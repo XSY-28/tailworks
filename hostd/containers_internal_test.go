@@ -229,3 +229,25 @@ func boxClass(inst *instance) *container.Class {
 	c := inst.app.Containers["Box"]
 	return &c
 }
+
+// TestContainerNoTailnetNode (ADR-032 D4 × fast-identity): starting
+// containers creates no object and no node, and marks no class hot for the
+// pre-joined node pool (whose pool nodes and warm keys serve object creates
+// only), even with the pool on.
+func TestContainerNoTailnetNode(t *testing.T) {
+	h, procs := ctrHost(t, func(c *Config) { c.PoolNodes = 2 })
+	inst := ctrInst(h, "t", "w")
+	for _, n := range []string{"a", "b"} {
+		if err := ctrStart(t, h, inst, n, startReq{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if procs.Live() != 2 {
+		t.Fatalf("live %d", procs.Live())
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.objects) != 0 || len(h.poolDemand) != 0 {
+		t.Fatalf("containers made objects %v / pool demand %v", h.objects, h.poolDemand)
+	}
+}

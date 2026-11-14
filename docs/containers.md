@@ -34,9 +34,14 @@ and the class bound as a Durable Object.
   `{"<Class>": {"image": ref, "images": {name: ref}}}` to pin refs (Sandbox SDK
   1.0 named images). A pin may only name that class's wrangler images.
 - A bundle with containers is placed only on a host that offers the
-  `containers` tier, for the image's arch (`503 no_host`; with `--host` or a
-  sticky lease holder that lacks it, `409 tier_unavailable`). This applies even
-  when the parent object itself is process-tier.
+  `containers` tier, for the image's arch, with a free VM in its capacity
+  vector (`503 no_host`; with `--host` or a sticky lease holder that lacks
+  `containers`, `409 tier_unavailable`, and `twd deploy --replace` moves it
+  instead). This applies even when the parent object itself is process-tier.
+  Smart placement (ADR-033: the best measured tailnet path to the
+  workload's `tailnet.connects`) only ranks the hosts that pass these
+  filters; the current holder is kept while it still offers `containers`
+  (capacity aside: it already holds its share).
 
 ### Use it
 
@@ -155,7 +160,8 @@ a per-container proxy on the host:
 - `getTcpPort().connect()`, raw TCP and WebSocket upgrades to container ports.
 - `snapshotContainer`, `containerSnapshot`, directory snapshots, backups,
   bucket mounts, persistent sandbox volumes.
-- Memory snapshots and fork.
+- Memory snapshots and fork (also: container VMs never come from the
+  microVM warm pool or a base snapshot; they cold-boot).
 - HTTP/2 and WebSocket upgrades through interceptors (HTTP/1.1 only).
 - A container with its own tailnet node (`sandbox.tailnet.tags`), and
   standalone containers not attached to an object.
@@ -232,6 +238,19 @@ DO (workerd, any tier) ── ctx.container (polyfill in the generated wrapper)
   whenever its connection dies (it always has; a vsock transport reset
   around a VMM snapshot would cause one), and an authenticated reconnect
   replaces the channel (DO guests too).
+- Warm-pool and snapshot VMs (fast-vm; Durable Object guests only, see
+  [Warm pool and snapshots](#warm-pool-and-snapshots)): a pooled VM boots
+  with a pre-claim token on its pool config drive, and every copy restored
+  from one base snapshot holds that base's token in guestd's memory, so the
+  pre-claim token is *not* unique per VM. It authenticates only the
+  connection before the claim, when the VM holds no tenant code (just
+  twd's warm-up app, which has run and exited) and no keys. The claim's
+  `load` op carries a fresh 256-bit `Load.CtlToken`, together with the
+  entropy, boot id and clock: hostd switches to it before it sends the load
+  (from then on the pre-claim or base token is refused), and guestd adopts
+  it before it answers and uses it for every later reconnect. So each
+  claimed VM has its own token, like a cold-booted one. Exec stream tokens
+  are per exec and only exist in container guests, which are never pooled.
 - Exec stdio: one more guest-initiated vsock connection per exec, whose first
   line is `{"type":"stream","exec":<id>,"token":<t>}`, `t` being the random
   per-exec token the host sent in the `exec` op; the host attaches it to the
@@ -433,6 +452,34 @@ TailnetApi props, unforgeable. Plain-DO mode: the tenant service claims the
 object (as for `ctx.tailnet`, docs/egress-modes.md): code in the workload
 could drive another plain object's container of the same workload (same
 trust domain), never a facet object's and never another workload's.
+
+## Warm pool and snapshots
+
+The fast-vm work (master, ADR-030) gives Durable Object microVMs a warm pool
+of pre-booted, tenant-free VMs (`twd-hostd -vm-pool`, on by default) and
+restores from one shared base snapshot per host for pool misses
+(`-vm-snapshot`, on by default, rebuilt hourly). **Container guests use
+neither: every container cold-boots** (`BootContainer`, ~250 ms to the
+entrypoint on Firecracker in Lima). Reasons:
+
+- A container VM is shaped by its start(): instance type (memory, vCPUs,
+  CPU quota), pids limit, its own image drive and a fresh scratch drive, its
+  sandbox NIC (no gateway services, its egress proxy), and the container
+  kernel. A pool would need one per shape, image and kernel.
+- ADR-032 D6's rule that bases be tenant-free means a base can't hold a
+  tenant's image; and an image drive or scratch disk swapped in after a
+  restore (the way the DO volume slot works) is not built.
+- Every restore must reseed entropy and reset the clock; the load op does
+  that for workerd guests, and container guests have no load op.
+
+The pool and the snapshot code share the boot path with containers
+(`launch`: config drive, jail, helper, vnet, boot stage timestamps). A
+container VM counts against the pool's huge-page budget like any VM of the
+backend (so a busy container host refills its pool less), its stage
+timestamps are recorded the same way, and the uffd helper and the
+`attach`/`snapshot-base`/`Restore` helper ops are never used for it. vz has
+no pool or snapshots (every VM there cold-boots). Whether containers should
+get a pool is an open decision in STATUS.md.
 
 ## Host tiers
 

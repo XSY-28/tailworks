@@ -23,7 +23,10 @@ func newBackend(t *testing.T) (sandbox.ContainerBackend, []string) {
 	if kernel == "" || ckernel == "" || rootfs == "" {
 		t.Skip("TWD_VM_KERNEL, TWD_VM_CONTAINER_KERNEL and TWD_VM_ROOTFS must be set (make e2e-container)")
 	}
-	be, err := vm.New(vm.Config{Kernel: kernel, ContainerKernel: ckernel, Rootfs: rootfs, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"), Helper: os.Getenv("TWD_VM_HELPER")})
+	// twd-hostd's defaults: warm pool (auto) and snapshots on, for the
+	// parents' DO VMs; containers cold-boot next to them.
+	be, err := vm.New(vm.Config{Kernel: kernel, ContainerKernel: ckernel, Rootfs: rootfs, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"), Helper: os.Getenv("TWD_VM_HELPER"),
+		Snapshot: os.Getenv("TWD_VM_E2E_SNAPSHOT") != "0"})
 	if err != nil {
 		t.Fatalf("microVM backend unavailable: %v", err)
 	}

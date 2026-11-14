@@ -74,3 +74,6 @@ func TestVZContainerStartFailures(t *testing.T) {
 		t.Fatalf("run dirs left behind: %v", ents)
 	}
 }
+
+// checkCtrColdBoot: vz has no warm pool or snapshots; every VM cold-boots.
+func checkCtrColdBoot(*testing.T, sandbox.ContainerBackend, sandbox.Info) {}

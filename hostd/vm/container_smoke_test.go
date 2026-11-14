@@ -111,6 +111,7 @@ func TestContainerSmoke(t *testing.T) {
 	defer c.Stop(0)
 	t.Logf("boot → ready %v; info %+v; rss %d kB", time.Since(t1), c.Info(), c.RSSKB())
 	checkCtrConfinement(t, c.Info(), "25000 ") // basic: 1/4 vCPU
+	checkCtrColdBoot(t, b, c.Info())
 
 	// The fractional vCPU holds: a busy loop gets about a quarter of one
 	// CPU (no more than half) over a second of wall time.
