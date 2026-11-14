@@ -65,6 +65,9 @@ func cmdDev(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := checkDevPort(*port, os.Stderr); err != nil { // devlog.go
+		return err
+	}
 	wd, err := findWorkerd(*workerdFlag)
 	if err != nil {
 		return err
@@ -82,6 +85,7 @@ func cmdDev(args []string) error {
 	defer os.RemoveAll(tmp)
 	os.Chmod(tmp, 0o700)
 
+	quietStdLog() // devlog.go: no "STUN server listening" line
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		return err

@@ -2,7 +2,7 @@ Last update: 2026-11-14 PT. Merged remote `twd logs` (status/remote-logs.md); ho
 
 Earlier: DX pass: strict twd.jsonc + schema, release workflow + get.sh, app-named tags, policy-doc fix.
 
-# Developer-experience pass (branch `paltry-bobcat`)
+# Developer-experience pass (branch `critique-developer-experience-admin-deployers`)
 
 Started from a DX review of the admin path (install, `twd up`) and the
 worker-developer path (`twd init`, `twd dev`, `twd deploy`). This branch has

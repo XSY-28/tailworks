@@ -147,6 +147,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if c.name == name {
 			if wantsHelp(rest) && !c.hidden {
 				commandUsage(stdout, c)
+				if fs := captureFlags(c, rest); fs != nil {
+					printFlags(stdout, fs) // helpflags.go
+				}
 				return 0
 			}
 			if err := c.run(rest); err != nil {
@@ -256,6 +259,10 @@ func newFlags(name string) *flags {
 // parse parses flags interleaved with positional args (twd kill X --cascade).
 func (f *flags) parse(args []string) ([]string, error) {
 	var pos []string
+	if helpMode {
+		helpFlagSet = f.FlagSet
+		return nil, errHelp
+	}
 	for {
 		if err := f.FlagSet.Parse(args); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
