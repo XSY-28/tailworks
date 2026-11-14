@@ -63,7 +63,12 @@ type Config struct {
 	// unique per-run prefix).
 	HostnamePrefix string
 	// Ephemeral joins nodes as ephemeral (tests and dev).
-	Ephemeral     bool
+	Ephemeral bool
+	// PoolNodes is how many pre-joined nodes to keep per hot class (a root
+	// create here in the last hour): a create of that class then takes one
+	// and renames it (~0.2 s) instead of joining a new node (ADR-031).
+	// 0 disables the pool.
+	PoolNodes     int
 	CapacityNodes int
 	// ReadyTimeout bounds how long requests wait for an object's node
 	// (identity_pending after; default 30 s).
@@ -140,10 +145,13 @@ type Host struct {
 	byNetd    map[string]*object   // netd object ID
 	byKey     map[string]*object   // tenantID|namespace|name (live only)
 	creating  map[string]*createCall
-	instSeq   int
-	sandbox   string // resolved Config.Sandbox
-	lastHB    time.Time
-	fenced    bool
+	// pre-joined node pool (poolnodes.go)
+	poolDemand map[string]time.Time // tenant/workload/class → last root create here
+	poolBusy   map[string]bool      // a pool node of that class is being created
+	instSeq    int
+	sandbox    string // resolved Config.Sandbox
+	lastHB     time.Time
+	fenced     bool
 
 	syncMu      sync.Mutex
 	syncNow     chan struct{}
@@ -203,6 +211,7 @@ func New(cfg Config) (*Host, error) {
 	h := &Host{cfg: cfg, sandbox: sb, log: cfg.Logger, mgmt: cfg.Mgmt,
 		tenants: map[string]*tenant{}, workloads: map[string]*workload{}, objects: map[string]*object{},
 		byNetd: map[string]*object{}, byKey: map[string]*object{}, creating: map[string]*createCall{},
+		poolDemand: map[string]time.Time{}, poolBusy: map[string]bool{},
 		syncNow: make(chan struct{}, 1)}
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err
@@ -342,6 +351,7 @@ func (h *Host) loop() {
 }
 
 func (h *Host) tick() {
+	defer h.maintainPools()
 	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
 	defer cancel()
 	if err := h.heartbeat(ctx); err != nil {

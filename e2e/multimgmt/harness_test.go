@@ -303,10 +303,10 @@ func newFakeSetec(t *testing.T) *httptest.Server {
 
 // ---- twd-mgmt replicas ----
 
-// warmArgs turns on the warm-key pool in every replica when TWD_MM_WARM_KEYS
-// is set (its cap per pool), so every hypothesis and soak can run with it.
+// warmArgs sets every replica's warm-key pool cap from TWD_MM_WARM_KEYS
+// ("0" turns it off; unset keeps twd-mgmt's default, 5).
 func warmArgs() []string {
-	if n := os.Getenv("TWD_MM_WARM_KEYS"); n != "" && n != "0" {
+	if n := os.Getenv("TWD_MM_WARM_KEYS"); n != "" {
 		return []string{"-warm-keys", n}
 	}
 	return nil

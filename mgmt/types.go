@@ -24,6 +24,13 @@ const (
 	StatusReady   = "ready"   // node joined (hostd reported ready)
 	StatusKilled  = "killed"  // killed (by operator, cascade, or reaper); terminal
 	StatusFailed  = "failed"  // minting failed permanently
+	// StatusAssigned: the object was given an already-joined pool node
+	// (CreateObject with poolObjectID; ADR-031); the host renames it and
+	// reports ready. Never minted.
+	StatusAssigned = "assigned"
+	// StatusTransferred: a pool node's row after its node went to an
+	// object (terminal; its node IDs and certificate moved/cleared).
+	StatusTransferred = "transferred"
 )
 
 // Defaults (RFC §4.6, §4.9, ADR-017).
@@ -175,7 +182,20 @@ type Object struct {
 }
 
 // Live reports whether the object is not terminal.
-func (o Object) Live() bool { return o.Status != StatusKilled && o.Status != StatusFailed }
+func (o Object) Live() bool {
+	return o.Status != StatusKilled && o.Status != StatusFailed && o.Status != StatusTransferred
+}
+
+// LiveStatuses are the statuses Live reports true for.
+var LiveStatuses = []string{StatusPending, StatusMinted, StatusAssigned, StatusReady}
+
+// liveSQL is Live as a SQL condition on objects.status.
+const liveSQL = "status NOT IN ('" + StatusKilled + "','" + StatusFailed + "','" + StatusTransferred + "')"
+
+// PoolNamespace holds pre-joined pool nodes (ADR-031): objectName is
+// "<Class>/<suffix>"; tags are the class's. A pool node becomes an object
+// of that class with CreateObject{poolObjectID}.
+const PoolNamespace = "_pool"
 
 // Lease is a namespace lease.
 type Lease struct {

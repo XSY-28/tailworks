@@ -81,6 +81,27 @@ func StartControl() (*Control, error) {
 	ctl.HTTPTestServer = httptest.NewUnstartedServer(ctl)
 	ctl.HTTPTestServer.Start()
 	ctl.SetGlobalAppCaps(tailcfg.PeerCapMap{TestCap: []tailcfg.RawMessage{TestCapValue}})
+	// Production control renames a node when its Hostinfo.Hostname changes
+	// (measured: a peer sees it ~210 ms later); testcontrol only names a node
+	// at registration. Emulate production: after each map request, follow
+	// the node's hostname (async: the hook runs under testcontrol's lock,
+	// before the request's Hostinfo is stored).
+	ctl.SetOnMapRequest(func(k key.NodePublic) {
+		go func() {
+			for _, d := range []time.Duration{30 * time.Millisecond, 150 * time.Millisecond, 500 * time.Millisecond} {
+				time.Sleep(d)
+				n := ctl.Node(k)
+				if n == nil || !n.Hostinfo.Valid() || n.Hostinfo.Hostname() == "" {
+					continue
+				}
+				want := n.Hostinfo.Hostname() + "." + MagicDNSDomain + "."
+				if n.Name != want {
+					n.Name = want
+					ctl.UpdateNode(n)
+				}
+			}
+		}()
+	})
 	return &Control{URL: ctl.HTTPTestServer.URL, Server: ctl, closers: []func(){
 		ctl.HTTPTestServer.Close, scancel, ds.Close, func() { d.Close() },
 	}}, nil

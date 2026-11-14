@@ -617,6 +617,48 @@ func (e *Env) Run() {
 	res.Numbers["agent_egress_ms"] = msOf(r.Dur)
 	res.pass("b_egress_own_node", "echo WhoIs = "+egressNode)
 
+	// (a2) a pre-joined node (ADR-031): a1's create made SupportAgent a hot
+	// class on this host, so hostd keeps a "_pool" node of it. The next new
+	// agent gets that node renamed (same stable node ID: no registration),
+	// answering on its own name.
+	var pool object
+	for dl := time.Now().Add(e.tmo(60 * time.Second)); ; time.Sleep(100 * time.Millisecond) {
+		for _, o := range e.objects() {
+			if o.Namespace == "_pool" && strings.HasPrefix(o.Name, "SupportAgent/") && o.Status == "ready" && o.StableNodeID != "" {
+				pool = o
+			}
+		}
+		if pool.ID != "" {
+			break
+		}
+		if time.Now().After(dl) {
+			t.Fatalf("(a2) no ready SupportAgent pool node after 60 s: %+v", e.objects())
+		}
+	}
+	t2 := time.Now()
+	r = do(hc, "GET", "http://"+agentIP+"/?agent=a2", nil)
+	if r.Code != 200 || get(r.Body, "agent") != "a2" {
+		t.Fatalf("(a2) agent via workload: %s", r)
+	}
+	a2 := e.waitObjectReady("SupportAgent", "a2", e.tmo(30*time.Second))
+	res.Numbers["prejoined_object_node_ready_ms"] = msOf(time.Since(t2))
+	if a2.StableNodeID != pool.StableNodeID {
+		t.Fatalf("(a2) a2 is on node %s, not the pool node %s (a fresh join, not an assignment)", a2.StableNodeID, pool.StableNodeID)
+	}
+	if label, _, _ := strings.Cut(a2.MagicDNS, "."); !strings.HasSuffix(label, a2.ID) || strings.Contains(label, "pool-") {
+		t.Fatalf("(a2) a2's MagicDNS %q is not named after it (%s); hostd adds only the per-run prefix", a2.MagicDNS, a2.ID)
+	}
+	a2IP := peerIP(t, client, a2.MagicDNS, e.tmo(30*time.Second))
+	r = do(hc, "GET", "http://"+a2IP+"/", nil)
+	if r.Code != 200 || get(r.Body, "caller", "nodeId") != clientID {
+		t.Fatalf("(a2) a2 via its own (renamed) node: %s", r)
+	}
+	if po, ok := e.findObject("_pool", pool.Name); !ok || po.Status != "transferred" {
+		t.Fatalf("(a2) pool row after the assignment: %+v", po)
+	}
+	res.pass("a2_prejoined_node", fmt.Sprintf("a2 on pool node %s (renamed %s → %s) in %v", pool.StableNodeID, pool.Hostname, a2.Hostname,
+		time.Since(t2).Round(time.Millisecond)))
+
 	// (c) MCP: allowed tool, and cap_missing for one the caller lacks.
 	ok, err := mcpCall(hc, mcpIP, "lookup_order", map[string]any{"order": "o1"})
 	if err != nil || get(ok, "result", "isError") == true {

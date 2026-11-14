@@ -1160,12 +1160,29 @@ func (s *SQLStore) CreateChild(ctx context.Context, o Object, maxLive int) error
 // uses FOR UPDATE; SQLite's immediate transaction holds the write lock.
 // ErrExists on a duplicate.
 func (s *SQLStore) CreateObjectChecked(ctx context.Context, o Object, maxObjects, maxLive int) error {
+	return s.createObjectTx(ctx, o, maxObjects, maxLive, "", "")
+}
+
+// ErrPoolGone: the pool node named in a transfer is no longer a ready,
+// untransferred node with the expected stable node ID.
+var ErrPoolGone = errors.New("pool node no longer available")
+
+// TransferPool is CreateObjectChecked that, in the same transaction, moves
+// the ready pool node poolID (whose stable node ID must be stableID) to o:
+// the pool row becomes "transferred" with its node IDs and certificate
+// cleared, so only o names the device. Two concurrent transfers of one pool
+// node: one gets ErrPoolGone.
+func (s *SQLStore) TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int) error {
+	return s.createObjectTx(ctx, o, maxObjects, maxLive, poolID, stableID)
+}
+
+func (s *SQLStore) createObjectTx(ctx context.Context, o Object, maxObjects, maxLive int, poolID, stableID string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	live := "status NOT IN ('" + StatusKilled + "','" + StatusFailed + "')"
+	live := liveSQL
 	lock := func(q string, arg string) error {
 		var x string
 		if err := tx.QueryRowContext(ctx, s.q(q+s.forUpdate()), arg).Scan(&x); err != nil {
@@ -1180,6 +1197,22 @@ func (s *SQLStore) CreateObjectChecked(ctx context.Context, o Object, maxObjects
 		if err := lock("SELECT id FROM tenants WHERE id=?", o.TenantID); err != nil {
 			return err
 		}
+	}
+	if poolID != "" {
+		// Before the quota count: the pool node stops being live as o starts.
+		r, err := tx.ExecContext(ctx, s.q(`UPDATE objects SET status=?, node_id='', stable_node_id='', magic_dns='', cert='',
+			kill_reason=?, updated_at=? WHERE id=? AND tenant_id=? AND namespace=? AND status=? AND stable_node_id=? AND stable_node_id<>''`),
+			StatusTransferred, "transferred to "+o.ID, o.CreatedAt, poolID, o.TenantID, PoolNamespace, StatusReady, stableID)
+		if err != nil {
+			return err
+		}
+		if n, err := r.RowsAffected(); err != nil {
+			return err
+		} else if n != 1 {
+			return ErrPoolGone
+		}
+	}
+	if maxObjects > 0 {
 		var n int64
 		if err := tx.QueryRowContext(ctx, s.q("SELECT COUNT(*) FROM objects WHERE tenant_id=? AND "+live), o.TenantID).Scan(&n); err != nil {
 			return err
@@ -1215,12 +1248,12 @@ func (s *SQLStore) GetObject(ctx context.Context, id string) (Object, error) {
 
 func (s *SQLStore) DeleteDeadObjects(ctx context.Context, tenantID string, statuses []string) ([]Object, error) {
 	if len(statuses) == 0 {
-		statuses = []string{StatusKilled, StatusFailed}
+		statuses = []string{StatusKilled, StatusFailed, StatusTransferred}
 	}
 	ph := strings.TrimSuffix(strings.Repeat("?,", len(statuses)), ",")
 	args := []any{tenantID}
 	for _, st := range statuses {
-		if st != StatusKilled && st != StatusFailed {
+		if st != StatusKilled && st != StatusFailed && st != StatusTransferred {
 			return nil, fmt.Errorf("purge: %q is not a terminal status", st)
 		}
 		args = append(args, st)
@@ -1390,7 +1423,7 @@ func (s *SQLStore) CountObjects(ctx context.Context) (map[string]int, error) {
 func (s *SQLStore) CountLive(ctx context.Context, tenantID, rootID string) (int, error) {
 	var n int64
 	var err error
-	live := "status NOT IN ('" + StatusKilled + "','" + StatusFailed + "')"
+	live := liveSQL
 	if rootID != "" {
 		err = s.db.QueryRowContext(ctx, s.q("SELECT COUNT(*) FROM objects WHERE root_id=? AND id<>? AND "+live), rootID, rootID).Scan(&n)
 	} else {

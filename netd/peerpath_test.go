@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,5 +97,60 @@ func TestEgressWaitsForNewPeerPath(t *testing.T) {
 	t.Logf("first request to a just-registered peer: without the path wait %v, with it %v", without.Round(time.Millisecond), with.Round(time.Millisecond))
 	if with > 2*time.Second {
 		t.Errorf("with the path wait the first request took %v; want well under WireGuard's 5 s retry", with)
+	}
+}
+
+// TestSetHostname: a ready node renames itself in place: its own netmap
+// and a peer's show the new name, object.json keeps it for a rejoin, and
+// the node ID and IP are unchanged.
+func TestSetHostname(t *testing.T) {
+	ctl := startControl(t)
+	mint := &countingMint{}
+	root := filepath.Join(newRundir(t), "s")
+	reg, err := netd.New(netd.Config{ControlURL: ctl.URL, StateRoot: root, Keys: mint.source(),
+		Upstream: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") })})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { reg.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	p, _ := reg.Create("pool-aaaa", netd.ObjectOptions{Hostname: "twd-pool-aaaa"})
+	q, _ := reg.Create("peer", netd.ObjectOptions{})
+	if err := p.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before := p.Info()
+	t0 := time.Now()
+	dns, err := p.SetHostname(ctx, "support-abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("renamed in %v → %s", time.Since(t0).Round(time.Millisecond), dns)
+	after := p.Info()
+	if !strings.HasPrefix(dns, "support-abcdef.") || after.Hostname != "support-abcdef" || after.NodeID != before.NodeID || after.IPs[0] != before.IPs[0] {
+		t.Fatalf("before %+v\nafter %+v (dns %s)", before, after, dns)
+	}
+	lc, _ := q.Server().LocalClient()
+	lc.OmitAuth = true
+	for dl := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		st, _ := lc.Status(ctx)
+		seen := false
+		for _, ps := range st.Peer {
+			seen = seen || strings.HasPrefix(ps.DNSName, "support-abcdef.")
+		}
+		if seen {
+			break
+		}
+		if time.Now().After(dl) {
+			t.Fatal("the peer never saw the new name")
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "pool-aaaa", "object.json"))
+	if !strings.Contains(string(b), `"hostname":"support-abcdef"`) {
+		t.Fatalf("object.json not updated: %s", b)
 	}
 }

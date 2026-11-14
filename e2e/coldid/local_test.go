@@ -67,6 +67,10 @@ func TestColdIdentityLocal(t *testing.T) {
 	if os.Getenv("TWD_COLDID_WARM") != "" {
 		e.name += "-warm"
 	}
+	if os.Getenv("TWD_COLDID_PREJOINED") != "" {
+		e.prejoined = true
+		e.name += "-prejoined"
+	}
 	ss := runColdIdentity(t, e)
 	if len(ss) < e.n*9/10 {
 		t.Fatalf("only %d/%d samples", len(ss), e.n)

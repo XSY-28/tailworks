@@ -1,5 +1,6 @@
 # twd STATUS (living log)
 
+Last update: 2026-11-14 00:30 PT. Fast identity: Ross approved the three decisions. `-warm-keys` now defaults to 5; port mapping stays off; **the pre-joined node pool (ADR-031 variant B) is built** (`twd-hostd -pool-nodes`, default 1 per hot class): create → first request on the object's own node **232 ms p50 / 297 ms p95** on production control. See "Fast identity, Phase 3".
 Last update: 2026-11-13 22:20 PT. Fast identity, Phase 2 on branch `fast-identity`: callers wait for a new peer's path (b), warm-key pool (a, `-warm-keys`, default off), no port mapping on host nodes (c, default); pre-joined node pool measured and drafted as ADR-031 (Proposed). See "Fast identity, Phase 2".
 Last update: 2026-11-13 21:10 PT. Fast identity, Phase 1 (measurement only) on branch `fast-identity`: per-stage cold-identity breakdown, hermetic and tailnet 1; the bimodal join explained. See "Fast identity: where a new object's node time goes".
 Last update: 2026-11-07 23:55 PT. M0 and M1 by the first run; M2 (`twd-mgmt`) on branch `m2-mgmt`.
@@ -1518,7 +1519,7 @@ Built in the order agreed after Phase 1: (b), (a), (c); (d) measured and drafted
   - netd's `Ready` is unchanged.
 - **Test:** `netd.TestEgressWaitsForNewPeerPath`. Object a calls a node through netd egress the moment the node appears in a's netmap: **5.106 s → 286 ms**.
 
-### (a) Warm-key pool (`mgmt/warmkeys.go`, `twd-mgmt -warm-keys N`, default 0 = off)
+### (a) Warm-key pool (`mgmt/warmkeys.go`, `twd-mgmt -warm-keys N`; default 5 since Phase 3, 0 = off)
 - **Storage.** A `warm_keys` table holds pre-minted, single-use, preauthorized keys per (tenant, canonical sorted tags, ephemeral), keyed `(tenant_id, key_id)` (key IDs are only unique per control plane). Secrets live in custody at `twd/<tenant>/_pool/authkey/<keyID>`.
 - **Take (in `mintOne`, after the mint claim, before any throttle token).**
   - One conditional `UPDATE … RETURNING` marks a key taken by the object (`FOR UPDATE SKIP LOCKED` on Postgres).
@@ -1602,11 +1603,99 @@ Hermetic (testcontrol, where control and the key API cost ~nothing), create → 
 - Recommendation: the per-tag-set variant first.
 
 ### Not done / follow-ups
-- `-warm-keys` is **off by default**; enabling it (the RFC says 5) is a product decision.
-  - Its cost: at most `cap` live, unused, preauthorized single-use keys per active pool, held in custody for up to 30 min.
+- ~~`-warm-keys` is off by default.~~ **Default 5 since Phase 3** (Ross).
+  - Cost: at most 5 live, unused, preauthorized single-use keys per active pool, held in custody for up to 30 min.
   - Idle pools stop refilling after an hour without creates or deploys.
+  - A tenant purge (`twd down --purge`) now revokes them.
 - `twd up` has no flag for `-warm-keys` or `-port-mapping` yet (twd-mgmt / twd-hostd flags only).
 - Tenant-level audit records (pool `mint`, `revoke`) have no object ID; `twd audit <object>` shows the object's own pooled `mint` record.
 - A peer can still lose the race in (b) (1/12 in the first production run): the path wait narrows the window but doesn't close it.
 - External clients (not twd's egress or CLI) still dial whenever they like; nothing on the node can tell when peers can reach it.
+
+## Fast identity, Phase 3: pre-joined node pool (ADR-031 variant B) built (branch `fast-identity`, 2026-11-14)
+Ross approved:
+1. `-warm-keys` on by default (5);
+2. port mapping off by default;
+3. building the pre-joined node pool, variant B (one pool per host, tenant, workload and class, so a pool node already has exactly the class's tags; assignment = rename only).
+
+### Design
+- **A pool node is an mgmt object in namespace `_pool`** (`objectName` `<Class>/<suffix>`, tags = the class's, never ephemeral, no TTL, never a spawn).
+  - It joins through the unchanged object machinery: create (quota; `create` audit with `pool`), mint (the warm-key pool), the lease-fenced credential, ready (node certificate).
+  - It serves nothing: hostd refuses ingress to it.
+  - Tenant code can't address it: `ensure` refuses the reserved classes `_pool` and `_workload`, so tenant code can neither create one nor act as one. Acting as one would mean holding the identity a later object is given.
+- **Assignment** (`CreateObject{poolObjectID}`). mgmt takes the node only if it is this tenant's and workload's, for this class, `ready` with a stable node ID, has exactly the class's canonical tags, and the new object is not ephemeral. Then, in **one transaction** (`TransferPool`):
+  - the object is inserted `assigned` with the node's IDs;
+  - the pool row becomes `transferred` (terminal, not live) with its node IDs, MagicDNS and certificate cleared, so only the object names the device;
+  - the object's `create` record (`fromPool`, `stableNodeID`) and the pool row's `transfer` record commit with it (H22).
+
+  Quota is unchanged: one live row in, one out. Concurrent offers of one node give it to one create; the other mints as usual.
+- **No key for an assigned object.** `Credential` answers `409 already_joined`. `ready` is fenced as before and must name the assigned stable node ID (`409 identity_conflict` otherwise); it signs the object's node certificate (ADR-025).
+  - Kill deletes the device as for any object.
+  - `remint` (a rejected rejoin) falls back to a fresh mint.
+  - `transferred` rows purge with killed and failed ones.
+- **hostd** (`hostd/poolnodes.go`):
+  - A class becomes hot on a root create; hostd keeps `-pool-nodes` (default 1) ready pool nodes per hot class, one join at a time.
+  - A create of that class reserves an idle one and offers it. If mgmt answers `assigned`, the object takes over the pool node's netd node and state dir under its own mgmt ID (hostd keeps `netdID` separate, persisted in `objects.json`, so restarts rejoin it).
+  - netd `SetHostname` renames the node from its own LocalAPI (no API call). It rewrites `object.json` and waits until the node's own netmap shows the name (control may suffix `-1`).
+  - Then `ready` goes to mgmt with the same stable node ID.
+  - Pool nodes of a class with no create here for an hour, and at least that old, are retired through mgmt's kill (audited, device deleted). The age condition means a restart, which forgets demand, doesn't drop a warm pool.
+- **API (spec first, `make api`):**
+  - statuses `assigned` and `transferred`;
+  - `ObjectCreate.poolObjectID`;
+  - the `_pool` namespace;
+  - `ReadyConflict` (409 `lease_lost | identity_conflict`) on `PATCH /v1/objects/{id}`;
+  - audit kinds `transfer` and `revoke`;
+  - `PurgeResult.warmKeysRevoked`.
+- testcontrol names a node only at registration; production renames on a hostname change. `nettest` now emulates production (it follows `Hostinfo.Hostname` after each map request), so hermetic tests exercise the rename.
+
+### Bugs found by the tests on the way
+- `make test -race`: netd's `start()` logged `o.hostname` after signalling ready, which raced with a rename. The name is now captured under the lock.
+- The spec validator rejected an undeclared 409 code and new audit kinds (fixed in the spec).
+- An e2e assertion compared mgmt's bare hostname with hostd's per-run-prefixed one (a test bug).
+
+### Tests
+- mgmt `TestPoolNodeAssignment` (spec-validated API):
+  - the pool node's join and its audit (`create,mint,credential,ready,transfer`);
+  - assignment without a mint, the object audit `create,ready`;
+  - `already_joined`, `identity_conflict` and `lease_lost` on ready;
+  - only the object names the device;
+  - a transferred node, or another class's node, falls back to a mint;
+  - two concurrent offers give the node to exactly one create;
+  - kill deletes the device; purge forgets the transferred row.
+- netd `TestSetHostname`: renamed in 32 ms with the same node ID and IP; a peer sees the new name; `object.json` updated.
+- hostd `TestEnsureRefusesReservedClasses`, `TestIngressRefusesPoolNodes`, `TestIdlePoolSelection`.
+- **`TestCLIEndToEnd`** (real twd, twd-mgmt and twd-hostd binaries, testcontrol, all new defaults on), new step **(a2)**:
+  - after agent a1, hostd brings up a SupportAgent pool node;
+  - agent a2 comes up **on that node** (same stable node ID) under its own MagicDNS name, answers the client with a verified caller, and the pool row is `transferred`;
+  - the flow's `twd down --purge` leftover check (devices and keys) still passes.
+- `make test` (14 Go packages with `-race`, plus JS), `make lint` (api-check, vet, secret scan), `make e2e-local`, `make test-pg`: PASS.
+- **Multi-replica** (3 replicas, warm keys at the new default):
+  - hypothesis suite **11/11**;
+  - **10 min soak (seed 307): PASS on every invariant**: I3, I5–I9, I11, Quota, AuditComplete, KillOnce, PoolExclusive, PoolTags. 290,420 ops; 216 objects adopted pooled keys, 0 with other tags.
+  - The harness doesn't run hostd, so pre-joined assignment isn't exercised across replicas. Its cross-replica safety rests on the single conditional transfer (`TransferPool`), which the concurrency case of `TestPoolNodeAssignment` covers on one replica and which `make test-pg` runs on both backends.
+
+### Measured (ms; create → …, p50 / p95)
+| path | where | n | own node ready | first 200 on the own node |
+|---|---|---|---|---|
+| Phase 1 baseline | tailnet 1 | 31 | 4364 / 10420 | 7009 / 15917 |
+| (b)+(a)+(c) | tailnet 1 | 20 | 1522 / 4235 | 1714 / 4450 |
+| **pre-joined (+ (a), (c))** | **tailnet 1** | **20** | **222 / 290** (max 812) | **232 / 297** (max 823) |
+| pre-joined | hermetic | 15 | 31 / 54 | 33 / 55 |
+
+Production breakdown of the pre-joined path (`e2e/coldid` `TWD_COLDID_PREJOINED=1`, which does what hostd does):
+- create with `poolObjectID` 1 ms;
+- rename until the node's own netmap shows it: **219 / 288 ms**;
+- fenced ready 1 ms;
+- the caller's netmap shows the new name 197 / 280 ms after the create;
+- 20/20 assigned, 20/20 direct.
+
+The pool node's own join (registration, including control's stalls) happens ahead of demand and is not in these numbers.
+
+### Still open
+- The registration-pacing hypothesis (Phase 2) is untested. It decides how fast pools refill after a burst.
+- A MagicDNS collision on rename is handled (the suffixed name is read back and reported) but was not provoked on production.
+- Headscale's support for node-side renames is unverified (ADR-002).
+- Ephemeral objects (spawns with a TTL) never use the pool. Ephemeral pool nodes would need their own pools.
+- `twd ls` lists idle pool nodes (namespace `_pool`); each is a device.
+- `twd up` has no flags for `-warm-keys`, `-pool-nodes` or `-port-mapping` (binary flags only).
 

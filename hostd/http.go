@@ -55,7 +55,7 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			wl = h.workloads[o.TenantID+"/"+o.Workload]
 		}
 		h.mu.Unlock()
-		if o == nil || wl == nil || o.TenantID != t.id {
+		if o == nil || wl == nil || o.TenantID != t.id || o.isPool() { // a pool node serves nothing
 			writeAPIError(w, &apiError{Code: "unknown_object", Detail: "node " + id + " is not hosted here"})
 			return
 		}

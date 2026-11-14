@@ -63,6 +63,9 @@ type env struct {
 	//   "path"      once the caller's own status shows a path (netd.WaitPeerPath).
 	dial   string
 	onMint func(keyID string) // every key mgmt minted (cleanup)
+	// prejoined: each object is created on a pre-joined "_pool" node
+	// (ADR-031), joined outside the timed window, as hostd's pool does.
+	prejoined bool
 }
 
 // sample is one object's timeline, every field ms after the create call.
@@ -97,6 +100,9 @@ type sample struct {
 	FirstPath    string  `json:"firstPath"`    // "direct" | "derp:<region>" at the first 200
 	Direct       float64 `json:"direct"`       // first time CurAddr was set (0 = not within the window)
 	HTTPAttempts int     `json:"httpAttempts"` // GETs until the first 200
+	// prejoined
+	Assigned bool    `json:"assigned"` // mgmt answered status assigned
+	Renamed  float64 `json:"renamed"`  // the node's own netmap shows its new name
 }
 
 // logCapture keeps every mgmt/netd record so spans can be read back.
@@ -421,7 +427,13 @@ func runColdIdentity(t *testing.T, e env) []sample {
 
 	var out []sample
 	for i := 0; i < e.n; i++ {
-		s, err := oneObject(ctx, t, e, call, tn.TenantID, reg, caller, pw, httpc, capt, i)
+		var s sample
+		var err error
+		if e.prejoined {
+			s, err = onePrejoined(ctx, e, call, tn.TenantID, dep.Epoch, reg, caller, pw, httpc, i)
+		} else {
+			s, err = oneObject(ctx, t, e, call, tn.TenantID, reg, caller, pw, httpc, capt, i)
+		}
 		if err != nil {
 			t.Errorf("object %d: %v", i, err)
 			continue
@@ -658,7 +670,11 @@ var stages = []stage{
 func report(t *testing.T, e env, ss []sample) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "cold identity, %s, n=%d\n| stage | p50 ms | p95 ms | max ms |\n|---|---|---|---|\n", e.name, len(ss))
-	for _, st := range stages {
+	sts := stages
+	if e.prejoined {
+		sts = stagesPrejoined
+	}
+	for _, st := range sts {
 		var v []float64
 		for _, s := range ss {
 			if d, ok := st.delta(s); ok {
@@ -762,4 +778,101 @@ func TestColdIdentityAggregate(t *testing.T) {
 	fmt.Fprintf(&b, "outliers: CreateKey >1 s %d/%d; register >2 s %d/%d; registered→netmap >1.5 s %d/%d; first 200 >3 s after ready %d/%d\n",
 		slowKey, len(all), slowReg, len(all), slowMap, len(all), penalty, penN)
 	t.Log("\n" + b.String())
+}
+
+// onePrejoined: a pool node of the class joins and becomes ready (not
+// timed: hostd does this ahead of demand), and the caller has a path to it;
+// then the timed part: create offering it → rename → ready → the caller's
+// netmap shows the new name → the first 200 on the object's own node.
+func onePrejoined(ctx context.Context, e env, call func(context.Context, string, string, any, any) (int, error), tenant string, epoch int64,
+	reg *netd.Registry, caller *nettest.Node, pw *peerWatch, httpc *http.Client, i int) (sample, error) {
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	var s sample
+	var pr mgmt.CreateObjectResponse
+	if _, err := call(ctx, "POST", "/v1/objects", map[string]any{"tenantID": tenant, "workload": e.prefix, "namespace": mgmt.PoolNamespace,
+		"objectName": fmt.Sprintf("%s/p%03d", e.prefix, i)}, &pr); err != nil {
+		return s, err
+	}
+	no, err := reg.Create(pr.ObjectID, netd.ObjectOptions{Hostname: pr.Hostname, Tags: pr.Tags})
+	if err != nil {
+		return s, err
+	}
+	if err := no.Ready(ctx); err != nil {
+		return s, fmt.Errorf("pool join: %w", err)
+	}
+	info := no.Info()
+	if _, err := call(ctx, "PATCH", "/v1/objects/"+pr.ObjectID, map[string]any{"status": "ready", "nodeID": info.NodeID, "stableNodeID": info.NodeID,
+		"magicDNS": strings.TrimSuffix(info.DNSName, "."), "epoch": epoch}, nil); err != nil {
+		return s, fmt.Errorf("pool ready: %w", err)
+	}
+	ip := netip.MustParseAddr(info.IPs[0])
+	if err := netd.WaitPeerPath(ctx, caller.LC, ip); err != nil {
+		return s, fmt.Errorf("caller path to the pool node: %w", err)
+	}
+
+	var cr mgmt.CreateObjectResponse
+	t0 := time.Now()
+	if _, err := call(ctx, "POST", "/v1/objects", map[string]any{"tenantID": tenant, "workload": e.prefix, "namespace": e.prefix,
+		"objectName": fmt.Sprintf("o%03d", i), "poolObjectID": pr.ObjectID}, &cr); err != nil {
+		return s, err
+	}
+	s.Object, s.CreateRPC, s.Assigned = cr.ObjectID, msSince(t0, time.Now()), cr.Status == mgmt.StatusAssigned
+	if !s.Assigned {
+		return s, fmt.Errorf("pool node not assigned (status %q)", cr.Status)
+	}
+	type seen struct {
+		at  time.Time
+		err error
+	}
+	sc := make(chan seen, 1)
+	go func() { t, _, err := pw.wait(ctx, cr.Hostname); sc <- seen{t, err} }()
+	dns, err := no.SetHostname(ctx, cr.Hostname)
+	if err != nil {
+		return s, fmt.Errorf("rename: %w", err)
+	}
+	s.Renamed = msSince(t0, time.Now())
+	if _, err := call(ctx, "PATCH", "/v1/objects/"+cr.ObjectID, map[string]any{"status": "ready", "nodeID": info.NodeID, "stableNodeID": info.NodeID,
+		"magicDNS": strings.TrimSuffix(dns, "."), "epoch": epoch}, nil); err != nil {
+		return s, fmt.Errorf("ready: %w", err)
+	}
+	s.Ready = msSince(t0, time.Now())
+	pv := <-sc
+	if pv.err != nil {
+		return s, fmt.Errorf("caller never saw the new name: %w", pv.err)
+	}
+	s.PeerSeen = msSince(t0, pv.at)
+	for {
+		s.HTTPAttempts++
+		resp, err := httpc.Get("http://" + ip.String() + "/")
+		if err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				s.FirstOK = msSince(t0, time.Now())
+				break
+			}
+		}
+		if ctx.Err() != nil {
+			return s, ctx.Err()
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if st, err := caller.LC.Status(ctx); err == nil {
+		for _, p := range st.Peer {
+			if len(p.TailscaleIPs) > 0 && p.TailscaleIPs[0] == ip {
+				s.FirstPath = map[bool]string{true: "direct", false: "derp:" + p.Relay}[p.CurAddr != ""]
+			}
+		}
+	}
+	return s, nil
+}
+
+var stagesPrejoined = []stage{
+	{"mgmt: POST /v1/objects with poolObjectID (assign + transfer + audit, one tx)", func(sample) float64 { return 0 }, func(s sample) float64 { return s.CreateRPC }, true},
+	{"netd: SetHostname → the node's own netmap shows the name", func(s sample) float64 { return s.CreateRPC }, func(s sample) float64 { return s.Renamed }, false},
+	{"mgmt: ready (fenced; node certificate)", func(s sample) float64 { return s.Renamed }, func(s sample) float64 { return s.Ready }, false},
+	{"control: create → in the caller's netmap under the new name", func(sample) float64 { return 0 }, func(s sample) float64 { return s.PeerSeen }, true},
+	{"**total: create → own node ready**", func(sample) float64 { return 0 }, func(s sample) float64 { return s.Ready }, true},
+	{"**total: create → first 200 on the own node**", func(sample) float64 { return 0 }, func(s sample) float64 { return s.FirstOK }, true},
 }

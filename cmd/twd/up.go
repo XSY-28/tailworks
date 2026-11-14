@@ -977,7 +977,7 @@ func cmdDown(args []string) error {
 		{
 			live := map[string]bool{}
 			for _, o := range objs {
-				if o.Status != "killed" && o.Status != "failed" {
+				if o.Status != "killed" && o.Status != "failed" && o.Status != "transferred" {
 					live[o.ID] = true
 				}
 			}

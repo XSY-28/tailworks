@@ -62,6 +62,10 @@ func TestColdIdentityReal(t *testing.T) {
 	if os.Getenv("TWD_COLDID_WARM") != "" {
 		e.name += "-warm"
 	}
+	if os.Getenv("TWD_COLDID_PREJOINED") != "" {
+		e.prejoined = true
+		e.name += "-prejoined"
+	}
 	var keyIDs []string
 	e.onMint = func(id string) { keyIDs = append(keyIDs, id) }
 	// Registered first, so it runs last: after the registry and caller close.

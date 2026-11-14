@@ -374,23 +374,37 @@ func (m *Mgmt) expireWarm(ctx context.Context, ws warmKeyStore) {
 	}
 }
 
-// DrainWarmKeys revokes every warm key (all tenants): for tests, purges and
+// DrainWarmKeys revokes every warm key (all tenants): for tests and
 // operators. Keys being adopted are left to their adopters.
-func (m *Mgmt) DrainWarmKeys(ctx context.Context) (int, error) {
+func (m *Mgmt) DrainWarmKeys(ctx context.Context) (int, error) { return m.drainWarm(ctx, "") }
+
+// drainWarm revokes the warm keys of tenantID ("" = all tenants).
+func (m *Mgmt) drainWarm(ctx context.Context, tenantID string) (int, error) {
 	ws, ok := m.store.(warmKeyStore)
 	if !ok {
 		return 0, nil
 	}
-	ks, err := ws.ExpireWarmKeys(ctx, 1<<62)
+	ks, err := ws.ListWarmKeys(ctx, WarmKeyWarm)
 	if err != nil {
 		return 0, err
 	}
+	n := 0
 	for _, k := range ks {
-		if t, err := m.store.GetTenant(ctx, k.TenantID); err == nil {
-			m.revokeWarm(ctx, t, k)
+		if tenantID != "" && k.TenantID != tenantID {
+			continue
+		}
+		// Take it out of the pool atomically first (a concurrent take wins
+		// or loses cleanly), then revoke.
+		tk, ok, err := ws.TakeWarmKey(ctx, k.TenantID, k.Pool, "_drain", m.now().UnixMilli(), -1<<62)
+		if err != nil || !ok {
+			continue
+		}
+		if t, err := m.store.GetTenant(ctx, tk.TenantID); err == nil {
+			m.revokeWarm(ctx, t, tk) // the key the take returned, not necessarily k
+			n++
 		}
 	}
-	return len(ks), nil
+	return n, nil
 }
 
 // WarmKeyStats is the pool size per (tenant, pool), for status and tests.

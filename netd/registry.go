@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"tailscale.com/envknob"
 	"time"
@@ -466,6 +467,7 @@ func (o *Object) start(ctx context.Context) error {
 	o.ln = &trackedListener{Listener: ln, o: o}
 	o.httpSrv, o.tr = hs, tr
 	o.state = StateReady
+	hostname := o.hostname // SetHostname may change it once ready
 	close(o.ready)
 	o.mu.Unlock()
 	o.spans.at(func(s *JoinSpans) *float64 { return &s.Listening })
@@ -478,7 +480,7 @@ func (o *Object) start(ctx context.Context) error {
 	}
 	r.mu.Unlock()
 	go hs.Serve(o.ln)
-	r.log.Info("object ready", "object", o.id, "hostname", o.hostname, "ip", ip4.String(),
+	r.log.Info("object ready", "object", o.id, "hostname", hostname, "ip", ip4.String(),
 		"node", string(o.nodeID), "join_ms", joinDur.Milliseconds(), "rejoined", rejoin, "reminted", reminted, "spans", o.spans.get())
 	return nil
 }
@@ -830,4 +832,46 @@ var portMapOnce sync.Once
 // without synchronisation.
 func DisablePortMapping() {
 	portMapOnce.Do(func() { envknob.Setenv("TS_DISABLE_PORTMAPPER", "true") })
+}
+
+// SetHostname renames a ready node in place (a pre-joined pool node handed
+// to an object; ADR-031). The node changes its own hostname (LocalAPI
+// EditPrefs: no control-plane API call), object.json is rewritten so a
+// rejoin keeps the name, and SetHostname waits until the node's own
+// netmap names it so; control may add a suffix ("-1") if the name is taken.
+// It returns the node's MagicDNS name. Measured on production control: a
+// peer's netmap shows the new name ~210 ms after the call.
+func (o *Object) SetHostname(ctx context.Context, hostname string) (string, error) {
+	o.mu.Lock()
+	lc, st := o.lc, o.state
+	o.mu.Unlock()
+	if st != StateReady || lc == nil {
+		return "", newErr(CodeIdentityPending, "object "+o.ID()+" is "+string(st)+", not ready")
+	}
+	if _, err := lc.EditPrefs(ctx, &ipn.MaskedPrefs{Prefs: ipn.Prefs{Hostname: hostname}, HostnameSet: true}); err != nil {
+		return "", fmt.Errorf("set hostname: %w", err)
+	}
+	o.mu.Lock()
+	o.hostname = hostname
+	mb, _ := json.Marshal(objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
+	o.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(o.dir, "object.json"), mb, 0o600); err != nil {
+		return "", err
+	}
+	for {
+		if st, err := lc.StatusWithoutPeers(ctx); err == nil && st.Self != nil {
+			label, _, _ := strings.Cut(st.Self.DNSName, ".")
+			if label == hostname || strings.HasPrefix(label, hostname+"-") {
+				o.mu.Lock()
+				o.dnsName = st.Self.DNSName
+				o.mu.Unlock()
+				return st.Self.DNSName, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return "", newErr(CodeIdentityPending, "object "+o.ID()+": hostname "+hostname+" not in its netmap yet: "+ctx.Err().Error())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 }

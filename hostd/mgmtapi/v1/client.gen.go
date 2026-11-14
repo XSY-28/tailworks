@@ -40,11 +40,13 @@ const (
 	AuditKindReady        AuditKind = "ready"
 	AuditKindReap         AuditKind = "reap"
 	AuditKindRemint       AuditKind = "remint"
+	AuditKindRevoke       AuditKind = "revoke"
 	AuditKindSpawn        AuditKind = "spawn"
 	AuditKindTenantCreate AuditKind = "tenant_create"
 	AuditKindTenantDelete AuditKind = "tenant_delete"
 	AuditKindTenantNote   AuditKind = "tenant_note"
 	AuditKindTenantUpdate AuditKind = "tenant_update"
+	AuditKindTransfer     AuditKind = "transfer"
 	AuditKindUndeploy     AuditKind = "undeploy"
 	AuditKindVolumeKey    AuditKind = "volume_key"
 )
@@ -92,6 +94,8 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindRemint:
 		return true
+	case AuditKindRevoke:
+		return true
 	case AuditKindSpawn:
 		return true
 	case AuditKindTenantCreate:
@@ -101,6 +105,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindTenantNote:
 		return true
 	case AuditKindTenantUpdate:
+		return true
+	case AuditKindTransfer:
 		return true
 	case AuditKindUndeploy:
 		return true
@@ -404,16 +410,20 @@ func (e ObjectPatchStatus) Valid() bool {
 
 // Defines values for ObjectStatus.
 const (
-	ObjectStatusFailed  ObjectStatus = "failed"
-	ObjectStatusKilled  ObjectStatus = "killed"
-	ObjectStatusMinted  ObjectStatus = "minted"
-	ObjectStatusPending ObjectStatus = "pending"
-	ObjectStatusReady   ObjectStatus = "ready"
+	ObjectStatusAssigned    ObjectStatus = "assigned"
+	ObjectStatusFailed      ObjectStatus = "failed"
+	ObjectStatusKilled      ObjectStatus = "killed"
+	ObjectStatusMinted      ObjectStatus = "minted"
+	ObjectStatusPending     ObjectStatus = "pending"
+	ObjectStatusReady       ObjectStatus = "ready"
+	ObjectStatusTransferred ObjectStatus = "transferred"
 )
 
 // Valid indicates whether the value is a known member of the ObjectStatus enum.
 func (e ObjectStatus) Valid() bool {
 	switch e {
+	case ObjectStatusAssigned:
+		return true
 	case ObjectStatusFailed:
 		return true
 	case ObjectStatusKilled:
@@ -423,6 +433,8 @@ func (e ObjectStatus) Valid() bool {
 	case ObjectStatusPending:
 		return true
 	case ObjectStatusReady:
+		return true
+	case ObjectStatusTransferred:
 		return true
 	default:
 		return false
@@ -545,8 +557,9 @@ func (e CreateObjectCredentialParamsReason) Valid() bool {
 
 // Defines values for PurgeTenantObjectsParamsState.
 const (
-	PurgeTenantObjectsParamsStateFailed PurgeTenantObjectsParamsState = "failed"
-	PurgeTenantObjectsParamsStateKilled PurgeTenantObjectsParamsState = "killed"
+	PurgeTenantObjectsParamsStateFailed      PurgeTenantObjectsParamsState = "failed"
+	PurgeTenantObjectsParamsStateKilled      PurgeTenantObjectsParamsState = "killed"
+	PurgeTenantObjectsParamsStateTransferred PurgeTenantObjectsParamsState = "transferred"
 )
 
 // Valid indicates whether the value is a known member of the PurgeTenantObjectsParamsState enum.
@@ -555,6 +568,8 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	case PurgeTenantObjectsParamsStateFailed:
 		return true
 	case PurgeTenantObjectsParamsStateKilled:
+		return true
+	case PurgeTenantObjectsParamsStateTransferred:
 		return true
 	default:
 		return false
@@ -606,7 +621,8 @@ type AuditBatch struct {
 // `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
 // `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
 // `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`.
+// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
+// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
 type AuditKind string
 
 // AuditPage defines model for AuditPage.
@@ -646,7 +662,8 @@ type AuditRecord struct {
 	// `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
 	// `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
 	// `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`.
+	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
+	// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
 	Kind     AuditKind `json:"kind"`
 	ObjectID *string   `json:"objectID,omitempty"`
 
@@ -797,7 +814,10 @@ type Endpoint struct {
 	Node     string  `json:"node"`
 	ObjectID *string `json:"objectID,omitempty"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status ObjectStatus `json:"status"`
 }
 
@@ -1098,7 +1118,10 @@ type NodeCertificate struct {
 	Payload      NodeCertificatePayload `json:"payload"`
 	StableNodeID string                 `json:"stableNodeID"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status   ObjectStatus `json:"status"`
 	TenantID string       `json:"tenantID"`
 }
@@ -1179,7 +1202,10 @@ type Object struct {
 	Root         string  `json:"root"`
 	StableNodeID *string `json:"stableNodeID,omitempty"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status   ObjectStatus `json:"status"`
 	Tags     []string     `json:"tags"`
 	TenantID string       `json:"tenantID"`
@@ -1204,12 +1230,20 @@ type ObjectCreate struct {
 	// Hostname The hostname hostd proposes; mgmt answers with the one to use.
 	Hostname *string `json:"hostname,omitempty"`
 
-	// Namespace DO class name, or `_workload`.
+	// Namespace DO class name, `_workload`, or `_pool` (a pre-joined pool node; then `objectName` is `<Class>/<suffix>` and `workload` is required).
 	Namespace  string     `json:"namespace"`
 	ObjectName string     `json:"objectName"`
 	Parent     *ObjectRef `json:"parent,omitempty"`
-	TenantID   string     `json:"tenantID"`
-	TraceID    *string    `json:"traceID,omitempty"`
+
+	// PoolObjectID A ready `_pool` node of this tenant, workload and class with exactly
+	// the class's tags, offered for a new, non-ephemeral object. If every
+	// condition holds, the object is created `assigned` to that node (no
+	// mint) and the pool node becomes `transferred`, in one transaction;
+	// the host renames the node and sends `ready` with the same
+	// `stableNodeID`. Otherwise it is ignored and the object is minted.
+	PoolObjectID *string `json:"poolObjectID,omitempty"`
+	TenantID     string  `json:"tenantID"`
+	TraceID      *string `json:"traceID,omitempty"`
 
 	// TTL `10m`-style duration or seconds. Defaults to the class `ttl`.
 	TTL *ObjectCreate_TTL `json:"ttl,omitempty"`
@@ -1258,7 +1292,10 @@ type ObjectRef struct {
 	ObjectID string `json:"objectID"`
 }
 
-// ObjectStatus `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+// ObjectStatus `pending` → `minted` → `ready`; or, for an object given a pre-joined
+// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+// `transferred` (a `_pool` node whose node went to an object).
 type ObjectStatus string
 
 // Page The generic page envelope (`Page<T>`); every concrete `*Page` schema
@@ -1298,6 +1335,9 @@ type PreflightResult struct {
 type PurgeResult struct {
 	// Purged Object IDs forgotten.
 	Purged []string `json:"purged"`
+
+	// WarmKeysRevoked The tenant's unused pooled keys revoked with the purge.
+	WarmKeysRevoked *int `json:"warmKeysRevoked,omitempty"`
 }
 
 // SelfInfo defines model for SelfInfo.
@@ -1693,6 +1733,12 @@ type NotFound = Error
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
 // `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
 type PreconditionFailed = Error
+
+// ReadyConflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// `missing` names what is absent (grant, cap, field, quota); `snippet`
+// is policy HuJSON to paste when a grant is missing; `doc_url` is
+// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+type ReadyConflict = Error
 
 // Unauthorized The DX.md error catalog shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
@@ -2609,6 +2655,11 @@ type ClientInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes any type of body and a specified content type.
@@ -2640,6 +2691,11 @@ type ClientInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes a body of the `application/json` content type.
@@ -3507,6 +3563,11 @@ func (c *Client) ListObjects(ctx context.Context, params *ListObjectsParams, req
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -3549,6 +3610,11 @@ func (c *Client) CreateObjectWithBody(ctx context.Context, contentType string, b
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -6651,6 +6717,11 @@ type ClientWithResponsesInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -6682,6 +6753,11 @@ type ClientWithResponsesInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -9337,7 +9413,7 @@ type UpdateObjectResponse struct {
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *LeaseLost
+	JSON409 *ReadyConflict
 	// JSON410 the response for an HTTP 410 `application/json` response
 	JSON410 *Gone
 	// JSON412 the response for an HTTP 412 `application/json` response
@@ -9383,7 +9459,7 @@ func (r UpdateObjectResponse) GetJSON404() *NotFound {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r UpdateObjectResponse) GetJSON409() *LeaseLost {
+func (r UpdateObjectResponse) GetJSON409() *ReadyConflict {
 	return r.JSON409
 }
 
@@ -11183,6 +11259,11 @@ func (c *ClientWithResponses) ListObjectsWithResponse(ctx context.Context, param
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -11221,6 +11302,11 @@ func (c *ClientWithResponses) CreateObjectWithBodyWithResponse(ctx context.Conte
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -13983,7 +14069,7 @@ func ParseUpdateObjectResponse(rsp *http.Response) (*UpdateObjectResponse, error
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest LeaseLost
+		var dest ReadyConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
