@@ -290,7 +290,7 @@ func (h *Host) Start(ctx context.Context) error {
 	h.mu.Lock()
 	h.lastHB = time.Now()
 	h.mu.Unlock()
-	h.wg.Add(2)
+	h.wg.Add(3) // loop, serviceLoop, cronLoop
 	go h.loop()
 	go h.serviceLoop()
 	if h.cfg.PathEvery > 0 {
