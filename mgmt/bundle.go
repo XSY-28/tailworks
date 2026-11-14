@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/cron"
+	"github.com/rosskukulinski/twd/internal/publicspec"
 	"github.com/tailscale/hujson"
 )
 
@@ -23,8 +25,22 @@ type TwdConfig struct {
 	// its tier.
 	Tier string `json:"tier"`
 	// Runtime is "" / "workerd" or "node" (Node apps always run in the
-	// process tier).
+	// process tier; public ingress is workerd-only in v1).
 	Runtime string `json:"runtime"`
+	// Public is twd.jsonc "public" (ADR-029): path prefixes reachable from
+	// the public internet over Funnel. nil: tailnet-only.
+	Public *publicspec.Spec `json:"public"`
+	// Placement is smart placement (ADR-033): mode "smart" (default) or
+	// "off"; targets default to tailnet.connects. Region/Host/Hostname are
+	// Cloudflare's hints: host/hostname name one target, region is ignored.
+	Placement struct {
+		Mode      string   `json:"mode"`
+		Targets   []string `json:"targets"`
+		Aggregate string   `json:"aggregate"`
+		Region    string   `json:"region"`
+		Host      string   `json:"host"`
+		Hostname  string   `json:"hostname"`
+	} `json:"placement"`
 	Tailnet struct {
 		// Tags are the workload entry node's tags (the "_workload" namespace).
 		Tags []string `json:"tags"`
@@ -43,6 +59,8 @@ type TwdConfig struct {
 			// hosts at once, so mgmt may move it off an unreachable host
 			// without --force-takeover (ADR-028 §3).
 			Fence string `json:"fence"`
+			// Public lets public requests create objects of this class (ADR-029 D5).
+			Public *publicspec.ClassSpec `json:"public"`
 		} `json:"objects"`
 		Spawn struct {
 			MaxLive  int `json:"maxLive"`
@@ -71,6 +89,38 @@ func (c *TwdConfig) Classes() []ClassConfig {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Class < out[j].Class })
 	return out
+}
+
+// PublicConfig validates twd.jsonc "public" and the per-class public
+// settings; nil when the workload declares no public routes.
+func (c *TwdConfig) PublicConfig() (*DeploymentPublic, error) {
+	var classes map[string]publicspec.ClassSpec
+	for name, o := range c.Tailnet.Objects {
+		if o.Public == nil {
+			continue
+		}
+		if err := o.Public.Validate(name); err != nil {
+			return nil, err
+		}
+		if c.Public == nil && o.Public.Create {
+			return nil, fmt.Errorf("tailnet.objects.%s.public.create needs twd.jsonc \"public\" routes", name)
+		}
+		if classes == nil {
+			classes = map[string]publicspec.ClassSpec{}
+		}
+		classes[name] = *o.Public
+	}
+	if c.Public == nil {
+		return nil, nil
+	}
+	if c.Runtime == "node" {
+		return nil, errors.New("\"public\" is not supported for runtime \"node\" yet (ADR-029 v1: workerd workloads only)")
+	}
+	sp := *c.Public
+	if err := sp.Validate(); err != nil {
+		return nil, err
+	}
+	return &DeploymentPublic{Spec: sp, Classes: classes}, nil
 }
 
 // ParseTwdConfig parses twd.jsonc (JSONC/HuJSON).
@@ -149,6 +199,40 @@ func BundleStateful(bundle []byte) (stateful bool, reason string) {
 		return false, ""
 	}
 	return true, "Durable Object classes " + strings.Join(guarded, ", ")
+}
+
+// BundleCrons returns the bundle's cron triggers (wrangler.jsonc or
+// wrangler.json "triggers": {"crons": [...]}), validated: at most
+// cron.MaxTriggers, no duplicates, each a valid expression. A bundle with no
+// wrangler config, or no triggers, has none. Hosts re-validate on deploy.
+func BundleCrons(bundle []byte) ([]string, error) {
+	files, err := bundleFiles(bundle, "wrangler.jsonc", "wrangler.json")
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range []string{"wrangler.jsonc", "wrangler.json"} {
+		b, ok := files[f]
+		if !ok {
+			continue
+		}
+		std, err := hujson.Standardize(b)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		var w struct {
+			Triggers struct {
+				Crons []string `json:"crons"`
+			} `json:"triggers"`
+		}
+		if err := json.Unmarshal(std, &w); err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		if err := cron.ValidateTriggers(w.Triggers.Crons); err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		return w.Triggers.Crons, nil
+	}
+	return nil, nil
 }
 
 // bundleFiles returns the shallowest copy of each named file (by base name)

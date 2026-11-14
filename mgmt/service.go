@@ -65,6 +65,16 @@ type Config struct {
 	OperatorTailnet string
 	// OperatorControlURL is passed to hosts with their join key.
 	OperatorControlURL string
+	// WarmKeys caps the warm-key pool per (tenant, tag set, ephemeral):
+	// pre-minted single-use keys that let a create skip CreateKey
+	// (warmkeys.go). 0 disables the pool.
+	WarmKeys int
+	// WarmKeyTTL is a pooled key's expiry at the API (default 30 min); it is
+	// revoked unused WarmKeyTakeMargin + 30 s before that.
+	WarmKeyTTL time.Duration
+	// WarmPoolInterval is how often pools are refilled and expired
+	// (default 2 s; a take also triggers a refill at once).
+	WarmPoolInterval time.Duration
 }
 
 // Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
@@ -96,6 +106,9 @@ type Mgmt struct {
 	deviceKept    map[string]bool               // killed objects whose device delete was refused (403)
 	oboKeys       map[string]ed25519.PrivateKey // tenant → OBO root key (loaded from custody)
 	clockOK       bool                          // last checkClock result (logs on change)
+	poolKick      chan struct{}                 // wakes the warm-key loop
+	poolPause     map[string]time.Time          // tenant → no refills until (after an error)
+	poolRetried   time.Time                     // last retry of failed warm-key revocations
 	volMu         sync.Mutex                    // VolumeKey create-if-absent
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -128,7 +141,17 @@ func New(cfg Config) (*Mgmt, error) {
 	m := &Mgmt{cfg: cfg, store: cfg.Store, custody: cfg.Custody, broker: cfg.Broker, clock: cfg.Clock, log: cfg.Log,
 		throttles: map[string]*Throttle{}, queues: map[string]chan string{}, queued: map[string]bool{}, replicaID: cfg.ReplicaID, waiters: map[string]chan struct{}{},
 		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{},
-		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{}}
+		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
+		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
+	if m.cfg.WarmKeyTTL == 0 {
+		m.cfg.WarmKeyTTL = DefaultWarmKeyTTL
+	}
+	if m.cfg.WarmKeyTTL < 2*(WarmKeyTakeMargin+warmKeySafety) {
+		return nil, fmt.Errorf("mgmt: WarmKeyTTL %v is too short (≥ %v)", m.cfg.WarmKeyTTL, 2*(WarmKeyTakeMargin+warmKeySafety))
+	}
+	if m.cfg.WarmPoolInterval == 0 {
+		m.cfg.WarmPoolInterval = defaultWarmTick
+	}
 	if cfg.PushTimeout == 0 {
 		m.cfg.PushTimeout = 2 * time.Second
 	}
@@ -177,6 +200,10 @@ func (m *Mgmt) Start() error {
 	}
 	m.clockOK = true
 	m.checkClock()
+	if m.warmStore() != nil {
+		m.wg.Add(1)
+		go m.poolLoop()
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -258,11 +285,16 @@ type TenantRequest struct {
 	OAuthClientFile        string `json:"oauthClientFile,omitempty"`
 	RegistrationsPerMinute int    `json:"registrationsPerMinute,omitempty"`
 	MaxObjects             int    `json:"maxObjects,omitempty"`
+	// PublicIngress is the ADR-029 gate: "allow" or "deny" (default).
+	PublicIngress string `json:"publicIngress,omitempty"`
 }
 
 func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error) {
 	if r.Tailnet == "" || r.Tailnet == "-" {
 		return Tenant{}, errf(400, "bad_request", "tailnet must be named explicitly")
+	}
+	if err := validPublicIngress(r.PublicIngress); err != nil {
+		return Tenant{}, err
 	}
 	switch r.MintMode {
 	case MintAPIKey:
@@ -293,7 +325,7 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	}
 	t := Tenant{ID: r.ID, Tailnet: r.Tailnet, ControlURL: r.ControlURL, MintMode: r.MintMode, APIKeyFile: r.APIKeyFile,
 		WIFClientID: r.WIFClientID, WIFLifecycleClientID: r.WIFLifecycleClientID, OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
-		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, CreatedAt: m.now().UnixMilli()}
+		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, PublicIngress: r.PublicIngress, CreatedAt: m.now().UnixMilli()}
 	if t.ID == "" {
 		t.ID = newID("tn_")[:11]
 	}
@@ -306,7 +338,7 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	if err := m.store.CreateTenant(ctx, t); err != nil {
 		return Tenant{}, err
 	}
-	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode})
+	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "publicIngress": t.PublicIngress})
 	return t, nil
 }
 
@@ -563,6 +595,13 @@ type DeployRequest struct {
 	// stopped heartbeating, is really gone, so a stateful workload may move
 	// off it (ADR-028 §3). Audited.
 	ForceTakeover bool `json:"forceTakeover,omitempty"`
+	// Replace re-places the workload (`twd deploy --replace`, ADR-033):
+	// the current live holder is not kept just because it holds the lease;
+	// the workload moves if another eligible host is clearly better (or to
+	// Host, when pinned). The lease moves at epoch+1 in one conditional
+	// write. A stateful workload also needs ForceTakeover: its Durable
+	// Object storage stays on the old host's disk.
+	Replace bool `json:"replace,omitempty"`
 	// By is the deployer (set by the API layer from the principal, never
 	// from the request body): a WhoIs login over the tailnet, the local
 	// actor on the unix socket.
@@ -580,6 +619,7 @@ type DeployResponse struct {
 		// Service (optional) is the workload's Tailscale Service.
 		Service *ServiceEndpoint `json:"service,omitempty"`
 	} `json:"endpoint"`
+	Placement *PlacementDecision `json:"placement,omitempty"`
 }
 
 // ServiceEndpoint is a workload's Tailscale Service: a stable name and VIPs
@@ -613,16 +653,27 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
-	tier := placementTier(t, nil)
 	var svcCfg *TwdConfig
+	var pub *DeploymentPublic
+	var bcfg *TwdConfig
 	if len(r.Bundle) > 0 {
+		if _, err := BundleCrons(r.Bundle); err != nil {
+			return resp, errf(400, "bad_bundle", "%v", err)
+		}
 		cfg, err := BundleConfig(r.Bundle)
 		svcCfg = cfg
 		if err != nil && len(classes) == 0 {
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
 		if err == nil {
-			tier = placementTier(t, cfg)
+			if pub, err = bundlePublic(cfg); err != nil {
+				return resp, err
+			}
+			if err := checkPublicDeploy(t, r.Workload, pub); err != nil {
+				return resp, err
+			}
+			bcfg = cfg
+			bundlePlacement(r.Bundle, cfg)
 			if len(classes) == 0 {
 				classes = cfg.Classes()
 			} else if len(cfg.Tailnet.Tags) > 0 && !slices.ContainsFunc(classes, func(c ClassConfig) bool { return c.Class == WorkloadNamespace }) {
@@ -639,6 +690,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if len(classes) == 0 {
 		return resp, errf(400, "bad_request", "no namespaces: the bundle's twd.jsonc declares neither tailnet.tags (the workload node) nor tailnet.objects")
 	}
+	classes = withPublicNamespace(classes, pub)
 	for _, c := range classes {
 		if c.Class == "" || len(c.Tags) == 0 {
 			return resp, errf(400, "bad_request", "namespace %q needs tags", c.Class)
@@ -653,10 +705,11 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if err != nil {
 		return resp, errf(400, "bad_bundle", "%v", err)
 	}
-	host, err := m.pickHost(ctx, t, r.Workload, r.Host, tier)
+	dec, held, err := m.place(ctx, t, placementInput{Workload: r.Workload, Pinned: r.Host, Replace: r.Replace, Config: bcfg})
 	if err != nil {
 		return resp, err
 	}
+	host := dec.Host
 	var svcDef *ServiceEndpoint
 	if svcName != "" {
 		// Before the lease and the record: a deploy whose Service can't
@@ -672,37 +725,94 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		return resp, err
 	}
 	fence := true // no bundle (namespaces given directly): assume stateful
+	stateWhy := "no bundle to inspect"
 	if len(r.Bundle) > 0 {
-		fence, _ = BundleStateful(r.Bundle)
+		fence, stateWhy = BundleStateful(r.Bundle)
 	}
-	lease, err := m.store.AcquireLease(ctx, LeaseName(t.ID, r.Workload), host, NamespaceLeaseTTL, m.now())
-	if errors.Is(err, ErrLeaseHeld) {
-		return resp, m.leaseHeldError(ctx, LeaseName(t.ID, r.Workload), r.Workload)
-	}
-	if err != nil {
-		return resp, err
+	name := LeaseName(t.ID, r.Workload)
+	var lease Lease
+	movedFrom := ""
+	if held != nil && held.Holder != host {
+		// A live host runs the workload and placement chose another one.
+		if !r.Replace {
+			if dec.Reason == "pinned" {
+				return resp, m.leaseHeldError(ctx, name, r.Workload)
+			}
+			why := ""
+			for _, s := range dec.Hosts {
+				if s.Host == held.Holder && !s.Eligible {
+					why = s.Why
+				}
+			}
+			e := errf(409, "lease_held", "workload %q runs on host %s, which can no longer take it (%s); redeploy with --replace to move it to %s", r.Workload, held.Holder, why, host)
+			return resp, e
+		}
+		if fence && !r.ForceTakeover {
+			return resp, errf(409, "move_unconfirmed", "workload %q is stateful (%s): moving it from %s to %s starts its Durable Objects with empty storage on %s (DO storage stays on %s's disk). Redeploy with --replace --force-takeover to move it anyway, or pin it with --host %s. Classes that tolerate this can set \"fence\": \"never\" in twd.jsonc",
+				r.Workload, stateWhy, held.Holder, host, host, held.Holder, held.Holder)
+		}
+		lease, err = m.store.MoveLease(ctx, name, held.Holder, held.Epoch, host, NamespaceLeaseTTL, m.now())
+		if errors.Is(err, ErrLeaseLost) {
+			return resp, errf(409, "lease_changed", "workload %q: its lease changed while it was being moved (another deploy?); retry", r.Workload)
+		}
+		if err != nil {
+			return resp, err
+		}
+		movedFrom = held.Holder
+	} else {
+		lease, err = m.store.AcquireLease(ctx, name, host, NamespaceLeaseTTL, m.now())
+		if errors.Is(err, ErrLeaseHeld) {
+			return resp, m.leaseHeldError(ctx, name, r.Workload)
+		}
+		if err != nil {
+			return resp, err
+		}
 	}
 	d := Deployment{ID: newID("dp_"), TenantID: t.ID, Workload: r.Workload, HostID: host, Namespaces: classes,
-		MaxLive: maxLive, MaxDepth: maxDepth, Epoch: lease.Epoch, Bundle: r.Bundle, DeployedBy: r.By, CreatedAt: m.now().UnixMilli(), Fence: fence}
-	detail := map[string]any{"deploymentID": d.ID, "workload": d.Workload, "host": host, "epoch": lease.Epoch, "by": r.By}
+		MaxLive: maxLive, MaxDepth: maxDepth, Epoch: lease.Epoch, Bundle: r.Bundle, DeployedBy: r.By, CreatedAt: m.now().UnixMilli(), Fence: fence,
+		Public: pub, Placement: &dec}
+	detail := map[string]any{"deploymentID": d.ID, "workload": d.Workload, "host": host, "epoch": lease.Epoch, "by": r.By,
+		"placement": map[string]any{"reason": dec.Reason, "summary": dec.Summary, "targets": dec.Targets}}
+	if pub != nil {
+		detail["publicRoutes"] = pub.Spec.Routes
+	}
 	if svcName != "" {
 		detail["service"] = svcName
 	}
 	if takeoverFrom != "" {
 		detail["takeoverFrom"], detail["forced"] = takeoverFrom, true
 	}
+	if movedFrom != "" {
+		detail["movedFrom"], detail["replace"] = movedFrom, true
+		if fence {
+			detail["forced"] = true
+		}
+	}
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, Kind: "deploy", ActingFor: r.By}, detail)
 	if err := m.store.CreateDeployment(actx, d); err != nil { // the deploy record commits with it (H22)
 		return resp, err
 	}
 	m.recordIntent(ctx, ai, nil)
-	resp.DeploymentID, resp.Host, resp.Epoch = d.ID, host, lease.Epoch
+	if pub != nil {
+		m.purgeDeadPublicNode(ctx, t.ID, r.Workload)
+	}
+	if pub == nil {
+		// Public routes removed (or never declared): a public node left
+		// from an earlier deploy must not keep serving (ADR-029).
+		m.killPublicNode(ctx, t.ID, r.Workload, "public routes removed", r.By)
+	}
+	resp.DeploymentID, resp.Host, resp.Epoch, resp.Placement = d.ID, host, lease.Epoch, &dec
 	resp.Endpoint.Node = r.Workload + "-" + host
 	resp.Endpoint.MagicDNS = resp.Endpoint.Node + "." + t.Tailnet
 	resp.Endpoint.Service = svcDef
 	m.setDepStatus(d.ID, DeploymentStatus{Status: "assigned"})
 	// Tell the host now instead of at its next heartbeat.
 	go m.push(host, "/v1/push/assignments", map[string]any{})
+	if movedFrom != "" && fence {
+		// A stateful move: stop the old copy now rather than at its next
+		// heartbeat (its renew at the old epoch fails either way).
+		go m.push(movedFrom, "/v1/push/assignments", map[string]any{})
+	}
 	return resp, nil
 }
 
@@ -739,7 +849,11 @@ type DeploymentView struct {
 	Namespaces   []ClassConfig `json:"namespaces"`
 	DeployedBy   string        `json:"deployedBy,omitempty"`
 	CreatedAt    int64         `json:"createdAt"`
-	Endpoint     struct {
+	// Public (ADR-029): the public URL and routes; nil when tailnet-only.
+	Public *DeploymentPublicView `json:"public,omitempty"`
+	// Placement is why the deployment is on its host (ADR-033 draft).
+	Placement *PlacementDecision `json:"placement,omitempty"`
+	Endpoint  struct {
 		ObjectID string           `json:"objectID,omitempty"`
 		Node     string           `json:"node"`
 		MagicDNS string           `json:"magicDNS"`
@@ -758,12 +872,13 @@ func (m *Mgmt) GetDeployment(ctx context.Context, id string) (DeploymentView, er
 		return v, err
 	}
 	v.DeploymentID, v.TenantID, v.Workload, v.Host, v.Epoch, v.Namespaces, v.CreatedAt = d.ID, d.TenantID, d.Workload, d.HostID, d.Epoch, d.Namespaces, d.CreatedAt
-	v.DeployedBy = d.DeployedBy
+	v.DeployedBy, v.Placement = d.DeployedBy, d.Placement
 	v.Status, v.Error = m.deploymentStatus(ctx, d)
 	if svc := workloadService(d.Namespaces); svc != "" {
 		t, _ := m.store.GetTenant(ctx, d.TenantID)
 		v.Endpoint.Service = &ServiceEndpoint{Name: svc, MagicDNS: tssvc.Label(svc) + "." + t.Tailnet}
 	}
+	v.Public = m.publicView(ctx, d)
 	if o, err := m.store.GetObjectByName(ctx, d.TenantID, d.Workload, WorkloadNamespace, d.Workload); err == nil {
 		v.Endpoint.ObjectID, v.Endpoint.MagicDNS, v.Endpoint.Status = o.ID, o.MagicDNS, o.Status
 		v.Endpoint.Node, _, _ = strings.Cut(o.MagicDNS, ".")
@@ -865,62 +980,6 @@ func (h Host) offersTier(tier string) bool {
 	return tier == "" || slices.Contains(h.Tiers, tier)
 }
 
-// pickHost: MVP is a single host per tenant namespace. Eligible hosts are
-// live, in the tenant's pool and offer the deployment's tier. Keep the
-// current live lease holder; otherwise the eligible host with the most free
-// capacity.
-func (m *Mgmt) pickHost(ctx context.Context, t Tenant, workload, want, tier string) (string, error) {
-	now := m.now()
-	hosts, err := m.store.ListHosts(ctx, Page{})
-	if err != nil {
-		return "", err
-	}
-	live := map[string]Host{}
-	for _, h := range hosts {
-		if h.Live(now) && (t.Pool == "" || h.Pool == t.Pool) {
-			live[h.ID] = h
-		}
-	}
-	if want != "" {
-		h, ok := live[want]
-		if !ok {
-			return "", errf(503, "no_host", "host %q is not live (no heartbeat within %v)", want, HostLeaseTTL)
-		}
-		if !h.offersTier(tier) {
-			return "", errf(409, "tier_unavailable", "host %q does not offer the %q tier (it offers %s); deploy without --host, or pick a host set up with `sudo twd host setup --microvm`", want, tier, tierList(h))
-		}
-		return want, nil
-	}
-	if l, err := m.store.GetLease(ctx, LeaseName(t.ID, workload)); err == nil && l.Holder != "" {
-		if h, ok := live[l.Holder]; ok {
-			if !h.offersTier(tier) {
-				return "", errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer the %q tier it now asks for (the host offers %s); run `twd undeploy %s`, then deploy again to place it on a host with that tier", workload, h.ID, tier, tierList(h), workload)
-			}
-			return l.Holder, nil
-		}
-	}
-	best, bestFree, others := "", -1<<62, 0
-	for _, h := range hosts {
-		if _, ok := live[h.ID]; !ok {
-			continue
-		}
-		if !h.offersTier(tier) {
-			others++
-			continue
-		}
-		if free := h.CapacityNodes - h.LiveNodes; free > bestFree || free == bestFree && h.ID < best {
-			best, bestFree = h.ID, free
-		}
-	}
-	if best == "" {
-		if tier != "" && others > 0 {
-			return "", errf(503, "no_host", "no live host offers the %q tier (%d live host(s) offer only other tiers); set one up with `sudo twd host setup --microvm`, or deploy with \"tier\": \"process\"", tier, others)
-		}
-		return "", errf(503, "no_host", "no live host (register twd-hostd and heartbeat first)")
-	}
-	return best, nil
-}
-
 func tierList(h Host) string {
 	if len(h.Tiers) == 0 {
 		return "none listed (process only)"
@@ -947,6 +1006,12 @@ type Assignment struct {
 	// Fence: stop serving this workload when mgmt is unreachable for
 	// FenceAfter (stateful). Hosts treat a missing field as true.
 	Fence bool `json:"fence"`
+	// Public (ADR-029): the workload's public ingress; nil when it has no
+	// twd.jsonc "public" or the tenant's publicIngress is not allow.
+	Public *PublicAssignment `json:"public,omitempty"`
+	// PlacementTargets are what the host should measure paths to for this
+	// workload (smart placement, ADR-033; empty = nothing).
+	PlacementTargets []string `json:"placementTargets,omitempty"`
 }
 
 func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, error) {
@@ -960,10 +1025,17 @@ func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, er
 		a := Assignment{DeploymentID: d.ID, TenantID: d.TenantID, Workload: d.Workload,
 			BundleURL: "/v1/deployments/" + d.ID + "/bundle", Epoch: d.Epoch,
 			Lease: LeaseName(d.TenantID, d.Workload), Tailnet: t.Tailnet, ControlURL: t.ControlURL, Namespaces: []ClassConfig{}, Fence: d.Fence}
+		a.Public = m.publicAssignment(ctx, t, d)
+		if d.Placement != nil && d.Placement.Mode == PlacementSmart {
+			a.PlacementTargets = d.Placement.Targets
+		}
 		for _, c := range d.Namespaces {
 			if c.Class == WorkloadNamespace {
 				a.WorkloadTags, a.Service = c.Tags, c.Service
 				continue
+			}
+			if c.Class == PublicNamespace {
+				continue // the public node is described by a.Public
 			}
 			a.Namespaces = append(a.Namespaces, c)
 		}
@@ -992,6 +1064,13 @@ type CreateObjectRequest struct {
 	TTL       json.RawMessage `json:"ttl,omitempty"`
 	ActingFor string          `json:"actingFor,omitempty"`
 	TraceID   string          `json:"traceID,omitempty"`
+	// PoolObjectID offers a ready pre-joined node of namespace "_pool"
+	// (ADR-031) for a new object: if it is this tenant's and workload's,
+	// for this class, with exactly the class's tags, and the object is not
+	// ephemeral, the object is created "assigned" to that node (no mint)
+	// and the pool node is transferred in the same transaction. Otherwise
+	// it is ignored and the object is minted as usual.
+	PoolObjectID string `json:"poolObjectID,omitempty"`
 }
 
 // CreateObjectResponse is the reply. Hostname is an addition: the node
@@ -1069,10 +1148,21 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		parent = &p
 	}
 	workload := r.Workload
+	classNS := r.Namespace // the class whose config (tags) applies
+	if r.Namespace == PoolNamespace {
+		cls, suffix, ok := strings.Cut(r.ObjectName, "/")
+		if !ok || cls == "" || suffix == "" || workload == "" || parent != nil || strings.HasPrefix(cls, "_") {
+			return resp, errf(400, "bad_request", "a %s node needs workload and objectName \"<Class>/<suffix>\" (not a spawn)", PoolNamespace)
+		}
+		classNS = cls
+	}
 	switch {
-	case r.Namespace == WorkloadNamespace:
+	case r.Namespace == WorkloadNamespace, r.Namespace == PublicNamespace:
 		if workload != "" && workload != r.ObjectName {
-			return resp, errf(400, "bad_request", "the %s object of workload %q must be named after it (got %q)", WorkloadNamespace, workload, r.ObjectName)
+			return resp, errf(400, "bad_request", "the %s object of workload %q must be named after it (got %q)", r.Namespace, workload, r.ObjectName)
+		}
+		if parent != nil {
+			return resp, errf(400, "bad_request", "the %s object of a workload cannot be spawned", r.Namespace)
 		}
 		workload = r.ObjectName
 	case workload == "" && parent != nil:
@@ -1082,8 +1172,13 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	var class ClassConfig
 	if r.Namespace == WorkloadNamespace {
 		dep, class, err = m.findWorkloadClass(ctx, t.ID, workload)
+	} else if r.Namespace == PublicNamespace {
+		dep, class, err = m.findPublicClass(ctx, t, workload)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return resp, err
+		}
 	} else {
-		dep, class, err = m.store.FindClass(ctx, t.ID, workload, r.Namespace)
+		dep, class, err = m.store.FindClass(ctx, t.ID, workload, classNS)
 	}
 	if errors.Is(err, ErrAmbiguous) {
 		return resp, errf(409, "namespace_ambiguous", "%v", err)
@@ -1103,7 +1198,7 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	if err != nil {
 		return resp, errf(400, "bad_request", "%v", err)
 	}
-	if ttl == 0 && class.TTL != "" {
+	if ttl == 0 && class.TTL != "" && r.Namespace != PoolNamespace {
 		ttl, _ = time.ParseDuration(class.TTL)
 	}
 	l := m.tenantLock(t.ID)
@@ -1135,7 +1230,12 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		// hand out an existing object's node.
 		return resp, errf(409, "identity_conflict", "object ID %s is already taken by another identity", id)
 	}
-	o := Object{ID: id, TenantID: t.ID, Workload: workload, Namespace: r.Namespace, Name: r.ObjectName, Hostname: id, DeploymentID: dep.ID,
+	hostname := id
+	if r.Namespace == PublicNamespace {
+		// The public URL is https://<workload>.<tailnet>.ts.net (ADR-029 D2).
+		hostname = workload
+	}
+	o := Object{ID: id, TenantID: t.ID, Workload: workload, Namespace: r.Namespace, Name: r.ObjectName, Hostname: hostname, DeploymentID: dep.ID,
 		Lease: LeaseName(t.ID, dep.Workload), Tags: class.Tags, Caps: r.Caps, RootID: id, TTLSeconds: int64(ttl / time.Second),
 		Status: StatusPending, ActingFor: r.ActingFor, CreatedAt: m.now().UnixMilli(), UpdatedAt: m.now().UnixMilli()}
 	kind := "create"
@@ -1162,6 +1262,9 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		spawnLimit = maxLive
 	}
 	detail := map[string]any{"workload": o.Workload, "namespace": o.Namespace, "name": o.Name, "tags": o.Tags, "root": o.RootID}
+	if r.ActingFor == ActingForPublic {
+		detail["origin"] = "public" // created by a public (Funnel) request (ADR-029 D5)
+	}
 	if o.ParentID != "" {
 		detail["parent"] = o.ParentID
 	}
@@ -1171,9 +1274,32 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	if ttl > 0 {
 		detail["ttl"] = ttl.String()
 	}
+	if r.Namespace == PoolNamespace {
+		detail["pool"] = classNS
+	}
+	pool := m.usablePool(ctx, r, o, class)
+	if pool != nil {
+		o.Status, o.NodeID, o.StableNodeID = StatusAssigned, pool.NodeID, pool.StableNodeID
+		detail["fromPool"], detail["stableNodeID"] = pool.ID, pool.StableNodeID
+	}
 	// The create/spawn record commits in the same transaction as the insert (H22).
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, ObjectID: o.ID, Kind: kind, TraceID: r.TraceID, ActingFor: r.ActingFor}, detail)
-	if err := m.store.CreateObjectChecked(actx, o, t.MaxObjects, spawnLimit); errors.Is(err, ErrQuota) {
+	var err2 error
+	var ti *auditIntent
+	if pool != nil {
+		// …and so does the pool node's transfer record.
+		actx, ti = m.intend(actx, AuditRecord{TenantID: t.ID, ObjectID: pool.ID, Kind: "transfer", TraceID: r.TraceID},
+			map[string]any{"to": o.ID, "stableNodeID": pool.StableNodeID, "class": r.Namespace, "name": r.ObjectName})
+		err2 = m.store.(poolStore).TransferPool(actx, o, pool.ID, pool.StableNodeID, t.MaxObjects, spawnLimit)
+		if errors.Is(err2, ErrPoolGone) {
+			// Another create took this pool node first: mint as usual.
+			r.PoolObjectID = ""
+			return m.CreateObject(ctx, r)
+		}
+	} else {
+		err2 = m.store.CreateObjectChecked(actx, o, t.MaxObjects, spawnLimit)
+	}
+	if err := err2; errors.Is(err, ErrQuota) {
 		// The fast-path CountLive saw room, but concurrent creates (possibly
 		// through other replicas) filled the quota first (H16).
 		return resp, errf(429, "object_quota_exceeded", "tenant %s has reached its maxObjects (%d)", t.ID, t.MaxObjects)
@@ -1202,8 +1328,53 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		return resp, err
 	}
 	m.recordIntent(ctx, ai, nil)
+	if pool != nil {
+		m.recordIntent(ctx, ti, nil)
+		m.log.Info("pool node assigned", "object", o.ID, "pool", pool.ID, "stableNodeID", pool.StableNodeID)
+		return CreateObjectResponse{ObjectID: o.ID, Status: StatusAssigned, Tags: o.Tags, Hostname: o.Hostname, Created: true}, nil
+	}
 	m.enqueue(t.ID, o.ID)
 	return CreateObjectResponse{ObjectID: o.ID, Status: StatusPending, Tags: o.Tags, Hostname: o.Hostname, Created: true}, nil
+}
+
+var errWrongNode = errors.New("ready on another node than the assigned one")
+
+// poolStore is implemented by stores that can transfer pool nodes.
+type poolStore interface {
+	TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int) error
+}
+
+// usablePool returns the pool node r offers for o if every condition of
+// ADR-031 variant B holds, else nil (the object is then minted as usual).
+func (m *Mgmt) usablePool(ctx context.Context, r CreateObjectRequest, o Object, class ClassConfig) *Object {
+	// Never for a reserved namespace (_pool, _workload, the public node's).
+	if r.PoolObjectID == "" || strings.HasPrefix(r.Namespace, "_") || r.Namespace == PublicNamespace || o.Ephemeral {
+		return nil
+	}
+	if _, ok := m.store.(poolStore); !ok {
+		return nil
+	}
+	p, err := m.store.GetObject(ctx, r.PoolObjectID)
+	why := ""
+	switch {
+	case err != nil:
+		why = "not found"
+	case p.TenantID != o.TenantID || p.Workload != o.Workload || p.Namespace != PoolNamespace:
+		why = "another tenant's, workload's or namespace's"
+	case !strings.HasPrefix(p.Name, r.Namespace+"/"):
+		why = "for another class"
+	case p.Status != StatusReady || p.StableNodeID == "":
+		why = "not a ready node (" + p.Status + ")"
+	case p.Ephemeral:
+		why = "ephemeral"
+	case !slices.Equal(canonTags(p.Tags), canonTags(class.Tags)) || !slices.Equal(canonTags(o.Tags), canonTags(class.Tags)):
+		why = "tags differ from the class's"
+	}
+	if why != "" {
+		m.log.Warn("pool node not used", "pool", r.PoolObjectID, "object", o.ID, "why", why)
+		return nil
+	}
+	return &p
 }
 
 // findWorkloadClass finds the latest deployment of the workload named name
@@ -1480,12 +1651,15 @@ const MintClaimTTL = 60 * time.Second
 // mintOne mints one single-use, preauthorized, ≤5-min key tagged with the
 // object's tags, and puts it in custody. The key is never logged.
 func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (created bool, err error) {
+	sp := mintSpans{start: time.Now()}
 	o, err := m.store.GetObject(ctx, id)
 	if err != nil || o.Status != StatusPending {
 		return false, nil // gone, killed or already minted
 	}
 	// Claim the mint (H02): only one replica calls CreateKey for an object.
 	now := m.now()
+	sp.queued = now.Sub(time.UnixMilli(o.CreatedAt)) // create → this attempt (store clock; both sides ms)
+	sp.mark(&sp.load)
 	if ok, err := m.store.ClaimMint(ctx, id, m.replicaID, now, now.Add(-MintClaimTTL)); err != nil {
 		return false, err
 	} else if !ok {
@@ -1496,31 +1670,42 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 	// the others. Correctness does not rest on the TTL: keyed custody and
 	// the KeyID check below make a late duplicate undo only its own key.
 	defer m.store.ReleaseMint(context.WithoutCancel(ctx), id, m.replicaID)
+	sp.mark(&sp.claim)
+	// Fast path: a pooled key (already minted, and its throttle token
+	// already spent by the refill).
+	if handled, err := m.adoptWarmKey(ctx, t, o, &sp); handled {
+		return false, err
+	}
 	// Only now take a registration token (the claim says this replica will
 	// mint), then refresh the claim: the wait may have been long.
 	if th != nil {
 		if err := th.Wait(ctx); err != nil {
 			return false, err
 		}
+		sp.mark(&sp.throttle)
 		now := m.now()
 		if ok, err := m.store.ClaimMint(ctx, id, m.replicaID, now, now.Add(-MintClaimTTL)); err != nil || !ok {
 			return false, err // lost it meanwhile (killed, minted, or the claim went stale)
 		}
+		sp.mark(&sp.reclaim)
 	}
 	api, err := m.broker.API(ctx, t, purposeMint)
 	if err != nil {
 		return false, err
 	}
+	sp.mark(&sp.broker)
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: o.Tags, Ephemeral: o.Ephemeral, Preauthorized: true,
 		ExpirySeconds: int(KeyExpiry / time.Second), Description: "twd " + o.ID})
 	if err != nil {
 		return false, err
 	}
+	sp.mark(&sp.createKey)
 	own := custodyKeyName(o, k.ID)
 	if err := m.custody.Put(ctx, own, []byte(k.Secret)); err != nil {
 		api.DeleteKey(ctx, k.ID)
 		return true, err
 	}
+	sp.mark(&sp.custody)
 	exp := m.now().Add(KeyExpiry - 15*time.Second).UnixMilli() // released only with ≥15 s of life left
 	killed := false
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, ObjectID: id, Kind: "mint"}, map[string]any{"keyID": k.ID, "tags": o.Tags,
@@ -1541,8 +1726,10 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 		m.custody.Delete(ctx, own)
 		return true, err
 	}
+	sp.mark(&sp.commit)
 	m.recordIntent(ctx, ai, nil) // committed with the mint (H22)
 	m.notify(id)
+	m.log.Info("mint spans", append([]any{"object", id, "tenant", t.ID, "keyID", k.ID}, sp.attrs()...)...)
 	return true, nil
 }
 
@@ -1584,6 +1771,7 @@ func (c Credential) String() string { return "mgmt.Credential{[REDACTED]}" }
 // name themselves) fences on the epoch alone. It waits up to wait for a
 // pending mint.
 func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, wait time.Duration) (Credential, error) {
+	called := time.Now()
 	deadline := m.now().Add(wait)
 	for {
 		ch := m.changed(id)
@@ -1598,6 +1786,10 @@ func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, w
 			return Credential{}, errf(502, "bootstrap_failed", "minting a key for %s failed", id)
 		case StatusReady:
 			return Credential{}, errf(409, "already_joined", "object %s already joined; rejoin from saved node state", id)
+		case StatusAssigned:
+			return Credential{}, errf(409, "already_joined", "object %s was assigned a pre-joined node (%s); it needs no key", id, o.StableNodeID)
+		case StatusTransferred:
+			return Credential{}, errf(410, "killed", "pool node %s was transferred (%s)", id, o.KillReason)
 		case StatusMinted:
 			if m.now().UnixMilli() >= o.KeyExpires {
 				// Expired unused key: revoke it and mint again.
@@ -1633,6 +1825,8 @@ func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, w
 			}
 			t, _ := m.store.GetTenant(ctx, o.TenantID)
 			m.recordIntent(ctx, ai, nil)
+			m.log.Info("credential released", "object", id, "host", hostID, "keyID", o.KeyID,
+				"waited_ms", time.Since(called).Milliseconds(), "since_create_ms", m.now().UnixMilli()-o.CreatedAt)
 			return Credential{AuthKey: string(secret), ExpiresAt: o.KeyExpires, Tags: o.Tags, Hostname: o.Hostname,
 				Ephemeral: o.Ephemeral, ControlURL: t.ControlURL}, nil
 		}
@@ -1674,7 +1868,7 @@ func (m *Mgmt) Ready(ctx context.Context, id, hostID string, r ReadyRequest) (Ob
 	if r.Epoch > 0 {
 		fence = &Fence{Lease: o.Lease, Holder: hostID, Epoch: r.Epoch}
 	}
-	wasKilled := false
+	wasKilled, wrongNode, assignedTo := false, false, ""
 	// The ready record commits with the status change (H22); the node
 	// certificate outcome is added below.
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: o.TenantID, ObjectID: id, Kind: "ready"},
@@ -1691,9 +1885,17 @@ func (m *Mgmt) Ready(ctx context.Context, id, hostID string, r ReadyRequest) (Ob
 			}
 			return nil
 		}
+		if o.Status == StatusAssigned && r.StableNodeID != o.StableNodeID {
+			// An assigned object may only become ready on the node it was given.
+			wrongNode, assignedTo = true, o.StableNodeID
+			return errWrongNode
+		}
 		o.Status, o.NodeID, o.StableNodeID, o.MagicDNS, o.UpdatedAt = StatusReady, r.NodeID, r.StableNodeID, r.MagicDNS, m.now().UnixMilli()
 		return nil
 	})
+	if wrongNode {
+		return o, errf(409, "identity_conflict", "object %s was assigned node %s, not %s", id, assignedTo, r.StableNodeID)
+	}
 	if err != nil {
 		return o, err
 	}
@@ -2178,6 +2380,8 @@ func (m *Mgmt) PendingDeletes() int {
 // PurgeResult is POST /v0/tenants/{id}/purge.
 type PurgeResult struct {
 	Purged []string `json:"purged"`
+	// WarmKeysRevoked counts the tenant's unused pooled keys revoked by the purge.
+	WarmKeysRevoked int `json:"warmKeysRevoked,omitempty"`
 }
 
 // Purge forgets a tenant's killed and failed objects (twd down --purge):
@@ -2199,6 +2403,13 @@ func (m *Mgmt) Purge(ctx context.Context, tenantID string, statuses ...string) (
 	dead, err := m.store.DeleteDeadObjects(ctx, tenantID, statuses)
 	if err != nil {
 		return res, err
+	}
+	// A purge leaves nothing behind: the tenant's unused pooled keys are
+	// revoked too (the pool refills on the next create or deploy).
+	if n, err := m.drainWarm(ctx, tenantID); err != nil {
+		m.log.Warn("purge: warm keys", "tenant", tenantID, "err", err)
+	} else if n > 0 {
+		res.WarmKeysRevoked = n
 	}
 	for _, o := range dead {
 		res.Purged = append(res.Purged, o.ID)
@@ -2279,7 +2490,7 @@ func (m *Mgmt) deleteDevice(ctx context.Context, o Object) error {
 // Reap kills (cascade) every live object past its TTL and every live
 // sub-agent whose parent is dead. It returns how many it killed.
 func (m *Mgmt) Reap(ctx context.Context) (int, error) {
-	live, err := m.store.ListObjects(ctx, ObjectFilter{Status: []string{StatusPending, StatusMinted, StatusReady}})
+	live, err := m.store.ListObjects(ctx, ObjectFilter{Status: LiveStatuses})
 	if err != nil {
 		return 0, err
 	}
@@ -2326,7 +2537,9 @@ const (
 // PrivilegedKinds are the kinds a tenant may never submit (RT-02).
 var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": true, "spawn": true, "kill": true,
 	"create": true, "mint": true, "ready": true, "credential": true, "principal": true, "device_delete": true,
-	"tenant": true, "deploy": true, "obo_root": true}
+	"tenant": true, "deploy": true, "obo_root": true,
+	// ADR-029: public ingress records come from netd/hostd only.
+	"public_request": true, "public_rejected": true, "public_object_created": true, "expose_on": true, "expose_off": true}
 
 // checkAuditSource enforces the provenance contract on a host-submitted
 // record: a "tenant" source may only carry a tenant_note, and a tenant_note
@@ -2475,6 +2688,9 @@ type PreflightRequest struct {
 	// Service, with WorkloadTags, checks autoApprovers.services.
 	Service      string   `json:"service,omitempty"`
 	WorkloadTags []string `json:"workloadTags,omitempty"`
+	// Public: the workload declares public routes, so tag:twd-public needs
+	// the funnel nodeAttr (ADR-029 D6).
+	Public bool `json:"public,omitempty"`
 }
 
 // PreflightMissing is one missing grant.
@@ -2499,6 +2715,12 @@ type PreflightResult struct {
 	Service           string `json:"service,omitempty"`
 	ServiceUnapproved bool   `json:"serviceUnapproved,omitempty"`
 	ServiceSnippet    string `json:"serviceSnippet,omitempty"`
+	// MissingNodeAttrs names missing nodeAttrs ("funnel on tag:twd-public");
+	// NodeAttrsSnippet is the policy to add (ADR-029 D6).
+	MissingNodeAttrs []string `json:"missingNodeAttrs,omitempty"`
+	NodeAttrsSnippet string   `json:"nodeAttrsSnippet,omitempty"`
+	// PublicURL is where the workload's public routes will be served.
+	PublicURL string `json:"publicURL,omitempty"`
 }
 
 // Preflight checks the request against the tenant's current policy (read
@@ -2539,10 +2761,14 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 			}
 		}
 	}
+	if r.Public && !pol.HasNodeAttr(PublicTag, "funnel") {
+		res.MissingNodeAttrs = append(res.MissingNodeAttrs, "funnel on "+PublicTag)
+		res.NodeAttrsSnippet = PublicFunnelSnippet
+	}
 	if r.Service != "" {
 		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
 	}
-	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && !res.ServiceUnapproved
+	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved
 	return res, nil
 }
 

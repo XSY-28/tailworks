@@ -56,7 +56,10 @@ func run() error {
 		tsapiURL     = flag.String("tsapi-url", tsapi.DefaultBaseURL, "Tailscale API base URL")
 		issuerURL    = flag.String("issuer-url", "", "WIF: public https issuer origin (default with -funnel: https://<tsnet name>)")
 		issuerListen = flag.String("issuer-listen", "", "WIF: also serve the issuer on this local address (plain HTTP, e.g. behind a proxy)")
-		funnel       = flag.Bool("funnel", false, "WIF: serve the issuer publicly via tsnet ListenFunnel :443 (needs -tsnet-hostname)")
+		funnel       = flag.Bool("funnel", false, "WIF: serve the issuer publicly via Funnel on the ISSUER's own tsnet node (-issuer-tsnet-hostname); mgmt's own node never uses Funnel")
+		issHostname  = flag.String("issuer-tsnet-hostname", "", "WIF: the issuer's own tsnet node (e.g. twd-issuer, tag "+mgmt.IssuerTag+"): Funnel-only, serves discovery + JWKS")
+		issDir       = flag.String("issuer-tsnet-dir", "", "WIF: the issuer node's state dir (default <state-dir>/issuer-tsnet; twd up joins it)")
+		issAuthFile  = flag.String("issuer-tsnet-authkey-file", "", "WIF: TS_AUTHKEY=… for the issuer node's first join (default: the state must already be logged in)")
 		tsHostname   = flag.String("tsnet-hostname", "", "serve the API on the operator tailnet as this tsnet node (e.g. twd-mgmt); required unless -local-dev")
 		noLoopback   = flag.Bool("no-loopback", false, "don't publish the node's loopback proxy for the local twd CLI (<state-dir>/loopback.json)")
 		version      = flag.String("version", "", "reported by GET /v1/status")
@@ -70,6 +73,8 @@ func run() error {
 		setecURL     = flag.String("setec-url", "", "setec server URL (with -custody setec)")
 		reapEvery    = flag.Duration("reap-interval", 10*time.Second, "reaper interval")
 		delDelay     = flag.Duration("device-delete-delay", 0, "defer kill tier 2 (device delete) this long after the tier-1 push, so the host's tombstone answers new connections with object_killed (keep < hostd -kill-tombstone)")
+		warmKeys     = flag.Int("warm-keys", 5, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
+		warmKeyTTL   = flag.Duration("warm-key-ttl", mgmt.DefaultWarmKeyTTL, "-warm-keys: a pooled key's expiry; unused keys are revoked shortly before it")
 		verbose      = flag.Bool("v", false, "debug logging")
 	)
 	flag.Parse()
@@ -210,7 +215,7 @@ func run() error {
 
 	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: *tsapiURL, Issuer: issuer},
 		IDSecret: secret, ReplicaID: replicaID, ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, Log: log,
-		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl}
+		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL}
 	if ts != nil {
 		mcfg.TailnetDial = ts.Dial // kill/assignment pushes to hosts' own nodes
 	}
@@ -368,17 +373,59 @@ func run() error {
 		} else if *tsTLS {
 			log.Warn("HTTPS is not enabled on this tailnet: the API is served on :80 only; `twd link` uses plain HTTP (WireGuard-encrypted, WhoIs-authenticated)")
 		}
-		if *funnel {
-			if issuer == nil {
-				return errors.New("-funnel needs an issuer URL")
-			}
-			fl, err := ts.ListenFunnel("tcp", ":443", tsnet.FunnelOnly())
-			if err != nil {
-				return fmt.Errorf("funnel: %w", err)
-			}
-			api.Listeners = append(api.Listeners, "funnel:443")
-			servers = append(servers, serve("funnel", fl, issuer.Handler()))
+	}
+	if *funnel {
+		// The WIF issuer is public, so it runs on its OWN node: mgmt's node
+		// (the API, WhoIs admins, the signing key's process identity) is
+		// never Funnel-capable and never listens on Funnel.
+		if issuer == nil {
+			return errors.New("-funnel needs an issuer URL")
 		}
+		if *issHostname == "" || *tsControl == "" {
+			return errors.New("-funnel needs -issuer-tsnet-hostname and -tsnet-control-url (the issuer runs on its own node, never on mgmt's)")
+		}
+		if *issHostname == *tsHostname {
+			return errors.New("-issuer-tsnet-hostname must differ from -tsnet-hostname: mgmt's node never serves Funnel")
+		}
+		dir := *issDir
+		if dir == "" {
+			dir = filepath.Join(*stateDir, "issuer-tsnet")
+		}
+		if filepath.Clean(dir) == filepath.Clean(filepath.Join(*stateDir, "tsnet")) {
+			return errors.New("-issuer-tsnet-dir must not be mgmt's own node state")
+		}
+		its := &tsnet.Server{Hostname: *issHostname, Dir: dir, ControlURL: *tsControl, AdvertiseTags: []string{mgmt.IssuerTag},
+			Logf: func(string, ...any) {}}
+		if *issAuthFile != "" {
+			k, err := tsapi.LoadEnvFile(*issAuthFile, "TS_AUTHKEY")
+			if err != nil {
+				return err
+			}
+			its.AuthKey = k
+		}
+		defer its.Close()
+		uctx, ucancel := context.WithTimeout(ctx, 2*time.Minute)
+		_, err := its.Up(uctx)
+		ucancel()
+		if err != nil {
+			return fmt.Errorf("issuer node %s: %w (twd up --wif joins it)", *issHostname, err)
+		}
+		fl, err := its.ListenFunnel("tcp", ":443", tsnet.FunnelOnly())
+		if err != nil {
+			return fmt.Errorf("funnel on the issuer node %s: %w", *issHostname, err)
+		}
+		if ilc, err := its.LocalClient(); err == nil {
+			if st, err := ilc.StatusWithoutPeers(ctx); err == nil && st.Self != nil {
+				// A new name's first certificate takes longer than a Funnel
+				// client's TLS handshake: warm it now, or every early
+				// handshake (Tailscale's token-exchange verifier fetching the
+				// JWKS) fails until issuance finishes.
+				netd.PrefetchCert(ilc, st.Self.DNSName, log.With("node", *issHostname))
+			}
+		}
+		api.Listeners = append(api.Listeners, "issuer-funnel:443")
+		log.Info("WIF issuer served over Funnel on its own node", "node", *issHostname, "tag", mgmt.IssuerTag)
+		servers = append(servers, serve("issuer-funnel", fl, issuer.Handler()))
 	}
 	if *issuerListen != "" {
 		if issuer == nil {

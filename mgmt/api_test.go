@@ -38,6 +38,7 @@ type fakeTS struct {
 	deletedKeys    []string
 	deletedDevices []string
 	policyFetches  int
+	policy         string // overrides samplePolicy when set (before the first fetch)
 	notModified    int
 	rateLimitNext  int // respond 429 to the next N key creates
 	tokenExchanges int
@@ -51,10 +52,9 @@ type fakeTS struct {
 	oauthExchanges int
 	refuseTags     map[string]bool // tags the control plane refuses ("not permitted")
 	// Tailscale Services (services_test.go): definitions by name, devices
-	// for GET /devices, and a per-test policy (samplePolicy when empty).
+	// for GET /devices (the per-test policy is the policy field above).
 	services  map[string]map[string]any
 	devices   []map[string]any
-	policy    string
 	svcPuts   int
 	svcDenied bool // 403 on /services (credential without the Services scope)
 }
@@ -174,9 +174,9 @@ func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", `"p1"`)
 		if f.policy != "" {
 			w.Write([]byte(f.policy))
-		} else {
-			w.Write([]byte(samplePolicy))
+			return
 		}
+		w.Write([]byte(samplePolicy))
 	case strings.Contains(r.URL.Path, "/services/"):
 		if f.svcDenied {
 			w.WriteHeader(403)
@@ -439,7 +439,10 @@ type testEnv struct {
 	sock    string
 }
 
-func newTestEnv(t *testing.T, issuer *Issuer) *testEnv {
+func newTestEnv(t *testing.T, issuer *Issuer) *testEnv { return newTestEnvWith(t, issuer, nil) }
+
+// newTestEnvWith is newTestEnv with the Config adjusted by mutate.
+func newTestEnvWith(t *testing.T, issuer *Issuer, mutate func(*Config)) *testEnv {
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("/tmp", "twd-mgmt-test-") // short path: unix socket limit
 	if err != nil {
@@ -467,9 +470,13 @@ func newTestEnv(t *testing.T, issuer *Issuer) *testEnv {
 		t.Fatal(err)
 	}
 	logs := &bytes.Buffer{}
-	m, err := New(Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL, Issuer: issuer},
+	cfg := Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL, Issuer: issuer},
 		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Hour, PolicyMaxAge: time.Minute,
-		Log: slog.New(slog.NewTextHandler(&lockedWriter{w: logs}, nil))})
+		Log: slog.New(slog.NewTextHandler(&lockedWriter{w: logs}, nil))}
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	m, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -74,6 +74,18 @@ type Info struct {
 	// call (netns, TAP, stack, VMM, API calls, boot, workerd).
 	Boot, Ready, Total time.Duration
 	GuestUptimeAtReady time.Duration
+	// Stages are host-side stage end times in ms since Boot() was called
+	// (config drive, helper: netns/jail/volume/jailer/API calls,
+	// InstanceStart, vnet, ready); GuestStages are the guest's own, in ms
+	// since its kernel started (proto.Msg.Stages).
+	Stages map[string]float64 `json:",omitempty"`
+	// Source is how the VM came to be: "cold" (booted for this workload),
+	// "pool" (a warm pooled VM, claimed and loaded), or "restore" (restored
+	// from the base snapshot, then loaded). PoolIdle: how long it had waited.
+	Source      string             `json:",omitempty"`
+	Base        string             `json:",omitempty"` // restore: the base snapshot it came from
+	PoolIdle    time.Duration      `json:",omitempty"`
+	GuestStages map[string]float64 `json:",omitempty"`
 	// Jail is how the VMM is confined (microVM tier: jailer chroot,
 	// uid/gid, cgroup limits, seccomp).
 	Jail *Jail `json:",omitempty"`

@@ -92,6 +92,11 @@ type Store interface {
 	// CountLive counts live objects of a tenant, or (rootID != "") the live
 	// descendants of rootID.
 	CountLive(ctx context.Context, tenantID, rootID string) (int, error)
+	// Public ingress (ADR-029): a workload's `twd expose` setting.
+	GetWorkloadPublic(ctx context.Context, tenantID, workload string) (WorkloadPublic, error)
+	SetWorkloadPublic(ctx context.Context, wp WorkloadPublic) error
+	// DeleteDeadObject forgets one killed/failed object (ErrNotFound if live).
+	DeleteDeadObject(ctx context.Context, id string) error
 	// DeleteDeadObjects removes a tenant's killed and failed objects (twd
 	// down --purge), so their names and IDs can be used again. It returns
 	// the removed objects; audit records are untouched.
@@ -101,6 +106,16 @@ type Store interface {
 	RenewLease(ctx context.Context, name, holder string, epoch int64, ttl time.Duration, now time.Time) (Lease, error)
 	ReleaseLease(ctx context.Context, name, holder string, epoch int64) error
 	GetLease(ctx context.Context, name string) (Lease, error)
+	// MoveLease hands a held lease from (from, epoch) to to at epoch+1 in
+	// one conditional write (ErrLeaseLost if from no longer holds it at
+	// epoch): an explicit re-place of a running workload (ADR-033).
+	MoveLease(ctx context.Context, name, from string, epoch int64, to string, ttl time.Duration, now time.Time) (Lease, error)
+
+	// Smart placement (ADR-033): PutHostPaths replaces a host's measured
+	// paths for one tenant; HostPaths reads every host's paths to the
+	// given targets of a tenant.
+	PutHostPaths(ctx context.Context, hostID, tenantID string, ms []PathMeasurement, now time.Time) error
+	HostPaths(ctx context.Context, tenantID string, targets []string) ([]PathMeasurement, error)
 
 	// AppendAudit appends to rec.Chain. If rec.Hash is empty the store
 	// links (PrevHash = chain head) and hashes it; otherwise the record is

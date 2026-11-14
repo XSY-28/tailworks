@@ -53,6 +53,14 @@ check below runs in both.
 | `McpAgent` | not tested | | — | deprecated upstream; use `createMcpHandler` (ADR-022) |
 | `@callable` RPC, `useAgent`, `AIChatAgent` | not tested | | — | same DO/WebSocket primitives as above (assumption) |
 
+## Cron triggers
+
+`wrangler.jsonc` `triggers.crons` and the default export's
+`scheduled(controller, env, ctx)` work as on Cloudflare (UTC, Cloudflare's
+cron syntax with 1 = Sunday, `controller.cron` and
+`controller.scheduledTime`). See [cron-triggers.md](cron-triggers.md). The
+`node` runtime does not support them.
+
 ## Vercel AI SDK (`ai` 7.0.165) and `mcp-handler` 2.3.1
 
 | Feature | Status | Test | Notes |
@@ -69,6 +77,32 @@ check below runs in both.
 | On-behalf-of (`actingFor`) assertions on MCP calls | ❌ | — | RFC §4.6 not implemented: the server sees the agent's node, not the human it acts for |
 | `WorkflowAgent` / Workflow SDK | ❌ | — | `node:vm` (ADR-022: Node process tier, branch m9) |
 | `HarnessAgent`, Sandbox, hosted Vercel services | ❌ | — | client-only or process tier |
+
+## Workers platform config
+
+| Cloudflare | twd | Test | Notes |
+|---|---|---|---|
+| Smart Placement `placement: {"mode": "smart"}` | ✅ different signal | `TestScoreHosts`, `TestAPIPlacement`, `e2e/placement`, multimgmt S12 | Cloudflare moves a Worker toward its backend by analysing request durations per location (up to 15 min after deploy, `SUCCESS` / `INSUFFICIENT_INVOCATIONS`). twd places a workload **at deploy** on the host with the best **measured tailnet path** to what it connects to (`tailnet.connects`, or `placement.targets`): direct WireGuard > peer relay > DERP > unmeasured, then RTT; free capacity breaks ties. Smart is the default when `connects` is set; `"mode": "off"` turns it off. Read from `twd.jsonc`, or from `wrangler.jsonc` `placement` if `twd.jsonc` has none. ADR-033 (Proposed) |
+| `placement.host` / `placement.hostname` (probe targets) | ✅ as one target | `TestResolvePlacement` | the name (port dropped) is resolved in the tenant's netmap (MagicDNS name, host name or IP); Cloudflare probes it from public IPs with TCP/HTTP, twd with disco pings from the tenant's own nodes |
+| `placement.region` (`aws:us-east-1`) | ⚠ ignored, warned | `TestResolvePlacement` | there are no cloud regions; the deploy's `placement.summary` says so |
+| Placement status (`cf-placement` header, `placement_status`) | ⚠ different | `TestAPIPlacement` | `twd deploy` prints why (`placed on h2: tag:db direct 1.8 ms (h1: relayed 24 ms, h3: unmeasured)`); `GET /v1/deployments/{id}` `placement` and `twd ls` show it; the deploy audit record carries it. No per-request header |
+| Re-placement while running | ❌ by design | `TestAPIPlacement`, `e2e/placement` | Cloudflare re-routes continuously. twd never moves a running workload on its own (the lease holder is sticky); `twd deploy --replace` re-places it explicitly (hysteresis: a better path class, or ≥ 2 ms and ≥ 20 % lower RTT) |
+| Per-object placement (DO location hints, `locationHint`) | ❌ | — | every Durable Object instance of a workload runs on the workload's host |
+
+## Public routes (Funnel, ADR-029)
+
+Cloudflare Workers are public by default; twd workloads are tailnet-only
+unless `twd.jsonc` lists `public.routes` ([public-ingress.md](public-ingress.md)).
+
+| Cloudflare expectation | On twd public routes |
+|---|---|
+| `request.headers.get("CF-Connecting-IP")` | ✅ the client IP Funnel reports (client copies stripped) |
+| `X-Forwarded-For` / `X-Forwarded-Proto` | ✅ single value / `https` (set by netd) |
+| `request.cf.country`, `asn`, `city`… | ❌ absent (no GeoIP in v1) |
+| Caller identity | `getRequester(req)` → `{kind:"public", ip}`; `getCaller(req)` throws `public_request` |
+| `env.NS.getByName(newName)` from a public request | ❌ `public_create_denied` unless the class sets `"public": {"create": true, "maxObjects": N}` |
+| Custom domains, bring-your-own front door | ❌ `*.ts.net` only (Funnel) |
+| `email()` handler | ❌ (Funnel has no port 25; use a provider's inbound webhook to a public route) |
 
 ## twd behaviour found by this suite
 

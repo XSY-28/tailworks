@@ -4,7 +4,11 @@
 // types here are the subset hostd works with, converted at the edge.
 package mgmtapi
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/rosskukulinski/twd/internal/publicspec"
+)
 
 // Error is every non-2xx body (DX.md catalog shape).
 type Error struct {
@@ -181,6 +185,45 @@ type Assignment struct {
 	// Fence (F9, ADR-028 §3): stop serving this workload when mgmt is
 	// unreachable for FenceAfter. nil (an older mgmt) means true.
 	Fence *bool `json:"fence,omitempty"`
+	// Public (ADR-029) is the workload's public ingress. nil: tailnet-only
+	// (no twd.jsonc "public", or the tenant's publicIngress is not allow).
+	Public *PublicAssignment `json:"public,omitempty"`
+	// PlacementTargets (smart placement, ADR-033) are what this host should
+	// measure tailnet paths to, from this tenant's nodes.
+	PlacementTargets []string `json:"placementTargets,omitempty"`
+}
+
+// PublicAssignment is a workload's public ingress as mgmt assigns it
+// (ADR-029). hostd runs one extra node for it (namespace "_public", object
+// name = the workload, tags Tags, hostname = the workload name) whose netd
+// serves the Funnel listener.
+type PublicAssignment struct {
+	Routes  []string          `json:"routes"`
+	Upgrade []string          `json:"upgrade,omitempty"`
+	Limits  publicspec.Limits `json:"limits"` // effective (defaults filled)
+	Tags    []string          `json:"tags"`
+	// Exposed is false after `twd expose off`: the public node stays
+	// joined (its certificate stays warm) but its Funnel listener is
+	// closed and its flows reset. `twd expose on` reopens it.
+	Exposed bool `json:"exposed"`
+}
+
+// PathReport is one tenant's measured paths (PUT /v1/hosts/{id}/paths, and
+// the reply to a probe push).
+type PathReport struct {
+	TenantID string       `json:"tenantID"`
+	Targets  []PathSample `json:"targets"`
+}
+
+// PathSample is one target's measured path. AgeMs is how long ago it was
+// measured (monotonic); mgmt stamps it with the store clock.
+type PathSample struct {
+	Target     string  `json:"target"`
+	Peer       string  `json:"peer,omitempty"`
+	Path       string  `json:"path"`
+	RTTMs      float64 `json:"rttMs,omitempty"`
+	DERPRegion string  `json:"derpRegion,omitempty"`
+	AgeMs      int64   `json:"ageMs"`
 }
 
 type ObjectRef struct {
@@ -202,6 +245,9 @@ type CreateObjectRequest struct {
 	// v0 clarifications: feed audit.
 	ActingFor string `json:"actingFor,omitempty"`
 	TraceID   string `json:"traceID,omitempty"`
+	// PoolObjectID offers a ready pre-joined "_pool" node for this object
+	// (ADR-031); mgmt answers status "assigned" if it took it.
+	PoolObjectID string `json:"poolObjectID,omitempty"`
 }
 
 // CreateObjectResponse is the part of the Object resource hostd uses
@@ -358,6 +404,14 @@ type Page[T any] struct {
 // (contract gap, see STATUS.md M3: mgmt must declare it like a class, with
 // the twd.jsonc tailnet.tags).
 const WorkloadNamespace = "_workload"
+
+// StatusAssigned is the status of an object created on a pre-joined pool
+// node (CreateObjectRequest.PoolObjectID, ADR-031): no key, rename + ready.
+const StatusAssigned = "assigned"
+
+// PublicNamespace is the object namespace of a workload's public node
+// (ADR-029); the object name is the workload name.
+const PublicNamespace = publicspec.Namespace
 
 // Namespace returns the object namespace for POST /v1/objects: the DO
 // class name, or WorkloadNamespace for the workload entry node (class "").

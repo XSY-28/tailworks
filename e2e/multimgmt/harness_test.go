@@ -27,12 +27,15 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/rosskukulinski/twd/mgmt"
 )
 
-const (
-	pgContainer = "twd-mm-pg"
-	pgPassword  = "twdmm"
-)
+const pgPassword = "twdmm"
+
+// pgContainer is the throwaway Postgres container's name. TWD_MM_PG_NAME
+// (with TWD_MM_PG_PORT) isolates concurrent runs from other worktrees,
+// which would otherwise remove each other's container mid-scenario.
+var pgContainer = env("TWD_MM_PG_NAME", "twd-mm-pg")
 
 func env(k, def string) string {
 	if v := os.Getenv(k); v != "" {
@@ -128,7 +131,8 @@ type fakeTS struct {
 	n   int
 	// keysByObject: object ID → key IDs ever created for it.
 	keysByObject map[string][]string
-	liveKeys     map[string]string // key ID → object ID
+	liveKeys     map[string]string // key ID → object ID ("pool:<key ID>" for warm-pool keys)
+	keyTags      map[string]string // key ID → its tags (sorted, comma-joined) + "|ephemeral" / "|persistent"
 	createTimes  []time.Time
 	deletedDevs  []string
 	hold         bool // while true, key creation answers 503 (objects stay pending)
@@ -171,7 +175,7 @@ const fakePolicy = `{
 }`
 
 func newFakeTS(t *testing.T) *fakeTS {
-	f := &fakeTS{keysByObject: map[string][]string{}, liveKeys: map[string]string{}}
+	f := &fakeTS{keysByObject: map[string][]string{}, liveKeys: map[string]string{}, keyTags: map[string]string{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -193,12 +197,25 @@ func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"message":"fakeTS: holding"}`))
 	case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/keys"):
 		var body struct {
-			Description string `json:"description"`
+			Description  string `json:"description"`
+			Capabilities struct {
+				Devices struct {
+					Create struct {
+						Ephemeral bool     `json:"ephemeral"`
+						Tags      []string `json:"tags"`
+					} `json:"create"`
+				} `json:"devices"`
+			} `json:"capabilities"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
 		f.n++
 		id := fmt.Sprintf("k%06d", f.n)
 		obj := strings.TrimPrefix(body.Description, "twd ")
+		if strings.HasPrefix(body.Description, "twd pool ") {
+			obj = "pool:" + id // a warm key belongs to no object until one adopts it
+		}
+		cr := body.Capabilities.Devices.Create
+		f.keyTags[id] = mgmt.PoolName(cr.Tags, cr.Ephemeral)
 		f.keysByObject[obj] = append(f.keysByObject[obj], id)
 		f.liveKeys[id] = obj
 		f.createTimes = append(f.createTimes, time.Now())
@@ -285,6 +302,15 @@ func newFakeSetec(t *testing.T) *httptest.Server {
 }
 
 // ---- twd-mgmt replicas ----
+
+// warmArgs sets every replica's warm-key pool cap from TWD_MM_WARM_KEYS
+// ("0" turns it off; unset keeps twd-mgmt's default, 5).
+func warmArgs() []string {
+	if n := os.Getenv("TWD_MM_WARM_KEYS"); n != "" {
+		return []string{"-warm-keys", n}
+	}
+	return nil
+}
 
 var buildOnce struct {
 	sync.Once
@@ -383,7 +409,7 @@ func (c *cluster) start(i int) {
 	fmt.Fprintf(lf, "=== start %s\n", time.Now().UTC().Format(time.RFC3339Nano))
 	args := append([]string{"-local-dev", "-socket", rp.sock, "-host-token-file", c.tokenFile, "-state-dir", rp.dir,
 		"-db", viaProxy(c.t, c.dsn, rp.pg.addr()), "-custody", "setec", "-setec-url", c.setec.URL, "-tsapi-url", c.ts.srv.URL, "-reap-interval", "2s",
-		"-no-loopback"}, c.extraArgs...)
+		"-no-loopback"}, append(warmArgs(), c.extraArgs...)...)
 	args = append(args, c.argsFor[i]...)
 	cmd := exec.Command(mgmtBinary(c.t), args...)
 	cmd.Env = append(os.Environ(), c.env[i]...)

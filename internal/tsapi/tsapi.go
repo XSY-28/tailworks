@@ -273,6 +273,19 @@ func (c *Client) DeleteDevice(ctx context.Context, id string) error {
 	return err
 }
 
+// SetDeviceName sets a device's name (its MagicDNS name: name is the
+// first label, or a full name in the tailnet's domain). An admin-set name
+// overrides the node's own hostname from then on.
+func (c *Client) SetDeviceName(ctx context.Context, id, name string) error {
+	return c.do(ctx, "POST", "/api/v2/device/"+url.PathEscape(id)+"/name", map[string]string{"name": name}, nil)
+}
+
+// SetDeviceTags replaces a device's tags (each must be ownable by the
+// caller's credential under the tailnet policy's tagOwners).
+func (c *Client) SetDeviceTags(ctx context.Context, id string, tags []string) error {
+	return c.do(ctx, "POST", "/api/v2/device/"+url.PathEscape(id)+"/tags", map[string][]string{"tags": tags}, nil)
+}
+
 // GetPolicy reads the tailnet policy file as JSON (read-only; twd never
 // writes policy). With etag set it sends If-None-Match and reports
 // notModified on a 304.

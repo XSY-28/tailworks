@@ -20,33 +20,40 @@ import (
 
 // Defines values for AuditKind.
 const (
-	AuditKindAllow        AuditKind = "allow"
-	AuditKindCreate       AuditKind = "create"
-	AuditKindCredential   AuditKind = "credential"
-	AuditKindDeny         AuditKind = "deny"
-	AuditKindDeploy       AuditKind = "deploy"
-	AuditKindDeviceDelete AuditKind = "device_delete"
-	AuditKindEgress       AuditKind = "egress"
-	AuditKindHostAdd      AuditKind = "host_add"
-	AuditKindHostDelete   AuditKind = "host_delete"
-	AuditKindHostRegister AuditKind = "host_register"
-	AuditKindKill         AuditKind = "kill"
-	AuditKindMint         AuditKind = "mint"
-	AuditKindObjectUpdate AuditKind = "object_update"
-	AuditKindOboRoot      AuditKind = "obo_root"
-	AuditKindPreflight    AuditKind = "preflight"
-	AuditKindPrincipal    AuditKind = "principal"
-	AuditKindPurge        AuditKind = "purge"
-	AuditKindReady        AuditKind = "ready"
-	AuditKindReap         AuditKind = "reap"
-	AuditKindRemint       AuditKind = "remint"
-	AuditKindSpawn        AuditKind = "spawn"
-	AuditKindTenantCreate AuditKind = "tenant_create"
-	AuditKindTenantDelete AuditKind = "tenant_delete"
-	AuditKindTenantNote   AuditKind = "tenant_note"
-	AuditKindTenantUpdate AuditKind = "tenant_update"
-	AuditKindUndeploy     AuditKind = "undeploy"
-	AuditKindVolumeKey    AuditKind = "volume_key"
+	AuditKindAllow               AuditKind = "allow"
+	AuditKindCreate              AuditKind = "create"
+	AuditKindCredential          AuditKind = "credential"
+	AuditKindDeny                AuditKind = "deny"
+	AuditKindDeploy              AuditKind = "deploy"
+	AuditKindDeviceDelete        AuditKind = "device_delete"
+	AuditKindEgress              AuditKind = "egress"
+	AuditKindExposeOff           AuditKind = "expose_off"
+	AuditKindExposeOn            AuditKind = "expose_on"
+	AuditKindHostAdd             AuditKind = "host_add"
+	AuditKindHostDelete          AuditKind = "host_delete"
+	AuditKindHostRegister        AuditKind = "host_register"
+	AuditKindKill                AuditKind = "kill"
+	AuditKindMint                AuditKind = "mint"
+	AuditKindObjectUpdate        AuditKind = "object_update"
+	AuditKindOboRoot             AuditKind = "obo_root"
+	AuditKindPreflight           AuditKind = "preflight"
+	AuditKindPrincipal           AuditKind = "principal"
+	AuditKindPublicObjectCreated AuditKind = "public_object_created"
+	AuditKindPublicRejected      AuditKind = "public_rejected"
+	AuditKindPublicRequest       AuditKind = "public_request"
+	AuditKindPurge               AuditKind = "purge"
+	AuditKindReady               AuditKind = "ready"
+	AuditKindReap                AuditKind = "reap"
+	AuditKindRemint              AuditKind = "remint"
+	AuditKindRevoke              AuditKind = "revoke"
+	AuditKindSpawn               AuditKind = "spawn"
+	AuditKindTenantCreate        AuditKind = "tenant_create"
+	AuditKindTenantDelete        AuditKind = "tenant_delete"
+	AuditKindTenantNote          AuditKind = "tenant_note"
+	AuditKindTenantUpdate        AuditKind = "tenant_update"
+	AuditKindTransfer            AuditKind = "transfer"
+	AuditKindUndeploy            AuditKind = "undeploy"
+	AuditKindVolumeKey           AuditKind = "volume_key"
 )
 
 // Valid indicates whether the value is a known member of the AuditKind enum.
@@ -66,6 +73,10 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindEgress:
 		return true
+	case AuditKindExposeOff:
+		return true
+	case AuditKindExposeOn:
+		return true
 	case AuditKindHostAdd:
 		return true
 	case AuditKindHostDelete:
@@ -84,6 +95,12 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindPrincipal:
 		return true
+	case AuditKindPublicObjectCreated:
+		return true
+	case AuditKindPublicRejected:
+		return true
+	case AuditKindPublicRequest:
+		return true
 	case AuditKindPurge:
 		return true
 	case AuditKindReady:
@@ -91,6 +108,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindReap:
 		return true
 	case AuditKindRemint:
+		return true
+	case AuditKindRevoke:
 		return true
 	case AuditKindSpawn:
 		return true
@@ -101,6 +120,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindTenantNote:
 		return true
 	case AuditKindTenantUpdate:
+		return true
+	case AuditKindTransfer:
 		return true
 	case AuditKindUndeploy:
 		return true
@@ -187,8 +208,10 @@ const (
 	ErrorCodeImmutableField          ErrorCode = "immutable_field"
 	ErrorCodeInternal                ErrorCode = "internal"
 	ErrorCodeKilled                  ErrorCode = "killed"
+	ErrorCodeLeaseChanged            ErrorCode = "lease_changed"
 	ErrorCodeLeaseHeld               ErrorCode = "lease_held"
 	ErrorCodeLeaseLost               ErrorCode = "lease_lost"
+	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
 	ErrorCodeNoHost                  ErrorCode = "no_host"
 	ErrorCodeNoIdentity              ErrorCode = "no_identity"
@@ -199,6 +222,7 @@ const (
 	ErrorCodePolicyMissingTagOwners  ErrorCode = "policy_missing_tag_owners"
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
+	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
@@ -209,6 +233,7 @@ const (
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
+	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -254,9 +279,13 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeKilled:
 		return true
+	case ErrorCodeLeaseChanged:
+		return true
 	case ErrorCodeLeaseHeld:
 		return true
 	case ErrorCodeLeaseLost:
+		return true
+	case ErrorCodeMoveUnconfirmed:
 		return true
 	case ErrorCodeNamespaceAmbiguous:
 		return true
@@ -278,6 +307,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodePreconditionFailed:
 		return true
+	case ErrorCodePublicIngressNotAllowed:
+		return true
 	case ErrorCodeServiceAPIFailed:
 		return true
 	case ErrorCodeServiceConflict:
@@ -297,6 +328,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeUnknownNamespace:
 		return true
 	case ErrorCodeUnknownTenant:
+		return true
+	case ErrorCodeUnknownWorkload:
 		return true
 	default:
 		return false
@@ -413,16 +446,20 @@ func (e ObjectPatchStatus) Valid() bool {
 
 // Defines values for ObjectStatus.
 const (
-	ObjectStatusFailed  ObjectStatus = "failed"
-	ObjectStatusKilled  ObjectStatus = "killed"
-	ObjectStatusMinted  ObjectStatus = "minted"
-	ObjectStatusPending ObjectStatus = "pending"
-	ObjectStatusReady   ObjectStatus = "ready"
+	ObjectStatusAssigned    ObjectStatus = "assigned"
+	ObjectStatusFailed      ObjectStatus = "failed"
+	ObjectStatusKilled      ObjectStatus = "killed"
+	ObjectStatusMinted      ObjectStatus = "minted"
+	ObjectStatusPending     ObjectStatus = "pending"
+	ObjectStatusReady       ObjectStatus = "ready"
+	ObjectStatusTransferred ObjectStatus = "transferred"
 )
 
 // Valid indicates whether the value is a known member of the ObjectStatus enum.
 func (e ObjectStatus) Valid() bool {
 	switch e {
+	case ObjectStatusAssigned:
+		return true
 	case ObjectStatusFailed:
 		return true
 	case ObjectStatusKilled:
@@ -432,6 +469,116 @@ func (e ObjectStatus) Valid() bool {
 	case ObjectStatusPending:
 		return true
 	case ObjectStatusReady:
+		return true
+	case ObjectStatusTransferred:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PathClass.
+const (
+	Derp        PathClass = "derp"
+	Direct      PathClass = "direct"
+	PeerRelay   PathClass = "peer-relay"
+	Unmeasured  PathClass = "unmeasured"
+	Unreachable PathClass = "unreachable"
+	Unresolved  PathClass = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the PathClass enum.
+func (e PathClass) Valid() bool {
+	switch e {
+	case Derp:
+		return true
+	case Direct:
+		return true
+	case PeerRelay:
+		return true
+	case Unmeasured:
+		return true
+	case Unreachable:
+		return true
+	case Unresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDecisionAggregate.
+const (
+	Sum   PlacementDecisionAggregate = "sum"
+	Worst PlacementDecisionAggregate = "worst"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDecisionAggregate enum.
+func (e PlacementDecisionAggregate) Valid() bool {
+	switch e {
+	case Sum:
+		return true
+	case Worst:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDecisionMode.
+const (
+	PlacementDecisionModeOff   PlacementDecisionMode = "off"
+	PlacementDecisionModeSmart PlacementDecisionMode = "smart"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDecisionMode enum.
+func (e PlacementDecisionMode) Valid() bool {
+	switch e {
+	case PlacementDecisionModeOff:
+		return true
+	case PlacementDecisionModeSmart:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDecisionReason.
+const (
+	PlacementDecisionReasonCapacity PlacementDecisionReason = "capacity"
+	PlacementDecisionReasonPinned   PlacementDecisionReason = "pinned"
+	PlacementDecisionReasonSmart    PlacementDecisionReason = "smart"
+	PlacementDecisionReasonSticky   PlacementDecisionReason = "sticky"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDecisionReason enum.
+func (e PlacementDecisionReason) Valid() bool {
+	switch e {
+	case PlacementDecisionReasonCapacity:
+		return true
+	case PlacementDecisionReasonPinned:
+		return true
+	case PlacementDecisionReasonSmart:
+		return true
+	case PlacementDecisionReasonSticky:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PublicIngress.
+const (
+	PublicIngressAllow PublicIngress = "allow"
+	PublicIngressDeny  PublicIngress = "deny"
+)
+
+// Valid indicates whether the value is a known member of the PublicIngress enum.
+func (e PublicIngress) Valid() bool {
+	switch e {
+	case PublicIngressAllow:
+		return true
+	case PublicIngressDeny:
 		return true
 	default:
 		return false
@@ -554,8 +701,9 @@ func (e CreateObjectCredentialParamsReason) Valid() bool {
 
 // Defines values for PurgeTenantObjectsParamsState.
 const (
-	PurgeTenantObjectsParamsStateFailed PurgeTenantObjectsParamsState = "failed"
-	PurgeTenantObjectsParamsStateKilled PurgeTenantObjectsParamsState = "killed"
+	PurgeTenantObjectsParamsStateFailed      PurgeTenantObjectsParamsState = "failed"
+	PurgeTenantObjectsParamsStateKilled      PurgeTenantObjectsParamsState = "killed"
+	PurgeTenantObjectsParamsStateTransferred PurgeTenantObjectsParamsState = "transferred"
 )
 
 // Valid indicates whether the value is a known member of the PurgeTenantObjectsParamsState enum.
@@ -564,6 +712,8 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	case PurgeTenantObjectsParamsStateFailed:
 		return true
 	case PurgeTenantObjectsParamsStateKilled:
+		return true
+	case PurgeTenantObjectsParamsStateTransferred:
 		return true
 	default:
 		return false
@@ -584,6 +734,15 @@ type Assignment struct {
 	MaxDepth   *int          `json:"maxDepth,omitempty"`
 	MaxLive    *int          `json:"maxLive,omitempty"`
 	Namespaces []ClassConfig `json:"namespaces"`
+
+	// PlacementTargets Smart placement targets the host should measure paths to (`PUT /v1/hosts/{id}/paths`).
+	PlacementTargets *[]string `json:"placementTargets,omitempty"`
+
+	// Public A workload's public ingress (ADR-029). The host runs one extra node
+	// for it (namespace `_public`, object name = the workload, hostname =
+	// the workload name, `tags`) whose Funnel listener serves `routes`
+	// while `exposed`.
+	Public *PublicAssignment `json:"public,omitempty"`
 
 	// Service The Tailscale Service the workload entry node advertises while the deployment is active and healthy; the host withdraws it on drain, undeploy, fencing, kill, or failed health checks.
 	Service      *string   `json:"service,omitempty"`
@@ -618,7 +777,13 @@ type AuditBatch struct {
 // `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
 // `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
 // `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`.
+// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
+// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
+// Public ingress (ADR-029), host chain: `public_request` (one per public
+// request), `public_rejected` (per-minute summary of requests the limits
+// refused), `public_object_created` (a name admitted for a public create);
+// `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
+// host: the listener opened/closed).
 type AuditKind string
 
 // AuditPage defines model for AuditPage.
@@ -658,7 +823,13 @@ type AuditRecord struct {
 	// `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
 	// `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
 	// `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`.
+	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
+	// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
+	// Public ingress (ADR-029), host chain: `public_request` (one per public
+	// request), `public_rejected` (per-minute summary of requests the limits
+	// refused), `public_object_created` (a name admitted for a public create);
+	// `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
+	// host: the listener opened/closed).
 	Kind     AuditKind `json:"kind"`
 	ObjectID *string   `json:"objectID,omitempty"`
 
@@ -747,19 +918,25 @@ type Deployment struct {
 	DeploymentID string `json:"deploymentID"`
 
 	// Endpoint The workload entry node (`_workload` object).
-	Endpoint     Endpoint         `json:"endpoint"`
-	Epoch        int64            `json:"epoch"`
-	Error        *string          `json:"error,omitempty"`
-	Host         string           `json:"host"`
-	MaxDepth     *int             `json:"maxDepth,omitempty"`
-	MaxLive      *int             `json:"maxLive,omitempty"`
-	Namespaces   []ClassConfig    `json:"namespaces"`
-	Status       DeploymentStatus `json:"status"`
-	TenantID     string           `json:"tenantID"`
-	Tier         *Tier            `json:"tier,omitempty"`
-	UpdatedAt    *int64           `json:"updatedAt,omitempty"`
-	Workload     string           `json:"workload"`
-	WorkloadTags *[]string        `json:"workloadTags,omitempty"`
+	Endpoint   Endpoint      `json:"endpoint"`
+	Epoch      int64         `json:"epoch"`
+	Error      *string       `json:"error,omitempty"`
+	Host       string        `json:"host"`
+	MaxDepth   *int          `json:"maxDepth,omitempty"`
+	MaxLive    *int          `json:"maxLive,omitempty"`
+	Namespaces []ClassConfig `json:"namespaces"`
+
+	// Placement Why a deployment is on its host (smart placement, ADR-033).
+	Placement *PlacementDecision `json:"placement,omitempty"`
+
+	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
+	Public       *DeploymentPublic `json:"public,omitempty"`
+	Status       DeploymentStatus  `json:"status"`
+	TenantID     string            `json:"tenantID"`
+	Tier         *Tier             `json:"tier,omitempty"`
+	UpdatedAt    *int64            `json:"updatedAt,omitempty"`
+	Workload     string            `json:"workload"`
+	WorkloadTags *[]string         `json:"workloadTags,omitempty"`
 }
 
 // DeploymentCreate defines model for DeploymentCreate.
@@ -767,7 +944,7 @@ type DeploymentCreate struct {
 	// Bundle tar (optionally gzipped) of the built worker + `twd.jsonc` + `wrangler.jsonc`.
 	Bundle []byte `json:"bundle"`
 
-	// ForceTakeover Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`).
+	// ForceTakeover Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there).
 	ForceTakeover *bool `json:"forceTakeover,omitempty"`
 
 	// Host Pin a host.
@@ -775,8 +952,11 @@ type DeploymentCreate struct {
 
 	// Namespaces Override the classes read from `twd.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
-	TenantID   string         `json:"tenantID"`
-	Workload   string         `json:"workload"`
+
+	// Replace Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
+	Replace  *bool  `json:"replace,omitempty"`
+	TenantID string `json:"tenantID"`
+	Workload string `json:"workload"`
 }
 
 // DeploymentPage defines model for DeploymentPage.
@@ -785,6 +965,19 @@ type DeploymentPage struct {
 
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// DeploymentPublic The deployment's public routes (ADR-029); absent when tailnet-only.
+type DeploymentPublic struct {
+	// Allowed The tenant's `publicIngress` is `allow`; false: declared but not served.
+	Allowed bool `json:"allowed"`
+
+	// Exposed `twd expose` setting.
+	Exposed bool     `json:"exposed"`
+	Routes  []string `json:"routes"`
+
+	// URL Examples: https://support.tail7906d5.ts.net/
+	URL string `json:"url"`
 }
 
 // DeploymentReport defines model for DeploymentReport.
@@ -815,7 +1008,10 @@ type Endpoint struct {
 	// Service A workload's Tailscale Service: a stable name and VIPs that survive the workload node being re-minted or moving host. Callers need a grant to the `svc:` name; control routes it to the workload node only when policy `autoApprovers.services` lets the workload tags host it.
 	Service *ServiceEndpoint `json:"service,omitempty"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status ObjectStatus `json:"status"`
 }
 
@@ -830,7 +1026,7 @@ type Error struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -852,6 +1048,8 @@ type Error struct {
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
+	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
@@ -888,7 +1086,7 @@ type Error struct {
 // |---|---|---|
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
-// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -910,6 +1108,8 @@ type Error struct {
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
 // | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
+// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 // | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 // | `already_joined` | 409 | credential for an object that has a node |
 // | `identity_conflict` | 409 | object ID collision across identities |
@@ -1012,6 +1212,11 @@ type HostPage struct {
 
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// HostPathReport defines model for HostPathReport.
+type HostPathReport struct {
+	Tenants []PathReport `json:"tenants"`
 }
 
 // HostPush Where mgmt pushes kills and assignment changes. Over the tailnet,
@@ -1122,7 +1327,10 @@ type NodeCertificate struct {
 	Payload      NodeCertificatePayload `json:"payload"`
 	StableNodeID string                 `json:"stableNodeID"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status   ObjectStatus `json:"status"`
 	TenantID string       `json:"tenantID"`
 }
@@ -1203,7 +1411,10 @@ type Object struct {
 	Root         string  `json:"root"`
 	StableNodeID *string `json:"stableNodeID,omitempty"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status   ObjectStatus `json:"status"`
 	Tags     []string     `json:"tags"`
 	TenantID string       `json:"tenantID"`
@@ -1228,12 +1439,20 @@ type ObjectCreate struct {
 	// Hostname The hostname hostd proposes; mgmt answers with the one to use.
 	Hostname *string `json:"hostname,omitempty"`
 
-	// Namespace DO class name, or `_workload`.
+	// Namespace DO class name, `_workload`, or `_pool` (a pre-joined pool node; then `objectName` is `<Class>/<suffix>` and `workload` is required).
 	Namespace  string     `json:"namespace"`
 	ObjectName string     `json:"objectName"`
 	Parent     *ObjectRef `json:"parent,omitempty"`
-	TenantID   string     `json:"tenantID"`
-	TraceID    *string    `json:"traceID,omitempty"`
+
+	// PoolObjectID A ready `_pool` node of this tenant, workload and class with exactly
+	// the class's tags, offered for a new, non-ephemeral object. If every
+	// condition holds, the object is created `assigned` to that node (no
+	// mint) and the pool node becomes `transferred`, in one transaction;
+	// the host renames the node and sends `ready` with the same
+	// `stableNodeID`. Otherwise it is ignored and the object is minted.
+	PoolObjectID *string `json:"poolObjectID,omitempty"`
+	TenantID     string  `json:"tenantID"`
+	TraceID      *string `json:"traceID,omitempty"`
 
 	// TTL `10m`-style duration or seconds. Defaults to the class `ttl`.
 	TTL *ObjectCreate_TTL `json:"ttl,omitempty"`
@@ -1282,7 +1501,10 @@ type ObjectRef struct {
 	ObjectID string `json:"objectID"`
 }
 
-// ObjectStatus `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+// ObjectStatus `pending` → `minted` → `ready`; or, for an object given a pre-joined
+// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+// `transferred` (a `_pool` node whose node went to an object).
 type ObjectStatus string
 
 // Page The generic page envelope (`Page<T>`); every concrete `*Page` schema
@@ -1295,6 +1517,79 @@ type Page struct {
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
 
+// PathClass How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+type PathClass string
+
+// PathReport defines model for PathReport.
+type PathReport struct {
+	Targets  []PathSample `json:"targets"`
+	TenantID string       `json:"tenantID"`
+}
+
+// PathSample defines model for PathSample.
+type PathSample struct {
+	AgeMs      int64   `json:"ageMs"`
+	DerpRegion *string `json:"derpRegion,omitempty"`
+
+	// Path How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+	Path PathClass `json:"path"`
+
+	// Peer The netmap peer measured (the best one when a tag matches several).
+	Peer  *string  `json:"peer,omitempty"`
+	RttMs *float32 `json:"rttMs,omitempty"`
+
+	// Target A `tailnet.connects` entry: a tag or a peer name.
+	Target string `json:"target"`
+}
+
+// PlacementDecision Why a deployment is on its host (smart placement, ADR-033).
+type PlacementDecision struct {
+	Aggregate *PlacementDecisionAggregate `json:"aggregate,omitempty"`
+	Host      string                      `json:"host"`
+
+	// Hosts The candidates, eligible ones best first.
+	Hosts *[]struct {
+		Eligible bool   `json:"eligible"`
+		Free     int    `json:"free"`
+		Host     string `json:"host"`
+
+		// Path How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+		Path    *PathClass `json:"path,omitempty"`
+		RttMs   *float32   `json:"rttMs,omitempty"`
+		Targets *[]struct {
+			AgeSeconds *int64  `json:"ageSeconds,omitempty"`
+			DerpRegion *string `json:"derpRegion,omitempty"`
+			Detail     *string `json:"detail,omitempty"`
+
+			// Path How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+			Path   PathClass `json:"path"`
+			Peer   *string   `json:"peer,omitempty"`
+			RttMs  *float32  `json:"rttMs,omitempty"`
+			Target string    `json:"target"`
+		} `json:"targets,omitempty"`
+
+		// Why Why the host is not eligible.
+		Why *string `json:"why,omitempty"`
+	} `json:"hosts,omitempty"`
+	Mode PlacementDecisionMode `json:"mode"`
+
+	// Reason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
+	Reason PlacementDecisionReason `json:"reason"`
+
+	// Summary Examples: placed on h2: tag:db direct 1.8 ms (h1: relayed 24 ms, h3: unmeasured)
+	Summary string    `json:"summary"`
+	Targets *[]string `json:"targets,omitempty"`
+}
+
+// PlacementDecisionAggregate defines model for PlacementDecision.Aggregate.
+type PlacementDecisionAggregate string
+
+// PlacementDecisionMode defines model for PlacementDecision.Mode.
+type PlacementDecisionMode string
+
+// PlacementDecisionReason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
+type PlacementDecisionReason string
+
 // PreflightMissing defines model for PreflightMissing.
 type PreflightMissing struct {
 	Dst string `json:"dst"`
@@ -1306,9 +1601,18 @@ type PreflightMissing struct {
 
 // PreflightResult defines model for PreflightResult.
 type PreflightResult struct {
-	Missing          []PreflightMissing `json:"missing"`
-	MissingTagOwners []string           `json:"missingTagOwners"`
-	Ok               bool               `json:"ok"`
+	Missing []PreflightMissing `json:"missing"`
+
+	// MissingNodeAttrs Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes.
+	MissingNodeAttrs *[]string `json:"missingNodeAttrs,omitempty"`
+	MissingTagOwners []string  `json:"missingTagOwners"`
+
+	// NodeAttrsSnippet The `tagOwners` + `nodeAttrs` policy to add (HuJSON).
+	NodeAttrsSnippet *string `json:"nodeAttrsSnippet,omitempty"`
+	Ok               bool    `json:"ok"`
+
+	// PublicURL Where the workload's public routes will be served.
+	PublicURL *string `json:"publicURL,omitempty"`
 
 	// Service The Tailscale Service the workload node would host (`tailnet.service`).
 	Service *string `json:"service,omitempty"`
@@ -1327,10 +1631,56 @@ type PreflightResult struct {
 	Unchecked *[]string `json:"unchecked,omitempty"`
 }
 
+// PublicAssignment A workload's public ingress (ADR-029). The host runs one extra node
+// for it (namespace `_public`, object name = the workload, hostname =
+// the workload name, `tags`) whose Funnel listener serves `routes`
+// while `exposed`.
+type PublicAssignment struct {
+	Exposed bool `json:"exposed"`
+
+	// Limits netd's limits on a public listener (ADR-029 D5); defaults filled in.
+	Limits PublicLimits `json:"limits"`
+
+	// Routes Examples: ["/webhooks/*","/oauth/callback"]
+	Routes []string `json:"routes"`
+
+	// Tags Examples: ["tag:twd-public"]
+	Tags []string `json:"tags"`
+
+	// Upgrade Routes on which WebSocket/SSE upgrades are allowed.
+	Upgrade *[]string `json:"upgrade,omitempty"`
+}
+
+// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
+// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+// a deploy that declares them is refused `403 public_ingress_not_allowed`,
+// and setting `deny` later makes hosts close every public listener.
+// `twd up` (single-tenant) creates its tenant with `allow`.
+type PublicIngress string
+
+// PublicLimits netd's limits on a public listener (ADR-029 D5); defaults filled in.
+type PublicLimits struct {
+	Burst   *int `json:"burst,omitempty"`
+	IPBurst *int `json:"ipBurst,omitempty"`
+
+	// IPRps Requests per second, per client IP.
+	IPRps          *float32 `json:"ipRps,omitempty"`
+	MaxBodyBytes   *int64   `json:"maxBodyBytes,omitempty"`
+	MaxConns       *int     `json:"maxConns,omitempty"`
+	MaxHeaderBytes *int     `json:"maxHeaderBytes,omitempty"`
+
+	// Rps Requests per second, per workload.
+	Rps            *float32 `json:"rps,omitempty"`
+	TimeoutSeconds *int     `json:"timeoutSeconds,omitempty"`
+}
+
 // PurgeResult defines model for PurgeResult.
 type PurgeResult struct {
 	// Purged Object IDs forgotten.
 	Purged []string `json:"purged"`
+
+	// WarmKeysRevoked The tenant's unused pooled keys revoked with the purge.
+	WarmKeysRevoked *int `json:"warmKeysRevoked,omitempty"`
 }
 
 // SelfInfo defines model for SelfInfo.
@@ -1435,8 +1785,15 @@ type Tenant struct {
 	OboPublicKey *string `json:"oboPublicKey,omitempty"`
 
 	// Pool Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host).
-	Pool                   *string `json:"pool,omitempty"`
-	RegistrationsPerMinute int     `json:"registrationsPerMinute"`
+	Pool *string `json:"pool,omitempty"`
+
+	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
+	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+	// a deploy that declares them is refused `403 public_ingress_not_allowed`,
+	// and setting `deny` later makes hosts close every public listener.
+	// `twd up` (single-tenant) creates its tenant with `allow`.
+	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
+	RegistrationsPerMinute int            `json:"registrationsPerMinute"`
 
 	// Tailnet MagicDNS suffix of the customer tailnet.
 	//
@@ -1465,12 +1822,19 @@ type TenantCreate struct {
 	MaxObjects *int    `json:"maxObjects,omitempty"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `static`: fakemgmt only (testcontrol accepts any key).
-	MintMode               MintMode `json:"mintMode"`
-	OauthClientFile        *string  `json:"oauthClientFile,omitempty"`
-	OauthClientID          *string  `json:"oauthClientID,omitempty"`
-	Pool                   *string  `json:"pool,omitempty"`
-	RegistrationsPerMinute *int     `json:"registrationsPerMinute,omitempty"`
-	Tailnet                string   `json:"tailnet"`
+	MintMode        MintMode `json:"mintMode"`
+	OauthClientFile *string  `json:"oauthClientFile,omitempty"`
+	OauthClientID   *string  `json:"oauthClientID,omitempty"`
+	Pool            *string  `json:"pool,omitempty"`
+
+	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
+	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+	// a deploy that declares them is refused `403 public_ingress_not_allowed`,
+	// and setting `deny` later makes hosts close every public listener.
+	// `twd up` (single-tenant) creates its tenant with `allow`.
+	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
+	RegistrationsPerMinute *int           `json:"registrationsPerMinute,omitempty"`
+	Tailnet                string         `json:"tailnet"`
 
 	// TenantID Optional; generated (`tn_…`) when absent.
 	TenantID             *string `json:"tenantID,omitempty"`
@@ -1502,10 +1866,13 @@ type TenantPatch struct {
 	MaxObjects *int                      `json:"maxObjects,omitempty"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `static`: fakemgmt only (testcontrol accepts any key).
-	MintMode               *MintMode                 `json:"mintMode,omitempty"`
-	OauthClientFile        nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
-	OauthClientID          nullable.Nullable[string] `json:"oauthClientID,omitempty"`
-	Pool                   nullable.Nullable[string] `json:"pool,omitempty"`
+	MintMode        *MintMode                 `json:"mintMode,omitempty"`
+	OauthClientFile nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
+	OauthClientID   nullable.Nullable[string] `json:"oauthClientID,omitempty"`
+	Pool            nullable.Nullable[string] `json:"pool,omitempty"`
+
+	// PublicIngress The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`).
+	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int                      `json:"registrationsPerMinute,omitempty"`
 	Tier                   *Tier                     `json:"tier,omitempty"`
 	WifClientID            nullable.Nullable[string] `json:"wifClientID,omitempty"`
@@ -1550,7 +1917,7 @@ type TombstoneError struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -1572,6 +1939,8 @@ type TombstoneError struct {
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
+	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
@@ -1670,6 +2039,23 @@ type WhoAmI struct {
 // WhoAmIKind defines model for WhoAmI.Kind.
 type WhoAmIKind string
 
+// WorkloadPublic defines model for WorkloadPublic.
+type WorkloadPublic struct {
+	// Exposed `twd expose on` (true, the default) or `off`.
+	Exposed   bool   `json:"exposed"`
+	TenantID  string `json:"tenantID"`
+	UpdatedAt *int64 `json:"updatedAt,omitempty"`
+
+	// UpdatedBy The actor who last toggled it (see Conventions).
+	UpdatedBy *string `json:"updatedBy,omitempty"`
+	Workload  string  `json:"workload"`
+}
+
+// WorkloadPublicPatch defines model for WorkloadPublicPatch.
+type WorkloadPublicPatch struct {
+	Exposed bool `json:"exposed"`
+}
+
 // Cursor defines model for cursor.
 type Cursor = string
 
@@ -1702,6 +2088,9 @@ type TenantPath = string
 
 // VolumeID defines model for volumeID.
 type VolumeID = string
+
+// WorkloadName defines model for workloadName.
+type WorkloadName = string
 
 // BadRequest The DX.md error catalog shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
@@ -1741,6 +2130,12 @@ type NotFound = Error
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
 // `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
 type PreconditionFailed = Error
+
+// ReadyConflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// `missing` names what is absent (grant, cap, field, quota); `snippet`
+// is policy HuJSON to paste when a grant is missing; `doc_url` is
+// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+type ReadyConflict = Error
 
 // Unauthorized The DX.md error catalog shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
@@ -1949,6 +2344,12 @@ type PurgeTenantObjectsParams struct {
 // PurgeTenantObjectsParamsState defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParamsState string
 
+// UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
+type UpdateWorkloadPublicParams struct {
+	// IfMatch Only apply if the resource's current `ETag` matches; otherwise `412 precondition_failed`.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
 type CreateVolumeKeyGrantParams struct {
 	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
@@ -1966,6 +2367,9 @@ type CreateHostJSONRequestBody = HostCreate
 
 // RegisterHostJSONRequestBody defines body for RegisterHost for application/json ContentType.
 type RegisterHostJSONRequestBody = HostRegistration
+
+// ReportHostPathsJSONRequestBody defines body for ReportHostPaths for application/json ContentType.
+type ReportHostPathsJSONRequestBody = HostPathReport
 
 // ReportHostStatusJSONRequestBody defines body for ReportHostStatus for application/json ContentType.
 type ReportHostStatusJSONRequestBody = HostStatus
@@ -1987,6 +2391,12 @@ type UpdateTenantJSONRequestBody = TenantPatch
 
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
+
+// UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
+type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
+
+// UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody defines body for UpdateWorkloadPublic for application/merge-patch+json ContentType.
+type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPublicPatch
 
 // Getter for additional properties for OIDCConfiguration. Returns the specified
 // element and whether it was found
@@ -2412,14 +2822,42 @@ type ClientInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -2441,14 +2879,42 @@ type ClientInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -2598,6 +3064,46 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/hosts/{id}/assignments (the `ListHostAssignments` operationId).
 	ListHostAssignments(ctx context.Context, id HostID, params *ListHostAssignmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ReportHostPathsWithBody Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPathsWithBody(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportHostPaths Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPaths(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ReportHostStatusWithBody Heartbeat (replace the host's reported status)
 	//
 	// Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -2657,6 +3163,11 @@ type ClientInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes any type of body and a specified content type.
@@ -2688,6 +3199,11 @@ type ClientInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes a body of the `application/json` content type.
@@ -2923,6 +3439,59 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
+	//
+	// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+	// served over Funnel from its public node
+	// (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
+	// the tenant's `publicIngress` is `allow`. A workload that was never
+	// toggled is exposed.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/public (the `GetWorkloadPublic` operationId).
+	GetWorkloadPublic(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWorkloadPublicWithBody Expose or unexpose a workload's public routes (JSON Merge Patch)
+	//
+	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// redeploys. `exposed: false` makes the host close the public node's
+	// Funnel listener and reset its flows (the node and its certificate
+	// stay); `true` reopens it. The lease holder is pushed at once.
+	// `404 unknown_workload` when the tenant has no deployment of the
+	// workload. Audited (`kind: expose_on` / `expose_off`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+	UpdateWorkloadPublicWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
+	//
+	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// redeploys. `exposed: false` makes the host close the public node's
+	// Funnel listener and reset its flows (the node and its certificate
+	// stay); `true` reopens it. The lease holder is pushed at once.
+	// `404 unknown_workload` when the tenant has no deployment of the
+	// workload. Audited (`kind: expose_on` / `expose_off`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+	UpdateWorkloadPublic(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody Expose or unexpose a workload's public routes (JSON Merge Patch)
+	//
+	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// redeploys. `exposed: false` makes the host close the public node's
+	// Funnel listener and reset its flows (the node and its certificate
+	// stay); `true` reopens it. The lease holder is pushed at once.
+	// `404 unknown_workload` when the tenant has no deployment of the
+	// workload. Audited (`kind: expose_on` / `expose_off`).
+	//
+	// Takes a body of the `application/merge-patch+json` content type.
+	//
+	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	//
 	// Creates a key grant: the 256-bit data key of the `(tenant, workload)`
@@ -3130,14 +3699,42 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -3169,14 +3766,42 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -3466,6 +4091,66 @@ func (c *Client) ListHostAssignments(ctx context.Context, id HostID, params *Lis
 	return c.Client.Do(req)
 }
 
+// ReportHostPathsWithBody Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *Client) ReportHostPathsWithBody(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportHostPathsRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportHostPaths Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *Client) ReportHostPaths(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportHostPathsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ReportHostStatusWithBody Heartbeat (replace the host's reported status)
 //
 // Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -3555,6 +4240,11 @@ func (c *Client) ListObjects(ctx context.Context, params *ListObjectsParams, req
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -3597,6 +4287,11 @@ func (c *Client) CreateObjectWithBody(ctx context.Context, contentType string, b
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -4013,6 +4708,99 @@ func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *Pu
 // Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 func (c *Client) CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckTenantWIFRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
+//
+// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+// served over Funnel from its public node
+// (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
+// the tenant's `publicIngress` is `allow`. A workload that was never
+// toggled is exposed.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/public (the `GetWorkloadPublic` operationId).
+func (c *Client) GetWorkloadPublic(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetWorkloadPublicRequest(c.Server, id, workload)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWorkloadPublicWithBody Expose or unexpose a workload's public routes (JSON Merge Patch)
+//
+// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// redeploys. `exposed: false` makes the host close the public node's
+// Funnel listener and reset its flows (the node and its certificate
+// stay); `true` reopens it. The lease holder is pushed at once.
+// `404 unknown_workload` when the tenant has no deployment of the
+// workload. Audited (`kind: expose_on` / `expose_off`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+func (c *Client) UpdateWorkloadPublicWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWorkloadPublicRequestWithBody(c.Server, id, workload, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
+//
+// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// redeploys. `exposed: false` makes the host close the public node's
+// Funnel listener and reset its flows (the node and its certificate
+// stay); `true` reopens it. The lease holder is pushed at once.
+// `404 unknown_workload` when the tenant has no deployment of the
+// workload. Audited (`kind: expose_on` / `expose_off`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+func (c *Client) UpdateWorkloadPublic(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWorkloadPublicRequest(c.Server, id, workload, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody Expose or unexpose a workload's public routes (JSON Merge Patch)
+//
+// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// redeploys. `exposed: false` makes the host close the public node's
+// Funnel listener and reset its flows (the node and its certificate
+// stay); `true` reopens it. The lease holder is pushed at once.
+// `404 unknown_workload` when the tenant has no deployment of the
+// workload. Audited (`kind: expose_on` / `expose_off`).
+//
+// Takes a body of the `application/merge-patch+json` content type.
+//
+// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+func (c *Client) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWorkloadPublicRequestWithApplicationMergePatchPlusJSONBody(c.Server, id, workload, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5227,6 +6015,53 @@ func NewListHostAssignmentsRequest(server string, id HostID, params *ListHostAss
 	return req, nil
 }
 
+// NewReportHostPathsRequest calls the generic ReportHostPaths builder with application/json body
+func NewReportHostPathsRequest(server string, id HostID, body ReportHostPathsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportHostPathsRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewReportHostPathsRequestWithBody constructs an http.Request for the ReportHostPaths method, with any body, and a specified content type
+func NewReportHostPathsRequestWithBody(server string, id HostID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s/paths", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewReportHostStatusRequest calls the generic ReportHostStatus builder with application/json body
 func NewReportHostStatusRequest(server string, id HostID, body ReportHostStatusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -6203,6 +7038,127 @@ func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error)
 	return req, nil
 }
 
+// NewGetWorkloadPublicRequest constructs an http.Request for the GetWorkloadPublic method
+func NewGetWorkloadPublicRequest(server string, id TenantID, workload WorkloadName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/public", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateWorkloadPublicRequest calls the generic UpdateWorkloadPublic builder with application/json body
+func NewUpdateWorkloadPublicRequest(server string, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateWorkloadPublicRequestWithBody(server, id, workload, params, "application/json", bodyReader)
+}
+
+// NewUpdateWorkloadPublicRequestWithApplicationMergePatchPlusJSONBody calls the generic UpdateWorkloadPublic builder with application/merge-patch+json body
+func NewUpdateWorkloadPublicRequestWithApplicationMergePatchPlusJSONBody(server string, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateWorkloadPublicRequestWithBody(server, id, workload, params, "application/merge-patch+json", bodyReader)
+}
+
+// NewUpdateWorkloadPublicRequestWithBody constructs an http.Request for the UpdateWorkloadPublic method, with any body, and a specified content type
+func NewUpdateWorkloadPublicRequestWithBody(server string, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/public", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IfMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-Match", *params.IfMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewCreateVolumeKeyGrantRequest constructs an http.Request for the CreateVolumeKeyGrant method
 func NewCreateVolumeKeyGrantRequest(server string, id VolumeID, params *CreateVolumeKeyGrantParams) (*http.Request, error) {
 	var err error
@@ -6434,14 +7390,42 @@ type ClientWithResponsesInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -6463,14 +7447,42 @@ type ClientWithResponsesInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -6638,6 +7650,46 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/hosts/{id}/assignments (the `ListHostAssignments` operationId).
 	ListHostAssignmentsWithResponse(ctx context.Context, id HostID, params *ListHostAssignmentsParams, reqEditors ...RequestEditorFn) (*ListHostAssignmentsResponse, error)
 
+	// ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPathsWithBodyWithResponse(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error)
+
+	// ReportHostPathsWithResponse Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPathsWithResponse(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error)
+
 	// ReportHostStatusWithBodyWithResponse Heartbeat (replace the host's reported status)
 	//
 	// Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -6699,6 +7751,11 @@ type ClientWithResponsesInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -6730,6 +7787,11 @@ type ClientWithResponsesInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -6984,6 +8046,61 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error)
+
+	// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
+	//
+	// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+	// served over Funnel from its public node
+	// (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
+	// the tenant's `publicIngress` is `allow`. A workload that was never
+	// toggled is exposed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/public (the `GetWorkloadPublic` operationId).
+	GetWorkloadPublicWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*GetWorkloadPublicResponse, error)
+
+	// UpdateWorkloadPublicWithBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
+	//
+	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// redeploys. `exposed: false` makes the host close the public node's
+	// Funnel listener and reset its flows (the node and its certificate
+	// stay); `true` reopens it. The lease holder is pushed at once.
+	// `404 unknown_workload` when the tenant has no deployment of the
+	// workload. Audited (`kind: expose_on` / `expose_off`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+	UpdateWorkloadPublicWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error)
+
+	// UpdateWorkloadPublicWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
+	//
+	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// redeploys. `exposed: false` makes the host close the public node's
+	// Funnel listener and reset its flows (the node and its certificate
+	// stay); `true` reopens it. The lease holder is pushed at once.
+	// `404 unknown_workload` when the tenant has no deployment of the
+	// workload. Audited (`kind: expose_on` / `expose_off`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+	UpdateWorkloadPublicWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error)
+
+	// UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
+	//
+	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// redeploys. `exposed: false` makes the host close the public node's
+	// Funnel listener and reset its flows (the node and its certificate
+	// stay); `true` reopens it. The lease holder is pushed at once.
+	// `404 unknown_workload` when the tenant has no deployment of the
+	// workload. Audited (`kind: expose_on` / `expose_off`).
+	//
+	// Takes a body of the `application/merge-patch+json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error)
 
 	// CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 	//
@@ -8804,6 +9921,102 @@ func (r ListHostAssignmentsResponse) ContentType() string {
 	return ""
 }
 
+// ReportHostPathsResponse400Headers the declared response headers of an HTTP 400 response for ReportHostPaths
+type ReportHostPathsResponse400Headers struct {
+	TwdError *string
+}
+
+// ReportHostPathsResponse403Headers the declared response headers of an HTTP 403 response for ReportHostPaths
+type ReportHostPathsResponse403Headers struct {
+	TwdError *string
+}
+
+// ReportHostPathsResponseDefaultHeaders the declared response headers of an HTTP default response for ReportHostPaths
+type ReportHostPathsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ReportHostPathsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// Stored Targets stored.
+		Stored int `json:"stored"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ReportHostPathsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ReportHostPathsResponse403Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ReportHostPathsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ReportHostPathsResponse) GetJSON200() *struct {
+	// Stored Targets stored.
+	Stored int `json:"stored"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ReportHostPathsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReportHostPathsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReportHostPathsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ReportHostPathsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportHostPathsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportHostPathsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportHostPathsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportHostPathsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ReportHostStatusResponse400Headers the declared response headers of an HTTP 400 response for ReportHostStatus
 type ReportHostStatusResponse400Headers struct {
 	TwdError *string
@@ -9385,7 +10598,7 @@ type UpdateObjectResponse struct {
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *LeaseLost
+	JSON409 *ReadyConflict
 	// JSON410 the response for an HTTP 410 `application/json` response
 	JSON410 *Gone
 	// JSON412 the response for an HTTP 412 `application/json` response
@@ -9431,7 +10644,7 @@ func (r UpdateObjectResponse) GetJSON404() *NotFound {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r UpdateObjectResponse) GetJSON409() *LeaseLost {
+func (r UpdateObjectResponse) GetJSON409() *ReadyConflict {
 	return r.JSON409
 }
 
@@ -10508,6 +11721,215 @@ func (r CheckTenantWIFResponse) ContentType() string {
 	return ""
 }
 
+// GetWorkloadPublicResponse200Headers the declared response headers of an HTTP 200 response for GetWorkloadPublic
+type GetWorkloadPublicResponse200Headers struct {
+	ETag *string
+}
+
+// GetWorkloadPublicResponse403Headers the declared response headers of an HTTP 403 response for GetWorkloadPublic
+type GetWorkloadPublicResponse403Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadPublicResponse404Headers the declared response headers of an HTTP 404 response for GetWorkloadPublic
+type GetWorkloadPublicResponse404Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadPublicResponseDefaultHeaders the declared response headers of an HTTP default response for GetWorkloadPublic
+type GetWorkloadPublicResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetWorkloadPublicResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *WorkloadPublic
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetWorkloadPublicResponse200Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetWorkloadPublicResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetWorkloadPublicResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetWorkloadPublicResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetWorkloadPublicResponse) GetJSON200() *WorkloadPublic {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetWorkloadPublicResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetWorkloadPublicResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetWorkloadPublicResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetWorkloadPublicResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetWorkloadPublicResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetWorkloadPublicResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetWorkloadPublicResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// UpdateWorkloadPublicResponse200Headers the declared response headers of an HTTP 200 response for UpdateWorkloadPublic
+type UpdateWorkloadPublicResponse200Headers struct {
+	ETag *string
+}
+
+// UpdateWorkloadPublicResponse400Headers the declared response headers of an HTTP 400 response for UpdateWorkloadPublic
+type UpdateWorkloadPublicResponse400Headers struct {
+	TwdError *string
+}
+
+// UpdateWorkloadPublicResponse403Headers the declared response headers of an HTTP 403 response for UpdateWorkloadPublic
+type UpdateWorkloadPublicResponse403Headers struct {
+	TwdError *string
+}
+
+// UpdateWorkloadPublicResponse404Headers the declared response headers of an HTTP 404 response for UpdateWorkloadPublic
+type UpdateWorkloadPublicResponse404Headers struct {
+	TwdError *string
+}
+
+// UpdateWorkloadPublicResponse412Headers the declared response headers of an HTTP 412 response for UpdateWorkloadPublic
+type UpdateWorkloadPublicResponse412Headers struct {
+	ETag     *string
+	TwdError *string
+}
+
+// UpdateWorkloadPublicResponseDefaultHeaders the declared response headers of an HTTP default response for UpdateWorkloadPublic
+type UpdateWorkloadPublicResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type UpdateWorkloadPublicResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *WorkloadPublic
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON412 the response for an HTTP 412 `application/json` response
+	JSON412 *PreconditionFailed
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *UpdateWorkloadPublicResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *UpdateWorkloadPublicResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *UpdateWorkloadPublicResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *UpdateWorkloadPublicResponse404Headers
+	// Headers412 the parsed response headers for an HTTP 412 response
+	Headers412 *UpdateWorkloadPublicResponse412Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *UpdateWorkloadPublicResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateWorkloadPublicResponse) GetJSON200() *WorkloadPublic {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r UpdateWorkloadPublicResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r UpdateWorkloadPublicResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UpdateWorkloadPublicResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON412 returns the response for an HTTP 412 `application/json` response
+func (r UpdateWorkloadPublicResponse) GetJSON412() *PreconditionFailed {
+	return r.JSON412
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateWorkloadPublicResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateWorkloadPublicResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateWorkloadPublicResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateWorkloadPublicResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateWorkloadPublicResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // CreateVolumeKeyGrantResponse201Headers the declared response headers of an HTTP 201 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse201Headers struct {
 	CacheControl *string
@@ -10858,14 +12280,42 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -10893,14 +12343,42 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -11152,6 +12630,58 @@ func (c *ClientWithResponses) ListHostAssignmentsWithResponse(ctx context.Contex
 	return ParseListHostAssignmentsResponse(rsp)
 }
 
+// ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *ClientWithResponses) ReportHostPathsWithBodyWithResponse(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error) {
+	rsp, err := c.ReportHostPathsWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportHostPathsResponse(rsp)
+}
+
+// ReportHostPathsWithResponse Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *ClientWithResponses) ReportHostPathsWithResponse(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error) {
+	rsp, err := c.ReportHostPaths(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportHostPathsResponse(rsp)
+}
+
 // ReportHostStatusWithBodyWithResponse Heartbeat (replace the host's reported status)
 //
 // Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -11231,6 +12761,11 @@ func (c *ClientWithResponses) ListObjectsWithResponse(ctx context.Context, param
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -11269,6 +12804,11 @@ func (c *ClientWithResponses) CreateObjectWithBodyWithResponse(ctx context.Conte
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -11637,6 +13177,85 @@ func (c *ClientWithResponses) CheckTenantWIFWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseCheckTenantWIFResponse(rsp)
+}
+
+// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
+//
+// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+// served over Funnel from its public node
+// (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
+// the tenant's `publicIngress` is `allow`. A workload that was never
+// toggled is exposed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/public (the `GetWorkloadPublic` operationId).
+func (c *ClientWithResponses) GetWorkloadPublicWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*GetWorkloadPublicResponse, error) {
+	rsp, err := c.GetWorkloadPublic(ctx, id, workload, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetWorkloadPublicResponse(rsp)
+}
+
+// UpdateWorkloadPublicWithBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
+//
+// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// redeploys. `exposed: false` makes the host close the public node's
+// Funnel listener and reset its flows (the node and its certificate
+// stay); `true` reopens it. The lease holder is pushed at once.
+// `404 unknown_workload` when the tenant has no deployment of the
+// workload. Audited (`kind: expose_on` / `expose_off`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+func (c *ClientWithResponses) UpdateWorkloadPublicWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error) {
+	rsp, err := c.UpdateWorkloadPublicWithBody(ctx, id, workload, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWorkloadPublicResponse(rsp)
+}
+
+// UpdateWorkloadPublicWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
+//
+// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// redeploys. `exposed: false` makes the host close the public node's
+// Funnel listener and reset its flows (the node and its certificate
+// stay); `true` reopens it. The lease holder is pushed at once.
+// `404 unknown_workload` when the tenant has no deployment of the
+// workload. Audited (`kind: expose_on` / `expose_off`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+func (c *ClientWithResponses) UpdateWorkloadPublicWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error) {
+	rsp, err := c.UpdateWorkloadPublic(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWorkloadPublicResponse(rsp)
+}
+
+// UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
+//
+// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// redeploys. `exposed: false` makes the host close the public node's
+// Funnel listener and reset its flows (the node and its certificate
+// stay); `true` reopens it. The lease holder is pushed at once.
+// `404 unknown_workload` when the tenant has no deployment of the
+// workload. Audited (`kind: expose_on` / `expose_off`).
+//
+// Takes a body of the `application/merge-patch+json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
+func (c *ClientWithResponses) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error) {
+	rsp, err := c.UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWorkloadPublicResponse(rsp)
 }
 
 // CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
@@ -13445,6 +15064,96 @@ func ParseListHostAssignmentsResponse(rsp *http.Response) (*ListHostAssignmentsR
 	return response, nil
 }
 
+// ParseReportHostPathsResponse parses an HTTP response from a ReportHostPathsWithResponse call
+func ParseReportHostPathsResponse(rsp *http.Response) (*ReportHostPathsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportHostPathsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// Stored Targets stored.
+			Stored int `json:"stored"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ReportHostPathsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ReportHostPathsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case true:
+		var headers ReportHostPathsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseReportHostStatusResponse parses an HTTP response from a ReportHostStatusWithResponse call
 func ParseReportHostStatusResponse(rsp *http.Response) (*ReportHostStatusResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14031,7 +15740,7 @@ func ParseUpdateObjectResponse(rsp *http.Response) (*UpdateObjectResponse, error
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest LeaseLost
+		var dest ReadyConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -15208,6 +16917,227 @@ func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, e
 		response.Headers404 = &headers
 	case true:
 		var headers CheckTenantWIFResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetWorkloadPublicResponse parses an HTTP response from a GetWorkloadPublicWithResponse call
+func ParseGetWorkloadPublicResponse(rsp *http.Response) (*GetWorkloadPublicResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetWorkloadPublicResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkloadPublic
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetWorkloadPublicResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 403:
+		var headers GetWorkloadPublicResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetWorkloadPublicResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetWorkloadPublicResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseUpdateWorkloadPublicResponse parses an HTTP response from a UpdateWorkloadPublicWithResponse call
+func ParseUpdateWorkloadPublicResponse(rsp *http.Response) (*UpdateWorkloadPublicResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateWorkloadPublicResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkloadPublic
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 412:
+		var dest PreconditionFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON412 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers UpdateWorkloadPublicResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers UpdateWorkloadPublicResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers UpdateWorkloadPublicResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers UpdateWorkloadPublicResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 412:
+		var headers UpdateWorkloadPublicResponse412Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers412 = &headers
+	case true:
+		var headers UpdateWorkloadPublicResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

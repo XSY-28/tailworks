@@ -5,7 +5,7 @@ TS_CREDS  ?= $(HOME)/.config/tailnet-agents-design
 TAILNET1  ?= tail7906d5.ts.net
 WORKERD   := node_modules/.bin/workerd
 
-.PHONY: all build deps js-build api api-lint api-check test test-go test-js test-sdk test-pg e2e-local e2e-real e2e-svc e2e-mm-svc e2e-mac e2e-multi e2e-keyless e2e-oauth e2e-mbp e2e-linux e2e-vm guest-image release lint hooks clean gen-js test-node vm-assets e2e-linux-vm e2e-linux-reboot
+.PHONY: e2e-coldid e2e-coldid-real all build deps js-build api api-lint api-check test test-go test-js test-sdk test-pg e2e-local e2e-real e2e-svc e2e-mm-svc e2e-mac e2e-multi e2e-keyless e2e-oauth e2e-public e2e-mbp e2e-linux e2e-vm guest-image release lint hooks clean gen-js test-node vm-assets e2e-linux-vm e2e-linux-reboot e2e-placement
 
 all: build
 
@@ -39,6 +39,11 @@ test-js:
 test-sdk: deps
 	$(GO) test -tags sdk -count=1 -v -timeout 10m ./e2e/sdk/...
 
+## e2e-placement: smart placement (ADR-033), hermetic: real twd-mgmt + two twd-hostd processes on
+## testcontrol + local DERP, a tag:db peer, one host forced onto DERP; placement, stickiness, --replace.
+e2e-placement: deps
+	$(GO) test -tags e2eplacement -count=1 -v -timeout 10m ./e2e/placement/...
+
 ## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container).
 PG_CTX  ?= orbstack
 PG_PORT ?= 55433
@@ -56,6 +61,18 @@ e2e-real: deps
 	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ereal -count=1 -v -timeout 15m ./e2e/real/...
 
+## e2e-coldid: cold-identity breakdown (create → own node reachable, per stage), hermetic.
+## TWD_COLDID_N objects; TWD_COLDID_DIAL=ready makes the caller wait for "ready". Results: e2e/coldid/results/.
+e2e-coldid:
+	$(GO) test -tags e2e -count=1 -v -timeout 15m -run TestColdIdentityLocal ./e2e/coldid/
+
+## e2e-coldid-real: the same on tailnet 1 (production control; ttest-fi-* nodes, deleted by ID afterwards).
+e2e-coldid-real:
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-coldid-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestColdIdentityReal ./e2e/coldid/
+
 ## guest-image: the microVM guest rootfs (Linux only; reproducible): workerd + twd-guestd.
 GUEST_OUT ?= guest/out
 guest-image: $(WORKERD)
@@ -66,7 +83,7 @@ TWD_VM_KERNEL ?= $(HOME)/fc/vmlinux
 # 2 MiB pages for guest RAM (runtime sysctl inside the Lima VM, not persisted):
 # without them, workerd start-up under nested virt is ~8x slower.
 VM_HUGEPAGES ?= 2048
-VM_ENV = PATH="$$PATH" TWD_VM_KERNEL="$(TWD_VM_KERNEL)" TWD_VM_ROOTFS="$(CURDIR)/$(GUEST_OUT)/rootfs.ext4"
+VM_ENV = PATH="$$PATH" TWD_VM_KERNEL="$(TWD_VM_KERNEL)" TWD_VM_ROOTFS="$(CURDIR)/$(GUEST_OUT)/rootfs.ext4" TWD_VM_BENCH_DEPLOYS="$(TWD_VM_BENCH_DEPLOYS)" TWD_VM_E2E_SNAPSHOT="$(TWD_VM_E2E_SNAPSHOT)" TWD_VM_E2E_SNAPSHOT_REFILL="$(TWD_VM_E2E_SNAPSHOT_REFILL)"
 e2e-vm: deps guest-image
 	@[ "$$(uname -s)" = Linux ] || { echo "e2e-vm: Linux only; run it inside Lima twd-dev"; exit 1; }
 	@[ "$$(cat /proc/sys/vm/nr_hugepages)" -ge $(VM_HUGEPAGES) ] || sudo sysctl -qw vm.nr_hugepages=$(VM_HUGEPAGES)
@@ -148,7 +165,7 @@ e2e-keyless: deps
 	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
 		echo "e2e-keyless: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
-		$(GO) test -tags e2ekeyless -count=1 -v -timeout 25m ./e2e/keyless/...
+		$(GO) test -tags e2ekeyless -count=1 -v -timeout 35m ./e2e/keyless/...
 
 ## e2e-oauth: M12 on tailnet 1: `twd up --oauth-client-file` (mint mode oauth: an OAuth client with
 ## auth_keys + devices:core + policy_file:read, tag:twd; no browser, no Funnel, no API key given to twd)
@@ -159,6 +176,17 @@ e2e-oauth: deps
 		echo "e2e-oauth: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2eoauth -count=1 -v -timeout 25m ./e2e/oauth/...
+
+## e2e-public: ADR-029 on tailnet 1: public ingress over real Funnel. `twd up --oauth-client-file`,
+## a workload with twd.jsonc "public" routes, fetched through public DNS like an internet client:
+## public requester (never a tailnet caller), spoofed headers dropped, route allowlist, no public
+## object creation (opt-in up to maxObjects), `twd expose off|on`, audit, doctor probe, zero leftovers.
+## The only policy write it may make is the tag:twd-public tagOwner + its funnel nodeAttr.
+e2e-public: deps
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-public: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2epublic -count=1 -v -timeout 30m ./e2e/public/...
 
 ## release: self-contained tarballs in dist/ (darwin-arm64, linux-arm64, linux-amd64): Go binaries
 ## (CGO_ENABLED=0, esbuild built in), pinned workerd, templates + vendored node_modules,
@@ -249,10 +277,13 @@ lint: api-check
 	$(GO) vet -tags e2emulti ./e2e/multi/...
 	$(GO) vet -tags e2ekeyless ./e2e/keyless/...
 	$(GO) vet -tags e2eoauth ./e2e/oauth/...
+	$(GO) vet -tags e2epublic ./e2e/public/...
 	$(GO) vet -tags e2embp ./e2e/mbp/...
 	$(GO) vet -tags e2elinux ./e2e/linux/...
 	$(GO) vet -tags sdk ./e2e/sdk/...
 	$(GO) vet -tags nodetier ./e2e/node/...
+	$(GO) vet -tags e2eplacement ./e2e/placement/...
+	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...
 	@sh scripts/check-secrets.sh
 
 hooks:

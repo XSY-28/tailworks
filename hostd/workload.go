@@ -63,6 +63,11 @@ type workload struct {
 	svcReason     string
 	svcFails      int
 	svcHealthy    bool
+
+	// placementTargets: what to measure paths to (smart placement).
+	placementTargets []string
+	cronLast         time.Time       // the last minute whose cron triggers were evaluated (UTC)
+	cronRunning      map[string]bool // cron expressions with a run in progress
 }
 
 // fences reports whether heartbeat loss must stop this workload (stateful,
@@ -282,6 +287,7 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 	w.mu.Unlock()
 	h.rejoinObjects(w, app)
 	h.syncService(w, false)
+	go h.applyPublic(w, a.Public)
 	h.log.Info("deployment active", "workload", w.name, "deployment", a.DeploymentID, "epoch", a.Epoch,
 		"tier", tier, "blue_green", old != nil, "ms", time.Since(st).Milliseconds())
 }
@@ -322,11 +328,18 @@ func (h *Host) deploySerial(w *workload, a mgmtapi.Assignment, app *bundle.App, 
 		}
 		w.mu.Unlock()
 	}
+	var drainMS, stopMS int64
 	if old != nil {
+		t := time.Now()
 		old.drain(h.cfg.DrainTimeout)
+		drainMS = time.Since(t).Milliseconds()
+		t = time.Now()
 		old.stop()
+		stopMS = time.Since(t).Milliseconds()
 	}
+	ts := time.Now()
 	inst, err := h.startInstance(w, a.DeploymentID, app, tier)
+	startMS := time.Since(ts).Milliseconds()
 	w.mu.Lock()
 	if old != nil && w.active == old {
 		w.active = nil
@@ -350,8 +363,10 @@ func (h *Host) deploySerial(w *workload, a mgmtapi.Assignment, app *bundle.App, 
 	open()
 	h.rejoinObjects(w, app)
 	h.syncService(w, false)
+	go h.applyPublic(w, a.Public)
 	h.log.Info("deployment active", "workload", w.name, "deployment", a.DeploymentID, "epoch", a.Epoch,
-		"runtime", app.Runtime, "tier", tier, "restart", old != nil, "ms", time.Since(st).Milliseconds())
+		"runtime", app.Runtime, "tier", tier, "restart", old != nil, "ms", time.Since(st).Milliseconds(),
+		"drain_ms", drainMS, "stop_old_ms", stopMS, "start_ms", startMS, "start_phases", inst.phases)
 }
 
 // rejoinObjects: objects of this workload saved from a previous run
@@ -427,6 +442,8 @@ type instance struct {
 	loopPorts []uint16
 
 	node *nodeProc // Node process tier (runtime "node"); nil for workerd
+
+	phases map[string]int64 // startInstance's phases (ms), for the deploy log
 
 	inflight atomic.Int64
 	reqs     atomic.Int64
@@ -521,6 +538,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		opts.Loopback = &gen.LoopbackNet{EgressObj: loop["obj"].Addr().String(), EgressWL: loop["wl"].Addr().String(),
 			HostAPI: loop["api"].Addr().String(), Token: token}
 	}
+	t0 := time.Now()
 	res, err := gen.Generate(app, opts)
 	if err != nil {
 		for _, l := range loop {
@@ -528,7 +546,8 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		}
 		return nil, err
 	}
-	inst := &instance{h: h, w: w, depID: depID, dir: dir, app: app, res: res, tier: tier, doStorage: opts.DOStorage}
+	inst := &instance{h: h, w: w, depID: depID, dir: dir, app: app, res: res, tier: tier, doStorage: opts.DOStorage,
+		phases: map[string]int64{"generate": time.Since(t0).Milliseconds()}}
 	var vol *sandbox.Volume
 	if vmTier {
 		// The DO volume's key comes from mgmt custody, released only to the
@@ -538,8 +557,10 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		epoch := w.epoch
 		w.mu.Unlock()
 		ctx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+		tk := time.Now()
 		key, err := h.mgmt.VolumeKey(ctx, w.tenantID, w.name, epoch)
 		cancel()
+		inst.phases["volume_key"] = time.Since(tk).Milliseconds()
 		if err != nil {
 			return nil, fmt.Errorf("DO volume key: %w", err)
 		}
@@ -626,14 +647,18 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 			go srv.Serve(ln)
 		}
 	}
+	tsp := time.Now()
 	if err := inst.spawn(); err != nil {
 		inst.stop()
 		return nil, err
 	}
+	inst.phases["spawn"] = time.Since(tsp).Milliseconds()
+	th := time.Now()
 	if err := inst.waitHealthy(20 * time.Second); err != nil {
 		inst.stop()
 		return nil, err
 	}
+	inst.phases["health"] = time.Since(th).Milliseconds()
 	return inst, nil
 }
 

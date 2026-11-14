@@ -15,7 +15,9 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
+	"tailscale.com/envknob"
 	"time"
 
 	"github.com/rosskukulinski/twd/internal/tssvc"
@@ -98,6 +100,16 @@ type Config struct {
 	Logger *slog.Logger
 	// TSNetLogs forwards tsnet's internal logs to Logger at debug level.
 	TSNetLogs bool
+
+	// PublicListen opens a public node's listener (ADR-029). Nil: tsnet
+	// ListenFunnel(":443", FunnelOnly()). Tests inject a listener whose
+	// conns are *ipn.FunnelConn (testcontrol issues no certificates).
+	PublicListen func(srv *tsnet.Server) (net.Listener, error)
+	// OnPublicRequest is called after each public request (audit, D7).
+	OnPublicRequest func(PublicRequestRecord)
+	// OnPublicRejected is called at most once per PublicRejectWindow per
+	// public node with the requests the limits refused.
+	OnPublicRejected func(PublicRejectSummary)
 }
 
 // ObjectOptions override registry defaults for one object.
@@ -105,6 +117,8 @@ type ObjectOptions struct {
 	Hostname  string
 	Tags      []string
 	Ephemeral *bool
+	// Public makes this a public (Funnel) node: see public.go.
+	Public *PublicOptions
 }
 
 // Registry holds every object node for one tenant on this host.
@@ -213,6 +227,8 @@ type Object struct {
 	nodeID   tailcfg.StableNodeID
 	dnsName  string
 	queued   time.Time
+	spans    *spanRec            // the current join's stages (JoinSpans)
+	pathOK   map[netip.Addr]bool // peers seen with a path (awaitPeerPath)
 	joinDur  time.Duration
 	rejoined bool
 	reminted bool // saved state was rejected by control; joined with a fresh key
@@ -234,6 +250,9 @@ type Object struct {
 	svcLn    *tssvc.ConnListener
 	svcHTTP  *http.Server
 	services []string // Services this node advertises
+	// pub is non-nil for a public (Funnel) node (ADR-029); set at Create
+	// and never changed.
+	pub *publicState
 }
 
 // ObjectInfo is a snapshot of an object, safe to serialize.
@@ -252,7 +271,13 @@ type ObjectInfo struct {
 	JoinMS    float64  `json:"joinMs,omitempty"`
 	// Services are the Tailscale Services this node advertises.
 	Services []string `json:"services,omitempty"`
-	Flows    int      `json:"flows"`
+	// Spans is the last join's stage breakdown (offsets from Create).
+	Spans JoinSpans `json:"spans"`
+	Flows int       `json:"flows"`
+	// Public is set for a public (Funnel) node; PublicListening reports
+	// whether its Funnel listener is open (ADR-029).
+	Public          bool `json:"public,omitempty"`
+	PublicListening bool `json:"publicListening,omitempty"`
 }
 
 // objectMeta is persisted next to the tsnet state so Rejoin can restore it.
@@ -261,6 +286,9 @@ type objectMeta struct {
 	Hostname  string   `json:"hostname"`
 	Tags      []string `json:"tags,omitempty"`
 	Ephemeral bool     `json:"ephemeral"`
+	// Public restores a public node as public on rejoin (never as a
+	// tailnet listener). Its Enabled is not trusted on restore.
+	Public *PublicOptions `json:"public,omitempty"`
 }
 
 // ErrClosed is returned after Close.
@@ -299,6 +327,10 @@ func (r *Registry) Create(id string, opts ObjectOptions) (*Object, error) {
 		queued:    time.Now(),
 		flows:     map[*flow]struct{}{},
 	}
+	o.spans = newSpanRec(o.queued)
+	if opts.Public != nil {
+		o.pub = newPublicState(*opts.Public)
+	}
 	if o.hostname == "" {
 		o.hostname = r.cfg.Hostname(id)
 	}
@@ -311,6 +343,13 @@ func (r *Registry) Create(id string, opts ObjectOptions) (*Object, error) {
 	// A saved object.json wins: a rejoin must come back as the same node.
 	if m, err := readMeta(o.dir); err == nil {
 		o.hostname, o.tags, o.ephemeral = m.Hostname, m.Tags, m.Ephemeral
+		if opts.Public == nil && m.Public != nil {
+			// Restored from saved state alone: public, but closed until the
+			// owner calls SetPublicEnabled (fail closed).
+			po := *m.Public
+			po.Enabled = false
+			o.pub = newPublicState(po)
+		}
 	}
 	r.objects[id] = o
 	r.joins.Add(1)
@@ -366,6 +405,7 @@ func (r *Registry) join(o *Object) {
 	if o.State() != StatePending {
 		return // killed while queued
 	}
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Slot })
 	ctx, cancel := context.WithTimeout(r.ctx, r.cfg.JoinTimeout)
 	defer cancel()
 	done := make(chan struct{})
@@ -407,8 +447,16 @@ func (o *Object) start(ctx context.Context) error {
 			return fmt.Errorf("auth key: %w", err)
 		}
 		key = k
+		o.spans.at(func(s *JoinSpans) *float64 { return &s.Key })
 	}
-	mb, _ := json.Marshal(objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
+	meta := objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral}
+	if o.pub != nil {
+		o.pub.mu.Lock()
+		po := o.pub.opts
+		o.pub.mu.Unlock()
+		meta.Public = &po
+	}
+	mb, _ := json.Marshal(meta)
 	if err := os.WriteFile(filepath.Join(o.dir, "object.json"), mb, 0o600); err != nil {
 		return err
 	}
@@ -440,9 +488,15 @@ func (o *Object) start(ctx context.Context) error {
 	srv := o.srv
 	o.mu.Unlock()
 	ip4, ip6 := srv.TailscaleIPs()
-	ln, err := srv.Listen("tcp", fmt.Sprintf(":%d", r.cfg.IngressPort))
-	if err != nil {
-		return err
+	// A public node never listens on the tailnet: its only listener is
+	// the Funnel one, opened below once the node is ready (ADR-029).
+	var ln net.Listener
+	if o.pub == nil {
+		l, err := srv.Listen("tcp", fmt.Sprintf(":%d", r.cfg.IngressPort))
+		if err != nil {
+			return err
+		}
+		ln = l
 	}
 	tr := &http.Transport{
 		DialContext:         o.dialEgress,
@@ -460,14 +514,18 @@ func (o *Object) start(ctx context.Context) error {
 	o.mu.Lock()
 	if o.state != StatePending {
 		o.mu.Unlock()
-		ln.Close()
+		if ln != nil {
+			ln.Close()
+		}
 		return errors.New("killed while joining")
 	}
 	o.lc, o.ip4, o.ip6, o.joinDur, o.rejoined, o.reminted = lc, ip4, ip6, joinDur, rejoin, reminted
 	if sst.Self != nil {
 		o.nodeID, o.dnsName = sst.Self.ID, sst.Self.DNSName
 	}
-	o.ln = &trackedListener{Listener: ln, o: o}
+	if ln != nil {
+		o.ln = &trackedListener{Listener: ln, o: o}
+	}
 	o.httpSrv, o.tr = hs, tr
 	// Tailscale Services: flows to a Service VIP on the ingress port reach
 	// the same attributed ingress (WhoIs on the real source address).
@@ -479,8 +537,15 @@ func (o *Object) start(ctx context.Context) error {
 	o.svcHTTP.SetKeepAlivesEnabled(false) // until a Service is advertised
 	svcHS := o.svcHTTP
 	o.state = StateReady
-	close(o.ready)
+	hostname := o.hostname // SetHostname may change it once ready
+	if o.pub == nil {
+		close(o.ready)
+	}
+	// A public node signals ready once its Funnel listener was attempted
+	// (below), so Ready means "listening" when Enabled. Only start closes
+	// o.ready once the state has left pending.
 	o.mu.Unlock()
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Listening })
 
 	r.mu.Lock()
 	for _, a := range []netip.Addr{ip4, ip6} {
@@ -489,10 +554,24 @@ func (o *Object) start(ctx context.Context) error {
 		}
 	}
 	r.mu.Unlock()
-	go hs.Serve(o.ln)
+	if o.pub != nil {
+		o.startPublicFlusher()
+		if err := o.openPublic(); err != nil {
+			// The node is up; only the Funnel listener failed (HTTPS
+			// certificates or the funnel nodeAttr missing). Report it and
+			// let the owner retry with SetPublicEnabled.
+			o.mu.Lock()
+			o.err = fmt.Errorf("public listener: %w", err)
+			o.mu.Unlock()
+			r.log.Warn("public listener failed", "object", o.id, "err", RedactError(err))
+		}
+		close(o.ready)
+	} else {
+		go hs.Serve(o.ln)
+	}
 	go svcHS.Serve(svcLn)
-	r.log.Info("object ready", "object", o.id, "hostname", o.hostname, "ip", ip4.String(),
-		"node", string(o.nodeID), "join_ms", joinDur.Milliseconds(), "rejoined", rejoin, "reminted", reminted)
+	r.log.Info("object ready", "object", o.id, "hostname", hostname, "ip", ip4.String(),
+		"node", string(o.nodeID), "join_ms", joinDur.Milliseconds(), "rejoined", rejoin, "reminted", reminted, "spans", o.spans.get())
 	return nil
 }
 
@@ -506,6 +585,7 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 	if r.cfg.TSNetLogs {
 		logf = tsnetLogf(r.log, o.id)
 	}
+	logf = o.spans.logf(logf)
 	srv := &tsnet.Server{
 		Hostname:      o.hostname,
 		Dir:           o.dir,
@@ -527,15 +607,19 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 	upCtx, upCancel := context.WithCancel(ctx)
 	defer upCancel()
 	rejected := make(chan struct{})
+	// Start explicitly (tsnet.Up would) so the backend start is its own span
+	// and the IPN bus can be watched from the first transition.
+	if err := srv.Start(); err != nil {
+		return nil, nil, fmt.Errorf("start %s: %w", o.hostname, err)
+	}
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Start })
+	lc0, err := srv.LocalClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	lc0.OmitAuth = true
+	go o.spans.watch(upCtx, lc0)
 	if rejoin && key == "" {
-		if err := srv.Start(); err != nil {
-			return nil, nil, fmt.Errorf("start %s: %w", o.hostname, err)
-		}
-		lc0, err := srv.LocalClient()
-		if err != nil {
-			return nil, nil, err
-		}
-		lc0.OmitAuth = true
 		var once sync.Once
 		go watchNeedsLogin(upCtx, lc0, func() { once.Do(func() { close(rejected); upCancel() }) })
 	}
@@ -547,6 +631,7 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 		}
 		return nil, nil, fmt.Errorf("up %s: %w", o.hostname, err)
 	}
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Running })
 	lc, err := srv.LocalClient()
 	if err != nil {
 		return nil, nil, err
@@ -633,6 +718,8 @@ func (o *Object) teardown() {
 			<-upDone
 		}
 	}
+	o.closePublic()
+	o.stopPublicFlusher()
 	o.mu.Lock()
 	srv, hs, tr, ts, shs := o.srv, o.httpSrv, o.tr, o.tombSrv, o.svcHTTP
 	o.services = nil // a closed node advertises nothing
@@ -727,13 +814,27 @@ func (o *Object) Server() *tsnet.Server {
 	return o.srv
 }
 
+// LocalClient returns the node's local API client (nil before it is up),
+// for read-only diagnostics such as path probes (Status, disco Ping).
+func (o *Object) LocalClient() *local.Client {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.state != StateReady {
+		return nil
+	}
+	return o.lc
+}
+
 // Info returns a snapshot.
 func (o *Object) Info() ObjectInfo {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	in := ObjectInfo{ID: o.id, Hostname: o.hostname, State: o.state, NodeID: string(o.nodeID),
 		DNSName: o.dnsName, Tags: o.tags, Ephemeral: o.ephemeral, Rejoined: o.rejoined, Reminted: o.reminted,
-		JoinMS: float64(o.joinDur.Microseconds()) / 1000, Flows: len(o.flows), Services: slices.Clone(o.services)}
+		JoinMS: float64(o.joinDur.Microseconds()) / 1000, Spans: o.spans.get(), Flows: len(o.flows), Services: slices.Clone(o.services)}
+	if o.pub != nil {
+		in.Public, in.PublicListening = true, o.PublicListening()
+	}
 	if o.err != nil {
 		in.Error = Redact(o.err.Error())
 	}
@@ -825,3 +926,62 @@ func closeParallel(objs []*Object, par int, f func(*Object)) {
 }
 
 var _ io.Closer = (*Registry)(nil)
+
+var portMapOnce sync.Once
+
+// DisablePortMapping turns off UPnP / NAT-PMP / PCP for every tsnet node in
+// this process. A fresh node's first netcheck waits for the port-map probe
+// (a 250 ms timeout when nothing answers, as on most networks) before it
+// picks a home DERP and goes Running: about 250 ms of every join
+// (STATUS.md "Fast identity"). It also stops N object nodes from each
+// asking the router for a mapping. Cost: no router-assisted direct paths
+// through hard NATs (they fall back to DERP).
+//
+// Call it once at process start, BEFORE any tsnet node exists: it sets
+// tailscale's TS_DISABLE_PORTMAPPER envknob, which running nodes read
+// without synchronisation.
+func DisablePortMapping() {
+	portMapOnce.Do(func() { envknob.Setenv("TS_DISABLE_PORTMAPPER", "true") })
+}
+
+// SetHostname renames a ready node in place (a pre-joined pool node handed
+// to an object; ADR-031). The node changes its own hostname (LocalAPI
+// EditPrefs: no control-plane API call), object.json is rewritten so a
+// rejoin keeps the name, and SetHostname waits until the node's own
+// netmap names it so; control may add a suffix ("-1") if the name is taken.
+// It returns the node's MagicDNS name. Measured on production control: a
+// peer's netmap shows the new name ~210 ms after the call.
+func (o *Object) SetHostname(ctx context.Context, hostname string) (string, error) {
+	o.mu.Lock()
+	lc, st := o.lc, o.state
+	o.mu.Unlock()
+	if st != StateReady || lc == nil {
+		return "", newErr(CodeIdentityPending, "object "+o.ID()+" is "+string(st)+", not ready")
+	}
+	if _, err := lc.EditPrefs(ctx, &ipn.MaskedPrefs{Prefs: ipn.Prefs{Hostname: hostname}, HostnameSet: true}); err != nil {
+		return "", fmt.Errorf("set hostname: %w", err)
+	}
+	o.mu.Lock()
+	o.hostname = hostname
+	mb, _ := json.Marshal(objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
+	o.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(o.dir, "object.json"), mb, 0o600); err != nil {
+		return "", err
+	}
+	for {
+		if st, err := lc.StatusWithoutPeers(ctx); err == nil && st.Self != nil {
+			label, _, _ := strings.Cut(st.Self.DNSName, ".")
+			if label == hostname || strings.HasPrefix(label, hostname+"-") {
+				o.mu.Lock()
+				o.dnsName = st.Self.DNSName
+				o.mu.Unlock()
+				return st.Self.DNSName, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return "", newErr(CodeIdentityPending, "object "+o.ID()+": hostname "+hostname+" not in its netmap yet: "+ctx.Err().Error())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}

@@ -12,6 +12,7 @@
 //
 //	start  → kernel, rootfs, config drive, console log, [volume image]
 //	start  ← gv0 TAP (hostd's side of the VM's network), vsock listener
+//	attach → volume image (a warm-pool VM, started with VolumeSlot)
 //	memdump ← the guest memory file of a full snapshot
 //
 // One connection is one VM: the helper kills the VM and releases
@@ -38,7 +39,8 @@ import (
 const DefaultSocket = "/run/twd/vmhelper.sock"
 
 // Version is bumped when the protocol changes incompatibly.
-const Version = 1
+// 2: VolumeSlot + the attach op (warm pool); snapshot-base + Restore.
+const Version = 2
 
 // Error codes.
 const (
@@ -54,8 +56,24 @@ const (
 
 // Request is one client → helper message.
 type Request struct {
-	Op    string        `json:"op"` // ping | start | kill | memdump
+	Op    string        `json:"op"` // ping | start | attach | kill | memdump | snapshot-base
 	Start *StartRequest `json:"start,omitempty"`
+	// Attach opens a volume (fd: the image) for a VM started with
+	// VolumeSlot and swaps it in behind the guest's /dev/vdc (Firecracker
+	// PATCH /drives, post-boot). At most once per VM.
+	Attach *Volume `json:"attach,omitempty"`
+	// Snapshot (op snapshot-base) turns another of this uid's VMs — a
+	// pooled one, warm and holding no tenant code — into a base snapshot:
+	// the helper pauses it, writes a full snapshot (VM state + guest
+	// memory) into its own root-only directory, and kills it (the original
+	// never runs again). The base lives as long as the connection that
+	// asked for it; restores name it by Response.BaseID.
+	Snapshot *SnapshotRequest `json:"snapshot,omitempty"`
+}
+
+// SnapshotRequest names the VM to snapshot by its jail ID (Jail.ID).
+type SnapshotRequest struct {
+	Of string `json:"of"`
 }
 
 // StartRequest boots one VM. File descriptors, in order: kernel (r),
@@ -72,6 +90,17 @@ type StartRequest struct {
 	GuestCID  int     `json:"guestCID"`
 	VsockPort int     `json:"vsockPort"` // host port the guest connects to
 	Volume    *Volume `json:"volume,omitempty"`
+	// VolumeSlot (warm pool; not with Volume): boot with a small blank
+	// placeholder as the DO drive, so that the workload's volume can be
+	// attached later (the attach op) without a reboot.
+	VolumeSlot bool `json:"volumeSlot,omitempty"`
+	// Restore (a base ID from snapshot-base, same uid): restore that base
+	// instead of booting — a fresh jail, netns and VMM, snapshot load with
+	// the guest memory served lazily by the helper (userfaultfd). The VM
+	// resumes as the base was: a pooled VM waiting for its load, with a
+	// volume slot. Machine and boot fields are ignored (the snapshot has
+	// them); the kernel fd is still passed and ignored.
+	Restore string `json:"restore,omitempty"`
 }
 
 // Volume is a persistent, encrypted block device for the guest (/dev/vdc).
@@ -117,6 +146,14 @@ type Response struct {
 	Timings   map[string]float64 `json:"timingsMs,omitempty"`
 	HugePages bool               `json:"hugePages,omitempty"`
 	VolumeNew bool               `json:"volumeNew,omitempty"`
+	// attach: the plaintext volume's size in 512-byte sectors (the guest
+	// waits for its /dev/vdc to show it).
+	VolumeSectors int64 `json:"volumeSectors,omitempty"`
+
+	// snapshot-base
+	BaseID    string   `json:"baseId,omitempty"`
+	BaseBytes int64    `json:"baseBytes,omitempty"` // memory file
+	BaseFiles []string `json:"baseFiles,omitempty"` // root-only paths (state, memory, config drive)
 }
 
 // Jail describes how the VMM is confined.

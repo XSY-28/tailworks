@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/tsaddr"
@@ -159,6 +160,7 @@ func (o *Object) dialEgress(ctx context.Context, network, addr string) (net.Conn
 	if state != StateReady || srv == nil {
 		return nil, &Error{Code: CodeKilled, Detail: "object " + o.id + " is " + string(state), Object: o.id}
 	}
+	o.awaitPeerPath(ctx, ap.Addr())
 	c, err := srv.Dial(ctx, "tcp", ap.String())
 	if err != nil {
 		return nil, err
@@ -376,4 +378,39 @@ func (r *Registry) servicePeer(o *Object, st *ipnstate.Status, ip netip.Addr) (c
 		}
 	}
 	return CodeForbiddenDestination, "the service's only reachable host is a sibling object on this host; same-host calls go through the platform", true
+}
+
+// PeerPathWait bounds how long an egress dial waits for a just-registered
+// peer to get a path (netd.HasPath) before sending anyway. It equals
+// WireGuard's REKEY_TIMEOUT: a first handshake initiation sent with no path
+// is dropped and retried only after 5 s, so waiting up to that long is never
+// slower than not waiting.
+var PeerPathWait = 5 * time.Second
+
+// awaitPeerPath waits (bounded by PeerPathWait) until this object's node has
+// a path to ip. Peers once seen with a path are cached, so only the first
+// dial to a peer costs a status read.
+func (o *Object) awaitPeerPath(ctx context.Context, ip netip.Addr) {
+	o.mu.Lock()
+	lc, known := o.lc, o.pathOK[ip]
+	o.mu.Unlock()
+	if known || lc == nil || PeerPathWait <= 0 {
+		return
+	}
+	wctx, cancel := context.WithTimeout(ctx, PeerPathWait)
+	defer cancel()
+	t0 := time.Now()
+	if err := WaitPeerPath(wctx, lc, ip); err != nil {
+		o.reg.log.Warn("egress: peer has no path yet; dialing anyway", "object", o.id, "peer", ip.String(), "waited_ms", time.Since(t0).Milliseconds())
+		return
+	}
+	if d := time.Since(t0); d > 50*time.Millisecond {
+		o.reg.log.Info("egress: waited for a new peer's path", "object", o.id, "peer", ip.String(), "waited_ms", d.Milliseconds())
+	}
+	o.mu.Lock()
+	if o.pathOK == nil {
+		o.pathOK = map[netip.Addr]bool{}
+	}
+	o.pathOK[ip] = true
+	o.mu.Unlock()
 }

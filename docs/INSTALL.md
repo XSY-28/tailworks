@@ -149,6 +149,7 @@ Funnel, no HTTPS requirement, no public issuer.**
      "tag:twd":      ["autogroup:admin"],
      "tag:twd-mgmt": ["autogroup:admin", "tag:twd"],
      "tag:twd-host": ["autogroup:admin", "tag:twd"],
+     "tag:twd-issuer": ["autogroup:admin", "tag:twd"],
    },
    "grants": [
      // hosts call mgmt's API; mgmt pushes kills to the hosts
@@ -229,7 +230,9 @@ What happens, in order (each line is a step you'll see):
    in a terminal, asks you to confirm it is in place **before** it
    requests a login URL (the login is refused with `requested tags
    [tag:twd-mgmt] are invalid or not permitted` otherwise; that refusal
-   is reported as `policy_missing_tag_owners` with the snippet):
+   is reported as `policy_missing_tag_owners` with the snippet). In WIF
+   mode the issuer runs on its **own** node, `tag:twd-issuer`; mgmt's node,
+   which serves the API, is never Funnel-capable:
    ```jsonc
    "tagOwners": {
      "tag:twd":      ["autogroup:admin"],
@@ -243,8 +246,9 @@ What happens, in order (each line is a step you'll see):
      {"src": ["autogroup:admin"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"twd.dev/cap/admin": [{}]}},
    ],
    "nodeAttrs": [
-     // Funnel publishes mgmt's OIDC issuer, so Tailscale can verify its tokens
-     {"target": ["tag:twd-mgmt"], "attr": ["funnel"]},
+     // Funnel publishes the OIDC issuer from its own node (discovery + JWKS
+     // only, no grants), so Tailscale can verify mgmt's tokens. Never on tag:twd-mgmt.
+     {"target": ["tag:twd-issuer"], "attr": ["funnel"]},
    ],
    ```
    Your apps' tags (`tag:twd-wl-<name>`, object class tags) are added as
@@ -253,11 +257,18 @@ What happens, in order (each line is a step you'll see):
    `tag:twd-mgmt`. twd prints a `https://login.tailscale.com/a/…` URL;
    open it and sign in as a tailnet admin. The node's state is kept under
    `~/.twd/mgmt/tsnet`, so later `twd up` runs need no login. The tailnet
-   name is read from the login (no `--tailnet`). If the tailnet has no
-   HTTPS certificates, or `tag:twd-mgmt` has no Funnel attribute, `twd up`
-   stops here and says exactly what to enable; the node stays joined.
+   name is read from the login (no `--tailnet`). Then the issuer's node
+   `twd-issuer` (`tag:twd-issuer`) joins the same way: a **second** login
+   URL (or `--issuer-authkey-file` for unattended setups); its state is
+   kept under `~/.twd/mgmt/issuer-tsnet`. If the tailnet has no HTTPS
+   certificates, or `tag:twd-issuer` has no Funnel attribute, `twd up`
+   stops here and says exactly what to enable; the nodes stay joined.
+   Upgrading from a twd that served the issuer from mgmt's node: the issuer
+   URL changes, so `twd up` clears the stored client IDs and asks for a new
+   trust credential; remove the old `tag:twd-mgmt` funnel entry (twd
+   warns while it is there).
 3. **Trust credential.** mgmt starts and publishes its OIDC issuer over
-   Funnel at `https://twd-mgmt.<tailnet>.ts.net/t/tn_<tailnet>`. twd prints
+   Funnel, from the issuer's node, at `https://twd-issuer.<tailnet>.ts.net/t/tn_<tailnet>`. twd prints
    the exact admin-console steps: Settings › Trust credentials › Add, with
    the issuer URL, the subject `twd:tenant:tn_<tailnet>:mint`, scope
    `auth_keys`, tag `tag:twd`; and an optional second **lifecycle**
@@ -340,6 +351,57 @@ start `twd-hostd -host-id <id> -mgmt http://twd-mgmt.<tailnet> -tsnet-control-ur
 `twd host ls` / `twd host rm <id> [--drain]` manage hosts; `twd tenant set`
 (PATCH) and `twd tenant rm`, `twd undeploy <workload>` round out the CRUD.
 
+#### Where a workload runs (placement, multi-host)
+
+With more than one host, mgmt picks the host at deploy (ADR-033 draft, Proposed):
+
+1. **Eligible hosts** are live (a heartbeat in the last 10 s), in the tenant's
+   pool (`twd tenant set --pool`), offer the workload's tier (`"tier":
+   "microvm"` in `twd.jsonc`, or the tenant's: only hosts with KVM and the
+   helper, `twd host ls` TIERS) and have free capacity.
+2. `twd deploy --host <id>` pins one (it must still be eligible).
+3. Otherwise a workload that is **already running stays where it is**. A
+   better host appearing never moves it.
+4. Otherwise (first deploy, or its host died) **smart placement**: if the
+   app declares `tailnet.connects` (or `placement.targets`), the host with
+   the best measured path to those peers wins: direct WireGuard, then a peer
+   relay, then DERP, then unmeasured; then the lowest RTT. Ties go to the
+   host with more free capacity. Without targets it's the most free capacity.
+
+```jsonc
+// twd.jsonc
+{
+  "tailnet": { "tags": ["tag:api"], "connects": ["tag:db"] },
+  "placement": { "mode": "smart" }   // the default when connects is set; "off" to disable
+  // "placement": { "targets": ["pg-primary"], "aggregate": "worst" }  // or "sum" over several targets
+}
+```
+
+```
+$ twd deploy
+✓ placed     placed on h2: tag:db direct 1.8 ms (h1: relayed via DERP nyc 24 ms, h3: unmeasured)
+✓ deployed   api@h2 · …
+```
+
+**Where the measurements come from:** each host measures, every 60 s
+(`twd-hostd -path-every`), the targets of the workloads it runs, from that
+tenant's own nodes on the host. It resolves the tag or name in the node's
+netmap and sends WireGuard disco pings; no keys are minted to measure. At
+deploy, mgmt asks hosts without a fresh measurement to probe (≤ 2 s). A
+host that runs nothing of the tenant has no vantage point and stays
+"unmeasured", so in a new tenant the first workload goes by capacity. Pin
+it (`--host`) next to the database once, and later deploys can measure.
+Measurements expire after 5 min and live in mgmt's store, so every replica
+places alike.
+
+**Moving a running workload:** `twd deploy --replace` re-places it. It moves
+only if another eligible host is clearly better: a better path class, or
+≥ 2 ms and ≥ 20 % lower RTT. The lease moves at the next epoch in one
+conditional write, the new host starts it, and the old host stops at its
+next heartbeat. A stateful workload (Durable Objects without `"fence":
+"never"`) also needs `--force-takeover`: its DO storage stays on the old
+host's disk. `twd ls` shows each workload's placement reason.
+
 `twd up --local-dev` keeps the old unix socket + per-host token for
 `twd dev` and hermetic tests only; `twd doctor` flags it.
 
@@ -418,7 +480,7 @@ twd down --purge           # kill every object and delete its devices, then stop
   console (Machines).
 - `https_required` / `funnel_required` from `twd up --wif`: enable HTTPS
   certificates (admin console › DNS) or add the `nodeAttrs` funnel entry
-  for `tag:twd-mgmt`; mgmt's node stays joined, re-run `twd up`.
+  for `tag:twd-issuer` (never `tag:twd-mgmt`); the nodes stay joined, re-run `twd up`.
 - `bootstrap_failed … not a tagOwner`: the account you logged in with may
   not own `tag:twd-mgmt`; add the tagOwners snippet, remove the node in the
   console, `twd up` again.
@@ -448,6 +510,25 @@ twd down --purge           # kill every object and delete its devices, then stop
   dispatcher: that's the sandbox; send egress through `HTTP(S)_PROXY` /
   `@twd/node`'s `fetch`.
 - Logs: `twd logs --component mgmt|hostd|supervisor` (on the host).
+
+## Tuning: how fast a new object's own node comes up
+
+A new Durable Object answers through its workload in milliseconds. Its
+**own** tailnet node (its MagicDNS name, tags and grants) normally needs a
+key minted, a registration at the coordination server and a first network
+check. `twd up` keeps that off the critical path with three settings. The
+defaults are on, and each `twd up` stores them for the service:
+
+| flag | default | what it does | what it costs |
+|---|---|---|---|
+| `--warm-keys N` | 5 | keeps up to N pre-minted, single-use keys per tag set, so a new object skips the key-API call (145 ms normally, seconds when the API is slow) | unused keys sit in twd's custody for up to 30 min; `twd down --purge` revokes them |
+| `--pool-nodes N` | 1 | keeps N pre-joined nodes per class that had a new object on this host in the last hour; the next new object of that class is renamed onto one (~0.2 s) instead of joining a new node (1.5 s typical, 4–6 s when control is slow) | each pool node is a device on your tailnet (listed under `_pool` in `twd ls`); idle ones are deleted after an hour without new objects |
+| `--port-mapping` | off | asks your router for port mappings (UPnP / NAT-PMP / PCP) for twd's nodes | off saves ~250 ms on every new node and keeps twd's nodes from each asking the router for a mapping; turn it on only if this host is behind a NAT that needs router-assisted direct connections (otherwise traffic goes direct or over DERP as usual) |
+
+Measured on a production tailnet, with all three at their defaults: a new
+object's first request on its own node arrives **~0.23 s** after it is
+created (p95 ~0.3 s), down from ~7 s. Details: STATUS.md, "Fast identity".
+`--warm-keys 0 --pool-nodes 0` turns both pools off.
 
 ## Linux
 
@@ -731,6 +812,18 @@ Add `"tier": "microvm"` to the app's `twd.jsonc`, then `twd deploy`.
   unmounts and releases the volume) before the new one starts, and the
   helper refuses a second attach (`volume_busy`) or an older epoch
   (`volume_fenced`).
+
+**Fast starts.** twd keeps a small **warm pool** of pre-booted VMs that hold
+no tenant code (`twd-hostd -vm-pool`; auto: 2 within the huge-page
+reservation; `-1` turns it off). A deploy or restart claims one and loads the
+workload into it, and the VM is never reused for another workload. When the
+pool is empty, a VM is **restored from a base snapshot** of a warm VM that
+holds no tenant code and no keys (`-vm-snapshot`, on by default) instead of
+booting one. Use `-vm-snapshot-refill` to refill the pool by restoring too:
+refills are faster, but claims are slower. Each restored VM gets private
+copies of its memory pages; no page is shared between VMs. The base is
+rebuilt at every start and every hour (`-vm-snapshot-rotate`). See STATUS.md
+"FV" for the numbers.
 
 Check a running VM: `twd host vmcheck <workload> [--keyscan]` (guest memory,
 DO volume fsync latency, and a scan of the guest's disks, files and full RAM
