@@ -890,9 +890,10 @@ func TestAPIHostAuditChain(t *testing.T) {
 	}
 	// A record signed by another key breaks verification.
 	_, other, _ := ed25519.GenerateKey(rand.Reader)
-	h1.ok("POST", "/v1/audit", map[string]any{"records": []any{mk("allow", "o1", other)}}, &resp)
-	if resp.Chain.OK || resp.Chain.BrokenAt != 4 || !strings.Contains(resp.Chain.Error, "hostSig") {
-		t.Fatalf("forged sig: %+v", resp.Chain)
+	// RT3-05: refused at ingest, never stored; the chain stays verified.
+	h1.fail("POST", "/v1/audit", map[string]any{"records": []any{mk("allow", "o1", other)}}, 400, "bad_host_sig")
+	if st := e.m.VerifyChain(context.Background(), "host:h1"); !st.OK || st.Records != 3 {
+		t.Fatalf("chain after a refused record: %+v", st)
 	}
 	e.c.fail("POST", "/v1/audit", map[string]any{"records": []any{map[string]any{"kind": "allow", "ts": time.Now().UTC().Format(time.RFC3339Nano),
 		"prevHash": "", "hash": strings.Repeat("0", 64)}}}, 400, "bad_request")

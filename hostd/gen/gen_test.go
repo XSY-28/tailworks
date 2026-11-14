@@ -23,9 +23,10 @@ import (
 // fakeHost plays twd-hostd's side of the sockets (no tailnet): it verifies
 // facet egress MACs and echoes the attribution it would use.
 type fakeHost struct {
-	mu  sync.Mutex
-	ops []map[string]any
-	key string
+	mu       sync.Mutex
+	ops      []map[string]any
+	key      string
+	admitted map[string]bool // names admitted for creation (as hostd records them)
 }
 
 func (f *fakeHost) serve(t *testing.T, sock string, h http.Handler) {
@@ -46,31 +47,49 @@ func (f *fakeHost) api() http.Handler {
 		f.mu.Lock()
 		f.ops = append(f.ops, body)
 		f.mu.Unlock()
-		// ADR-029: only objects named "pub-ok*" exist (or are admitted) for
-		// public requests.
-		pubOK := strings.HasPrefix(fmtAny(body["name"]), "pub-ok")
+		// Create admission, as hostd decides it: an attested object (as) or a
+		// request with a create ticket may admit any name; a public request
+		// (no ticket) only names "pub-ok*" (they exist, or public.create
+		// allows them). ensure then creates only admitted names: "pub-adm*"
+		// stands in for a name a bypassed guard reached without admission
+		// (hostd refuses the create itself).
+		name := fmtAny(body["name"])
 		if as, ok := body["as"].(map[string]any); ok && body["op"] == "ensure" {
-			pubOK = strings.HasPrefix(fmtAny(as["name"]), "pub-ok")
+			name = fmtAny(as["name"])
 		}
-		denyPublic := func() {
+		pubOK := strings.HasPrefix(name, "pub-ok")
+		_, hasTicket := body["ticket"].(string)
+		_, hasAs := body["as"].(map[string]any)
+		deny := func(code, msg string) {
 			w.Header().Set("content-type", "application/json")
 			w.WriteHeader(403)
-			w.Write([]byte(`{"code":"public_create_denied","message":"no such object for a public request"}`))
+			w.Write([]byte(`{"code":"` + code + `","message":"` + msg + `"}`))
 		}
 		switch body["op"] {
 		case "admit":
-			// "pub-adm*" passes admit but not ensure{public}: it stands in
-			// for a tenant-side guard that was bypassed, so the Host DO's
-			// own check is what refuses it.
-			if !pubOK && !strings.HasPrefix(fmtAny(body["name"]), "pub-adm") {
-				denyPublic()
+			// "pub-adm*": the guard's admit passes but hostd never records an
+			// admission, standing in for a guard that was bypassed or lied.
+			pubAdm := strings.HasPrefix(name, "pub-adm")
+			if !hasTicket && !hasAs && !pubOK && !pubAdm {
+				deny("public_create_denied", "no such object for a public request")
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]any{"ok": true, "existing": true})
+			if !pubAdm {
+				f.mu.Lock()
+				if f.admitted == nil {
+					f.admitted = map[string]bool{}
+				}
+				f.admitted[name] = true
+				f.mu.Unlock()
+			}
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "existing": pubOK})
 			return
 		case "ensure":
-			if body["public"] == true && !pubOK {
-				denyPublic()
+			f.mu.Lock()
+			adm := f.admitted[name]
+			f.mu.Unlock()
+			if !adm && !pubOK {
+				deny("create_not_admitted", "object "+name+" does not exist and no request admitted its creation")
 				return
 			}
 		}
@@ -184,9 +203,29 @@ func start(t *testing.T, appDir string, vars map[string]string) *inst {
 
 var testCaller = map[string]any{"nodeId": "nCLIENT", "node": "ttest-client.ttest.ts.net.", "hostname": "ttest-client", "addrs": []string{"100.64.0.9"}, "tags": []string{}, "capMap": map[string]any{}}
 
+// ticketed adds hostd's create ticket to a simulated cf.twd (tailnet
+// requests and cron runs carry one; public requests never do).
+func (in *inst) ticketed(twd map[string]any) map[string]any {
+	out := map[string]any{"ticket": gen.CreateTicket(in.f.key, "tr-test", time.Now())}
+	for k, v := range twd {
+		out[k] = v
+	}
+	return out
+}
+
 func (in *inst) get(path string, twd map[string]any, hdr ...string) (int, http.Header, map[string]any) {
+	if twd["kind"] == "object" {
+		// Delivered on the object's own node: in hostd the object exists, so
+		// its ensure is a wake. The fake records it as admitted.
+		in.f.mu.Lock()
+		if in.f.admitted == nil {
+			in.f.admitted = map[string]bool{}
+		}
+		in.f.admitted[fmtAny(twd["name"])] = true
+		in.f.mu.Unlock()
+	}
 	req, _ := http.NewRequest("GET", "http://app.local"+path, nil)
-	blob := map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "twd": twd}
+	blob := map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "twd": in.ticketed(twd)}
 	b, _ := json.Marshal(blob)
 	req.Header.Set("x-twd-cf", string(b))
 	for i := 0; i+1 < len(hdr); i += 2 {

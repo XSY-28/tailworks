@@ -17,6 +17,7 @@ Each Durable Object class picks how its outbound `fetch()` is attributed, in `tw
 | Ingress identity | Own node (`getCaller()` per request) | Own node (`getCaller()` per request) |
 | Alarms (`setAlarm`, Agents SDK `schedule()`) | ❌ Facets have no alarm scheduler (workerd today) | ✅ |
 | `ctx.tailnet.spawn/kill` | Attested by the platform (unforgeable `as`) | Claimed by the tenant-side wrapper. Within one workload, code could claim to be another plain object of the same workload. Same trust domain (RFC §4.8 residual risk) |
+| Creating a new object through `env.X` | Admitted by the request's ticket or the object's attested identity ([create admission](create-admission.md)); a raw binding is refused `create_not_admitted` | Same; a plain DO whose creation was not admitted answers `create_not_admitted` and gets no node |
 | Kill | Enforced in platform code (the `Host_` flag, plus the facet aborted) | Enforced by the tenant-side wrapper's `fetch`; the node is killed by netd either way |
 | `ctx.container` (classes with wrangler `containers`, docs/containers.md) | ✅ Only the object's own container (platform-attested) | ✅ Its own container; like `spawn/kill`, claimed by the tenant-side wrapper, so code in the workload could drive another plain object's container of the same workload, never a facet object's |
 | A container's intercepted requests (`interceptOutboundHttp(s)`, docs/containers.md) | Run in the object; the handler's `fetch()` leaves as **the object's node** | Run in the object; the handler's `fetch()` leaves as **the workload node** |

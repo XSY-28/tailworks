@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/twd/hostd/gen"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"github.com/rosskukulinski/twd/internal/publicspec"
 	"github.com/rosskukulinski/twd/netd"
@@ -302,18 +303,82 @@ func (h *Host) admitPublic(w *workload, app *bundle.App, class, name string) (ex
 	return false, nil
 }
 
-// ensureAllowedPublic is the check for /v1/ensure with "public": true.
-func (h *Host) ensureAllowedPublic(w *workload, class, name string) *apiError {
+// ---- create admission (RT3-06/07) ----
+//
+// Every object name is a tailnet node, so a create is admitted explicitly:
+// by a tailnet request's ticket or an attested object (admitCreate, from
+// the platform's "admit" op), by public.create (admitPublic), or by a spawn.
+// ensure refuses to create a name nobody admitted: code that reaches a raw
+// binding (import { env } from "cloudflare:workers", a cached env, __TWD)
+// can wake existing objects but cannot mint nodes.
+
+const maxAdmits = 50_000
+
+// admitCreate records that (class, name) of w may be created once within
+// gen.TicketTTL. Existing objects and node-less classes need no admission.
+func (h *Host) admitCreate(w *workload, app *bundle.App, class, name string) (existing bool, err *apiError) {
+	if class == "" || name == "" {
+		return false, &apiError{Code: "bad_request", Detail: "admit needs class and name"}
+	}
+	c := app.Classes[class]
+	if c == nil {
+		return false, &apiError{Code: "bad_request", Detail: "unknown class " + class}
+	}
+	if !c.Node {
+		return true, nil // no node, nothing to admit
+	}
 	h.mu.Lock()
-	o := h.byKey[objKey(w.tenantID, w.name, class, name)]
-	h.mu.Unlock()
-	if o != nil && !o.terminal() {
-		return nil
+	defer h.mu.Unlock()
+	if o := h.byKey[objKey(w.tenantID, w.name, class, name)]; o != nil && !o.terminal() {
+		return true, nil
 	}
-	if h.pubCreates.has(w.tenantID, w.name, class, name) {
-		return nil
+	h.admitLocalLocked(w, class, name)
+	return false, nil
+}
+
+func (h *Host) admitLocal(w *workload, class, name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.admitLocalLocked(w, class, name)
+}
+
+func (h *Host) admitLocalLocked(w *workload, class, name string) {
+	now := time.Now()
+	if len(h.admits) >= maxAdmits {
+		for k, exp := range h.admits {
+			if now.After(exp) {
+				delete(h.admits, k)
+			}
+		}
+		for k := range h.admits { // still full: drop arbitrary entries (they re-admit)
+			if len(h.admits) < maxAdmits {
+				break
+			}
+			delete(h.admits, k)
+		}
 	}
-	return &apiError{Code: "public_create_denied", Detail: "a public request may not create " + class + "/" + name + " (not admitted)"}
+	h.admits[objKey(w.tenantID, w.name, class, name)] = now.Add(gen.TicketTTL)
+}
+
+// takeAdmissionLocked consumes a live admission for key (h.mu held).
+func (h *Host) takeAdmissionLocked(key string) bool {
+	exp, ok := h.admits[key]
+	if !ok {
+		return false
+	}
+	delete(h.admits, key)
+	return time.Now().Before(exp)
+}
+
+// needsAdmission: creating (class, name) needs an admission unless it is a
+// platform-internal node (the workload's own, the public node) or a spawn
+// by an attested object (parent with a class; the workload node as parent is
+// a Worker-level spawn, admitted by its ticket in the spawn op).
+func needsAdmission(class string, parent *object) bool {
+	if class == "" || class == mgmtapi.PublicNamespace {
+		return false
+	}
+	return parent == nil || parent.Class == ""
 }
 
 func (h *Host) workloadObjectID(w *workload) string {

@@ -127,3 +127,54 @@ func StripPlatformHeaders(h http.Header) {
 		h.Del(k)
 	}
 }
+
+// ---- create tickets (RT3-06/07: creation is admitted, never implied) ----
+//
+// Every new Durable Object name is a tailnet node, so creating one must be
+// a platform decision, not a side effect of tenant code reaching a raw
+// binding. hostd stamps a ticket into cf.twd for each request it forwards
+// from the tailnet (and each cron run); only the guarded env the runtime
+// hands tenant code presents it back ("admit"), so a public request, a
+// cached raw binding or a direct __TWD call cannot create. The ticket is
+// hostd-issued and hostd-verified; it never leaves the host.
+
+// TicketTTL bounds how long a ticket admits creates (a request's lifetime
+// plus slack; the same window as the egress MAC skew).
+const TicketTTL = 2 * time.Minute
+
+const ticketDomain = "twd-create-ticket-v1\n"
+
+func ticketMAC(root, exp, traceID string) string {
+	m := hmac.New(sha256.New, []byte(root))
+	m.Write([]byte(ticketDomain + exp + "\n" + traceID))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// CreateTicket issues a ticket for the request traceID under the instance
+// root key, valid until now + TicketTTL: "v1.<exp unix ms>.<traceID>.<mac>".
+func CreateTicket(root, traceID string, now time.Time) string {
+	if root == "" {
+		return "" // no key, no ticket (and VerifyTicket refuses everything)
+	}
+	exp := strconv.FormatInt(now.Add(TicketTTL).UnixMilli(), 10)
+	return "v1." + exp + "." + traceID + "." + ticketMAC(root, exp, traceID)
+}
+
+// VerifyTicket checks a ticket under root and returns its trace ID.
+func VerifyTicket(root, ticket string, now time.Time) (traceID string, ok bool) {
+	if root == "" || len(ticket) > 256 {
+		return "", false
+	}
+	parts := strings.Split(ticket, ".")
+	if len(parts) != 4 || parts[0] != "v1" || parts[2] == "" {
+		return "", false
+	}
+	ms, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || now.After(time.UnixMilli(ms)) || time.UnixMilli(ms).Sub(now) > TicketTTL+time.Minute {
+		return "", false
+	}
+	if !hmac.Equal([]byte(ticketMAC(root, parts[1], parts[2])), []byte(parts[3])) {
+		return "", false
+	}
+	return parts[2], true
+}

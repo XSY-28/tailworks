@@ -153,9 +153,9 @@ func (s *SQLStore) UpdateThrottle(ctx context.Context, tenantID string, fn func(
 	return tx.Commit()
 }
 
-func (s *SQLStore) SetDeploymentStatus(ctx context.Context, id, status, errText string) error {
-	_, err := s.db.ExecContext(ctx, s.q("UPDATE deployments SET host_status=?, host_error=? WHERE id=? AND (host_status<>? OR host_error<>?)"),
-		status, errText, id, status, errText)
+func (s *SQLStore) SetDeploymentStatus(ctx context.Context, id, hostID, status, errText string) error {
+	_, err := s.db.ExecContext(ctx, s.q("UPDATE deployments SET host_status=?, host_error=? WHERE id=? AND host_id=? AND (host_status<>? OR host_error<>?)"),
+		status, errText, id, hostID, status, errText)
 	return err
 }
 
@@ -1257,7 +1257,7 @@ func (s *SQLStore) CreateObject(ctx context.Context, o Object) error {
 // CreateChild inserts a spawned object iff its root stays within maxLive
 // live descendants (CreateObjectChecked without a tenant quota).
 func (s *SQLStore) CreateChild(ctx context.Context, o Object, maxLive int) error {
-	return s.CreateObjectChecked(ctx, o, 0, maxLive)
+	return s.CreateObjectChecked(ctx, o, 0, maxLive, nil)
 }
 
 // CreateObjectChecked inserts o in one transaction with its limits, so
@@ -1268,8 +1268,8 @@ func (s *SQLStore) CreateChild(ctx context.Context, o Object, maxLive int) error
 // live descendants (H04). Locks are taken tenant first, then root. Postgres
 // uses FOR UPDATE; SQLite's immediate transaction holds the write lock.
 // ErrExists on a duplicate.
-func (s *SQLStore) CreateObjectChecked(ctx context.Context, o Object, maxObjects, maxLive int) error {
-	return s.createObjectTx(ctx, o, maxObjects, maxLive, "", "")
+func (s *SQLStore) CreateObjectChecked(ctx context.Context, o Object, maxObjects, maxLive int, fence *Fence) error {
+	return s.createObjectTx(ctx, o, maxObjects, maxLive, "", "", fence)
 }
 
 // ErrPoolGone: the pool node named in a transfer is no longer a ready,
@@ -1281,16 +1281,23 @@ var ErrPoolGone = errors.New("pool node no longer available")
 // the pool row becomes "transferred" with its node IDs and certificate
 // cleared, so only o names the device. Two concurrent transfers of one pool
 // node: one gets ErrPoolGone.
-func (s *SQLStore) TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int) error {
-	return s.createObjectTx(ctx, o, maxObjects, maxLive, poolID, stableID)
+func (s *SQLStore) TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int, fence *Fence) error {
+	return s.createObjectTx(ctx, o, maxObjects, maxLive, poolID, stableID, fence)
 }
 
-func (s *SQLStore) createObjectTx(ctx context.Context, o Object, maxObjects, maxLive int, poolID, stableID string) error {
+func (s *SQLStore) createObjectTx(ctx context.Context, o Object, maxObjects, maxLive int, poolID, stableID string, fence *Fence) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if fence != nil {
+		// The caller must hold the workload's lease (RT3-01). Read under the
+		// same transaction as the insert, like every other fenced write.
+		if err := s.checkFence(ctx, tx, fence); err != nil {
+			return err
+		}
+	}
 	live := liveSQL
 	lock := func(q string, arg string) error {
 		var x string
@@ -1476,7 +1483,10 @@ func (s *SQLStore) checkFence(ctx context.Context, tx *sql.Tx, f *Fence) error {
 	if err != nil {
 		return err
 	}
-	if epoch != f.Epoch || holder == "" || (f.Holder != "" && holder != f.Holder) {
+	// Epoch 0 means "any epoch": the fence then binds the holder only
+	// (hostd always sends the epoch; the holder check is what keeps one
+	// host off another's leases, RT3-01).
+	if (f.Epoch > 0 && epoch != f.Epoch) || holder == "" || (f.Holder != "" && holder != f.Holder) {
 		return fmt.Errorf("%w: lease %q is held by %q at epoch %d (expires %s); caller %q asked for epoch %d",
 			ErrLeaseLost, f.Lease, holder, epoch, time.UnixMilli(expires).UTC().Format(time.RFC3339), f.Holder, f.Epoch)
 	}

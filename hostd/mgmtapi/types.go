@@ -328,6 +328,9 @@ type CreateObjectRequest struct {
 	// PoolObjectID offers a ready pre-joined "_pool" node for this object
 	// (ADR-031); mgmt answers status "assigned" if it took it.
 	PoolObjectID string `json:"poolObjectID,omitempty"`
+	// Epoch is the lease epoch this host holds for the workload; mgmt fences
+	// the create on it (a host may only create objects on its own leases).
+	Epoch int64 `json:"epoch,omitempty"`
 }
 
 // CreateObjectResponse is the part of the Object resource hostd uses

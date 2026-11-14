@@ -29,6 +29,8 @@ var errStatus = map[string]int{
 	"capacity_exhausted": 503, "container_quota_exceeded": 429, "quota_unavailable": 503, "container_running": 409,
 	"tier_unavailable":     409,
 	"public_create_denied": 403, "public_request": 403, "not_public": 404,
+	// Create admission (docs/create-admission.md): a new name nobody admitted.
+	"create_not_admitted": 403,
 }
 
 func writeAPIError(w http.ResponseWriter, e *apiError) {
@@ -73,10 +75,9 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 		if o.Class != "" {
 			route = map[string]any{"kind": "object", "class": o.Class, "name": o.Name, "workload": o.Workload, "objectID": o.ID}
 		}
+		trace := newTraceID()
 		blob["twd"] = route
-		blob["traceId"] = newTraceID()
-		b, _ := json.Marshal(blob)
-		r.Header.Set(netd.HeaderCF, string(b))
+		blob["traceId"] = trace
 		ctx, cancel := context.WithTimeout(r.Context(), h.cfg.DrainTimeout+5*time.Second)
 		inst, release := wl.acquire(ctx)
 		cancel()
@@ -85,8 +86,24 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			return
 		}
 		defer release()
+		if !publicBlob(blob) {
+			// A tailnet request may create objects: its ticket (hostd-issued,
+			// hostd-verified) is what the runtime's guarded env presents to
+			// "admit". Public requests get none (RT3-06/07).
+			route["ticket"] = gen.CreateTicket(inst.macKey(), trace, time.Now())
+		}
+		b, _ := json.Marshal(blob)
+		r.Header.Set(netd.HeaderCF, string(b))
 		inst.ingress.ServeHTTP(w, r)
 	})
+}
+
+// publicBlob reports whether netd's cf blob marks the request as public
+// (Funnel): tailscale.requester.kind == "public".
+func publicBlob(blob map[string]any) bool {
+	ts, _ := blob["tailscale"].(map[string]any)
+	rq, _ := ts["requester"].(map[string]any)
+	return rq["kind"] == "public"
 }
 
 // statusRecorder captures the status and twd-error of a proxied response.
@@ -216,10 +233,10 @@ type apiReq struct {
 	Records   []map[string]any              `json:"records"`
 	ActingFor string                        `json:"actingFor"`
 	Principal string                        `json:"principal"`
-	// Public: the request being served came from the public internet
-	// (ADR-029); ensure then refuses objects that neither exist nor were
-	// admitted.
-	Public bool `json:"public"`
+	// Ticket is the create ticket of the request being served (cf.twd.ticket,
+	// hostd-issued for tailnet requests and cron runs); it admits creates
+	// ("admit", a workload-level "spawn"). Public requests have none.
+	Ticket string `json:"ticket"`
 }
 
 func objView(o *object) map[string]any {
@@ -259,11 +276,6 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			if !c.Node {
 				return nil, &apiError{Code: "bad_request", Detail: "class " + req.As.Class + " has no tailnet identity (\"node\": false)"}
 			}
-			if req.Public {
-				if e := h.ensureAllowedPublic(wl, req.As.Class, req.As.Name); e != nil {
-					return nil, e
-				}
-			}
 			return h.ensure(ctx, wl, req.As.Class, req.As.Name, nil, nil, "", req.ActingFor)
 		}
 		fail := func(err error) { writeAPIError(w, asAPIError(err)) }
@@ -289,8 +301,19 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			}
 			writeJSON(w, 200, objView(o))
 		case "admit":
-			// ADR-029 D5: may a public request reach (class, name)?
-			existing, e := h.admitPublic(wl, inst.app, req.Class, req.Name)
+			// May the caller reach, and so create, (class, name)? Creation is
+			// never implied by reaching a binding (RT3-06/07): an attested
+			// object may create (chained creation is the app's logic), a
+			// tailnet request proves itself with its ticket, and a public
+			// request is held to public.create (ADR-029 D5).
+			var existing bool
+			var e *apiError
+			_, ticketOK := gen.VerifyTicket(inst.macKey(), req.Ticket, time.Now())
+			if req.As != nil || ticketOK {
+				existing, e = h.admitCreate(wl, inst.app, req.Class, req.Name)
+			} else {
+				existing, e = h.admitPublic(wl, inst.app, req.Class, req.Name)
+			}
 			if e != nil {
 				fail(e)
 				return
@@ -321,9 +344,21 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			if ttl == "" {
 				ttl = c.TTL
 			}
-			af := req.Principal
-			if af == "" {
-				af = parent.ActingFor
+			if parent.Class == "" {
+				// A spawn from the Worker (workload identity) is admitted by the
+				// request's ticket; a public request has none, and neither has
+				// code that reached __TWD some other way (RT3-07).
+				if _, ok := gen.VerifyTicket(inst.macKey(), req.Ticket, time.Now()); !ok {
+					fail(&apiError{Code: "create_not_admitted", Detail: "spawn from the workload needs the request's create ticket (a public request may not spawn)"})
+					return
+				}
+				h.admitLocal(wl, req.Class, req.Name)
+			}
+			// The child acts for its parent's principal (RFC §4.6); tenant code
+			// chooses only "inherit" (default) or "none", never a name (RT3-08).
+			af := parent.ActingFor
+			if req.Principal == "none" {
+				af = ""
 			}
 			o, err := h.ensure(ctx, wl, req.Class, req.Name, parent, req.Caps, ttl, af)
 			if err != nil {
@@ -337,9 +372,12 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				fail(&apiError{Code: "bad_request", Detail: "ready: unknown class " + req.Class})
 				return
 			}
-			o, err := h.ensure(ctx, wl, req.Class, req.Name, nil, nil, "")
-			if err != nil {
-				fail(err)
+			// ready waits for an object spawn already created; it never creates.
+			h.mu.Lock()
+			o := h.byKey[objKey(wl.tenantID, wl.name, req.Class, req.Name)]
+			h.mu.Unlock()
+			if o == nil {
+				fail(&apiError{Code: "unknown_object", Detail: "no live object " + req.Class + "/" + req.Name + " (ready follows spawn)"})
 				return
 			}
 			to := time.Duration(req.TimeoutMS) * time.Millisecond

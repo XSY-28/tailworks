@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -593,7 +594,7 @@ func (m *Mgmt) ReportHostStatus(ctx context.Context, hostID string, rep HostRepo
 	liveNodes, leases := rep.LiveNodes, rep.Leases
 	for _, d := range rep.Deployments {
 		if d.DeploymentID != "" {
-			m.setDepStatus(d.DeploymentID, d)
+			m.setDepStatus(hostID, d.DeploymentID, d)
 		}
 	}
 	now := m.now()
@@ -908,7 +909,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	resp.Endpoint.Node = r.Workload + "-" + host
 	resp.Endpoint.MagicDNS = resp.Endpoint.Node + "." + t.Tailnet
 	resp.Endpoint.Service = svcDef
-	m.setDepStatus(d.ID, DeploymentStatus{Status: "assigned"})
+	m.setDepStatus(host, d.ID, DeploymentStatus{Status: "assigned"})
 	// Tell the host now instead of at its next heartbeat.
 	go m.push(host, "/v1/push/assignments", map[string]any{})
 	if movedFrom != "" && fence {
@@ -932,10 +933,10 @@ type DeploymentStatus struct {
 // heartbeats that repeat it every few seconds cost a lookup, not a write. A
 // per-replica cache can't decide that: another replica may have written a
 // different status since.
-func (m *Mgmt) setDepStatus(id string, st DeploymentStatus) {
+func (m *Mgmt) setDepStatus(hostID, id string, st DeploymentStatus) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := m.store.SetDeploymentStatus(ctx, id, st.Status, st.Error); err != nil {
+	if err := m.store.SetDeploymentStatus(ctx, id, hostID, st.Status, st.Error); err != nil {
 		m.log.Warn("deployment status", "deployment", id, "err", err)
 	}
 }
@@ -1229,7 +1230,17 @@ type CreateObjectRequest struct {
 	// and the pool node is transferred in the same transaction. Otherwise
 	// it is ignored and the object is minted as usual.
 	PoolObjectID string `json:"poolObjectID,omitempty"`
+	// Epoch is the lease epoch the calling host holds for the workload.
+	// hostd always sends it; mgmt fences the create on it (RT3-01).
+	Epoch int64 `json:"epoch,omitempty"`
+	// hostID is the authenticated host making the request (set by the API
+	// layer from the principal, never from the body). Non-empty: the
+	// create is fenced on the workload's lease being held by this host.
+	hostID string
 }
+
+// WithHost returns r bound to the authenticated host hostID.
+func (r CreateObjectRequest) WithHost(hostID string) CreateObjectRequest { r.hostID = hostID; return r }
 
 // CreateObjectResponse is the reply. Hostname is an addition: the node
 // hostname hostd should use.
@@ -1352,6 +1363,18 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q", in, t.ID, r.Namespace)
 	}
 	workload = dep.Workload
+	// A host may only create objects on a lease it holds (RT3-01). The
+	// fence is checked again inside the insert transaction; this early read
+	// gives a clear answer and an audit record without touching the row.
+	var fence *Fence
+	if r.hostID != "" || r.Epoch > 0 {
+		fence = &Fence{Lease: LeaseName(t.ID, dep.Workload), Holder: r.hostID, Epoch: r.Epoch}
+		if l, lerr := m.store.GetLease(ctx, fence.Lease); lerr != nil || l.Holder == "" || (fence.Holder != "" && l.Holder != fence.Holder) || (fence.Epoch > 0 && l.Epoch != fence.Epoch) {
+			m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "deny", Code: "lease_lost", TraceID: r.TraceID},
+				map[string]any{"workload": workload, "namespace": r.Namespace, "name": r.ObjectName, "host": r.hostID, "epoch": r.Epoch, "message": "create on a lease the caller does not hold"})
+			return resp, errf(409, "lease_lost", "host %q does not hold the lease of workload %q at epoch %d; only the host serving a workload may create its objects", r.hostID, workload, r.Epoch)
+		}
+	}
 	ttl, err := ParseTTL(r.TTL)
 	if err != nil {
 		return resp, errf(400, "bad_request", "%v", err)
@@ -1435,7 +1458,7 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	if r.Namespace == PoolNamespace {
 		detail["pool"] = classNS
 	}
-	pool := m.usablePool(ctx, r, o, class)
+	pool := m.usablePool(ctx, r, o, class, dep)
 	if pool != nil {
 		o.Status, o.NodeID, o.StableNodeID = StatusAssigned, pool.NodeID, pool.StableNodeID
 		detail["fromPool"], detail["stableNodeID"] = pool.ID, pool.StableNodeID
@@ -1448,16 +1471,19 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		// …and so does the pool node's transfer record.
 		actx, ti = m.intend(actx, AuditRecord{TenantID: t.ID, ObjectID: pool.ID, Kind: "transfer", TraceID: r.TraceID},
 			map[string]any{"to": o.ID, "stableNodeID": pool.StableNodeID, "class": r.Namespace, "name": r.ObjectName})
-		err2 = m.store.(poolStore).TransferPool(actx, o, pool.ID, pool.StableNodeID, t.MaxObjects, spawnLimit)
+		err2 = m.store.(poolStore).TransferPool(actx, o, pool.ID, pool.StableNodeID, t.MaxObjects, spawnLimit, fence)
 		if errors.Is(err2, ErrPoolGone) {
 			// Another create took this pool node first: mint as usual.
 			r.PoolObjectID = ""
 			return m.CreateObject(ctx, r)
 		}
 	} else {
-		err2 = m.store.CreateObjectChecked(actx, o, t.MaxObjects, spawnLimit)
+		err2 = m.store.CreateObjectChecked(actx, o, t.MaxObjects, spawnLimit, fence)
 	}
-	if err := err2; errors.Is(err, ErrQuota) {
+	if err := err2; errors.Is(err, ErrLeaseLost) {
+		// The lease moved between the early read and the insert (RT3-01).
+		return resp, errf(409, "lease_lost", "host %q lost the lease of workload %q while creating %s/%s: %v", r.hostID, workload, r.Namespace, r.ObjectName, err)
+	} else if errors.Is(err, ErrQuota) {
 		// The fast-path CountLive saw room, but concurrent creates (possibly
 		// through other replicas) filled the quota first (H16).
 		return resp, errf(429, "object_quota_exceeded", "tenant %s has reached its maxObjects (%d)", t.ID, t.MaxObjects)
@@ -1499,12 +1525,12 @@ var errWrongNode = errors.New("ready on another node than the assigned one")
 
 // poolStore is implemented by stores that can transfer pool nodes.
 type poolStore interface {
-	TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int) error
+	TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int, fence *Fence) error
 }
 
 // usablePool returns the pool node r offers for o if every condition of
 // ADR-031 variant B holds, else nil (the object is then minted as usual).
-func (m *Mgmt) usablePool(ctx context.Context, r CreateObjectRequest, o Object, class ClassConfig) *Object {
+func (m *Mgmt) usablePool(ctx context.Context, r CreateObjectRequest, o Object, class ClassConfig, dep Deployment) *Object {
 	// Never for a reserved namespace (_pool, _workload, the public node's).
 	if r.PoolObjectID == "" || strings.HasPrefix(r.Namespace, "_") || r.Namespace == PublicNamespace || o.Ephemeral {
 		return nil
@@ -1527,12 +1553,28 @@ func (m *Mgmt) usablePool(ctx context.Context, r CreateObjectRequest, o Object, 
 		why = "ephemeral"
 	case !slices.Equal(canonTags(p.Tags), canonTags(class.Tags)) || !slices.Equal(canonTags(o.Tags), canonTags(class.Tags)):
 		why = "tags differ from the class's"
+	case r.hostID != "" && !m.poolJoinedBy(ctx, p, dep, r.hostID):
+		// The node's state is on the disk of the host that joined it; another
+		// host adopting it would strand the object (RT3-04).
+		why = "joined by another host"
 	}
 	if why != "" {
 		m.log.Warn("pool node not used", "pool", r.PoolObjectID, "object", o.ID, "why", why)
 		return nil
 	}
 	return &p
+}
+
+// poolJoinedBy reports whether pool node p was joined by hostID: it was
+// created under a deployment of this workload assigned to that host. The
+// current deployment is the common case; an older one of the same
+// workload on the same host (pool nodes outlive redeploys) also counts.
+func (m *Mgmt) poolJoinedBy(ctx context.Context, p Object, dep Deployment, hostID string) bool {
+	if p.DeploymentID == dep.ID {
+		return dep.HostID == hostID
+	}
+	pd, err := m.store.GetDeployment(ctx, p.DeploymentID)
+	return err == nil && pd.HostID == hostID && pd.TenantID == dep.TenantID && pd.Workload == dep.Workload
 }
 
 // findWorkloadClass finds the latest deployment of the workload named name
@@ -2022,8 +2064,11 @@ func (m *Mgmt) Ready(ctx context.Context, id, hostID string, r ReadyRequest) (Ob
 	if err != nil {
 		return o, err
 	}
+	// Only the host holding the object's lease may report it ready (RT3-02).
+	// hostd always sends the epoch; a host that omits it is still bound to
+	// the holder. Epoch 0 with no host (in-process callers) stays unfenced.
 	var fence *Fence
-	if r.Epoch > 0 {
+	if r.Epoch > 0 || hostID != "" {
 		fence = &Fence{Lease: o.Lease, Holder: hostID, Epoch: r.Epoch}
 	}
 	wasKilled, wrongNode, assignedTo := false, false, ""
@@ -2726,6 +2771,34 @@ func checkAuditSource(source, kind string) *Error {
 // carry hash (and prevHash); the response reports whether they link.
 func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMessage) (int, ChainStatus, error) {
 	chain := "host:" + hostID
+	// Every host record must be signed by the key the host registered
+	// (RT3-05): an unsigned chain would let any host write "host" records,
+	// and VerifyChain only checks signatures when a key exists.
+	host, err := m.store.GetHost(ctx, hostID)
+	if err != nil {
+		return 0, ChainStatus{}, lookupErr(err, errf(404, "host_not_registered", "host %s is not registered", hostID))
+	}
+	if host.AuditPubKey == "" {
+		return 0, ChainStatus{}, errf(403, "audit_key_required", "host %s registered without an auditPubKey; audit records are refused", hostID)
+	}
+	pub, err := decodeB64(host.AuditPubKey)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return 0, ChainStatus{}, errf(403, "audit_key_required", "host %s has an invalid auditPubKey", hostID)
+	}
+	// A host may only write records about objects of workloads it has been
+	// assigned (now or earlier): records naming another tenant's objects are
+	// attribution forgery, whatever the chain says (RT3-05).
+	served := map[string]bool{}
+	servedBy := func(o Object) bool {
+		k := o.TenantID + "/" + o.Workload
+		if v, ok := served[k]; ok {
+			return v
+		}
+		ds, err := m.store.ListDeployments(ctx, DeploymentFilter{TenantID: o.TenantID, Workload: o.Workload, HostID: hostID}, Page{Limit: 1})
+		v := err == nil && len(ds) > 0
+		served[k] = v
+		return v
+	}
 	for i, raw := range recs {
 		var r struct {
 			TS        any    `json:"ts"`
@@ -2748,12 +2821,18 @@ func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMe
 			e.Message = fmt.Sprintf("record %d: %s", i, e.Message)
 			return i, ChainStatus{}, e
 		}
+		if sig, err := base64.StdEncoding.DecodeString(r.HostSig); err != nil || !ed25519.Verify(pub, []byte(r.Hash), sig) {
+			return i, ChainStatus{}, errf(400, "bad_host_sig", "record %d: hostSig does not verify under host %s's auditPubKey", i, hostID)
+		}
 		canon, err := Canonicalize(raw)
 		if err != nil {
 			return i, ChainStatus{}, errf(400, "bad_request", "record %d: %v", i, err)
 		}
 		tenant := ""
 		if o, err := m.store.GetObject(ctx, r.ObjectID); err == nil {
+			if !servedBy(o) {
+				return i, ChainStatus{}, errf(403, "audit_object_foreign", "record %d: object %s belongs to workload %s/%s, which host %s has never served", i, o.ID, o.TenantID, o.Workload, hostID)
+			}
 			tenant = o.TenantID
 		}
 		if _, err := m.store.AppendAudit(ctx, AuditRecord{Chain: chain, TS: fmt.Sprint(r.TS), TenantID: tenant, ObjectID: r.ObjectID,

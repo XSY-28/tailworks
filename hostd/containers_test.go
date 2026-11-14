@@ -143,15 +143,16 @@ func TestContainerPolyfill(t *testing.T) {
 		if r := call("/f/b/exec", "argv", `["true"]`); r["error"] == nil {
 			t.Fatalf("b exec ran: %v", r)
 		}
-		// The facet keeps no platform binding in env, and a plain-DO object
-		// (the workload's trust domain) can't claim a facet object.
+		// No tenant env keeps the platform binding (create admission,
+		// docs/create-admission.md): a plain-DO object cannot even reach for
+		// a facet object's container through it, let alone be refused.
 		if r := call("/f/a/envtwd"); r["hasTWD"] != false {
 			t.Fatalf("facet env leaks __TWD: %v", r)
 		}
 		for _, op := range []string{"destroy", "status", "signal"} {
 			r := call("/p/z/forge", "target", "a", "op", op)
-			if r["ok"] != false {
-				t.Fatalf("plain object drove facet a's container (%s): %v", op, r)
+			if r["noBinding"] != true {
+				t.Fatalf("plain object reached the platform binding for facet a's container (%s): %v", op, r)
 			}
 		}
 		if c := ctrOf("Box", "a"); c.State != "running" {

@@ -23,7 +23,7 @@ const json = (status, body, extra = {}) =>
 const DOC = "https://github.com/rosskukulinski/twd/blob/main/docs/errors.md#";
 const STATUS = {
   killed: 410, no_identity: 401, bad_request: 400, unknown_object: 404, identity_pending: 503, hostd_unavailable: 503,
-  public_create_denied: 403, public_request: 403, not_public: 404,
+  public_create_denied: 403, public_request: 403, not_public: 404, create_not_admitted: 403,
 };
 
 // isPublic: netd delivered this request over Funnel (ADR-029). Only netd
@@ -89,17 +89,29 @@ async function routeObject(env, ctx, cls, name, req) {
 }
 
 // scheduled runs one cron trigger (cf.twd.kind = "scheduled", which only
-// hostd can set): the tenant's default export scheduled() handler, via the
-// TENANT service binding. Only the app's declared crons are accepted.
-async function scheduled(env, t) {
+// hostd can set): the tenant's default export scheduled() handler. Only the
+// app's declared crons are accepted. The run goes to the tenant service as
+// a fetch carrying cf.twd (kind scheduled, cron, scheduledTime and the run's
+// create ticket): the runtime wrapper in the tenant isolate dispatches it to
+// scheduled() with a controller and answers {outcome, noRetry, error}.
+// (workerd's native Fetcher.scheduled() builds its own controller, so the
+// ticket could not ride on that.)
+async function scheduled(env, t, req) {
   const cron = t.cron;
   if (typeof cron !== "string" || !CFG.crons.includes(cron)) return errResponse("bad_request", "no such cron trigger in this deployment");
   const st = t.scheduledTime;
   if (typeof st !== "number" || !Number.isFinite(st)) return errResponse("bad_request", "bad scheduledTime");
-  if (typeof env.TENANT.scheduled !== "function") return errResponse("bad_request", "cron triggers are not enabled for this deployment");
   try {
-    const r = await env.TENANT.scheduled({ cron, scheduledTime: new Date(st) });
-    return json(200, { outcome: String(r?.outcome ?? "unknown"), noRetry: !!r?.noRetry });
+    const r = await env.TENANT.fetch(
+      new Request("http://tenant/_twd/scheduled", {
+        method: "POST",
+        signal: req.signal,
+        cf: { twd: { kind: "scheduled", cron, scheduledTime: st, ticket: t.ticket }, traceId: req.cf?.traceId },
+      }),
+    );
+    const body = await r.json().catch(() => null);
+    if (!body || typeof body.outcome !== "string") return json(200, { outcome: "exception", noRetry: false, error: "scheduled() dispatch answered " + r.status });
+    return json(200, { outcome: body.outcome, noRetry: !!body.noRetry, error: body.error });
   } catch (e) {
     return json(200, { outcome: "exception", noRetry: false, error: String(e?.message ?? e).slice(0, 512) });
   }
@@ -138,7 +150,7 @@ export default {
       case "admin":
         return admin(req, env, ctx, t);
       case "scheduled":
-        return scheduled(env, t);
+        return scheduled(env, t, req);
       case "object":
         return routeObject(env, ctx, t.class, t.name, req);
       case "intercept": {
@@ -157,8 +169,20 @@ export default {
         const u = new URL(req.url);
         const m = u.pathname.match(/^\/_twd\/o\/([A-Za-z_$][\w$]*)\/([^/]+)(\/.*)?$/);
         if (m) {
+          const name = decodeURIComponent(m[2]);
+          if (CFG.classes[m[1]] && name) {
+            // A tailnet request may create the object it addresses: admit it
+            // with the request's ticket (hostd verifies; public requests
+            // never reach /_twd).
+            try {
+              await hostd(env, "admit", { class: m[1], name, ticket: t.ticket });
+            } catch (e) {
+              const b = e.body ?? errBody("create_not_admitted", String(e));
+              return errResponse(b.code ?? "create_not_admitted", b.message ?? String(e));
+            }
+          }
           u.pathname = m[3] ?? "/";
-          return routeObject(env, ctx, m[1], decodeURIComponent(m[2]), new Request(u, req));
+          return routeObject(env, ctx, m[1], name, new Request(u, req));
         }
         return env.TENANT.fetch(req);
       }
@@ -178,7 +202,6 @@ function makeHost(cls) {
       this.__f = null;
       this.__ensured = null;
       this.__actingFor = ""; // own property: the Proxy would answer unknown names with an RPC forwarder
-      this.__publicOK = null; // own property, same reason (public-request admission, ADR-029)
       this.__killed = ctx.storage.kv.get("__twd_killed") ?? null;
       const self = this;
       return new Proxy(this, {
@@ -187,19 +210,26 @@ function makeHost(cls) {
           if (p === "then") return undefined;
           return async (...args) => {
             if (self.__killed) throw new Error("[killed] object " + cls + "/" + self.ctx.id.name + " was killed: " + self.__killed);
-            const f = self.__facet(true);
-            return f[p](...args);
+            // No tenant code runs for an object nobody admitted (RT3-06).
+            const d = await self.__admitted();
+            if (d) throw new Error("[" + d.code + "] " + d.message);
+            return self.__facet()[p](...args);
           };
         },
       });
     }
-    __ctxEnsure() {
-      const p = this.__ensure().catch(() => {});
+    // __admitted: hostd must know this object (it exists, or a tailnet
+    // request / an attested object / public.create admitted its creation)
+    // before any tenant code runs. A refused create is final; other hostd
+    // errors (unavailable) are not fatal here, as before.
+    async __admitted() {
       try {
-        this.ctx.waitUntil(p);
-      } catch {
-        /* ignore */
+        await this.__ensure();
+      } catch (e) {
+        const c = e.body?.code;
+        if (c === "create_not_admitted" || c === "public_create_denied" || c === "killed") return { code: c, message: e.body?.message ?? String(e) };
       }
+      return null;
     }
     __ensure() {
       if (!this.__ensured) {
@@ -210,22 +240,11 @@ function makeHost(cls) {
       }
       return this.__ensured;
     }
-    // __facet(rpc): an RPC call (e.g. the Agents SDK's setName from
-    // getAgentByName) usually precedes the first fetch, which knows the
-    // caller; give it a moment so the object is created acting for that
-    // caller (audit), then ensure anyway.
-    __facet(rpc) {
+    // __facet: the tenant class as a facet (callers await __admitted first).
+    __facet() {
       if (!this.__f) {
         const name = this.ctx.id.name;
         if (!name) throw new Error("[bad_request] twd objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
-        const p = rpc
-          ? new Promise((res) => setTimeout(res, 250)).then(() => this.__ensure()).catch(() => {})
-          : this.__ensure().catch(() => {});
-        try {
-          this.ctx.waitUntil(p);
-        } catch {
-          /* ignore */
-        }
         const exp = this.ctx.exports;
         const w = this.env.LOADER.get(CFG.deploymentID + ":" + cls + ":" + name, () => {
           const env = { ...CFG.vars };
@@ -244,29 +263,9 @@ function makeHost(cls) {
       }
       return this.__f;
     }
-    // __ensurePublic (ADR-029 D5): before a public request touches the
-    // facet, hostd must confirm the object exists or was admitted
-    // (public.create under its cap); otherwise no facet, no node.
-    __ensurePublic() {
-      if (!this.__publicOK) {
-        this.__publicOK = hostd(this.env, "ensure", { as: { class: cls, name: this.ctx.id.name }, public: true }).catch((e) => {
-          this.__publicOK = null;
-          throw e;
-        });
-      }
-      return this.__publicOK;
-    }
     async fetch(req) {
       if (this.__killed) return errResponse("killed", "object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
-      if (isPublic(req)) {
-        if (!this.ctx.id.name) return errResponse("public_create_denied", "a public request may only reach objects addressed by name");
-        try {
-          await this.__ensurePublic();
-        } catch (e) {
-          const b = e.body ?? errBody("public_create_denied", String(e));
-          return errResponse(b.code ?? "public_create_denied", b.message ?? String(e));
-        }
-      }
+      if (!this.ctx.id.name) return errResponse("bad_request", "twd objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
       // Internal fetches (e.g. partyserver's set-name) carry no caller.
       const who = principalOf(req);
       if (who && !this.__actingFor) {
@@ -282,8 +281,12 @@ function makeHost(cls) {
           }
         }
       }
-      if (who && this.__f && !this.__ensured) this.__ctxEnsure();
-      return this.__facet(!who).fetch(req);
+      // Whether the request is public or not is not read from req.cf here:
+      // hostd decides from what it admitted (a public request's guarded env
+      // admits only under public.create; a raw binding admits nothing).
+      const d = await this.__admitted();
+      if (d) return errResponse(d.code, d.message);
+      return this.__facet().fetch(req);
     }
     // Facet alarm delegation (facets cannot set alarms in workerd): the
     // facet's ctx.storage.{set,get,delete}Alarm land here via TailnetApi
@@ -308,7 +311,7 @@ function makeHost(cls) {
     async alarm(info) {
       if (this.__killed) return;
       // AlarmInvocationInfo is not serializable; pass its fields.
-      await this.__facet(true).__twd_alarm({ retryCount: info?.retryCount ?? 0, isRetry: !!info?.isRetry });
+      await this.__facet().__twd_alarm({ retryCount: info?.retryCount ?? 0, isRetry: !!info?.isRetry });
     }
     async __twd_kill(reason) {
       this.__killed = reason || "killed";
@@ -498,21 +501,26 @@ export class TailnetApi extends WorkerEntrypoint {
       }
     }
     if (op === "admit") {
-      // Public-request admission (ADR-029 D5): may a public request reach
-      // (or create) class/name? hostd decides; nothing is created here.
+      // Create admission: may the caller reach, and so create, class/name?
+      // hostd decides from who asks: an attested object (as), a tailnet
+      // request (its ticket), or a public request (public.create, ADR-029
+      // D5). Nothing is created here.
       if (typeof args.class !== "string" || !CFG.classes[args.class] || typeof args.name !== "string" || !args.name) {
-        return { ok: false, error: errBody("public_create_denied", "admit: unknown class or empty name") };
+        return { ok: false, error: errBody("create_not_admitted", "admit: unknown class or empty name") };
       }
       try {
-        return { ok: true, value: await hostd(this.env, "admit", { class: args.class, name: args.name }) };
+        return { ok: true, value: await hostd(this.env, "admit", { class: args.class, name: args.name, ticket: typeof args.ticket === "string" ? args.ticket : undefined, as }) };
       } catch (e) {
         return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
       }
     }
     if (!["ensure", "spawn", "ready", "kill", "audit", "self"].includes(op)) return { ok: false, error: errBody("bad_request", "unknown op " + op) };
     if (op === "ensure" && !as) return { ok: false, error: errBody("bad_request", "ensure needs an object") };
+    // Tenant code never names a principal: actingFor comes from the
+    // platform's own calls (Host_<Class>), never from these args (RT3-08).
+    const { actingFor: _af, public: _pub, ...rest } = args;
     try {
-      return { ok: true, value: await hostd(this.env, op, { ...args, as }) };
+      return { ok: true, value: await hostd(this.env, op, { ...rest, as }) };
     } catch (e) {
       return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
     }

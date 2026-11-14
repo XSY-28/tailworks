@@ -129,6 +129,7 @@ unless `twd.jsonc` lists `public.routes` ([public-ingress.md](public-ingress.md)
 | `request.cf.country`, `asn`, `city`… | ❌ absent (no GeoIP in v1) |
 | Caller identity | `getRequester(req)` → `{kind:"public", ip}`; `getCaller(req)` throws `public_request` |
 | `env.NS.getByName(newName)` from a public request | ❌ `public_create_denied` unless the class sets `"public": {"create": true, "maxObjects": N}` |
+| `env.NS.getByName(newName)` through a raw binding (`import { env } from "cloudflare:workers"`, a cached `env`) | ❌ `create_not_admitted` for a new name, from any request; existing objects work. Create through the handler's `env` ([create admission](create-admission.md)) |
 | Custom domains, bring-your-own front door | ❌ `*.ts.net` only (Funnel) |
 | `email()` handler | ❌ (Funnel has no port 25; use a provider's inbound webhook to a public route) |
 

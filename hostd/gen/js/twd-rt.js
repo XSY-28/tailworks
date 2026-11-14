@@ -25,6 +25,7 @@ var CATALOG = Object.freeze({
   hostd_unavailable: { status: 503, title: "the host agent is unavailable" },
   public_request: { status: 403, title: "a public (Funnel) request reached code that needs a tailnet caller; use getRequester()" },
   public_create_denied: { status: 403, title: "a public request may not create a new object (or spawn); only existing objects, or classes with public.create" },
+  create_not_admitted: { status: 403, title: "the object does not exist and nothing admitted its creation: reach new objects through the env twd hands your handler (not a raw or cached binding, not from a public request)" },
   public_ingress_not_allowed: { status: 403, title: "the tenant does not allow public ingress (operator setting publicIngress)" },
   public_name_taken: { status: 409, title: "the workload's public node name is taken on the tailnet (MagicDNS would rename it)" },
   rate_limited: { status: 429, title: "too many public requests (per workload or per client IP)" },
@@ -541,10 +542,11 @@ function defineContainer(ctx, c) {
 }
 
 // js/packages/tailnet/src/runtime.ts
-function createTailnetContext(tw, env, bindings, self) {
+function createTailnetContext(tw, env, bindings, self, ticket) {
   if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "twd platform binding missing (not running on twd?)");
   const op = async (name, args = {}) => {
-    const r = await tw.call(name, self ? { ...args, as: self } : args);
+    const a = self ? { ...args, as: self } : ticket ? { ...args, ticket } : args;
+    const r = await tw.call(name, a);
     if (!r || !r.ok) throw TailnetError.from(r?.error);
     return r.value;
   };
@@ -652,8 +654,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
     [name]: class extends C {
       constructor(ctx, env) {
         const tw = env?.__TWD;
-        const e = { ...env };
-        delete e.__TWD;
+        const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
         define(ctx, createTailnetContext(tw, e, bindings));
         installAlarmShim(ctx, tw);
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
@@ -705,12 +706,20 @@ function wrapPlainClass(C, name, bindings, opts) {
       constructor(ctx, env) {
         const tw = env?.__TWD;
         const oname = ctx?.id?.name;
-        if (tw && oname) define(ctx, createTailnetContext(tw, env, bindings, { class: name, name: oname }));
+        const self = oname ? { class: name, name: oname } : void 0;
+        const e = guardEnv(env, bindings, "tailnet", admitter(tw, self ? { as: self } : {}));
+        if (tw && oname) define(ctx, createTailnetContext(tw, e, bindings, self));
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
-        super(ctx, env);
+        super(ctx, e);
         if (tw && oname && opts.node) {
-          const p = tw.call("ensure", { as: { class: name, name: oname } }).catch(() => {
+          const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
+            if (r && !r.ok) {
+              const err2 = TailnetError.from(r.error);
+              if (err2.code === "create_not_admitted") this.__twd_denied = err2;
+            }
+          }, () => {
           });
+          this.__twd_ensure = p;
           try {
             ctx.waitUntil?.(p);
           } catch {
@@ -733,6 +742,8 @@ function wrapPlainClass(C, name, bindings, opts) {
     W.prototype.fetch = async function(req) {
       const k = this.ctx.storage.kv.get("__twd_killed");
       if (k) return killedResponse(k);
+      if (this.__twd_ensure) await this.__twd_ensure;
+      if (this.__twd_denied) return this.__twd_denied.toResponse();
       return proto.fetch.call(this, req);
     };
   }
@@ -741,6 +752,12 @@ function wrapPlainClass(C, name, bindings, opts) {
 }
 function isPublicReq(req) {
   return req?.cf?.tailscale?.requester?.kind === "public";
+}
+function admitter(tw, extra) {
+  return async (cls, name) => {
+    if (!tw || typeof tw.call !== "function") return { ok: false, error: { code: "create_not_admitted", message: "twd platform binding missing; refusing to reach a Durable Object" } };
+    return tw.call("admit", { class: cls, name, ...extra });
+  };
 }
 var ADMIT_CACHE_MAX = 1e4;
 var admitted = /* @__PURE__ */ new Map();
@@ -751,18 +768,17 @@ function remember(key) {
   }
   admitted.set(key, true);
 }
-async function admit(tw, cls, name) {
+async function admit(adm, cls, name) {
   const key = cls + "\n" + name;
   if (admitted.has(key)) return;
-  if (!tw || typeof tw.call !== "function") throw new TailnetError("public_create_denied", "twd platform binding missing; refusing a public object access");
-  const r = await tw.call("admit", { class: cls, name });
-  if (!r || !r.ok) throw TailnetError.from(r?.error ?? { code: "public_create_denied", message: "admit refused" });
+  const r = await adm(cls, name);
+  if (!r || !r.ok) throw TailnetError.from(r?.error ?? { code: "create_not_admitted", message: "admit refused" });
   remember(key);
 }
 function denied(msg) {
   throw new TailnetError("public_create_denied", msg);
 }
-function guardStub(tw, cls, name, real) {
+function guardStub(adm, cls, name, real) {
   return new Proxy(
     {},
     {
@@ -771,18 +787,19 @@ function guardStub(tw, cls, name, real) {
         if (p === "id" || p === "name") return real[p];
         if (typeof p === "symbol") return real[p];
         return async (...args) => {
-          await admit(tw, cls, name);
-          return real[p](...args);
+          await admit(adm, cls, name);
+          const target = real && typeof real.then === "function" ? await real : real;
+          return target[p](...args);
         };
       }
     }
   );
 }
-function guardNamespace(tw, cls, ns) {
+function guardNamespace(adm, cls, ns, mode) {
   return Object.freeze({
     getByName(name) {
       const n = String(name);
-      return guardStub(tw, cls, n, ns.getByName(n));
+      return guardStub(adm, cls, n, ns.getByName(n));
     },
     idFromName(name) {
       return ns.idFromName(name);
@@ -792,25 +809,32 @@ function guardNamespace(tw, cls, ns) {
     },
     get(id, opts) {
       const n = id?.name;
-      if (typeof n !== "string" || !n) denied(`a public request may only address ${cls} objects by name (idFromName/getByName)`);
-      return guardStub(tw, cls, n, ns.get(id, opts));
+      if (typeof n !== "string" || !n) {
+        if (mode === "public") denied(`a public request may only address ${cls} objects by name (idFromName/getByName)`);
+        return ns.get(id, opts);
+      }
+      return guardStub(adm, cls, n, ns.get(id, opts));
     },
-    newUniqueId() {
-      denied(`a public request may not create a new ${cls} object (newUniqueId)`);
+    newUniqueId(opts) {
+      if (mode === "public") denied(`a public request may not create a new ${cls} object (newUniqueId)`);
+      return ns.newUniqueId(opts);
     },
     jurisdiction(j) {
-      return guardNamespace(tw, cls, ns.jurisdiction(j));
+      return guardNamespace(adm, cls, ns.jurisdiction(j), mode);
     }
   });
 }
-function publicEnv(env, bindings) {
+function guardEnv(env, bindings, mode, adm) {
   if (!env || typeof env !== "object") return env;
-  const tw = env.__TWD;
   const out = { ...env };
+  delete out.__TWD;
   for (const [k, cls] of Object.entries(bindings)) {
-    if (env[k]) out[k] = guardNamespace(tw, cls, env[k]);
+    if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
   }
   return out;
+}
+function publicEnv(env, bindings) {
+  return guardEnv(env, bindings, "public", admitter(env?.__TWD, {}));
 }
 function publicTailnet(tn) {
   return Object.freeze({
@@ -827,8 +851,38 @@ function asResponse(e) {
   const m = String(e?.message ?? e);
   const i = m.indexOf("[killed]");
   if (i >= 0) return new TailnetError("killed", m.slice(i + 8).trim()).toResponse();
-  if (isTailnetError(e) && (e.code === "public_create_denied" || e.code === "public_request")) return e.toResponse();
+  const j = m.indexOf("[create_not_admitted]");
+  if (j >= 0) return new TailnetError("create_not_admitted", m.slice(j + 21).trim()).toResponse();
+  if (isTailnetError(e) && (e.code === "public_create_denied" || e.code === "public_request" || e.code === "create_not_admitted")) return e.toResponse();
   return null;
+}
+function requestTicket(req) {
+  const t = req?.cf?.twd?.ticket;
+  return typeof t === "string" && t ? t : void 0;
+}
+function isScheduledReq(req) {
+  return req?.cf?.twd?.kind === "scheduled";
+}
+async function runScheduled(scheduledFn, req, extra) {
+  const t = req.cf.twd;
+  let noRetry = false;
+  const controller = {
+    cron: String(t.cron ?? ""),
+    scheduledTime: Number(t.scheduledTime),
+    type: "scheduled",
+    noRetry() {
+      noRetry = true;
+    }
+  };
+  if (typeof scheduledFn !== "function") {
+    return Response.json({ outcome: "exception", noRetry: false, error: "the default export has no scheduled() handler" });
+  }
+  try {
+    await scheduledFn(controller, ...extra);
+    return Response.json({ outcome: "ok", noRetry });
+  } catch (e) {
+    return Response.json({ outcome: "exception", noRetry, error: String(e?.message ?? e).slice(0, 512) });
+  }
 }
 function wrapHandler(H, bindings) {
   if (!H) {
@@ -839,17 +893,28 @@ function wrapHandler(H, bindings) {
   if (typeof H === "function") {
     const C = class extends H {
       constructor(ctx, env) {
-        define(ctx, createTailnetContext(env?.__TWD, env, bindings));
-        super(ctx, env);
+        const tw = env?.__TWD;
+        const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
+        define(ctx, createTailnetContext(tw, e, bindings));
+        super(ctx, e);
+        this.__twd = tw;
       }
     };
     if (typeof H.prototype?.fetch === "function") {
       const f = H.prototype.fetch;
       C.prototype.fetch = async function(req) {
+        const tw = this.__twd;
         if (isPublicReq(req)) {
-          const raw = this.env;
-          this.env = publicEnv(raw, bindings);
-          if (this.ctx?.tailnet) define(this.ctx, publicTailnet(this.ctx.tailnet));
+          this.env = guardEnv(this.env, bindings, "public", admitter(tw, {}));
+          if (tw) define(this.ctx, publicTailnet(createTailnetContext(tw, this.env, bindings)));
+        } else {
+          const ticket = requestTicket(req);
+          this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket }));
+          if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, void 0, ticket));
+          if (isScheduledReq(req)) {
+            const sf = typeof this.scheduled === "function" ? this.scheduled.bind(this) : void 0;
+            return runScheduled(sf, req, []);
+          }
         }
         try {
           return await f.call(this, req);
@@ -866,12 +931,17 @@ function wrapHandler(H, bindings) {
   for (const k of Object.keys(H)) {
     if (typeof H[k] !== "function") continue;
     out[k] = function(a, env, ctx) {
+      const tw = env?.__TWD;
       const pub = k === "fetch" && isPublicReq(a);
       if (pub) {
-        const tn = env?.__TWD ? createTailnetContext(env.__TWD, env, bindings) : null;
-        env = publicEnv(env, bindings);
-        if (ctx && tn) define(ctx, publicTailnet(tn));
-      } else if (ctx && env?.__TWD && !("tailnet" in ctx)) define(ctx, createTailnetContext(env.__TWD, env, bindings));
+        env = guardEnv(env, bindings, "public", admitter(tw, {}));
+        if (ctx && tw) define(ctx, publicTailnet(createTailnetContext(tw, env, bindings)));
+      } else {
+        const ticket = k === "fetch" ? requestTicket(a) : void 0;
+        env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
+        if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, void 0, ticket));
+        if (k === "fetch" && isScheduledReq(a)) return runScheduled(H.scheduled, a, [env, ctx]);
+      }
       let r;
       try {
         r = H[k].call(H, a, env, ctx);

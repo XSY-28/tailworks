@@ -266,8 +266,11 @@ func (e DeploymentStatus) Valid() bool {
 // Defines values for ErrorCode.
 const (
 	ErrorCodeAlreadyJoined           ErrorCode = "already_joined"
+	ErrorCodeAuditKeyRequired        ErrorCode = "audit_key_required"
+	ErrorCodeAuditObjectForeign      ErrorCode = "audit_object_foreign"
 	ErrorCodeBadBundle               ErrorCode = "bad_bundle"
 	ErrorCodeBadCursor               ErrorCode = "bad_cursor"
+	ErrorCodeBadHostSig              ErrorCode = "bad_host_sig"
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
@@ -323,9 +326,15 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case ErrorCodeAlreadyJoined:
 		return true
+	case ErrorCodeAuditKeyRequired:
+		return true
+	case ErrorCodeAuditObjectForeign:
+		return true
 	case ErrorCodeBadBundle:
 		return true
 	case ErrorCodeBadCursor:
+		return true
+	case ErrorCodeBadHostSig:
 		return true
 	case ErrorCodeBadRequest:
 		return true
@@ -1875,6 +1884,13 @@ type ObjectCreate struct {
 	// Caps `{capName: value | [values]}`; see `caps ⊆ parent` semantics in `CreateObject`.
 	Caps *Caps `json:"caps,omitempty"`
 
+	// Epoch The lease epoch the calling host holds for the workload. hostd
+	// always sends it. A host may only create objects on leases it
+	// holds: the create is fenced on the lease's holder (and, when
+	// `epoch` is given, its epoch) in the insert transaction;
+	// otherwise `409 lease_lost`.
+	Epoch *int64 `json:"epoch,omitempty"`
+
 	// Hostname The hostname hostd proposes; mgmt answers with the one to use.
 	Hostname *string `json:"hostname,omitempty"`
 
@@ -1921,7 +1937,7 @@ type ObjectPage struct {
 
 // ObjectPatch JSON Merge Patch. Hosts send the `ready` group; admins send `ttl`.
 type ObjectPatch struct {
-	// Epoch Fences the ready commit.
+	// Epoch Fences the ready commit. hostd always sends it; with or without it, a host may only report ready on objects whose lease it holds (`409 lease_lost`).
 	Epoch        *int64             `json:"epoch,omitempty"`
 	MagicDNS     *string            `json:"magicDNS,omitempty"`
 	NodeID       *string            `json:"nodeID,omitempty"`

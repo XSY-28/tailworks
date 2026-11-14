@@ -141,7 +141,7 @@ func TestGeneratedNoCronsRefusesScheduled(t *testing.T) {
 
 func (in *inst) getRaw(path string, twd map[string]any) (int, http.Header, []byte) {
 	req, _ := http.NewRequest("GET", "http://app.local"+path, nil)
-	b, _ := json.Marshal(map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "twd": twd})
+	b, _ := json.Marshal(map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "twd": in.ticketed(twd)})
 	req.Header.Set("x-twd-cf", string(b))
 	resp, err := in.hc.Do(req)
 	if err != nil {
@@ -165,7 +165,7 @@ func mustJSON(t *testing.T, b []byte, v any) {
 // the overlap guard could no longer see it.
 func TestGeneratedCronCancelledOnDisconnect(t *testing.T) {
 	in := start(t, hostdtest.Fixture("cron"), map[string]string{"SLEEP_MS": "1500"})
-	b, _ := json.Marshal(map[string]any{"twd": sched("0 0 2 1 *", time.Now())})
+	b, _ := json.Marshal(map[string]any{"twd": in.ticketed(sched("0 0 2 1 *", time.Now()))})
 	req, _ := http.NewRequest("POST", "http://app.local/", nil)
 	req.Header.Set("x-twd-cf", string(b))
 	short := &http.Client{Timeout: 400 * time.Millisecond, Transport: in.hc.Transport}

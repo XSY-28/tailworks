@@ -1,7 +1,11 @@
 // Test fixture for ADR-029 public ingress: reports what a handler sees for
 // public vs tailnet requests, and tries the things public requests must not do.
-import { DurableObject } from "cloudflare:workers";
+import { DurableObject, env as rawEnv } from "cloudflare:workers";
 import { getCaller, getRequester, isTailnetError } from "@twd/tailnet";
+
+// A handler that caches the env it was given (a pattern the docs warn
+// about): a later public request would use a tailnet request's guard.
+let CACHED_ENV = null;
 
 const SEEN = (req) =>
   Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-twd") || k.startsWith("cf-") || k.startsWith("x-forwarded") || k.startsWith("tailscale-")));
@@ -20,6 +24,9 @@ function who(req) {
 class Base extends DurableObject {
   async fetch(req) {
     return Response.json({ object: this.ctx.id.name, ...who(req) });
+  }
+  async ping() {
+    return this.ctx.id.name;
   }
 }
 export class Room extends Base {}
@@ -45,6 +52,39 @@ export default {
       const ns = parts[1] === "room" ? env.ROOM : parts[1] === "open" ? env.OPEN : null;
       if (!ns) return new Response("no such class", { status: 404 });
       return ns.getByName(decodeURIComponent(parts[2])).fetch(req);
+    }
+    // RT3-06/07: bypasses of the guarded env. None may create an object.
+    if (parts[0] === "raw" && parts[1]) {
+      // import { env } from "cloudflare:workers": the raw binding, no guard.
+      return rawEnv.ROOM.getByName(decodeURIComponent(parts[1])).fetch(req);
+    }
+    if (parts[0] === "rawrpc" && parts[1]) {
+      try {
+        return Response.json({ pinged: await rawEnv.ROOM.getByName(decodeURIComponent(parts[1])).ping() });
+      } catch (e) {
+        return Response.json({ error: String(e?.message ?? e) }, { status: 299 });
+      }
+    }
+    if (parts[0] === "twd") {
+      // The platform binding is not in the handler's env; the raw binding
+      // still has it, and a spawn through it must be refused by hostd.
+      const out = { handlerHas: "__TWD" in env, rawHas: !!rawEnv.__TWD };
+      if (rawEnv.__TWD) {
+        try {
+          out.rawSpawn = await rawEnv.__TWD.call("spawn", { class: "Room", name: "via-twd" });
+        } catch (e) {
+          out.rawSpawn = { error: String(e) };
+        }
+      }
+      return Response.json(out);
+    }
+    if (parts[0] === "cache") {
+      CACHED_ENV = env;
+      return Response.json({ cached: true });
+    }
+    if (parts[0] === "cached" && parts[1]) {
+      if (!CACHED_ENV) return Response.json({ error: "nothing cached" }, { status: 299 });
+      return CACHED_ENV.ROOM.getByName(decodeURIComponent(parts[1])).fetch(req);
     }
     if (parts[0] === "spawn") {
       try {

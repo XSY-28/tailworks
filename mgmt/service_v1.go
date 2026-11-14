@@ -430,7 +430,7 @@ func (m *Mgmt) DeleteHost(ctx context.Context, id string, drain bool, by string)
 		if ds, err := m.store.Assignments(ctx, id); err == nil {
 			for _, d := range ds {
 				if d.TenantID == tenantID && d.Workload == workload {
-					m.setDepStatus(d.ID, DeploymentStatus{Status: "draining"})
+					m.setDepStatus(id, d.ID, DeploymentStatus{Status: "draining"})
 				}
 			}
 		}
@@ -505,7 +505,7 @@ func (m *Mgmt) Undeploy(ctx context.Context, id, reason, by string) (KillResult,
 	if err := m.store.StopDeployment(ctx, id, m.now()); err != nil {
 		return res, err
 	}
-	m.setDepStatus(d.ID, DeploymentStatus{Status: "stopped"})
+	m.setDepStatus(d.HostID, d.ID, DeploymentStatus{Status: "stopped"})
 	go m.push(d.HostID, "/v1/push/assignments", map[string]any{})
 	m.audit(ctx, AuditRecord{TenantID: d.TenantID, Kind: "undeploy", ActingFor: by}, map[string]any{"deploymentID": d.ID,
 		"workload": d.Workload, "host": d.HostID, "killed": len(res.Killed), "reason": reason, "by": by})
