@@ -5,6 +5,28 @@ twd runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 `install.sh`; nothing needs root. [macOS](#macos) · [Linux](#linux) ·
 [Linux support matrix](#linux-support-matrix).
 
+## Try it without a tailnet
+
+You don't need a tailnet, a credential or `twd up` to run an app: `twd dev`
+starts the same twd-hostd, netd and workerd as production against an
+embedded control plane on 127.0.0.1 (Tailscale's testcontrol plus a local
+DERP/STUN) and an in-memory mgmt, and proxies a local port to the
+workload's node through a dev client node, so `getCaller()` sees a real
+(dev) caller.
+
+```sh
+twd init hello --template agent && cd hello
+twd dev                      # ready on http://127.0.0.1:8787 · edits reload · Ctrl-C to stop
+twd dev --once --json        # start, make one request, print it, exit (a smoke test)
+```
+
+`twd dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
+The `mcp` template serves on `/mcp` (its `/` answers 404); `twd dev` says
+so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
+policy evaluator (every dev node sees every other and gets the same test
+capabilities). Everything else below is for running apps on a real
+tailnet.
+
 ## macOS
 
 These are the exact steps for an Apple-silicon Mac with nothing installed:
@@ -344,6 +366,23 @@ is the expected answer. The policy additions `twd up` prints include the
 host ⇄ mgmt grants (`tag:twd-host → tag:twd-mgmt tcp:80,443`,
 `tag:twd-mgmt → tag:twd-host tcp:7474`).
 
+#### One process by default; scale out with `twd host add`
+
+`twd up` runs **one process** by default: the supervisor hosts twd-mgmt
+and the host agent together, so mgmt's node `twd-mgmt` is the only
+infrastructure device twd adds to your tailnet (`twd.json`:
+`"mode": "single"`). The embedded host talks to mgmt in-process as the
+`host` principal (every per-host and per-lease check applies as for a
+remote host) and mgmt delivers kills in-process; no host node, no join key,
+no `tag:twd-host` grant is needed for this machine. `twd status` says
+`host <id> (embedded in the mgmt process)` and `twd doctor`'s `transport`
+row `ok tsnet: … host embedded in the mgmt process`. The policy snippet
+`twd up` prints still includes `tag:twd-host` and the host ⇄ mgmt grants:
+they are what **scale-out** needs. `twd up --separate-host` keeps the
+two-process layout (twd-hostd as its own child on its own `tag:twd-host`
+node); a state dir keeps the layout it was created with (state from before
+this option stays two-process). Object nodes are the same in both layouts.
+
 Add a second machine as a host with `twd host add <host-id>`: mgmt records
 it (pending) and writes a single-use join key file; on the new machine run
 `twd-hostd join --host-id <id> --token-file <file> --control-url …`, then
@@ -608,15 +647,25 @@ Ubuntu would make bash skip `~/.profile`.
 ### Run twd as a systemd user service
 
 ```sh
-twd up --service                                                             # keyless (login URL + trust credential, as on macOS)
+twd up --oauth-client-file ~/.config/twd/oauth.env --service --yes           # OAuth client (recommended), as on macOS
+twd up --wif --service                                                       # keyless (login URL + trust credential)
 twd up --tailnet <your-tailnet>.ts.net --api-key-file ~/path/to/api.env --yes --service   # apikey mode
 systemctl --user status twd.service
 ```
 
 `--service` writes `~/.config/systemd/user/twd.service`. That unit runs the
-same supervisor as plain `twd up` (`twd __supervise`: twd-mgmt, then
-twd-hostd) with `Restart=on-failure`, and twd enables and starts it. Logs go
-to the same `<state>/logs/`. `systemctl --user restart twd` brings twd back
+same supervisor as plain `twd up` (`twd __supervise`: by default one
+process with mgmt and the embedded host agent; with `--separate-host`,
+twd-mgmt then twd-hostd as children) with `Restart=on-failure`, and twd
+enables and starts it. Logs go to the same `<state>/logs/` (`mgmt.log` and
+`hostd.log` in both layouts).
+
+**One process by default; scale out with `twd host add`.** As on macOS,
+`twd up` adds one device to your tailnet (mgmt's node) and runs the host
+agent inside the same process; only when you add machines (`twd host add
+<id>`, then `twd-hostd join` + `twd-hostd` there) do hosts get their own
+`tag:twd-host` nodes, which is also what the printed `tag:twd-host` policy
+lines are for. `systemctl --user restart twd` brings twd back
 in a few seconds, and deployed workloads rejoin with the same tailnet nodes
 and IPs. A plain `twd down` stops it through systemd but leaves the unit
 enabled, so it starts again at your next login or boot.

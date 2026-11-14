@@ -44,6 +44,11 @@ func LoadEnvFile(path, name string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
+	return scanEnv(f, path, name)
+}
+
+// scanEnv finds NAME=value in dotenv-style content.
+func scanEnv(f io.Reader, path, name string) (string, error) {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())

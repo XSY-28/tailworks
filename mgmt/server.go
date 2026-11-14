@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -149,7 +150,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	e := *asAPIError(err)
 	if e.DocURL == "" {
-		e.DocURL = "https://twd.dev/errors/" + e.Code
+		e.DocURL = DocBase + e.Code
 	}
 	e.TraceID = r.Header.Get("Twd-Trace-ID")
 	if e.TraceID == "" {
@@ -171,6 +172,10 @@ func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 func readJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(io.LimitReader(r.Body, 64<<20))
 	if err := dec.Decode(v); err != nil && !errors.Is(err, io.EOF) {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			return errf(400, "bad_request", "request body exceeds %d bytes", mbe.Limit)
+		}
 		return errf(400, "bad_request", "invalid JSON: %v", err)
 	}
 	return nil
@@ -195,31 +200,6 @@ func (s *Server) allowed(p Principal, roles int) bool {
 		return slices.Contains(p.Caps, AdminCap) || slices.Contains(s.Admins, p.Login)
 	}
 	return false
-}
-
-func (s *Server) h(roles int, fn func(w http.ResponseWriter, r *http.Request) (any, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		p := principalOf(r.Context())
-		if !s.allowed(p, roles) {
-			writeErr(w, r, errf(403, "forbidden", "caller (%s) may not call %s %s", p.Kind, r.Method, r.URL.Path))
-			return
-		}
-		// tsnet hosts may only act as themselves.
-		if p.Kind == "host" {
-			if id := r.PathValue("id"); id != "" && strings.HasPrefix(r.URL.Path, "/v0/hosts/") && id != p.HostID {
-				writeErr(w, r, errf(403, "forbidden", "host %s may not act as host %s", p.HostID, id))
-				return
-			}
-		}
-		v, err := fn(w, r)
-		if err != nil {
-			writeErr(w, r, err)
-			return
-		}
-		if v != nil {
-			writeJSON(w, http.StatusOK, v)
-		}
-	}
 }
 
 // hostOf names the calling host: tsnet hosts by WhoIs binding; local
@@ -381,6 +361,53 @@ type WhoIsInfo struct {
 
 // WhoIsFunc resolves a tailnet caller (tsnet LocalClient.WhoIs).
 type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIsInfo, error)
+
+// browserGuard refuses cross-site browser requests (CSRF / DNS rebinding
+// against the admin UI). A request is browser-originated when it carries
+// Sec-Fetch-Mode or Origin; CLI and hostd clients send neither and are
+// never affected. For a browser-originated request that is not GET, HEAD
+// or OPTIONS:
+//   - Sec-Fetch-Site, if present, must be same-origin or none;
+//   - Origin, if present, must name the request's own Host;
+//   - a /v1 mutation must carry X-Twd-UI: 1 (set by the UI's app.js; the
+//     custom header forces a CORS preflight, which mgmt never answers, so
+//     cross-origin JavaScript cannot reach the handler at all).
+//
+// Refusals are 403 forbidden "cross-site request refused": the spec's
+// ErrorCode enum is closed, so no cross_site_request code is minted.
+func browserGuard(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			h.ServeHTTP(w, r)
+			return
+		}
+		origin := r.Header.Get("Origin")
+		if r.Header.Get("Sec-Fetch-Mode") == "" && origin == "" {
+			h.ServeHTTP(w, r) // not a browser
+			return
+		}
+		refuse := func(why string) {
+			writeErr(w, r, errf(403, "forbidden", "cross-site request refused: %s", why))
+		}
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+			refuse("Sec-Fetch-Site " + site)
+			return
+		}
+		if origin != "" {
+			u, err := url.Parse(origin)
+			if err != nil || origin == "null" || u.Host == "" || !strings.EqualFold(u.Host, r.Host) {
+				refuse("Origin " + origin + " is not this host (" + r.Host + ")")
+				return
+			}
+		}
+		if strings.HasPrefix(r.URL.Path, "/v1/") && r.Header.Get("X-Twd-UI") != "1" {
+			refuse("browser mutations of /v1 need the X-Twd-UI header (use the admin UI)")
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
 
 // TailnetHandler authenticates tailnet callers by WhoIs (ADR-026):
 //   - tag:twd-host nodes are hosts, bound to the hostID they registered with;

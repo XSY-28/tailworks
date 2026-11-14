@@ -45,7 +45,7 @@ export interface CatalogEntry {
   title: string;
 }
 
-export const DOC_BASE = "https://github.com/rosskukulinski/twd/blob/main/docs/errors.md#";
+export const DOC_BASE = "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#";
 
 export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.freeze({
   peer_not_visible: { status: 403, title: "the destination is not in this node's netmap (a grant is missing, or the name does not exist)" },

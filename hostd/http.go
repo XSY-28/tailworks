@@ -31,6 +31,7 @@ var errStatus = map[string]int{
 	"public_create_denied": 403, "public_request": 403, "not_public": 404,
 	// Create admission (docs/create-admission.md): a new name nobody admitted.
 	"create_not_admitted": 403,
+	"push_unauthorized":   403,
 }
 
 func writeAPIError(w http.ResponseWriter, e *apiError) {
@@ -453,8 +454,9 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 
 // ---- push API (mgmt → hostd) and status ----
 
-func (h *Host) pushAPI() http.Handler {
-	m := http.NewServeMux()
+// pushHandlers registers the pushes mgmt sends a host: kills and
+// assignment changes. They are served on both push surfaces.
+func (h *Host) pushHandlers(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/push/kill", func(w http.ResponseWriter, r *http.Request) {
 		var k mgmtapi.KillOrder
 		if err := json.NewDecoder(r.Body).Decode(&k); err != nil || k.ObjectID == "" {
@@ -464,16 +466,44 @@ func (h *Host) pushAPI() http.Handler {
 		h.killLocal(k.ObjectID, k.Reason)
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
+	m.HandleFunc("POST /v1/push/assignments", func(w http.ResponseWriter, r *http.Request) {
+		h.TriggerSync()
+		writeJSON(w, 200, map[string]any{"ok": true})
+	})
+	// Smart placement (ADR-033): measure a tenant's targets now (mgmt, at deploy).
+	m.HandleFunc("POST /v1/push/probe", h.probeHandler)
+}
+
+// tsnetPushAPI is what the host's own tailnet node serves (Config.
+// PushListener): the pushes only, each authenticated as coming from mgmt's
+// node (pushAuth). Status, purge and VM checks are the operator's and stay
+// on the local socket.
+func (h *Host) tsnetPushAPI() http.Handler {
+	m := http.NewServeMux()
+	h.pushHandlers(m)
+	return h.pushAuth.handler(m)
+}
+
+// PushHandler is the push API (POST /v1/push/kill, POST /v1/push/assignments)
+// for mgmt running in the same process (Config.PushInProcess): mgmt serves
+// each push through it directly, so there is no peer to authenticate. It
+// routes nothing else (status and purge stay on the local socket).
+func (h *Host) PushHandler() http.Handler {
+	m := http.NewServeMux()
+	h.pushHandlers(m)
+	return m
+}
+
+// pushAPI is the local unix-socket API (<run-dir>/hostd.sock, mode 0600,
+// procsb.Guard): the pushes (local-dev mgmt) plus the operator's status,
+// purge and VM checks (twd status / down --purge / host vmcheck).
+func (h *Host) pushAPI() http.Handler {
+	m := http.NewServeMux()
+	h.pushHandlers(m)
 	// twd down --purge: forget killed objects (their tombstones) so a
 	// redeploy on this state dir starts from a clean registry.
 	m.HandleFunc("POST /v1/purge", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "purged": h.Purge()})
-	})
-	// Smart placement: measure a tenant's targets now (mgmt, at deploy).
-	m.HandleFunc("POST /v1/push/probe", h.probeHandler)
-	m.HandleFunc("POST /v1/push/assignments", func(w http.ResponseWriter, r *http.Request) {
-		h.TriggerSync()
-		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 	m.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, h.Status())

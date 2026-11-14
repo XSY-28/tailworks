@@ -100,7 +100,10 @@ func mintModeRequired() *cliErr {
 // tailnet is named (devices endpoint, if the client may list devices),
 // and, if the client may read the policy, tag ownership is verified.
 // readable reports whether the policy could be read; pol is it then.
-func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSource, clientID, file string, out io.Writer) (tailnet string, pol []byte, readable bool, err error) {
+//
+// needed is the tag ownership the layout requires (tagOwnersNeeded for the
+// two-process layout; single-process: tag:twd-mgmt only).
+func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSource, clientID, file string, out io.Writer, needed policy.Snippet) (tailnet string, pol []byte, readable bool, err error) {
 	if _, err := src.Token(ctx); err != nil {
 		return "", nil, false, fail("oauth_exchange_failed", "Tailscale refused the OAuth client "+clientID+" from "+file, netd.Redact(err.Error())).
 			withFix("check TS_OAUTH_CLIENT_SECRET in "+file+" (admin console › Settings › OAuth clients); a revoked client must be regenerated",
@@ -116,7 +119,7 @@ func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSour
 		fmt.Fprintf(out, "› policy   the OAuth client can't read the policy (%s); tag ownership is checked by the first mint instead\n", firstLine(netd.Redact(perr.Error())))
 		return tailnet, nil, false, nil
 	}
-	miss, merr := policy.Missing(p, tagOwnersNeeded())
+	miss, merr := policy.Missing(p, needed)
 	if merr != nil {
 		return tailnet, p, true, fail("bad_request", "can't parse the tailnet policy", merr.Error())
 	}

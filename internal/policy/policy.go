@@ -160,6 +160,26 @@ type Options struct {
 // TwdTagPrefix: the only tags twd may own or use as a grant source.
 const TwdTagPrefix = "tag:twd"
 
+// IsTwdTag reports whether t is exactly `tag:twd` or a `tag:twd-…` tag in
+// Tailscale's tag grammar (`^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`). A bare
+// prefix match is not enough: `tag:twdx`, `tag:twd-x ` (padding) or a tag
+// with control characters would otherwise slip into tagOwners and grants.
+func IsTwdTag(t string) bool {
+	if t == TwdTagPrefix {
+		return true
+	}
+	rest, ok := strings.CutPrefix(t, TwdTagPrefix+"-")
+	if !ok || rest == "" {
+		return false
+	}
+	for _, r := range rest {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // Check enforces what a twd-generated snippet may add to a tenant policy
 // (RT-06). It never trusts the snippet's origin (a bundle's twd.jsonc):
 //   - tagOwners keys must be twd tags (tag:twd, tag:twd-*), owned only by
@@ -170,7 +190,7 @@ const TwdTagPrefix = "tag:twd"
 //   - grants may only carry src, dst, ip and app.
 func Check(s Snippet, o Options) error {
 	okTag := func(t string) bool {
-		return strings.HasPrefix(t, TwdTagPrefix) || slices.Contains(o.AllowTags, t)
+		return IsTwdTag(t) || slices.Contains(o.AllowTags, t)
 	}
 	keys := make([]string, 0, len(s.TagOwners))
 	for t := range s.TagOwners {

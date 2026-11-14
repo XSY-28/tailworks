@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -17,6 +18,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -114,8 +116,11 @@ type Mgmt struct {
 	liveReplicas int
 	waiters      map[string]chan struct{}
 	spawnMu      map[string]*sync.Mutex // per tenant: serialises budget checks
-	pushURLs     map[string]string      // hostID → unix:// push socket (in memory; hosts re-register)
+	pushURLs     map[string]string      // hostID → push target cache (unix://, http://node:port, inproc://)
 	pending      map[string]*pendingDelete
+	// inprocPush are the push handlers of hosts embedded in this process
+	// (single-process twd up): hostID → the host agent's push API.
+	inprocPush map[string]http.Handler
 	// reg is the OCI registry (nil without Config.RegistryDir).
 	reg      *registry.Registry
 	resolver *registry.Resolver
@@ -159,7 +164,7 @@ func New(cfg Config) (*Mgmt, error) {
 	}
 	m := &Mgmt{cfg: cfg, store: cfg.Store, custody: cfg.Custody, broker: cfg.Broker, clock: cfg.Clock, log: cfg.Log,
 		throttles: map[string]*Throttle{}, queues: map[string]chan string{}, queued: map[string]bool{}, replicaID: cfg.ReplicaID, waiters: map[string]chan struct{}{},
-		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{},
+		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{}, inprocPush: map[string]http.Handler{},
 		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
 		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
 	if m.cfg.WarmKeyTTL == 0 {
@@ -332,8 +337,11 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 		if !filepath.IsAbs(r.APIKeyFile) {
 			return Tenant{}, errf(400, "bad_request", "apiKeyFile must be an absolute path")
 		}
-		if _, err := os.Stat(r.APIKeyFile); err != nil {
+		// Same rule as the OAuth client file: a regular 0600 file, no symlink.
+		if f, err := tsapi.OpenSecretFile(r.APIKeyFile); err != nil {
 			return Tenant{}, errf(400, "bad_request", "apiKeyFile: %v", err)
+		} else {
+			f.Close()
 		}
 	case MintWIF:
 		if r.WIFClientID == "" {
@@ -477,15 +485,47 @@ type RegisterRequest struct {
 	Tiers         []string `json:"tiers"`
 	AuditPubKey   string   `json:"auditPubKey,omitempty"`
 	Pool          string   `json:"pool,omitempty"`
+	// RegistrationSecret is the one-time secret from POST /v1/hosts; a
+	// tailnet node must present it to bind itself to a pending host (M1).
+	RegistrationSecret string `json:"registrationSecret,omitempty"`
 	// PushURL is where mgmt pushes kills and assignment changes on the
-	// local-dev socket (unix:///… only). Over the tailnet hosts give
-	// PushPort instead: mgmt pushes to the WhoIs node's address.
+	// local-dev socket (unix:///… only), or EmbeddedPushURL for the host
+	// agent embedded in mgmt's own process (single-process twd up). Over
+	// the tailnet hosts give PushPort instead: mgmt pushes to the WhoIs
+	// node's address.
 	PushURL  string `json:"pushURL,omitempty"`
 	PushPort int    `json:"pushPort,omitempty"`
 	// Arch (GOARCH) and Capacity, the capacity vector (ADR-032 D9).
 	Arch     string        `json:"arch,omitempty"`
 	Capacity *HostCapacity `json:"capacity,omitempty"`
 }
+
+// EmbeddedPushURL is the push "URL" of a host agent that runs inside
+// mgmt's own process (single-process `twd up`): pushes are served through
+// the handler given to SetInProcessPush, nothing is dialled. A
+// registration naming it is accepted only when the request's context
+// carries the embedded-host marker (WithEmbeddedHost), which only the
+// in-process transport sets: no listener (tsnet or unix socket) attaches it.
+const EmbeddedPushURL = "inproc://"
+
+type embeddedHostKey struct{}
+
+// WithEmbeddedHost marks ctx as a request from the host agent embedded in
+// this process (internal/inproc sets it next to the host principal). The
+// marker cannot arrive over the wire: it is a context value, and the
+// listeners' auth wrappers attach only a Principal.
+func WithEmbeddedHost(ctx context.Context, hostID string) context.Context {
+	return context.WithValue(ctx, embeddedHostKey{}, hostID)
+}
+
+// embeddedHostOf returns the embedded host ID of ctx ("" if not embedded).
+func embeddedHostOf(ctx context.Context) string {
+	id, _ := ctx.Value(embeddedHostKey{}).(string)
+	return id
+}
+
+// IsEmbeddedHost reports whether ctx is a request from the embedded host.
+func IsEmbeddedHost(ctx context.Context) bool { return embeddedHostOf(ctx) != "" }
 
 // RegisterHost binds the host record to the calling node (nodeID, nodeAddr
 // are the WhoIs identity and tailnet IP of a tsnet host; "" on the
@@ -500,11 +540,61 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	}
 	old, err := m.store.GetHost(ctx, r.HostID)
 	created := errors.Is(err, ErrNotFound)
-	if err == nil && old.NodeID != "" && nodeID != "" && old.NodeID != nodeID {
+	if err != nil && !created {
+		return Host{}, false, err
+	}
+	secretHash := old.RegistrationSecretHash
+	embedded := r.PushURL == EmbeddedPushURL
+	if embedded {
+		// The host agent embedded in this process: no node to bind, no
+		// registration secret (it is the same process). Only the in-process
+		// transport can present the marker; a tsnet or local-dev caller
+		// naming inproc:// is refused.
+		switch {
+		case embeddedHostOf(ctx) != r.HostID || nodeID != "":
+			m.audit(ctx, AuditRecord{Kind: "deny", Code: "host_identity_mismatch", ActingFor: "host:" + r.HostID},
+				map[string]any{"host": r.HostID, "node": nodeID, "reason": "push URL inproc:// from a caller that is not the embedded host"})
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: push URL %s is reserved for the host agent embedded in twd-mgmt's process", r.HostID, EmbeddedPushURL)
+		case old.NodeID != "":
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s is registered to tailnet node %s; `twd host rm %s` before running it embedded", r.HostID, old.NodeID, r.HostID)
+		}
+	}
+	switch {
+	case nodeID == "":
+		// No node to bind: the --local-dev socket (Twd-Host-ID), where the
+		// record may still be created implicitly. A bound node ID is kept.
+		nodeID = old.NodeID
+	case created:
+		// M1: over the tailnet a host ID exists only if an admin added it.
+		return Host{}, false, errf(403, "host_not_registered", "host %s was never added: `twd host add %s` mints its join key and registration secret", r.HostID, r.HostID)
+	case old.NodeID == "":
+		// First bind of an admin-created host: the join key proves
+		// tag:twd-host, the one-time secret proves this host ID.
+		if secretHash == "" || r.RegistrationSecret == "" ||
+			subtle.ConstantTimeCompare([]byte(hashRegistrationSecret(r.RegistrationSecret)), []byte(secretHash)) != 1 {
+			m.audit(ctx, AuditRecord{Kind: "deny", Code: "host_identity_mismatch", ActingFor: "host:" + r.HostID},
+				map[string]any{"host": r.HostID, "node": nodeID, "reason": "registration secret missing or wrong"})
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: the registration secret is missing or wrong (`twd host add %s` mints a new join key and secret)", r.HostID, r.HostID)
+		}
+		secretHash = "" // used once
+		created = true  // the record existed (pending); this is the host's first registration
+	case old.NodeID != nodeID:
 		return Host{}, false, errf(403, "host_identity_mismatch", "host %s is registered to another node", r.HostID)
+	}
+	// M4: the audit key is pinned at the first registration that carries
+	// one; later registrations may repeat or omit it, never change it
+	// (rotation is twd host rm + twd host add).
+	auditKey := r.AuditPubKey
+	if old.AuditPubKey != "" {
+		if auditKey != "" && auditKey != old.AuditPubKey {
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: auditPubKey is pinned to the key of its first registration (rotate with twd host rm %s --drain, then twd host add)", r.HostID, r.HostID)
+		}
+		auditKey = old.AuditPubKey
 	}
 	target := ""
 	switch {
+	case embedded:
+		target = EmbeddedPushURL
 	case strings.HasPrefix(r.PushURL, "unix:///") && nodeID == "":
 		target = r.PushURL
 	case r.PushPort > 0 && nodeAddr != "":
@@ -518,9 +608,9 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	}
 	m.mu.Unlock()
 	now := m.now().UnixMilli()
-	h := Host{ID: r.HostID, CapacityNodes: r.CapacityNodes, Tiers: r.Tiers, NodeID: nodeID, AuditPubKey: r.AuditPubKey,
+	h := Host{ID: r.HostID, CapacityNodes: r.CapacityNodes, Tiers: r.Tiers, NodeID: nodeID, AuditPubKey: auditKey,
 		Pool: r.Pool, PushPort: r.PushPort, PushTarget: target, LastSeen: now, UpdatedAt: now, CreatedAt: old.CreatedAt,
-		Arch: r.Arch, Capacity: r.Capacity, Usage: old.Usage}
+		Arch: r.Arch, Capacity: r.Capacity, Usage: old.Usage, RegistrationSecretHash: secretHash}
 	if h.CreatedAt == 0 {
 		h.CreatedAt = now
 	}
@@ -530,8 +620,12 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	if err := m.store.UpsertHost(ctx, h); err != nil {
 		return Host{}, false, err
 	}
-	m.audit(ctx, AuditRecord{Kind: "host_register", ActingFor: "host:" + r.HostID}, map[string]any{"host": r.HostID, "node": nodeID,
-		"tiers": r.Tiers, "capacity": r.CapacityNodes, "arch": r.Arch, "capacityVector": r.Capacity, "push": m.pushTarget(r.HostID) != "", "new": created})
+	detail := map[string]any{"host": r.HostID, "node": nodeID,
+		"tiers": r.Tiers, "capacity": r.CapacityNodes, "arch": r.Arch, "capacityVector": r.Capacity, "push": m.pushTarget(r.HostID) != "", "new": created}
+	if embedded {
+		detail["transport"] = "embedded"
+	}
+	m.audit(ctx, AuditRecord{Kind: "host_register", ActingFor: "host:" + r.HostID}, detail)
 	return h, created, nil
 }
 
@@ -555,6 +649,19 @@ func (m *Mgmt) pushTarget(hostID string) string {
 	m.pushURLs[hostID] = h.PushTarget
 	m.mu.Unlock()
 	return h.PushTarget
+}
+
+// SetInProcessPush registers (or with nil forgets) the push API of a host
+// agent running in this process: push serves POST /v1/push/… through h
+// instead of dialling, once the host has registered with EmbeddedPushURL.
+func (m *Mgmt) SetInProcessPush(hostID string, h http.Handler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if h == nil {
+		delete(m.inprocPush, hostID)
+		return
+	}
+	m.inprocPush[hostID] = h
 }
 
 // HeartbeatLease is one lease a host believes it holds.
@@ -719,6 +826,45 @@ func validName(s string) bool {
 	return true
 }
 
+// reservedTags are twd's own infrastructure tags. The OAuth client (owner
+// of tag:twd) can mint keys for them, so a bundle must never be able to
+// ask for them: a workload node with tag:twd-host would be admitted as a
+// host by mgmt's WhoIs gate.
+var reservedTags = []string{"tag:twd", MgmtTag, HostTag}
+
+// validTagSyntax is Tailscale's tag grammar: ^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$
+// (no whitespace, no control characters, nothing after a bare "tag:").
+func validTagSyntax(tag string) bool {
+	rest, ok := strings.CutPrefix(tag, "tag:")
+	if !ok || rest == "" {
+		return false
+	}
+	for i, r := range rest {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case i > 0 && (r == '.' || r == '_' || r == '-'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// validateObjectTag is the single check every tag a workload asks for goes
+// through (deploy, preflight, spawn): well-formed (400 bad_request) and not
+// one of twd's own tags (400 reserved_tag).
+func validateObjectTag(class, tag string) *Error {
+	if !validTagSyntax(tag) {
+		return errf(400, "bad_request", "namespace %q: %q is not a valid tag (want tag:[a-zA-Z0-9][a-zA-Z0-9._-]*)", class, tag)
+	}
+	for _, res := range reservedTags {
+		if strings.EqualFold(tag, res) {
+			return errf(400, "reserved_tag", "namespace %q: %s is one of twd's own tags (%s) and cannot be given to a workload", class, tag, strings.Join(reservedTags, ", "))
+		}
+	}
+	return nil
+}
+
 func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, error) {
 	if r.replica == nil {
 		return m.deployGroup(ctx, r) // replicas: workload_replicas.go
@@ -776,8 +922,8 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, errf(400, "bad_request", "namespace %q needs tags", c.Class)
 		}
 		for _, tag := range c.Tags {
-			if !strings.HasPrefix(tag, "tag:") {
-				return resp, errf(400, "bad_request", "namespace %q: %q is not a tag", c.Class, tag)
+			if e := validateObjectTag(c.Class, tag); e != nil {
+				return resp, e
 			}
 		}
 	}
@@ -1622,6 +1768,9 @@ func (m *Mgmt) checkSpawn(ctx context.Context, t Tenant, dep Deployment, p, chil
 		return errf(503, "policy_unavailable", "can't read tenant policy to check delegation: %v", err)
 	}
 	for _, tag := range child.Tags {
+		if e := validateObjectTag(child.Namespace, tag); e != nil {
+			return e
+		}
 		if !pol.TagOwnedBy(tag, p.Tags) {
 			e := errf(403, "delegation_invalid", "child tag %s is not owned by the parent's tags %v", tag, p.Tags)
 			e.Snippet = fmt.Sprintf(`"tagOwners": { %q: ["tag:twd", %q] }`, tag, p.Tags[0])
@@ -2050,8 +2199,8 @@ func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, w
 // object, to see a mint done by another replica.
 const credentialPoll = 250 * time.Millisecond
 
-// ReadyRequest is POST /v0/objects/{id}/ready. Epoch is optional (fences
-// the commit when set).
+// ReadyRequest is the host's PATCH {status: ready, …}. Epoch is required:
+// the commit is always fenced on (lease, caller host, epoch) (H2).
 type ReadyRequest struct {
 	NodeID       string `json:"nodeID"`
 	StableNodeID string `json:"stableNodeID"`
@@ -2100,11 +2249,16 @@ func (m *Mgmt) Ready(ctx context.Context, id, hostID string, r ReadyRequest) (Ob
 		return o, errf(409, "identity_conflict", "object %s was assigned node %s, not %s", id, assignedTo, r.StableNodeID)
 	}
 	if err != nil {
+		if errors.Is(err, ErrLeaseLost) {
+			m.audit(ctx, AuditRecord{TenantID: o.TenantID, ObjectID: id, Kind: "deny", Code: "lease_lost"},
+				map[string]any{"host": hostID, "epoch": r.Epoch, "op": "ready"})
+		}
 		return o, err
 	}
 	m.deleteCustody(ctx, o)
 	if wasKilled {
 		// Killed while joining: the device that just appeared must go too.
+		// The fence held above, so this is the lease holder's own report.
 		o.NodeID, o.StableNodeID = r.NodeID, r.StableNodeID
 		m.deleteDeviceClaimed(ctx, o, false) // claimed, recorded; the sweep retries if this fails
 		return o, errf(410, "killed", "object %s was killed while joining; device deleted", id)
@@ -2156,10 +2310,10 @@ func (m *Mgmt) Remint(ctx context.Context, id, hostID string, r RemintRequest) (
 	case StatusFailed:
 		return old, errf(502, "bootstrap_failed", "minting a key for %s failed", id)
 	}
-	var fence *Fence
-	if r.Epoch > 0 {
-		fence = &Fence{Lease: old.Lease, Holder: hostID, Epoch: r.Epoch}
+	if r.Epoch <= 0 {
+		return old, errf(400, "bad_request", "epoch is required for a remint (the lease epoch the host holds)")
 	}
+	fence := &Fence{Lease: old.Lease, Holder: hostID, Epoch: r.Epoch}
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: old.TenantID, ObjectID: id, Kind: "remint"},
 		map[string]any{"host": hostID, "reason": r.Reason, "previousStatus": old.Status, "previousStableNodeID": old.StableNodeID,
 			"hostname": old.Hostname}) // committed with the reset (H22)
@@ -2427,6 +2581,16 @@ func (m *Mgmt) push(hostID, path string, body any) error {
 }
 
 func (m *Mgmt) pushTo(u, hostID, path string, body any) error {
+	if u == EmbeddedPushURL {
+		// A host embedded in this process (single-process twd up): served
+		// through its handler, no dial. Another replica would see the same
+		// persisted target and fail here, which is right: only the process
+		// that embeds the host can reach it.
+		m.mu.Lock()
+		inproc := m.inprocPush[hostID]
+		m.mu.Unlock()
+		return m.pushInProcess(hostID, inproc, path, body)
+	}
 	base := "http://hostd"
 	var dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	if sock, ok := strings.CutPrefix(u, "unix://"); ok {
@@ -2452,6 +2616,27 @@ func (m *Mgmt) pushTo(u, hostID, path string, body any) error {
 	resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("push %s: %s", path, resp.Status)
+	}
+	return nil
+}
+
+// pushInProcess serves one push through the embedded host's handler (no
+// network; bounded by PushTimeout like a dialled push).
+func (m *Mgmt) pushInProcess(hostID string, h http.Handler, path string, body any) error {
+	if h == nil {
+		return fmt.Errorf("embedded host %s has no push handler", hostID)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), m.cfg.PushTimeout)
+	defer cancel()
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "http://hostd"+path, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "inproc"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code/100 != 2 {
+		m.log.Debug("push failed", "host", hostID, "path", path, "status", rec.Code)
+		return fmt.Errorf("push %s: %d %s", path, rec.Code, http.StatusText(rec.Code))
 	}
 	return nil
 }
@@ -2767,8 +2952,29 @@ func checkAuditSource(source, kind string) *Error {
 	return nil
 }
 
-// IngestAudit stores host-submitted records on the host's chain. Each must
-// carry hash (and prevHash); the response reports whether they link.
+// hostAuditRecord is the part of a host-submitted record mgmt indexes.
+type hostAuditRecord struct {
+	TS        any    `json:"ts"`
+	ObjectID  string `json:"objectID"`
+	Kind      string `json:"kind"`
+	Source    string `json:"source"`
+	TraceID   string `json:"traceID"`
+	ActingFor string `json:"actingFor"`
+	PrevHash  string `json:"prevHash"`
+	Hash      string `json:"hash"`
+	HostSig   string `json:"hostSig"`
+}
+
+// IngestAudit stores host-submitted records on the host's chain. Every
+// record is verified before anything is written (M4): its hash must be
+// the hash of its content, its hostSig must verify with the host's pinned
+// audit key (when the host registered one), and the batch must link:
+// record i's prevHash is record i-1's hash, and the first prevHash is the
+// chain head. A first prevHash of "" on a non-empty chain is a chain
+// restart (hostd keeps its link in memory); it is stored and reported by
+// verification, never spliced into history. A batch that starts behind
+// the head (a retry after a lost response) resumes after the record that
+// is the head. Anything else is 400 and nothing of the batch is stored.
 func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMessage) (int, ChainStatus, error) {
 	chain := "host:" + hostID
 	// Every host record must be signed by the key the host registered
@@ -2799,35 +3005,63 @@ func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMe
 		served[k] = v
 		return v
 	}
+	parsed := make([]hostAuditRecord, len(recs))
+	canons := make([][]byte, len(recs))
 	for i, raw := range recs {
-		var r struct {
-			TS        any    `json:"ts"`
-			ObjectID  string `json:"objectID"`
-			Kind      string `json:"kind"`
-			Source    string `json:"source"`
-			TraceID   string `json:"traceID"`
-			ActingFor string `json:"actingFor"`
-			PrevHash  string `json:"prevHash"`
-			Hash      string `json:"hash"`
-			HostSig   string `json:"hostSig"`
-		}
-		if err := json.Unmarshal(raw, &r); err != nil {
-			return i, ChainStatus{}, errf(400, "bad_request", "record %d: %v", i, err)
+		r := &parsed[i]
+		if err := json.Unmarshal(raw, r); err != nil {
+			return 0, ChainStatus{}, errf(400, "bad_request", "record %d: %v", i, err)
 		}
 		if r.Hash == "" || r.Kind == "" {
-			return i, ChainStatus{}, errf(400, "bad_request", "record %d: kind and hash are required", i)
+			return 0, ChainStatus{}, errf(400, "bad_request", "record %d: kind and hash are required", i)
 		}
 		if e := checkAuditSource(r.Source, r.Kind); e != nil {
 			e.Message = fmt.Sprintf("record %d: %s", i, e.Message)
-			return i, ChainStatus{}, e
+			return 0, ChainStatus{}, e
 		}
 		if sig, err := base64.StdEncoding.DecodeString(r.HostSig); err != nil || !ed25519.Verify(pub, []byte(r.Hash), sig) {
 			return i, ChainStatus{}, errf(400, "bad_host_sig", "record %d: hostSig does not verify under host %s's auditPubKey", i, hostID)
 		}
 		canon, err := Canonicalize(raw)
 		if err != nil {
-			return i, ChainStatus{}, errf(400, "bad_request", "record %d: %v", i, err)
+			return 0, ChainStatus{}, errf(400, "bad_request", "record %d: %v", i, err)
 		}
+		want, err := HashRecord(raw)
+		if err != nil {
+			return 0, ChainStatus{}, errf(400, "bad_request", "record %d: %v", i, err)
+		}
+		if want != r.Hash {
+			return 0, ChainStatus{}, errf(400, "bad_request", "record %d: hash does not match the record's content", i)
+		}
+		if i > 0 && r.PrevHash != parsed[i-1].Hash {
+			return 0, ChainStatus{}, errf(400, "bad_request", "record %d: prevHash does not link to record %d", i, i-1)
+		}
+		// RT3-05: a record naming another workload's object is attribution
+		// forgery, whatever the chain says.
+		if o, err := m.store.GetObject(ctx, r.ObjectID); err == nil && !servedBy(o) {
+			return i, ChainStatus{}, errf(403, "audit_object_foreign", "record %d: object %s belongs to workload %s/%s, which host %s has never served", i, o.ID, o.TenantID, o.Workload, hostID)
+		}
+		canons[i] = canon
+	}
+	start := 0
+	if len(parsed) > 0 {
+		_, head, err := m.store.AuditHead(ctx, chain)
+		if err != nil {
+			return 0, ChainStatus{}, err
+		}
+		if first := parsed[0].PrevHash; first != head && first != "" {
+			for k := range parsed {
+				if parsed[k].Hash == head {
+					start = k + 1 // already stored up to here
+				}
+			}
+			if start == 0 {
+				return 0, ChainStatus{}, errf(400, "bad_request", "record 0: prevHash does not link to the head of chain %s", chain)
+			}
+		}
+	}
+	for i := start; i < len(parsed); i++ {
+		r := parsed[i]
 		tenant := ""
 		if o, err := m.store.GetObject(ctx, r.ObjectID); err == nil {
 			if !servedBy(o) {
@@ -2837,7 +3071,7 @@ func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMe
 		}
 		if _, err := m.store.AppendAudit(ctx, AuditRecord{Chain: chain, TS: fmt.Sprint(r.TS), TenantID: tenant, ObjectID: r.ObjectID,
 			Kind: r.Kind, TraceID: r.TraceID, ActingFor: r.ActingFor, PrevHash: r.PrevHash, Hash: r.Hash, HostSig: r.HostSig,
-			Raw: canon}); err != nil {
+			Raw: canons[i]}); err != nil {
 			return i, ChainStatus{}, err
 		}
 	}

@@ -79,7 +79,8 @@ func (b *Broker) API(ctx context.Context, t Tenant, purpose string) (TailnetAPI,
 		if t.APIKeyFile == "" {
 			return nil, errors.New("apikey mode needs apiKeyFile")
 		}
-		k, err := tsapi.LoadEnvFile(t.APIKeyFile, "TS_API_KEY")
+		// Like the OAuth client file: 0600, a regular file, no symlink.
+		k, err := tsapi.LoadSecretEnvFile(t.APIKeyFile, "TS_API_KEY")
 		if err != nil {
 			return nil, fmt.Errorf("tenant %s api key: %w", t.ID, err)
 		}

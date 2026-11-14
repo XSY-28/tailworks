@@ -136,6 +136,23 @@ func (m *MultiEnv) Run() {
 	if m.TSAPIURL != "" {
 		upArgs = append(upArgs, "--tsapi-url", m.TSAPIURL)
 	}
+	if !m.SingleProcess {
+		upArgs = append(upArgs, "--separate-host") // the layout this suite was written against (Env.SingleProcess)
+	}
+	// `twd tenant add` and hostd refuse a second tenant when this user can
+	// reach a container engine, is in its group, or can reach the system
+	// tailscaled (sandbox_unavailable; procsb.ScanHostSockets). That control
+	// has its own tests (hostd TestSharedHost*); here it would only stop
+	// the isolation checks (a)–(f), which hold unchanged under the opt-out,
+	// so on such a host run as `twd up --insecure-shared-host` and say so.
+	if hs := procsb.ScanHostSockets(); !hs.Empty() {
+		reach := append([]string{}, hs.Hard...)
+		if hs.Tailscaled != "" {
+			reach = append(reach, hs.Tailscaled)
+		}
+		t.Logf("this user can reach %s: twd would refuse the second tenant (sandbox_unavailable), so running twd up --insecure-shared-host; to exercise the refusal, run the tests as a user outside the docker/podman/lxd/incus groups without access to those sockets", strings.Join(reach, ", "))
+		upArgs = append(upArgs, "--insecure-shared-host")
+	}
 	var up struct {
 		TenantID   string `json:"tenantID"`
 		HostID     string `json:"hostID"`

@@ -61,6 +61,14 @@ type Config struct {
 	// dev). Normal operation is tsnet only: the CLI reaches mgmt through
 	// mgmt's node loopback proxy, hostd through its own tag:twd-host node.
 	LocalDev bool `json:"localDev,omitempty"`
+	// Mode is the process layout `twd up` runs: "single" (the default for
+	// new state since M13: one process, mgmt's node is the only
+	// infrastructure device and the host agent runs embedded in it, pushes
+	// and API calls in-process) or "separate" (twd up --separate-host, and
+	// --local-dev: twd-mgmt and twd-hostd as two child processes, the host
+	// on its own tag:twd-host node). Empty means separate: state written
+	// before Mode existed keeps its shape.
+	Mode string `json:"mode,omitempty"`
 	// PushPort is the port on hostd's node where mgmt pushes kills.
 	PushPort       int    `json:"pushPort,omitempty"`
 	HostID         string `json:"hostID"`
@@ -97,6 +105,23 @@ type state struct {
 	Link *Link
 
 	remoteTenants []TenantRef
+}
+
+// Process layouts (Config.Mode).
+const (
+	ModeSingle   = "single"
+	ModeSeparate = "separate"
+)
+
+// single reports whether the host agent runs embedded in mgmt's process.
+func (c Config) single() bool { return c.Mode == ModeSingle }
+
+// modeLabel names the layout for humans.
+func (c Config) modeLabel() string {
+	if c.single() {
+		return ModeSingle
+	}
+	return ModeSeparate
 }
 
 // keyless reports whether this state runs in keyless (WIF) mint mode.
@@ -319,6 +344,8 @@ func (s *state) transport() string {
 		return "tsnet (link, this machine's Tailscale)"
 	case s.Cfg.LocalDev:
 		return "local-dev (unix socket + host token)"
+	case s.Cfg.single():
+		return "tsnet (loopback through mgmt's node; host embedded in the mgmt process)"
 	}
 	return "tsnet (loopback through mgmt's node)"
 }

@@ -61,13 +61,19 @@ printf 'TS_OAUTH_CLIENT_ID=%s\nTS_OAUTH_CLIENT_SECRET=%s\n' '<client id>' '<clie
 chmod 600 ~/.config/twd/oauth.env
 ```
 
-**3. Start twd.** This starts the control plane (`twd-mgmt`) and a host
-agent on this machine, both joining your tailnet as tagged nodes. No browser
-login is needed:
+**3. Start twd.** One process: the control plane (`twd-mgmt`) with the host
+agent embedded in it, joining your tailnet as a single tagged node
+(`twd-mgmt`). No browser login is needed:
 
 ```sh
 twd up --oauth-client-file ~/.config/twd/oauth.env --service --yes
 ```
+
+It prints the **admin console**, `http://twd-mgmt.<tailnet>.ts.net/ui/`:
+open it from any tailnet admin's browser (WhoIs identity, no login) to see
+hosts, deployments, every object's lineage and the audit trail, and to kill
+or undeploy. Need more machines later? `twd host add` joins another host;
+`twd up --separate-host` keeps mgmt and the host agent as two nodes.
 
 **4. Create and deploy a Durable Object app.** The `agent` template is a
 Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
@@ -115,6 +121,11 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
   [docs/cron-triggers.md](docs/cron-triggers.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
+- **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).
+- **Every typed error code and its fix:** [docs/errors.md](docs/errors.md).
+- **Security:** [security/THREAT-MODEL.md](security/THREAT-MODEL.md) and
+  [security/RED-TEAM.md](security/RED-TEAM.md) (the attacker's view,
+  findings and fixes).
 - **Running several mgmt replicas on Postgres:** the chaos and soak harness
   and its findings are in [e2e/multimgmt/](e2e/multimgmt/)
   (`LEDGER.md`). Replicas can share one Tailscale Service VIP

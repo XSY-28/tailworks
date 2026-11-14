@@ -1,0 +1,112 @@
+{{define "content"}}
+<section class="grid">
+  <div class="card">
+    <h2>mgmt</h2>
+    <dl class="kv">
+      <dt>DNS name</dt><dd class="mono">{{or .Who.Mgmt.DNSName "-"}}</dd>
+      <dt>tailnet</dt><dd class="mono">{{or .Who.Mgmt.Tailnet "-"}}</dd>
+      <dt>version</dt><dd class="mono">{{or .Status.Version "-"}}</dd>
+      <dt>listeners</dt><dd class="mono">{{if .Status.Listeners}}{{join .Status.Listeners}}{{else}}-{{end}}</dd>
+      <dt>transport</dt><dd class="mono">{{.Status.Transport}}{{if .Who.Mgmt.HTTPS}} · https{{end}}</dd>
+      {{if .Who.Mgmt.Issuer}}<dt>WIF issuer</dt><dd class="mono">{{.Who.Mgmt.Issuer}}</dd>{{end}}
+      <dt>mint modes</dt><dd class="mono">{{if .MintModes}}{{join .MintModes}}{{else}}<span class="muted">no tenants</span>{{end}}</dd>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>audit chain</h2>
+    <div data-live="verification">
+      <p>{{if .Verification.OK}}<span class="badge ok">verified</span>{{else}}<span class="badge bad">NOT VERIFIED</span>{{end}}
+      {{if .Verification.VerifiedAt}}<span class="muted small">checked {{stamp .Verification.VerifiedAt}}</span>{{end}}</p>
+      <p class="chains">{{template "chains" .Verification.Chains}}</p>
+    </div>
+    <p><a href="/ui/audit">full audit →</a></p>
+  </div>
+</section>
+
+{{if .Errors}}<div class="flash bad">{{range .Errors}}<div>{{.}}</div>{{end}}</div>{{end}}
+
+<section>
+  <h2>hosts <span class="count">{{len .Hosts}}</span></h2>
+  <div data-live="hosts">
+  <table>
+    <thead><tr><th>host</th><th>status</th><th>heartbeat</th><th>nodes live/cap</th><th>tiers</th><th>pool</th><th>push</th><th>leases</th><th>node</th></tr></thead>
+    <tbody>
+    {{range .Hosts}}<tr>
+      <td class="mono"><a href="/ui/hosts/{{.HostID}}">{{.HostID}}</a>{{if .DNSName}}<div class="small muted">{{.DNSName}}</div>{{end}}</td>
+      <td>{{template "status" .Status}}</td>
+      <td class="mono">{{ago .LastSeen}}</td>
+      <td class="mono">{{.LiveNodes}}/{{.CapacityNodes}}</td>
+      <td class="small">{{join .Tiers}}</td>
+      <td class="small">{{or .Pool "-"}}</td>
+      <td class="mono small">{{.PushTransport}}</td>
+      <td class="mono small">{{len .Leases}}</td>
+      <td class="mono small" title="{{.NodeID}}">{{if .NodeID}}{{short .NodeID}}{{else}}-{{end}}</td>
+    </tr>{{else}}<tr><td colspan="9" class="muted">no hosts: <span class="mono">twd host add</span> then run twd-hostd</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>tenants <span class="count">{{len .Tenants}}</span></h2>
+  <div data-live="tenants">
+  <table>
+    <thead><tr><th>tenant</th><th>tailnet</th><th>mint mode</th><th>max objects</th><th>registrations/min</th><th>effective</th><th>mint queue</th><th>pool / tier</th><th>created</th></tr></thead>
+    <tbody>
+    {{range .Tenants}}<tr>
+      <td class="mono"><a href="/ui/tenants/{{.TenantID}}">{{.TenantID}}</a></td>
+      <td class="mono">{{.Tailnet}}</td>
+      <td class="mono">{{.MintMode}}</td>
+      <td class="mono">{{.MaxObjects}}</td>
+      <td class="mono">{{.RegistrationsPerMinute}}</td>
+      <td class="mono">{{printf "%.1f" .EffectiveRegistrationsPerMinute}}</td>
+      <td class="mono">{{.MintQueue}}</td>
+      <td class="small">{{or .Pool "-"}} / {{or .Tier "-"}}</td>
+      <td class="mono small">{{ago .CreatedAt}}</td>
+    </tr>{{else}}<tr><td colspan="9" class="muted">no tenants</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>deployments <span class="count">{{len .Deployments}}</span> <span class="muted small">latest per workload</span></h2>
+  <div data-live="deployments">
+  <table>
+    <thead><tr><th>workload</th><th>deployment</th><th>tenant</th><th>host</th><th>by</th><th>created</th><th>status</th><th>endpoint</th></tr></thead>
+    <tbody>
+    {{range .Deployments}}<tr>
+      <td class="mono">{{.Workload}}</td>
+      <td class="mono"><a href="/ui/deployments/{{.DeploymentID}}">{{.DeploymentID}}</a></td>
+      <td class="mono small"><a href="/ui/tenants/{{.TenantID}}">{{.TenantID}}</a></td>
+      <td class="mono small"><a href="/ui/hosts/{{.Host}}">{{.Host}}</a></td>
+      <td class="small">{{or .DeployedBy "-"}}</td>
+      <td class="mono small">{{ago .CreatedAt}}</td>
+      <td>{{template "status" .Status}}{{if .Error}} <span class="small bad-text">{{.Error}}</span>{{end}}</td>
+      <td class="mono small">{{if .Endpoint.MagicDNS}}<a href="http://{{.Endpoint.MagicDNS}}/" rel="noreferrer">{{.Endpoint.MagicDNS}}</a> {{template "status" .Endpoint.Status}}{{else}}-{{end}}</td>
+    </tr>{{else}}<tr><td colspan="8" class="muted">no deployments: <span class="mono">twd deploy</span></td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>objects <span class="count">{{len .Objects}}</span> <span class="muted small">lineage tree, every tenant</span></h2>
+  <div data-live="objects">
+  <table class="objects">
+    <thead>{{template "objhead"}}</thead>
+    <tbody>{{template "objrows" .Objects}}{{if not .Objects}}<tr><td colspan="9" class="muted">no objects</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>recent audit <span class="count">{{len .Audit}}</span> <span class="muted small">newest first</span></h2>
+  <div data-live="audit">
+  <table>
+    <thead>{{template "audithead"}}</thead>
+    <tbody>{{template "auditrows" (auditSet .Audit .Names)}}{{if not .Audit}}<tr><td colspan="6" class="muted">no audit records</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+{{end}}

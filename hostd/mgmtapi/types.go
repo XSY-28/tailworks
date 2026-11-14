@@ -88,9 +88,14 @@ type RegisterRequest struct {
 	// PushPort is hostd's push listener on its own tsnet node; mgmt pushes
 	// to the WhoIs node's address at this port (tsnet transport).
 	PushPort int `json:"pushPort,omitempty"`
-	// AuditPubKey: base64 ed25519 key for hostSig.
+	// AuditPubKey: base64 ed25519 key for hostSig (pinned by mgmt on the
+	// first registration; later ones may only repeat it).
 	AuditPubKey string `json:"auditPubKey,omitempty"`
 	Pool        string `json:"pool,omitempty"`
+	// RegistrationSecret is the one-time secret `twd host add` / `twd up`
+	// put in the join file (TWD_REGISTRATION_SECRET); mgmt requires it on
+	// the first tailnet registration of a host ID and ignores it after.
+	RegistrationSecret string `json:"registrationSecret,omitempty"`
 	// Arch is GOARCH; Capacity the capacity vector (ADR-032 D9).
 	Arch     string        `json:"arch,omitempty"`
 	Capacity *HostCapacity `json:"capacity,omitempty"`

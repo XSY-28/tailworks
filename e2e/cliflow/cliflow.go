@@ -130,6 +130,12 @@ type Env struct {
 	OnPeers func(client *nettest.Node, hc *http.Client, agentIP, mcpIP string)
 	// UpArgs are extra `twd up` flags (e2e-linux: --service).
 	UpArgs []string
+	// SingleProcess runs `twd up` in its default single-process layout
+	// (M13: the host agent embedded in twd-mgmt; mgmt's node is the only
+	// infrastructure device). The default here is the two-process layout
+	// (`--separate-host`: twd-hostd on its own tag:twd-host node), which
+	// the e2e suites were written against.
+	SingleProcess bool
 	// Persistent: join nodes non-ephemeral (twd up's default; e2e-linux,
 	// so they rejoin after a service restart). The caller must then stop
 	// with `twd down --purge` (Down doesn't purge).
@@ -371,6 +377,9 @@ func (e *Env) upArgs() []string {
 		"--mgmt-hostname", e.Prefix+"mgmt", "--host-id", strings.TrimSuffix(e.Prefix, "-"))
 	if !e.Persistent {
 		upArgs = append(upArgs, "--ephemeral")
+	}
+	if !e.SingleProcess {
+		upArgs = append(upArgs, "--separate-host")
 	}
 	if e.TSAPIURL != "" {
 		upArgs = append(upArgs, "--tsapi-url", e.TSAPIURL)
@@ -940,8 +949,19 @@ func (e *Env) TrackInfra(mgmtNodeID string) {
 	e.MustJSON(&hosts, "host", "ls")
 	for _, h := range hosts {
 		add(h.NodeID)
-		if h.Status != "live" || h.NodeID == "" {
+		switch {
+		case e.SingleProcess && (h.Status != "live" || h.NodeID != ""):
+			t.Fatalf("host %s is %q with node %q: the embedded host must be live with no node of its own", h.HostID, h.Status, h.NodeID)
+		case !e.SingleProcess && (h.Status != "live" || h.NodeID == ""):
 			t.Fatalf("host %s is %q with node %q: the host must be live on its own tag:twd-host node", h.HostID, h.Status, h.NodeID)
+		}
+	}
+	if e.SingleProcess {
+		if _, err := os.Stat(filepath.Join(e.StateDir, "hostd", "tsnet")); err == nil {
+			t.Fatalf("single-process twd up created host node state in %s", filepath.Join(e.StateDir, "hostd", "tsnet"))
+		}
+		if _, err := os.Stat(filepath.Join(e.StateDir, "hostd", "join.env")); err == nil {
+			t.Fatalf("single-process twd up minted a host join key")
 		}
 	}
 	var doc struct {
@@ -952,6 +972,9 @@ func (e *Env) TrackInfra(mgmtNodeID string) {
 		if c.Name == "transport" {
 			if c.Status != "ok" || !strings.HasPrefix(c.Detail, "tsnet:") {
 				t.Fatalf("doctor transport: %s %s", c.Status, c.Detail)
+			}
+			if e.SingleProcess != strings.Contains(c.Detail, "host embedded in the mgmt process") {
+				t.Fatalf("doctor transport does not describe the layout (single=%v): %s", e.SingleProcess, c.Detail)
 			}
 			e.Res.pass("transport_tsnet_only", c.Detail)
 		}

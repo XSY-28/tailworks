@@ -578,6 +578,9 @@ func (s *SQLStore) addColumns(ctx context.Context) error {
 		{"deployments", "public_spec", "ALTER TABLE deployments ADD COLUMN public_spec TEXT NOT NULL DEFAULT ''"},
 		// smart placement (ADR-033): why the deployment is on its host (JSON).
 		{"deployments", "placement", "ALTER TABLE deployments ADD COLUMN placement TEXT NOT NULL DEFAULT ''"},
+		// M1 (security review): hex SHA-256 of the one-time host registration
+		// secret; '' once the node is bound (or for local-dev hosts).
+		{"hosts", "reg_secret_hash", "ALTER TABLE hosts ADD COLUMN reg_secret_hash TEXT NOT NULL DEFAULT ''"},
 	} {
 		rows, err := s.db.QueryContext(ctx, "SELECT "+c.col+" FROM "+c.table+" WHERE 1=0")
 		if err == nil {
@@ -888,7 +891,7 @@ func (s *SQLStore) ListTenants(ctx context.Context, pg Page) ([]Tenant, error) {
 
 // ---- hosts ----
 
-const hostCols = "id, capacity, tiers, node_id, audit_pubkey, live_nodes, last_seen, pool, push_port, created_at, updated_at, push_target, arch, capacity_vec, usage_vec"
+const hostCols = "id, capacity, tiers, node_id, audit_pubkey, live_nodes, last_seen, pool, push_port, created_at, updated_at, push_target, arch, capacity_vec, usage_vec, reg_secret_hash"
 
 func scanHost(sc interface{ Scan(...any) error }) (Host, error) {
 	var h Host
@@ -896,7 +899,7 @@ func scanHost(sc interface{ Scan(...any) error }) (Host, error) {
 	var tiers, capVec, usageVec string
 	var port int64
 	err := sc.Scan(&h.ID, &capacity, &tiers, &h.NodeID, &h.AuditPubKey, &live, &h.LastSeen, &h.Pool, &port, &h.CreatedAt, &h.UpdatedAt, &h.PushTarget,
-		&h.Arch, &capVec, &usageVec)
+		&h.Arch, &capVec, &usageVec, &h.RegistrationSecretHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return h, ErrNotFound
 	}
@@ -933,12 +936,12 @@ func (s *SQLStore) UpsertHost(ctx context.Context, h Host) error {
 	}
 	// created_at is kept from the first insert (the page key must be stable).
 	// usage_vec is the heartbeat's (TouchHost), kept across re-registration.
-	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO hosts (`+hostCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO hosts (`+hostCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (id) DO UPDATE SET capacity=excluded.capacity, tiers=excluded.tiers, node_id=excluded.node_id,
 		audit_pubkey=excluded.audit_pubkey, last_seen=excluded.last_seen, pool=excluded.pool, push_port=excluded.push_port, updated_at=excluded.updated_at,
-		push_target=excluded.push_target, arch=excluded.arch, capacity_vec=excluded.capacity_vec`),
+		push_target=excluded.push_target, arch=excluded.arch, capacity_vec=excluded.capacity_vec, reg_secret_hash=excluded.reg_secret_hash`),
 		h.ID, h.CapacityNodes, jsonStr(h.Tiers), h.NodeID, h.AuditPubKey, h.LiveNodes, h.LastSeen, h.Pool, h.PushPort, h.CreatedAt, h.UpdatedAt, h.PushTarget,
-		h.Arch, vecStr(h.Capacity), vecStr(h.Usage))
+		h.Arch, vecStr(h.Capacity), vecStr(h.Usage), h.RegistrationSecretHash)
 	return err
 }
 
