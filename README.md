@@ -107,6 +107,9 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
   - The Linux microVM tier (Firecracker).
 - **Serve chosen paths to the public internet** (webhooks, OAuth callbacks)
   over Funnel: [docs/public-ingress.md](docs/public-ingress.md).
+- **API keys and other secrets** (`env.NAME`, like `wrangler secret`):
+  `twd secret put`, and `.dev.vars` for `twd dev`. See
+  [docs/secrets.md](docs/secrets.md).
 - **Run an app locally with no tailnet at all:** `twd dev`.
 - **What runs and what doesn't:** [docs/COMPAT.md](docs/COMPAT.md)
   (Agents SDK, MCP, Vercel AI SDK) and [docs/node-tier.md](docs/node-tier.md)

@@ -405,6 +405,13 @@ func describe(r mgmt.AuditRecord, names map[string]string) string {
 		return fmt.Sprintf("device %v deleted (%v ms)", d["nodeID"], d["ms"])
 	case "deny":
 		return fmt.Sprintf("%s %v", r.Code, d["message"])
+	// Worker secrets: names only, never values.
+	case "secret_put":
+		return fmt.Sprintf("secret %v of %v set by %s", d["name"], d["workload"], orDash(r.ActingFor))
+	case "secret_delete":
+		return fmt.Sprintf("secret %v of %v deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
+	case "secret_release":
+		return fmt.Sprintf("secrets %s of %v released to host %v (epoch %v)", compact(d["names"]), d["workload"], d["host"], d["epoch"])
 	// Public ingress (ADR-029). Host records are best-effort rendered from
 	// whichever of these fields they carry; the rest is shown compactly.
 	case "public_request":

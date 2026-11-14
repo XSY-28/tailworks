@@ -105,6 +105,10 @@ type Server struct {
 	reg                  *registry.Registry
 	resolver             *registry.Resolver
 	services             map[string]string // workload -> Tailscale Service (SetService)
+
+	// Worker secrets (secrets.go): tenant/workload -> name -> secret.
+	secrets      map[string]map[string]*fakeSecret
+	secretGrants int
 }
 
 // SetHeartbeatsDown makes host heartbeats fail with 503 (tests: a host
@@ -211,6 +215,10 @@ func New(cfg Config) *Server {
 	m.HandleFunc("POST /v1/tenants", s.createTenant)
 	m.HandleFunc("GET /v1/tenants", s.listTenants)
 	m.HandleFunc("GET /v1/tenants/{id}", s.getTenant)
+	m.HandleFunc("GET /v1/tenants/{id}/workloads/{workload}/secrets", s.listSecrets)
+	m.HandleFunc("PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name}", s.putSecret)
+	m.HandleFunc("DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name}", s.deleteSecret)
+	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/secret-grants", s.secretGrant)
 	m.HandleFunc("PUT /v1/hosts/{id}", s.register)
 	m.HandleFunc("PUT /v1/hosts/{id}/status", s.heartbeat)
 	m.HandleFunc("GET /v1/hosts/{id}/assignments", s.assignments)
