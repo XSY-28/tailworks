@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/container"
 	"github.com/rosskukulinski/twd/internal/cron"
 	"github.com/rosskukulinski/twd/internal/publicspec"
 	"github.com/tailscale/hujson"
@@ -41,6 +42,11 @@ type TwdConfig struct {
 		Host      string   `json:"host"`
 		Hostname  string   `json:"hostname"`
 	} `json:"placement"`
+
+	// Replicas runs a stateless workload on this many distinct hosts
+	// (default 1); see workload_replicas.go.
+	Replicas int `json:"replicas"`
+
 	Tailnet struct {
 		// Tags are the workload entry node's tags (the "_workload" namespace).
 		Tags []string `json:"tags"`
@@ -275,6 +281,41 @@ func bundleFiles(bundle []byte, names ...string) (map[string][]byte, error) {
 		}
 		out[base], depth[base] = b, d
 	}
+}
+
+// BundleContainers returns the container classes a bundle declares: the
+// wrangler.jsonc/.json "containers" array (Cloudflare's shape) with
+// twd.jsonc "containers" overriding by class (ADR-032). A bundle that
+// declares containers needs a host offering them (placement), and each
+// class's max_instances bounds its running containers (reservations).
+func BundleContainers(bundle []byte) ([]container.Class, error) {
+	files, err := bundleFiles(bundle, "twd.jsonc", "wrangler.jsonc", "wrangler.json")
+	if err != nil {
+		return nil, err
+	}
+	std := func(name string) ([]byte, error) {
+		b, ok := files[name]
+		if !ok {
+			return nil, nil
+		}
+		s, err := hujson.Standardize(b)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		return s, nil
+	}
+	wb, err := std("wrangler.jsonc")
+	if err == nil && wb == nil {
+		wb, err = std("wrangler.json")
+	}
+	if err != nil {
+		return nil, err
+	}
+	tb, err := std("twd.jsonc")
+	if err != nil {
+		return nil, err
+	}
+	return container.Parse(wb, tb)
 }
 
 func BundleConfig(bundle []byte) (*TwdConfig, error) {

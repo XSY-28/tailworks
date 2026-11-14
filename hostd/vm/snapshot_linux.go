@@ -43,6 +43,12 @@ type baseSnap struct {
 	info  map[string]any
 	err   error
 	built time.Time
+	// ctlToken is the base VM's control-channel token: every copy restored
+	// from this base holds it in guestd's memory, so it authenticates a
+	// copy's pre-claim connection only (no tenant code has run in it yet);
+	// each copy's claim replaces it with the copy's own (Load.CtlToken).
+	// It is never sent to a guest after the base boot.
+	ctlToken string
 }
 
 // BaseGrace is how long an old base outlives its replacement.
@@ -117,7 +123,17 @@ func (b *Backend) retire(old *baseSnap) {
 		case <-b.baseDone:
 		}
 		old.conn.Close() // the helper removes the base's files
+		b.baseMu.Lock()
+		delete(b.baseTokens, old.id)
+		b.baseMu.Unlock()
 	}()
+}
+
+// baseToken is base id's control-channel token ("" = no such base).
+func (b *Backend) baseToken(id string) string {
+	b.baseMu.Lock()
+	defer b.baseMu.Unlock()
+	return b.baseTokens[id]
 }
 
 func (b *Backend) buildBase(ctx context.Context, bs *baseSnap) error {
@@ -162,7 +178,13 @@ func (b *Backend) makeBase(ctx context.Context, bs *baseSnap) error {
 		conn.Close()
 		return fmt.Errorf("snapshot-base: %w", err)
 	}
-	bs.conn, bs.id, bs.files = conn, resp.BaseID, resp.BaseFiles
+	bs.conn, bs.id, bs.files, bs.ctlToken = conn, resp.BaseID, resp.BaseFiles, m.token()
+	b.baseMu.Lock()
+	if b.baseTokens == nil {
+		b.baseTokens = map[string]string{}
+	}
+	b.baseTokens[bs.id] = bs.ctlToken
+	b.baseMu.Unlock()
 	bs.info = map[string]any{"base": resp.BaseID, "mem_bytes": resp.BaseBytes, "boot_ms": booted.Milliseconds(),
 		"snapshot_ms": resp.Timings, "total_ms": time.Since(st).Milliseconds(), "hugepages": m.info.HugePages}
 	b.cfg.Log.Info("microVM base snapshot ready", "info", bs.info)

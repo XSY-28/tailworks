@@ -26,6 +26,9 @@ type TenantPatch struct {
 	OAuthClientFile        *string
 	RegistrationsPerMinute *int
 	MaxObjects             *int
+	MaxContainers          *int
+	MaxContainerMemMiB     *int
+	MaxContainerVCPU       *float64
 	Pool                   *string
 	Tier                   *string
 	// PublicIngress is the ADR-029 gate ("allow" | "deny"; null clears = deny).
@@ -84,6 +87,27 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 		}
 		t.MaxObjects = *p.MaxObjects
 		changed["maxObjects"] = t.MaxObjects
+	}
+	for _, q := range []struct {
+		name string
+		p    *int
+		dst  *int
+	}{{"maxContainers", p.MaxContainers, &t.MaxContainers}, {"maxContainerMemMiB", p.MaxContainerMemMiB, &t.MaxContainerMemMiB}} {
+		if q.p == nil {
+			continue
+		}
+		if *q.p <= 0 {
+			return Tenant{}, errf(400, "bad_request", "%s must be positive", q.name)
+		}
+		*q.dst = *q.p
+		changed[q.name] = *q.p
+	}
+	if p.MaxContainerVCPU != nil {
+		if *p.MaxContainerVCPU <= 0 {
+			return Tenant{}, errf(400, "bad_request", "maxContainerVCPU must be positive")
+		}
+		t.MaxContainerVCPU = *p.MaxContainerVCPU
+		changed["maxContainerVCPU"] = t.MaxContainerVCPU
 	}
 	if p.Pool != nil {
 		t.Pool = *p.Pool
@@ -485,6 +509,22 @@ func (m *Mgmt) Undeploy(ctx context.Context, id, reason, by string) (KillResult,
 	go m.push(d.HostID, "/v1/push/assignments", map[string]any{})
 	m.audit(ctx, AuditRecord{TenantID: d.TenantID, Kind: "undeploy", ActingFor: by}, map[string]any{"deploymentID": d.ID,
 		"workload": d.Workload, "host": d.HostID, "killed": len(res.Killed), "reason": reason, "by": by})
+	// Undeploying a workload stops its replicas too (twd.jsonc "replicas").
+	if replicaGroup(d.Namespaces) == "" {
+		if reps, err := m.replicasOf(ctx, d.TenantID, d.Workload); err == nil {
+			for _, rd := range reps {
+				rr, err := m.Undeploy(ctx, rd.ID, reason, by)
+				if err != nil {
+					m.log.Warn("undeploy replica failed", "replica", rd.Workload, "err", err)
+					continue
+				}
+				res.Killed = append(res.Killed, rr.Killed...)
+				res.Pushed = append(res.Pushed, rr.Pushed...)
+				res.DevicesDeleted = append(res.DevicesDeleted, rr.DevicesDeleted...)
+				res.DevicesDeleting = append(res.DevicesDeleting, rr.DevicesDeleting...)
+			}
+		}
+	}
 	return res, nil
 }
 
@@ -529,6 +569,15 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 	svcName, err := applyService(svcCfg, r.Workload, classes)
 	if err != nil {
 		return res, errf(400, "bad_bundle", "%v", err)
+	}
+	if t, err := m.store.GetTenant(ctx, r.TenantID); err == nil {
+		stateful := true
+		if len(r.Bundle) > 0 {
+			stateful, _ = BundleStateful(r.Bundle)
+		}
+		if _, err := m.checkReplicas(ctx, t, r, svcCfg, classes, stateful); err != nil {
+			return res, err
+		}
 	}
 	var wlTags []string
 	for _, c := range classes {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -277,6 +278,9 @@ type deployResult struct {
 	// Public (ADR-029) is the workload's public URL and state, if any.
 	Public  *mgmt.DeploymentPublicView `json:"public,omitempty"`
 	Timings map[string]float64         `json:"timingsMs"`
+
+	// Replicas (twd.jsonc "replicas" > 1): every copy and its host.
+	Replicas []mgmt.ReplicaRef `json:"replicas,omitempty"`
 }
 
 func cmdDeploy(args []string) error {
@@ -285,6 +289,7 @@ func cmdDeploy(args []string) error {
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
 	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
+	platform := f.String("platform", "", "containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)")
 	hostF := f.String("host", "", "pin the workload to this host (it must be live, in the tenant's pool and offer the tier)")
 	replace := f.Bool("replace", false, "re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs")
 	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
@@ -365,9 +370,24 @@ func cmdDeploy(args []string) error {
 		}
 		fmt.Printf("✓ build      %s %.1f KB (esbuild) · bundle %.1f KB\n", main, float64(jsBytes)/1024, float64(len(tb))/1024)
 	}
+	// Containers (ADR-032 D3): build the Dockerfile images here and push them
+	// to twd's registry; mgmt pins every image to a digest at deploy.
+	var ilog io.Writer = os.Stdout
+	if *f.json {
+		ilog = os.Stderr
+	}
+	bctx, bcancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	builtImages, err := buildContainerImages(bctx, mc, a, tb, tn.TenantID, *platform, ilog)
+	bcancel()
+	if err != nil {
+		return err
+	}
 	ds := time.Now()
 	var dr mgmt.DeployResponse
 	body := map[string]any{"tenantID": tn.TenantID, "workload": a.Name, "bundle": tb}
+	if len(builtImages) > 0 {
+		body["containerImages"] = builtImages
+	}
 	if *forceTakeover {
 		body["forceTakeover"] = true
 	}
@@ -416,10 +436,21 @@ func cmdDeploy(args []string) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	if err := waitReplicas(ctx, mc, dr, ds, *wait); err != nil {
+		return err
+	}
+	res.Replicas = dr.Replicas
 	res.Status, res.Endpoint, res.Public = v.Status, v.Endpoint, v.Public
 	res.Timings["ready"] = ms(time.Since(ds))
 	if !*f.json {
 		fmt.Printf("✓ deployed   %s@%s · node %s · http://%s/  (deploy → ready %.1fs)\n", a.Name, v.Host, v.Endpoint.Node, v.Endpoint.MagicDNS, res.Timings["ready"]/1000)
+		if len(dr.Replicas) > 1 {
+			parts := make([]string, 0, len(dr.Replicas))
+			for _, rp := range dr.Replicas {
+				parts = append(parts, rp.Workload+"@"+rp.Host)
+			}
+			fmt.Printf("✓ replicas   %d · %s\n", len(dr.Replicas), strings.Join(parts, ", "))
+		}
 		if sv := v.Endpoint.Service; sv != nil {
 			fmt.Printf("✓ service    %s · http://%s/  (stable across redeploys and host moves; callers need a grant to %s)\n", sv.Name, sv.MagicDNS, sv.Name)
 		}

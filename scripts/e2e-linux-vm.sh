@@ -12,7 +12,7 @@ VM=$1
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEV=${TWD_DEV_VM:-twd-dev}
 cd "$ROOT"
-VERSION=$(cat VERSION)-$(git rev-parse --short=8 HEAD)$(git diff --quiet HEAD -- . ':!STATUS.md' || echo -dirty)
+VERSION=$(cat VERSION)-$(git rev-parse --short=8 HEAD)$(git diff --quiet HEAD -- . ':!STATUS.md' ':!status' || echo -dirty)
 REL=/tmp/twd-l3-release
 echo "e2e-linux-vm: release $VERSION, built in $DEV:$REL"
 
@@ -29,7 +29,7 @@ else
 	echo "e2e-linux-vm: dist/$TGZ missing or without share/twd/vm: building it in $DEV:$REL"
 	limactl shell "$DEV" -- mkdir -p "$REL"
 	git ls-files -co --exclude-standard | tar cf - -T - | limactl shell "$DEV" -- tar xf - -C "$REL"
-	limactl shell "$DEV" -- bash -lc "cd $REL && make deps >/tmp/twd-l3-release.log 2>&1 && make vm-assets TWD_VM_KERNEL=\$HOME/fc/vmlinux >>/tmp/twd-l3-release.log 2>&1 && \
+	limactl shell "$DEV" -- bash -lc "cd $REL && make deps >/tmp/twd-l3-release.log 2>&1 && make vm-assets >>/tmp/twd-l3-release.log 2>&1 && \
 		TWD_VM_ASSETS_arm64=$REL/dist/vm-assets-arm64 make release RELEASE_TARGETS=linux-arm64 RELEASE_VERSION=$VERSION >>/tmp/twd-l3-release.log 2>&1 || { tail -40 /tmp/twd-l3-release.log; exit 1; }"
 	limactl copy "$DEV:$REL/dist/$TGZ" "dist/$TGZ"
 fi

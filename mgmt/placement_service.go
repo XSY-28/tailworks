@@ -106,6 +106,14 @@ type placementInput struct {
 	Pinned   string
 	Replace  bool
 	Config   *TwdConfig
+	// Need carries what the bundle's containers need (ADR-032: the
+	// "containers" capability for the images' arch); its Tier is set here
+	// from Config and the tenant.
+	Need placementNeed
+
+	// Exclude: hosts placement must not choose (other replicas of the same
+	// workload already run there; workload_replicas.go).
+	Exclude map[string]bool
 }
 
 // place decides the deployment's host. It returns the decision and the
@@ -121,28 +129,35 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 	live := map[string]bool{}
 	byID := map[string]Host{}
 	for _, h := range hosts {
+		if in.Exclude[h.ID] {
+			continue
+		}
 		c := candidateOf(h, now)
 		cands = append(cands, c)
 		live[h.ID], byID[h.ID] = c.Live, h
 	}
 	pc := resolvePlacement(in.Config)
-	tier := placementTier(t, in.Config) // "" = any host (process)
+	need := in.Need
+	need.Tier = placementTier(t, in.Config) // "" = any host (process)
 	req := Requirements{Pool: t.Pool, Pinned: in.Pinned, Replace: in.Replace,
-		Mode: pc.Mode, Targets: pc.Targets, Aggregate: pc.Aggregate, Now: now}
-	if tier != "" {
-		req.Tiers = []string{tier}
+		Mode: pc.Mode, Targets: pc.Targets, Aggregate: pc.Aggregate, Now: now,
+		Containers: need.Containers, Arch: need.Arch, Arches: need.Arches}
+	if need.Tier != "" {
+		req.Tiers = []string{need.Tier}
 	}
-	if h, ok := byID[in.Pinned]; ok && live[in.Pinned] && !h.offersTier(tier) {
-		return PlacementDecision{}, nil, errf(409, "tier_unavailable", "host %q does not offer the %q tier (it offers %s); deploy without --host, or pick a host set up with `sudo twd host setup --microvm`", in.Pinned, tier, tierList(h))
+	req.Capacity = placementCapacity(req.Tiers, req.Containers)
+	if h, ok := byID[in.Pinned]; ok && live[in.Pinned] && !h.offers(need) {
+		return PlacementDecision{}, nil, errf(409, "tier_unavailable", "host %q does not offer %s (it offers %s); deploy without --host, or pick a host set up with `sudo twd host setup --microvm`", in.Pinned, need, tierList(h))
 	}
 	var held *Lease
 	if l, err := m.store.GetLease(ctx, LeaseName(t.ID, in.Workload)); err == nil && l.Holder != "" && live[l.Holder] {
 		held = &l
 		req.Sticky = l.Holder
-		// Stickiness never keeps a workload on the wrong tier: refuse (or,
-		// with --replace, let placement move it).
-		if h := byID[l.Holder]; !h.offersTier(tier) && !in.Replace {
-			return PlacementDecision{}, held, errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer the %q tier it now asks for (the host offers %s); redeploy with --replace to move it to a host with that tier, or run `twd undeploy %s` and deploy again", in.Workload, h.ID, tier, tierList(h), in.Workload)
+		// Stickiness never keeps a workload on the wrong tier, or where its
+		// containers can't run: refuse (or, with --replace, let placement
+		// move it).
+		if h := byID[l.Holder]; !h.offers(need) && !in.Replace {
+			return PlacementDecision{}, held, errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer %s it now asks for (the host offers %s); redeploy with --replace to move it to a host that does, or run `twd undeploy %s` and deploy again", in.Workload, h.ID, need, tierList(h), in.Workload)
 		}
 	}
 	var ms []PathMeasurement
@@ -193,7 +208,10 @@ func (m *Mgmt) probeMissing(ctx context.Context, t Tenant, cands []Candidate, ms
 			fresh[x.HostID]++
 		}
 	}
-	need := map[string]int{"nodes": 1}
+	need := req.Capacity
+	if need == nil {
+		need = map[string]int{"nodes": 1}
+	}
 	var ask []string
 	for _, c := range cands {
 		if ineligible(c, req, need, c.ID == req.Sticky) == "" && fresh[c.ID] < len(req.Targets) && m.pushTarget(c.ID) != "" {

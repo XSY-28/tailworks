@@ -119,10 +119,53 @@ still applies: if every host of the Service is a sibling object on the same
 host, the call is refused with `forbidden_destination`, because same-host
 calls go through the platform.
 
-**Not done here:** running one workload on several hosts at once. A
-workload still holds one namespace lease, so there is one host per
-workload. Services make that host replaceable without changing the caller's
-name; they don't make the workload multi-host.
+### Replicas: one stateless workload on several hosts
+
+```jsonc
+{
+  "name": "web",
+  "replicas": 3,                       // 1..16, default 1
+  "tailnet": { "tags": ["tag:twd-wl-web"], "service": true }
+}
+```
+
+This is Cloudflare's split. A plain Worker is stateless, so it can run in
+many places. A Durable Object must run in exactly one place, so **only
+stateless bundles may have replicas**: no DO classes, or every class marked
+`"fence": "never"`. Anything else is refused with `400 bad_bundle`, both at
+the preflight and at the deploy.
+
+- **Model:** replica *i* is deployed as its own workload,
+  `<workload>--r<i>` (`web`, `web--r2`, `web--r3`). Each replica keeps its
+  own lease and epoch, deployment record, assignment, workload node and
+  identity, so all the single-host machinery (fencing, kill, ready,
+  credentials) applies unchanged. `"replicas": 1` is exactly the old
+  behavior. The `_workload` namespace records the group: `replicaOf` on
+  replicas 2..N, and `replicas` on the workload itself.
+- **Placement:** each replica goes on a distinct live host that offers the
+  tier, sticking to its current host on redeploy. If there aren't enough
+  hosts, the deploy fails with `503 no_host` ("replicas: 4 needs 4 distinct
+  live hosts") before anything is written. `--host` can't be combined with
+  replicas.
+- **Service:** all replicas host the same Service, which belongs to the
+  workload. Each host gates its own advertisement on its replica's health
+  (above), so a stalled or failing replica drops out on its own.
+- **Lifecycle:**
+  - a redeploy with a smaller count undeploys the extra replicas, and
+    undeploying the workload undeploys them all;
+  - a replica can't be deployed by its own name (`409 replica_conflict`);
+  - a replica name already used by a separate workload is also refused
+    with `409 replica_conflict`;
+  - `twd deploy` waits for every replica and prints
+    `✓ replicas 3 · web@h1, web--r2@h2, web--r3@h3`.
+- **Routing:** in the measured runs, Tailscale sent every fresh connection
+  from one client to the same Service host (20 of 20). Replicas give
+  failover and spread load *across clients*, not round-robin per
+  connection.
+
+Not done: the Cloudflare-style split for DO apps, where the Worker is
+replicated and its DOs stay single-homed, with stubs forwarded to the
+owning host.
 
 ## mgmt replicas (`svc:twd-mgmt`)
 
@@ -168,4 +211,5 @@ twd-hostd -mgmt http://twd-mgmt.<tailnet> …
 |---|---|
 | `internal/tssvc` real (`TestRealService`) | VIP answered 3.5 s after advertise; WhoIs saw the caller's node ID through the VIP; after withdraw the next fresh request failed (within one 3 s timeout); re-advertise answered in 14 ms |
 | E2E-SVC (`make e2e-svc`, twd CLI) | `twd deploy` created the definition (owner comment, VIPs). First call through the VIP 11.1 s after deploy, caller = the client node. Redeploy kept the same VIPs and was served again at once. `twd kill` of the workload node: the VIP stopped answering on the next request (≤ 3 s). `twd down`: 0 leftover devices/keys; definition kept |
+| E2E-REPLICAS (`TestE2EReplicas` in `make e2e-svc`; host A from `twd up`, host B a second `twd-hostd` joined with `twd host add`) | `replicas: 2` placed on both hosts. The Service answered 5.6 s after deploy, caller = the client node, 20/20 fresh connections to one replica. Stalling that replica's workerd (SIGSTOP): its host withdrew, and 5 consecutive answers came from the other replica 11.1 s later; re-advertised 0.2 s after SIGCONT. Scale to 1: the second replica was undeployed and the Service kept answering. 0 leftovers |
 | H12 real (`make e2e-mm-svc`, 2 replicas on Postgres; needs `TWD_MM_PG_DSN` pointing at a database of its own) | `svc:ttest-mgmt` answered 5.6 s after start; `/v1/whoami` through the VIP = the client node, admin. Serving replica's store reset → 5 consecutive answers from the other replica 8.2 s later; it re-advertised 0.5 s after its store came back. SIGTERM of the serving replica → steady on the other 7.7 s later |

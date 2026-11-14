@@ -1,0 +1,7 @@
+# Generated from api/openapi.yaml by `make api`. Never hand-merge these: on a
+# conflict, resolve api/openapi.yaml, run `make api` (it rewrites all three
+# whole, markers included) and `git add` them. `make lint` runs api-check,
+# which fails if they are stale. See AGENTS.md "Parallel branches".
+mgmt/api/v1/api.gen.go          linguist-generated=true
+hostd/mgmtapi/v1/client.gen.go  linguist-generated=true
+docs/contracts/mgmt-api.md      linguist-generated=true

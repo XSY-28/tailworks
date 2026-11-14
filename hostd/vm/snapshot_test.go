@@ -8,8 +8,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -189,6 +191,7 @@ func TestSnapshotUniqueness(t *testing.T) {
 		bootID    string
 		worker    map[string]any
 		egress    string
+		token     string // the copy's control-channel token after its claim
 		err       error
 	}
 	out := make([]res, copies)
@@ -223,6 +226,10 @@ func TestSnapshotUniqueness(t *testing.T) {
 				return
 			}
 			defer vm.Stop()
+			if r.token, err = checkClaimToken(ctx, vm.(*Machine), b.baseToken(id)); err != nil {
+				r.err = err
+				return
+			}
 			post, err := vm.Op(ctx, proto.Msg{Op: "ident"})
 			r.hostPost = time.Now().UnixNano()
 			if err != nil {
@@ -281,6 +288,11 @@ func TestSnapshotUniqueness(t *testing.T) {
 		}
 		if r.post.BootID == r.pre.BootID {
 			t.Fatalf("copy %d: boot_id not replaced by the load", i)
+		}
+		for j := 0; j < i; j++ {
+			if r.token == out[j].token {
+				t.Fatalf("copies %d and %d: same control-channel token after the claim", i, j)
+			}
 		}
 	}
 	// Recorded (not asserted): were the copies' kernel CRNGs identical
@@ -381,4 +393,51 @@ func TestSnapshotRotate(t *testing.T) {
 		t.Fatalf("GET /: %q", got)
 	}
 	t.Logf("pool %+v", *b.PoolStats())
+}
+
+// checkClaimToken (ADR-032 × fast-vm): a claimed copy of the base has its
+// own control-channel token (not the base's, which every copy booted with);
+// a guest connection presenting the base token is refused; and guestd uses
+// the new token when it reconnects (the host drops the channel; ops work
+// again only over guestd's re-authenticated connection).
+func checkClaimToken(ctx context.Context, m *Machine, base string) (string, error) {
+	tok := m.token()
+	if base == "" || tok == base || len(tok) != 64 {
+		return "", fmt.Errorf("claim token %q, base %q: not a fresh per-copy token", tok, base)
+	}
+	host, guest := net.Pipe()
+	go m.route(host)
+	guest.SetDeadline(time.Now().Add(5 * time.Second))
+	go json.NewEncoder(guest).Encode(proto.Msg{Type: "hello", Token: base})
+	if _, err := guest.Read(make([]byte, 1)); err != io.EOF && err != io.ErrClosedPipe {
+		guest.Close()
+		return "", fmt.Errorf("a hello with the base token after the claim was not refused (read: %v)", err)
+	}
+	guest.Close()
+	m.mu.Lock()
+	n0, c := m.ctlConns, m.ctl
+	m.mu.Unlock()
+	c.Close() // guestd reconnects, with the load's token or not at all
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		m.mu.Lock()
+		n := m.ctlConns
+		m.mu.Unlock()
+		if n > n0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			return "", errors.New("guestd did not reconnect with the claim's token")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if m.token() != tok {
+		return "", errors.New("token changed after the claim")
+	}
+	octx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := m.Op(octx, proto.Msg{Op: "ping"}); err != nil {
+		return "", fmt.Errorf("op after guestd's reconnect: %w", err)
+	}
+	return tok, nil
 }

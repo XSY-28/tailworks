@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/container"
 	"github.com/rosskukulinski/twd/internal/publicspec"
 )
 
@@ -39,6 +40,9 @@ const (
 const (
 	DefaultRegistrationsPerMinute = 200
 	DefaultMaxObjects             = 1000
+	DefaultMaxContainers          = 10
+	DefaultMaxContainerMemMiB     = 16384
+	DefaultMaxContainerVCPU       = 8.0
 	DefaultMaxLive                = 64
 	DefaultMaxDepth               = 3
 	NamespaceLeaseTTL             = 45 * time.Second // > hostd's FenceAfter (30 s) + margin (ADR-028 §3)
@@ -62,6 +66,11 @@ type Tenant struct {
 	OAuthClientFile        string `json:"oauthClientFile,omitempty"`
 	RegistrationsPerMinute int    `json:"registrationsPerMinute"`
 	MaxObjects             int    `json:"maxObjects"`
+	// Container quotas (ADR-032 D9): running containers, their total guest
+	// memory and vCPUs. Containers are not objects (no maxObjects).
+	MaxContainers      int     `json:"maxContainers"`
+	MaxContainerMemMiB int     `json:"maxContainerMemMiB"`
+	MaxContainerVCPU   float64 `json:"maxContainerVCPU"`
 	// Pool places the tenant's deployments on hosts with the same pool
 	// ("" = any host). Tier is the default isolation tier.
 	Pool string `json:"pool,omitempty"`
@@ -105,9 +114,15 @@ type Host struct {
 	ID            string   `json:"hostID"`
 	CapacityNodes int      `json:"capacityNodes"`
 	Tiers         []string `json:"tiers"`
-	NodeID        string   `json:"nodeID,omitempty"`      // operator-tailnet stable node ID (tsnet mode)
-	AuditPubKey   string   `json:"auditPubKey,omitempty"` // base64 ed25519, verifies hostSig
-	Pool          string   `json:"pool,omitempty"`
+	// Arch is the host's GOARCH ("" = an older host that didn't say);
+	// Capacity its registered capacity vector and Usage the live usage from
+	// its last heartbeat (ADR-032 D9).
+	Arch        string        `json:"arch,omitempty"`
+	Capacity    *HostCapacity `json:"capacity,omitempty"`
+	Usage       *HostUsage    `json:"usage,omitempty"`
+	NodeID      string        `json:"nodeID,omitempty"`      // operator-tailnet stable node ID (tsnet mode)
+	AuditPubKey string        `json:"auditPubKey,omitempty"` // base64 ed25519, verifies hostSig
+	Pool        string        `json:"pool,omitempty"`
 	// PushPort is hostd's push listener on its own tsnet node (0 = none;
 	// local-dev hosts register a unix:// push URL instead).
 	PushPort int `json:"pushPort,omitempty"`
@@ -120,6 +135,35 @@ type Host struct {
 	CreatedAt  int64  `json:"createdAt"`
 	UpdatedAt  int64  `json:"updatedAt"`
 }
+
+// HostCapacity is a host's capacity vector (api/openapi.yaml HostCapacity).
+type HostCapacity struct {
+	Nodes          int     `json:"nodes"`
+	VMs            int     `json:"vms"`
+	VMMemMiB       int     `json:"vmMemMiB"`
+	HugeMemMiB     int     `json:"hugeMemMiB"`
+	VCPUs          int     `json:"vcpus"`
+	VCPUOvercommit float64 `json:"vcpuOvercommit"`
+	ScratchMiB     int     `json:"scratchMiB"`
+}
+
+// HostUsage is live usage against HostCapacity (api/openapi.yaml HostUsage).
+type HostUsage struct {
+	Nodes      int     `json:"nodes"`
+	VMs        int     `json:"vms"`
+	VMMemMiB   int     `json:"vmMemMiB"`
+	HugeMemMiB int     `json:"hugeMemMiB"`
+	VCPUs      float64 `json:"vcpus"`
+	ScratchMiB int     `json:"scratchMiB"`
+	Containers int     `json:"containers"`
+}
+
+// Host capabilities beyond the isolation tiers.
+const (
+	// CapContainers: the host runs containers and code sandboxes (one
+	// microVM each) for images of its Arch (ADR-032).
+	CapContainers = "containers"
+)
 
 // Pending reports a host created by `twd host add` that never registered.
 func (h Host) Pending() bool { return h.LastSeen == 0 }
@@ -138,6 +182,11 @@ type ClassConfig struct {
 	// Service (the _workload namespace only) is the Tailscale Service the
 	// workload entry node hosts (twd.jsonc tailnet.service).
 	Service string `json:"service,omitempty"`
+	// ReplicaOf (the _workload namespace of replicas 2..N only) names the
+	// workload this deployment is a replica of (twd.jsonc "replicas");
+	// Replicas (replica 1, the workload itself) is how many there are.
+	ReplicaOf string `json:"replicaOf,omitempty"`
+	Replicas  int    `json:"replicas,omitempty"`
 }
 
 // Deployment is one deploy of a workload.
@@ -165,6 +214,11 @@ type Deployment struct {
 	// and stopped) last reported; shared by every replica (F13, H08).
 	HostStatus string `json:"-"`
 	HostError  string `json:"-"`
+	// Containers are the bundle's container classes (ADR-032): placement
+	// required a host offering them; reservations check each class's
+	// MaxInstances.
+	Containers []container.Class `json:"-"`
+
 	// Public is the deployment's public ingress spec (nil: tailnet-only).
 	Public *DeploymentPublic `json:"-"`
 	// Placement is why the deployment is on its host (nil for deployments

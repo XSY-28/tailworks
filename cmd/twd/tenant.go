@@ -393,6 +393,9 @@ func cmdTenantSet(args []string) error {
 	tier := f.String("tier", "", "default isolation tier: process | microvm (\"-\" = unset)")
 	wifID := f.String("wif-client-id", "", "switch to mint mode wif with this mint trust credential")
 	wifLife := f.String("wif-lifecycle-client-id", "", "lifecycle trust credential (\"-\" = clear)")
+	maxCtr := f.Int("max-containers", 0, "containers (ADR-032): running containers quota")
+	maxCtrMem := f.Int("max-container-mem-mib", 0, "containers: total guest memory quota (MiB)")
+	maxCtrCPU := f.Float64("max-container-vcpu", 0, "containers: total vCPU quota (fractional, e.g. 2.5)")
 	pubIngress := f.String("public-ingress", "", "public (Funnel) ingress gate for twd.jsonc \"public\" routes: allow | deny (ADR-029)")
 	pos, err := f.parse(args)
 	if err != nil {
@@ -437,6 +440,15 @@ func cmdTenantSet(args []string) error {
 	if *wifLife != "" {
 		patch["wifLifecycleClientID"] = val(*wifLife)
 	}
+	if *maxCtr > 0 {
+		patch["maxContainers"] = *maxCtr
+	}
+	if *maxCtrMem > 0 {
+		patch["maxContainerMemMiB"] = *maxCtrMem
+	}
+	if *maxCtrCPU > 0 {
+		patch["maxContainerVCPU"] = *maxCtrCPU
+	}
 	switch *pubIngress {
 	case "":
 	case "allow", "deny":
@@ -459,8 +471,8 @@ func cmdTenantSet(args []string) error {
 		if gate == "" {
 			gate = "deny"
 		}
-		fmt.Printf("✓ tenant   %s (%s) updated · mint mode %s · %d objects max · %d registrations/min · pool %q · tier %q · public ingress %s\n",
-			t.Tailnet, t.ID, t.MintMode, t.MaxObjects, t.RegistrationsPerMinute, t.Pool, t.Tier, gate)
+		fmt.Printf("✓ tenant   %s (%s) updated · mint mode %s · %d objects max · %d registrations/min · pool %q · tier %q · containers ≤ %d, ≤ %d MiB, ≤ %g vCPU · public ingress %s\n",
+			t.Tailnet, t.ID, t.MintMode, t.MaxObjects, t.RegistrationsPerMinute, t.Pool, t.Tier, t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU, gate)
 	})
 	return nil
 }

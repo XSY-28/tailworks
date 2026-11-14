@@ -12,16 +12,16 @@ import (
 )
 
 type vmOptions struct {
-	kernel, rootfs, firecracker, jailer, helper, hugePages string
-	memMiB, vcpus, pool                                    int
-	snapshot, snapRefill                                   bool
-	rotate                                                 time.Duration
+	kernel, rootfs, firecracker, jailer, helper, hugePages, containerKernel, vzVMM string
+	memMiB, vcpus, pool                                                            int
+	rosetta, snapshot, snapRefill                                                  bool
+	rotate                                                                         time.Duration
 }
 
 // vmBackend enables the microVM tier when this host can run it: KVM, the
 // guest kernel and image, and the twd-vmhelper service (`sudo twd host
 // setup --microvm`; as root without it, an in-process helper). Otherwise
-// microvm deployments fall back to the process tier.
+// microvm deployments are refused (tier_unavailable), never downgraded.
 func vmBackend(o vmOptions, log *slog.Logger) sandbox.Backend {
 	if os.Geteuid() == 0 {
 		if _, err := os.Stat(o.helper); err != nil {
@@ -29,7 +29,8 @@ func vmBackend(o vmOptions, log *slog.Logger) sandbox.Backend {
 		}
 	}
 	b, err := vm.New(vm.Config{Helper: o.helper, Firecracker: o.firecracker, Jailer: o.jailer, Kernel: o.kernel, Rootfs: o.rootfs,
-		MemMiB: o.memMiB, VCPUs: o.vcpus, HugePages: o.hugePages, Pool: o.pool, Snapshot: o.snapshot, SnapshotRefill: o.snapRefill, BaseRotate: o.rotate, Log: log})
+		MemMiB: o.memMiB, VCPUs: o.vcpus, HugePages: o.hugePages, ContainerKernel: o.containerKernel,
+		Pool: o.pool, Snapshot: o.snapshot, SnapshotRefill: o.snapRefill, BaseRotate: o.rotate, Log: log})
 	if err != nil {
 		log.Info("microVM tier unavailable; process tier only", "reason", err)
 		return nil

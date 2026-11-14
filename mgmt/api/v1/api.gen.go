@@ -7,27 +7,44 @@ package v1
 
 import (
 	"bytes"
-	"compress/flate"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"path"
 	"strings"
 	"time"
 
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for Arch.
+const (
+	ArchAmd64 Arch = "amd64"
+	ArchArm64 Arch = "arm64"
+)
+
+// Valid indicates whether the value is a known member of the Arch enum.
+func (e Arch) Valid() bool {
+	switch e {
+	case ArchAmd64:
+		return true
+	case ArchArm64:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditKind.
 const (
 	AuditKindAllow               AuditKind = "allow"
+	AuditKindContainerRelease    AuditKind = "container_release"
+	AuditKindContainerReserve    AuditKind = "container_reserve"
+	AuditKindContainerStart      AuditKind = "container_start"
+	AuditKindContainerStop       AuditKind = "container_stop"
 	AuditKindCreate              AuditKind = "create"
 	AuditKindCredential          AuditKind = "credential"
 	AuditKindDeny                AuditKind = "deny"
@@ -39,6 +56,9 @@ const (
 	AuditKindHostAdd             AuditKind = "host_add"
 	AuditKindHostDelete          AuditKind = "host_delete"
 	AuditKindHostRegister        AuditKind = "host_register"
+	AuditKindImagePin            AuditKind = "image_pin"
+	AuditKindImagePublic         AuditKind = "image_public"
+	AuditKindImagePush           AuditKind = "image_push"
 	AuditKindKill                AuditKind = "kill"
 	AuditKindMint                AuditKind = "mint"
 	AuditKindObjectUpdate        AuditKind = "object_update"
@@ -68,6 +88,14 @@ func (e AuditKind) Valid() bool {
 	switch e {
 	case AuditKindAllow:
 		return true
+	case AuditKindContainerRelease:
+		return true
+	case AuditKindContainerReserve:
+		return true
+	case AuditKindContainerStart:
+		return true
+	case AuditKindContainerStop:
+		return true
 	case AuditKindCreate:
 		return true
 	case AuditKindCredential:
@@ -89,6 +117,12 @@ func (e AuditKind) Valid() bool {
 	case AuditKindHostDelete:
 		return true
 	case AuditKindHostRegister:
+		return true
+	case AuditKindImagePin:
+		return true
+	case AuditKindImagePublic:
+		return true
+	case AuditKindImagePush:
 		return true
 	case AuditKindKill:
 		return true
@@ -160,6 +194,42 @@ func (e AuditSource) Valid() bool {
 	}
 }
 
+// Defines values for ContainerClassArch.
+const (
+	ContainerClassArchAmd64 ContainerClassArch = "amd64"
+	ContainerClassArchArm64 ContainerClassArch = "arm64"
+)
+
+// Valid indicates whether the value is a known member of the ContainerClassArch enum.
+func (e ContainerClassArch) Valid() bool {
+	switch e {
+	case ContainerClassArchAmd64:
+		return true
+	case ContainerClassArchArm64:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContainerImagePinArch.
+const (
+	ContainerImagePinArchAmd64 ContainerImagePinArch = "amd64"
+	ContainerImagePinArchArm64 ContainerImagePinArch = "arm64"
+)
+
+// Valid indicates whether the value is a known member of the ContainerImagePinArch enum.
+func (e ContainerImagePinArch) Valid() bool {
+	switch e {
+	case ContainerImagePinArchAmd64:
+		return true
+	case ContainerImagePinArchArm64:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeploymentStatus.
 const (
 	DeploymentStatusActive     DeploymentStatus = "active"
@@ -203,6 +273,7 @@ const (
 	ErrorCodeBadHostSig              ErrorCode = "bad_host_sig"
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
+	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
@@ -215,12 +286,14 @@ const (
 	ErrorCodeHostTokenUnconfigured   ErrorCode = "host_token_unconfigured"
 	ErrorCodeIdentityConflict        ErrorCode = "identity_conflict"
 	ErrorCodeIdentityPending         ErrorCode = "identity_pending"
+	ErrorCodeImageUnavailable        ErrorCode = "image_unavailable"
 	ErrorCodeImmutableField          ErrorCode = "immutable_field"
 	ErrorCodeInternal                ErrorCode = "internal"
 	ErrorCodeKilled                  ErrorCode = "killed"
 	ErrorCodeLeaseChanged            ErrorCode = "lease_changed"
 	ErrorCodeLeaseHeld               ErrorCode = "lease_held"
 	ErrorCodeLeaseLost               ErrorCode = "lease_lost"
+	ErrorCodeMirrorDisabled          ErrorCode = "mirror_disabled"
 	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
 	ErrorCodeNoHost                  ErrorCode = "no_host"
@@ -233,6 +306,8 @@ const (
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
+	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
+	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
@@ -265,6 +340,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeBootstrapFailed:
 		return true
+	case ErrorCodeContainerQuotaExceeded:
+		return true
 	case ErrorCodeDelegationExceedsParent:
 		return true
 	case ErrorCodeDelegationInvalid:
@@ -289,6 +366,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeIdentityPending:
 		return true
+	case ErrorCodeImageUnavailable:
+		return true
 	case ErrorCodeImmutableField:
 		return true
 	case ErrorCodeInternal:
@@ -300,6 +379,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeLeaseHeld:
 		return true
 	case ErrorCodeLeaseLost:
+		return true
+	case ErrorCodeMirrorDisabled:
 		return true
 	case ErrorCodeMoveUnconfirmed:
 		return true
@@ -324,6 +405,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePreconditionFailed:
 		return true
 	case ErrorCodePublicIngressNotAllowed:
+		return true
+	case ErrorCodeRegistryUnavailable:
+		return true
+	case ErrorCodeReplicaConflict:
 		return true
 	case ErrorCodeServiceAPIFailed:
 		return true
@@ -385,6 +470,27 @@ func (e HostStatusEnum) Valid() bool {
 	case HostStatusEnumPending:
 		return true
 	case HostStatusEnumStale:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostTier.
+const (
+	HostTierContainers HostTier = "containers"
+	HostTierMicrovm    HostTier = "microvm"
+	HostTierProcess    HostTier = "process"
+)
+
+// Valid indicates whether the value is a known member of the HostTier enum.
+func (e HostTier) Valid() bool {
+	switch e {
+	case HostTierContainers:
+		return true
+	case HostTierMicrovm:
+		return true
+	case HostTierProcess:
 		return true
 	default:
 		return false
@@ -583,6 +689,42 @@ func (e PlacementDecisionReason) Valid() bool {
 	}
 }
 
+// Defines values for PublicImageArch.
+const (
+	PublicImageArchAmd64 PublicImageArch = "amd64"
+	PublicImageArchArm64 PublicImageArch = "arm64"
+)
+
+// Valid indicates whether the value is a known member of the PublicImageArch enum.
+func (e PublicImageArch) Valid() bool {
+	switch e {
+	case PublicImageArchAmd64:
+		return true
+	case PublicImageArchArm64:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PublicImageCreateArches.
+const (
+	PublicImageCreateArchesAmd64 PublicImageCreateArches = "amd64"
+	PublicImageCreateArchesArm64 PublicImageCreateArches = "arm64"
+)
+
+// Valid indicates whether the value is a known member of the PublicImageCreateArches enum.
+func (e PublicImageCreateArches) Valid() bool {
+	switch e {
+	case PublicImageCreateArchesAmd64:
+		return true
+	case PublicImageCreateArchesArm64:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PublicIngress.
 const (
 	PublicIngressAllow PublicIngress = "allow"
@@ -621,16 +763,16 @@ func (e StatusClockSource) Valid() bool {
 
 // Defines values for Tier.
 const (
-	Microvm Tier = "microvm"
-	Process Tier = "process"
+	TierMicrovm Tier = "microvm"
+	TierProcess Tier = "process"
 )
 
 // Valid indicates whether the value is a known member of the Tier enum.
 func (e Tier) Valid() bool {
 	switch e {
-	case Microvm:
+	case TierMicrovm:
 		return true
-	case Process:
+	case TierProcess:
 		return true
 	default:
 		return false
@@ -736,13 +878,21 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	}
 }
 
+// Arch A Go GOARCH. Container images must match their host's.
+type Arch string
+
 // Assignment What a host must run; `bundleURL` is `GET /v1/deployments/{id}/bundle`.
 type Assignment struct {
-	BundleURL    string  `json:"bundleURL"`
-	ControlURL   *string `json:"controlURL,omitempty"`
-	CreatedAt    int64   `json:"createdAt"`
-	DeploymentID string  `json:"deploymentID"`
-	Epoch        int64   `json:"epoch"`
+	BundleURL string `json:"bundleURL"`
+
+	// Containers The workload's container classes as mgmt resolved them at deploy (ADR-032 D3): the image
+	// refs `ctx.container` sees and their per-arch pins. hostd starts a container only from the
+	// pin for its own arch, pulled by digest from twd's registry.
+	Containers   *[]ContainerClass `json:"containers,omitempty"`
+	ControlURL   *string           `json:"controlURL,omitempty"`
+	CreatedAt    int64             `json:"createdAt"`
+	DeploymentID string            `json:"deploymentID"`
+	Epoch        int64             `json:"epoch"`
 
 	// Fence Stop serving this workload when no heartbeat to mgmt has succeeded for the host's fence window (30 s): it has Durable Objects that must not run on two hosts (ADR-028 §3). Stateless workloads and `"fence": "never"` classes are false and keep serving. Hosts treat a missing field as true.
 	Fence      *bool         `json:"fence,omitempty"`
@@ -788,18 +938,51 @@ type AuditBatch struct {
 	Records []AuditRecord `json:"records"`
 }
 
-// AuditKind Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
-// `principal`, `tenant_note` (source `tenant`, unverified). mgmt chain:
-// `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
-// `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
-// `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
-// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
-// Public ingress (ADR-029), host chain: `public_request` (one per public
-// request), `public_rejected` (per-minute summary of requests the limits
-// refused), `public_object_created` (a name admitted for a public create);
-// `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
-// host: the listener opened/closed).
+// AuditKind Host chain (netd/hostd):
+// `allow`,
+// `deny`,
+// `egress`,
+// `spawn`,
+// `kill`,
+// `principal`,
+// `tenant_note` (source `tenant`, unverified),
+// `container_start` (an object's container, ADR-032),
+// `container_stop` (an object's container, ADR-032).
+// mgmt chain:
+// `tenant_create`,
+// `tenant_update`,
+// `tenant_delete`,
+// `host_register`,
+// `host_delete`,
+// `deploy`,
+// `undeploy`,
+// `create`,
+// `mint`,
+// `remint`,
+// `ready`,
+// `kill`,
+// `device_delete`,
+// `purge`,
+// `volume_key`,
+// `reap`,
+// `preflight` (optional; dryRun deploys),
+// `host_add`,
+// `credential`,
+// `obo_root`,
+// `object_update`,
+// `container_reserve`,
+// `container_release`,
+// `image_push` (a manifest pushed to the registry),
+// `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
+// `image_public` (a public base image added or removed),
+// `transfer` (a `_pool` node went to an object, ADR-031),
+// `revoke` (an unused pooled key revoked).
+// Public ingress (ADR-029), host chain:
+// `public_request` (one per public request),
+// `public_rejected` (per-minute summary of requests the limits refused),
+// `public_object_created` (a name admitted for a public create).
+// Both chains:
+// `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 type AuditKind string
 
 // AuditPage defines model for AuditPage.
@@ -834,18 +1017,51 @@ type AuditRecord struct {
 	// HostSig base64 ed25519 over utf8(hash); host chains only.
 	HostSig *string `json:"hostSig,omitempty"`
 
-	// Kind Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
-	// `principal`, `tenant_note` (source `tenant`, unverified). mgmt chain:
-	// `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
-	// `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
-	// `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
-	// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
-	// Public ingress (ADR-029), host chain: `public_request` (one per public
-	// request), `public_rejected` (per-minute summary of requests the limits
-	// refused), `public_object_created` (a name admitted for a public create);
-	// `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
-	// host: the listener opened/closed).
+	// Kind Host chain (netd/hostd):
+	// `allow`,
+	// `deny`,
+	// `egress`,
+	// `spawn`,
+	// `kill`,
+	// `principal`,
+	// `tenant_note` (source `tenant`, unverified),
+	// `container_start` (an object's container, ADR-032),
+	// `container_stop` (an object's container, ADR-032).
+	// mgmt chain:
+	// `tenant_create`,
+	// `tenant_update`,
+	// `tenant_delete`,
+	// `host_register`,
+	// `host_delete`,
+	// `deploy`,
+	// `undeploy`,
+	// `create`,
+	// `mint`,
+	// `remint`,
+	// `ready`,
+	// `kill`,
+	// `device_delete`,
+	// `purge`,
+	// `volume_key`,
+	// `reap`,
+	// `preflight` (optional; dryRun deploys),
+	// `host_add`,
+	// `credential`,
+	// `obo_root`,
+	// `object_update`,
+	// `container_reserve`,
+	// `container_release`,
+	// `image_push` (a manifest pushed to the registry),
+	// `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
+	// `image_public` (a public base image added or removed),
+	// `transfer` (a `_pool` node went to an object, ADR-031),
+	// `revoke` (an unused pooled key revoked).
+	// Public ingress (ADR-029), host chain:
+	// `public_request` (one per public request),
+	// `public_rejected` (per-minute summary of requests the limits refused),
+	// `public_object_created` (a name admitted for a public create).
+	// Both chains:
+	// `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 	Kind     AuditKind `json:"kind"`
 	ObjectID *string   `json:"objectID,omitempty"`
 
@@ -899,12 +1115,131 @@ type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
+	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
+	ReplicaOf *string `json:"replicaOf,omitempty"`
+
+	// Replicas `_workload` only, the workload itself: its replica count when > 1.
+	Replicas *int `json:"replicas,omitempty"`
+
 	// Service `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc` `tailnet.service`).
 	Service *string  `json:"service,omitempty"`
 	Tags    []string `json:"tags"`
 
 	// TTL `10m`-style duration or seconds.
 	TTL *string `json:"ttl,omitempty"`
+}
+
+// ContainerClass A container class of a deployment (a wrangler `containers` entry plus twd.jsonc overrides) and its pinned images.
+type ContainerClass struct {
+	Arch  *ContainerClassArch `json:"arch,omitempty"`
+	Class string              `json:"class"`
+
+	// Custom What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`).
+	Custom *ContainerResources `json:"custom,omitempty"`
+
+	// Image The default image reference `start()` runs.
+	Image *string `json:"image,omitempty"`
+
+	// ImageSources Named images twd deploy builds: name → the wrangler Dockerfile, as written.
+	ImageSources *map[string]string `json:"imageSources,omitempty"`
+
+	// Images Named images (`ctx.container.images`): name → reference.
+	Images       *map[string]string   `json:"images,omitempty"`
+	InstanceType *string              `json:"instanceType,omitempty"`
+	MaxInstances *int                 `json:"maxInstances,omitempty"`
+	Pins         *[]ContainerImagePin `json:"pins,omitempty"`
+
+	// Source The wrangler `image` as written (a ref, or a Dockerfile path).
+	Source *string `json:"source,omitempty"`
+}
+
+// ContainerClassArch defines model for ContainerClass.Arch.
+type ContainerClassArch string
+
+// ContainerImagePin One image reference of a container class, resolved once at deploy for one arch (ADR-032 D3):
+// hosts pull exactly `repository@digest` from twd's registry and nothing else. Retagging the
+// upstream ref later changes nothing until the next deploy.
+type ContainerImagePin struct {
+	Arch ContainerImagePinArch `json:"arch"`
+
+	// Digest The linux/`arch` image manifest (never an index).
+	Digest string `json:"digest"`
+
+	// From What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the twd.local ref.
+	From *string `json:"from,omitempty"`
+
+	// Name The class's image name (wrangler `images` key); absent for the default image.
+	Name *string `json:"name,omitempty"`
+
+	// Ref The reference as `ctx.container` sees it (the wrangler image, or the `twd.local/<tenant>/…@sha256:…` ref `twd deploy` built).
+	Ref string `json:"ref"`
+
+	// Repository `<tenantID>/…` (the tenant's builds and mirrors) or `public/…` (public bases, alias targets).
+	Repository string `json:"repository"`
+}
+
+// ContainerImagePinArch defines model for ContainerImagePin.Arch.
+type ContainerImagePinArch string
+
+// ContainerImages Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+// with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+// replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
+type ContainerImages map[string]struct {
+	Image  *string            `json:"image,omitempty"`
+	Images *map[string]string `json:"images,omitempty"`
+}
+
+// ContainerReservation defines model for ContainerReservation.
+type ContainerReservation struct {
+	Class string `json:"class"`
+
+	// CreatedAt unix ms (store clock)
+	CreatedAt int64  `json:"createdAt"`
+	Host      string `json:"host"`
+	Object    string `json:"object"`
+
+	// RenewedAt unix ms of the last reserve or heartbeat that reported it (store clock)
+	RenewedAt int64 `json:"renewedAt"`
+
+	// ReservationID Examples: cr_5k2m9q
+	ReservationID string `json:"reservationID"`
+
+	// Resources What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`).
+	Resources ContainerResources `json:"resources"`
+	TenantID  string             `json:"tenantID"`
+	Workload  string             `json:"workload"`
+}
+
+// ContainerReservationCreate defines model for ContainerReservationCreate.
+type ContainerReservationCreate struct {
+	// Class The DO class (a wrangler `containers[].class_name`).
+	Class string `json:"class"`
+
+	// Epoch The workload's lease epoch the host holds.
+	Epoch int64 `json:"epoch"`
+
+	// Object The DO instance (its name or hex ID): one container per instance.
+	Object string `json:"object"`
+
+	// Resources What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`).
+	Resources ContainerResources `json:"resources"`
+	TenantID  string             `json:"tenantID"`
+	Workload  string             `json:"workload"`
+}
+
+// ContainerReservationPage defines model for ContainerReservationPage.
+type ContainerReservationPage struct {
+	Items []ContainerReservation `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// ContainerResources What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`).
+type ContainerResources struct {
+	DiskMiB int     `json:"diskMiB"`
+	MemMiB  int     `json:"memMiB"`
+	Vcpu    float32 `json:"vcpu"`
 }
 
 // Credential A single-use auth key. Never logged; `String()` redacts it in Go.
@@ -925,7 +1260,9 @@ type Credential struct {
 
 // Deployment defines model for Deployment.
 type Deployment struct {
-	CreatedAt int64 `json:"createdAt"`
+	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
+	Containers *[]ContainerClass `json:"containers,omitempty"`
+	CreatedAt  int64             `json:"createdAt"`
 
 	// DeployedBy The actor who deployed (see Conventions).
 	DeployedBy *string `json:"deployedBy,omitempty"`
@@ -946,19 +1283,27 @@ type Deployment struct {
 	Placement *PlacementDecision `json:"placement,omitempty"`
 
 	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
-	Public       *DeploymentPublic `json:"public,omitempty"`
-	Status       DeploymentStatus  `json:"status"`
-	TenantID     string            `json:"tenantID"`
-	Tier         *Tier             `json:"tier,omitempty"`
-	UpdatedAt    *int64            `json:"updatedAt,omitempty"`
-	Workload     string            `json:"workload"`
-	WorkloadTags *[]string         `json:"workloadTags,omitempty"`
+	Public *DeploymentPublic `json:"public,omitempty"`
+
+	// Replicas A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
+	Replicas     *[]ReplicaRef    `json:"replicas,omitempty"`
+	Status       DeploymentStatus `json:"status"`
+	TenantID     string           `json:"tenantID"`
+	Tier         *Tier            `json:"tier,omitempty"`
+	UpdatedAt    *int64           `json:"updatedAt,omitempty"`
+	Workload     string           `json:"workload"`
+	WorkloadTags *[]string        `json:"workloadTags,omitempty"`
 }
 
 // DeploymentCreate defines model for DeploymentCreate.
 type DeploymentCreate struct {
 	// Bundle tar (optionally gzipped) of the built worker + `twd.jsonc` + `wrangler.jsonc`.
 	Bundle []byte `json:"bundle"`
+
+	// ContainerImages Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+	// with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+	// replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
+	ContainerImages *ContainerImages `json:"containerImages,omitempty"`
 
 	// ForceTakeover Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there).
 	ForceTakeover *bool `json:"forceTakeover,omitempty"`
@@ -1061,7 +1406,8 @@ type Error struct {
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
-	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
+	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
@@ -1078,10 +1424,14 @@ type Error struct {
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
+	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
+	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
+	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-	// | `no_host` | 503 | no live host for the deployment |
+	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -1121,7 +1471,8 @@ type Error struct {
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
-// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
+// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
 // | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
@@ -1138,10 +1489,14 @@ type Error struct {
 // | `precondition_failed` | 412 | `If-Match` mismatch |
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
+// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
+// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
+// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-// | `no_host` | 503 | no live host for the deployment |
+// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 // | `internal` | 500 | — |
 type ErrorCode string
@@ -1156,10 +1511,21 @@ type HealthOk bool
 
 // Host defines model for Host.
 type Host struct {
+	// Arch A Go GOARCH. Container images must match their host's.
+	Arch *Arch `json:"arch,omitempty"`
+
 	// AuditPubKey base64 ed25519; verifies `hostSig`.
-	AuditPubKey   *string `json:"auditPubKey,omitempty"`
-	CapacityNodes int     `json:"capacityNodes"`
-	CreatedAt     int64   `json:"createdAt"`
+	AuditPubKey *string `json:"auditPubKey,omitempty"`
+
+	// Capacity The capacity vector a host registers (ADR-032 D9). `nodes` is
+	// tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO
+	// instances and containers alike): their count, guest memory (all, and
+	// the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit`
+	// for scheduling) and scratch disk. A host without a microVM backend
+	// reports 0 for every VM dimension.
+	Capacity      *HostCapacity `json:"capacity,omitempty"`
+	CapacityNodes int           `json:"capacityNodes"`
+	CreatedAt     int64         `json:"createdAt"`
 
 	// DNSName `twd-host-<hostID>.<tailnet>`.
 	DNSName *string `json:"dnsName,omitempty"`
@@ -1184,8 +1550,27 @@ type Host struct {
 
 	// Status `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 	Status    HostStatusEnum `json:"status"`
-	Tiers     []Tier         `json:"tiers"`
+	Tiers     []HostTier     `json:"tiers"`
 	UpdatedAt int64          `json:"updatedAt"`
+
+	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
+	Usage *HostUsage `json:"usage,omitempty"`
+}
+
+// HostCapacity The capacity vector a host registers (ADR-032 D9). `nodes` is
+// tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO
+// instances and containers alike): their count, guest memory (all, and
+// the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit`
+// for scheduling) and scratch disk. A host without a microVM backend
+// reports 0 for every VM dimension.
+type HostCapacity struct {
+	HugeMemMiB     int     `json:"hugeMemMiB"`
+	Nodes          int     `json:"nodes"`
+	ScratchMiB     int     `json:"scratchMiB"`
+	VcpuOvercommit float32 `json:"vcpuOvercommit"`
+	Vcpus          int     `json:"vcpus"`
+	VMMemMiB       int     `json:"vmMemMiB"`
+	Vms            int     `json:"vms"`
 }
 
 // HostCreate defines model for HostCreate.
@@ -1194,8 +1579,8 @@ type HostCreate struct {
 	Pool   *string `json:"pool,omitempty"`
 
 	// TenantID The operator tenant whose credential mints the key (default: the tenant whose tailnet is mgmt's own).
-	TenantID *string `json:"tenantID,omitempty"`
-	Tiers    *[]Tier `json:"tiers,omitempty"`
+	TenantID *string     `json:"tenantID,omitempty"`
+	Tiers    *[]HostTier `json:"tiers,omitempty"`
 }
 
 // HostDeleteResult defines model for HostDeleteResult.
@@ -1248,23 +1633,43 @@ type HostPush struct {
 
 // HostRegistration defines model for HostRegistration.
 type HostRegistration struct {
-	AuditPubKey   *string `json:"auditPubKey,omitempty"`
-	CapacityNodes int     `json:"capacityNodes"`
-	Pool          *string `json:"pool,omitempty"`
+	// Arch A Go GOARCH. Container images must match their host's.
+	Arch        *Arch   `json:"arch,omitempty"`
+	AuditPubKey *string `json:"auditPubKey,omitempty"`
+
+	// Capacity The capacity vector a host registers (ADR-032 D9). `nodes` is
+	// tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO
+	// instances and containers alike): their count, guest memory (all, and
+	// the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit`
+	// for scheduling) and scratch disk. A host without a microVM backend
+	// reports 0 for every VM dimension.
+	Capacity      *HostCapacity `json:"capacity,omitempty"`
+	CapacityNodes int           `json:"capacityNodes"`
+	Pool          *string       `json:"pool,omitempty"`
 
 	// Push Where mgmt pushes kills and assignment changes. Over the tailnet,
 	// `port` names hostd's push listener on **its own tsnet node** (the
 	// WhoIs node; mgmt never pushes anywhere else). `url` is accepted only
 	// on the local-dev socket and only as `unix:///…`.
-	Push  *HostPush `json:"push,omitempty"`
-	Tiers []Tier    `json:"tiers"`
+	Push  *HostPush  `json:"push,omitempty"`
+	Tiers []HostTier `json:"tiers"`
 }
 
 // HostStatus The heartbeat body.
 type HostStatus struct {
+	// Containers Every container running on this host (reservation reconciliation,
+	// ADR-032 D9): a reported reservation is renewed; a host's
+	// reservation left out for 30 s after its creation is released; a
+	// reported container with no reservation is adopted if this host
+	// holds the workload's lease (it runs; mgmt records it, over quota
+	// or not, audited `container_reserve` with `adopted`), else ignored.
+	Containers  *[]RunningContainer `json:"containers,omitempty"`
 	Deployments *[]DeploymentReport `json:"deployments,omitempty"`
 	Leases      []Lease             `json:"leases"`
 	LiveNodes   int                 `json:"liveNodes"`
+
+	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
+	Usage *HostUsage `json:"usage,omitempty"`
 }
 
 // HostStatusEnum `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
@@ -1280,6 +1685,33 @@ type HostStatusResponse struct {
 
 	// RevokeObjects Object IDs killed in the last 10 min in namespaces this host holds; kill idempotently.
 	RevokeObjects []string `json:"revokeObjects"`
+}
+
+// HostTier What a host offers: the isolation tiers (`process`, `microvm`) and `containers` (ADR-032: it can run containers and code sandboxes, one microVM each, for images of its `arch`).
+type HostTier string
+
+// HostUsage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
+type HostUsage struct {
+	Containers int     `json:"containers"`
+	HugeMemMiB int     `json:"hugeMemMiB"`
+	Nodes      int     `json:"nodes"`
+	ScratchMiB int     `json:"scratchMiB"`
+	Vcpus      float32 `json:"vcpus"`
+	VMMemMiB   int     `json:"vmMemMiB"`
+	Vms        int     `json:"vms"`
+}
+
+// ImageAlias defines model for ImageAlias.
+type ImageAlias struct {
+	// Arch "" = every arch.
+	Arch *string `json:"arch,omitempty"`
+	From string  `json:"from"`
+	To   string  `json:"to"`
+}
+
+// ImageAliasList defines model for ImageAliasList.
+type ImageAliasList struct {
+	Items []ImageAlias `json:"items"`
 }
 
 // JWKS defines model for JWKS.
@@ -1674,6 +2106,54 @@ type PublicAssignment struct {
 	Upgrade *[]string `json:"upgrade,omitempty"`
 }
 
+// PublicImage defines model for PublicImage.
+type PublicImage struct {
+	Arch      PublicImageArch `json:"arch"`
+	CreatedAt int64           `json:"createdAt"`
+	CreatedBy *string         `json:"createdBy,omitempty"`
+
+	// Digest The linux/`arch` image manifest.
+	Digest string `json:"digest"`
+
+	// ID Examples: pi_3f9a1c2b7d8e4f50
+	ID string `json:"id"`
+
+	// Ref The normalised upstream ref (or twd.local ref) deploys match.
+	Ref string `json:"ref"`
+
+	// Repository `public/…`
+	Repository string `json:"repository"`
+
+	// SourceDigest The upstream top-level digest (index or manifest) at add time.
+	SourceDigest string `json:"sourceDigest"`
+}
+
+// PublicImageArch defines model for PublicImage.Arch.
+type PublicImageArch string
+
+// PublicImageCreate defines model for PublicImageCreate.
+type PublicImageCreate struct {
+	// Arches Default every linux amd64/arm64 image the ref has.
+	Arches *[]PublicImageCreateArches `json:"arches,omitempty"`
+	Ref    string                     `json:"ref"`
+}
+
+// PublicImageCreateArches defines model for PublicImageCreate.Arches.
+type PublicImageCreateArches string
+
+// PublicImageList defines model for PublicImageList.
+type PublicImageList struct {
+	Items []PublicImage `json:"items"`
+}
+
+// PublicImagePage defines model for PublicImagePage.
+type PublicImagePage struct {
+	Items []PublicImage `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
 // PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
 // tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
 // a deploy that declares them is refused `403 public_ingress_not_allowed`,
@@ -1704,6 +2184,30 @@ type PurgeResult struct {
 
 	// WarmKeysRevoked The tenant's unused pooled keys revoked with the purge.
 	WarmKeysRevoked *int `json:"warmKeysRevoked,omitempty"`
+}
+
+// ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
+type ReplicaRef struct {
+	DeploymentID string            `json:"deploymentID"`
+	Host         string            `json:"host"`
+	Status       *DeploymentStatus `json:"status,omitempty"`
+
+	// Workload Examples: web--r2
+	Workload string `json:"workload"`
+}
+
+// RunningContainer One running container in a heartbeat.
+type RunningContainer struct {
+	Class  string `json:"class"`
+	Object string `json:"object"`
+
+	// ReservationID The reservation it runs under (absent: started without one, e.g. a restart while mgmt was unreachable).
+	ReservationID *string `json:"reservationID,omitempty"`
+
+	// Resources What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`).
+	Resources ContainerResources `json:"resources"`
+	TenantID  string             `json:"tenantID"`
+	Workload  string             `json:"workload"`
 }
 
 // SelfInfo defines model for SelfInfo.
@@ -1793,7 +2297,16 @@ type Tenant struct {
 	// ControlURL Non-default control plane (testcontrol, headscale).
 	ControlURL *string `json:"controlURL,omitempty"`
 	CreatedAt  int64   `json:"createdAt"`
-	MaxObjects int     `json:"maxObjects"`
+
+	// MaxContainerMemMiB Total guest memory of the tenant's running containers.
+	MaxContainerMemMiB *int `json:"maxContainerMemMiB,omitempty"`
+
+	// MaxContainerVCPU Total vCPUs of the tenant's running containers (fractional: `lite` is 1/16).
+	MaxContainerVCPU *float32 `json:"maxContainerVCPU,omitempty"`
+
+	// MaxContainers Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`.
+	MaxContainers *int `json:"maxContainers,omitempty"`
+	MaxObjects    int  `json:"maxObjects"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `static`: fakemgmt only (testcontrol accepts any key).
 	MintMode MintMode `json:"mintMode"`
@@ -1840,9 +2353,12 @@ type Tenant struct {
 
 // TenantCreate defines model for TenantCreate.
 type TenantCreate struct {
-	APIKeyFile *string `json:"apiKeyFile,omitempty"`
-	ControlURL *string `json:"controlURL,omitempty"`
-	MaxObjects *int    `json:"maxObjects,omitempty"`
+	APIKeyFile         *string  `json:"apiKeyFile,omitempty"`
+	ControlURL         *string  `json:"controlURL,omitempty"`
+	MaxContainerMemMiB *int     `json:"maxContainerMemMiB,omitempty"`
+	MaxContainerVCPU   *float32 `json:"maxContainerVCPU,omitempty"`
+	MaxContainers      *int     `json:"maxContainers,omitempty"`
+	MaxObjects         *int     `json:"maxObjects,omitempty"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `static`: fakemgmt only (testcontrol accepts any key).
 	MintMode        MintMode `json:"mintMode"`
@@ -1885,8 +2401,11 @@ type TenantPage struct {
 
 // TenantPatch JSON Merge Patch over the updatable fields. `null` clears an optional field.
 type TenantPatch struct {
-	APIKeyFile nullable.Nullable[string] `json:"apiKeyFile,omitempty"`
-	MaxObjects *int                      `json:"maxObjects,omitempty"`
+	APIKeyFile         nullable.Nullable[string] `json:"apiKeyFile,omitempty"`
+	MaxContainerMemMiB *int                      `json:"maxContainerMemMiB,omitempty"`
+	MaxContainerVCPU   *float32                  `json:"maxContainerVCPU,omitempty"`
+	MaxContainers      *int                      `json:"maxContainers,omitempty"`
+	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `static`: fakemgmt only (testcontrol accepts any key).
 	MintMode        *MintMode                 `json:"mintMode,omitempty"`
@@ -1959,7 +2478,8 @@ type TombstoneError struct {
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
-	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
+	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
@@ -1976,10 +2496,14 @@ type TombstoneError struct {
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
+	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
+	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
+	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-	// | `no_host` | 503 | no live host for the deployment |
+	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -2103,6 +2627,12 @@ type Limit = int
 // ObjectID defines model for objectID.
 type ObjectID = string
 
+// RepositoryName defines model for repositoryName.
+type RepositoryName = string
+
+// ReservationID defines model for reservationID.
+type ReservationID = string
+
 // TenantID defines model for tenantID.
 type TenantID = string
 
@@ -2197,6 +2727,17 @@ type GetCertificateParams struct {
 	Tenant string `form:"tenant" json:"tenant"`
 }
 
+// ListContainerReservationsParams defines parameters for ListContainerReservations.
+type ListContainerReservationsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Tenant *string `form:"tenant,omitempty" json:"tenant,omitempty"`
+	Host   *string `form:"host,omitempty" json:"host,omitempty"`
+}
+
 // ListDeploymentsParams defines parameters for ListDeployments.
 type ListDeploymentsParams struct {
 	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
@@ -2261,6 +2802,15 @@ type GetHostParams struct {
 
 // ListHostAssignmentsParams defines parameters for ListHostAssignments.
 type ListHostAssignmentsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListPublicImagesParams defines parameters for ListPublicImages.
+type ListPublicImagesParams struct {
 	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
@@ -2382,6 +2932,9 @@ type CreateVolumeKeyGrantParams struct {
 // AppendAuditJSONRequestBody defines body for AppendAudit for application/json ContentType.
 type AppendAuditJSONRequestBody = AuditBatch
 
+// CreateContainerReservationJSONRequestBody defines body for CreateContainerReservation for application/json ContentType.
+type CreateContainerReservationJSONRequestBody = ContainerReservationCreate
+
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = DeploymentCreate
 
@@ -2396,6 +2949,9 @@ type ReportHostPathsJSONRequestBody = HostPathReport
 
 // ReportHostStatusJSONRequestBody defines body for ReportHostStatus for application/json ContentType.
 type ReportHostStatusJSONRequestBody = HostStatus
+
+// CreatePublicImageJSONRequestBody defines body for CreatePublicImage for application/json ContentType.
+type CreatePublicImageJSONRequestBody = PublicImageCreate
 
 // CreateObjectJSONRequestBody defines body for CreateObject for application/json ContentType.
 type CreateObjectJSONRequestBody = ObjectCreate
@@ -2710,6 +3266,15 @@ type ServerInterface interface {
 	// GetCertificate Look up a node certificate by stable node ID
 	// (GET /v1/certificates/{stableNodeID})
 	GetCertificate(w http.ResponseWriter, r *http.Request, stableNodeID string, params GetCertificateParams)
+	// ListContainerReservations List container reservations
+	// (GET /v1/container-reservations)
+	ListContainerReservations(w http.ResponseWriter, r *http.Request, params ListContainerReservationsParams)
+	// CreateContainerReservation Reserve quota for a container before it starts
+	// (POST /v1/container-reservations)
+	CreateContainerReservation(w http.ResponseWriter, r *http.Request)
+	// DeleteContainerReservation Release a container reservation (the container stopped)
+	// (DELETE /v1/container-reservations/{id})
+	DeleteContainerReservation(w http.ResponseWriter, r *http.Request, id ReservationID)
 	// ListDeployments List deployments
 	// (GET /v1/deployments)
 	ListDeployments(w http.ResponseWriter, r *http.Request, params ListDeploymentsParams)
@@ -2755,6 +3320,18 @@ type ServerInterface interface {
 	// ReportHostStatus Heartbeat (replace the host's reported status)
 	// (PUT /v1/hosts/{id}/status)
 	ReportHostStatus(w http.ResponseWriter, r *http.Request, id HostID)
+	// ListImageAliases The image alias map
+	// (GET /v1/images/aliases)
+	ListImageAliases(w http.ResponseWriter, r *http.Request)
+	// ListPublicImages List public base images
+	// (GET /v1/images/public)
+	ListPublicImages(w http.ResponseWriter, r *http.Request, params ListPublicImagesParams)
+	// CreatePublicImage Mark an image as a public base (mirrors it now)
+	// (POST /v1/images/public)
+	CreatePublicImage(w http.ResponseWriter, r *http.Request)
+	// DeletePublicImage Unmark a public base image
+	// (DELETE /v1/images/public/{id})
+	DeletePublicImage(w http.ResponseWriter, r *http.Request, id string)
 	// ListObjects List objects (with lineage)
 	// (GET /v1/objects)
 	ListObjects(w http.ResponseWriter, r *http.Request, params ListObjectsParams)
@@ -3114,6 +3691,118 @@ func (siw *ServerInterfaceWrapper) GetCertificate(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCertificate(w, r, stableNodeID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContainerReservations operation middleware
+func (siw *ServerInterfaceWrapper) ListContainerReservations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContainerReservationsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tenant" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tenant", r.URL.Query(), &params.Tenant, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tenant"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "host" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "host", r.URL.Query(), &params.Host, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "host"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "host", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContainerReservations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateContainerReservation operation middleware
+func (siw *ServerInterfaceWrapper) CreateContainerReservation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateContainerReservation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteContainerReservation operation middleware
+func (siw *ServerInterfaceWrapper) DeleteContainerReservation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ReservationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteContainerReservation(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3731,6 +4420,106 @@ func (siw *ServerInterfaceWrapper) ReportHostStatus(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReportHostStatus(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImageAliases operation middleware
+func (siw *ServerInterfaceWrapper) ListImageAliases(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImageAliases(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPublicImages operation middleware
+func (siw *ServerInterfaceWrapper) ListPublicImages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPublicImagesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPublicImages(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePublicImage operation middleware
+func (siw *ServerInterfaceWrapper) CreatePublicImage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePublicImage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePublicImage operation middleware
+func (siw *ServerInterfaceWrapper) DeletePublicImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePublicImage(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4757,6 +5546,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/audit", wrapper.AppendAudit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/audit/verification", wrapper.GetAuditVerification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/volumes/{id}/keys", wrapper.CreateVolumeKeyGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/container-reservations", wrapper.ListContainerReservations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/container-reservations", wrapper.CreateContainerReservation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/container-reservations/{id}", wrapper.DeleteContainerReservation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/images/public", wrapper.ListPublicImages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/images/public", wrapper.CreatePublicImage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/images/public/{id}", wrapper.DeletePublicImage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/images/aliases", wrapper.ListImageAliases)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/healthz", wrapper.GetHealthz)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/status", wrapper.GetStatus)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/whoami", wrapper.WhoAmI)
@@ -5339,6 +6135,300 @@ type GetCertificatedefaultJSONResponse struct {
 }
 
 func (response GetCertificatedefaultJSONResponse) VisitGetCertificateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContainerReservationsRequestObject struct {
+	Params ListContainerReservationsParams
+}
+
+type ListContainerReservationsResponseObject interface {
+	VisitListContainerReservationsResponse(w http.ResponseWriter) error
+}
+
+type ListContainerReservations200JSONResponse ContainerReservationPage
+
+func (response ListContainerReservations200JSONResponse) VisitListContainerReservationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContainerReservations400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListContainerReservations400JSONResponse) VisitListContainerReservationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContainerReservations403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListContainerReservations403JSONResponse) VisitListContainerReservationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContainerReservationsdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListContainerReservationsdefaultJSONResponse) VisitListContainerReservationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservationRequestObject struct {
+	Body *CreateContainerReservationJSONRequestBody
+}
+
+type CreateContainerReservationResponseObject interface {
+	VisitCreateContainerReservationResponse(w http.ResponseWriter) error
+}
+
+type CreateContainerReservation200JSONResponse ContainerReservation
+
+func (response CreateContainerReservation200JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservation201ResponseHeaders struct {
+	Location *string
+}
+
+type CreateContainerReservation201JSONResponse struct {
+	Body    ContainerReservation
+	Headers CreateContainerReservation201ResponseHeaders
+}
+
+func (response CreateContainerReservation201JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservation400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateContainerReservation400JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservation403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateContainerReservation403JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservation404JSONResponse Error
+
+func (response CreateContainerReservation404JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservation409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response CreateContainerReservation409JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservation429JSONResponse Error
+
+func (response CreateContainerReservation429JSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateContainerReservationdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response CreateContainerReservationdefaultJSONResponse) VisitCreateContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContainerReservationRequestObject struct {
+	ID ReservationID `json:"id"`
+}
+
+type DeleteContainerReservationResponseObject interface {
+	VisitDeleteContainerReservationResponse(w http.ResponseWriter) error
+}
+
+type DeleteContainerReservation204Response struct {
+}
+
+func (response DeleteContainerReservation204Response) VisitDeleteContainerReservationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteContainerReservation403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteContainerReservation403JSONResponse) VisitDeleteContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContainerReservation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteContainerReservation404JSONResponse) VisitDeleteContainerReservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContainerReservationdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteContainerReservationdefaultJSONResponse) VisitDeleteContainerReservationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6835,6 +7925,318 @@ type ReportHostStatusdefaultJSONResponse struct {
 }
 
 func (response ReportHostStatusdefaultJSONResponse) VisitReportHostStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImageAliasesRequestObject struct {
+}
+
+type ListImageAliasesResponseObject interface {
+	VisitListImageAliasesResponse(w http.ResponseWriter) error
+}
+
+type ListImageAliases200JSONResponse ImageAliasList
+
+func (response ListImageAliases200JSONResponse) VisitListImageAliasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImageAliases403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListImageAliases403JSONResponse) VisitListImageAliasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImageAliasesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListImageAliasesdefaultJSONResponse) VisitListImageAliasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPublicImagesRequestObject struct {
+	Params ListPublicImagesParams
+}
+
+type ListPublicImagesResponseObject interface {
+	VisitListPublicImagesResponse(w http.ResponseWriter) error
+}
+
+type ListPublicImages200JSONResponse PublicImagePage
+
+func (response ListPublicImages200JSONResponse) VisitListPublicImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPublicImages400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListPublicImages400JSONResponse) VisitListPublicImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPublicImages403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPublicImages403JSONResponse) VisitListPublicImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPublicImagesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListPublicImagesdefaultJSONResponse) VisitListPublicImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublicImageRequestObject struct {
+	Body *CreatePublicImageJSONRequestBody
+}
+
+type CreatePublicImageResponseObject interface {
+	VisitCreatePublicImageResponse(w http.ResponseWriter) error
+}
+
+type CreatePublicImage201JSONResponse PublicImageList
+
+func (response CreatePublicImage201JSONResponse) VisitCreatePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublicImage400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreatePublicImage400JSONResponse) VisitCreatePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublicImage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreatePublicImage403JSONResponse) VisitCreatePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublicImage409JSONResponse Error
+
+func (response CreatePublicImage409JSONResponse) VisitCreatePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublicImage502JSONResponse Error
+
+func (response CreatePublicImage502JSONResponse) VisitCreatePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePublicImagedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response CreatePublicImagedefaultJSONResponse) VisitCreatePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeletePublicImageRequestObject struct {
+	ID string `json:"id"`
+}
+
+type DeletePublicImageResponseObject interface {
+	VisitDeletePublicImageResponse(w http.ResponseWriter) error
+}
+
+type DeletePublicImage204Response struct {
+}
+
+func (response DeletePublicImage204Response) VisitDeletePublicImageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeletePublicImage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeletePublicImage403JSONResponse) VisitDeletePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeletePublicImage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeletePublicImage404JSONResponse) VisitDeletePublicImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeletePublicImagedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeletePublicImagedefaultJSONResponse) VisitDeletePublicImageResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8977,6 +10379,15 @@ type StrictServerInterface interface {
 	// GetCertificate Look up a node certificate by stable node ID
 	// (GET /v1/certificates/{stableNodeID})
 	GetCertificate(ctx context.Context, request GetCertificateRequestObject) (GetCertificateResponseObject, error)
+	// ListContainerReservations List container reservations
+	// (GET /v1/container-reservations)
+	ListContainerReservations(ctx context.Context, request ListContainerReservationsRequestObject) (ListContainerReservationsResponseObject, error)
+	// CreateContainerReservation Reserve quota for a container before it starts
+	// (POST /v1/container-reservations)
+	CreateContainerReservation(ctx context.Context, request CreateContainerReservationRequestObject) (CreateContainerReservationResponseObject, error)
+	// DeleteContainerReservation Release a container reservation (the container stopped)
+	// (DELETE /v1/container-reservations/{id})
+	DeleteContainerReservation(ctx context.Context, request DeleteContainerReservationRequestObject) (DeleteContainerReservationResponseObject, error)
 	// ListDeployments List deployments
 	// (GET /v1/deployments)
 	ListDeployments(ctx context.Context, request ListDeploymentsRequestObject) (ListDeploymentsResponseObject, error)
@@ -9022,6 +10433,18 @@ type StrictServerInterface interface {
 	// ReportHostStatus Heartbeat (replace the host's reported status)
 	// (PUT /v1/hosts/{id}/status)
 	ReportHostStatus(ctx context.Context, request ReportHostStatusRequestObject) (ReportHostStatusResponseObject, error)
+	// ListImageAliases The image alias map
+	// (GET /v1/images/aliases)
+	ListImageAliases(ctx context.Context, request ListImageAliasesRequestObject) (ListImageAliasesResponseObject, error)
+	// ListPublicImages List public base images
+	// (GET /v1/images/public)
+	ListPublicImages(ctx context.Context, request ListPublicImagesRequestObject) (ListPublicImagesResponseObject, error)
+	// CreatePublicImage Mark an image as a public base (mirrors it now)
+	// (POST /v1/images/public)
+	CreatePublicImage(ctx context.Context, request CreatePublicImageRequestObject) (CreatePublicImageResponseObject, error)
+	// DeletePublicImage Unmark a public base image
+	// (DELETE /v1/images/public/{id})
+	DeletePublicImage(ctx context.Context, request DeletePublicImageRequestObject) (DeletePublicImageResponseObject, error)
 	// ListObjects List objects (with lineage)
 	// (GET /v1/objects)
 	ListObjects(ctx context.Context, request ListObjectsRequestObject) (ListObjectsResponseObject, error)
@@ -9321,6 +10744,89 @@ func (sh *strictHandler) GetCertificate(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCertificateResponseObject); ok {
 		if err := validResponse.VisitGetCertificateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContainerReservations operation middleware
+func (sh *strictHandler) ListContainerReservations(w http.ResponseWriter, r *http.Request, params ListContainerReservationsParams) {
+	var request ListContainerReservationsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContainerReservations(ctx, request.(ListContainerReservationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContainerReservations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContainerReservationsResponseObject); ok {
+		if err := validResponse.VisitListContainerReservationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateContainerReservation operation middleware
+func (sh *strictHandler) CreateContainerReservation(w http.ResponseWriter, r *http.Request) {
+	var request CreateContainerReservationRequestObject
+
+	var body CreateContainerReservationJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateContainerReservation(ctx, request.(CreateContainerReservationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateContainerReservation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateContainerReservationResponseObject); ok {
+		if err := validResponse.VisitCreateContainerReservationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteContainerReservation operation middleware
+func (sh *strictHandler) DeleteContainerReservation(w http.ResponseWriter, r *http.Request, id ReservationID) {
+	var request DeleteContainerReservationRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteContainerReservation(ctx, request.(DeleteContainerReservationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteContainerReservation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteContainerReservationResponseObject); ok {
+		if err := validResponse.VisitDeleteContainerReservationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9745,6 +11251,113 @@ func (sh *strictHandler) ReportHostStatus(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReportHostStatusResponseObject); ok {
 		if err := validResponse.VisitReportHostStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListImageAliases operation middleware
+func (sh *strictHandler) ListImageAliases(w http.ResponseWriter, r *http.Request) {
+	var request ListImageAliasesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListImageAliases(ctx, request.(ListImageAliasesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListImageAliases")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListImageAliasesResponseObject); ok {
+		if err := validResponse.VisitListImageAliasesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPublicImages operation middleware
+func (sh *strictHandler) ListPublicImages(w http.ResponseWriter, r *http.Request, params ListPublicImagesParams) {
+	var request ListPublicImagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPublicImages(ctx, request.(ListPublicImagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPublicImages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPublicImagesResponseObject); ok {
+		if err := validResponse.VisitListPublicImagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePublicImage operation middleware
+func (sh *strictHandler) CreatePublicImage(w http.ResponseWriter, r *http.Request) {
+	var request CreatePublicImageRequestObject
+
+	var body CreatePublicImageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePublicImage(ctx, request.(CreatePublicImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePublicImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePublicImageResponseObject); ok {
+		if err := validResponse.VisitCreatePublicImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeletePublicImage operation middleware
+func (sh *strictHandler) DeletePublicImage(w http.ResponseWriter, r *http.Request, id string) {
+	var request DeletePublicImageRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeletePublicImage(ctx, request.(DeletePublicImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeletePublicImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeletePublicImageResponseObject); ok {
+		if err := validResponse.VisitDeletePublicImageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -10322,573 +11935,4 @@ func (sh *strictHandler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	} else if response != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
 	}
-}
-
-// Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
-// Stored as a slice of fixed-width chunks rather than one concatenated
-// const string: with thousands of chunks the chained `+` fold is several
-// times slower for the Go compiler than parsing a slice literal.
-var swaggerSpec = []string{
-	"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",
-}
-
-// decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
-// after base64-decoding and flate-decompressing the embedded blob.
-func decodeSpec() ([]byte, error) {
-	encoded := strings.Join(swaggerSpec, "")
-	compressed, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("error base64 decoding spec: %w", err)
-	}
-	zr := flate.NewReader(bytes.NewReader(compressed))
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(zr); err != nil {
-		return nil, fmt.Errorf("read flate: %w", err)
-	}
-	if err := zr.Close(); err != nil {
-		return nil, fmt.Errorf("close flate reader: %w", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-var rawSpec = decodeSpecCached()
-
-// a naive cache of the decoded OpenAPI spec
-func decodeSpecCached() func() ([]byte, error) {
-	data, err := decodeSpec()
-	return func() ([]byte, error) {
-		return data, err
-	}
-}
-
-// Constructs a synthetic filesystem for resolving external references when loading openapi specifications.
-func PathToRawSpec(pathToFile string) map[string]func() ([]byte, error) {
-	res := make(map[string]func() ([]byte, error))
-	if len(pathToFile) > 0 {
-		res[pathToFile] = rawSpec
-	}
-
-	return res
-}
-
-// GetSpec returns the OpenAPI specification corresponding to the generated
-// code in this file. External references in the spec are resolved through
-// PathToRawSpec; externally-referenced files must be embedded in their
-// corresponding Go packages (via the import-mapping feature). URL-based
-// external refs are not supported.
-func GetSpec() (swagger *openapi3.T, err error) {
-	resolvePath := PathToRawSpec("")
-
-	loader := openapi3.NewLoader()
-	loader.IsExternalRefsAllowed = true
-	loader.ReadFromURIFunc = func(loader *openapi3.Loader, url *url.URL) ([]byte, error) {
-		pathToFile := url.String()
-		pathToFile = path.Clean(pathToFile)
-		getSpec, ok := resolvePath[pathToFile]
-		if !ok {
-			err1 := fmt.Errorf("path not found: %s", pathToFile)
-			return nil, err1
-		}
-		return getSpec()
-	}
-	var specData []byte
-	specData, err = rawSpec()
-	if err != nil {
-		return
-	}
-	swagger, err = loader.LoadFromData(specData)
-	if err != nil {
-		return
-	}
-	return
-}
-
-// GetSpecJSON returns the raw JSON bytes of the embedded OpenAPI
-// specification: decompressed but not unmarshaled. External references
-// are not resolved here; the bytes are the spec exactly as embedded by
-// codegen. The result is cached at package init time, so repeated calls
-// are cheap.
-func GetSpecJSON() ([]byte, error) {
-	return rawSpec()
-}
-
-// GetSwagger returns the OpenAPI specification corresponding to the
-// generated code in this file.
-//
-// Deprecated: GetSwagger predates kin-openapi renaming openapi3.Swagger
-// to openapi3.T. Use [GetSpec] instead. This wrapper is retained for
-// backwards compatibility.
-func GetSwagger() (*openapi3.T, error) {
-	return GetSpec()
 }

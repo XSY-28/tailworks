@@ -76,6 +76,10 @@ func run() error {
 		warmKeys     = flag.Int("warm-keys", 5, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
 		warmKeyTTL   = flag.Duration("warm-key-ttl", mgmt.DefaultWarmKeyTTL, "-warm-keys: a pooled key's expiry; unused keys are revoked shortly before it")
 		verbose      = flag.Bool("v", false, "debug logging")
+		registryDir  = flag.String("registry-dir", "", "OCI registry blob store (ADR-032 D3; default <state-dir>/registry; \"off\" disables the registry). Replicas serving the registry must share it")
+		regInsecure  = flag.String("registry-insecure", "", "comma-separated upstream registry hosts mirrored over plain HTTP (tests: a local upstream)")
+		noMirror     = flag.Bool("no-mirror", false, "refuse external image refs at deploy (only twd deploy builds and public bases); mgmt then makes no registry egress")
+		aliasFile    = flag.String("image-aliases", "", "JSON file [{from, to, arch}] replacing the default image alias map (cloudflare/sandbox → twd.local arm64 rebuilds)")
 	)
 	flag.Parse()
 	lvl := slog.LevelInfo
@@ -215,7 +219,26 @@ func run() error {
 
 	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: *tsapiURL, Issuer: issuer},
 		IDSecret: secret, ReplicaID: replicaID, ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, Log: log,
-		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL}
+		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl, NoMirror: *noMirror, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL}
+	switch *registryDir {
+	case "off":
+	case "":
+		mcfg.RegistryDir = filepath.Join(*stateDir, "registry")
+	default:
+		mcfg.RegistryDir = *registryDir
+	}
+	if *regInsecure != "" {
+		mcfg.RegistryInsecure = strings.Split(*regInsecure, ",")
+	}
+	if *aliasFile != "" {
+		b, err := os.ReadFile(*aliasFile)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(b, &mcfg.ImageAliases); err != nil {
+			return fmt.Errorf("-image-aliases %s: %w", *aliasFile, err)
+		}
+	}
 	if ts != nil {
 		mcfg.TailnetDial = ts.Dial // kill/assignment pushes to hosts' own nodes
 	}
