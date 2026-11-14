@@ -675,6 +675,10 @@ type DeployRequest struct {
 	// from the request body): a WhoIs login over the tailnet, the local
 	// actor on the unix socket.
 	By string `json:"-"`
+
+	// replica is set by deployGroup (workload_replicas.go): which replica
+	// of which workload this deploy is. nil only on the outer call.
+	replica *replicaCtx
 }
 
 // DeployResponse is the deploy reply.
@@ -689,6 +693,9 @@ type DeployResponse struct {
 		Service *ServiceEndpoint `json:"service,omitempty"`
 	} `json:"endpoint"`
 	Placement *PlacementDecision `json:"placement,omitempty"`
+
+	// Replicas (twd.jsonc "replicas" > 1): every copy, this one first.
+	Replicas []ReplicaRef `json:"replicas,omitempty"`
 }
 
 // ServiceEndpoint is a workload's Tailscale Service: a stable name and VIPs
@@ -712,6 +719,9 @@ func validName(s string) bool {
 }
 
 func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, error) {
+	if r.replica == nil {
+		return m.deployGroup(ctx, r) // replicas: workload_replicas.go
+	}
 	var resp DeployResponse
 	t, err := m.store.GetTenant(ctx, r.TenantID)
 	if err != nil {
@@ -770,10 +780,11 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			}
 		}
 	}
-	svcName, err := applyService(svcCfg, r.Workload, classes)
+	svcName, err := applyService(svcCfg, r.replica.owner(r.Workload), classes) // replicas share the group's Service
 	if err != nil {
 		return resp, errf(400, "bad_bundle", "%v", err)
 	}
+	r.replica.mark(classes)
 	need := placementNeed{}
 	var ctrs []container.Class
 	if len(r.Bundle) > 0 {
@@ -796,7 +807,8 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	// Placement (ADR-033) keeps ADR-032's eligibility: tier, the
 	// "containers" capability and arch, and the capacity vector.
-	dec, held, err := m.place(ctx, t, placementInput{Workload: r.Workload, Pinned: r.Host, Replace: r.Replace, Config: bcfg, Need: need})
+	dec, held, err := m.place(ctx, t, placementInput{Workload: r.Workload, Pinned: r.Host, Replace: r.Replace, Config: bcfg, Need: need,
+		Exclude: r.replica.exclude})
 	if err != nil {
 		return resp, err
 	}
@@ -805,7 +817,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if svcName != "" {
 		// Before the lease and the record: a deploy whose Service can't
 		// exist (name taken, no API scope) fails without side effects.
-		def, err := m.ensureService(ctx, t, r.Workload, svcName)
+		def, err := m.ensureService(ctx, t, r.replica.owner(r.Workload), svcName)
 		if err != nil {
 			return resp, err
 		}
@@ -953,6 +965,9 @@ type DeploymentView struct {
 		Status   string           `json:"status"`
 		Service  *ServiceEndpoint `json:"service,omitempty"`
 	} `json:"endpoint"`
+
+	// Replicas (twd.jsonc "replicas" > 1): every copy with its status.
+	Replicas []ReplicaRef `json:"replicas,omitempty"`
 }
 
 // GetDeployment returns a deployment with the host-reported status and its
@@ -973,6 +988,7 @@ func (m *Mgmt) GetDeployment(ctx context.Context, id string) (DeploymentView, er
 		v.Endpoint.Service = &ServiceEndpoint{Name: svc, MagicDNS: tssvc.Label(svc) + "." + t.Tailnet}
 	}
 	v.Public = m.publicView(ctx, d)
+	v.Replicas = m.replicaView(ctx, d, v.Status)
 	if o, err := m.store.GetObjectByName(ctx, d.TenantID, d.Workload, WorkloadNamespace, d.Workload); err == nil {
 		v.Endpoint.ObjectID, v.Endpoint.MagicDNS, v.Endpoint.Status = o.ID, o.MagicDNS, o.Status
 		v.Endpoint.Node, _, _ = strings.Cut(o.MagicDNS, ".")

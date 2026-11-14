@@ -120,7 +120,8 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
   (`LEDGER.md`). Replicas can share one Tailscale Service VIP
   (`-tsnet-service svc:twd-mgmt`).
 - **Stable names for workloads (Tailscale Services):** `"service": true` in
-  `twd.jsonc`; see [docs/services.md](docs/services.md).
+  `twd.jsonc`; stateless workloads can also run on several hosts behind it
+  (`"replicas": 3`). See [docs/services.md](docs/services.md).
 - **Build status and measured results:** [status/](status/) (one file per workstream) and the frozen history in [STATUS.md](STATUS.md).
 - **Design:** the RFC and ADRs live in
   `rosskukulinski/tailnet-agents-design` (private).

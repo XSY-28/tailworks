@@ -110,6 +110,10 @@ type placementInput struct {
 	// "containers" capability for the images' arch); its Tier is set here
 	// from Config and the tenant.
 	Need placementNeed
+
+	// Exclude: hosts placement must not choose (other replicas of the same
+	// workload already run there; workload_replicas.go).
+	Exclude map[string]bool
 }
 
 // place decides the deployment's host. It returns the decision and the
@@ -125,6 +129,9 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 	live := map[string]bool{}
 	byID := map[string]Host{}
 	for _, h := range hosts {
+		if in.Exclude[h.ID] {
+			continue
+		}
 		c := candidateOf(h, now)
 		cands = append(cands, c)
 		live[h.ID], byID[h.ID] = c.Live, h

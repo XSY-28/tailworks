@@ -2411,6 +2411,7 @@ components:
         | `lease_held` | 409 | another host holds the lease |
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
         | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+        | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
         | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
         | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
         | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
@@ -2461,6 +2462,7 @@ components:
         - takeover_unconfirmed
         - service_conflict
         - service_api_failed
+        - replica_conflict
         - tier_unavailable
         - move_unconfirmed
         - lease_changed
@@ -3018,6 +3020,21 @@ components:
           description: >-
             `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc`
             `tailnet.service`).
+        replicaOf:
+          type: string
+          description: >-
+            `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc`
+            `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
+        replicas: { type: integer, minimum: 2, description: "`_workload` only, the workload itself: its replica count when > 1." }
+    ReplicaRef:
+      type: object
+      description: One replica of a workload with `twd.jsonc` `replicas` > 1.
+      required: [workload, deploymentID, host]
+      properties:
+        workload: { type: string, examples: [web--r2] }
+        deploymentID: { type: string }
+        host: { type: string }
+        status: { $ref: "#/components/schemas/DeploymentStatus" }
     ServiceEndpoint:
       type: object
       description: >-
@@ -3057,6 +3074,12 @@ components:
         maxDepth: { type: integer }
         endpoint: { $ref: "#/components/schemas/Endpoint" }
         public: { $ref: "#/components/schemas/DeploymentPublic" }
+        replicas:
+          type: array
+          description: >-
+            A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first,
+            each on a distinct host. Undeploying the workload undeploys its replicas.
+          items: { $ref: "#/components/schemas/ReplicaRef" }
         deployedBy: { type: string, description: The actor who deployed (see Conventions). }
         containers:
           type: array
