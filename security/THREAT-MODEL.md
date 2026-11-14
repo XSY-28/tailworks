@@ -4,8 +4,8 @@ Date: 2026-11-08 · Branch `rt-redteam` · Author: red team (adversarial review 
 overnight build, M0–M9 as recorded in `STATUS.md`). Companion: `RED-TEAM.md` (findings),
 `attacks/` (PoCs + regression tests).
 
-This is the attacker's view. It is built from the design (`~/dev/tailnet-agents-design`
-RFC §4.3–4.11, §8, `review/security.md`) and verified against the **implementation** in
+This is the attacker's view. It is built from the design ([`docs/design/RFC.md`](../docs/design/RFC.md)
+§4.3–4.11, §8, and the design-phase `review/security.md`) and verified against the **implementation** in
 `~/dev/twd` (netd, mgmt, hostd, the JS runtime, the generated platform wrapper). Where the
 paper threat model and the code disagree, the code wins.
 

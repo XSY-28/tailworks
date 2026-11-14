@@ -1,5 +1,9 @@
 # Notes for coding agents
 
+The design is in `docs/design/`: the RFC (`RFC.md`) and one file per ADR
+(`adr/`). This repo is public. Don't add internal figures (pricing,
+Tailscale-internal limits, roadmap or tooling) to any file here.
+
 Several agents work in this repo at once, each on its own branch or
 worktree. Most merge pain has come from everyone editing the same few lines,
 not from real logic clashes. These rules keep parallel branches out of each
@@ -63,8 +67,10 @@ renumber to ADR-033 across the code, docs and Makefile. While a decision is
 Proposed on a branch, call it `ADR-<slug>` (for example
 `ADR-smart-placement`). Give it the next free number only when merging to
 master, and replace the slug everywhere in that same change
-(`git grep ADR-<slug>`). If ADRs live in this repo, use one file per ADR,
-not one shared `DECISIONS.md`.
+(`git grep ADR-<slug>`). ADRs are one file each in `docs/design/adr/`:
+draft as `docs/design/adr/<slug>.md`, rename to `NNN-<slug>.md` when the
+number is assigned, and add the row to `docs/design/adr/README.md` in sorted
+position.
 
 ### 6. Stay close to master
 
