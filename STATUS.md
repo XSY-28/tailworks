@@ -1,5 +1,6 @@
 # twd STATUS (living log)
 
+Last update: 2026-11-13 21:10 PT. Fast identity, Phase 1 (measurement only) on branch `fast-identity`: per-stage cold-identity breakdown, hermetic and tailnet 1; the bimodal join explained. See "Fast identity: where a new object's node time goes".
 Last update: 2026-11-07 23:55 PT. M0 and M1 by the first run; M2 (`twd-mgmt`) on branch `m2-mgmt`.
 Last update: 2026-11-08 00:10 PT. M0, M1 (main) and M3 (branch `m3-hostd`).
 Last update: 2026-11-08 00:40 PT. M8 (microVM tier, Firecracker in Lima) on branch `m8-vm`: `make e2e-vm` PASS.
@@ -1432,3 +1433,71 @@ Run `e6d03b` (2026-11-08 23:56 PT) via `policy.ApplyWith` (additions only, valid
 - The interactive confirmation before the WIF login URL and the translation of a join-time tag refusal were exercised only by unit tests (no real browser login can be automated).
 - Not exercised for real: an OAuth client **without** `devices:core` (hermetic only), and a real `policy_missing_tag_owners` (would need breaking tailnet 1's policy); both covered hermetically.
 - `twd up` without `policy_file:read` can't check grants; it reports that and relies on the mints proving tag ownership. Without that scope `spawn()` answers `policy_unavailable` (same as WIF without a lifecycle credential).
+
+## Fast identity: where a new object's node time goes (branch `fast-identity`, 2026-11-13; Phase 1, measurement only)
+**Question.** A new object's compute is ready in 13–24 ms, but its own node is reachable only 1.5–7 s later (bimodal). Where does that time go? No optimisation in this phase.
+
+**Instrumentation (kept; diagnostics only, no behaviour change):**
+- **mgmt** logs `mint spans` after every successful mint (`queued_ms` create → attempt on the store clock, then `load`, `claim`, `throttle`, `reclaim`, `broker`, `createkey`, `custody`, `commit`, `attempt_ms`, `create_to_minted_ms`; durations on the replica's monotonic clock, never used for decisions) and `credential released` (`waited_ms`, `since_create_ms`). Both name the key by ID only.
+- **netd** records `JoinSpans` per fresh join (`ObjectInfo.spans`, and the `object ready` log line): join slot, key in hand, tsnet backend started, controlclient `doLogin` / `RegisterReq` sent / its response (matched in tsnet's own log lines), IPN `Starting`, the first `SelfChange` (the node's first netmap), `Running`, listener open. `up()` now always calls `srv.Start()` before `Up` (it only did on rejoins) so the bus is watched from the first transition.
+- **Harness** `e2e/coldid` (`make e2e-coldid`, `make e2e-coldid-real`): the real code path in one process. twd-mgmt (SQLite) is served on its v1 unix socket. Objects are created with `POST /v1/objects` and minted by the mint worker. A netd `Registry` joins each node with a KeySource that is hostd's loop (the fenced `POST …/credentials?epoch=&wait=10` long-poll). A separate **caller** node watches its IPN bus (`PeersChanged`: when the new node lands in its netmap, when it gets a home DERP and endpoints) and GETs the object's own node until a 200, recording the path. Two caller modes: dial as soon as the peer is in the netmap (a client polling MagicDNS), or only after the node is ready (a client told "ready" by twd). Objects are created one at a time (2 s apart on the real tailnet). `TWD_COLDID_AGG=<glob> … -run Aggregate` pools result files into the table below.
+- Not in the path: hostd's own `CreateObject` RPC over its tsnet loopback (the harness calls the same API on the unix socket) and workerd.
+
+**Runs.**
+- Hermetic (testcontrol + local DERP/STUN, fake key API): 94 objects (64 dial-on-netmap, 30 dial-on-ready).
+- Tailnet 1 (production control, `ttest-fi-<run>-*`, ephemeral `tag:ttest`): 59 objects in 5 runs (31 / 28).
+- Every real run deleted exactly its devices by ID and revoked its keys (`left 0`, `untracked []` each time). No policy was read or written, and no `tskey-` appeared in any captured log.
+
+### Per stage (ms; each row is the time between two marks; p50 / p95)
+| stage | hermetic p50 | p95 | tailnet 1 p50 | p95 |
+|---|---|---|---|---|
+| mgmt: `POST /v1/objects` (row + create audit in one tx, enqueue) | 1 | 3 | 2 | 4 |
+| mgmt: mint queue → `mintOne` | 2 | 3 | 2 | 4 |
+| mgmt: mint claim + throttle token + re-claim | 0 | 1 | 0 | 1 |
+| mgmt: **`CreateKey` API call** | 0 | 0 | **195** | **4562** |
+| mgmt: custody put + fenced commit (+ mint audit) → `minted` | 0 | 1 | 1 | 2 |
+| hostd: credential long-poll wakes → key in netd | 1 | 2 | 1 | 2 |
+| netd: tsnet backend start (after the key) | 10 | 14 | 12 | 21 |
+| tsnet: `doLogin` → `RegisterRequest` sent (fetch control's key over HTTPS) | 0 | 1 | 431 | 786 |
+| control: `RegisterRequest` → response (Noise dial + register) | 1 | 2 | 434 | **5422** |
+| control: registered → the node's first netmap | 14 | 21 | 186 | **5370** |
+| tsnet: first netmap → `Running` → listening (**first netcheck, port-map probe**) | **262** | 274 | **259** | 286 |
+| control: registered → in the caller's netmap | 4 | 12 | 5 | 2242 |
+| control: node `Running` → the caller's netmap has its home DERP (n=4, last 2 runs only) | – | – | 396 | 680 |
+| caller: own node ready → first HTTP 200, dial on netmap | 4922 | 5056 | 591 | 5531 |
+| caller: own node ready → first HTTP 200, dial on ready | 3 | 5220 | **5140** | 5307 |
+| **create → own node ready** | **294** | 311 | **2906** | **10420** |
+| **create → first 200 on the own node** (both modes) | 5141 | 5349 | **7082** | **15917** |
+
+Outlier counts on tailnet 1 (59 objects): `CreateKey` > 1 s in **26**; register > 2 s in **9**; registered → first netmap > 1.5 s in **10**; first 200 more than 3 s after ready in **37**. The `CreateKey` latency moved between runs minutes apart: p50 145 ms in two runs (with 1.7–4.8 s outliers), but **1.42 s p50 across a whole run** in another. Hermetically, twd's own work before the join (create row → key in netd) is **≈5 ms**.
+
+### Findings
+1. **twd's own code is not the cost.** Everything between the create call and the key reaching netd (row, audit outbox, mint queue, claim, throttle, custody, fenced commit, long-poll wake) is 4–7 ms p50 in both environments. The F16 `credentialPoll` (250 ms) never fires on one replica, because the local `notify` wakes the long-poll. The key arrives about 1 ms after `minted`.
+2. **The clean production path is ~1.45 s, and every piece of it is external:** `CreateKey` 145 ms + control key fetch 430 ms + Noise dial + register 434 ms + first map 186 ms + **a fixed 250 ms port-map probe** + 10 ms. The last one is client-side and fixed. netcheck's first report waits for the UPnP/NAT-PMP/PCP probe (`netcheck.go` `waitPortMap`; `portMapServiceTimeout` = 250 ms). Nothing answers on this network, so every fresh node waits out the timeout, hermetically too, before it picks a home DERP and goes `Running`. It is also a per-node cost: N object nodes on a host each try to map a port on the home router. The only knob is the process-wide `TS_DISABLE_PORTMAPPER` envknob.
+3. **The bimodal production join (≈1.6 s vs ≈6.8 s) is three independent tails on Tailscale's side, not one twd stage.** Each of them added +1.5–5.5 s to some objects:
+   - the key API (`CreateKey` 1.5–4.8 s; 26/59);
+   - the register request (+4.3–5.0 s; 9/59);
+   - the first map response (+2–5.4 s; 10/59).
+
+   Only 5 of the first 20 objects of the main run were clean. The register and map stalls are near-constant +5 s. The client logs show it simply waiting on an open request: no retry, no `node registration rate limited` line and no `Retry-After` in any run. So this is not ADR-017 shaping visible to the client; it is control-side latency, the same family as the 3–5 s device-delete and logout outliers in M1/M2. twd can't speed these up, only take them off the critical path.
+4. **A fourth, separate +5 s hits callers: WireGuard's first-handshake retry.** It is not part of the join. It is what turns "own node ready" into "first request on the own node". The caller's log on a dial-on-ready sample:
+   ```
+   47.738  wg: Sending handshake initiation
+   47.738  wg: Failed to send handshake initiation: no UDP or DERP addr
+   50.739  magicsock: derp route for [peer] set to derp-10        (the path exists, +3.0 s)
+   52.800  wg: Handshake did not complete after 5 seconds, retrying (try 2)
+   52.803  wg: Received handshake response                       (3 ms once retried)
+   ```
+   - A node is in its peers' netmaps about 5 ms after it registers, but its home DERP and endpoints reach them only after its first netcheck, ≈0.3–0.7 s after it is `Running` (later in slow runs).
+   - A first packet sent in that window has nowhere to go. WireGuard drops the initiation and retries only after `REKEY_TIMEOUT` (5 s).
+   - twd's "ready" (`tsnet.Up` returned) falls *inside* that window, so on production a caller that waits for ready pays the 5 s almost always (**28/28**, ready → 200 p50 5.14 s). Hermetically, propagation is instant and only 2/30 did.
+   - Dialing *earlier* on production was mostly cheaper (p50 591 ms after ready): whether the first initiation lands before or after the path arrives is a race.
+   - **This is the same mechanism family as the L3 re-find delay, with a different trigger.** Both are WireGuard timers on the *caller*, not DERP or netmap propagation. Re-find: a stale session, KEEPALIVE_TIMEOUT + REKEY_TIMEOUT ≈ 15 s. Here: a dropped first initiation, REKEY_TIMEOUT = 5 s.
+5. **What a warm-key pool would buy:** only the `CreateKey` row. That is 145 ms on a good run, but it also removes the key API's 1.5–4.8 s tail (26/59 objects) from the critical path, so it moves p95 more than p50. It does nothing for the register and map tails (finding 3), the 250 ms probe (finding 2) or the caller's 5 s (finding 4).
+
+**The numbers point partly elsewhere** than minting and joining. For *own node ready*, minting (`CreateKey` tail) and joining (control's register and map tails, the 250 ms probe) are the whole cost. For *first request on the own node*, the largest single item is finding 4, on the caller, after the join. Phase 2 is paused for a decision (see the summary on the branch). Candidates, measured cost in brackets:
+- (a) the warm-key pool [CreateKey: 145 ms p50, up to 4.8 s tail];
+- (b) report ready only once the node's home DERP has reached control, i.e. its own netmap's Self has it, and/or have twd's own dialers (netd egress, `@twd/tailnet`, CLI) wait for a peer path before the first packet [the 5 s caller retry];
+- (c) skip the port-map probe on object nodes [250 ms fixed per node; tradeoff: no UPnP-assisted direct paths];
+- (d) the pre-joined node pool (design only) [the register and map tails plus ~1.1 s fixed].
+

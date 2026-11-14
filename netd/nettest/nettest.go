@@ -102,13 +102,21 @@ type Node struct {
 
 // NewNode starts an ephemeral in-memory node on controlURL with key.
 func NewNode(ctx context.Context, controlURL, key, hostname, dir string) (*Node, error) {
+	return NewNodeLogf(ctx, controlURL, key, hostname, dir, nil)
+}
+
+// NewNodeLogf is NewNode with tsnet's logs sent to logf (nil discards).
+func NewNodeLogf(ctx context.Context, controlURL, key, hostname, dir string, logf func(string, ...any)) (*Node, error) {
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
 	if controlURL == "" {
 		return nil, fmt.Errorf("nettest: controlURL required")
 	}
 	s := &tsnet.Server{
 		Hostname: hostname, ControlURL: controlURL, AuthKey: key, Ephemeral: true,
 		Store: new(mem.Store), Dir: dir,
-		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {},
+		Logf: logf, UserLogf: logf,
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()

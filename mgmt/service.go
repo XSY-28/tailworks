@@ -1389,12 +1389,15 @@ const MintClaimTTL = 60 * time.Second
 // mintOne mints one single-use, preauthorized, ≤5-min key tagged with the
 // object's tags, and puts it in custody. The key is never logged.
 func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (created bool, err error) {
+	sp := mintSpans{start: time.Now()}
 	o, err := m.store.GetObject(ctx, id)
 	if err != nil || o.Status != StatusPending {
 		return false, nil // gone, killed or already minted
 	}
 	// Claim the mint (H02): only one replica calls CreateKey for an object.
 	now := m.now()
+	sp.queued = now.Sub(time.UnixMilli(o.CreatedAt)) // create → this attempt (store clock; both sides ms)
+	sp.mark(&sp.load)
 	if ok, err := m.store.ClaimMint(ctx, id, m.replicaID, now, now.Add(-MintClaimTTL)); err != nil {
 		return false, err
 	} else if !ok {
@@ -1405,31 +1408,37 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 	// the others. Correctness does not rest on the TTL: keyed custody and
 	// the KeyID check below make a late duplicate undo only its own key.
 	defer m.store.ReleaseMint(context.WithoutCancel(ctx), id, m.replicaID)
+	sp.mark(&sp.claim)
 	// Only now take a registration token (the claim says this replica will
 	// mint), then refresh the claim: the wait may have been long.
 	if th != nil {
 		if err := th.Wait(ctx); err != nil {
 			return false, err
 		}
+		sp.mark(&sp.throttle)
 		now := m.now()
 		if ok, err := m.store.ClaimMint(ctx, id, m.replicaID, now, now.Add(-MintClaimTTL)); err != nil || !ok {
 			return false, err // lost it meanwhile (killed, minted, or the claim went stale)
 		}
+		sp.mark(&sp.reclaim)
 	}
 	api, err := m.broker.API(ctx, t, purposeMint)
 	if err != nil {
 		return false, err
 	}
+	sp.mark(&sp.broker)
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: o.Tags, Ephemeral: o.Ephemeral, Preauthorized: true,
 		ExpirySeconds: int(KeyExpiry / time.Second), Description: "twd " + o.ID})
 	if err != nil {
 		return false, err
 	}
+	sp.mark(&sp.createKey)
 	own := custodyKeyName(o, k.ID)
 	if err := m.custody.Put(ctx, own, []byte(k.Secret)); err != nil {
 		api.DeleteKey(ctx, k.ID)
 		return true, err
 	}
+	sp.mark(&sp.custody)
 	exp := m.now().Add(KeyExpiry - 15*time.Second).UnixMilli() // released only with ≥15 s of life left
 	killed := false
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, ObjectID: id, Kind: "mint"}, map[string]any{"keyID": k.ID, "tags": o.Tags,
@@ -1450,8 +1459,10 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 		m.custody.Delete(ctx, own)
 		return true, err
 	}
+	sp.mark(&sp.commit)
 	m.recordIntent(ctx, ai, nil) // committed with the mint (H22)
 	m.notify(id)
+	m.log.Info("mint spans", append([]any{"object", id, "tenant", t.ID, "keyID", k.ID}, sp.attrs()...)...)
 	return true, nil
 }
 
@@ -1493,6 +1504,7 @@ func (c Credential) String() string { return "mgmt.Credential{[REDACTED]}" }
 // name themselves) fences on the epoch alone. It waits up to wait for a
 // pending mint.
 func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, wait time.Duration) (Credential, error) {
+	called := time.Now()
 	deadline := m.now().Add(wait)
 	for {
 		ch := m.changed(id)
@@ -1542,6 +1554,8 @@ func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, w
 			}
 			t, _ := m.store.GetTenant(ctx, o.TenantID)
 			m.recordIntent(ctx, ai, nil)
+			m.log.Info("credential released", "object", id, "host", hostID, "keyID", o.KeyID,
+				"waited_ms", time.Since(called).Milliseconds(), "since_create_ms", m.now().UnixMilli()-o.CreatedAt)
 			return Credential{AuthKey: string(secret), ExpiresAt: o.KeyExpires, Tags: o.Tags, Hostname: o.Hostname,
 				Ephemeral: o.Ephemeral, ControlURL: t.ControlURL}, nil
 		}

@@ -211,6 +211,7 @@ type Object struct {
 	nodeID   tailcfg.StableNodeID
 	dnsName  string
 	queued   time.Time
+	spans    *spanRec // the current join's stages (JoinSpans)
 	joinDur  time.Duration
 	rejoined bool
 	reminted bool // saved state was rejected by control; joined with a fresh key
@@ -240,7 +241,9 @@ type ObjectInfo struct {
 	Rejoined  bool     `json:"rejoined"`
 	Reminted  bool     `json:"reminted,omitempty"`
 	JoinMS    float64  `json:"joinMs,omitempty"`
-	Flows     int      `json:"flows"`
+	// Spans is the last join's stage breakdown (offsets from Create).
+	Spans JoinSpans `json:"spans"`
+	Flows int       `json:"flows"`
 }
 
 // objectMeta is persisted next to the tsnet state so Rejoin can restore it.
@@ -287,6 +290,7 @@ func (r *Registry) Create(id string, opts ObjectOptions) (*Object, error) {
 		queued:    time.Now(),
 		flows:     map[*flow]struct{}{},
 	}
+	o.spans = newSpanRec(o.queued)
 	if o.hostname == "" {
 		o.hostname = r.cfg.Hostname(id)
 	}
@@ -354,6 +358,7 @@ func (r *Registry) join(o *Object) {
 	if o.State() != StatePending {
 		return // killed while queued
 	}
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Slot })
 	ctx, cancel := context.WithTimeout(r.ctx, r.cfg.JoinTimeout)
 	defer cancel()
 	done := make(chan struct{})
@@ -395,6 +400,7 @@ func (o *Object) start(ctx context.Context) error {
 			return fmt.Errorf("auth key: %w", err)
 		}
 		key = k
+		o.spans.at(func(s *JoinSpans) *float64 { return &s.Key })
 	}
 	mb, _ := json.Marshal(objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
 	if err := os.WriteFile(filepath.Join(o.dir, "object.json"), mb, 0o600); err != nil {
@@ -460,6 +466,8 @@ func (o *Object) start(ctx context.Context) error {
 	o.state = StateReady
 	close(o.ready)
 	o.mu.Unlock()
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Listening })
+	o.spans.finish()
 
 	r.mu.Lock()
 	for _, a := range []netip.Addr{ip4, ip6} {
@@ -470,7 +478,7 @@ func (o *Object) start(ctx context.Context) error {
 	r.mu.Unlock()
 	go hs.Serve(o.ln)
 	r.log.Info("object ready", "object", o.id, "hostname", o.hostname, "ip", ip4.String(),
-		"node", string(o.nodeID), "join_ms", joinDur.Milliseconds(), "rejoined", rejoin, "reminted", reminted)
+		"node", string(o.nodeID), "join_ms", joinDur.Milliseconds(), "rejoined", rejoin, "reminted", reminted, "spans", o.spans.get())
 	return nil
 }
 
@@ -484,6 +492,7 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 	if r.cfg.TSNetLogs {
 		logf = tsnetLogf(r.log, o.id)
 	}
+	logf = o.spans.logf(logf)
 	srv := &tsnet.Server{
 		Hostname:      o.hostname,
 		Dir:           o.dir,
@@ -505,15 +514,19 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 	upCtx, upCancel := context.WithCancel(ctx)
 	defer upCancel()
 	rejected := make(chan struct{})
+	// Start explicitly (tsnet.Up would) so the backend start is its own span
+	// and the IPN bus can be watched from the first transition.
+	if err := srv.Start(); err != nil {
+		return nil, nil, fmt.Errorf("start %s: %w", o.hostname, err)
+	}
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Start })
+	lc0, err := srv.LocalClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	lc0.OmitAuth = true
+	go o.spans.watch(upCtx, lc0)
 	if rejoin && key == "" {
-		if err := srv.Start(); err != nil {
-			return nil, nil, fmt.Errorf("start %s: %w", o.hostname, err)
-		}
-		lc0, err := srv.LocalClient()
-		if err != nil {
-			return nil, nil, err
-		}
-		lc0.OmitAuth = true
 		var once sync.Once
 		go watchNeedsLogin(upCtx, lc0, func() { once.Do(func() { close(rejected); upCancel() }) })
 	}
@@ -525,6 +538,7 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 		}
 		return nil, nil, fmt.Errorf("up %s: %w", o.hostname, err)
 	}
+	o.spans.at(func(s *JoinSpans) *float64 { return &s.Running })
 	lc, err := srv.LocalClient()
 	if err != nil {
 		return nil, nil, err
@@ -707,7 +721,7 @@ func (o *Object) Info() ObjectInfo {
 	defer o.mu.Unlock()
 	in := ObjectInfo{ID: o.id, Hostname: o.hostname, State: o.state, NodeID: string(o.nodeID),
 		DNSName: o.dnsName, Tags: o.tags, Ephemeral: o.ephemeral, Rejoined: o.rejoined, Reminted: o.reminted,
-		JoinMS: float64(o.joinDur.Microseconds()) / 1000, Flows: len(o.flows)}
+		JoinMS: float64(o.joinDur.Microseconds()) / 1000, Spans: o.spans.get(), Flows: len(o.flows)}
 	if o.err != nil {
 		in.Error = Redact(o.err.Error())
 	}
