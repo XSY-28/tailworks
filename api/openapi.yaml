@@ -128,6 +128,8 @@ tags:
     description: DO instances, agents and sub-agents, each with its own tailnet node.
   - name: credentials
     description: Single-use auth keys and node certificates.
+  - name: secrets
+    description: Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
   - name: audit
     description: Hash-chained, append-only audit log.
   - name: volumes
@@ -502,6 +504,127 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "412": { $ref: "#/components/responses/PreconditionFailed" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/secrets:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [secrets]
+      operationId: ListWorkloadSecrets
+      summary: List a workload's secrets (names and times, never values)
+      description: |
+        `twd secret ls`. No admin operation returns a value; only the lease
+        holder gets them (`POST …/secret-grants`). Ordered by name. A
+        workload with no secrets (or never deployed) is an empty page.
+        `404 unknown_tenant`.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: One page of secrets, ordered by name.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecretPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/secrets/{name}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/secretName"
+    put:
+      tags: [secrets]
+      operationId: PutWorkloadSecret
+      summary: Create or replace a workload secret (`twd secret put`)
+      description: |
+        ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+        custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+        The workload need not be deployed yet. The value reaches the
+        workload as the text binding `env.<name>` (runtime `node`: the
+        environment variable `<name>`) on its **next deploy**; running
+        instances keep the value they started with. At most 128 secrets per
+        workload and 5 KiB per value. Names are JS identifiers that are also
+        environment variable names; `TWD_…` and `__TWD…` are reserved. The
+        value is never logged, audited or returned. Audited
+        (`kind: secret_put`, name only).
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecretPut" }
+      responses:
+        "200":
+          description: Replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [secrets]
+      operationId: DeleteWorkloadSecret
+      summary: Delete a workload secret (`twd secret rm`)
+      description: |
+        Takes effect on the workload's next deploy. `404 unknown_secret`
+        when the workload has no secret of that name. Audited
+        (`kind: secret_delete`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/secret-grants:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [secrets, credentials]
+      operationId: CreateWorkloadSecretGrant
+      summary: Release a workload's secret values to the lease holder
+      description: |
+        hostd calls this when it starts a deployment of the workload. As
+        with a volume key grant, the values are released only to the host
+        holding the workload's lease at `epoch` (`409 lease_lost`), with
+        `Cache-Control: no-store`, and are never logged. A workload with no
+        secrets gets an empty map. Audited (`kind: secret_release`, names
+        only) when there is at least one secret.
+      x-twd-role: host
+      x-twd-audit: true
+      parameters:
+        - $ref: "#/components/parameters/epoch"
+      responses:
+        "201":
+          description: The grant.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecretGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
         default: { $ref: "#/components/responses/Error" }
 
   # ------------------------------------------------------------------ hosts
@@ -2177,6 +2300,12 @@ components:
       required: true
       description: Workload name (a DNS label).
       schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+    secretName:
+      name: name
+      in: path
+      required: true
+      description: "Secret name: a JS identifier that is also an environment variable name; `TWD_…` and `__TWD…` are reserved."
+      schema: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
     tenantID:
       name: id
       in: path
@@ -2449,6 +2578,7 @@ components:
         | `bad_cursor` | 400 | `cursor` does not decode |
         | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
         | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+        | `too_many_secrets` | 400 | a workload already has 128 secrets |
         | `no_identity` | 401 | WhoIs failed for the connection |
         | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
         | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -2463,6 +2593,7 @@ components:
         | `unknown_tenant` | 404 | — |
         | `unknown_namespace` | 404 | `(workload, class)` not declared |
         | `no_logs` | 404 | the workload's host has no log file for it yet |
+        | `unknown_secret` | 404 | the workload has no secret of that name |
         | `exists` | 409 | create of an existing ID |
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
@@ -2501,6 +2632,7 @@ components:
         - bad_cursor
         - bad_bundle
         - immutable_field
+        - too_many_secrets
         - no_identity
         - host_token_required
         - host_token_invalid
@@ -2515,6 +2647,7 @@ components:
         - unknown_tenant
         - unknown_namespace
         - no_logs
+        - unknown_secret
         - exists
         - lease_lost
         - lease_held
@@ -2621,6 +2754,12 @@ components:
         - type: object
           properties:
             items: { type: array, items: { $ref: "#/components/schemas/ContainerReservation" } }
+    SecretPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Secret" } }
     ObjectPage:
       allOf:
         - $ref: "#/components/schemas/Page"
@@ -3453,6 +3592,9 @@ components:
         `device_delete`,
         `purge`,
         `volume_key`,
+        `secret_put` (a workload secret set; name only),
+        `secret_delete`,
+        `secret_release` (a workload's secrets released to its lease holder; names only),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -3496,6 +3638,9 @@ components:
         - device_delete
         - purge
         - volume_key
+        - secret_put
+        - secret_delete
+        - secret_release
         - reap
         - preflight
         - host_add
@@ -3575,6 +3720,38 @@ components:
         verifiedAt: { type: integer, format: int64 }
 
     # ------------------------------------------------------------- volumes
+    Secret:
+      type: object
+      description: A workload secret's metadata. The value is never part of it.
+      required: [tenantID, workload, name, createdAt, updatedAt]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        name: { type: string }
+        createdAt: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
+        updatedBy: { type: string, description: The actor who last set it (see Conventions). }
+    SecretPut:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, maxLength: 5120, format: password, writeOnly: true, description: "The secret value (UTF-8, at most 5 KiB)." }
+      additionalProperties: false
+      x-twd-secret: true
+    SecretGrant:
+      type: object
+      description: A fenced release of a workload's secret values. Never logged.
+      required: [tenantID, workload, epoch, secrets]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        epoch: { type: integer, format: int64 }
+        secrets:
+          type: object
+          description: Name to value.
+          additionalProperties: { type: string, format: password }
+        grantedAt: { type: integer, format: int64 }
+      x-twd-secret: true
     VolumeKeyGrant:
       type: object
       description: A fenced release of a volume's data key. Never logged.

@@ -73,6 +73,9 @@ const (
 	AuditKindReap                AuditKind = "reap"
 	AuditKindRemint              AuditKind = "remint"
 	AuditKindRevoke              AuditKind = "revoke"
+	AuditKindSecretDelete        AuditKind = "secret_delete"
+	AuditKindSecretPut           AuditKind = "secret_put"
+	AuditKindSecretRelease       AuditKind = "secret_release"
 	AuditKindSpawn               AuditKind = "spawn"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
@@ -151,6 +154,12 @@ func (e AuditKind) Valid() bool {
 	case AuditKindRemint:
 		return true
 	case AuditKindRevoke:
+		return true
+	case AuditKindSecretDelete:
+		return true
+	case AuditKindSecretPut:
+		return true
+	case AuditKindSecretRelease:
 		return true
 	case AuditKindSpawn:
 		return true
@@ -318,7 +327,9 @@ const (
 	ErrorCodeTakeoverUnconfirmed     ErrorCode = "takeover_unconfirmed"
 	ErrorCodeTenantHasLiveObjects    ErrorCode = "tenant_has_live_objects"
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
+	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
+	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
 	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
 )
@@ -432,7 +443,11 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeTierUnavailable:
 		return true
+	case ErrorCodeTooManySecrets:
+		return true
 	case ErrorCodeUnknownNamespace:
+		return true
+	case ErrorCodeUnknownSecret:
 		return true
 	case ErrorCodeUnknownTenant:
 		return true
@@ -970,6 +985,9 @@ type AuditBatch struct {
 // `device_delete`,
 // `purge`,
 // `volume_key`,
+// `secret_put` (a workload secret set; name only),
+// `secret_delete`,
+// `secret_release` (a workload's secrets released to its lease holder; names only),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1049,6 +1067,9 @@ type AuditRecord struct {
 	// `device_delete`,
 	// `purge`,
 	// `volume_key`,
+	// `secret_put` (a workload secret set; name only),
+	// `secret_delete`,
+	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1395,6 +1416,7 @@ type Error struct {
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1409,6 +1431,7 @@ type Error struct {
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
+	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -1462,6 +1485,7 @@ type Error struct {
 // | `bad_cursor` | 400 | `cursor` does not decode |
 // | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1476,6 +1500,7 @@ type Error struct {
 // | `unknown_tenant` | 404 | — |
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
 // | `no_logs` | 404 | the workload's host has no log file for it yet |
+// | `unknown_secret` | 404 | the workload has no secret of that name |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
@@ -2220,6 +2245,43 @@ type RunningContainer struct {
 	Workload  string             `json:"workload"`
 }
 
+// Secret A workload secret's metadata. The value is never part of it.
+type Secret struct {
+	CreatedAt int64  `json:"createdAt"`
+	Name      string `json:"name"`
+	TenantID  string `json:"tenantID"`
+	UpdatedAt int64  `json:"updatedAt"`
+
+	// UpdatedBy The actor who last set it (see Conventions).
+	UpdatedBy *string `json:"updatedBy,omitempty"`
+	Workload  string  `json:"workload"`
+}
+
+// SecretGrant A fenced release of a workload's secret values. Never logged.
+type SecretGrant struct {
+	Epoch     int64  `json:"epoch"`
+	GrantedAt *int64 `json:"grantedAt,omitempty"`
+
+	// Secrets Name to value.
+	Secrets  map[string]string `json:"secrets"`
+	TenantID string            `json:"tenantID"`
+	Workload string            `json:"workload"`
+}
+
+// SecretPage defines model for SecretPage.
+type SecretPage struct {
+	Items []Secret `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// SecretPut defines model for SecretPut.
+type SecretPut struct {
+	// Value The secret value (UTF-8, at most 5 KiB).
+	Value *string `json:"value,omitempty"`
+}
+
 // SelfInfo defines model for SelfInfo.
 type SelfInfo struct {
 	// DNSName `twd-mgmt.<tailnet>`
@@ -2471,6 +2533,7 @@ type TombstoneError struct {
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -2485,6 +2548,7 @@ type TombstoneError struct {
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
+	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -2644,6 +2708,9 @@ type RepositoryName = string
 
 // ReservationID defines model for reservationID.
 type ReservationID = string
+
+// SecretName defines model for secretName.
+type SecretName = string
 
 // TenantID defines model for tenantID.
 type TenantID = string
@@ -2947,6 +3014,21 @@ type UpdateWorkloadPublicParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// CreateWorkloadSecretGrantParams defines parameters for CreateWorkloadSecretGrant.
+type CreateWorkloadSecretGrantParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
+}
+
+// ListWorkloadSecretsParams defines parameters for ListWorkloadSecrets.
+type ListWorkloadSecretsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
 type CreateVolumeKeyGrantParams struct {
 	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
@@ -3000,6 +3082,9 @@ type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
 // UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody defines body for UpdateWorkloadPublic for application/merge-patch+json ContentType.
 type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPublicPatch
+
+// PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
+type PutWorkloadSecretJSONRequestBody = SecretPut
 
 // Getter for additional properties for OIDCConfiguration. Returns the specified
 // element and whether it was found
@@ -3410,6 +3495,18 @@ type ServerInterface interface {
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id}/workloads/{workload}/public)
 	UpdateWorkloadPublic(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params UpdateWorkloadPublicParams)
+	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
+	// (POST /v1/tenants/{id}/workloads/{workload}/secret-grants)
+	CreateWorkloadSecretGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateWorkloadSecretGrantParams)
+	// ListWorkloadSecrets List a workload's secrets (names and times, never values)
+	// (GET /v1/tenants/{id}/workloads/{workload}/secrets)
+	ListWorkloadSecrets(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadSecretsParams)
+	// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name})
+	DeleteWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName)
+	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
+	PutWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName)
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	// (POST /v1/volumes/{id}/keys)
 	CreateVolumeKeyGrant(w http.ResponseWriter, r *http.Request, id VolumeID, params CreateVolumeKeyGrantParams)
@@ -5440,6 +5537,209 @@ func (siw *ServerInterfaceWrapper) UpdateWorkloadPublic(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// CreateWorkloadSecretGrant operation middleware
+func (siw *ServerInterfaceWrapper) CreateWorkloadSecretGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWorkloadSecretGrantParams
+
+	// ------------- Required query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWorkloadSecretGrant(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWorkloadSecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkloadSecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkloadSecretsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkloadSecrets(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWorkloadSecret operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWorkloadSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name SecretName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWorkloadSecret(w, r, id, workload, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutWorkloadSecret operation middleware
+func (siw *ServerInterfaceWrapper) PutWorkloadSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name SecretName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutWorkloadSecret(w, r, id, workload, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateVolumeKeyGrant operation middleware
 func (siw *ServerInterfaceWrapper) CreateVolumeKeyGrant(w http.ResponseWriter, r *http.Request) {
 
@@ -5626,6 +5926,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/logs", wrapper.GetWorkloadLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.GetWorkloadPublic)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.UpdateWorkloadPublic)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets", wrapper.ListWorkloadSecrets)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets/{name}", wrapper.DeleteWorkloadSecret)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets/{name}", wrapper.PutWorkloadSecret)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secret-grants", wrapper.CreateWorkloadSecretGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts", wrapper.ListHosts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/hosts", wrapper.CreateHost)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/hosts/{id}", wrapper.DeleteHost)
@@ -10380,6 +10684,409 @@ func (response UpdateWorkloadPublicdefaultJSONResponse) VisitUpdateWorkloadPubli
 	return err
 }
 
+type CreateWorkloadSecretGrantRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   CreateWorkloadSecretGrantParams
+}
+
+type CreateWorkloadSecretGrantResponseObject interface {
+	VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error
+}
+
+type CreateWorkloadSecretGrant201ResponseHeaders struct {
+	CacheControl *string
+}
+
+type CreateWorkloadSecretGrant201JSONResponse struct {
+	Body    SecretGrant
+	Headers CreateWorkloadSecretGrant201ResponseHeaders
+}
+
+func (response CreateWorkloadSecretGrant201JSONResponse) VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWorkloadSecretGrant400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateWorkloadSecretGrant400JSONResponse) VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWorkloadSecretGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWorkloadSecretGrant403JSONResponse) VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWorkloadSecretGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateWorkloadSecretGrant404JSONResponse) VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWorkloadSecretGrant409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response CreateWorkloadSecretGrant409JSONResponse) VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateWorkloadSecretGrantdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response CreateWorkloadSecretGrantdefaultJSONResponse) VisitCreateWorkloadSecretGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadSecretsRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   ListWorkloadSecretsParams
+}
+
+type ListWorkloadSecretsResponseObject interface {
+	VisitListWorkloadSecretsResponse(w http.ResponseWriter) error
+}
+
+type ListWorkloadSecrets200JSONResponse SecretPage
+
+func (response ListWorkloadSecrets200JSONResponse) VisitListWorkloadSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadSecrets400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWorkloadSecrets400JSONResponse) VisitListWorkloadSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadSecrets403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWorkloadSecrets403JSONResponse) VisitListWorkloadSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadSecrets404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWorkloadSecrets404JSONResponse) VisitListWorkloadSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadSecretsdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListWorkloadSecretsdefaultJSONResponse) VisitListWorkloadSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteWorkloadSecretRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     SecretName   `json:"name"`
+}
+
+type DeleteWorkloadSecretResponseObject interface {
+	VisitDeleteWorkloadSecretResponse(w http.ResponseWriter) error
+}
+
+type DeleteWorkloadSecret204Response struct {
+}
+
+func (response DeleteWorkloadSecret204Response) VisitDeleteWorkloadSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWorkloadSecret403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWorkloadSecret403JSONResponse) VisitDeleteWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteWorkloadSecret404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWorkloadSecret404JSONResponse) VisitDeleteWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteWorkloadSecretdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteWorkloadSecretdefaultJSONResponse) VisitDeleteWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadSecretRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     SecretName   `json:"name"`
+	Body     *PutWorkloadSecretJSONRequestBody
+}
+
+type PutWorkloadSecretResponseObject interface {
+	VisitPutWorkloadSecretResponse(w http.ResponseWriter) error
+}
+
+type PutWorkloadSecret200JSONResponse Secret
+
+func (response PutWorkloadSecret200JSONResponse) VisitPutWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadSecret201JSONResponse Secret
+
+func (response PutWorkloadSecret201JSONResponse) VisitPutWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadSecret400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutWorkloadSecret400JSONResponse) VisitPutWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadSecret403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutWorkloadSecret403JSONResponse) VisitPutWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadSecret404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutWorkloadSecret404JSONResponse) VisitPutWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadSecretdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutWorkloadSecretdefaultJSONResponse) VisitPutWorkloadSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateVolumeKeyGrantRequestObject struct {
 	ID     VolumeID `json:"id"`
 	Params CreateVolumeKeyGrantParams
@@ -10707,6 +11414,18 @@ type StrictServerInterface interface {
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id}/workloads/{workload}/public)
 	UpdateWorkloadPublic(ctx context.Context, request UpdateWorkloadPublicRequestObject) (UpdateWorkloadPublicResponseObject, error)
+	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
+	// (POST /v1/tenants/{id}/workloads/{workload}/secret-grants)
+	CreateWorkloadSecretGrant(ctx context.Context, request CreateWorkloadSecretGrantRequestObject) (CreateWorkloadSecretGrantResponseObject, error)
+	// ListWorkloadSecrets List a workload's secrets (names and times, never values)
+	// (GET /v1/tenants/{id}/workloads/{workload}/secrets)
+	ListWorkloadSecrets(ctx context.Context, request ListWorkloadSecretsRequestObject) (ListWorkloadSecretsResponseObject, error)
+	// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name})
+	DeleteWorkloadSecret(ctx context.Context, request DeleteWorkloadSecretRequestObject) (DeleteWorkloadSecretResponseObject, error)
+	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
+	PutWorkloadSecret(ctx context.Context, request PutWorkloadSecretRequestObject) (PutWorkloadSecretResponseObject, error)
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	// (POST /v1/volumes/{id}/keys)
 	CreateVolumeKeyGrant(ctx context.Context, request CreateVolumeKeyGrantRequestObject) (CreateVolumeKeyGrantResponseObject, error)
@@ -12118,6 +12837,125 @@ func (sh *strictHandler) UpdateWorkloadPublic(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateWorkloadPublicResponseObject); ok {
 		if err := validResponse.VisitUpdateWorkloadPublicResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWorkloadSecretGrant operation middleware
+func (sh *strictHandler) CreateWorkloadSecretGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateWorkloadSecretGrantParams) {
+	var request CreateWorkloadSecretGrantRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWorkloadSecretGrant(ctx, request.(CreateWorkloadSecretGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWorkloadSecretGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWorkloadSecretGrantResponseObject); ok {
+		if err := validResponse.VisitCreateWorkloadSecretGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWorkloadSecrets operation middleware
+func (sh *strictHandler) ListWorkloadSecrets(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadSecretsParams) {
+	var request ListWorkloadSecretsRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWorkloadSecrets(ctx, request.(ListWorkloadSecretsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWorkloadSecrets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWorkloadSecretsResponseObject); ok {
+		if err := validResponse.VisitListWorkloadSecretsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWorkloadSecret operation middleware
+func (sh *strictHandler) DeleteWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName) {
+	var request DeleteWorkloadSecretRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWorkloadSecret(ctx, request.(DeleteWorkloadSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWorkloadSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWorkloadSecretResponseObject); ok {
+		if err := validResponse.VisitDeleteWorkloadSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutWorkloadSecret operation middleware
+func (sh *strictHandler) PutWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName) {
+	var request PutWorkloadSecretRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	var body PutWorkloadSecretJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutWorkloadSecret(ctx, request.(PutWorkloadSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutWorkloadSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutWorkloadSecretResponseObject); ok {
+		if err := validResponse.VisitPutWorkloadSecretResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

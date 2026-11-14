@@ -221,7 +221,7 @@ func (inst *instance) spawnNode() error {
 	if wl := inst.w.currentWL(); wl != nil {
 		env["TWD_NODE_NAME"] = wl.MagicDNS
 	}
-	for k, v := range inst.app.Node.Env {
+	for k, v := range nodeEnv(inst.app) { // node.env, deploy vars, secrets (secrets.go)
 		if _, reserved := env[k]; !reserved {
 			env[k] = v
 		}

@@ -228,6 +228,11 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 		w.fail(a.DeploymentID, err)
 		return
 	}
+	// Worker secrets, released to this lease holder only (secrets.go).
+	if app, err = h.withSecrets(ctx, w, app, tier, a.Epoch); err != nil {
+		w.fail(a.DeploymentID, err)
+		return
+	}
 
 	// The workload entry node (async; requests wait for it).
 	wl, err := h.ensure(ctx, w, "", w.name, nil, nil, "")

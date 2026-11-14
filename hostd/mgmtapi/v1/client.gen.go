@@ -71,6 +71,9 @@ const (
 	AuditKindReap                AuditKind = "reap"
 	AuditKindRemint              AuditKind = "remint"
 	AuditKindRevoke              AuditKind = "revoke"
+	AuditKindSecretDelete        AuditKind = "secret_delete"
+	AuditKindSecretPut           AuditKind = "secret_put"
+	AuditKindSecretRelease       AuditKind = "secret_release"
 	AuditKindSpawn               AuditKind = "spawn"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
@@ -149,6 +152,12 @@ func (e AuditKind) Valid() bool {
 	case AuditKindRemint:
 		return true
 	case AuditKindRevoke:
+		return true
+	case AuditKindSecretDelete:
+		return true
+	case AuditKindSecretPut:
+		return true
+	case AuditKindSecretRelease:
 		return true
 	case AuditKindSpawn:
 		return true
@@ -316,7 +325,9 @@ const (
 	ErrorCodeTakeoverUnconfirmed     ErrorCode = "takeover_unconfirmed"
 	ErrorCodeTenantHasLiveObjects    ErrorCode = "tenant_has_live_objects"
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
+	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
+	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
 	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
 )
@@ -430,7 +441,11 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeTierUnavailable:
 		return true
+	case ErrorCodeTooManySecrets:
+		return true
 	case ErrorCodeUnknownNamespace:
+		return true
+	case ErrorCodeUnknownSecret:
 		return true
 	case ErrorCodeUnknownTenant:
 		return true
@@ -968,6 +983,9 @@ type AuditBatch struct {
 // `device_delete`,
 // `purge`,
 // `volume_key`,
+// `secret_put` (a workload secret set; name only),
+// `secret_delete`,
+// `secret_release` (a workload's secrets released to its lease holder; names only),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1047,6 +1065,9 @@ type AuditRecord struct {
 	// `device_delete`,
 	// `purge`,
 	// `volume_key`,
+	// `secret_put` (a workload secret set; name only),
+	// `secret_delete`,
+	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1393,6 +1414,7 @@ type Error struct {
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1407,6 +1429,7 @@ type Error struct {
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
+	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -1460,6 +1483,7 @@ type Error struct {
 // | `bad_cursor` | 400 | `cursor` does not decode |
 // | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1474,6 +1498,7 @@ type Error struct {
 // | `unknown_tenant` | 404 | — |
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
 // | `no_logs` | 404 | the workload's host has no log file for it yet |
+// | `unknown_secret` | 404 | the workload has no secret of that name |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
@@ -2218,6 +2243,43 @@ type RunningContainer struct {
 	Workload  string             `json:"workload"`
 }
 
+// Secret A workload secret's metadata. The value is never part of it.
+type Secret struct {
+	CreatedAt int64  `json:"createdAt"`
+	Name      string `json:"name"`
+	TenantID  string `json:"tenantID"`
+	UpdatedAt int64  `json:"updatedAt"`
+
+	// UpdatedBy The actor who last set it (see Conventions).
+	UpdatedBy *string `json:"updatedBy,omitempty"`
+	Workload  string  `json:"workload"`
+}
+
+// SecretGrant A fenced release of a workload's secret values. Never logged.
+type SecretGrant struct {
+	Epoch     int64  `json:"epoch"`
+	GrantedAt *int64 `json:"grantedAt,omitempty"`
+
+	// Secrets Name to value.
+	Secrets  map[string]string `json:"secrets"`
+	TenantID string            `json:"tenantID"`
+	Workload string            `json:"workload"`
+}
+
+// SecretPage defines model for SecretPage.
+type SecretPage struct {
+	Items []Secret `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// SecretPut defines model for SecretPut.
+type SecretPut struct {
+	// Value The secret value (UTF-8, at most 5 KiB).
+	Value *string `json:"value,omitempty"`
+}
+
 // SelfInfo defines model for SelfInfo.
 type SelfInfo struct {
 	// DNSName `twd-mgmt.<tailnet>`
@@ -2469,6 +2531,7 @@ type TombstoneError struct {
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -2483,6 +2546,7 @@ type TombstoneError struct {
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
+	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -2642,6 +2706,9 @@ type RepositoryName = string
 
 // ReservationID defines model for reservationID.
 type ReservationID = string
+
+// SecretName defines model for secretName.
+type SecretName = string
 
 // TenantID defines model for tenantID.
 type TenantID = string
@@ -2945,6 +3012,21 @@ type UpdateWorkloadPublicParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// CreateWorkloadSecretGrantParams defines parameters for CreateWorkloadSecretGrant.
+type CreateWorkloadSecretGrantParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
+}
+
+// ListWorkloadSecretsParams defines parameters for ListWorkloadSecrets.
+type ListWorkloadSecretsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
 type CreateVolumeKeyGrantParams struct {
 	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
@@ -2998,6 +3080,9 @@ type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
 // UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody defines body for UpdateWorkloadPublic for application/merge-patch+json ContentType.
 type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPublicPatch
+
+// PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
+type PutWorkloadSecretJSONRequestBody = SecretPut
 
 // Getter for additional properties for OIDCConfiguration. Returns the specified
 // element and whether it was found
@@ -4252,6 +4337,73 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
+	//
+	// hostd calls this when it starts a deployment of the workload. As
+	// with a volume key grant, the values are released only to the host
+	// holding the workload's lease at `epoch` (`409 lease_lost`), with
+	// `Cache-Control: no-store`, and are never logged. A workload with no
+	// secrets gets an empty map. Audited (`kind: secret_release`, names
+	// only) when there is at least one secret.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/secret-grants (the `CreateWorkloadSecretGrant` operationId).
+	CreateWorkloadSecretGrant(ctx context.Context, id TenantID, workload WorkloadName, params *CreateWorkloadSecretGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkloadSecrets List a workload's secrets (names and times, never values)
+	//
+	// `twd secret ls`. No admin operation returns a value; only the lease
+	// holder gets them (`POST …/secret-grants`). Ordered by name. A
+	// workload with no secrets (or never deployed) is an empty page.
+	// `404 unknown_tenant`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/secrets (the `ListWorkloadSecrets` operationId).
+	ListWorkloadSecrets(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+	//
+	// Takes effect on the workload's next deploy. `404 unknown_secret`
+	// when the workload has no secret of that name. Audited
+	// (`kind: secret_delete`).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `DeleteWorkloadSecret` operationId).
+	DeleteWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutWorkloadSecretWithBody Create or replace a workload secret (`twd secret put`)
+	//
+	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// The workload need not be deployed yet. The value reaches the
+	// workload as the text binding `env.<name>` (runtime `node`: the
+	// environment variable `<name>`) on its **next deploy**; running
+	// instances keep the value they started with. At most 128 secrets per
+	// workload and 5 KiB per value. Names are JS identifiers that are also
+	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// value is never logged, audited or returned. Audited
+	// (`kind: secret_put`, name only).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+	PutWorkloadSecretWithBody(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+	//
+	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// The workload need not be deployed yet. The value reaches the
+	// workload as the text binding `env.<name>` (runtime `node`: the
+	// environment variable `<name>`) on its **next deploy**; running
+	// instances keep the value they started with. At most 128 secrets per
+	// workload and 5 KiB per value. Names are JS identifiers that are also
+	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// value is never logged, audited or returned. Audited
+	// (`kind: secret_put`, name only).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+	PutWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	//
@@ -5822,6 +5974,123 @@ func (c *Client) UpdateWorkloadPublic(ctx context.Context, id TenantID, workload
 // Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 func (c *Client) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateWorkloadPublicRequestWithApplicationMergePatchPlusJSONBody(c.Server, id, workload, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
+//
+// hostd calls this when it starts a deployment of the workload. As
+// with a volume key grant, the values are released only to the host
+// holding the workload's lease at `epoch` (`409 lease_lost`), with
+// `Cache-Control: no-store`, and are never logged. A workload with no
+// secrets gets an empty map. Audited (`kind: secret_release`, names
+// only) when there is at least one secret.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/secret-grants (the `CreateWorkloadSecretGrant` operationId).
+func (c *Client) CreateWorkloadSecretGrant(ctx context.Context, id TenantID, workload WorkloadName, params *CreateWorkloadSecretGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateWorkloadSecretGrantRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkloadSecrets List a workload's secrets (names and times, never values)
+//
+// `twd secret ls`. No admin operation returns a value; only the lease
+// holder gets them (`POST …/secret-grants`). Ordered by name. A
+// workload with no secrets (or never deployed) is an empty page.
+// `404 unknown_tenant`.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/secrets (the `ListWorkloadSecrets` operationId).
+func (c *Client) ListWorkloadSecrets(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkloadSecretsRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+//
+// Takes effect on the workload's next deploy. `404 unknown_secret`
+// when the workload has no secret of that name. Audited
+// (`kind: secret_delete`).
+//
+// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `DeleteWorkloadSecret` operationId).
+func (c *Client) DeleteWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteWorkloadSecretRequest(c.Server, id, workload, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutWorkloadSecretWithBody Create or replace a workload secret (`twd secret put`)
+//
+// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// The workload need not be deployed yet. The value reaches the
+// workload as the text binding `env.<name>` (runtime `node`: the
+// environment variable `<name>`) on its **next deploy**; running
+// instances keep the value they started with. At most 128 secrets per
+// workload and 5 KiB per value. Names are JS identifiers that are also
+// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// value is never logged, audited or returned. Audited
+// (`kind: secret_put`, name only).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+func (c *Client) PutWorkloadSecretWithBody(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutWorkloadSecretRequestWithBody(c.Server, id, workload, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+//
+// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// The workload need not be deployed yet. The value reaches the
+// workload as the text binding `env.<name>` (runtime `node`: the
+// environment variable `<name>`) on its **next deploy**; running
+// instances keep the value they started with. At most 128 secrets per
+// workload and 5 KiB per value. Names are JS identifiers that are also
+// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// value is never logged, audited or returned. Audited
+// (`kind: secret_put`, name only).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+func (c *Client) PutWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutWorkloadSecretRequest(c.Server, id, workload, name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8603,6 +8872,259 @@ func NewUpdateWorkloadPublicRequestWithBody(server string, id TenantID, workload
 	return req, nil
 }
 
+// NewCreateWorkloadSecretGrantRequest constructs an http.Request for the CreateWorkloadSecretGrant method
+func NewCreateWorkloadSecretGrantRequest(server string, id TenantID, workload WorkloadName, params *CreateWorkloadSecretGrantParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/secret-grants", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "epoch", params.Epoch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListWorkloadSecretsRequest constructs an http.Request for the ListWorkloadSecrets method
+func NewListWorkloadSecretsRequest(server string, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/secrets", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteWorkloadSecretRequest constructs an http.Request for the DeleteWorkloadSecret method
+func NewDeleteWorkloadSecretRequest(server string, id TenantID, workload WorkloadName, name SecretName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/secrets/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutWorkloadSecretRequest calls the generic PutWorkloadSecret builder with application/json body
+func NewPutWorkloadSecretRequest(server string, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutWorkloadSecretRequestWithBody(server, id, workload, name, "application/json", bodyReader)
+}
+
+// NewPutWorkloadSecretRequestWithBody constructs an http.Request for the PutWorkloadSecret method, with any body, and a specified content type
+func NewPutWorkloadSecretRequestWithBody(server string, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/secrets/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewCreateVolumeKeyGrantRequest constructs an http.Request for the CreateVolumeKeyGrant method
 func NewCreateVolumeKeyGrantRequest(server string, id VolumeID, params *CreateVolumeKeyGrantParams) (*http.Request, error) {
 	var err error
@@ -9717,6 +10239,79 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error)
+
+	// CreateWorkloadSecretGrantWithResponse Release a workload's secret values to the lease holder
+	//
+	// hostd calls this when it starts a deployment of the workload. As
+	// with a volume key grant, the values are released only to the host
+	// holding the workload's lease at `epoch` (`409 lease_lost`), with
+	// `Cache-Control: no-store`, and are never logged. A workload with no
+	// secrets gets an empty map. Audited (`kind: secret_release`, names
+	// only) when there is at least one secret.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/secret-grants (the `CreateWorkloadSecretGrant` operationId).
+	CreateWorkloadSecretGrantWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateWorkloadSecretGrantParams, reqEditors ...RequestEditorFn) (*CreateWorkloadSecretGrantResponse, error)
+
+	// ListWorkloadSecretsWithResponse List a workload's secrets (names and times, never values)
+	//
+	// `twd secret ls`. No admin operation returns a value; only the lease
+	// holder gets them (`POST …/secret-grants`). Ordered by name. A
+	// workload with no secrets (or never deployed) is an empty page.
+	// `404 unknown_tenant`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/secrets (the `ListWorkloadSecrets` operationId).
+	ListWorkloadSecretsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams, reqEditors ...RequestEditorFn) (*ListWorkloadSecretsResponse, error)
+
+	// DeleteWorkloadSecretWithResponse Delete a workload secret (`twd secret rm`)
+	//
+	// Takes effect on the workload's next deploy. `404 unknown_secret`
+	// when the workload has no secret of that name. Audited
+	// (`kind: secret_delete`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `DeleteWorkloadSecret` operationId).
+	DeleteWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, reqEditors ...RequestEditorFn) (*DeleteWorkloadSecretResponse, error)
+
+	// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`twd secret put`)
+	//
+	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// The workload need not be deployed yet. The value reaches the
+	// workload as the text binding `env.<name>` (runtime `node`: the
+	// environment variable `<name>`) on its **next deploy**; running
+	// instances keep the value they started with. At most 128 secrets per
+	// workload and 5 KiB per value. Names are JS identifiers that are also
+	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// value is never logged, audited or returned. Audited
+	// (`kind: secret_put`, name only).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+	PutWorkloadSecretWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error)
+
+	// PutWorkloadSecretWithResponse Create or replace a workload secret (`twd secret put`)
+	//
+	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// The workload need not be deployed yet. The value reaches the
+	// workload as the text binding `env.<name>` (runtime `node`: the
+	// environment variable `<name>`) on its **next deploy**; running
+	// instances keep the value they started with. At most 128 secrets per
+	// workload and 5 KiB per value. Names are JS identifiers that are also
+	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// value is never logged, audited or returned. Audited
+	// (`kind: secret_put`, name only).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+	PutWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error)
 
 	// CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 	//
@@ -14252,6 +14847,401 @@ func (r UpdateWorkloadPublicResponse) ContentType() string {
 	return ""
 }
 
+// CreateWorkloadSecretGrantResponse201Headers the declared response headers of an HTTP 201 response for CreateWorkloadSecretGrant
+type CreateWorkloadSecretGrantResponse201Headers struct {
+	CacheControl *string
+}
+
+// CreateWorkloadSecretGrantResponse400Headers the declared response headers of an HTTP 400 response for CreateWorkloadSecretGrant
+type CreateWorkloadSecretGrantResponse400Headers struct {
+	TwdError *string
+}
+
+// CreateWorkloadSecretGrantResponse403Headers the declared response headers of an HTTP 403 response for CreateWorkloadSecretGrant
+type CreateWorkloadSecretGrantResponse403Headers struct {
+	TwdError *string
+}
+
+// CreateWorkloadSecretGrantResponse404Headers the declared response headers of an HTTP 404 response for CreateWorkloadSecretGrant
+type CreateWorkloadSecretGrantResponse404Headers struct {
+	TwdError *string
+}
+
+// CreateWorkloadSecretGrantResponse409Headers the declared response headers of an HTTP 409 response for CreateWorkloadSecretGrant
+type CreateWorkloadSecretGrantResponse409Headers struct {
+	TwdError *string
+}
+
+// CreateWorkloadSecretGrantResponseDefaultHeaders the declared response headers of an HTTP default response for CreateWorkloadSecretGrant
+type CreateWorkloadSecretGrantResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CreateWorkloadSecretGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *SecretGrant
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *LeaseLost
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateWorkloadSecretGrantResponse201Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *CreateWorkloadSecretGrantResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CreateWorkloadSecretGrantResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *CreateWorkloadSecretGrantResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *CreateWorkloadSecretGrantResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CreateWorkloadSecretGrantResponseDefaultHeaders
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateWorkloadSecretGrantResponse) GetJSON201() *SecretGrant {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateWorkloadSecretGrantResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateWorkloadSecretGrantResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateWorkloadSecretGrantResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateWorkloadSecretGrantResponse) GetJSON409() *LeaseLost {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateWorkloadSecretGrantResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateWorkloadSecretGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateWorkloadSecretGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateWorkloadSecretGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateWorkloadSecretGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListWorkloadSecretsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadSecrets
+type ListWorkloadSecretsResponse400Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadSecretsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadSecrets
+type ListWorkloadSecretsResponse403Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadSecretsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadSecrets
+type ListWorkloadSecretsResponse404Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadSecretsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadSecrets
+type ListWorkloadSecretsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListWorkloadSecretsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SecretPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListWorkloadSecretsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListWorkloadSecretsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListWorkloadSecretsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListWorkloadSecretsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWorkloadSecretsResponse) GetJSON200() *SecretPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListWorkloadSecretsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListWorkloadSecretsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListWorkloadSecretsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListWorkloadSecretsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWorkloadSecretsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkloadSecretsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkloadSecretsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWorkloadSecretsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DeleteWorkloadSecretResponse403Headers the declared response headers of an HTTP 403 response for DeleteWorkloadSecret
+type DeleteWorkloadSecretResponse403Headers struct {
+	TwdError *string
+}
+
+// DeleteWorkloadSecretResponse404Headers the declared response headers of an HTTP 404 response for DeleteWorkloadSecret
+type DeleteWorkloadSecretResponse404Headers struct {
+	TwdError *string
+}
+
+// DeleteWorkloadSecretResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteWorkloadSecret
+type DeleteWorkloadSecretResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DeleteWorkloadSecretResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DeleteWorkloadSecretResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DeleteWorkloadSecretResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DeleteWorkloadSecretResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteWorkloadSecretResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteWorkloadSecretResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteWorkloadSecretResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteWorkloadSecretResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteWorkloadSecretResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteWorkloadSecretResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteWorkloadSecretResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PutWorkloadSecretResponse400Headers the declared response headers of an HTTP 400 response for PutWorkloadSecret
+type PutWorkloadSecretResponse400Headers struct {
+	TwdError *string
+}
+
+// PutWorkloadSecretResponse403Headers the declared response headers of an HTTP 403 response for PutWorkloadSecret
+type PutWorkloadSecretResponse403Headers struct {
+	TwdError *string
+}
+
+// PutWorkloadSecretResponse404Headers the declared response headers of an HTTP 404 response for PutWorkloadSecret
+type PutWorkloadSecretResponse404Headers struct {
+	TwdError *string
+}
+
+// PutWorkloadSecretResponseDefaultHeaders the declared response headers of an HTTP default response for PutWorkloadSecret
+type PutWorkloadSecretResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type PutWorkloadSecretResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Secret
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Secret
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *PutWorkloadSecretResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *PutWorkloadSecretResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *PutWorkloadSecretResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *PutWorkloadSecretResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutWorkloadSecretResponse) GetJSON200() *Secret {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PutWorkloadSecretResponse) GetJSON201() *Secret {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutWorkloadSecretResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutWorkloadSecretResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutWorkloadSecretResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PutWorkloadSecretResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutWorkloadSecretResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutWorkloadSecretResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutWorkloadSecretResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutWorkloadSecretResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // CreateVolumeKeyGrantResponse201Headers the declared response headers of an HTTP 201 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse201Headers struct {
 	CacheControl *string
@@ -15810,6 +16800,109 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithApplicationMergePatchPlusJ
 		return nil, err
 	}
 	return ParseUpdateWorkloadPublicResponse(rsp)
+}
+
+// CreateWorkloadSecretGrantWithResponse Release a workload's secret values to the lease holder
+//
+// hostd calls this when it starts a deployment of the workload. As
+// with a volume key grant, the values are released only to the host
+// holding the workload's lease at `epoch` (`409 lease_lost`), with
+// `Cache-Control: no-store`, and are never logged. A workload with no
+// secrets gets an empty map. Audited (`kind: secret_release`, names
+// only) when there is at least one secret.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/secret-grants (the `CreateWorkloadSecretGrant` operationId).
+func (c *ClientWithResponses) CreateWorkloadSecretGrantWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateWorkloadSecretGrantParams, reqEditors ...RequestEditorFn) (*CreateWorkloadSecretGrantResponse, error) {
+	rsp, err := c.CreateWorkloadSecretGrant(ctx, id, workload, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateWorkloadSecretGrantResponse(rsp)
+}
+
+// ListWorkloadSecretsWithResponse List a workload's secrets (names and times, never values)
+//
+// `twd secret ls`. No admin operation returns a value; only the lease
+// holder gets them (`POST …/secret-grants`). Ordered by name. A
+// workload with no secrets (or never deployed) is an empty page.
+// `404 unknown_tenant`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/secrets (the `ListWorkloadSecrets` operationId).
+func (c *ClientWithResponses) ListWorkloadSecretsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams, reqEditors ...RequestEditorFn) (*ListWorkloadSecretsResponse, error) {
+	rsp, err := c.ListWorkloadSecrets(ctx, id, workload, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkloadSecretsResponse(rsp)
+}
+
+// DeleteWorkloadSecretWithResponse Delete a workload secret (`twd secret rm`)
+//
+// Takes effect on the workload's next deploy. `404 unknown_secret`
+// when the workload has no secret of that name. Audited
+// (`kind: secret_delete`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `DeleteWorkloadSecret` operationId).
+func (c *ClientWithResponses) DeleteWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, reqEditors ...RequestEditorFn) (*DeleteWorkloadSecretResponse, error) {
+	rsp, err := c.DeleteWorkloadSecret(ctx, id, workload, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteWorkloadSecretResponse(rsp)
+}
+
+// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`twd secret put`)
+//
+// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// The workload need not be deployed yet. The value reaches the
+// workload as the text binding `env.<name>` (runtime `node`: the
+// environment variable `<name>`) on its **next deploy**; running
+// instances keep the value they started with. At most 128 secrets per
+// workload and 5 KiB per value. Names are JS identifiers that are also
+// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// value is never logged, audited or returned. Audited
+// (`kind: secret_put`, name only).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+func (c *ClientWithResponses) PutWorkloadSecretWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error) {
+	rsp, err := c.PutWorkloadSecretWithBody(ctx, id, workload, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutWorkloadSecretResponse(rsp)
+}
+
+// PutWorkloadSecretWithResponse Create or replace a workload secret (`twd secret put`)
+//
+// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// The workload need not be deployed yet. The value reaches the
+// workload as the text binding `env.<name>` (runtime `node`: the
+// environment variable `<name>`) on its **next deploy**; running
+// instances keep the value they started with. At most 128 secrets per
+// workload and 5 KiB per value. Names are JS identifiers that are also
+// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// value is never logged, audited or returned. Audited
+// (`kind: secret_put`, name only).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
+func (c *ClientWithResponses) PutWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error) {
+	rsp, err := c.PutWorkloadSecret(ctx, id, workload, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutWorkloadSecretResponse(rsp)
 }
 
 // CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
@@ -20389,6 +21482,407 @@ func ParseUpdateWorkloadPublicResponse(rsp *http.Response) (*UpdateWorkloadPubli
 		response.Headers412 = &headers
 	case true:
 		var headers UpdateWorkloadPublicResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreateWorkloadSecretGrantResponse parses an HTTP response from a CreateWorkloadSecretGrantWithResponse call
+func ParseCreateWorkloadSecretGrantResponse(rsp *http.Response) (*CreateWorkloadSecretGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateWorkloadSecretGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest SecretGrant
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest LeaseLost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreateWorkloadSecretGrantResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
+	case rsp.StatusCode == 400:
+		var headers CreateWorkloadSecretGrantResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers CreateWorkloadSecretGrantResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers CreateWorkloadSecretGrantResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers CreateWorkloadSecretGrantResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers CreateWorkloadSecretGrantResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListWorkloadSecretsResponse parses an HTTP response from a ListWorkloadSecretsWithResponse call
+func ParseListWorkloadSecretsResponse(rsp *http.Response) (*ListWorkloadSecretsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkloadSecretsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SecretPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListWorkloadSecretsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListWorkloadSecretsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListWorkloadSecretsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListWorkloadSecretsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseDeleteWorkloadSecretResponse parses an HTTP response from a DeleteWorkloadSecretWithResponse call
+func ParseDeleteWorkloadSecretResponse(rsp *http.Response) (*DeleteWorkloadSecretResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteWorkloadSecretResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers DeleteWorkloadSecretResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DeleteWorkloadSecretResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers DeleteWorkloadSecretResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePutWorkloadSecretResponse parses an HTTP response from a PutWorkloadSecretWithResponse call
+func ParsePutWorkloadSecretResponse(rsp *http.Response) (*PutWorkloadSecretResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutWorkloadSecretResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Secret
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Secret
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers PutWorkloadSecretResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers PutWorkloadSecretResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers PutWorkloadSecretResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers PutWorkloadSecretResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

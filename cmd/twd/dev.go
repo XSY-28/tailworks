@@ -133,7 +133,11 @@ func cmdDev(args []string) error {
 		}
 	}
 
+	var devVars []string // .dev.vars names (devvars.go): the workload's secrets in dev
 	deploy := func() (hostd.ObjectStatus, error) {
+		if devVars, err = syncDevVars(ctx, mc, tr.TenantID, a.Name, a.Dir); err != nil {
+			return hostd.ObjectStatus{}, fail("bad_request", err.Error())
+		}
 		tb, _, err := a.build(nil)
 		if err != nil {
 			return hostd.ObjectStatus{}, err
@@ -195,6 +199,9 @@ func cmdDev(args []string) error {
 		fmt.Printf("  twd.jsonc asks for \"tier\": \"microvm\"; twd dev runs it in the process tier (deployed hosts refuse it without a microVM backend)\n")
 	}
 	fmt.Printf("  node %-28s %s\n", wl.Hostname, strings.Join(a.Cfg.Tailnet.Tags, ","))
+	if len(devVars) > 0 {
+		fmt.Printf("  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
+	}
 	for _, c := range a.Cfg.Classes() {
 		if c.Class != "_workload" {
 			fmt.Printf("  class %-27s %s (a node per object, on first use)\n", c.Class, strings.Join(c.Tags, ","))

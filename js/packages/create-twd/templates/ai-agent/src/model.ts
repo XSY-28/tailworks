@@ -7,6 +7,12 @@
 //   import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 //   const llm = createOpenAICompatible({ name: "gw", baseURL: "http://llm-gw/v1", fetch: ctx.tailnet.fetch });
 //   export const model = () => llm("my-model");
+// Keep the provider's API key out of wrangler.jsonc "vars" (they're committed
+// to git): store it as a secret and read it as env.LLM_API_KEY, as on
+// Cloudflare (see docs/secrets.md):
+//   twd secret put LLM_API_KEY          # prompts; or: printf %s "$KEY" | twd secret put LLM_API_KEY
+//   createOpenAICompatible({ name: "gw", baseURL: "...", apiKey: env.LLM_API_KEY, fetch: ctx.tailnet.fetch })
+// For `twd dev`, put LLM_API_KEY=... in .dev.vars (gitignored) instead.
 import { MockLanguageModelV4 } from "ai/test";
 import { simulateReadableStream } from "ai";
 

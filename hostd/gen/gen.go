@@ -111,6 +111,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 			return nil, fmt.Errorf("gen: bad compatibility flag %q", f)
 		}
 	}
+	if err := checkSecrets(app); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(o.Dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -250,6 +253,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		Vars         map[string]json.RawMessage `json:"vars"`
 		Crons        []string                   `json:"crons"`
 	}{o.DeploymentID, o.Workload, app.CompatDate, nonNil(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons)}
+	cfg.Vars = varsWithSecrets(cfg.Vars, app.Secrets)
 	if cfg.Vars == nil {
 		cfg.Vars = map[string]json.RawMessage{}
 	}
@@ -386,11 +390,15 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	sort.Strings(vars)
 	for _, k := range vars {
+		if _, secret := app.Secrets[k]; secret {
+			continue // the secret's text binding below overrides the var
+		}
 		if !regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`).MatchString(k) || strings.HasPrefix(k, "__TWD") {
 			return nil, fmt.Errorf("gen: bad var name %q", k)
 		}
 		fmt.Fprintf(&c, "    (name = %s, json = %s),\n", cq(k), cq(string(app.Vars[k])))
 	}
+	c.WriteString(secretBindings(app))
 	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n);\n\n")
 	c.WriteString("const deny :Workerd.Worker = (\n  compatibilityDate = \"2026-04-01\",\n  modules = [ (name = \"deny.js\", esModule = embed \"deny.js\") ],\n);\n")
 	if err := write("config.capnp", []byte(c.String())); err != nil {
