@@ -1011,7 +1011,7 @@ type Error struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -1069,7 +1069,7 @@ type Error struct {
 // |---|---|---|
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
-// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -1877,7 +1877,7 @@ type TombstoneError struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -2782,7 +2782,10 @@ type ClientInterface interface {
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-	// `tailnet.objects` is `400 bad_bundle`.
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -2836,7 +2839,10 @@ type ClientInterface interface {
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-	// `tailnet.objects` is `400 bad_bundle`.
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -3653,7 +3659,10 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-// `tailnet.objects` is `400 bad_bundle`.
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -3717,7 +3726,10 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-// `tailnet.objects` is `400 bad_bundle`.
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -7338,7 +7350,10 @@ type ClientWithResponsesInterface interface {
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-	// `tailnet.objects` is `400 bad_bundle`.
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -7392,7 +7407,10 @@ type ClientWithResponsesInterface interface {
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-	// `tailnet.objects` is `400 bad_bundle`.
+	// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+	// duplicates, each a valid five-field UTC expression that can fire); an
+	// invalid one is `400 bad_bundle`.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -12222,7 +12240,10 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-// `tailnet.objects` is `400 bad_bundle`.
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -12282,7 +12303,10 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-// `tailnet.objects` is `400 bad_bundle`.
+// `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+// duplicates, each a valid five-field UTC expression that can fire); an
+// invalid one is `400 bad_bundle`.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes

@@ -55,6 +55,8 @@ type workload struct {
 	noFence      bool // assignment fence=false: stateless, keeps serving without mgmt
 	// placementTargets: what to measure paths to (smart placement).
 	placementTargets []string
+	cronLast         time.Time       // the last minute whose cron triggers were evaluated (UTC)
+	cronRunning      map[string]bool // cron expressions with a run in progress
 }
 
 // fences reports whether heartbeat loss must stop this workload (stateful,
