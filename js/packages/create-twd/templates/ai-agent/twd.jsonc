@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/rosskukulinski/twd/master/schema/twd.schema.json",
   "name": "ai-agent",
   "tailnet": {
     "tags": ["tag:twd-wl-ai"],

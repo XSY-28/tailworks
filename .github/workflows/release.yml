@@ -1,0 +1,61 @@
+# Release: on a v* tag, build the three tarballs (darwin-arm64, linux-arm64,
+# linux-amd64) with `make release` and attach them, with SHA256SUMS, to a
+# DRAFT GitHub release. A maintainer reviews the draft and publishes it;
+# scripts/get.sh installs the latest published release.
+#
+# It runs on macOS because the darwin binaries must be ad-hoc signed there
+# (scripts/release.sh). The linux tarballs are cross-built on the same
+# runner WITHOUT the microVM guest (RELEASE_VM_ASSETS=0, release.json
+# "microvm": false): the guest image needs a Linux builder with loop devices.
+# Build a linux tarball with the guest by hand (`make release` on Linux, or
+# Lima twd-dev on a Mac) and upload it to the draft to replace this one.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "existing tag to (re)build, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check the tag matches VERSION
+        run: |
+          v="${TAG#v}"
+          if [ "$v" != "$(cat VERSION)" ]; then
+            echo "tag $TAG does not match VERSION $(cat VERSION)"; exit 1
+          fi
+      - name: make release
+        run: make release RELEASE_VERSION="${TAG#v}" RELEASE_VM_ASSETS=0
+      - name: Smoke test the darwin tarball
+        run: |
+          mkdir -p "$RUNNER_TEMP/t" && tar -xzf dist/twd-*-darwin-arm64.tar.gz -C "$RUNNER_TEMP/t"
+          "$RUNNER_TEMP"/t/twd-*/bin/twd version
+      - name: Draft the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --draft --verify-tag --title "twd $TAG" \
+              --notes "Install: see docs/INSTALL.md. The linux tarballs in this draft have no microVM tier unless replaced (see .github/workflows/release.yml)."
+          gh release upload "$TAG" dist/twd-*.tar.gz dist/SHA256SUMS --clobber

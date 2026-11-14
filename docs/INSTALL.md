@@ -85,9 +85,15 @@ npm `@cloudflare/workerd-darwin-arm64`), the app templates and the
 `node_modules` they need (vendored, so `twd init` and `twd deploy` work
 offline).
 
+The quickest way is [`scripts/get.sh`](../scripts/get.sh). It downloads
+the latest [GitHub release](https://github.com/rosskukulinski/twd/releases)
+for this machine, checks it against `SHA256SUMS` and runs its `install.sh`
+(step 2): `curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/twd/master/scripts/get.sh && sh get.sh`.
+To do it by hand, or from a tarball you built (`make release`):
+
 ```sh
 mkdir -p ~/Downloads/twd && cd ~/Downloads/twd
-# copy twd-<version>-darwin-arm64.tar.gz and SHA256SUMS here (scp, AirDrop, …)
+# download (or copy) twd-<version>-darwin-arm64.tar.gz and SHA256SUMS here
 shasum -a 256 -c SHA256SUMS --ignore-missing
 tar -xzf twd-*-darwin-arm64.tar.gz
 ```
@@ -149,7 +155,6 @@ Funnel, no HTTPS requirement, no public issuer.**
      "tag:twd":      ["autogroup:admin"],
      "tag:twd-mgmt": ["autogroup:admin", "tag:twd"],
      "tag:twd-host": ["autogroup:admin", "tag:twd"],
-     "tag:twd-issuer": ["autogroup:admin", "tag:twd"],
    },
    "grants": [
      // hosts call mgmt's API; mgmt pushes kills to the hosts
@@ -238,6 +243,7 @@ What happens, in order (each line is a step you'll see):
      "tag:twd":      ["autogroup:admin"],
      "tag:twd-mgmt": ["autogroup:admin", "tag:twd"],
      "tag:twd-host": ["autogroup:admin", "tag:twd"],
+     "tag:twd-issuer": ["autogroup:admin", "tag:twd"],
    },
    "grants": [
      {"src": ["tag:twd-host"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"]},
@@ -576,7 +582,8 @@ socket or state. It reads `/proc/<pid>/fd` and matches unix-socket peers with
 
 ```sh
 mkdir -p ~/twd-release && cd ~/twd-release
-# copy twd-<version>-linux-arm64.tar.gz (or -linux-amd64) and SHA256SUMS here
+# download (or copy) twd-<version>-linux-arm64.tar.gz (or -linux-amd64) and SHA256SUMS here
+# (or skip this block: `sh get.sh` does all of it, as on macOS)
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf twd-*-linux-*.tar.gz
 cd twd-*-linux-*/ && ./install.sh          # no sudo; refuses to run as root
@@ -754,7 +761,10 @@ arch on either. A guest of the wrong arch is refused (`twd doctor`:
 > microVM tier**: `share/twd/release.json` says `"microvm": false`,
 > `share/twd/vm/` is absent, and `twd doctor` reports `firecracker: skip …
 > install a linux release built with the microVM assets`. The process tier
-> (Landlock + seccomp) is unaffected. The red team's second pass found a
+> (Landlock + seccomp) is unaffected. The GitHub release workflow builds on macOS
+> with `RELEASE_VM_ASSETS=0`, so its linux tarballs have no microVM tier
+> unless a maintainer replaced them with Linux-built ones: check
+> `release.json` before you run `twd host setup --microvm`. The red team's second pass found a
 > Mac-built tarball without the guest; the `make release` change above is
 > the fix, and the e2e-linux-vm row in STATUS.md says which tarball it ran.
 

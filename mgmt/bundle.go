@@ -131,7 +131,9 @@ func (c *TwdConfig) PublicConfig() (*DeploymentPublic, error) {
 
 // ParseTwdConfig parses twd.jsonc (JSONC/HuJSON).
 func ParseTwdConfig(b []byte) (*TwdConfig, error) {
-	std, err := hujson.Standardize(b)
+	// Standardize rewrites its argument in place (comments become spaces);
+	// copy so the caller's bytes (twd.jsonc as shipped) keep their comments.
+	std, err := hujson.Standardize(append([]byte(nil), b...))
 	if err != nil {
 		return nil, fmt.Errorf("twd.jsonc: %w", err)
 	}

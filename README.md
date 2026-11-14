@@ -17,19 +17,28 @@ unmodified (see [docs/COMPAT.md](docs/COMPAT.md)).
 
 You need:
 - a Mac (Apple silicon) or a Linux machine (arm64 or amd64);
-- a Tailscale tailnet where you're an admin;
-- Go ≥ 1.27 and Node.js ≥ 20, to build the release (the installed twd needs
-  neither).
+- a Tailscale tailnet where you're an admin.
 
-**1. Build and install** (no sudo; everything goes into `~/.twd`):
+**1. Install** (no sudo; everything goes into `~/.twd`). Download the latest
+[release](https://github.com/rosskukulinski/twd/releases), verify its
+checksum and install it. Read [scripts/get.sh](scripts/get.sh) first; it's
+short:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/twd/master/scripts/get.sh
+sh get.sh                                      # or: sh get.sh v0.1.0
+export PATH="$HOME/.twd/bin:$PATH"             # add this to your shell profile too
+twd doctor                                     # every check prints a fix if it fails
+```
+
+Or build the release yourself (needs Go ≥ 1.27 and Node.js ≥ 20; the
+installed twd needs neither):
 
 ```sh
 git clone https://github.com/rosskukulinski/twd && cd twd
 make release RELEASE_TARGETS=$(go env GOOS)-$(go env GOARCH)   # → dist/twd-<version>-<os>-<arch>.tar.gz
 mkdir -p /tmp/twd && tar -xzf dist/twd-*-$(go env GOOS)-$(go env GOARCH).tar.gz -C /tmp/twd
 /tmp/twd/twd-*/install.sh
-export PATH="$HOME/.twd/bin:$PATH"             # add this to your shell profile too
-twd doctor                                     # every check prints a fix if it fails
 ```
 
 **2. Let twd mint keys on your tailnet.** In the admin console:
@@ -46,12 +55,16 @@ twd doctor                                     # every check prints a fix if it 
     {"src": ["autogroup:admin"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"twd.dev/cap/admin": [{}]}},
   ],
   ```
-- then generate an **OAuth client**: Settings › OAuth clients, **Auth Keys ›
-  Write** with tag `tag:twd`. Optionally add **Devices › Core › Write** (so
-  kills also delete the device), **Policy File › Read** (so deploys
-  preflight your grants) and **Services › Write** (so workloads with
-  `tailnet.service` get a Tailscale Service; see
-  [docs/services.md](docs/services.md)).
+- then generate an **OAuth client**: Settings › OAuth clients, with tag
+  `tag:twd` and these scopes:
+  - **Auth Keys › Write**: required;
+  - **Devices › Core › Write**: so kills also delete the device;
+  - **Policy File › Read**: so deploys check your grants first;
+  - **Services › Write**: so workloads with `tailnet.service` get a
+    Tailscale Service ([docs/services.md](docs/services.md)).
+
+  Only the first is required, but pick all four now. Adding a scope later
+  means generating a new client.
 
 Save the client where only you can read it:
 
@@ -79,9 +92,12 @@ cd support
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```
 
-`twd deploy` preflights the app's tags. If your policy is missing a
-`tagOwners` line for them, it prints the exact snippet to add; add it and
-run `twd deploy` again. When it's done, it prints the workload's address,
+`twd init` names the app's tags after it (`tag:twd-wl-support`,
+`tag:twd-support-support-agent`, …). `twd deploy` checks them first. If
+your policy has no `tagOwners` line for them, it prints the exact snippet
+to add; add it and run `twd deploy` again. Every key of `twd.jsonc` is in
+[docs/twd-jsonc.md](docs/twd-jsonc.md), and `twd dev` / `twd deploy`
+refuse a key they don't know. When it's done, it prints the workload's address,
 e.g. `http://support-<host>.<tailnet>.ts.net/`.
 
 **5. Call it** from any device on your tailnet. Each name is a separate
@@ -108,6 +124,8 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
 - **Serve chosen paths to the public internet** (webhooks, OAuth callbacks)
   over Funnel: [docs/public-ingress.md](docs/public-ingress.md).
 - **Run an app locally with no tailnet at all:** `twd dev`.
+- **`twd.jsonc`, every key:** [docs/twd-jsonc.md](docs/twd-jsonc.md)
+  (with a JSON Schema for editor completion).
 - **What runs and what doesn't:** [docs/COMPAT.md](docs/COMPAT.md)
   (Agents SDK, MCP, Vercel AI SDK) and [docs/node-tier.md](docs/node-tier.md)
   (Node.js apps).

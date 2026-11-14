@@ -308,7 +308,7 @@ func TestE2EOAuth(t *testing.T) {
 	// 5. Remote deploy (bundled on the dev box, uploaded over https), ls by
 	// the WhoIs actor, remote kill (device deleted via devices:core), audit.
 	rdir := filepath.Join(work, "remote", "mcp2")
-	dev.MustJSON(nil, "init", rdir, "--template", "mcp")
+	dev.MustJSON(nil, "init", rdir, "--template", "mcp", "--keep-tags")
 	var dep struct {
 		DeploymentID string
 		Endpoint     struct{ Node, MagicDNS string }

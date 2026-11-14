@@ -405,7 +405,7 @@ func TestE2ELinux(t *testing.T) {
 	res.Checks["microvm_tier"] = "INFO " + mv
 	res.Pass("doctor", fmt.Sprintf("%d checks in %.0f ms, none failed: %s", len(doc.Checks), msOf(d), strings.Join(summary, " ")))
 
-	if _, se, _, err := e.Twd("init", rWork+"/ai", "--template", "ai-agent", "--json"); err != nil {
+	if _, se, _, err := e.Twd("init", rWork+"/ai", "--template", "ai-agent", "--keep-tags", "--json"); err != nil {
 		t.Fatalf("twd init --template ai-agent in the VM: %v %s", err, se)
 	}
 	res.Pass("init_ai_agent_offline", "twd init --template ai-agent in the VM (no npm); bundled offline by doctor")

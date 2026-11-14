@@ -297,7 +297,7 @@ func TestCLILink(t *testing.T) {
 	}
 	// Remote deploy (bundled locally, uploaded), ls with deployedBy, kill, audit.
 	agentDir := filepath.Join(work, "agent")
-	dev.MustJSON(nil, "init", agentDir, "--template", "agent")
+	dev.MustJSON(nil, "init", agentDir, "--template", "agent", "--keep-tags")
 	var dep struct {
 		DeploymentID string
 		Endpoint     struct{ Node, MagicDNS string }
@@ -379,7 +379,7 @@ func TestDevOnce(t *testing.T) {
 	bin := cliflow.BuildBinaries(t)
 	work := t.TempDir()
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
-	e.MustJSON(nil, "init", filepath.Join(work, "hello"), "--template", "hello")
+	e.MustJSON(nil, "init", filepath.Join(work, "hello"), "--template", "hello", "--keep-tags")
 	var r struct {
 		Smoke struct {
 			Status float64 `json:"status"`

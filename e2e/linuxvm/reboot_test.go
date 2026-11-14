@@ -146,7 +146,7 @@ func TestE2ELinuxReboot(t *testing.T) {
 	}
 	res.Numbers["up_first_ms"] = msOf(up())
 	agentDir := rWork + "/agent"
-	e.MustJSON(nil, "init", agentDir, "--template", "agent")
+	e.MustJSON(nil, "init", agentDir, "--template", "agent", "--keep-tags")
 	r.must(`sed -i '0,/{/s//{\n  "tier": "microvm",/' ` + shq(agentDir+"/twd.jsonc"))
 	var dep struct {
 		Endpoint struct{ MagicDNS string } `json:"endpoint"`
