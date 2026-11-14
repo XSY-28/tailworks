@@ -3,27 +3,21 @@
 package vm
 
 import (
-	"archive/tar"
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"maps"
 	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/netip"
-	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,12 +40,15 @@ type Config struct {
 	Firecracker string // in-process helper only (default /usr/local/bin/firecracker)
 	Jailer      string // in-process helper only (default /usr/local/bin/jailer)
 	Kernel      string // uncompressed guest kernel (vmlinux)
-	Rootfs      string // guest image from guest/build-image.sh (mounted read-only by every VM)
-	RunDir      string // per-VM dirs: config drive, console log
-	MemMiB      int    // guest memory (default 512)
-	VCPUs       int    // default 2 (1 vCPU: workerd's threads contend; p50 latency ~30 ms nested)
-	MTU         int    // default 1500
-	BootArgs    string // kernel cmdline (default below)
+	// ContainerKernel boots container guests (needs erofs + overlayfs:
+	// guest/build-kernel.sh); "" = Kernel.
+	ContainerKernel string
+	Rootfs          string // guest image from guest/build-image.sh (mounted read-only by every VM)
+	RunDir          string // per-VM dirs: config drive, console log
+	MemMiB          int    // guest memory (default 512)
+	VCPUs           int    // default 2 (1 vCPU: workerd's threads contend; p50 latency ~30 ms nested)
+	MTU             int    // default 1500
+	BootArgs        string // kernel cmdline (default: DefaultBootArgs for this arch)
 	// HugePages backs guest memory with 2 MiB pages (needs free hugetlbfs
 	// pages on the host: vm.nr_hugepages). Far fewer stage-2 faults, which
 	// dominate workerd start-up under nested virtualization (measured in
@@ -63,7 +60,9 @@ type Config struct {
 	// Pool is the warm pool's size: pre-booted, warm VMs without tenant
 	// code that Boot() claims instead of booting (see pool_linux.go). 0 =
 	// auto (half the huge-page reservation's VMs, at most 2; off without
-	// huge pages), < 0 = off.
+	// huge pages), < 0 = off. Durable Object (workerd) guests only:
+	// container guests (BootContainer) always cold-boot (ADR-032 + fast-vm:
+	// docs/containers.md "Warm pool and snapshots").
 	Pool int
 	// PoolBudgetMiB caps the guest RAM of all of this backend's VMs for
 	// refills (default: the huge-page reservation, vm.nr_hugepages × 2 MiB).
@@ -73,6 +72,7 @@ type Config struct {
 	// booting them — for pool refills, and on demand when the pool is
 	// empty. Guest memory is served lazily (userfaultfd). See
 	// snapshot_linux.go and the ADR draft on cross-tenant memory sharing.
+	// Durable Object guests only, like Pool.
 	Snapshot bool
 	// SnapshotRefill: refill the pool by restoring the base (+ re-warm)
 	// instead of booting. Refills are 6x faster (~0.1 vs ~0.6 s, in the
@@ -85,10 +85,6 @@ type Config struct {
 	BaseRotate time.Duration
 	Log        *slog.Logger
 }
-
-// DefaultBootArgs: serial console, no PCI probing, panic → reboot (which
-// Firecracker turns into a VM exit), twd-guestd as init, read-only root.
-const DefaultBootArgs = "console=ttyS0 reboot=k panic=1 quiet ro rootfstype=ext4 init=/sbin/twd-guestd"
 
 // Backend is the Firecracker microVM backend.
 type Backend struct {
@@ -104,7 +100,8 @@ type Backend struct {
 	pool    *pool
 
 	baseMu        sync.Mutex
-	base          *baseSnap // current base snapshot (Snapshot on)
+	base          *baseSnap         // current base snapshot (Snapshot on)
+	baseTokens    map[string]string // base ID → its control-channel token (baseSnap.ctlToken), while the base exists
 	baseRotations int
 	baseStop      context.CancelFunc
 	baseDone      chan struct{}
@@ -121,6 +118,9 @@ func Available(cfg Config) error {
 		if _, err := os.Stat(p); err != nil {
 			return err
 		}
+	}
+	if err := CheckArch(cfg.Kernel, cfg.Rootfs, runtime.GOARCH); err != nil {
+		return err
 	}
 	if cfg.Helper != "" {
 		r, err := helperapi.Ping(cfg.Helper)
@@ -156,7 +156,7 @@ func New(cfg Config) (*Backend, error) {
 		cfg.MTU = 1500
 	}
 	if cfg.BootArgs == "" {
-		cfg.BootArgs = DefaultBootArgs
+		cfg.BootArgs = DefaultBootArgs(runtime.GOARCH)
 	}
 	if cfg.ReadyTimeout == 0 {
 		cfg.ReadyTimeout = 30 * time.Second
@@ -246,59 +246,36 @@ func (b *Backend) Name() string { return "firecracker" }
 // Via says how VMs are launched (helper service or in-process).
 func (b *Backend) Via() string { return b.via }
 
-var (
-	gatewayIP = netip.MustParseAddr(proto.GatewayIP)
-	guestIP   = netip.MustParseAddr(proto.GuestIP)
-	gwMAC     = net.HardwareAddr{0x06, 0x00, 0xc0, 0xa8, 0x48, 0x01}
-)
-
-const guestMAC = "06:00:c0:a8:48:02"
-
 // Machine is one running Firecracker microVM.
 type Machine struct {
-	b       *Backend
-	id      string
-	dir     string
-	log     *slog.Logger
-	conn    *helperapi.Conn
-	pid     int
-	vn      *vnet
-	tapFD   int
-	vsock   net.Listener
-	ingress http.Handler
-	volume  bool
+	agent
+	b      *Backend
+	id     string
+	dir    string
+	conn   *helperapi.Conn
+	pid    int
+	tapFD  int
+	vsock  net.Listener
+	volume bool
 
-	info    sandbox.Info
-	start   time.Time
-	done    chan struct{}
-	ready   chan struct{}
-	readyOK atomic.Bool
-	// pool VMs: closed when the guest first says "pooled" (warm, waiting)
-	pooled   chan struct{}
-	pooledOK atomic.Bool
-	pooledAt time.Time
-	stopped  atomic.Bool
-	exitErr  error
-	disks    []string
-
-	mu      sync.Mutex
-	ctl     net.Conn
-	enc     *json.Encoder
-	pending map[int64]chan proto.Msg
-	nextID  int64
-	events  []proto.Msg
-	lastErr string
+	stopped atomic.Bool
+	exitErr error
+	disks   []string
 	cleanup sync.Once
 	// the helper's time from VMM exit to volume released (exit event), and
 	// its other exit stats (restored VMs: uffd faults served)
 	releaseMS float64
 	exitStats map[string]float64
+
+	ctr *ctrState // container guests only
 }
 
 // Boot implements sandbox.Backend. With a warm pool, it claims a pooled VM
 // (booted earlier, warm, holding no tenant code) and injects the workload
-// into it; otherwise (pool off or empty) it cold-boots a VM with the
-// workload on its config drive.
+// into it; otherwise (pool off or empty) it restores one from the base
+// snapshot (snapshots on) or cold-boots a VM with the workload on its
+// config drive. Container guests never come from the pool or a snapshot
+// (BootContainer cold-boots).
 func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (sandbox.VM, error) {
 	if b.pool != nil {
 		m := b.pool.take()
@@ -324,45 +301,118 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (sandbox.VM, error) 
 			b.cfg.Log.Warn("microVM restore failed; booting cold", "spec", s.ID, "err", err)
 		}
 	}
-	m, err := b.boot(ctx, bootOpts{name: s.ID, spec: &s, volume: s.Volume, handlers: s.Handlers, log: s.Log})
+	m, err := b.boot(ctx, bootOpts{name: s.ID, spec: &s, log: s.Log})
 	if err != nil {
 		return nil, err // not a typed nil *Machine
 	}
 	return m, nil
 }
 
-// bootOpts: one VM boot. A cold boot carries the workload (spec, on the
-// config drive); a pool boot (pool) carries none: its config drive is the
-// warm-up app, its DO drive a placeholder (volume slot), its stack has no
-// listeners, and it is ready when the guest says "pooled".
+// bootOpts: one workerd-guest VM boot. A cold boot carries the workload
+// (spec, on the config drive); a pool boot (pool) carries none: its config
+// drive is the warm-up app, its DO drive a placeholder (volume slot), its
+// stack has no listeners, and it is ready when the guest says "pooled".
 type bootOpts struct {
-	name     string
-	spec     *sandbox.Spec
-	volume   *sandbox.Volume
-	handlers map[uint16]http.Handler
-	log      *slog.Logger
-	pool     bool
-	restore  string // restore this base snapshot (a pooled VM) instead of booting
+	name    string
+	spec    *sandbox.Spec
+	log     *slog.Logger
+	pool    bool
+	restore string // restore this base snapshot (a pooled VM) instead of booting
 }
 
-func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error) {
+// boot turns bootOpts into a launch (the boot path shared with container
+// guests).
+func (b *Backend) boot(ctx context.Context, o bootOpts) (*Machine, error) {
+	name := o.name
+	req := &helperapi.StartRequest{Name: name, MemMiB: b.cfg.MemMiB, VCPUs: b.cfg.VCPUs, HugePages: b.cfg.HugePages,
+		BootArgs: b.cfg.BootArgs, MTU: b.cfg.MTU, GuestMAC: guestMAC, GuestCID: 3, VsockPort: proto.VsockPort}
+	l := launch{name: name, log: o.log, kernel: b.cfg.Kernel, req: req}
+	switch {
+	case o.restore != "":
+		// A restored copy's guestd holds the base's control-channel token
+		// (it is in the snapshot's memory) until its claim's load replaces
+		// it with the copy's own.
+		tok := b.baseToken(o.restore)
+		if tok == "" {
+			return nil, fmt.Errorf("base snapshot %s is gone", o.restore)
+		}
+		req.Restore = o.restore
+		l.pool, l.restore, l.ctlToken = true, o.restore, tok
+		// (the jail needs a config drive file; the restored guest never
+		// reads it, and it carries no token: the base's lives in memory)
+		l.drive = func(p, _ string) error { return writePoolDrive(p, b.cfg.MTU, "") }
+	case o.pool:
+		req.VolumeSlot = true
+		l.pool = true
+		l.drive = func(p, token string) error { return writePoolDrive(p, b.cfg.MTU, token) }
+	default:
+		s := o.spec
+		l.handlers = s.Handlers
+		l.drive = func(p, token string) error { return writeConfigDrive(p, *s, b.cfg.MTU, token, nil) }
+		if v := s.Volume; v != nil {
+			l.extra = func(m *Machine) (*os.File, error) {
+				f, format, err := openVolume(v)
+				if err != nil {
+					return nil, fmt.Errorf("volume %s: %w", v.Name, err)
+				}
+				req.Volume = &helperapi.Volume{Name: v.Name, Epoch: v.Epoch, Key: v.Key, Format: format}
+				m.disks = append(m.disks, v.Path)
+				m.volume = true
+				m.info.Volume = v.Name
+				return f, nil
+			}
+		}
+	}
+	if l.pool && b.pool != nil && b.pool.hugeOnly {
+		req.HugePages = "on" // a pool VM never falls back to 4 KiB pages
+	}
+	return b.launch(ctx, l)
+}
+
+// launch is one VM boot's inputs (Boot: a workerd guest, cold or for the
+// pool; BootContainer: a container guest).
+type launch struct {
+	name     string
+	log      *slog.Logger
+	kernel   string
+	drive    func(path, token string) error // writes the config drive (token: GuestConfig.CtlToken)
+	req      *helperapi.StartRequest
+	extra    func(m *Machine) (*os.File, error) // the fifth drive (DO volume or container image)
+	handlers map[uint16]http.Handler
+	gnet     sandbox.ContainerNet // a container guest's egress proxy (nil: no egress)
+	ctr      *ctrState
+	// pool: a warm-pool or base VM (ready when the guest says "pooled");
+	// restore: the base snapshot it is restored from; ctlToken: the token
+	// its guestd already holds (a restore: the base's; "" = a fresh one).
+	pool     bool
+	restore  string
+	ctlToken string
+}
+
+func (b *Backend) launch(ctx context.Context, l launch) (_ *Machine, err error) {
 	t0 := time.Now()
 	n := b.seq.Add(1)
-	id := fmt.Sprintf("%d-%s-%d", os.Getpid(), o.name, n)
-	m := &Machine{b: b, id: id, dir: filepath.Join(b.cfg.RunDir, id), tapFD: -1,
-		done: make(chan struct{}), ready: make(chan struct{}), pooled: make(chan struct{}), pending: map[int64]chan proto.Msg{}}
+	id := fmt.Sprintf("%d-%s-%d", os.Getpid(), l.name, n)
+	m := &Machine{agent: newAgent(), b: b, id: id, dir: filepath.Join(b.cfg.RunDir, id), tapFD: -1, ctr: l.ctr}
+	if l.ctlToken != "" {
+		m.ctlToken = l.ctlToken
+	}
 	m.info.Stages = map[string]float64{}
 	m.info.Source = "cold"
-	if o.pool {
+	if l.pool {
 		m.info.Source = "pool"
 	}
-	if o.restore != "" {
-		m.info.Source, m.info.Base, o.pool = "restore", o.restore, true
+	if l.restore != "" {
+		m.info.Source, m.info.Base = "restore", l.restore
 	}
 	stage := func(name string) { m.info.Stages[name] = float64(time.Since(t0).Microseconds()) / 1000 }
+	if l.ctr != nil {
+		l.ctr.m = m
+		m.onEvent, m.onStream = l.ctr.event, m.attachStream
+	}
 	m.log = b.cfg.Log.With("vm", id)
-	if o.log != nil {
-		m.log = o.log.With("vm", id)
+	if l.log != nil {
+		m.log = l.log.With("vm", id)
 	}
 	defer func() {
 		if err != nil {
@@ -376,12 +426,7 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	// 1. Config drive: the instance dir + guest.json, as a raw tar (a pool
 	// VM's: the warm-up app, no tenant code).
 	drive := filepath.Join(m.dir, "config.tar")
-	if o.pool { // (a restore uses the base's own; the jail needs the file)
-		err = writePoolDrive(drive, b.cfg.MTU)
-	} else {
-		err = writeConfigDrive(drive, *o.spec, b.cfg.MTU)
-	}
-	if err != nil {
+	if err := l.drive(drive, m.ctlToken); err != nil {
 		return nil, fmt.Errorf("config drive: %w", err)
 	}
 	m.disks = []string{b.cfg.Rootfs, drive}
@@ -394,7 +439,7 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 			f.Close()
 		}
 	}()
-	for _, p := range []string{b.cfg.Kernel, b.cfg.Rootfs, drive} {
+	for _, p := range []string{l.kernel, b.cfg.Rootfs, drive} {
 		f, err := os.Open(p)
 		if err != nil {
 			return nil, err
@@ -407,22 +452,13 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	}
 	files = append(files, console)
 	m.info.Console = console.Name()
-	req := &helperapi.StartRequest{Name: o.name, MemMiB: b.cfg.MemMiB, VCPUs: b.cfg.VCPUs, HugePages: b.cfg.HugePages,
-		BootArgs: b.cfg.BootArgs, MTU: b.cfg.MTU, GuestMAC: guestMAC, GuestCID: 3, VsockPort: proto.VsockPort, VolumeSlot: o.pool && o.restore == "",
-		Restore: o.restore}
-	if o.pool && b.pool != nil && b.pool.hugeOnly {
-		req.HugePages = "on" // a pool VM never falls back to 4 KiB pages
-	}
-	if v := o.volume; v != nil {
-		f, format, err := openVolume(v)
+	req := l.req
+	if l.extra != nil {
+		f, err := l.extra(m)
 		if err != nil {
-			return nil, fmt.Errorf("volume %s: %w", v.Name, err)
+			return nil, err
 		}
 		files = append(files, f)
-		req.Volume = &helperapi.Volume{Name: v.Name, Epoch: v.Epoch, Key: v.Key, Format: format}
-		m.disks = append(m.disks, v.Path)
-		m.volume = true
-		m.info.Volume = v.Name
 	}
 
 	// 3. The helper: netns + TAPs, jail, volume, jailer → Firecracker,
@@ -466,22 +502,23 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 		m.info.Jail = &sandbox.Jail{ID: j.ID, Chroot: j.Chroot, Cgroup: j.Cgroup, CPUMax: j.CPUMax, Seccomp: j.Seccomp,
 			Netns: j.Netns, UID: j.UID, GID: j.GID, MemMax: j.MemMax}
 	}
-	m.vn, err = newVnet(m.tapFD, uint32(b.cfg.MTU), gwMAC, gatewayIP, guestIP, proto.PrefixLen, o.handlers)
+	m.vn, err = newVnet(m.tapFD, uint32(b.cfg.MTU), gwMAC, gatewayIP, guestIP, proto.PrefixLen, l.handlers, l.gnet)
 	if err != nil {
 		return nil, err
 	}
 	m.ingress = m.ingressProxy()
 	stage("vnet")
-	go m.acceptCtl()
+	go m.acceptCtl(m.vsock)
 	go m.watch()
 	if b.pool != nil {
-		b.pool.track(m)
+		b.pool.track(m) // every VM of this backend counts against the pool's budget
 	}
 
-	// 4. Wait for guestd to report workerd healthy (a pool VM: warm and
-	// waiting for its load).
+	// 4. Wait for guestd to report workerd healthy (or, in a container
+	// guest, the entrypoint started; a pool VM: warm and waiting for its
+	// load).
 	want, what := m.ready, "ready"
-	if o.pool {
+	if l.pool {
 		want, what = m.pooled, "pooled"
 	}
 	rctx, cancel := context.WithTimeout(ctx, b.cfg.ReadyTimeout)
@@ -489,6 +526,12 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	select {
 	case <-want:
 	case <-m.done:
+		m.mu.Lock()
+		le := m.lastErr
+		m.mu.Unlock()
+		if le != "" {
+			return nil, fmt.Errorf("microVM exited during boot: %s", le)
+		}
 		return nil, fmt.Errorf("microVM exited during boot: %v", m.exitErr)
 	case <-rctx.Done():
 		m.mu.Lock()
@@ -499,16 +542,17 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	m.info.Total = time.Since(t0)
 	stage(what)
 	m.log.Info("microVM "+what, "boot_ms", m.info.Boot.Milliseconds(), "ready_ms", m.info.Ready.Milliseconds(),
-		"total_ms", m.info.Total.Milliseconds(), "jail", resp.Jail != nil, "volume", m.info.Volume, "volume_ms", m.info.VolumeAttachMS)
+		"total_ms", m.info.Total.Milliseconds(), "jail", resp.Jail != nil, "volume", m.info.Volume, "volume_ms", m.info.VolumeAttachMS,
+		"container", l.ctr != nil)
 	return m, nil
 }
 
 // claim turns a pooled VM into the workload's: attach its volume (the
 // helper swaps it in behind the DO drive), serve its gateway handlers,
 // inject the bundle and config over vsock (guestd reseeds, sets the clock,
-// extracts, mounts), and wait for the tenant's workerd to be healthy. The
-// VM is single-use: on any error it is destroyed, never returned to the
-// pool.
+// takes its own control-channel token, extracts, mounts), and wait for the
+// tenant's workerd to be healthy. The VM is single-use: on any error it is
+// destroyed, never returned to the pool.
 func (b *Backend) claim(ctx context.Context, m *Machine, s sandbox.Spec) (vmi sandbox.VM, err error) {
 	return b.claimAt(ctx, m, s, time.Now(), false)
 }
@@ -594,6 +638,12 @@ func (b *Backend) claimAt(ctx context.Context, m *Machine, s sandbox.Spec, t0 ti
 		}
 	}
 	ld.UnixNano = time.Now().UnixNano() // now, not at claim start: the guest's clock
+	// The claimed VM's own control-channel token (ADR-032 + fast-vm): a
+	// pooled VM's guestd holds the token it booted with, and every copy
+	// restored from one base holds the base's. From the load on, the host
+	// accepts only this fresh one; guestd adopts it with the load and
+	// uses it for every reconnect.
+	ld.CtlToken = m.rekey()
 	if _, err := m.Op(ictx, proto.Msg{Op: "load", Load: ld}); err != nil {
 		return nil, fmt.Errorf("inject: %w; console: %s", err, m.consoleTail(1500))
 	}
@@ -699,165 +749,6 @@ func (m *Machine) consoleTail(n int) string {
 	return netd.Redact(string(bytes.TrimSpace(b)))
 }
 
-// ---- control channel ----
-
-func (m *Machine) acceptCtl() {
-	for {
-		c, err := m.vsock.Accept()
-		if err != nil {
-			return
-		}
-		m.mu.Lock()
-		if m.ctl != nil {
-			m.ctl.Close()
-		}
-		m.ctl, m.enc = c, json.NewEncoder(c)
-		m.mu.Unlock()
-		go m.readCtl(c)
-	}
-}
-
-func (m *Machine) readCtl(c net.Conn) {
-	sc := bufio.NewScanner(c)
-	sc.Buffer(make([]byte, 64<<10), 4<<20)
-	for sc.Scan() {
-		var msg proto.Msg
-		if json.Unmarshal(sc.Bytes(), &msg) != nil {
-			continue
-		}
-		m.mu.Lock()
-		if msg.Type == "resp" {
-			if ch := m.pending[msg.ID]; ch != nil {
-				delete(m.pending, msg.ID)
-				ch <- msg
-			}
-			m.mu.Unlock()
-			continue
-		}
-		if len(m.events) < 256 {
-			m.events = append(m.events, msg)
-		}
-		m.mu.Unlock()
-		switch msg.Type {
-		case "boot":
-			m.info.Boot = time.Since(m.start)
-			m.setGuestStages(msg.Stages)
-		case "pooled":
-			m.setGuestStages(msg.Stages)
-			if m.pooledOK.CompareAndSwap(false, true) {
-				m.mu.Lock()
-				m.pooledAt = time.Now()
-				m.mu.Unlock()
-				close(m.pooled)
-			}
-		case "ready":
-			if m.info.Source == "cold" {
-				m.info.Ready = time.Since(m.start)
-			}
-			m.info.GuestUptimeAtReady = time.Duration(msg.UptimeMS) * time.Millisecond
-			m.setGuestStages(msg.Stages)
-			if m.readyOK.CompareAndSwap(false, true) {
-				close(m.ready)
-			}
-		case "workerd-exit":
-			m.log.Warn("guest workerd exited", "code", msg.ExitCode, "restarts", msg.Restarts, "err", msg.Error)
-			m.mu.Lock()
-			m.lastErr = fmt.Sprintf("workerd exit %d %s", msg.ExitCode, msg.Error)
-			m.mu.Unlock()
-		}
-	}
-}
-
-func (m *Machine) setGuestStages(st map[string]float64) {
-	if len(st) == 0 {
-		return
-	}
-	m.mu.Lock()
-	if m.info.GuestStages == nil {
-		m.info.GuestStages = map[string]float64{}
-	}
-	for k, v := range st {
-		m.info.GuestStages[k] = v
-	}
-	m.mu.Unlock()
-}
-
-func (m *Machine) eventTypes() []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var s []string
-	for _, e := range m.events {
-		s = append(s, e.Type)
-	}
-	return s
-}
-
-// Op implements sandbox.VM.
-func (m *Machine) Op(ctx context.Context, msg proto.Msg) (proto.Msg, error) {
-	ch := make(chan proto.Msg, 1)
-	m.mu.Lock()
-	if m.enc == nil {
-		m.mu.Unlock()
-		return proto.Msg{}, errors.New("guest agent not connected")
-	}
-	m.nextID++
-	msg.ID = m.nextID
-	m.pending[msg.ID] = ch
-	err := m.enc.Encode(msg)
-	m.mu.Unlock()
-	if err != nil {
-		return proto.Msg{}, err
-	}
-	select {
-	case r := <-ch:
-		if r.Error != "" {
-			return r, errors.New(r.Error)
-		}
-		return r, nil
-	case <-ctx.Done():
-		return proto.Msg{}, ctx.Err()
-	case <-m.done:
-		return proto.Msg{}, errors.New("microVM exited")
-	}
-}
-
-// ---- ingress ----
-
-func (m *Machine) ingressProxy() http.Handler {
-	tr := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return m.vn.dialGuest(ctx, proto.IngressPort)
-		},
-		MaxIdleConnsPerHost: 64,
-		IdleConnTimeout:     30 * time.Second,
-	}
-	target := &url.URL{Scheme: "http", Host: "guest"}
-	return &httputil.ReverseProxy{
-		Transport:     tr,
-		FlushInterval: -1,
-		ErrorLog:      nil,
-		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.SetURL(target)
-			pr.Out.Host = pr.In.Host
-			netd.KeepForwarded(pr)
-		},
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			if r.Context().Err() != nil {
-				return
-			}
-			netd.WriteError(w, &netd.Error{Code: netd.CodeUpstreamUnavailable, Detail: "microVM: " + err.Error()})
-		},
-	}
-}
-
-// Ingress implements sandbox.VM.
-func (m *Machine) Ingress() http.Handler { return m.ingress }
-
-// DialGuest implements sandbox.VM.
-func (m *Machine) DialGuest(ctx context.Context) (net.Conn, error) {
-	return m.vn.dialGuest(ctx, proto.IngressPort)
-}
-
 // ---- lifecycle ----
 
 // ExitStats are the helper's stats from the VM's exit (volume release ms;
@@ -868,23 +759,8 @@ func (m *Machine) ExitStats() map[string]float64 {
 	return maps.Clone(m.exitStats)
 }
 
-// Done implements sandbox.VM.
-func (m *Machine) Done() <-chan struct{} { return m.done }
-
 // Err implements sandbox.VM.
 func (m *Machine) Err() error { return m.exitErr }
-
-// Info implements sandbox.VM.
-func (m *Machine) Info() sandbox.Info {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	i := m.info
-	i.Stages, i.GuestStages = maps.Clone(i.Stages), maps.Clone(i.GuestStages)
-	return i
-}
-
-// Refused implements sandbox.VM.
-func (m *Machine) Refused() []string { return m.vn.refusedFlows() }
 
 // Disks implements sandbox.VM.
 func (m *Machine) Disks() []string { return m.disks }
@@ -907,9 +783,10 @@ func (m *Machine) Kill() {
 
 // Stop implements sandbox.VM. With a volume, the guest first stops workerd
 // and unmounts it (so every write is on the host), then the VMM is killed
-// (arm64 Firecracker has no ACPI shutdown) and the helper releases the
-// volume, which can then be attached to the next VM. Stop returns after
-// that release.
+// and the helper releases the volume, which can then be attached to the
+// next VM. Stop returns after that release. The same on both arches: arm64
+// Firecracker has no ACPI shutdown, and x86_64's SendCtrlAltDel (i8042)
+// would add nothing after the vsock shutdown has done the clean part.
 func (m *Machine) Stop() {
 	if m.volume && m.readyOK.Load() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -984,137 +861,6 @@ func (m *Machine) MemoryDump(ctx context.Context, dir string) (string, error) {
 		err = cerr
 	}
 	return mem, err
-}
-
-// ---- config drive ----
-
-func writeConfigDrive(path string, s sandbox.Spec, mtu int) error {
-	gc := proto.GuestConfig{UnixNano: time.Now().UnixNano(), IP: proto.GuestIP, Gateway: proto.GatewayIP, Prefix: proto.PrefixLen,
-		MTU: mtu, WorkerdArgs: s.WorkerdArgs, HealthCF: s.HealthCF, Debug: s.Debug}
-	if s.Volume != nil {
-		gc.Volume = proto.VolumeDev
-	}
-	return writeDrive(path, gc, func(tw *tar.Writer) error { return tarDir(tw, s.AppDir) })
-}
-
-// The warm-up app on a pool VM's config drive: twd's own, no tenant code.
-// One request through a Durable Object with SQLite and KV storage faults in
-// the code paths the platform runtime uses (workerd, V8, the isolate, SQLite),
-// on top of the workerd binary itself. It listens on loopback only.
-const (
-	warmupCapnp = `using Workerd = import "/workerd/workerd.capnp";
-const config :Workerd.Config = (
-  services = [ (name = "main", worker = .w), (name = "do", disk = (path = "/run/twd/app/warmdo", writable = true)) ],
-  sockets = [ (name = "in", address = "127.0.0.1:8080", service = "main", http = (cfBlobHeader = "x-twd-cf")) ],
-);
-const w :Workerd.Worker = (
-  compatibilityDate = "2026-04-01",
-  modules = [ (name = "w.js", esModule = embed "w.js") ],
-  durableObjectNamespaces = [ (className = "W", uniqueKey = "twd-warmup", enableSql = true) ],
-  durableObjectStorage = (localDisk = "do"),
-  bindings = [ (name = "NS", durableObjectNamespace = "W") ],
-);
-`
-	warmupJS = `import { DurableObject } from "cloudflare:workers";
-export class W extends DurableObject {
-  async fetch(req) {
-    const sql = this.ctx.storage.sql;
-    sql.exec("CREATE TABLE IF NOT EXISTS t (k TEXT PRIMARY KEY, v TEXT)");
-    sql.exec("INSERT OR REPLACE INTO t VALUES (?, ?)", "k", "v");
-    await this.ctx.storage.put("k", { n: 1 });
-    const v = await this.ctx.storage.get("k");
-    return new Response("warm " + sql.exec("SELECT count(*) AS n FROM t").one().n + " " + JSON.stringify(v));
-  }
-}
-export default {
-  async fetch(req, env) {
-    const r = await env.NS.get(env.NS.idFromName("w")).fetch("http://w/");
-    return new Response(await r.text() + " " + JSON.stringify(req.cf ?? {}));
-  }
-};
-`
-)
-
-// writePoolDrive writes a pool VM's config drive: the network config and
-// the warm-up app (plus proto.WarmupMarker, which fsscan must not find
-// after the warm-up). No tenant code, no keys.
-func writePoolDrive(path string, mtu int) error {
-	gc := proto.GuestConfig{UnixNano: time.Now().UnixNano(), IP: proto.GuestIP, Gateway: proto.GatewayIP, Prefix: proto.PrefixLen,
-		MTU: mtu, Pool: true, WarmupArgs: []string{"serve", "config.capnp", "--experimental"}, WarmupHealthCF: "{}"}
-	return writeDrive(path, gc, func(tw *tar.Writer) error {
-		if err := tw.WriteHeader(&tar.Header{Name: "warmdo/", Mode: 0o700, Typeflag: tar.TypeDir}); err != nil {
-			return err
-		}
-		for name, body := range map[string]string{"config.capnp": warmupCapnp, "w.js": warmupJS, proto.WarmupMarker: "twd warm-up app (no tenant code)\n"} {
-			if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(body)), Typeflag: tar.TypeReg}); err != nil {
-				return err
-			}
-			if _, err := io.WriteString(tw, body); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// bundleTar is the workload's instance dir as a tar (a pool VM's load).
-func bundleTar(dir string) ([]byte, error) {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	if err := tarDir(tw, dir); err != nil {
-		return nil, err
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func writeDrive(path string, gc proto.GuestConfig, body func(*tar.Writer) error) error {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	gb, _ := json.Marshal(gc)
-	if err := tw.WriteHeader(&tar.Header{Name: proto.GuestConfigFile, Mode: 0o600, Size: int64(len(gb)), Typeflag: tar.TypeReg}); err != nil {
-		return err
-	}
-	tw.Write(gb)
-	if err := body(tw); err != nil {
-		return err
-	}
-	if err := tw.Close(); err != nil {
-		return err
-	}
-	if pad := buf.Len() % 4096; pad != 0 {
-		buf.Write(make([]byte, 4096-pad))
-	}
-	return os.WriteFile(path, buf.Bytes(), 0o600)
-}
-
-func tarDir(tw *tar.Writer, root string) error {
-	return filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(root, p)
-		if rel == "." {
-			return nil
-		}
-		if d.IsDir() {
-			return tw.WriteHeader(&tar.Header{Name: filepath.ToSlash(rel) + "/", Mode: 0o700, Typeflag: tar.TypeDir})
-		}
-		if !d.Type().IsRegular() {
-			return nil // sockets etc.
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		if err := tw.WriteHeader(&tar.Header{Name: filepath.ToSlash(rel), Mode: 0o600, Size: int64(len(b)), Typeflag: tar.TypeReg}); err != nil {
-			return err
-		}
-		_, err = tw.Write(b)
-		return err
-	})
 }
 
 // PoolStats reports the warm pool (nil: no pool).

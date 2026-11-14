@@ -222,11 +222,17 @@ func TestPoolNoCarryOver(t *testing.T) {
 	os.Remove(mem)
 	// Load workload B into it (claim does what Boot does after take).
 	bApp := newMarkerApp(t, "wb", true)
+	preClaim := m.token()
 	vm, err := b.claim(ctx, m, bApp.spec)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer vm.Stop()
+	// The claimed VM has its own control token; the one it booted with
+	// (on its pool config drive) is refused from now on (ADR-032 × fast-vm).
+	if _, err := checkClaimToken(ctx, vm.(*Machine), preClaim); err != nil {
+		t.Fatal(err)
+	}
 	if got := guestGet(t, vm, "/"); got != "hello "+bApp.marker {
 		t.Fatalf("B: %q", got)
 	}

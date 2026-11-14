@@ -1,11 +1,14 @@
-//go:build e2evm && linux
+//go:build e2evm && (linux || darwin)
 
 // Package vm is E2E-VM (M8): the same apps as the process tier, run in a
-// Firecracker microVM in Lima, with host-side netd (one tsnet.Server per
-// object, outside the guest) as the guest's only network. Hermetic:
-// testcontrol + local DERP/STUN, fakemgmt, real twd-hostd, real Firecracker.
+// microVM, with host-side netd (one tsnet.Server per object, outside the
+// guest) as the guest's only network. Hermetic: testcontrol + local
+// DERP/STUN, fakemgmt, real twd-hostd, a real hypervisor: Firecracker in
+// Lima (backend_linux_test.go) or Virtualization.framework on macOS
+// (backend_darwin_test.go, ADR-032 D7).
 //
-// Run with `make e2e-vm` (inside Lima; needs root, KVM, the guest image).
+// Run with `make e2e-vm` (inside Lima; needs root, KVM, the guest image) or
+// `make e2e-vz` (on a Mac; no root).
 package vm
 
 import (
@@ -23,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -75,21 +79,24 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 	if v := os.Getenv("TWD_VM_VCPUS"); v != "" {
 		fmt.Sscan(v, &vcpus)
 	}
-	vcfg := vm.Config{Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
-		Helper: os.Getenv("TWD_VM_HELPER")}
+	if pool < 0 && !fastVMSupported {
+		t.Skip("this backend has no warm pool or snapshots (Firecracker only)")
+	}
+	be, binfo, err := newBackend(kernel, rootfs, vcpus, pool, snapshot)
+	snapshot = snapshot && fastVMSupported
 	wantSource := "pool"
-	vcfg.Pool, vcfg.Snapshot = pool, snapshot
-	vcfg.SnapshotRefill = snapshot && pool >= 0 && os.Getenv("TWD_VM_E2E_SNAPSHOT_REFILL") == "1"
-	if snapshot && (pool < 0 || vcfg.SnapshotRefill) {
+	if snapshot && (pool < 0 || os.Getenv("TWD_VM_E2E_SNAPSHOT_REFILL") == "1") {
 		wantSource = "restore"
 	}
-	be, err := vm.New(vcfg)
 	if err != nil {
 		t.Fatalf("microVM backend unavailable: %v", err)
 	}
 	t.Cleanup(func() { be.Close() })
-	res := &results{m: map[string]any{"started": time.Now().UTC().Format(time.RFC3339), "kernel": kernel, "rootfs": rootfs, "vcpus": vcpus, "mem_mib": 512,
-		"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M(), "snapshot": snapshot, "pool": pool}}
+	res := &results{m: map[string]any{"started": time.Now().UTC().Format(time.RFC3339), "backend": be.Name(), "kernel": kernel, "rootfs": rootfs, "vcpus": vcpus, "mem_mib": 512,
+		"snapshot": snapshot, "pool": pool}}
+	for k, v := range binfo {
+		res.m[k] = v
+	}
 	if mb, err := os.ReadFile(filepath.Join(filepath.Dir(rootfs), "manifest.json")); err == nil {
 		var man map[string]any
 		json.Unmarshal(mb, &man)
@@ -156,16 +163,16 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 	// below run in claimed pool VMs: every check (keys, egress attribution,
 	// volume, kill/restart) then covers the pool path. TestSmoke covers the
 	// cold path.
-	if be.PoolStats() != nil {
+	if be.poolOn() {
 		wc, cancel := context.WithTimeout(ctx, 60*time.Second)
-		if err := be.WaitPool(wc, 2); err != nil {
+		if err := be.waitPool(wc, 2); err != nil {
 			t.Fatal(err)
 		}
 		cancel()
 	}
 	if snapshot {
 		wc, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		_, info, err := be.BaseSnapshot(wc)
+		_, info, err := be.baseSnapshot(wc)
 		cancel()
 		if err != nil {
 			t.Fatal(err)
@@ -202,6 +209,17 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 	}
 
 	t.Run("TierSelection", func(t *testing.T) {
+		// The host offers the microVM tier to mgmt (placement relies on it).
+		ht := e.FM.HostTiers()
+		if len(ht) != 1 {
+			t.Fatalf("registered hosts: %v", ht)
+		}
+		for id, tiers := range ht {
+			if !slices.Contains(tiers, "microvm") {
+				t.Fatalf("host %s registered tiers %v: no microvm", id, tiers)
+			}
+			res.set("host_tiers", tiers)
+		}
 		for name, want := range map[string]string{"hello": "microvm", "probe": "microvm", "probep": "process"} {
 			ws := wstatus(name)
 			if ws.Tier != want {
@@ -213,7 +231,7 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 				}
 				res.set("boot_"+name, map[string]any{"source": ws.VM.Source, "boot_call_total_ms": ws.VM.Total.Milliseconds(),
 					"breakdown": vm.Breakdown(*ws.VM)})
-				if (be.PoolStats() != nil || snapshot) && ws.VM.Source != wantSource {
+				if (be.poolOn() || snapshot) && ws.VM.Source != wantSource {
 					t.Fatalf("%s: VM source %q, want %q", name, ws.VM.Source, wantSource)
 				}
 				t.Logf("%s VM: %s, whole Boot() %v", name, ws.VM.Source, ws.VM.Total)
@@ -296,17 +314,13 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 		t.Logf("DO storage on %s: %v", br.Bench.FS, lat)
 	})
 
-	t.Run("Jailed", func(t *testing.T) {
+	t.Run(isolationTest, func(t *testing.T) {
 		m := map[string]any{}
 		for _, w := range []string{"hello", "probe"} {
 			ws := wstatus(w)
-			j := ws.VM.Jail
-			if j == nil || j.UID < 1000 || j.Chroot == "" || j.Cgroup == "" {
-				t.Fatalf("%s: not jailed: %+v", w, j)
-			}
-			m[w] = checkJailed(t, ws.VM.PID, j)
+			m[w] = checkIsolated(t, w, ws.VM)
 		}
-		res.set("jail", m)
+		res.set("isolation", m)
 	})
 
 	t.Run("VolumeNeverDoubleMounted", func(t *testing.T) {
@@ -337,7 +351,7 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			m[w] = map[string]any{"firecracker_rss_mb": v.RSSKB() / 1024, "guest_mem_total_mb": r.Stats.MemTotalKB / 1024,
+			m[w] = map[string]any{be.Name() + "_rss_mb": v.RSSKB() / 1024, "guest_mem_total_mb": r.Stats.MemTotalKB / 1024,
 				"guest_mem_used_mb": (r.Stats.MemTotalKB - r.Stats.MemAvailableKB) / 1024, "guest_workerd_rss_mb": r.Stats.WorkerdRSSKB / 1024}
 		}
 		res.set("rss", m)
@@ -379,12 +393,18 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 		if err != nil || len(r.Found) > 0 {
 			t.Fatalf("fsscan: %v %v", r.Found, err)
 		}
-		// Guest memory: a full Firecracker snapshot of RAM (workerd heap,
-		// page cache, tmpfs). Positive control: the instance's egress MAC key
-		// is in there, so the dump is real.
+		// Guest memory: a full snapshot of RAM (workerd heap, page cache,
+		// tmpfs). Positive control: the instance's egress MAC key is in
+		// there, so the dump is real.
 		dir := t.TempDir()
 		st := time.Now()
 		mem, err := vmProbe.MemoryDump(ctx, dir)
+		if err != nil && !memoryDumpRequired {
+			res.set("no_keys_in_guest", map[string]any{"needles": len(needles), "fsscan_files": r.Scanned, "disks": vmProbe.Disks(),
+				"memory": "NOT SCANNED: " + err.Error()})
+			t.Logf("%d needles: none in %d guest files or %d disks; guest memory NOT scanned on %s: %v", len(needles), r.Scanned, len(vmProbe.Disks()), be.Name(), err)
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -405,7 +425,7 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 			// file, its config drive): no key, and nothing instance-specific
 			// either — the probe instance's MAC key is not in it (it came
 			// with the restored copy's load; the dump above has it).
-			files, _, err := be.BaseSnapshot(ctx)
+			files, _, err := be.baseSnapshot(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -660,10 +680,10 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 		var infos []sandbox.Info
 		var drive int64
 		waitPool := func() {
-			if be.PoolStats() != nil { // steady state: the pool has refilled
+			if be.poolOn() { // steady state: the pool has refilled
 				wc, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
-				if err := be.WaitPool(wc, 1); err != nil {
+				if err := be.waitPool(wc, 1); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -722,7 +742,7 @@ func runE2EVM(t *testing.T, snapshot bool, pool int) {
 		}
 		out := map[string]any{"deploy_to_active_ms": vm.Percentiles(deployMS), "deploy_to_serving_ms": vm.Percentiles(servingMS),
 			"vm_kill_to_serving_ms": vm.Percentiles(restartMS), "stage_order": order, "stages": stats, "config_drive_bytes": drive,
-			"pool": be.PoolStats()}
+			"pool": be.poolStats()}
 		res.set("deploy_ready_bench", out)
 		t.Logf("hello ×%d: deploy→active %v, deploy→serving %v, VM kill→serving %v\n%s", n, vm.Percentiles(deployMS), vm.Percentiles(servingMS),
 			vm.Percentiles(restartMS), strings.Join(lines, "\n"))
@@ -746,46 +766,6 @@ func wstatusEpoch(e *hostdtest.Env, w string) int64 {
 		}
 	}
 	return 0
-}
-
-// checkJailed: the VMM runs as its jail uid, chrooted, under seccomp, in
-// its cgroup with cpu.max and memory.max set.
-func checkJailed(t *testing.T, pid int, j *sandbox.Jail) map[string]any {
-	t.Helper()
-	st, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := map[string]any{"uid": j.UID, "chroot": j.Chroot, "cgroup": j.Cgroup}
-	for _, ln := range strings.Split(string(st), "\n") {
-		f := strings.Fields(ln)
-		if len(f) > 1 && f[0] == "Uid:" && f[1] != fmt.Sprint(j.UID) {
-			t.Fatalf("VMM uid %s, want %d", f[1], j.UID)
-		}
-		if len(f) > 1 && f[0] == "Seccomp:" {
-			if f[1] != "2" {
-				t.Fatalf("VMM seccomp mode %s, want 2", f[1])
-			}
-			out["seccomp"] = "filter (mode 2)"
-		}
-	}
-	if _, err := os.Stat(fmt.Sprintf("/proc/%d/root/api.sock", pid)); err != nil {
-		t.Fatalf("VMM not in its jail: %v", err)
-	}
-	if _, err := os.Stat(fmt.Sprintf("/proc/%d/root/etc/passwd", pid)); err == nil {
-		t.Fatal("VMM sees the host's /etc")
-	}
-	cg, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
-	if !strings.Contains(string(cg), j.Cgroup) {
-		t.Fatalf("VMM cgroup %s, want %s", cg, j.Cgroup)
-	}
-	cpu, _ := os.ReadFile(filepath.Join("/sys/fs/cgroup", j.Cgroup, "cpu.max"))
-	mem, _ := os.ReadFile(filepath.Join("/sys/fs/cgroup", j.Cgroup, "memory.max"))
-	out["cpu.max"], out["memory.max"] = strings.TrimSpace(string(cpu)), strings.TrimSpace(string(mem))
-	if out["cpu.max"] == "max 100000" || out["memory.max"] == "max" {
-		t.Fatalf("cgroup limits not set: %v", out)
-	}
-	return out
 }
 
 type hostdtestWS struct {
@@ -967,7 +947,7 @@ func writeResults(t *testing.T, r *results) {
 	r.m["passed"] = !t.Failed()
 	b, _ := json.MarshalIndent(r.m, "", "  ")
 	os.MkdirAll("results", 0o755)
-	name := "l3-"
+	name := resultsPrefix
 	if r.m["snapshot"] == true && r.m["pool"] == -1 {
 		name = "fv-snapshot-"
 	}

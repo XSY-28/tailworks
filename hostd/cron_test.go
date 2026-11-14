@@ -16,7 +16,16 @@ import (
 // testcontrol. The scheduler's tick is driven with chosen wall-clock times
 // (CronTickAt); everything below it is the production path.
 func TestCronTriggers(t *testing.T) {
-	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.CronTimeout = 2 * time.Second })
+	// The host's own cron loop runs on a frozen clock at a minute no
+	// trigger matches (2000-01-01 00:01), so only the ticks below run
+	// triggers: on the real clock it fired "*/5" whenever the suite crossed
+	// such a minute, and recorded the real minute as run, so the test's
+	// earlier minutes read as already run (both seen in Lima).
+	frozen := time.Date(2000, 1, 1, 0, 1, 0, 0, time.UTC)
+	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) {
+		o.CronTimeout = 2 * time.Second
+		o.CronClock = func() time.Time { return frozen }
+	})
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("cron"), "cron", map[string]string{"ECHO_URL": "http://ttest-echo/from-cron", "SLEEP_MS": "10000"})
 	wl := e.WaitActive("cron", dep, 60*time.Second)

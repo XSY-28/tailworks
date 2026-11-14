@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rosskukulinski/twd/internal/container"
 	"github.com/rosskukulinski/twd/internal/cron"
 	"github.com/rosskukulinski/twd/internal/publicspec"
 )
@@ -51,6 +52,10 @@ type App struct {
 	Runtime string
 	// Node is the Node process tier app (Runtime == RuntimeNode).
 	Node *NodeApp
+	// Containers are the container classes (wrangler "containers", with
+	// twd.jsonc "containers" overriding or pinning by class), by DO class:
+	// each instance of the class may run one container (ADR-032).
+	Containers map[string]container.Class
 	// Public (twd.jsonc "public", ADR-029) lists the path prefixes reachable
 	// from the public internet over Funnel, and their limits. nil: the
 	// workload is tailnet-only.
@@ -135,7 +140,11 @@ type twdConfig struct {
 		Health string            `json:"health"`
 		Args   []string          `json:"args"`
 	} `json:"node"`
-	Tailnet struct {
+	// Containers is parsed by internal/container (only its presence here):
+	// an array like wrangler's, or {"<Class>": {"image", "images"}}, the
+	// pins twd deploy writes once it has built them (ADR-032 D3).
+	Containers json.RawMessage `json:"containers"`
+	Tailnet    struct {
 		Tags     []string `json:"tags"`
 		Connects []string `json:"connects"`
 		Objects  map[string]struct {
@@ -296,6 +305,23 @@ func Parse(files map[string][]byte) (*App, error) {
 			return nil, fmt.Errorf("bundle: tailnet.objects.%s.egress must be %q or %q", name, EgressObject, EgressWorkload)
 		}
 	}
+	var twdJSON []byte
+	if tb, ok := files["twd.jsonc"]; ok {
+		twdJSON = StripJSONC(tb)
+	}
+	cs, err := container.Parse(StripJSONC(wb), twdJSON)
+	if err != nil {
+		return nil, fmt.Errorf("bundle: %w", err)
+	}
+	for _, c := range cs {
+		if a.Classes[c.Class] == nil {
+			return nil, fmt.Errorf("bundle: containers.%s has no durable_objects binding (a container belongs to a Durable Object class)", c.Class)
+		}
+		if a.Containers == nil {
+			a.Containers = map[string]container.Class{}
+		}
+		a.Containers[c.Class] = c
+	}
 	return a, nil
 }
 
@@ -329,6 +355,9 @@ func parseNode(files map[string][]byte, t *twdConfig) (*App, error) {
 	}
 	if len(t.Tailnet.Objects) > 0 {
 		return nil, errors.New("bundle: runtime \"node\" has one tailnet identity per process (ADR-022); tailnet.objects is not supported")
+	}
+	if c := bytes.TrimSpace(t.Containers); len(c) > 0 && string(c) != "null" && string(c) != "[]" && string(c) != "{}" {
+		return nil, errors.New("bundle: runtime \"node\" has no Durable Objects, so no containers (a container belongs to a Durable Object class)")
 	}
 	switch a.Tier {
 	case "", TierProcess:

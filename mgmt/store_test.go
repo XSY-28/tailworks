@@ -30,7 +30,7 @@ func storesUnderTest(t *testing.T) map[string]*SQLStore {
 			t.Fatalf("postgres: %v", err)
 		}
 		// Fresh schema per test: drop everything and migrate again.
-		for _, tbl := range []string{"tenants", "hosts", "deployments", "objects", "leases", "audit", "audit_heads", "revocations", "host_paths"} {
+		for _, tbl := range []string{"tenants", "hosts", "deployments", "objects", "leases", "audit", "audit_heads", "revocations", "container_reservations", "registry_links", "registry_tags", "public_images", "host_paths", "warm_keys"} {
 			if err := p.rawExec(ctx, "DROP TABLE IF EXISTS "+tbl+" CASCADE"); err != nil {
 				t.Fatal(err)
 			}

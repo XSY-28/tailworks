@@ -99,9 +99,14 @@ type Candidate struct {
 	Tiers    []string
 	Live     bool
 	Draining bool
-	// Free capacity per unit ("nodes" = capacityNodes - liveNodes; future
-	// units such as "vms" or "hugepageMiB" come from the host's
-	// registration). A unit the host doesn't report counts as 0.
+	// Arch is the host's GOARCH ("" = not reported): container images run
+	// only on a host of their arch (ADR-032).
+	Arch string
+	// Free capacity per unit: "nodes" = capacityNodes - liveNodes; the
+	// capacity vector's units (ADR-032 D9: "vms", "vmMemMiB", "hugeMemMiB",
+	// "vcpus" with overcommit, "scratchMiB") come from the host's
+	// registration minus its heartbeat's usage. A unit the host doesn't
+	// report counts as 0.
 	Free map[string]int
 }
 
@@ -111,8 +116,49 @@ func candidateOf(h Host, now time.Time) Candidate {
 	if len(tiers) == 0 {
 		tiers = []string{"process"} // hosts that predate tier reporting
 	}
-	return Candidate{ID: h.ID, Pool: h.Pool, Tiers: tiers, Live: h.Live(now),
-		Free: map[string]int{"nodes": h.CapacityNodes - h.LiveNodes}}
+	return Candidate{ID: h.ID, Pool: h.Pool, Tiers: tiers, Live: h.Live(now), Arch: h.Arch, Free: freeUnits(h)}
+}
+
+// unboundedUnit stands in for a capacity-vector unit of a host that
+// registered no vector (a hostd that predates ADR-032 D9): placement can't
+// bound what it doesn't know, and the host's own admission still applies.
+const unboundedUnit = 1 << 30
+
+// freeUnits is a host's free capacity per unit (Candidate.Free).
+func freeUnits(h Host) map[string]int {
+	free := map[string]int{"nodes": h.CapacityNodes - h.LiveNodes}
+	c, u := h.Capacity, h.Usage
+	if c == nil {
+		for _, k := range []string{"vms", "vmMemMiB", "hugeMemMiB", "vcpus", "scratchMiB"} {
+			free[k] = unboundedUnit
+		}
+		return free
+	}
+	if u == nil {
+		u = &HostUsage{}
+	}
+	oc := c.VCPUOvercommit
+	if oc <= 0 {
+		oc = 1
+	}
+	free["vms"] = c.VMs - u.VMs
+	free["vmMemMiB"] = c.VMMemMiB - u.VMMemMiB
+	free["hugeMemMiB"] = c.HugeMemMiB - u.HugeMemMiB
+	free["vcpus"] = int(float64(c.VCPUs)*oc - u.VCPUs)
+	free["scratchMiB"] = c.ScratchMiB - u.ScratchMiB
+	return free
+}
+
+// placementCapacity is the free capacity a new deployment needs: a node,
+// and one free VM when it runs in a microVM (a microvm-tier DO instance) or
+// declares containers (each container is a VM; ADR-032 D9). The sticky
+// holder is exempt (it already holds its share).
+func placementCapacity(tiers []string, containers bool) map[string]int {
+	need := map[string]int{"nodes": 1}
+	if containers || slices.Contains(tiers, "microvm") {
+		need["vms"] = 1
+	}
+	return need
 }
 
 // Requirements is what a placement must satisfy and optimize.
@@ -121,6 +167,12 @@ type Requirements struct {
 	Pool     string         // "" = any pool
 	Tiers    []string       // the host must offer every one
 	Capacity map[string]int // free units needed (nil = {"nodes": 1})
+	// Containers: the bundle declares containers (ADR-032), so the host
+	// must offer the "containers" capability for Arch ("" = any) and, when
+	// Arches is set, be of one of the arches every image was pinned for.
+	Containers bool
+	Arch       string
+	Arches     []string
 	// Pinned bypasses scoring: an explicit --host, or a sandbox that must
 	// run next to its parent DO. The pinned host must still be eligible.
 	Pinned string
@@ -308,6 +360,16 @@ func ineligible(c Candidate, req Requirements, need map[string]int, holder bool)
 			return fmt.Sprintf("no %s tier (offers %s)", t, strings.Join(c.Tiers, ","))
 		}
 	}
+	if req.Containers {
+		switch {
+		case !slices.Contains(c.Tiers, CapContainers):
+			return fmt.Sprintf("no containers (offers %s)", strings.Join(c.Tiers, ","))
+		case req.Arch != "" && c.Arch != req.Arch:
+			return fmt.Sprintf("containers for %s, the images need %s", archOrUnknown(c.Arch), req.Arch)
+		case len(req.Arches) > 0 && !slices.Contains(req.Arches, c.Arch):
+			return fmt.Sprintf("containers for %s, the images were pinned for %s", archOrUnknown(c.Arch), strings.Join(req.Arches, ","))
+		}
+	}
 	if holder {
 		return ""
 	}
@@ -322,6 +384,13 @@ func ineligible(c Candidate, req Requirements, need map[string]int, holder bool)
 		}
 	}
 	return ""
+}
+
+func archOrUnknown(a string) string {
+	if a == "" {
+		return "an unknown arch"
+	}
+	return a
 }
 
 func scoreTargets(s *HostScore, targets []string, get func(string) (PathMeasurement, bool), now time.Time, maxAge time.Duration, agg string) {
@@ -489,6 +558,25 @@ func noHostSummary(hosts []HostScore, req Requirements) string {
 		want = "no live host with tier " + strings.Join(req.Tiers, "+")
 		if slices.Contains(req.Tiers, "microvm") {
 			fix = "; set one up with `sudo twd host setup --microvm`, or deploy with \"tier\": \"process\""
+		}
+	}
+	if req.Containers {
+		// ADR-032: the bundle's "containers" need a host offering them for
+		// the images' arch (NAS and no-KVM hosts never do).
+		c := "containers"
+		if req.Arch != "" {
+			c += " (" + req.Arch + " images)"
+		} else if len(req.Arches) > 0 {
+			c += " (" + strings.Join(req.Arches, " or ") + " images: the arches every image was pinned for)"
+		}
+		if len(req.Tiers) > 0 {
+			want += " and " + c
+		} else {
+			want = "no live host with " + c
+		}
+		fix = "; set up a Linux host with KVM (`sudo twd host setup --microvm`); NAS and no-KVM hosts never offer containers"
+		if req.Arch != "" {
+			fix = fmt.Sprintf("; set up a %s Linux host with KVM (`sudo twd host setup --microvm`); NAS and no-KVM hosts never offer containers", req.Arch)
 		}
 	}
 	return want + " (" + strings.Join(parts, "; ") + ")" + fix
