@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -82,8 +84,32 @@ func (inst *instance) logFile() string {
 	return p
 }
 
+// logsCallerTag is the tag a tailnet caller of GET /v1/logs must carry.
+// The policy grant (tag:twd-mgmt → tag:twd-host) is not enough on its own:
+// a broad grant (the default allow-all policy) would let any node read any
+// workload's logs without going through mgmt's admin check.
+const logsCallerTag = "tag:twd-mgmt"
+
+// logsCallerOK admits the unix push socket (no host:port address) and,
+// on the tailnet listener, only callers WhoIs reports with logsCallerTag.
+// It fails closed when WhoIs fails.
+func (h *Host) logsCallerOK(r *http.Request) bool {
+	if h.cfg.PushCallerTags == nil {
+		return true
+	}
+	if _, _, err := net.SplitHostPort(r.RemoteAddr); err != nil {
+		return true // unix socket: local, 0600, sandboxed workloads refused
+	}
+	tags, err := h.cfg.PushCallerTags(r.Context(), r.RemoteAddr)
+	return err == nil && slices.Contains(tags, logsCallerTag)
+}
+
 // logsHandler is GET /v1/logs?tenant=&workload=&n=&follow=1.
 func (h *Host) logsHandler(w http.ResponseWriter, r *http.Request) {
+	if !h.logsCallerOK(r) {
+		writeLogsError(w, 403, "forbidden", "workload logs are served to twd-mgmt ("+logsCallerTag+") only")
+		return
+	}
 	q := r.URL.Query()
 	tenantID, workload := q.Get("tenant"), q.Get("workload")
 	n := 50

@@ -231,6 +231,7 @@ func run() error {
 	}
 	if pushLn != nil {
 		hcfg.PushListener, hcfg.PushPort = pushLn, *pushPort
+		hcfg.PushCallerTags = pushCallerTags(ts)
 	}
 	h, err := hostd.New(hcfg)
 	if err != nil {

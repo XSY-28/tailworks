@@ -152,6 +152,12 @@ type Config struct {
 	// to mgmt at registration so pushes go to the WhoIs node's address.
 	// The unix push socket (local-dev) is always served too.
 	PushListener net.Listener
+
+	// PushCallerTags, when set, returns the tailnet tags of a push-API
+	// caller by its remote address (WhoIs on the host's node). GET /v1/logs
+	// serves tenant data and answers TCP callers only if they carry
+	// tag:twd-mgmt (logs.go); the unix socket is local and unchanged.
+	PushCallerTags func(ctx context.Context, remoteAddr string) ([]string, error)
 	// ServiceCheckEvery is how often a workload with a Tailscale Service is
 	// health-probed (advertised only while healthy). 0 = 2 s.
 	ServiceCheckEvery time.Duration

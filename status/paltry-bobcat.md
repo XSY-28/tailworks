@@ -1,4 +1,6 @@
-Last update: 2026-11-14 PT. DX pass: strict twd.jsonc + schema, release workflow + get.sh, app-named tags, policy-doc fix.
+Last update: 2026-11-14 PT. Merged remote `twd logs` (status/remote-logs.md); hostd's GET /v1/logs now admits only tag:twd-mgmt over the tailnet.
+
+Earlier: DX pass: strict twd.jsonc + schema, release workflow + get.sh, app-named tags, policy-doc fix.
 
 # Developer-experience pass (branch `paltry-bobcat`)
 
@@ -62,6 +64,22 @@ secrets are separate workstreams, each with its own status file.
   entry is refused with `checksum mismatch`.
 - Not run: the release workflow itself (it needs a pushed tag on GitHub),
   and the e2e suites against a real tailnet.
+
+## Remote logs: caller check on hostd
+
+The push API (tcp:7474 on the host's node) relied only on the policy grant
+`tag:twd-mgmt → tag:twd-host`. Logs are tenant data: with a broad grant
+(for example the default allow-all policy), any node could read any
+workload's log and skip mgmt's admin check. `GET /v1/logs` now asks WhoIs
+(`hostd.Config.PushCallerTags`, `cmd/twd-hostd/pushcaller.go`) and answers
+TCP callers only if they carry `tag:twd-mgmt`. A failed WhoIs is refused,
+and the unix socket is unchanged. Test: `TestLogsHandlerCallerMustBeMgmt`.
+After the merge, `make lint test` passes; `TestCLILink` ran here (not
+skipped) and covers `twd logs` from a linked machine.
+
+Kills, `/v1/status` and the other push routes still have no such check.
+Extending it to the whole push API needs the e2e suites run against a
+real tailnet first.
 
 ## Gaps and next steps
 
