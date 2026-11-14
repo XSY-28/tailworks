@@ -74,6 +74,12 @@ type Info struct {
 	// call (netns, TAP, stack, VMM, API calls, boot, workerd).
 	Boot, Ready, Total time.Duration
 	GuestUptimeAtReady time.Duration
+	// Stages are host-side stage end times in ms since Boot() was called
+	// (config drive, helper: netns/jail/volume/jailer/API calls,
+	// InstanceStart, vnet, ready); GuestStages are the guest's own, in ms
+	// since its kernel started (proto.Msg.Stages).
+	Stages      map[string]float64 `json:",omitempty"`
+	GuestStages map[string]float64 `json:",omitempty"`
 	// Jail is how the VMM is confined (microVM tier: jailer chroot,
 	// uid/gid, cgroup limits, seccomp).
 	Jail *Jail `json:",omitempty"`

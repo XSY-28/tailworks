@@ -11,6 +11,7 @@ Last update: 2026-11-08 01:40 PT. M7 (E2E-MULTI: one host, tenant A on tailnet 1
 Last update: 2026-11-08 08:30 PT. L3: `make e2e-linux-reboot` PASS (clean reboot + power cut). Earlier, 08:15 PT, L3 (production-shaped microVM tier on Linux) on branch `l3-microvm`: `make e2e-vm` PASS (13 subtests), `make e2e-linux-vm` PASS from the installed release on fresh `twdl-kvm-u24`.
 Last update: 2026-11-08 10:00 PT. Integration (Linux): L3 + L1 merged onto master (L2) on `int-linux`; redeploy-after-purge and lease_lost-retry fixes; full matrix green (macOS, real tailnets, twd-dev, Debian 12 / Ubuntu 24.04 arm64 with reboot + ephemeral / Ubuntu 24.04 amd64, e2e-linux-vm, e2e-linux-reboot); re-find delay diagnosed (WireGuard stale-session timeout, not DERP/netmap).
 Last update: 2026-11-08 09:05 PT. L1: ephemeral nodes now re-mint on a rejected rejoin (netd + mgmt `/remint` + hostd); reboot survival and the ephemeral restart measured on Ubuntu 24.04 arm64; 5/5 supported distros PASS.
+Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown measured (see the FV section at the end).
 Last update: 2026-11-08 02:05 PT. Integration: master (M6 + M5 + M9, `57dd519`) merged into `m7-multi`; the full matrix passes on `4cce30d` (macOS, real tailnets, mbp from the release, Lima).
 
 ## M0: repo skeleton (DONE)
@@ -1432,3 +1433,65 @@ Run `e6d03b` (2026-11-08 23:56 PT) via `policy.ApplyWith` (additions only, valid
 - The interactive confirmation before the WIF login URL and the translation of a join-time tag refusal were exercised only by unit tests (no real browser login can be automated).
 - Not exercised for real: an OAuth client **without** `devices:core` (hermetic only), and a real `policy_missing_tag_owners` (would need breaking tailnet 1's policy); both covered hermetically.
 - `twd up` without `policy_file:read` can't check grants; it reports that and relies on the mints proving tag ownership. Without that scope `spawn()` answers `policy_unavailable` (same as WIF without a lifecycle credential).
+
+
+## FV: fast microVM start (branch `fast-vm`, 2026-11-13)
+Goal: make a microVM workload start in tens of ms (warm pool, then snapshot restore), so the VM tier is usable where isolates are, and a later step can afford one VM per object.
+
+> **Every number in this section was measured in Lima `twd-dev` on an M5 Pro, so Firecracker runs under nested virtualization** (the Lima VM is itself a vz guest). Stage-2 page faults and VM exits cost far more there than on bare-metal KVM. **No bare-metal KVM machine was available**, so there are no bare-metal numbers. Treat absolute values as upper bounds and the ratios between stages as the useful part. Huge pages (2 MiB) back guest RAM in all runs (M8 finding 1). twd-dev was shared with other sessions during these runs; one Firecracker VM left over from an earlier run (`twdp59144-0`, 5 days old, not started by this work) held 256 huge pages throughout and was left alone.
+
+### Phase 1: where the 0.6 s goes
+**Instrumentation** (kept; it is cheap):
+- `twd-guestd` stamps each stage on `CLOCK_BOOTTIME`, i.e. ms since the guest kernel started, which is InstanceStart. The stamps go out in the `boot` and `ready` messages (`proto.Msg.Stages`).
+- The helper reports each step relative to its own start (`Timings`: netns, jail, volume, jailer, every API call).
+- hostd records its own stages. All of it lands in `sandbox.Info.Stages` / `GuestStages`.
+- `vm.Breakdown()` turns these into per-stage durations and `vm.Summarize()` into p50/p95.
+- A debug-only guest op `wbench` times `workerd --version`, and debug-only `wkill` lets the supervisor restart workerd so a warm restart can be timed.
+
+**Benchmarks:**
+- `hostd/vm` `TestBootBench` (`TWD_VM_BENCH=N`; not part of `make e2e-vm`) boots the tiny smoke config 20 times, without and with a fresh encrypted volume, plus 3 boots of a worker with ~1.2 s of top-level module work.
+- e2e-vm `DeployReadyBench` (`TWD_VM_BENCH_DEPLOYS=20 make e2e-vm`; default 5) redeploys the real `hello` template (platform bundle, 48 KiB config drive, DO volume) through hostd 20 times, then kills its VM 3 times.
+
+**Stages, real `hello` platform bundle through hostd** (20 serial redeploys; e2e-vm `DeployReadyBench`):
+
+| Stage | p50 ms | p95 ms |
+|---|---|---|
+| host: config drive (tar of the instance dir) | 0.2 | 0.3 |
+| host: netns + bridge + 2 TAPs (6 `ip` execs) | 27.4 | 38.0 |
+| host: jail dir (bind mounts, config copy, vsock listener) | 0.2 | 0.3 |
+| host: volume attach (loop + LUKS2 open; existing volume) | 16.4 | 22.4 |
+| host: jailer exec → Firecracker API socket up | 15.8 | 22.5 |
+| host: VMM API calls (machine, boot source, 3 drives, net, vsock) | 1.4 | 2.4 |
+| host: InstanceStart call | 4.6 | 5.9 |
+| guest: **kernel boot** (InstanceStart → init runs) | **122.1** | 151.6 |
+| guest: init mounts | 0.4 | 0.5 |
+| guest: config drive read + extract | 2.9 | 5.7 |
+| guest: set clock / eth0 up | 0.0 / 0.7 | 0.1 / 1.1 |
+| guest: DO volume mount | 4.1 | 7.8 |
+| guest: workerd fork/exec | 3.1 | 4.0 |
+| guest: **workerd/V8 process init** (exec → ingress socket listening) | **168.1** | 229.0 |
+| guest: **isolate + bundle load + first healthy response** | **197.6** | 304.8 |
+| **whole `Boot()`** | **601.6** | 799.8 |
+| hostd: **deploy → active** (incl. drain, guest unmount, volume release, `Boot()`, health, routing) | **745.7** | 768.6 |
+| hostd: deploy → first 200 over tsnet | 772.1 | 795.0 |
+| hostd: VM SIGKILL → serving again (3 kills; includes the restart policy's 200/400/600 ms backoff) | 1305.9 | 1626.6 |
+
+**Same, tiny smoke worker** (`TestBootBench`, 20 boots each): no volume, `Boot()` p50 603 / p95 718 ms. With a *new* volume (LUKS2 format + mkfs each boot), the volume attach takes 80 / 91 ms and `Boot()` 688 / 805 ms. Kernel boot 125 ms, workerd init 188 ms, first healthy 207 ms: the smoke config costs as much as the platform bundle.
+
+**What each workerd stage really is.** A worker that spends ~1.2 s in module top-level code shifts *first healthy response* by ~1.2 s and leaves *until listening* unchanged (165 ms). So workerd binds its sockets before it evaluates modules. "Until listening" is workerd/V8 process init, and the bundle is compiled and evaluated on the first request.
+
+**Where the 0.6 s goes:**
+- **kernel 20 %**;
+- **workerd process init 28 %**;
+- **first request (isolate + bundle) 33 %**;
+- host-side setup (netns, volume, jailer, API) ~11 %;
+- the rest is init, mounts and vsock.
+
+On top of `Boot()`, hostd's redeploy spends ~145 ms: the drain, the old guest's unmount and volume release (~110 ms, L3), the health check and the routing switch.
+
+**The decisive measurement: workerd in a *warm* VM.** After a VM is up, a second workerd started in the same guest (debug `wkill`; the supervisor restarts it) goes from exec to healthy in **13–15 ms**: 8 ms to listening, 5–6 ms for the first request. A cold one takes ~395 ms. `workerd --version` alone takes 10.8–17.7 ms on its first run in a fresh guest and 1.7–2.1 ms on its third. So ~95 % of the cold workerd cost is first-touch cost, not work:
+- reading the 155 MiB workerd binary through virtio-blk into an empty guest page cache;
+- faulting in fresh guest RAM, which under nested virt means stage-2 faults per page.
+
+A VM that has run workerd once and then starts a *fresh* workerd process for the tenant skips almost all of it. That shapes both the pool (Phase 2) and the snapshot (Phase 3).
+

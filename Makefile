@@ -66,7 +66,7 @@ TWD_VM_KERNEL ?= $(HOME)/fc/vmlinux
 # 2 MiB pages for guest RAM (runtime sysctl inside the Lima VM, not persisted):
 # without them, workerd start-up under nested virt is ~8x slower.
 VM_HUGEPAGES ?= 2048
-VM_ENV = PATH="$$PATH" TWD_VM_KERNEL="$(TWD_VM_KERNEL)" TWD_VM_ROOTFS="$(CURDIR)/$(GUEST_OUT)/rootfs.ext4"
+VM_ENV = PATH="$$PATH" TWD_VM_KERNEL="$(TWD_VM_KERNEL)" TWD_VM_ROOTFS="$(CURDIR)/$(GUEST_OUT)/rootfs.ext4" TWD_VM_BENCH_DEPLOYS="$(TWD_VM_BENCH_DEPLOYS)"
 e2e-vm: deps guest-image
 	@[ "$$(uname -s)" = Linux ] || { echo "e2e-vm: Linux only; run it inside Lima twd-dev"; exit 1; }
 	@[ "$$(cat /proc/sys/vm/nr_hugepages)" -ge $(VM_HUGEPAGES) ] || sudo sysctl -qw vm.nr_hugepages=$(VM_HUGEPAGES)

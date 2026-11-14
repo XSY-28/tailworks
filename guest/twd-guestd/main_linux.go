@@ -47,11 +47,47 @@ const workerdBin = "/usr/bin/workerd"
 
 var start = time.Now()
 
+// ---- stage timestamps (Phase 1 boot breakdown) ----
+
+var (
+	stMu   sync.Mutex
+	stages = map[string]float64{}
+)
+
+// bootMS is ms since the guest kernel started (CLOCK_BOOTTIME; unaffected
+// by settimeofday).
+func bootMS() float64 {
+	var ts unix.Timespec
+	unix.ClockGettime(unix.CLOCK_BOOTTIME, &ts)
+	return float64(ts.Nano()) / 1e6
+}
+
+// stage records the end of a boot stage (first time only).
+func stage(name string) {
+	t := bootMS()
+	stMu.Lock()
+	if _, ok := stages[name]; !ok {
+		stages[name] = t
+	}
+	stMu.Unlock()
+}
+
+func stageCopy() map[string]float64 {
+	stMu.Lock()
+	defer stMu.Unlock()
+	m := make(map[string]float64, len(stages))
+	for k, v := range stages {
+		m[k] = v
+	}
+	return m
+}
+
 func logf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "twd-guestd: "+format+"\n", args...)
 }
 
 func main() {
+	stage("init")
 	if os.Getpid() != 1 {
 		logf("not PID 1; refusing to run")
 		os.Exit(2)
@@ -70,30 +106,35 @@ func run() error {
 	if err := mounts(); err != nil {
 		return err
 	}
+	stage("mounts")
 	cfg, err := readConfigDrive("/dev/vdb")
 	if err != nil {
 		return fmt.Errorf("config drive: %w", err)
 	}
+	stage("config")
 	if cfg.UnixNano > 0 {
 		tv := unix.NsecToTimeval(cfg.UnixNano + time.Since(start).Nanoseconds())
 		if err := unix.Settimeofday(&tv); err != nil {
 			logf("settimeofday: %v", err)
 		}
 	}
+	stage("clock")
 	if err := netUp(cfg); err != nil {
 		return fmt.Errorf("network: %w", err)
 	}
+	stage("net")
 	os.MkdirAll(proto.DODir, 0o700)
 	if cfg.Volume != "" {
 		if err := mountVolume(cfg.Volume); err != nil {
 			return fmt.Errorf("DO volume: %w", err)
 		}
 	}
+	stage("volume")
 
 	g := &guest{cfg: cfg, out: make(chan proto.Msg, 64)}
 	go g.vsockLoop()
 	go g.reap()
-	g.send(proto.Msg{Type: "boot", UptimeMS: time.Since(start).Milliseconds()})
+	g.send(proto.Msg{Type: "boot", UptimeMS: time.Since(start).Milliseconds(), Stages: stageCopy()})
 	g.superviseWorkerd()
 	return nil
 }
@@ -264,6 +305,7 @@ type guest struct {
 	workerdPID int
 	restarts   int
 	stopping   bool     // shutdown: don't restart workerd
+	sfx        string   // stage-name suffix of the current workerd attempt
 	exits      chan int // workerd exit statuses, fed by reap()
 }
 
@@ -352,6 +394,26 @@ func (g *guest) handle(m proto.Msg) proto.Msg {
 			break
 		}
 		r.Results = probe(m.Targets)
+	case "wbench":
+		// Bare workerd process start (exec, dynamic loading, binary page
+		// faults, no config): `workerd --version`, N times.
+		if !g.cfg.Debug {
+			r.Error = "wbench needs debug mode"
+			break
+		}
+		r.Stages = wbench(m.N)
+	case "wkill":
+		// SIGKILL workerd (the supervisor restarts it): warm-restart timing.
+		if !g.cfg.Debug {
+			r.Error = "wkill needs debug mode"
+			break
+		}
+		g.mu.Lock()
+		pid := g.workerdPID
+		g.mu.Unlock()
+		if pid > 0 {
+			unix.Kill(pid, unix.SIGKILL)
+		}
 	default:
 		r.Error = "unknown op " + m.Op
 	}
@@ -490,6 +552,21 @@ func fsscan(root string) (found []string, n int) {
 	return found, n
 }
 
+func wbench(n int) map[string]float64 {
+	if n <= 0 || n > 50 {
+		n = 5
+	}
+	out := map[string]float64{}
+	for i := 0; i < n; i++ {
+		st := time.Now()
+		if err := exec.Command(workerdBin, "--version").Run(); err != nil {
+			out["error"] = 1
+		}
+		out[fmt.Sprintf("run%02d", i)] = float64(time.Since(st).Microseconds()) / 1000
+	}
+	return out
+}
+
 func probe(targets []string) []proto.ProbeResult {
 	out := make([]proto.ProbeResult, len(targets))
 	var wg sync.WaitGroup
@@ -567,6 +644,13 @@ func (g *guest) superviseWorkerd() {
 	g.mu.Unlock()
 	for attempt := 0; ; attempt++ {
 		st := time.Now()
+		sfx := ""
+		if attempt > 0 {
+			sfx = fmt.Sprintf("#%d", attempt) // a restart's own stage times
+		}
+		g.mu.Lock()
+		g.sfx = sfx
+		g.mu.Unlock()
 		cmd := exec.Command(workerdBin, g.cfg.WorkerdArgs...)
 		cmd.Dir = proto.AppDir
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
@@ -577,6 +661,7 @@ func (g *guest) superviseWorkerd() {
 			g.workerdPID = cmd.Process.Pid
 		}
 		g.mu.Unlock()
+		stage("workerd_spawn" + sfx)
 		if err != nil {
 			logf("start workerd: %v", err)
 			g.send(proto.Msg{Type: "workerd-exit", ExitCode: -1, Error: err.Error(), Restarts: attempt})
@@ -594,7 +679,8 @@ func (g *guest) superviseWorkerd() {
 		}()
 		select {
 		case <-healthy:
-			g.send(proto.Msg{Type: "ready", UptimeMS: time.Since(start).Milliseconds(), WorkerdMS: time.Since(st).Milliseconds(), Restarts: attempt})
+			stage("healthy" + sfx)
+			g.send(proto.Msg{Type: "ready", UptimeMS: time.Since(start).Milliseconds(), WorkerdMS: time.Since(st).Milliseconds(), Restarts: attempt, Stages: stageCopy()})
 			code := <-g.exits
 			g.send(proto.Msg{Type: "workerd-exit", ExitCode: code, Restarts: attempt})
 		case code := <-g.exits:
@@ -619,7 +705,24 @@ func (g *guest) waitHealthy(d time.Duration) bool {
 	cl := &http.Client{Timeout: time.Second}
 	deadline := time.Now().Add(d)
 	addr := fmt.Sprintf("http://127.0.0.1:%d/_twd/admin", proto.IngressPort)
+	tcp := fmt.Sprintf("127.0.0.1:%d", proto.IngressPort)
+	listening := false
 	for time.Now().Before(deadline) {
+		if !listening {
+			// workerd binds its sockets once the config (and every
+			// worker in it) is loaded: the end of "bundle load".
+			c, err := net.DialTimeout("tcp", tcp, 100*time.Millisecond)
+			if err != nil {
+				time.Sleep(2 * time.Millisecond)
+				continue
+			}
+			c.Close()
+			listening = true
+			g.mu.Lock()
+			sfx := g.sfx
+			g.mu.Unlock()
+			stage("workerd_listen" + sfx)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		req, _ := http.NewRequestWithContext(ctx, "POST", addr, bytes.NewReader(nil))
 		req.Header.Set("x-twd-cf", g.cfg.HealthCF)

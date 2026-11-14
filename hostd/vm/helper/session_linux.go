@@ -175,6 +175,7 @@ func (s *Server) start(c *net.UnixConn, uid int, req *helperapi.StartRequest, fd
 		}
 		os.Chown(node, sess.jailID, sess.jailID)
 		tm["volume"] = ms(time.Since(vt))
+		tm["volume_done"] = ms(time.Since(t0))
 		log.Info("volume attached", "volume", req.Volume.Name, "epoch", req.Volume.Epoch, "formatted", a.formatted, "ms", tm["volume"])
 	}
 
@@ -254,6 +255,7 @@ func (s *Server) start(c *net.UnixConn, uid int, req *helperapi.StartRequest, fd
 			<-exited
 			return nil, resp, nil, err
 		}
+		tm["api"+cl.path] = ms(time.Since(t0))
 	}
 	started := time.Now()
 	if err := sess.call("PUT", "/actions", map[string]any{"action_type": "InstanceStart"}); err != nil {

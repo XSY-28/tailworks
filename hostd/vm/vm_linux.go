@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -243,6 +244,8 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (vmi sandbox.VM, err
 	id := fmt.Sprintf("%d-%s-%d", os.Getpid(), s.ID, n)
 	m := &Machine{b: b, id: id, dir: filepath.Join(b.cfg.RunDir, id), tapFD: -1,
 		done: make(chan struct{}), ready: make(chan struct{}), pending: map[int64]chan proto.Msg{}}
+	m.info.Stages = map[string]float64{}
+	stage := func(name string) { m.info.Stages[name] = float64(time.Since(t0).Microseconds()) / 1000 }
 	m.log = b.cfg.Log.With("vm", id)
 	if s.Log != nil {
 		m.log = s.Log.With("vm", id)
@@ -262,6 +265,7 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (vmi sandbox.VM, err
 		return nil, fmt.Errorf("config drive: %w", err)
 	}
 	m.disks = []string{b.cfg.Rootfs, drive}
+	stage("config_drive")
 
 	// 2. The files the helper puts in the jail, as open fds.
 	var files []*os.File
@@ -303,6 +307,8 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (vmi sandbox.VM, err
 	if err != nil {
 		return nil, fmt.Errorf("microVM helper: %w", err)
 	}
+	stage("helper_dial")
+	hs := time.Since(t0)
 	resp, fds, err := m.conn.Do(helperapi.Request{Op: "start", Start: req}, files, 90*time.Second)
 	req.Volume = nil // drop our reference to the key copy
 	if err != nil {
@@ -321,8 +327,13 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (vmi sandbox.VM, err
 	if err != nil {
 		return nil, err
 	}
+	stage("helper_start")
+	for k, v := range resp.Timings { // the helper's, relative to its own start
+		m.info.Stages["helper."+k] = float64(hs.Microseconds())/1000 + v
+	}
 	m.pid = resp.PID
 	m.start = time.Unix(0, resp.StartedAt)
+	m.info.Stages["instance_start"] = float64(m.start.Sub(t0).Microseconds()) / 1000
 	m.info.PID = resp.PID
 	m.info.HugePages = resp.HugePages
 	m.info.VolumeNew = resp.VolumeNew
@@ -336,6 +347,7 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (vmi sandbox.VM, err
 		return nil, err
 	}
 	m.ingress = m.ingressProxy()
+	stage("vnet")
 	go m.acceptCtl()
 	go m.watch()
 
@@ -353,6 +365,7 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (vmi sandbox.VM, err
 		return nil, fmt.Errorf("microVM not ready after %v; events %v; last %s; console: %s", b.cfg.ReadyTimeout, m.eventTypes(), le, m.consoleTail(3000))
 	}
 	m.info.Total = time.Since(t0)
+	stage("ready")
 	m.log.Info("microVM ready", "boot_ms", m.info.Boot.Milliseconds(), "ready_ms", m.info.Ready.Milliseconds(),
 		"total_ms", m.info.Total.Milliseconds(), "jail", resp.Jail != nil, "volume", m.info.Volume, "volume_ms", m.info.VolumeAttachMS)
 	return m, nil
@@ -469,9 +482,11 @@ func (m *Machine) readCtl(c net.Conn) {
 		switch msg.Type {
 		case "boot":
 			m.info.Boot = time.Since(m.start)
+			m.setGuestStages(msg.Stages)
 		case "ready":
 			m.info.Ready = time.Since(m.start)
 			m.info.GuestUptimeAtReady = time.Duration(msg.UptimeMS) * time.Millisecond
+			m.setGuestStages(msg.Stages)
 			if m.readyOK.CompareAndSwap(false, true) {
 				close(m.ready)
 			}
@@ -482,6 +497,20 @@ func (m *Machine) readCtl(c net.Conn) {
 			m.mu.Unlock()
 		}
 	}
+}
+
+func (m *Machine) setGuestStages(st map[string]float64) {
+	if len(st) == 0 {
+		return
+	}
+	m.mu.Lock()
+	if m.info.GuestStages == nil {
+		m.info.GuestStages = map[string]float64{}
+	}
+	for k, v := range st {
+		m.info.GuestStages[k] = v
+	}
+	m.mu.Unlock()
 }
 
 func (m *Machine) eventTypes() []string {
@@ -568,7 +597,13 @@ func (m *Machine) Done() <-chan struct{} { return m.done }
 func (m *Machine) Err() error { return m.exitErr }
 
 // Info implements sandbox.VM.
-func (m *Machine) Info() sandbox.Info { return m.info }
+func (m *Machine) Info() sandbox.Info {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	i := m.info
+	i.Stages, i.GuestStages = maps.Clone(i.Stages), maps.Clone(i.GuestStages)
+	return i
+}
 
 // Refused implements sandbox.VM.
 func (m *Machine) Refused() []string { return m.vn.refusedFlows() }
@@ -718,3 +753,6 @@ func writeConfigDrive(path string, s sandbox.Spec, mtu int) error {
 	}
 	return os.WriteFile(path, buf.Bytes(), 0o600)
 }
+
+// PoolStats reports the warm pool (nil: no pool).
+func (b *Backend) PoolStats() map[string]any { return nil }

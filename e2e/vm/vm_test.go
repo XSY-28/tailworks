@@ -580,6 +580,74 @@ func TestE2EVM(t *testing.T) {
 			"new_vm_ready_ms": info.Ready.Milliseconds(), "volume_attach_ms": info.VolumeAttachMS, "storage": "kv+sql present"})
 		t.Logf("redeploy: active %d ms, serving %v, volume attach %.1f ms; storage present", activeMS, first, info.VolumeAttachMS)
 	})
+
+	// Deploy → ready and crash → serving, repeated, with the per-stage
+	// breakdown of each new VM (the fast-VM work's before/after numbers).
+	t.Run("DeployReadyBench", func(t *testing.T) {
+		n := 5
+		if v := os.Getenv("TWD_VM_BENCH_DEPLOYS"); v != "" {
+			fmt.Sscan(v, &n)
+		}
+		var deployMS, servingMS, restartMS []float64
+		var infos []sandbox.Info
+		var drive int64
+		for i := 0; i < n; i++ {
+			old := e.Host.Sandbox(e.TenantID, "hello")
+			st := time.Now()
+			d := e.Deploy(hostdtest.Template("hello"), "hello", map[string]string{"UPSTREAM": echoURL})
+			e.WaitActive("hello", d, 90*time.Second)
+			deployMS = append(deployMS, float64(time.Since(st).Microseconds())/1000)
+			for j := 0; j < 400; j++ {
+				if code, _ := getJSON("http://" + hello.IP + "/"); code == 200 {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			servingMS = append(servingMS, float64(time.Since(st).Microseconds())/1000)
+			nv := e.Host.Sandbox(e.TenantID, "hello")
+			if nv == nil || nv == old {
+				t.Fatal("redeploy did not replace the VM")
+			}
+			infos = append(infos, nv.Info())
+			if fi, err := os.Stat(nv.Disks()[1]); err == nil {
+				drive = fi.Size()
+			}
+		}
+		// hostd's bounded restart policy backs off attempt×200 ms and gives
+		// up after 5 crashes within 30 s, so only 3 kills (backoffs 200,
+		// 400, 600 ms are included in kill→serving; the VM's own boot is in
+		// the stage breakdown).
+		for i := 0; i < min(n, 3); i++ {
+			old := e.Host.Sandbox(e.TenantID, "hello")
+			st := time.Now()
+			old.Kill()
+			for {
+				nv := e.Host.Sandbox(e.TenantID, "hello")
+				if nv != nil && nv != old {
+					if code, _ := getJSON("http://" + hello.IP + "/"); code == 200 {
+						restartMS = append(restartMS, float64(time.Since(st).Microseconds())/1000)
+						infos = append(infos, nv.Info())
+						break
+					}
+				}
+				if time.Since(st) > 60*time.Second {
+					t.Fatal("VM did not come back")
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
+		order, stats := vm.Summarize(infos)
+		var lines []string
+		for _, k := range order {
+			lines = append(lines, fmt.Sprintf("%-75s p50 %7.1f  p95 %7.1f ms", k, stats[k]["p50"], stats[k]["p95"]))
+		}
+		out := map[string]any{"deploy_to_active_ms": vm.Percentiles(deployMS), "deploy_to_serving_ms": vm.Percentiles(servingMS),
+			"vm_kill_to_serving_ms": vm.Percentiles(restartMS), "stage_order": order, "stages": stats, "config_drive_bytes": drive,
+			"pool": be.PoolStats()}
+		res.set("deploy_ready_bench", out)
+		t.Logf("hello ×%d: deploy→active %v, deploy→serving %v, VM kill→serving %v\n%s", n, vm.Percentiles(deployMS), vm.Percentiles(servingMS),
+			vm.Percentiles(restartMS), strings.Join(lines, "\n"))
+	})
 }
 
 // checkPersisted: object ip's KV and SQLite values written earlier are there.
