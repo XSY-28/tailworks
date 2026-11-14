@@ -164,6 +164,10 @@ type Deployment struct {
 	HostError  string `json:"-"`
 	// Public is the deployment's public ingress spec (nil: tailnet-only).
 	Public *DeploymentPublic `json:"-"`
+	// Placement is why the deployment is on its host (nil for deployments
+	// that predate smart placement). Its Targets are what the host
+	// measures for this workload.
+	Placement *PlacementDecision `json:"placement,omitempty"`
 }
 
 // LeaseName is the namespace lease key for a deployment. MVP: one lease per
