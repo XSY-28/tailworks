@@ -11,7 +11,7 @@ Last update: 2026-11-08 01:40 PT. M7 (E2E-MULTI: one host, tenant A on tailnet 1
 Last update: 2026-11-08 08:30 PT. L3: `make e2e-linux-reboot` PASS (clean reboot + power cut). Earlier, 08:15 PT, L3 (production-shaped microVM tier on Linux) on branch `l3-microvm`: `make e2e-vm` PASS (13 subtests), `make e2e-linux-vm` PASS from the installed release on fresh `twdl-kvm-u24`.
 Last update: 2026-11-08 10:00 PT. Integration (Linux): L3 + L1 merged onto master (L2) on `int-linux`; redeploy-after-purge and lease_lost-retry fixes; full matrix green (macOS, real tailnets, twd-dev, Debian 12 / Ubuntu 24.04 arm64 with reboot + ephemeral / Ubuntu 24.04 amd64, e2e-linux-vm, e2e-linux-reboot); re-find delay diagnosed (WireGuard stale-session timeout, not DERP/netmap).
 Last update: 2026-11-08 09:05 PT. L1: ephemeral nodes now re-mint on a rejected rejoin (netd + mgmt `/remint` + hostd); reboot survival and the ephemeral restart measured on Ubuntu 24.04 arm64; 5/5 supported distros PASS.
-Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown; Phase 2 warm pool (on by default), `Boot()` p50 602 → 58 ms, deploy → active 746 → 193 ms; Phase 3 snapshot restore behind `-vm-snapshot` (off by default), restore → ready p50 100 ms on demand, 28 ms from a restore-filled pool; ADR-030 draft (design repo, uncommitted) awaits Ross's decision. `make test`, `make lint`, `make e2e-vm`, `make e2e-linux-vm` PASS (see the FV section at the end).
+Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown; Phase 2 warm pool (on by default), `Boot()` p50 602 → 58 ms, deploy → active 746 → 193 ms; Phase 3 snapshot restore, **on by default for pool misses** after ADR-030 was decided (one shared base, no cross-tenant page sharing, hourly rotation); restore → ready p50 100 ms on demand. `make test`, `make lint`, `make e2e-vm`, `make e2e-linux-vm` PASS (see the FV section at the end).
 Last update: 2026-11-08 02:05 PT. Integration: master (M6 + M5 + M9, `57dd519`) merged into `m7-multi`; the full matrix passes on `4cce30d` (macOS, real tailnets, mbp from the release, Lima).
 
 ## M0: repo skeleton (DONE)
@@ -1576,7 +1576,7 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
 2. **The workerd clock is frozen during execution**, so a `Date.now()` busy loop never ends. The heavy-top-level benchmark uses an iteration count.
 3. A pool VM's console log holds only the warm-up's output until the claim; after the claim, the workload's output follows in the same file.
 
-### Phase 3: snapshot restore (built; behind `-vm-snapshot`, **default off**)
+### Phase 3: snapshot restore (built; `-vm-snapshot` **on by default** since ADR-030 was decided, used for pool misses)
 **Design** (`hostd/vm/snapshot_linux.go`, `helper/uffd_linux.go`; helper ops `snapshot-base` and `start` with `Restore`):
 - **Base snapshot.** With `Snapshot` on, hostd boots one pool VM at startup: kernel, guestd, the no-tenant warm-up run and exited, app dir empty, waiting for its load. hostd checks that `fsscan` shows no state files and nothing that looks like tailscale state.
   - Then the helper, on a separate *holder* connection, pauses that VM, takes a Full snapshot, and moves the state (11 KB) and memory (512 MiB) files plus the config drive (8 KB) into `StateDir/snapshots/<id>/` (root, 0600).
@@ -1633,9 +1633,30 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
   - **On bare-metal KVM this cost should be far smaller, but it's not measured (no bare-metal machine was available).**
 - **Memory:** a restored VM holds the ~53 × 2 MiB pages (≈106 MiB) the base had touched, as **private** copies. Guest RAM is still reserved per VM at its full size (huge pages).
 
-**Decided (Ross, 2026-11-13):** one base shared by all tenants on a host, which is what's built; the cloned-kernel-state risk (ADR-030 (d)) is accepted. Still open: no cross-tenant page sharing ever (2), and base rotation (3). The flag stays off until those are answered.
+**Decided (Ross, 2026-11-13; ADR-030, design repo, uncommitted):**
+1. one base shared by all tenants on a host (the cloned-kernel-state risk (d) is accepted);
+2. no guest pages shared across tenants, ever;
+3. the base is rebuilt at start and hourly.
 
-**Why it's off:** cross-tenant memory sharing and cloned kernel state are a security decision. Draft **ADR-030** (number provisional) is in the design repo's `DECISIONS.md`, **uncommitted**. It recommends one shared base per host with private pages only, **never** sharing guest pages across tenants (no File backend, no KSM), and base rotation. Ross decides; the flag stays off until then.
+**Then built:**
+- **Rotation** (`-vm-snapshot-rotate`, default 1 h). A new base is built in the background; if the huge-page budget has no room for the base VM, it retries in a minute. Restores switch to the new base, idle pool VMs restored from the old one are discarded (`PoolStats.Rotated`), and the old base's files are removed after a 30 s grace (`BaseGrace`). `TestSnapshotRotate` checks all of it with a 4 s rotation.
+- **`-vm-snapshot` defaults to on.**
+
+**Which path restores serve, measured.** An A/B over 4 alternating `make e2e-vm` runs (`TWD_VM_E2E_SNAPSHOT`, 20 `hello` redeploys each, same host and hour):
+
+| pool refilled by | claim `Boot()` p50 / p95 ms | deploy → active p50 ms |
+|---|---|---|
+| boot | 62.2–74.0 / 65.9–85.1 | 193–234 |
+| restore + rewarm | 82.5–115.3 / 92.4–147.5 | 237–305 |
+
+- The extra time in restored VMs is guest-kernel first-touch: tar extract 2.3 → 3.9 ms, ext4 mount 5.7 → 9.3 ms, volume attach +3.5 ms, workerd init +2 ms. workerd's bundle load is identical (26.4 ms).
+- Pre-touching guest RAM during rewarm (all free RAM, then 128 MiB) **did not close it reliably**, and copying that much through userfaultfd per refill disturbed concurrent claims (p95 185 ms in one run). It was reverted.
+- **So the default is a boot-filled pool, and the snapshot serves misses.** An empty pool (deploy bursts, crash loops) restores in ~130 ms instead of cold-booting in ~600 ms. `-vm-snapshot-refill` opts into restore-filled refills (6× faster refills, slower claims).
+
+**Final default** (`make e2e-vm` `TestE2EVM`, 20 `hello` redeploys):
+- claim `Boot()` p50 62.0 / p95 69.8 ms;
+- deploy → active 196.2 / 216.8 ms;
+- miss path (`TestE2EVMSnapshot`, pool off) `Boot()` 130.7 / 140.6 ms. Draft **ADR-030** (number provisional) is in the design repo's `DECISIONS.md`, **uncommitted**. It recommends one shared base per host with private pages only, **never** sharing guest pages across tenants (no File backend, no KSM), and base rotation. Ross decides; the flag stays off until then.
 
 ### FV: Definition-of-done runs (2026-11-13, on `fast-vm`)
 | Run | Result |
@@ -1644,7 +1665,7 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
 | `make test` (Lima twd-dev, Linux arm64) | **PASS** |
 | `make lint` (macOS; incl. `GOOS=linux` vet of `hostd/vm`, `guest`, `e2e/vm`; check-secrets) | **PASS** |
 | `make e2e-vm` (twd-dev): TestPoolClaim, TestPoolNoCarryOver, TestPoolBudget, TestSnapshotRestore, TestSnapshotPool, TestSnapshotUniqueness, TestSmoke, TestVolume, TestE2EVM 14/14, TestE2EVMSnapshot 14/14 | **PASS** (several runs; results `e2e/vm/results/l3-*.json`, `fv-snapshot-*.json`) |
-| `make e2e-linux-vm` (fresh `twdl-kvm-u24`, installed release, systemd `twd-vmhelper` with protocol v2, tailnet 1, `ttest-l3-<run>`) | run `28c309`: **FAIL**, cleanup only (below; every functional check passed). Run `97a876` after the harness fix: **PASS** (`e2e/real/results/l3-linuxvm-20261113-213301-97a876.json`) |
+| `make e2e-linux-vm` (fresh `twdl-kvm-u24`, installed release, systemd `twd-vmhelper` with protocol v2, tailnet 1, `ttest-l3-<run>`) | run `28c309`: **FAIL**, cleanup only (below; every functional check passed). Run `97a876` after the harness fix: **PASS**. Run `dbc527` with snapshots on by default: **PASS** (9 devices tracked and deleted, 0 left, 0 untracked; independently verified). That run doesn't record whether hostd's base snapshot was built through the systemd helper; it is exercised only in-process (`make e2e-vm`) |
 | `make test-pg` | **skipped**: mgmt not touched |
 | `make e2e-linux-reboot` | **not run** (not in this task's done list). Its cleanup got the same infra-node fix, untested |
 
@@ -1671,9 +1692,10 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
 - **No bare-metal numbers**: every number is nested virt.
 - **Serial redeploys** still release the old VM's volume before the new VM attaches it: 85–100 ms of deploy → active. That needs a hot volume handover (L3 gap).
 - **Huge-page accounting outside the pool.** The cold path and the helper's `auto` mode still decide on available pages at boot time only, while Firecracker reserves nothing (Phase 2 finding 1). Per-helper accounting of all VMs is a follow-up.
-- **Base rotation** isn't built; the base lives as long as hostd.
+- **Base under the systemd helper** is not asserted by any test (e2e-linux-vm passes with it on but doesn't check that the base was built). If it fails, misses fall back to cold boots.
+- **Restore-filled pool claims** are 20–50 ms slower than boot-filled ones (nested virt). That is why refills boot by default.
 - **One base per hostd and VM shape.** A different `-vm-mem-mib` / `-vm-vcpus` needs its own base (not built: one shape per backend today).
 - **VMGenID:** not used, since the guest kernel would need ≥ 6.10 (or a backport). The explicit reseed covers it; a newer guest kernel would close the race window *before* the load too.
-- **Cloned guest-kernel secrets** across restored copies (KASLR slide, `net_secret`, early siphash keys) are by design of snapshots. See ADR-030 (d).
+- **Cloned guest-kernel secrets** across restored copies (KASLR slide, `net_secret`, early siphash keys) are by design of snapshots; risk accepted in ADR-030 (d), bounded in time by the hourly rotation.
 - **One VM per object** (RFC §4.8 `isolation: "object"`) is not built (out of scope). The pool and restore make it affordable: a claim is 28–58 ms.
 
