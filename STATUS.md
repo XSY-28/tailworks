@@ -1756,6 +1756,7 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
 | `make lint` (macOS; incl. `GOOS=linux` vet of `hostd/vm`, `guest`, `e2e/vm`; check-secrets) | **PASS** |
 | `make e2e-vm` (twd-dev): TestPoolClaim, TestPoolNoCarryOver, TestPoolBudget, TestSnapshotRestore, TestSnapshotPool, TestSnapshotUniqueness, TestSmoke, TestVolume, TestE2EVM 14/14, TestE2EVMSnapshot 14/14 | **PASS** (several runs; results `e2e/vm/results/l3-*.json`, `fv-snapshot-*.json`) |
 | `make e2e-linux-vm` (fresh `twdl-kvm-u24`, installed release, systemd `twd-vmhelper` with protocol v2, tailnet 1, `ttest-l3-<run>`) | run `28c309`: **FAIL**, cleanup only (below; every functional check passed). Run `97a876` after the harness fix: **PASS**. Run `dbc527` with snapshots on by default: **PASS** (9 devices tracked and deleted, 0 left, 0 untracked; independently verified). That run doesn't record whether hostd's base snapshot was built through the systemd helper; it is exercised only in-process (`make e2e-vm`) |
+| **After merging master** (tier-aware placement, public ingress; merge `cb30fb1`, conflict in STATUS only) | `make lint`, `make test` (macOS and Lima), `make e2e-vm` (12 tests incl. TestE2EVM and TestE2EVMSnapshot), `make e2e-linux-vm` run `a622df` (9 devices tracked and deleted, 0 left, independently verified): **all PASS** |
 | `make test-pg` | **skipped**: mgmt not touched |
 | `make e2e-linux-reboot` | **not run** (not in this task's done list). Its cleanup got the same infra-node fix, untested |
 
