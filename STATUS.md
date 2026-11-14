@@ -1633,6 +1633,8 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
   - **On bare-metal KVM this cost should be far smaller, but it's not measured (no bare-metal machine was available).**
 - **Memory:** a restored VM holds the ~53 × 2 MiB pages (≈106 MiB) the base had touched, as **private** copies. Guest RAM is still reserved per VM at its full size (huge pages).
 
+**Decided (Ross, 2026-11-13):** one base shared by all tenants on a host, which is what's built; the cloned-kernel-state risk (ADR-030 (d)) is accepted. Still open: no cross-tenant page sharing ever (2), and base rotation (3). The flag stays off until those are answered.
+
 **Why it's off:** cross-tenant memory sharing and cloned kernel state are a security decision. Draft **ADR-030** (number provisional) is in the design repo's `DECISIONS.md`, **uncommitted**. It recommends one shared base per host with private pages only, **never** sharing guest pages across tenants (no File backend, no KSM), and base rotation. Ross decides; the flag stays off until then.
 
 ### FV: Definition-of-done runs (2026-11-13, on `fast-vm`)
