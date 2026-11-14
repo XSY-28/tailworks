@@ -70,11 +70,13 @@ const (
 	AuditKindReady               AuditKind = "ready"
 	AuditKindReap                AuditKind = "reap"
 	AuditKindRemint              AuditKind = "remint"
+	AuditKindRevoke              AuditKind = "revoke"
 	AuditKindSpawn               AuditKind = "spawn"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
 	AuditKindTenantUpdate        AuditKind = "tenant_update"
+	AuditKindTransfer            AuditKind = "transfer"
 	AuditKindUndeploy            AuditKind = "undeploy"
 	AuditKindVolumeKey           AuditKind = "volume_key"
 )
@@ -146,6 +148,8 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindRemint:
 		return true
+	case AuditKindRevoke:
+		return true
 	case AuditKindSpawn:
 		return true
 	case AuditKindTenantCreate:
@@ -155,6 +159,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindTenantNote:
 		return true
 	case AuditKindTenantUpdate:
+		return true
+	case AuditKindTransfer:
 		return true
 	case AuditKindUndeploy:
 		return true
@@ -279,9 +285,11 @@ const (
 	ErrorCodeImmutableField          ErrorCode = "immutable_field"
 	ErrorCodeInternal                ErrorCode = "internal"
 	ErrorCodeKilled                  ErrorCode = "killed"
+	ErrorCodeLeaseChanged            ErrorCode = "lease_changed"
 	ErrorCodeLeaseHeld               ErrorCode = "lease_held"
 	ErrorCodeLeaseLost               ErrorCode = "lease_lost"
 	ErrorCodeMirrorDisabled          ErrorCode = "mirror_disabled"
+	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
 	ErrorCodeNoHost                  ErrorCode = "no_host"
 	ErrorCodeNoIdentity              ErrorCode = "no_identity"
@@ -352,11 +360,15 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeKilled:
 		return true
+	case ErrorCodeLeaseChanged:
+		return true
 	case ErrorCodeLeaseHeld:
 		return true
 	case ErrorCodeLeaseLost:
 		return true
 	case ErrorCodeMirrorDisabled:
+		return true
+	case ErrorCodeMoveUnconfirmed:
 		return true
 	case ErrorCodeNamespaceAmbiguous:
 		return true
@@ -536,16 +548,20 @@ func (e ObjectPatchStatus) Valid() bool {
 
 // Defines values for ObjectStatus.
 const (
-	ObjectStatusFailed  ObjectStatus = "failed"
-	ObjectStatusKilled  ObjectStatus = "killed"
-	ObjectStatusMinted  ObjectStatus = "minted"
-	ObjectStatusPending ObjectStatus = "pending"
-	ObjectStatusReady   ObjectStatus = "ready"
+	ObjectStatusAssigned    ObjectStatus = "assigned"
+	ObjectStatusFailed      ObjectStatus = "failed"
+	ObjectStatusKilled      ObjectStatus = "killed"
+	ObjectStatusMinted      ObjectStatus = "minted"
+	ObjectStatusPending     ObjectStatus = "pending"
+	ObjectStatusReady       ObjectStatus = "ready"
+	ObjectStatusTransferred ObjectStatus = "transferred"
 )
 
 // Valid indicates whether the value is a known member of the ObjectStatus enum.
 func (e ObjectStatus) Valid() bool {
 	switch e {
+	case ObjectStatusAssigned:
+		return true
 	case ObjectStatusFailed:
 		return true
 	case ObjectStatusKilled:
@@ -555,6 +571,98 @@ func (e ObjectStatus) Valid() bool {
 	case ObjectStatusPending:
 		return true
 	case ObjectStatusReady:
+		return true
+	case ObjectStatusTransferred:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PathClass.
+const (
+	Derp        PathClass = "derp"
+	Direct      PathClass = "direct"
+	PeerRelay   PathClass = "peer-relay"
+	Unmeasured  PathClass = "unmeasured"
+	Unreachable PathClass = "unreachable"
+	Unresolved  PathClass = "unresolved"
+)
+
+// Valid indicates whether the value is a known member of the PathClass enum.
+func (e PathClass) Valid() bool {
+	switch e {
+	case Derp:
+		return true
+	case Direct:
+		return true
+	case PeerRelay:
+		return true
+	case Unmeasured:
+		return true
+	case Unreachable:
+		return true
+	case Unresolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDecisionAggregate.
+const (
+	Sum   PlacementDecisionAggregate = "sum"
+	Worst PlacementDecisionAggregate = "worst"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDecisionAggregate enum.
+func (e PlacementDecisionAggregate) Valid() bool {
+	switch e {
+	case Sum:
+		return true
+	case Worst:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDecisionMode.
+const (
+	PlacementDecisionModeOff   PlacementDecisionMode = "off"
+	PlacementDecisionModeSmart PlacementDecisionMode = "smart"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDecisionMode enum.
+func (e PlacementDecisionMode) Valid() bool {
+	switch e {
+	case PlacementDecisionModeOff:
+		return true
+	case PlacementDecisionModeSmart:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDecisionReason.
+const (
+	PlacementDecisionReasonCapacity PlacementDecisionReason = "capacity"
+	PlacementDecisionReasonPinned   PlacementDecisionReason = "pinned"
+	PlacementDecisionReasonSmart    PlacementDecisionReason = "smart"
+	PlacementDecisionReasonSticky   PlacementDecisionReason = "sticky"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDecisionReason enum.
+func (e PlacementDecisionReason) Valid() bool {
+	switch e {
+	case PlacementDecisionReasonCapacity:
+		return true
+	case PlacementDecisionReasonPinned:
+		return true
+	case PlacementDecisionReasonSmart:
+		return true
+	case PlacementDecisionReasonSticky:
 		return true
 	default:
 		return false
@@ -731,8 +839,9 @@ func (e CreateObjectCredentialParamsReason) Valid() bool {
 
 // Defines values for PurgeTenantObjectsParamsState.
 const (
-	PurgeTenantObjectsParamsStateFailed PurgeTenantObjectsParamsState = "failed"
-	PurgeTenantObjectsParamsStateKilled PurgeTenantObjectsParamsState = "killed"
+	PurgeTenantObjectsParamsStateFailed      PurgeTenantObjectsParamsState = "failed"
+	PurgeTenantObjectsParamsStateKilled      PurgeTenantObjectsParamsState = "killed"
+	PurgeTenantObjectsParamsStateTransferred PurgeTenantObjectsParamsState = "transferred"
 )
 
 // Valid indicates whether the value is a known member of the PurgeTenantObjectsParamsState enum.
@@ -741,6 +850,8 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	case PurgeTenantObjectsParamsStateFailed:
 		return true
 	case PurgeTenantObjectsParamsStateKilled:
+		return true
+	case PurgeTenantObjectsParamsStateTransferred:
 		return true
 	default:
 		return false
@@ -769,6 +880,9 @@ type Assignment struct {
 	MaxDepth   *int          `json:"maxDepth,omitempty"`
 	MaxLive    *int          `json:"maxLive,omitempty"`
 	Namespaces []ClassConfig `json:"namespaces"`
+
+	// PlacementTargets Smart placement targets the host should measure paths to (`PUT /v1/hosts/{id}/paths`).
+	PlacementTargets *[]string `json:"placementTargets,omitempty"`
 
 	// Public A workload's public ingress (ADR-029). The host runs one extra node
 	// for it (namespace `_public`, object name = the workload, hostname =
@@ -810,7 +924,8 @@ type AuditBatch struct {
 // `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
 // `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry),
 // `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
-// `image_public` (a public base image added or removed).
+// `image_public` (a public base image added or removed),
+// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
 // Public ingress (ADR-029), host chain: `public_request` (one per public
 // request), `public_rejected` (per-minute summary of requests the limits
 // refused), `public_object_created` (a name admitted for a public create);
@@ -859,7 +974,8 @@ type AuditRecord struct {
 	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
 	// `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry),
 	// `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
-	// `image_public` (a public base image added or removed).
+	// `image_public` (a public base image added or removed),
+	// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
 	// Public ingress (ADR-029), host chain: `public_request` (one per public
 	// request), `public_rejected` (per-minute summary of requests the limits
 	// refused), `public_object_created` (a name admitted for a public create);
@@ -1073,6 +1189,9 @@ type Deployment struct {
 	MaxLive    *int          `json:"maxLive,omitempty"`
 	Namespaces []ClassConfig `json:"namespaces"`
 
+	// Placement Why a deployment is on its host (smart placement, ADR-033).
+	Placement *PlacementDecision `json:"placement,omitempty"`
+
 	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
 	Public       *DeploymentPublic `json:"public,omitempty"`
 	Status       DeploymentStatus  `json:"status"`
@@ -1093,7 +1212,7 @@ type DeploymentCreate struct {
 	// replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
 	ContainerImages *ContainerImages `json:"containerImages,omitempty"`
 
-	// ForceTakeover Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`).
+	// ForceTakeover Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there).
 	ForceTakeover *bool `json:"forceTakeover,omitempty"`
 
 	// Host Pin a host.
@@ -1101,8 +1220,11 @@ type DeploymentCreate struct {
 
 	// Namespaces Override the classes read from `twd.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
-	TenantID   string         `json:"tenantID"`
-	Workload   string         `json:"workload"`
+
+	// Replace Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
+	Replace  *bool  `json:"replace,omitempty"`
+	TenantID string `json:"tenantID"`
+	Workload string `json:"workload"`
 }
 
 // DeploymentPage defines model for DeploymentPage.
@@ -1151,7 +1273,10 @@ type Endpoint struct {
 	Node     string  `json:"node"`
 	ObjectID *string `json:"objectID,omitempty"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status ObjectStatus `json:"status"`
 }
 
@@ -1186,6 +1311,8 @@ type Error struct {
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
@@ -1205,7 +1332,7 @@ type Error struct {
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers) |
+	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -1246,6 +1373,8 @@ type Error struct {
 // | `lease_held` | 409 | another host holds the lease |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 // | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 // | `already_joined` | 409 | credential for an object that has a node |
 // | `identity_conflict` | 409 | object ID collision across identities |
@@ -1265,7 +1394,7 @@ type Error struct {
 // | `bootstrap_failed` | 502 | control plane refused the mint |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers) |
+// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 // | `internal` | 500 | — |
 type ErrorCode string
@@ -1382,6 +1511,11 @@ type HostPage struct {
 
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// HostPathReport defines model for HostPathReport.
+type HostPathReport struct {
+	Tenants []PathReport `json:"tenants"`
 }
 
 // HostPush Where mgmt pushes kills and assignment changes. Over the tailnet,
@@ -1539,7 +1673,10 @@ type NodeCertificate struct {
 	Payload      NodeCertificatePayload `json:"payload"`
 	StableNodeID string                 `json:"stableNodeID"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status   ObjectStatus `json:"status"`
 	TenantID string       `json:"tenantID"`
 }
@@ -1620,7 +1757,10 @@ type Object struct {
 	Root         string  `json:"root"`
 	StableNodeID *string `json:"stableNodeID,omitempty"`
 
-	// Status `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
 	Status   ObjectStatus `json:"status"`
 	Tags     []string     `json:"tags"`
 	TenantID string       `json:"tenantID"`
@@ -1645,12 +1785,20 @@ type ObjectCreate struct {
 	// Hostname The hostname hostd proposes; mgmt answers with the one to use.
 	Hostname *string `json:"hostname,omitempty"`
 
-	// Namespace DO class name, or `_workload`.
+	// Namespace DO class name, `_workload`, or `_pool` (a pre-joined pool node; then `objectName` is `<Class>/<suffix>` and `workload` is required).
 	Namespace  string     `json:"namespace"`
 	ObjectName string     `json:"objectName"`
 	Parent     *ObjectRef `json:"parent,omitempty"`
-	TenantID   string     `json:"tenantID"`
-	TraceID    *string    `json:"traceID,omitempty"`
+
+	// PoolObjectID A ready `_pool` node of this tenant, workload and class with exactly
+	// the class's tags, offered for a new, non-ephemeral object. If every
+	// condition holds, the object is created `assigned` to that node (no
+	// mint) and the pool node becomes `transferred`, in one transaction;
+	// the host renames the node and sends `ready` with the same
+	// `stableNodeID`. Otherwise it is ignored and the object is minted.
+	PoolObjectID *string `json:"poolObjectID,omitempty"`
+	TenantID     string  `json:"tenantID"`
+	TraceID      *string `json:"traceID,omitempty"`
 
 	// TTL `10m`-style duration or seconds. Defaults to the class `ttl`.
 	TTL *ObjectCreate_TTL `json:"ttl,omitempty"`
@@ -1699,7 +1847,10 @@ type ObjectRef struct {
 	ObjectID string `json:"objectID"`
 }
 
-// ObjectStatus `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+// ObjectStatus `pending` → `minted` → `ready`; or, for an object given a pre-joined
+// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+// `transferred` (a `_pool` node whose node went to an object).
 type ObjectStatus string
 
 // Page The generic page envelope (`Page<T>`); every concrete `*Page` schema
@@ -1711,6 +1862,79 @@ type Page struct {
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
+
+// PathClass How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+type PathClass string
+
+// PathReport defines model for PathReport.
+type PathReport struct {
+	Targets  []PathSample `json:"targets"`
+	TenantID string       `json:"tenantID"`
+}
+
+// PathSample defines model for PathSample.
+type PathSample struct {
+	AgeMs      int64   `json:"ageMs"`
+	DerpRegion *string `json:"derpRegion,omitempty"`
+
+	// Path How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+	Path PathClass `json:"path"`
+
+	// Peer The netmap peer measured (the best one when a tag matches several).
+	Peer  *string  `json:"peer,omitempty"`
+	RttMs *float32 `json:"rttMs,omitempty"`
+
+	// Target A `tailnet.connects` entry: a tag or a peer name.
+	Target string `json:"target"`
+}
+
+// PlacementDecision Why a deployment is on its host (smart placement, ADR-033).
+type PlacementDecision struct {
+	Aggregate *PlacementDecisionAggregate `json:"aggregate,omitempty"`
+	Host      string                      `json:"host"`
+
+	// Hosts The candidates, eligible ones best first.
+	Hosts *[]struct {
+		Eligible bool   `json:"eligible"`
+		Free     int    `json:"free"`
+		Host     string `json:"host"`
+
+		// Path How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+		Path    *PathClass `json:"path,omitempty"`
+		RttMs   *float32   `json:"rttMs,omitempty"`
+		Targets *[]struct {
+			AgeSeconds *int64  `json:"ageSeconds,omitempty"`
+			DerpRegion *string `json:"derpRegion,omitempty"`
+			Detail     *string `json:"detail,omitempty"`
+
+			// Path How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+			Path   PathClass `json:"path"`
+			Peer   *string   `json:"peer,omitempty"`
+			RttMs  *float32  `json:"rttMs,omitempty"`
+			Target string    `json:"target"`
+		} `json:"targets,omitempty"`
+
+		// Why Why the host is not eligible.
+		Why *string `json:"why,omitempty"`
+	} `json:"hosts,omitempty"`
+	Mode PlacementDecisionMode `json:"mode"`
+
+	// Reason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
+	Reason PlacementDecisionReason `json:"reason"`
+
+	// Summary Examples: placed on h2: tag:db direct 1.8 ms (h1: relayed 24 ms, h3: unmeasured)
+	Summary string    `json:"summary"`
+	Targets *[]string `json:"targets,omitempty"`
+}
+
+// PlacementDecisionAggregate defines model for PlacementDecision.Aggregate.
+type PlacementDecisionAggregate string
+
+// PlacementDecisionMode defines model for PlacementDecision.Mode.
+type PlacementDecisionMode string
+
+// PlacementDecisionReason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
+type PlacementDecisionReason string
 
 // PreflightMissing defines model for PreflightMissing.
 type PreflightMissing struct {
@@ -1839,6 +2063,9 @@ type PublicLimits struct {
 type PurgeResult struct {
 	// Purged Object IDs forgotten.
 	Purged []string `json:"purged"`
+
+	// WarmKeysRevoked The tenant's unused pooled keys revoked with the purge.
+	WarmKeysRevoked *int `json:"warmKeysRevoked,omitempty"`
 }
 
 // RunningContainer One running container in a heartbeat.
@@ -2112,6 +2339,8 @@ type TombstoneError struct {
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
@@ -2131,7 +2360,7 @@ type TombstoneError struct {
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers) |
+	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -2311,6 +2540,12 @@ type NotFound = Error
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
 // `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
 type PreconditionFailed = Error
+
+// ReadyConflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// `missing` names what is absent (grant, cap, field, quota); `snippet`
+// is policy HuJSON to paste when a grant is missing; `doc_url` is
+// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+type ReadyConflict = Error
 
 // Unauthorized The DX.md error catalog shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
@@ -2565,6 +2800,9 @@ type CreateHostJSONRequestBody = HostCreate
 
 // RegisterHostJSONRequestBody defines body for RegisterHost for application/json ContentType.
 type RegisterHostJSONRequestBody = HostRegistration
+
+// ReportHostPathsJSONRequestBody defines body for ReportHostPaths for application/json ContentType.
+type ReportHostPathsJSONRequestBody = HostPathReport
 
 // ReportHostStatusJSONRequestBody defines body for ReportHostStatus for application/json ContentType.
 type ReportHostStatusJSONRequestBody = HostStatus
@@ -3102,14 +3340,39 @@ type ClientInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -3131,14 +3394,39 @@ type ClientInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -3288,6 +3576,46 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/hosts/{id}/assignments (the `ListHostAssignments` operationId).
 	ListHostAssignments(ctx context.Context, id HostID, params *ListHostAssignmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ReportHostPathsWithBody Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPathsWithBody(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportHostPaths Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPaths(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ReportHostStatusWithBody Heartbeat (replace the host's reported status)
 	//
 	// Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -3400,6 +3728,11 @@ type ClientInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes any type of body and a specified content type.
@@ -3431,6 +3764,11 @@ type ClientInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes a body of the `application/json` content type.
@@ -4048,14 +4386,39 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -4087,14 +4450,39 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -4384,6 +4772,66 @@ func (c *Client) ListHostAssignments(ctx context.Context, id HostID, params *Lis
 	return c.Client.Do(req)
 }
 
+// ReportHostPathsWithBody Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *Client) ReportHostPathsWithBody(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportHostPathsRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportHostPaths Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *Client) ReportHostPaths(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportHostPathsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ReportHostStatusWithBody Heartbeat (replace the host's reported status)
 //
 // Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -4576,6 +5024,11 @@ func (c *Client) ListObjects(ctx context.Context, params *ListObjectsParams, req
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -4618,6 +5071,11 @@ func (c *Client) CreateObjectWithBody(ctx context.Context, contentType string, b
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -6505,6 +6963,53 @@ func NewListHostAssignmentsRequest(server string, id HostID, params *ListHostAss
 	return req, nil
 }
 
+// NewReportHostPathsRequest calls the generic ReportHostPaths builder with application/json body
+func NewReportHostPathsRequest(server string, id HostID, body ReportHostPathsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportHostPathsRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewReportHostPathsRequestWithBody constructs an http.Request for the ReportHostPaths method, with any body, and a specified content type
+func NewReportHostPathsRequestWithBody(server string, id HostID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s/paths", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewReportHostStatusRequest calls the generic ReportHostStatus builder with application/json body
 func NewReportHostStatusRequest(server string, id HostID, body ReportHostStatusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -8086,14 +8591,39 @@ type ClientWithResponsesInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -8115,14 +8645,39 @@ type ClientWithResponsesInterface interface {
 	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-	// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-	// `400 bad_bundle`.
+	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+	// `tailnet.objects` is `400 bad_bundle`.
 	//
-	// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-	// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-	// bundle, pushes the assignment to the host and answers `202` with
+	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+	// the assignment to the host and answers `202` with
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
+	//
+	// **Placement** (ADR-033; the answer's `placement` says why):
+	// 1. Eligible hosts are live, in the tenant's pool, offer the
+	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
+	//    otherwise), and have free capacity.
+	// 2. `host` pins one (it must still be eligible; a pinned host without
+	//    the tier is `409 tier_unavailable`).
+	// 3. Otherwise the current live lease holder is kept (placement is
+	//    sticky; a better host appearing never moves a running workload).
+	//    A holder without the tier the workload now asks for is
+	//    `409 tier_unavailable` (or, with `replace`, the workload moves).
+	// 4. Otherwise, with smart placement (the default when the workload
+	//    declares `tailnet.connects` or `placement.targets`): the best
+	//    measured path to the targets wins (direct > peer relay > DERP >
+	//    unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+	//    "sum" over several targets). Hosts without a fresh measurement are
+	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+	//
+	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// it moves only if an eligible host is clearly better (a better path
+	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+	// `epoch+1` in one conditional write. A stateful workload's move also
+	// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+	// storage stays on the old host.
 	//
 	// **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 	// only checks the policy: every src tag must be in `tagOwners`, and
@@ -8290,6 +8845,46 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/hosts/{id}/assignments (the `ListHostAssignments` operationId).
 	ListHostAssignmentsWithResponse(ctx context.Context, id HostID, params *ListHostAssignmentsParams, reqEditors ...RequestEditorFn) (*ListHostAssignmentsResponse, error)
 
+	// ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPathsWithBodyWithResponse(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error)
+
+	// ReportHostPathsWithResponse Report measured tailnet paths (smart placement)
+	//
+	// Smart placement (ADR-033). The host reports, per tenant, the path
+	// from that tenant's nodes on this host to each target its workloads
+	// declare (`placementTargets` in its assignments): `direct` WireGuard,
+	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+	// Each listed tenant's stored rows for this host are **replaced**.
+	// `ageMs` is how long ago the host measured (its monotonic clock);
+	// mgmt stamps `measuredAt` with the store clock, and placement ignores
+	// measurements older than 5 min. A host may report only for tenants it
+	// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+	// each. Hosts send it at most once a minute, and only while they have
+	// targets. Not audited (telemetry); the placement decision it feeds is
+	// recorded with the deploy.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+	ReportHostPathsWithResponse(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error)
+
 	// ReportHostStatusWithBodyWithResponse Heartbeat (replace the host's reported status)
 	//
 	// Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -8410,6 +9005,11 @@ type ClientWithResponsesInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -8441,6 +9041,11 @@ type ClientWithResponsesInterface interface {
 	// - The mint is queued behind the tenant throttle
 	//   (`registrationsPerMinute`) and quota (`maxObjects`;
 	//   `429 object_quota_exceeded`).
+	// - `namespace: "_pool"` creates a pre-joined pool node for the class in
+	//   `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+	//   made ready like any object, but serving nothing until a create
+	//   names it in `poolObjectID`. Then that create answers
+	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -10854,6 +11459,102 @@ func (r ListHostAssignmentsResponse) ContentType() string {
 	return ""
 }
 
+// ReportHostPathsResponse400Headers the declared response headers of an HTTP 400 response for ReportHostPaths
+type ReportHostPathsResponse400Headers struct {
+	TwdError *string
+}
+
+// ReportHostPathsResponse403Headers the declared response headers of an HTTP 403 response for ReportHostPaths
+type ReportHostPathsResponse403Headers struct {
+	TwdError *string
+}
+
+// ReportHostPathsResponseDefaultHeaders the declared response headers of an HTTP default response for ReportHostPaths
+type ReportHostPathsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ReportHostPathsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// Stored Targets stored.
+		Stored int `json:"stored"`
+	}
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ReportHostPathsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ReportHostPathsResponse403Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ReportHostPathsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ReportHostPathsResponse) GetJSON200() *struct {
+	// Stored Targets stored.
+	Stored int `json:"stored"`
+} {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ReportHostPathsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReportHostPathsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReportHostPathsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ReportHostPathsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportHostPathsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportHostPathsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportHostPathsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportHostPathsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ReportHostStatusResponse400Headers the declared response headers of an HTTP 400 response for ReportHostStatus
 type ReportHostStatusResponse400Headers struct {
 	TwdError *string
@@ -11760,7 +12461,7 @@ type UpdateObjectResponse struct {
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *LeaseLost
+	JSON409 *ReadyConflict
 	// JSON410 the response for an HTTP 410 `application/json` response
 	JSON410 *Gone
 	// JSON412 the response for an HTTP 412 `application/json` response
@@ -11806,7 +12507,7 @@ func (r UpdateObjectResponse) GetJSON404() *NotFound {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r UpdateObjectResponse) GetJSON409() *LeaseLost {
+func (r UpdateObjectResponse) GetJSON409() *ReadyConflict {
 	return r.JSON409
 }
 
@@ -13552,14 +14253,39 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -13587,14 +14313,39 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-// `tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-// `400 bad_bundle`.
+// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+// `tailnet.objects` is `400 bad_bundle`.
 //
-// **Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-// acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-// bundle, pushes the assignment to the host and answers `202` with
+// **Deploy** (`dryRun` absent or false): picks a host, acquires the
+// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+// the assignment to the host and answers `202` with
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
+//
+// **Placement** (ADR-033; the answer's `placement` says why):
+//  1. Eligible hosts are live, in the tenant's pool, offer the
+//     workload's tier (`microvm` needs a host with KVM; `503 no_host`
+//     otherwise), and have free capacity.
+//  2. `host` pins one (it must still be eligible; a pinned host without
+//     the tier is `409 tier_unavailable`).
+//  3. Otherwise the current live lease holder is kept (placement is
+//     sticky; a better host appearing never moves a running workload).
+//     A holder without the tier the workload now asks for is
+//     `409 tier_unavailable` (or, with `replace`, the workload moves).
+//  4. Otherwise, with smart placement (the default when the workload
+//     declares `tailnet.connects` or `placement.targets`): the best
+//     measured path to the targets wins (direct > peer relay > DERP >
+//     unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+//     "sum" over several targets). Hosts without a fresh measurement are
+//     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+//
+// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// it moves only if an eligible host is clearly better (a better path
+// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+// `epoch+1` in one conditional write. A stateful workload's move also
+// needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+// storage stays on the old host.
 //
 // **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 // only checks the policy: every src tag must be in `tagOwners`, and
@@ -13846,6 +14597,58 @@ func (c *ClientWithResponses) ListHostAssignmentsWithResponse(ctx context.Contex
 	return ParseListHostAssignmentsResponse(rsp)
 }
 
+// ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *ClientWithResponses) ReportHostPathsWithBodyWithResponse(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error) {
+	rsp, err := c.ReportHostPathsWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportHostPathsResponse(rsp)
+}
+
+// ReportHostPathsWithResponse Report measured tailnet paths (smart placement)
+//
+// Smart placement (ADR-033). The host reports, per tenant, the path
+// from that tenant's nodes on this host to each target its workloads
+// declare (`placementTargets` in its assignments): `direct` WireGuard,
+// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+// Each listed tenant's stored rows for this host are **replaced**.
+// `ageMs` is how long ago the host measured (its monotonic clock);
+// mgmt stamps `measuredAt` with the store clock, and placement ignores
+// measurements older than 5 min. A host may report only for tenants it
+// runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+// each. Hosts send it at most once a minute, and only while they have
+// targets. Not audited (telemetry); the placement decision it feeds is
+// recorded with the deploy.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
+func (c *ClientWithResponses) ReportHostPathsWithResponse(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error) {
+	rsp, err := c.ReportHostPaths(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportHostPathsResponse(rsp)
+}
+
 // ReportHostStatusWithBodyWithResponse Heartbeat (replace the host's reported status)
 //
 // Every 3 s. Renews the host lease (TTL 10 s) and every namespace lease
@@ -14014,6 +14817,11 @@ func (c *ClientWithResponses) ListObjectsWithResponse(ctx context.Context, param
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -14052,6 +14860,11 @@ func (c *ClientWithResponses) CreateObjectWithBodyWithResponse(ctx context.Conte
 //   - The mint is queued behind the tenant throttle
 //     (`registrationsPerMinute`) and quota (`maxObjects`;
 //     `429 object_quota_exceeded`).
+//   - `namespace: "_pool"` creates a pre-joined pool node for the class in
+//     `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+//     made ready like any object, but serving nothing until a create
+//     names it in `poolObjectID`. Then that create answers
+//     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
 //
@@ -16591,6 +17404,96 @@ func ParseListHostAssignmentsResponse(rsp *http.Response) (*ListHostAssignmentsR
 	return response, nil
 }
 
+// ParseReportHostPathsResponse parses an HTTP response from a ReportHostPathsWithResponse call
+func ParseReportHostPathsResponse(rsp *http.Response) (*ReportHostPathsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportHostPathsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// Stored Targets stored.
+			Stored int `json:"stored"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ReportHostPathsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ReportHostPathsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case true:
+		var headers ReportHostPathsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseReportHostStatusResponse parses an HTTP response from a ReportHostStatusWithResponse call
 func ParseReportHostStatusResponse(rsp *http.Response) (*ReportHostStatusResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17490,7 +18393,7 @@ func ParseUpdateObjectResponse(rsp *http.Response) (*UpdateObjectResponse, error
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest LeaseLost
+		var dest ReadyConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -406,7 +406,10 @@ type testEnv struct {
 	sock    string
 }
 
-func newTestEnv(t *testing.T, issuer *Issuer) *testEnv {
+func newTestEnv(t *testing.T, issuer *Issuer) *testEnv { return newTestEnvWith(t, issuer, nil) }
+
+// newTestEnvWith is newTestEnv with the Config adjusted by mutate.
+func newTestEnvWith(t *testing.T, issuer *Issuer, mutate func(*Config)) *testEnv {
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("/tmp", "twd-mgmt-test-") // short path: unix socket limit
 	if err != nil {
@@ -434,9 +437,13 @@ func newTestEnv(t *testing.T, issuer *Issuer) *testEnv {
 		t.Fatal(err)
 	}
 	logs := &bytes.Buffer{}
-	m, err := New(Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL, Issuer: issuer},
+	cfg := Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL, Issuer: issuer},
 		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Hour, PolicyMaxAge: time.Minute,
-		Log: slog.New(slog.NewTextHandler(&lockedWriter{w: logs}, nil))})
+		Log: slog.New(slog.NewTextHandler(&lockedWriter{w: logs}, nil))}
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	m, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

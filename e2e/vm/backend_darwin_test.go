@@ -3,6 +3,8 @@
 package vm
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -27,15 +29,37 @@ const (
 type testBackend interface {
 	sandbox.Backend
 	Close() error
+	// fast-vm (Firecracker only): the warm pool and the base snapshot.
+	poolOn() bool
+	waitPool(ctx context.Context, n int) error
+	baseSnapshot(ctx context.Context) ([]string, map[string]any, error)
+	poolStats() any
 }
 
-func newBackend(kernel, rootfs string, vcpus int) (testBackend, map[string]any, error) {
+// fastVMSupported: vz has no warm pool or snapshot restores (every VM
+// cold-boots).
+const fastVMSupported = false
+
+type vzBackend struct{ *vm.Backend }
+
+func (vzBackend) poolOn() bool { return false }
+
+func (vzBackend) waitPool(context.Context, int) error { return errors.New("vz: no warm pool") }
+
+func (vzBackend) baseSnapshot(context.Context) ([]string, map[string]any, error) {
+	return nil, nil, errors.New("vz: no snapshots")
+}
+
+func (vzBackend) poolStats() any { return nil }
+
+// newBackend: pool and snapshot are Firecracker's (ignored here).
+func newBackend(kernel, rootfs string, vcpus, _ int, _ bool) (testBackend, map[string]any, error) {
 	be, err := vm.New(vm.Config{VMM: os.Getenv("TWD_VZ_VMM"), Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus,
 		BootArgs: os.Getenv("TWD_VM_BOOTARGS"), Rosetta: os.Getenv("TWD_VM_ROSETTA") != ""})
 	if err != nil {
 		return nil, nil, err
 	}
-	return be, map[string]any{"via": be.Via()}, nil
+	return vzBackend{be}, map[string]any{"via": be.Via()}, nil
 }
 
 var seenPIDs = map[int]string{}

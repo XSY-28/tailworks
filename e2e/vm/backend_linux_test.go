@@ -3,6 +3,7 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,15 +25,44 @@ const (
 type testBackend interface {
 	sandbox.Backend
 	Close() error
+	// fast-vm (Firecracker only): the warm pool and the base snapshot.
+	poolOn() bool
+	waitPool(ctx context.Context, n int) error
+	baseSnapshot(ctx context.Context) ([]string, map[string]any, error)
+	poolStats() any
 }
 
-func newBackend(kernel, rootfs string, vcpus int) (testBackend, map[string]any, error) {
-	be, err := vm.New(vm.Config{Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
-		Helper: os.Getenv("TWD_VM_HELPER")})
+// fastVMSupported: Firecracker has the warm pool and snapshot restores.
+const fastVMSupported = true
+
+type fcBackend struct{ *vm.Backend }
+
+func (b fcBackend) poolOn() bool { return b.PoolStats() != nil }
+
+func (b fcBackend) waitPool(ctx context.Context, n int) error { return b.WaitPool(ctx, n) }
+
+func (b fcBackend) baseSnapshot(ctx context.Context) ([]string, map[string]any, error) {
+	return b.BaseSnapshot(ctx)
+}
+
+func (b fcBackend) poolStats() any {
+	if s := b.PoolStats(); s != nil {
+		return s
+	}
+	return nil
+}
+
+// newBackend: pool as vm.Config.Pool, snapshot as vm.Config.Snapshot
+// (TWD_VM_E2E_SNAPSHOT_REFILL=1 also refills the pool by restore).
+func newBackend(kernel, rootfs string, vcpus, pool int, snapshot bool) (testBackend, map[string]any, error) {
+	vcfg := vm.Config{Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
+		Helper: os.Getenv("TWD_VM_HELPER"), Pool: pool, Snapshot: snapshot}
+	vcfg.SnapshotRefill = snapshot && pool >= 0 && os.Getenv("TWD_VM_E2E_SNAPSHOT_REFILL") == "1"
+	be, err := vm.New(vcfg)
 	if err != nil {
 		return nil, nil, err
 	}
-	return be, map[string]any{"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M()}, nil
+	return fcBackend{be}, map[string]any{"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M()}, nil
 }
 
 func checkIsolated(t *testing.T, w string, info *sandbox.Info) map[string]any {

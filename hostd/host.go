@@ -67,7 +67,12 @@ type Config struct {
 	// unique per-run prefix).
 	HostnamePrefix string
 	// Ephemeral joins nodes as ephemeral (tests and dev).
-	Ephemeral     bool
+	Ephemeral bool
+	// PoolNodes is how many pre-joined nodes to keep per hot class (a root
+	// create here in the last hour): a create of that class then takes one
+	// and renames it (~0.2 s) instead of joining a new node (ADR-031).
+	// 0 disables the pool.
+	PoolNodes     int
 	CapacityNodes int
 	// ReadyTimeout bounds how long requests wait for an object's node
 	// (identity_pending after; default 30 s).
@@ -172,6 +177,10 @@ type Config struct {
 	// workload's egress.internet allowlist. Nil: none; such flows are
 	// refused. twd-hostd sets DirectInternet unless -container-internet=off.
 	ContainerInternet *ContainerInternet
+	// PathEvery is how often hostd measures and reports the tailnet paths
+	// to its assignments' placement targets (smart placement, ADR-033).
+	// 0 = DefaultPathEvery (60 s); negative disables measuring.
+	PathEvery time.Duration
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -208,10 +217,13 @@ type Host struct {
 	byNetd    map[string]*object   // netd object ID
 	byKey     map[string]*object   // tenantID|namespace|name (live only)
 	creating  map[string]*createCall
-	instSeq   int
-	sandbox   string // resolved Config.Sandbox
-	lastHB    time.Time
-	fenced    bool
+	// pre-joined node pool (poolnodes.go)
+	poolDemand map[string]time.Time // tenant/workload/class → last root create here
+	poolBusy   map[string]bool      // a pool node of that class is being created
+	instSeq    int
+	sandbox    string // resolved Config.Sandbox
+	lastHB     time.Time
+	fenced     bool
 
 	capOnce    sync.Once
 	capVec     mgmtapi.HostCapacity // capacity(): measured once
@@ -277,6 +289,9 @@ func New(cfg Config) (*Host, error) {
 	if cfg.ContainerQuota == nil {
 		cfg.ContainerQuota = mgmtQuota{cfg.Mgmt}
 	}
+	if cfg.PathEvery == 0 {
+		cfg.PathEvery = DefaultPathEvery
+	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
@@ -291,6 +306,7 @@ func New(cfg Config) (*Host, error) {
 	h := &Host{cfg: cfg, sandbox: sb, log: cfg.Logger, mgmt: cfg.Mgmt,
 		tenants: map[string]*tenant{}, workloads: map[string]*workload{}, objects: map[string]*object{},
 		byNetd: map[string]*object{}, byKey: map[string]*object{}, creating: map[string]*createCall{},
+		poolDemand: map[string]time.Time{}, poolBusy: map[string]bool{},
 		public: map[string]*publicState{}, syncNow: make(chan struct{}, 1), quota: cfg.ContainerQuota, containers: containerLedger{held: map[ContainerKey]*ctrEntry{}}}
 	h.ctr = newCtrManager(h)
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
@@ -351,6 +367,10 @@ func (h *Host) Start(ctx context.Context) error {
 	h.mu.Unlock()
 	h.wg.Add(1)
 	go h.loop()
+	if h.cfg.PathEvery > 0 {
+		h.wg.Add(1)
+		go h.pathLoop()
+	}
 	return nil
 }
 
@@ -445,6 +465,7 @@ func (h *Host) loop() {
 }
 
 func (h *Host) tick() {
+	defer h.maintainPools()
 	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
 	defer cancel()
 	if err := h.heartbeat(ctx); err != nil {
@@ -611,6 +632,9 @@ func (h *Host) syncAssignments(ctx context.Context) error {
 			h.workloads[key] = w
 		}
 		h.mu.Unlock()
+		w.mu.Lock()
+		w.placementTargets = a.PlacementTargets
+		w.mu.Unlock()
 		if w.wantDeploy(a) {
 			go h.deploy(w, a)
 		} else {

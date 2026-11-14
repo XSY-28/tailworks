@@ -29,7 +29,18 @@ type TwdConfig struct {
 	Runtime string `json:"runtime"`
 	// Public is twd.jsonc "public" (ADR-029): path prefixes reachable from
 	// the public internet over Funnel. nil: tailnet-only.
-	Public  *publicspec.Spec `json:"public"`
+	Public *publicspec.Spec `json:"public"`
+	// Placement is smart placement (ADR-033): mode "smart" (default) or
+	// "off"; targets default to tailnet.connects. Region/Host/Hostname are
+	// Cloudflare's hints: host/hostname name one target, region is ignored.
+	Placement struct {
+		Mode      string   `json:"mode"`
+		Targets   []string `json:"targets"`
+		Aggregate string   `json:"aggregate"`
+		Region    string   `json:"region"`
+		Host      string   `json:"host"`
+		Hostname  string   `json:"hostname"`
+	} `json:"placement"`
 	Tailnet struct {
 		// Tags are the workload entry node's tags (the "_workload" namespace).
 		Tags []string `json:"tags"`

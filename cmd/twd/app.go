@@ -265,15 +265,16 @@ func (v varFlags) Set(s string) error {
 }
 
 type deployResult struct {
-	Workload     string               `json:"workload"`
-	Tenant       string               `json:"tenant"`
-	TenantID     string               `json:"tenantID"`
-	DeploymentID string               `json:"deploymentID"`
-	Host         string               `json:"host"`
-	Status       string               `json:"status"`
-	Endpoint     any                  `json:"endpoint"`
-	Preflight    mgmt.PreflightResult `json:"preflight"`
-	BundleBytes  int                  `json:"bundleBytes"`
+	Workload     string                  `json:"workload"`
+	Tenant       string                  `json:"tenant"`
+	TenantID     string                  `json:"tenantID"`
+	DeploymentID string                  `json:"deploymentID"`
+	Host         string                  `json:"host"`
+	Status       string                  `json:"status"`
+	Endpoint     any                     `json:"endpoint"`
+	Preflight    mgmt.PreflightResult    `json:"preflight"`
+	Placement    *mgmt.PlacementDecision `json:"placement,omitempty"`
+	BundleBytes  int                     `json:"bundleBytes"`
 	// Public (ADR-029) is the workload's public URL and state, if any.
 	Public  *mgmt.DeploymentPublicView `json:"public,omitempty"`
 	Timings map[string]float64         `json:"timingsMs"`
@@ -284,8 +285,10 @@ func cmdDeploy(args []string) error {
 	name := f.String("name", "", "workload name (default: twd.jsonc name)")
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
-	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed)")
+	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
 	platform := f.String("platform", "", "containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)")
+	hostF := f.String("host", "", "pin the workload to this host (it must be live, in the tenant's pool and offer the tier)")
+	replace := f.Bool("replace", false, "re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs")
 	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
 	waitPublic := f.Duration("wait-public", 0, "also wait (up to this long) until the public URL answers from the public internet (twd.jsonc \"public\")")
 	tenantF := tenantFlag(f)
@@ -385,10 +388,19 @@ func cmdDeploy(args []string) error {
 	if *forceTakeover {
 		body["forceTakeover"] = true
 	}
+	if *hostF != "" {
+		body["host"] = *hostF
+	}
+	if *replace {
+		body["replace"] = true
+	}
 	if err := mc.Do(ctx, "POST", "/v1/deployments", body, &dr); err != nil {
 		return err
 	}
-	res.DeploymentID, res.Host = dr.DeploymentID, dr.Host
+	res.DeploymentID, res.Host, res.Placement = dr.DeploymentID, dr.Host, dr.Placement
+	if !*f.json && dr.Placement != nil {
+		fmt.Printf("✓ placed     %s\n", dr.Placement.Summary)
+	}
 	res.Timings["deploy_api"] = ms(time.Since(ds))
 	if *noWait {
 		res.Status = "assigned"

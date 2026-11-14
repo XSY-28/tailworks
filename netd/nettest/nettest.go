@@ -81,6 +81,27 @@ func StartControl() (*Control, error) {
 	ctl.HTTPTestServer = httptest.NewUnstartedServer(ctl)
 	ctl.HTTPTestServer.Start()
 	ctl.SetGlobalAppCaps(tailcfg.PeerCapMap{TestCap: []tailcfg.RawMessage{TestCapValue}})
+	// Production control renames a node when its Hostinfo.Hostname changes
+	// (measured: a peer sees it ~210 ms later); testcontrol only names a node
+	// at registration. Emulate production: after each map request, follow
+	// the node's hostname (async: the hook runs under testcontrol's lock,
+	// before the request's Hostinfo is stored).
+	ctl.SetOnMapRequest(func(k key.NodePublic) {
+		go func() {
+			for _, d := range []time.Duration{30 * time.Millisecond, 150 * time.Millisecond, 500 * time.Millisecond} {
+				time.Sleep(d)
+				n := ctl.Node(k)
+				if n == nil || !n.Hostinfo.Valid() || n.Hostinfo.Hostname() == "" {
+					continue
+				}
+				want := n.Hostinfo.Hostname() + "." + MagicDNSDomain + "."
+				if n.Name != want {
+					n.Name = want
+					ctl.UpdateNode(n)
+				}
+			}
+		}()
+	})
 	return &Control{URL: ctl.HTTPTestServer.URL, Server: ctl, closers: []func(){
 		ctl.HTTPTestServer.Close, scancel, ds.Close, func() { d.Close() },
 	}}, nil
@@ -102,13 +123,21 @@ type Node struct {
 
 // NewNode starts an ephemeral in-memory node on controlURL with key.
 func NewNode(ctx context.Context, controlURL, key, hostname, dir string) (*Node, error) {
+	return NewNodeLogf(ctx, controlURL, key, hostname, dir, nil)
+}
+
+// NewNodeLogf is NewNode with tsnet's logs sent to logf (nil discards).
+func NewNodeLogf(ctx context.Context, controlURL, key, hostname, dir string, logf func(string, ...any)) (*Node, error) {
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
 	if controlURL == "" {
 		return nil, fmt.Errorf("nettest: controlURL required")
 	}
 	s := &tsnet.Server{
 		Hostname: hostname, ControlURL: controlURL, AuthKey: key, Ephemeral: true,
 		Store: new(mem.Store), Dir: dir,
-		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {},
+		Logf: logf, UserLogf: logf,
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()

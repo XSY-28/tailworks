@@ -82,11 +82,18 @@ func run() error {
 		vmHuge     = flag.String("vm-hugepages", "auto", "microVM tier: back guest RAM with 2 MiB pages: auto | on | off")
 		vzVMM      = flag.String("vz-vmm", "", "microVM tier on macOS: the twd-vz VMM, signed with the virtualization entitlement (default: next to twd-hostd)")
 		vmRosetta  = flag.Bool("vm-rosetta", false, "microVM tier on macOS (Apple silicon): share Rosetta for Linux into guests so x86_64 binaries run")
+		vmSnap     = flag.Bool("vm-snapshot", true, "microVM tier: when the warm pool is empty, restore a VM from a base snapshot of a warm VM without tenant code or keys (private, lazily loaded guest memory) instead of booting one (ADR-030; Durable Object VMs only, containers cold-boot)")
+		vmSnapFill = flag.Bool("vm-snapshot-refill", false, "microVM tier: also refill the warm pool by restoring the base snapshot (faster refills, slower claims) instead of booting")
+		vmRotate   = flag.Duration("vm-snapshot-rotate", time.Hour, "microVM tier: rebuild the base snapshot this often (and at every start); idle pool VMs restored from the old base are discarded; < 0 = never")
+		vmPool     = flag.Int("vm-pool", 0, "microVM tier: warm pool size (pre-booted VMs without tenant code; single use; Durable Object VMs only, containers cold-boot): 0 = auto (≤ 2, within the huge-page reservation), -1 = off")
 		sandboxF   = flag.String("sandbox", "auto", "process-tier workerd/Node sandbox: auto (seatbelt on macOS, landlock on Linux) | seatbelt | landlock | none")
 		insecureSH = flag.Bool("insecure-shared-host", false, "without a process sandbox, still run process-tier workloads of more than one tenant (tenants are NOT isolated from each other)")
 		sbDeny     = flag.String("sandbox-deny", "", "comma-separated extra paths no workerd may read, write or connect to (twd up: its state and run dirs)")
 		nodeBin    = flag.String("node", "", "Node process tier (runtime \"node\"): node binary (default: $TWD_NODE, or node on PATH)")
 		tokenFile  = flag.String("mgmt-token-file", filepath.Join(home, ".twd", "hostd", "mgmt.token"), "per-host token file minted by twd-mgmt (sent as Twd-Host-Token on the unix socket; \"\" = none)")
+		poolNodes  = flag.Int("pool-nodes", 1, "pre-joined nodes to keep per hot class (one with a create here in the last hour): a create takes one and renames it (~0.2 s) instead of joining a new node; each is a device; 0 = off")
+		portMap    = flag.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's tailnet nodes (off by default: it adds ~250 ms to every new object node's join and has every node ask the router for a mapping; turn on for hosts behind hard NATs that need router-assisted direct paths)")
+		pathEvery  = flag.Duration("path-every", hostd.DefaultPathEvery, "smart placement: measure and report tailnet paths to assignments' placement targets this often (negative disables)")
 		siblings   = flag.Bool("allow-sibling-egress", false, "let objects reach other objects hosted here over the tailnet (hairpin; single-host tests/demos)")
 		ctrOff     = flag.Bool("no-containers", false, "don't offer containers (ctx.container) even with a microVM backend")
 		ctrKernel  = flag.String("vm-container-kernel", "", "containers: guest kernel with erofs (guest/build-kernel.sh; default -vm-kernel)")
@@ -104,6 +111,10 @@ func run() error {
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
 	)
 	flag.Parse()
+	if !*portMap {
+		// Process-wide, so before any tsnet node (this host's own included).
+		netd.DisablePortMapping()
+	}
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(*logLevel)); err != nil {
 		return err
@@ -171,11 +182,12 @@ func run() error {
 	}
 	hcfg := hostd.Config{HostID: *hostID, Mgmt: mc, DataDir: *dataDir, RunDir: *runDir, WorkerdBin: wd,
 		HeartbeatEvery: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL,
-		CapacityNodes: *capacity, KillTombstone: *tombstone, Logger: log, TSNetLogs: *tsnetLogs,
-		Sandbox: *sandboxF, SandboxDeny: splitList(*sbDeny), InsecureSharedHost: *insecureSH, AllowSiblingEgress: *siblings,
+		PathEvery: *pathEvery, CapacityNodes: *capacity, KillTombstone: *tombstone, Logger: log, TSNetLogs: *tsnetLogs,
+		Sandbox: *sandboxF, SandboxDeny: splitList(*sbDeny), InsecureSharedHost: *insecureSH, AllowSiblingEgress: *siblings, PoolNodes: *poolNodes,
 		DefaultTier: *tier, NodeBin: *nodeBin, VMVolumeMiB: *vmVolMiB, VMMemMiB: *vmMem, VMVCPUs: *vmCPUs,
 		VM: vmBackend(vmOptions{kernel: *vmKernel, rootfs: *vmRootfs, firecracker: *vmFC, jailer: *vmJailer, helper: *vmHelper,
-			memMiB: *vmMem, vcpus: *vmCPUs, hugePages: *vmHuge, containerKernel: *ctrKernel, vzVMM: *vzVMM, rosetta: *vmRosetta}, log),
+			memMiB: *vmMem, vcpus: *vmCPUs, hugePages: *vmHuge, containerKernel: *ctrKernel, vzVMM: *vzVMM, rosetta: *vmRosetta,
+			pool: *vmPool, snapshot: *vmSnap, snapRefill: *vmSnapFill, rotate: *vmRotate}, log),
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
 		ContainerCapacity: hostd.ContainerCapacity{Max: *ctrMax, MemMiB: *ctrMemMiB, VCPU: *ctrVCPU}}
 	// Containers (ADR-032) run on the microVM backend; without it this host

@@ -415,9 +415,20 @@ CREATE TABLE IF NOT EXISTS public_images (
   id TEXT PRIMARY KEY, ref TEXT NOT NULL, arch TEXT NOT NULL, repo TEXT NOT NULL, digest TEXT NOT NULL,
   source_digest TEXT NOT NULL, created_by TEXT NOT NULL, created_at BIGINT NOT NULL,
   UNIQUE (ref, arch));
+CREATE TABLE IF NOT EXISTS warm_keys (
+  key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, pool TEXT NOT NULL, tags TEXT NOT NULL, ephemeral BIGINT NOT NULL,
+  status TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL,
+  taken_by TEXT NOT NULL DEFAULT '', taken_at BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (tenant_id, key_id));
+CREATE INDEX IF NOT EXISTS warm_keys_pool ON warm_keys (tenant_id, pool, status, expires_at);
 CREATE TABLE IF NOT EXISTS workload_public (
   tenant_id TEXT NOT NULL, workload TEXT NOT NULL, exposed BIGINT NOT NULL, updated_at BIGINT NOT NULL,
   updated_by TEXT NOT NULL DEFAULT '', PRIMARY KEY (tenant_id, workload));
+CREATE TABLE IF NOT EXISTS host_paths (
+  host_id TEXT NOT NULL, tenant_id TEXT NOT NULL, target TEXT NOT NULL, peer TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL, rtt_us BIGINT NOT NULL DEFAULT 0, derp_region TEXT NOT NULL DEFAULT '',
+  measured_at BIGINT NOT NULL, PRIMARY KEY (tenant_id, target, host_id));
+CREATE INDEX IF NOT EXISTS host_paths_host ON host_paths (host_id, measured_at);
 `
 
 // Append-only audit: UPDATE/DELETE on audit rows abort (defence in depth;
@@ -565,6 +576,8 @@ func (s *SQLStore) addColumns(ctx context.Context) error {
 		// deployment's validated twd.jsonc "public" (JSON, '' = none).
 		{"tenants", "public_ingress", "ALTER TABLE tenants ADD COLUMN public_ingress TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "public_spec", "ALTER TABLE deployments ADD COLUMN public_spec TEXT NOT NULL DEFAULT ''"},
+		// smart placement (ADR-033): why the deployment is on its host (JSON).
+		{"deployments", "placement", "ALTER TABLE deployments ADD COLUMN placement TEXT NOT NULL DEFAULT ''"},
 	} {
 		rows, err := s.db.QueryContext(ctx, "SELECT "+c.col+" FROM "+c.table+" WHERE 1=0")
 		if err == nil {
@@ -933,8 +946,8 @@ func (s *SQLStore) GetHost(ctx context.Context, id string) (Host, error) {
 	return scanHost(s.db.QueryRowContext(ctx, s.q("SELECT "+hostCols+" FROM hosts WHERE id=?"), id))
 }
 
-// DeleteHost removes the host and its container reservations (its
-// containers die with it: ADR-032 D2).
+// DeleteHost removes the host, its container reservations (its
+// containers die with it: ADR-032 D2) and its path measurements (ADR-033).
 func (s *SQLStore) DeleteHost(ctx context.Context, id string) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, s.q("DELETE FROM hosts WHERE id=?"), id)
@@ -944,7 +957,10 @@ func (s *SQLStore) DeleteHost(ctx context.Context, id string) error {
 		if n, _ := res.RowsAffected(); n == 0 {
 			return ErrNotFound
 		}
-		_, err = tx.ExecContext(ctx, s.q("DELETE FROM container_reservations WHERE host_id=?"), id)
+		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM container_reservations WHERE host_id=?"), id); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, s.q("DELETE FROM host_paths WHERE host_id=?"), id) // smart placement's measurements
 		return err
 	})
 }
@@ -987,16 +1003,17 @@ func (s *SQLStore) TouchHost(ctx context.Context, id string, liveNodes int, usag
 
 // ---- deployments ----
 
-const deployCols = "id, tenant_id, workload, host_id, namespaces, max_live, max_depth, epoch, created_at, deployed_by, stopped_at, fence, host_status, host_error, containers, public_spec"
+const deployCols = "id, tenant_id, workload, host_id, namespaces, max_live, max_depth, epoch, created_at, deployed_by, stopped_at, fence, host_status, host_error, containers, public_spec, placement"
 
 func scanDeployment(sc interface{ Scan(...any) error }) (Deployment, error) {
 	var d Deployment
 	var ns, cs string
 	var ml, md, fence int64
-	var pub string
-	err := sc.Scan(&d.ID, &d.TenantID, &d.Workload, &d.HostID, &ns, &ml, &md, &d.Epoch, &d.CreatedAt, &d.DeployedBy, &d.StoppedAt, &fence, &d.HostStatus, &d.HostError, &cs, &pub)
+	var pub, pl string
+	err := sc.Scan(&d.ID, &d.TenantID, &d.Workload, &d.HostID, &ns, &ml, &md, &d.Epoch, &d.CreatedAt, &d.DeployedBy, &d.StoppedAt, &fence, &d.HostStatus, &d.HostError, &cs, &pub, &pl)
 	d.Fence = fence != 0
 	d.Public = decodePublic(pub)
+	d.Placement = parsePlacement(pl)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -1022,9 +1039,9 @@ func (s *SQLStore) CreateDeployment(ctx context.Context, d Deployment) error {
 		fence = 1
 	}
 	err := s.tx(ctx, func(tx *sql.Tx) error { // a tx so a deploy's audit intent commits with it (H22)
-		_, err := tx.ExecContext(ctx, s.q("INSERT INTO deployments ("+deployCols+", bundle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
+		_, err := tx.ExecContext(ctx, s.q("INSERT INTO deployments ("+deployCols+", bundle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
 			d.ID, d.TenantID, d.Workload, d.HostID, jsonStr(d.Namespaces), d.MaxLive, d.MaxDepth, d.Epoch, d.CreatedAt, d.DeployedBy, d.StoppedAt, fence,
-			d.HostStatus, d.HostError, containersStr(d.Containers), encodePublic(d.Public), d.Bundle)
+			d.HostStatus, d.HostError, containersStr(d.Containers), encodePublic(d.Public), placementStr(d.Placement), d.Bundle)
 		return err
 	})
 	if isUnique(err) {
@@ -1038,10 +1055,11 @@ func (s *SQLStore) GetDeployment(ctx context.Context, id string) (Deployment, er
 	var d Deployment
 	var ns, cs string
 	var ml, md, fence int64
-	var pub string
-	err := row.Scan(&d.ID, &d.TenantID, &d.Workload, &d.HostID, &ns, &ml, &md, &d.Epoch, &d.CreatedAt, &d.DeployedBy, &d.StoppedAt, &fence, &d.HostStatus, &d.HostError, &cs, &pub, &d.Bundle)
+	var pub, pl string
+	err := row.Scan(&d.ID, &d.TenantID, &d.Workload, &d.HostID, &ns, &ml, &md, &d.Epoch, &d.CreatedAt, &d.DeployedBy, &d.StoppedAt, &fence, &d.HostStatus, &d.HostError, &cs, &pub, &pl, &d.Bundle)
 	d.Fence = fence != 0
 	d.Public = decodePublic(pub)
+	d.Placement = parsePlacement(pl)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -1251,12 +1269,29 @@ func (s *SQLStore) CreateChild(ctx context.Context, o Object, maxLive int) error
 // uses FOR UPDATE; SQLite's immediate transaction holds the write lock.
 // ErrExists on a duplicate.
 func (s *SQLStore) CreateObjectChecked(ctx context.Context, o Object, maxObjects, maxLive int) error {
+	return s.createObjectTx(ctx, o, maxObjects, maxLive, "", "")
+}
+
+// ErrPoolGone: the pool node named in a transfer is no longer a ready,
+// untransferred node with the expected stable node ID.
+var ErrPoolGone = errors.New("pool node no longer available")
+
+// TransferPool is CreateObjectChecked that, in the same transaction, moves
+// the ready pool node poolID (whose stable node ID must be stableID) to o:
+// the pool row becomes "transferred" with its node IDs and certificate
+// cleared, so only o names the device. Two concurrent transfers of one pool
+// node: one gets ErrPoolGone.
+func (s *SQLStore) TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int) error {
+	return s.createObjectTx(ctx, o, maxObjects, maxLive, poolID, stableID)
+}
+
+func (s *SQLStore) createObjectTx(ctx context.Context, o Object, maxObjects, maxLive int, poolID, stableID string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	live := "status NOT IN ('" + StatusKilled + "','" + StatusFailed + "')"
+	live := liveSQL
 	lock := func(q string, arg string) error {
 		var x string
 		if err := tx.QueryRowContext(ctx, s.q(q+s.forUpdate()), arg).Scan(&x); err != nil {
@@ -1271,6 +1306,22 @@ func (s *SQLStore) CreateObjectChecked(ctx context.Context, o Object, maxObjects
 		if err := lock("SELECT id FROM tenants WHERE id=?", o.TenantID); err != nil {
 			return err
 		}
+	}
+	if poolID != "" {
+		// Before the quota count: the pool node stops being live as o starts.
+		r, err := tx.ExecContext(ctx, s.q(`UPDATE objects SET status=?, node_id='', stable_node_id='', magic_dns='', cert='',
+			kill_reason=?, updated_at=? WHERE id=? AND tenant_id=? AND namespace=? AND status=? AND stable_node_id=? AND stable_node_id<>''`),
+			StatusTransferred, "transferred to "+o.ID, o.CreatedAt, poolID, o.TenantID, PoolNamespace, StatusReady, stableID)
+		if err != nil {
+			return err
+		}
+		if n, err := r.RowsAffected(); err != nil {
+			return err
+		} else if n != 1 {
+			return ErrPoolGone
+		}
+	}
+	if maxObjects > 0 {
 		var n int64
 		if err := tx.QueryRowContext(ctx, s.q("SELECT COUNT(*) FROM objects WHERE tenant_id=? AND "+live), o.TenantID).Scan(&n); err != nil {
 			return err
@@ -1306,12 +1357,12 @@ func (s *SQLStore) GetObject(ctx context.Context, id string) (Object, error) {
 
 func (s *SQLStore) DeleteDeadObjects(ctx context.Context, tenantID string, statuses []string) ([]Object, error) {
 	if len(statuses) == 0 {
-		statuses = []string{StatusKilled, StatusFailed}
+		statuses = []string{StatusKilled, StatusFailed, StatusTransferred}
 	}
 	ph := strings.TrimSuffix(strings.Repeat("?,", len(statuses)), ",")
 	args := []any{tenantID}
 	for _, st := range statuses {
-		if st != StatusKilled && st != StatusFailed {
+		if st != StatusKilled && st != StatusFailed && st != StatusTransferred {
 			return nil, fmt.Errorf("purge: %q is not a terminal status", st)
 		}
 		args = append(args, st)
@@ -1481,7 +1532,7 @@ func (s *SQLStore) CountObjects(ctx context.Context) (map[string]int, error) {
 func (s *SQLStore) CountLive(ctx context.Context, tenantID, rootID string) (int, error) {
 	var n int64
 	var err error
-	live := "status NOT IN ('" + StatusKilled + "','" + StatusFailed + "')"
+	live := liveSQL
 	if rootID != "" {
 		err = s.db.QueryRowContext(ctx, s.q("SELECT COUNT(*) FROM objects WHERE root_id=? AND id<>? AND "+live), rootID, rootID).Scan(&n)
 	} else {
@@ -1533,6 +1584,23 @@ func (s *SQLStore) ReleaseLease(ctx context.Context, name, holder string, epoch 
 		return ErrLeaseLost
 	}
 	return nil
+}
+
+// MoveLease hands the lease from (from, epoch) to to at epoch+1 in one
+// conditional write: it succeeds only while from still holds it at epoch
+// (ErrLeaseLost otherwise), so there is never a moment with two holders
+// or none. The old holder's next renew fails and it stops serving.
+func (s *SQLStore) MoveLease(ctx context.Context, name, from string, epoch int64, to string, ttl time.Duration, now time.Time) (Lease, error) {
+	if to == "" || from == "" {
+		return Lease{}, errors.New("lease holders required")
+	}
+	l := Lease{Name: name}
+	err := s.db.QueryRowContext(ctx, s.q(`UPDATE leases SET holder=?, epoch=epoch+1, expires_at=? WHERE name=? AND holder=? AND epoch=?
+		RETURNING holder, epoch, expires_at`), to, now.Add(ttl).UnixMilli(), name, from, epoch).Scan(&l.Holder, &l.Epoch, &l.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Lease{}, ErrLeaseLost
+	}
+	return l, err
 }
 
 func (s *SQLStore) GetLease(ctx context.Context, name string) (Lease, error) {

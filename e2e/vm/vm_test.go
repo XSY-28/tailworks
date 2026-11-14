@@ -40,6 +40,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/hostdtest"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
+	"github.com/rosskukulinski/twd/hostd/vm"
 	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
 	"github.com/rosskukulinski/twd/netd/nettest"
 )
@@ -55,7 +56,21 @@ func (r *results) set(k string, v any) {
 	r.mu.Unlock()
 }
 
-func TestE2EVM(t *testing.T) {
+// TestE2EVM runs the product default (twd-hostd -vm-pool auto,
+// -vm-snapshot on): a boot-filled warm pool, with the base snapshot for
+// pool misses. Every workload VM here is a claimed pool VM (the suite waits
+// for the pool); NoKeysInGuest also scans the base. TWD_VM_E2E_SNAPSHOT=0:
+// snapshots off; TWD_VM_E2E_SNAPSHOT_REFILL=1: the pool refilled by restore.
+func TestE2EVM(t *testing.T) { runE2EVM(t, os.Getenv("TWD_VM_E2E_SNAPSHOT") != "0", 0) }
+
+// TestE2EVMSnapshot is the same suite with the pool off: every workload VM
+// (first deploys, redeploys, crash restarts) is restored on demand.
+// (The boot-filled pool: hostd/vm TestPool*; the cold path: TestSmoke.)
+func TestE2EVMSnapshot(t *testing.T) { runE2EVM(t, true, -1) }
+
+// runE2EVM: snapshot on/off; pool as vm.Config.Pool. With snapshots on,
+// NoKeysInGuest also scans the base snapshot's files.
+func runE2EVM(t *testing.T, snapshot bool, pool int) {
 	kernel, rootfs := os.Getenv("TWD_VM_KERNEL"), os.Getenv("TWD_VM_ROOTFS")
 	if kernel == "" || rootfs == "" {
 		t.Skip("TWD_VM_KERNEL and TWD_VM_ROOTFS must be set (make e2e-vm)")
@@ -64,12 +79,21 @@ func TestE2EVM(t *testing.T) {
 	if v := os.Getenv("TWD_VM_VCPUS"); v != "" {
 		fmt.Sscan(v, &vcpus)
 	}
-	be, binfo, err := newBackend(kernel, rootfs, vcpus)
+	if pool < 0 && !fastVMSupported {
+		t.Skip("this backend has no warm pool or snapshots (Firecracker only)")
+	}
+	be, binfo, err := newBackend(kernel, rootfs, vcpus, pool, snapshot)
+	snapshot = snapshot && fastVMSupported
+	wantSource := "pool"
+	if snapshot && (pool < 0 || os.Getenv("TWD_VM_E2E_SNAPSHOT_REFILL") == "1") {
+		wantSource = "restore"
+	}
 	if err != nil {
 		t.Fatalf("microVM backend unavailable: %v", err)
 	}
 	t.Cleanup(func() { be.Close() })
-	res := &results{m: map[string]any{"started": time.Now().UTC().Format(time.RFC3339), "backend": be.Name(), "kernel": kernel, "rootfs": rootfs, "vcpus": vcpus, "mem_mib": 512}}
+	res := &results{m: map[string]any{"started": time.Now().UTC().Format(time.RFC3339), "backend": be.Name(), "kernel": kernel, "rootfs": rootfs, "vcpus": vcpus, "mem_mib": 512,
+		"snapshot": snapshot, "pool": pool}}
 	for k, v := range binfo {
 		res.m[k] = v
 	}
@@ -135,6 +159,27 @@ func TestE2EVM(t *testing.T) {
 	}
 	echoURL := "http://ttest-echo/"
 
+	// The warm pool (on by default) fills first, so that the workloads
+	// below run in claimed pool VMs: every check (keys, egress attribution,
+	// volume, kill/restart) then covers the pool path. TestSmoke covers the
+	// cold path.
+	if be.poolOn() {
+		wc, cancel := context.WithTimeout(ctx, 60*time.Second)
+		if err := be.waitPool(wc, 2); err != nil {
+			t.Fatal(err)
+		}
+		cancel()
+	}
+	if snapshot {
+		wc, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		_, info, err := be.baseSnapshot(wc)
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.set("base_snapshot", info)
+	}
+
 	// Deploy hello + probe in the microVM tier (the tenant's tier), and a
 	// process-tier copy of probe for the latency comparison.
 	tDeploy := time.Now()
@@ -184,10 +229,12 @@ func TestE2EVM(t *testing.T) {
 				if ws.VM == nil || ws.VM.PID == 0 {
 					t.Fatalf("%s: no VM info", name)
 				}
-				res.set("boot_"+name, map[string]any{"instance_start_to_guest_init_ms": ws.VM.Boot.Milliseconds(),
-					"instance_start_to_workerd_ready_ms": ws.VM.Ready.Milliseconds(), "boot_call_total_ms": ws.VM.Total.Milliseconds(),
-					"guest_uptime_at_ready_ms": ws.VM.GuestUptimeAtReady.Milliseconds()})
-				t.Logf("%s VM: InstanceStart→init %v, →workerd ready %v, whole Boot() %v", name, ws.VM.Boot, ws.VM.Ready, ws.VM.Total)
+				res.set("boot_"+name, map[string]any{"source": ws.VM.Source, "boot_call_total_ms": ws.VM.Total.Milliseconds(),
+					"breakdown": vm.Breakdown(*ws.VM)})
+				if (be.poolOn() || snapshot) && ws.VM.Source != wantSource {
+					t.Fatalf("%s: VM source %q, want %q", name, ws.VM.Source, wantSource)
+				}
+				t.Logf("%s VM: %s, whole Boot() %v", name, ws.VM.Source, ws.VM.Total)
 			}
 		}
 	})
@@ -372,7 +419,31 @@ func TestE2EVM(t *testing.T) {
 		fi, _ := os.Stat(mem)
 		os.Remove(mem)
 		res.set("no_keys_in_guest", map[string]any{"needles": len(needles), "fsscan_files": r.Scanned, "memdump_mb": fi.Size() >> 20,
-			"memdump_ms": dumpMS, "disks": vmProbe.Disks()})
+			"memdump_ms": dumpMS, "disks": vmProbe.Disks(), "vm_source": vmProbe.Info().Source})
+		if snapshot {
+			// The base snapshot itself (VM state, the full guest memory
+			// file, its config drive): no key, and nothing instance-specific
+			// either — the probe instance's MAC key is not in it (it came
+			// with the restored copy's load; the dump above has it).
+			files, _, err := be.baseSnapshot(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			withMAC := map[string][]byte{"probe's MAC key": []byte(mac)}
+			for k, v := range needles {
+				withMAC[k] = v
+			}
+			var sizes []int64
+			for _, f := range files {
+				if hit := scanFile(t, f, withMAC); hit != "" {
+					t.Fatalf("%s in the base snapshot file %s", hit, f)
+				}
+				fi, _ := os.Stat(f)
+				sizes = append(sizes, fi.Size())
+			}
+			res.set("no_keys_in_base_snapshot", map[string]any{"files": files, "bytes": sizes, "needles": len(withMAC)})
+			t.Logf("base snapshot: none of %d needles (incl. probe's MAC key) in %v (%v bytes)", len(withMAC), files, sizes)
+		}
 		t.Logf("%d needles (tskey-, the test auth key, node/machine private keys as text and raw bytes, the volume key): none in %d guest files, 3 disks or %d MiB of guest RAM",
 			len(needles), r.Scanned, fi.Size()>>20)
 		// After the pause/resume the guest still serves.
@@ -597,6 +668,85 @@ func TestE2EVM(t *testing.T) {
 			"new_vm_ready_ms": info.Ready.Milliseconds(), "volume_attach_ms": info.VolumeAttachMS, "storage": "kv+sql present"})
 		t.Logf("redeploy: active %d ms, serving %v, volume attach %.1f ms; storage present", activeMS, first, info.VolumeAttachMS)
 	})
+
+	// Deploy → ready and crash → serving, repeated, with the per-stage
+	// breakdown of each new VM (the fast-VM work's before/after numbers).
+	t.Run("DeployReadyBench", func(t *testing.T) {
+		n := 5
+		if v := os.Getenv("TWD_VM_BENCH_DEPLOYS"); v != "" {
+			fmt.Sscan(v, &n)
+		}
+		var deployMS, servingMS, restartMS []float64
+		var infos []sandbox.Info
+		var drive int64
+		waitPool := func() {
+			if be.poolOn() { // steady state: the pool has refilled
+				wc, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				if err := be.waitPool(wc, 1); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		for i := 0; i < n; i++ {
+			waitPool()
+			old := e.Host.Sandbox(e.TenantID, "hello")
+			st := time.Now()
+			d := e.Deploy(hostdtest.Template("hello"), "hello", map[string]string{"UPSTREAM": echoURL})
+			e.WaitActive("hello", d, 90*time.Second)
+			deployMS = append(deployMS, float64(time.Since(st).Microseconds())/1000)
+			for j := 0; j < 400; j++ {
+				if code, _ := getJSON("http://" + hello.IP + "/"); code == 200 {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			servingMS = append(servingMS, float64(time.Since(st).Microseconds())/1000)
+			nv := e.Host.Sandbox(e.TenantID, "hello")
+			if nv == nil || nv == old {
+				t.Fatal("redeploy did not replace the VM")
+			}
+			infos = append(infos, nv.Info())
+			if fi, err := os.Stat(nv.Disks()[1]); err == nil {
+				drive = fi.Size()
+			}
+		}
+		// hostd's bounded restart policy backs off attempt×200 ms and gives
+		// up after 5 crashes within 30 s, so only 3 kills (backoffs 200,
+		// 400, 600 ms are included in kill→serving; the VM's own boot is in
+		// the stage breakdown).
+		for i := 0; i < min(n, 3); i++ {
+			waitPool()
+			old := e.Host.Sandbox(e.TenantID, "hello")
+			st := time.Now()
+			old.Kill()
+			for {
+				nv := e.Host.Sandbox(e.TenantID, "hello")
+				if nv != nil && nv != old {
+					if code, _ := getJSON("http://" + hello.IP + "/"); code == 200 {
+						restartMS = append(restartMS, float64(time.Since(st).Microseconds())/1000)
+						infos = append(infos, nv.Info())
+						break
+					}
+				}
+				if time.Since(st) > 60*time.Second {
+					t.Fatal("VM did not come back")
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
+		order, stats := vm.Summarize(infos)
+		var lines []string
+		for _, k := range order {
+			lines = append(lines, fmt.Sprintf("%-75s p50 %7.1f  p95 %7.1f ms", k, stats[k]["p50"], stats[k]["p95"]))
+		}
+		out := map[string]any{"deploy_to_active_ms": vm.Percentiles(deployMS), "deploy_to_serving_ms": vm.Percentiles(servingMS),
+			"vm_kill_to_serving_ms": vm.Percentiles(restartMS), "stage_order": order, "stages": stats, "config_drive_bytes": drive,
+			"pool": be.poolStats()}
+		res.set("deploy_ready_bench", out)
+		t.Logf("hello ×%d: deploy→active %v, deploy→serving %v, VM kill→serving %v\n%s", n, vm.Percentiles(deployMS), vm.Percentiles(servingMS),
+			vm.Percentiles(restartMS), strings.Join(lines, "\n"))
+	})
 }
 
 // checkPersisted: object ip's KV and SQLite values written earlier are there.
@@ -797,7 +947,11 @@ func writeResults(t *testing.T, r *results) {
 	r.m["passed"] = !t.Failed()
 	b, _ := json.MarshalIndent(r.m, "", "  ")
 	os.MkdirAll("results", 0o755)
-	p := filepath.Join("results", resultsPrefix+time.Now().UTC().Format("20060102T150405Z")+".json")
+	name := resultsPrefix
+	if r.m["snapshot"] == true && r.m["pool"] == -1 {
+		name = "fv-snapshot-"
+	}
+	p := filepath.Join("results", name+time.Now().UTC().Format("20060102T150405Z")+".json")
 	os.WriteFile(p, b, 0o644)
 	t.Logf("results: %s\n%s", p, b)
 }

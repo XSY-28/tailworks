@@ -119,6 +119,7 @@ hostd's API, not this document's.
 | `PUT` | `/v1/hosts/{id}` | host | yes | `RegisterHost` | Register or re-register a host (idempotent) |
 | `DELETE` | `/v1/hosts/{id}` | admin | yes | `DeleteHost` | Drain and remove a host |
 | `GET` | `/v1/hosts/{id}/assignments` | host\|admin | no | `ListHostAssignments` | List the deployments assigned to a host |
+| `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
 | `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
 | `GET` | `/v1/images/aliases` | admin\|host | no | `ListImageAliases` | The image alias map |
 | `GET` | `/v1/images/public` | admin\|host | no | `ListPublicImages` | List public base images |
@@ -280,7 +281,7 @@ Replaces `POST /v0/tenants/{id}/purge`.
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
 | `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
-| `state` | query | array of string: `killed` \| `failed` | no | Terminal states to purge. Repeatable. Any other value is `400 bad_request`. |
+| `state` | query | array of string: `killed` \| `failed` \| `transferred` | no | Terminal states to purge. Repeatable. Any other value is `400 bad_request`. |
 
 | Status | Body | Description |
 |---|---|---|
@@ -498,6 +499,37 @@ operator credential when mgmt has one; otherwise it is reported in
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+### `PUT /v1/hosts/{id}/paths` — Report measured tailnet paths (smart placement)
+
+`ReportHostPaths` · role **host** · audited: no
+
+Smart placement (ADR-033). The host reports, per tenant, the path
+from that tenant's nodes on this host to each target its workloads
+declare (`placementTargets` in its assignments): `direct` WireGuard,
+`peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
+Each listed tenant's stored rows for this host are **replaced**.
+`ageMs` is how long ago the host measured (its monotonic clock);
+mgmt stamps `measuredAt` with the store clock, and placement ignores
+measurements older than 5 min. A host may report only for tenants it
+runs a workload of (`403` otherwise). Bounds: 64 tenants, 32 targets
+each. Hosts send it at most once a minute, and only while they have
+targets. Not audited (telemetry); the placement decision it feeds is
+recorded with the deploy.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Host ID (one safe path element). |
+
+**Request** `application/json`: `HostPathReport`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | object | Stored. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | The host never registered (`host_not_registered`). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ### `PUT /v1/hosts/{id}/status` — Heartbeat (replace the host's reported status)
 
 `ReportHostStatus` · role **host** · audited: no
@@ -556,14 +588,39 @@ mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
 the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
 node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
-`tier`. A bundle with neither `tailnet.tags` nor `tailnet.objects` is
-`400 bad_bundle`.
+`tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
+wrangler's `placement`). A bundle with neither `tailnet.tags` nor
+`tailnet.objects` is `400 bad_bundle`.
 
-**Deploy** (`dryRun` absent or false): picks a host (`host` pins one),
-acquires the `(tenant, workload)` lease at `epoch+1`, stores the
-bundle, pushes the assignment to the host and answers `202` with
+**Deploy** (`dryRun` absent or false): picks a host, acquires the
+`(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
+the assignment to the host and answers `202` with
 `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 or `failed`.
+
+**Placement** (ADR-033; the answer's `placement` says why):
+1. Eligible hosts are live, in the tenant's pool, offer the
+   workload's tier (`microvm` needs a host with KVM; `503 no_host`
+   otherwise), and have free capacity.
+2. `host` pins one (it must still be eligible; a pinned host without
+   the tier is `409 tier_unavailable`).
+3. Otherwise the current live lease holder is kept (placement is
+   sticky; a better host appearing never moves a running workload).
+   A holder without the tier the workload now asks for is
+   `409 tier_unavailable` (or, with `replace`, the workload moves).
+4. Otherwise, with smart placement (the default when the workload
+   declares `tailnet.connects` or `placement.targets`): the best
+   measured path to the targets wins (direct > peer relay > DERP >
+   unmeasured, then RTT; `placement.aggregate` "worst" (default) or
+   "sum" over several targets). Hosts without a fresh measurement are
+   asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
+
+`replace: true` (`twd deploy --replace`) re-places a running workload:
+it moves only if an eligible host is clearly better (a better path
+class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
+`epoch+1` in one conditional write. A stateful workload's move also
+needs `forceTakeover` (`409 move_unconfirmed`): its Durable Object
+storage stays on the old host.
 
 **Preflight** (`dryRun=true`): the same body and parser, but mgmt
 only checks the policy: every src tag must be in `tagOwners`, and
@@ -702,6 +759,11 @@ hostd calls this on first `create()`/`spawn()`. The identity is
 - The mint is queued behind the tenant throttle
   (`registrationsPerMinute`) and quota (`maxObjects`;
   `429 object_quota_exceeded`).
+- `namespace: "_pool"` creates a pre-joined pool node for the class in
+  `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+  made ready like any object, but serving nothing until a create
+  names it in `poolObjectID`. Then that create answers
+  `status: assigned` and mints nothing.
 Spawn checks are unchanged from v0.
 
 **Request** `application/json`: `ObjectCreate`
@@ -769,7 +831,7 @@ Any other field, or a host sending admin fields (and vice versa), is
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| 409 | `Error` | `lease_lost` (the caller does not hold the namespace lease at this epoch) or `identity_conflict` (an `assigned` object reported ready on another node than the pool node it was given). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
@@ -1478,6 +1540,7 @@ What a host must run; `bundleURL` is `GET /v1/deployments/{id}/bundle`.
 | `maxDepth` | integer | no |  |
 | `maxLive` | integer | no |  |
 | `namespaces` | array of `ClassConfig` | yes |  |
+| `placementTargets` | array of string | no | Smart placement targets the host should measure paths to (`PUT /v1/hosts/{id}/paths`). |
 | `public` | `PublicAssignment` | no | A workload's public ingress (ADR-029). The host runs one extra node for it (namespace `_public`, object name = the workload, hostname = the workload name, `tags`) whose Funnel listener serves `routes` while `exposed`. |
 | `tailnet` | string | yes |  |
 | `tenantID` | string | yes |  |
@@ -1517,14 +1580,15 @@ Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
 `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
 `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry),
 `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
-`image_public` (a public base image added or removed).
+`image_public` (a public base image added or removed),
+`transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
 Public ingress (ADR-029), host chain: `public_request` (one per public
 request), `public_rejected` (per-minute summary of requests the limits
 refused), `public_object_created` (a name admitted for a public create);
 `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
 host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -1552,7 +1616,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start`, `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create); `expose_on` / `expose_off` on both chains (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start`, `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create); `expose_on` / `expose_off` on both chains (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -1710,6 +1774,7 @@ A single-use auth key. Never logged; `String()` redacts it in Go.
 | `maxDepth` | integer | no |  |
 | `maxLive` | integer | no |  |
 | `namespaces` | array of `ClassConfig` | yes |  |
+| `placement` | `PlacementDecision` | no | Why a deployment is on its host (smart placement, ADR-033). |
 | `public` | `DeploymentPublic` | no | The deployment's public routes (ADR-029); absent when tailnet-only. |
 | `status` | `DeploymentStatus` | yes |  |
 | `tenantID` | string | yes |  |
@@ -1724,9 +1789,10 @@ A single-use auth key. Never logged; `String()` redacts it in Go.
 |---|---|---|---|
 | `bundle` | string | yes | tar (optionally gzipped) of the built worker + `twd.jsonc` + `wrangler.jsonc`. |
 | `containerImages` | `ContainerImages` | no | Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}` with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other. |
-| `forceTakeover` | boolean | no | Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). |
+| `forceTakeover` | boolean | no | Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there). |
 | `host` | string | no | Pin a host. |
 | `namespaces` | array of `ClassConfig` | no | Override the classes read from `twd.jsonc` (tests). |
+| `replace` | boolean | no | Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`). |
 | `tenantID` | string | yes |  |
 | `workload` | string | yes |  |
 
@@ -1777,7 +1843,7 @@ The workload entry node (`_workload` object).
 | `magicDNS` | string | yes |  |
 | `node` | string | yes | hostname |
 | `objectID` | string | no |  |
-| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`. |
+| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; or, for an object given a pre-joined pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready` (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and `transferred` (a `_pool` node whose node went to an object). |
 
 #### `Error`
 
@@ -1788,7 +1854,7 @@ is policy HuJSON to paste when a grant is missing; `doc_url` is
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}` \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}` \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -1823,6 +1889,8 @@ The catalog. Status in parentheses.
 | `lease_held` | 409 | another host holds the lease |
 | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+| `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+| `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 | `already_joined` | 409 | credential for an object that has a node |
 | `identity_conflict` | 409 | object ID collision across identities |
@@ -1842,11 +1910,11 @@ The catalog. Status in parentheses.
 | `bootstrap_failed` | 502 | control plane refused the mint |
 | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
-| `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers) |
+| `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `immutable_field`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `tier_unavailable`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `immutable_field`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `internal`
 
 #### `Health`
 
@@ -1934,6 +2002,12 @@ Extends `Page`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `items` | array of `Host` | no |  |
+
+#### `HostPathReport`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `tenants` | array of `PathReport` | yes |  |
 
 #### `HostPush`
 
@@ -2069,7 +2143,7 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `oboPublicKey` | string | yes | base64 Ed25519 |
 | `payload` | `NodeCertificatePayload` | yes | `internal/nodecert.Payload`; signed with the tenant's OBO root key (Ed25519). |
 | `stableNodeID` | string | yes |  |
-| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`. |
+| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; or, for an object given a pre-joined pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready` (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and `transferred` (a `_pool` node whose node went to an object). |
 | `tenantID` | string | yes |  |
 
 #### `NodeCertificatePayload`
@@ -2125,7 +2199,7 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `parent` | string | no | Parent object ID (spawn). |
 | `root` | string | yes | Root of the spawn tree (itself for a root). |
 | `stableNodeID` | string | no |  |
-| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`. |
+| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; or, for an object given a pre-joined pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready` (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and `transferred` (a `_pool` node whose node went to an object). |
 | `tags` | array of string | yes |  |
 | `tenantID` | string | yes |  |
 | `tombstone` | `Tombstone` | no | The kill record of an object. Kept until the tenant's terminal objects are purged. |
@@ -2140,9 +2214,10 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `actingFor` | string | no | The principal this object acts for (feeds audit). |
 | `caps` | `Caps` | no | `{capName: value \| [values]}`; see `caps ⊆ parent` semantics in `CreateObject`. |
 | `hostname` | string | no | The hostname hostd proposes; mgmt answers with the one to use. |
-| `namespace` | string | yes | DO class name, or `_workload`. |
+| `namespace` | string | yes | DO class name, `_workload`, or `_pool` (a pre-joined pool node; then `objectName` is `<Class>/<suffix>` and `workload` is required). |
 | `objectName` | string | yes |  |
 | `parent` | `ObjectRef` | no |  |
+| `poolObjectID` | string | no | A ready `_pool` node of this tenant, workload and class with exactly the class's tags, offered for a new, non-ephemeral object. If every condition holds, the object is created `assigned` to that node (no mint) and the pool node becomes `transferred`, in one transaction; the host renames the node and sends `ready` with the same `stableNodeID`. Otherwise it is ignored and the object is minted. |
 | `tenantID` | string | yes |  |
 | `traceID` | string | no |  |
 | `ttl` | string \| integer | no | `10m`-style duration or seconds. Defaults to the class `ttl`. |
@@ -2177,9 +2252,12 @@ JSON Merge Patch. Hosts send the `ready` group; admins send `ttl`.
 
 #### `ObjectStatus`
 
-`pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+`pending` → `minted` → `ready`; or, for an object given a pre-joined
+pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+(never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+`transferred` (a `_pool` node whose node went to an object).
 
-Enum: `pending`, `minted`, `ready`, `killed`, `failed`
+Enum: `pending`, `minted`, `assigned`, `ready`, `killed`, `failed`, `transferred`
 
 #### `Page`
 
@@ -2191,6 +2269,44 @@ the last page.
 |---|---|---|---|
 | `items` | array of any | yes |  |
 | `nextCursor` | string \| null | yes | Pass as `?cursor=` for the next page; `null` when there is none. |
+
+#### `PathClass`
+
+How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only).
+
+Enum: `direct`, `peer-relay`, `derp`, `unresolved`, `unreachable`, `unmeasured`
+
+#### `PathReport`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `targets` | array of `PathSample` | yes |  |
+| `tenantID` | string | yes |  |
+
+#### `PathSample`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `ageMs` | integer (int64) | yes |  |
+| `derpRegion` | string | no |  |
+| `path` | `PathClass` | yes | How a host reaches a target: direct WireGuard, a Tailscale peer relay, or DERP; `unresolved` (no netmap peer matches the target), `unreachable` (no ping answered), `unmeasured` (no fresh measurement; placement only). |
+| `peer` | string | no | The netmap peer measured (the best one when a tag matches several). |
+| `rttMs` | number | no |  |
+| `target` | string | yes | A `tailnet.connects` entry: a tag or a peer name. |
+
+#### `PlacementDecision`
+
+Why a deployment is on its host (smart placement, ADR-033).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `aggregate` | string: `worst` \| `sum` | no |  |
+| `host` | string | yes |  |
+| `hosts` | array of object | no | The candidates, eligible ones best first. |
+| `mode` | string: `smart` \| `off` | yes |  |
+| `reason` | string: `pinned` \| `sticky` \| `smart` \| `capacity` | yes | pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity. |
+| `summary` | string | yes |  |
+| `targets` | array of string | no |  |
 
 #### `PreflightMissing`
 
@@ -2293,6 +2409,7 @@ netd's limits on a public listener (ADR-029 D5); defaults filled in.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `purged` | array of string | yes | Object IDs forgotten. |
+| `warmKeysRevoked` | integer | no | The tenant's unused pooled keys revoked with the purge. |
 
 #### `RunningContainer`
 

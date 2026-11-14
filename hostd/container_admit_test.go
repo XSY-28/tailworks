@@ -90,7 +90,7 @@ func admitHost(t *testing.T, vm bool, capVec mgmtapi.HostCapacity) (*Host, *fake
 
 var roomy = mgmtapi.HostCapacity{VMs: 10, VMMemMiB: 1 << 20, VCPUs: 64, VCPUOvercommit: 1, ScratchMiB: 1 << 20}
 
-func key(obj string) ContainerKey {
+func testCtrKey(obj string) ContainerKey {
 	return ContainerKey{TenantID: "tn", Workload: "w", Class: "Sandbox", Object: obj}
 }
 
@@ -111,7 +111,7 @@ func wantCode(t *testing.T, err error, code string) {
 // another way), before it asks mgmt for anything.
 func TestContainerNeedsBackend(t *testing.T) {
 	h, q := admitHost(t, false, roomy)
-	_, err := h.AcquireContainer(context.Background(), key("a"), lite)
+	_, err := h.AcquireContainer(context.Background(), testCtrKey("a"), lite)
 	wantCode(t, err, "tier_unavailable")
 	if q.calls() != 0 {
 		t.Fatal("reserved quota for a container this host can't run")
@@ -124,7 +124,7 @@ func TestContainerNeedsBackend(t *testing.T) {
 	if got := h.tiers(); !slices.Equal(got, []string{"process", "microvm"}) {
 		t.Fatalf("tiers %v", got)
 	}
-	_, err = h.AcquireContainer(context.Background(), key("a"), lite)
+	_, err = h.AcquireContainer(context.Background(), testCtrKey("a"), lite)
 	wantCode(t, err, "tier_unavailable")
 	// twd dev (ForceProcessTier) offers neither, even with both backends.
 	h, q2 := admitHost(t, true, roomy)
@@ -132,7 +132,7 @@ func TestContainerNeedsBackend(t *testing.T) {
 	if got := h.tiers(); !slices.Equal(got, []string{"process"}) {
 		t.Fatalf("forced tiers %v", got)
 	}
-	_, err = h.AcquireContainer(context.Background(), key("a"), lite)
+	_, err = h.AcquireContainer(context.Background(), testCtrKey("a"), lite)
 	wantCode(t, err, "tier_unavailable")
 	if q.calls()+q2.calls() != 0 {
 		t.Fatal("reserved quota for a container this host can't run")
@@ -159,14 +159,14 @@ func TestContainerCapacity(t *testing.T) {
 			h, q := admitHost(t, true, tc.cap)
 			var slots []*ContainerSlot
 			for i := range tc.fits {
-				s, err := h.AcquireContainer(ctx, key(fmt.Sprint("o", i)), tc.res)
+				s, err := h.AcquireContainer(ctx, testCtrKey(fmt.Sprint("o", i)), tc.res)
 				if err != nil {
 					t.Fatalf("container %d: %v", i, err)
 				}
 				slots = append(slots, s)
 			}
 			n := q.calls()
-			_, err := h.AcquireContainer(ctx, key("over"), tc.res)
+			_, err := h.AcquireContainer(ctx, testCtrKey("over"), tc.res)
 			wantCode(t, err, "capacity_exhausted")
 			if ae := asAPIError(err); fmt.Sprint(ae.Extra["missing"].(map[string]any)["capacity"]) != tc.which {
 				t.Fatalf("refused on %v, want %s", ae.Extra, tc.which)
@@ -175,7 +175,7 @@ func TestContainerCapacity(t *testing.T) {
 				t.Fatal("asked mgmt for quota for a container the host has no room for")
 			}
 			slots[0].Release(ctx)
-			if _, err := h.AcquireContainer(ctx, key("over"), tc.res); err != nil {
+			if _, err := h.AcquireContainer(ctx, testCtrKey("over"), tc.res); err != nil {
 				t.Fatalf("after a release: %v", err)
 			}
 		})
@@ -192,7 +192,7 @@ func TestContainerCapacityConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := h.AcquireContainer(context.Background(), key(fmt.Sprint("o", i)), lite); err == nil {
+			if _, err := h.AcquireContainer(context.Background(), testCtrKey(fmt.Sprint("o", i)), lite); err == nil {
 				mu.Lock()
 				ok++
 				mu.Unlock()
@@ -211,13 +211,13 @@ func TestContainerQuotaRefused(t *testing.T) {
 	ctx := context.Background()
 	h, q := admitHost(t, true, roomy)
 	q.max = 1
-	if _, err := h.AcquireContainer(ctx, key("a"), lite); err != nil {
+	if _, err := h.AcquireContainer(ctx, testCtrKey("a"), lite); err != nil {
 		t.Fatal(err)
 	}
 	if q.reserves[0].Epoch != 7 {
 		t.Fatalf("reserved at epoch %d, want the workload's 7", q.reserves[0].Epoch)
 	}
-	_, err := h.AcquireContainer(ctx, key("b"), lite)
+	_, err := h.AcquireContainer(ctx, testCtrKey("b"), lite)
 	wantCode(t, err, "container_quota_exceeded")
 	if asAPIError(err).Extra["missing"] == nil {
 		t.Fatal("the quota refusal lost its missing{}")
@@ -225,7 +225,7 @@ func TestContainerQuotaRefused(t *testing.T) {
 	if u := h.usage(); u.Containers != 1 {
 		t.Fatalf("a refused container holds capacity: %+v", u)
 	}
-	_, err = h.AcquireContainer(ctx, key("a"), lite)
+	_, err = h.AcquireContainer(ctx, testCtrKey("a"), lite)
 	wantCode(t, err, "container_running")
 	if _, err := h.AcquireContainer(ctx, ContainerKey{TenantID: "tn", Workload: "other", Class: "S", Object: "x"}, lite); err == nil {
 		t.Fatal("a container of a workload this host doesn't run was admitted")
@@ -239,14 +239,14 @@ func TestContainerFailClosedAndRestart(t *testing.T) {
 	ctx := context.Background()
 	h, q := admitHost(t, true, roomy)
 	q.setDown(true)
-	_, err := h.AcquireContainer(ctx, key("new"), lite)
+	_, err := h.AcquireContainer(ctx, testCtrKey("new"), lite)
 	wantCode(t, err, "quota_unavailable")
 	if u := h.usage(); u.Containers != 0 || len(h.containers.running()) != 0 {
 		t.Fatalf("a refused start holds capacity or is reported: %+v", u)
 	}
 
 	q.setDown(false)
-	s, err := h.AcquireContainer(ctx, key("a"), basic)
+	s, err := h.AcquireContainer(ctx, testCtrKey("a"), basic)
 	if err != nil || s.ReservationID == "" || s.Restarted {
 		t.Fatalf("start a: %+v %v", s, err)
 	}
@@ -258,11 +258,11 @@ func TestContainerFailClosedAndRestart(t *testing.T) {
 	if rs := h.containers.running(); len(rs) != 0 {
 		t.Fatalf("a stopped container is reported running: %+v", rs)
 	}
-	_, err = h.AcquireContainer(ctx, key("a"), container.InstanceTypes["standard-1"])
+	_, err = h.AcquireContainer(ctx, testCtrKey("a"), container.InstanceTypes["standard-1"])
 	wantCode(t, err, "quota_unavailable") // bigger than what it holds
-	_, err = h.AcquireContainer(ctx, key("b"), lite)
+	_, err = h.AcquireContainer(ctx, testCtrKey("b"), lite)
 	wantCode(t, err, "quota_unavailable") // another key holds nothing
-	r, err := h.AcquireContainer(ctx, key("a"), lite)
+	r, err := h.AcquireContainer(ctx, testCtrKey("a"), lite)
 	if err != nil || !r.Restarted || r.ReservationID != s.ReservationID {
 		t.Fatalf("restart within the held reservation: %+v %v", r, err)
 	}
@@ -276,7 +276,7 @@ func TestContainerFailClosedAndRestart(t *testing.T) {
 		t.Fatalf("released %v", q.released)
 	}
 	q.setDown(true)
-	_, err = h.AcquireContainer(ctx, key("a"), lite)
+	_, err = h.AcquireContainer(ctx, testCtrKey("a"), lite)
 	wantCode(t, err, "quota_unavailable")
 }
 
@@ -292,7 +292,7 @@ func TestCapacityVector(t *testing.T) {
 		t.Fatalf("with a backend: %+v", c)
 	}
 	h.workloads["tn/w"].active = &instance{tier: "microvm"}
-	if _, err := h.AcquireContainer(context.Background(), key("a"), basic); err != nil {
+	if _, err := h.AcquireContainer(context.Background(), testCtrKey("a"), basic); err != nil {
 		t.Fatal(err)
 	}
 	u := h.usage()

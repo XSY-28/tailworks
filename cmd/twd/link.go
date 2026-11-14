@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,6 +18,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/twd/netd"
 	"tailscale.com/tsnet"
 )
 
@@ -108,6 +110,16 @@ func (l *Link) dial(ctx context.Context, network, addr string) (net.Conn, error)
 			return nil, err
 		}
 		addr = net.JoinHostPort(ip, port)
+	}
+	// A just-started peer (a fresh mgmt node) is in the netmap before it
+	// has a path; a first packet then is dropped and WireGuard retries only
+	// after 5 s. Wait for the path (bounded), then dial regardless.
+	if ap, err := netip.ParseAddrPort(addr); err == nil {
+		if lc, err := ts.LocalClient(); err == nil {
+			wctx, cancel := context.WithTimeout(ctx, netd.PeerPathWait)
+			netd.WaitPeerPath(wctx, lc, ap.Addr())
+			cancel()
+		}
 	}
 	return ts.Dial(ctx, network, addr)
 }

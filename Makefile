@@ -5,7 +5,7 @@ TS_CREDS  ?= $(HOME)/.config/tailnet-agents-design
 TAILNET1  ?= tail7906d5.ts.net
 WORKERD   := node_modules/.bin/workerd
 
-.PHONY: all build deps js-build api api-lint api-check test test-go test-js test-sdk test-pg e2e-local e2e-real e2e-mac e2e-multi e2e-keyless e2e-oauth e2e-public e2e-mbp e2e-linux e2e-vm guest-image guest-kernel release lint hooks clean gen-js test-node vm-assets e2e-linux-vm e2e-linux-reboot vz-assets vz-kernel e2e-vz e2e-container test-images e2e-container-build e2e-container-registry e2e-vz-container
+.PHONY: all build deps js-build api api-lint api-check test test-go test-js test-sdk test-pg e2e-local e2e-real e2e-mac e2e-multi e2e-keyless e2e-oauth e2e-public e2e-mbp e2e-linux e2e-vm guest-image guest-kernel release lint hooks clean gen-js test-node vm-assets e2e-linux-vm e2e-linux-reboot vz-assets vz-kernel e2e-vz e2e-container test-images e2e-container-build e2e-container-registry e2e-vz-container e2e-coldid e2e-coldid-real e2e-placement
 
 all: build
 
@@ -50,6 +50,11 @@ CRANE ?= $(shell command -v crane)
 test-images:
 	TWD_TEST_DOCKER=1 TWD_CRANE="$(CRANE)" $(GO) test -count=1 -v -run 'TestBuildAndPush|TestCraneConformance|TestCLIImages' ./internal/imagebuild/ ./internal/registry/ ./cmd/twd/
 
+## e2e-placement: smart placement (ADR-033), hermetic: real twd-mgmt + two twd-hostd processes on
+## testcontrol + local DERP, a tag:db peer, one host forced onto DERP; placement, stickiness, --replace.
+e2e-placement: deps
+	$(GO) test -tags e2eplacement -count=1 -v -timeout 10m ./e2e/placement/...
+
 ## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container).
 PG_CTX  ?= orbstack
 PG_PORT ?= 55433
@@ -66,6 +71,18 @@ e2e-real: deps
 		echo "e2e-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ereal -count=1 -v -timeout 15m ./e2e/real/...
+
+## e2e-coldid: cold-identity breakdown (create → own node reachable, per stage), hermetic.
+## TWD_COLDID_N objects; TWD_COLDID_DIAL=ready makes the caller wait for "ready". Results: e2e/coldid/results/.
+e2e-coldid:
+	$(GO) test -tags e2e -count=1 -v -timeout 15m -run TestColdIdentityLocal ./e2e/coldid/
+
+## e2e-coldid-real: the same on tailnet 1 (production control; ttest-fi-* nodes, deleted by ID afterwards).
+e2e-coldid-real:
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-coldid-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestColdIdentityReal ./e2e/coldid/
 
 ## guest-image / guest-kernel / vm-assets: the microVM guest (Linux only; reproducible; inputs
 ## pinned in guest/inputs.sh) for GUEST_ARCH (Go's name, amd64 or arm64; default: this machine).
@@ -91,8 +108,10 @@ VM_KERNEL_DEP = $(if $(filter $(DEFAULT_VM_KERNEL),$(TWD_VM_KERNEL)),guest-kerne
 # 2 MiB pages for guest RAM (runtime sysctl inside the Lima VM, not persisted):
 # without them, workerd start-up under nested virt is ~8x slower.
 VM_HUGEPAGES ?= 2048
-# TWD_VM_VCPUS / TWD_VM_BOOTARGS (optional) pass through to the tests (sudo drops the env).
+# TWD_VM_VCPUS / TWD_VM_BOOTARGS (optional) pass through to the tests (sudo drops the env), as do
+# fast-vm's TWD_VM_BENCH_DEPLOYS / TWD_VM_E2E_SNAPSHOT / TWD_VM_E2E_SNAPSHOT_REFILL.
 VM_ENV = PATH="$$PATH" TWD_VM_KERNEL="$(TWD_VM_KERNEL)" TWD_VM_ROOTFS="$(CURDIR)/$(GUEST_OUT)/rootfs.ext4" \
+	TWD_VM_BENCH_DEPLOYS="$(TWD_VM_BENCH_DEPLOYS)" TWD_VM_E2E_SNAPSHOT="$(TWD_VM_E2E_SNAPSHOT)" TWD_VM_E2E_SNAPSHOT_REFILL="$(TWD_VM_E2E_SNAPSHOT_REFILL)" \
 	$(if $(TWD_VM_VCPUS),TWD_VM_VCPUS="$(TWD_VM_VCPUS)") $(if $(TWD_VM_BOOTARGS),TWD_VM_BOOTARGS="$(TWD_VM_BOOTARGS)")
 e2e-vm: deps guest-image $(VM_KERNEL_DEP)
 	@[ "$$(uname -s)" = Linux ] || { echo "e2e-vm: Linux only; run it inside Lima twd-dev"; exit 1; }
@@ -367,6 +386,8 @@ lint: api-check
 	$(GO) vet -tags e2elinux ./e2e/linux/...
 	$(GO) vet -tags sdk ./e2e/sdk/...
 	$(GO) vet -tags nodetier ./e2e/node/...
+	$(GO) vet -tags e2eplacement ./e2e/placement/...
+	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...
 	@sh scripts/check-secrets.sh
 
 hooks:

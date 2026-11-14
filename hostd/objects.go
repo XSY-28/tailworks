@@ -47,6 +47,7 @@ type object struct {
 	Created   time.Time `json:"created"`
 
 	live      bool          // node created in the netd registry (this process)
+	reserved  bool          // a pool node offered to a create in flight (poolnodes.go)
 	readyCh   chan struct{} // closed on ready/failed/killed
 	joinFails int           // consecutive bootstrap failures (retryNode)
 }
@@ -150,6 +151,11 @@ func netdIDFor(id string) string {
 // mgmt and starting its node (async) on first use. class "" is the
 // workload entry node. parent/caps/ttl apply to spawns.
 func (h *Host) ensure(ctx context.Context, w *workload, class, name string, parent *object, caps json.RawMessage, ttl string, actingFor ...string) (*object, error) {
+	if class == PoolClass || class == mgmtapi.WorkloadNamespace {
+		// Reserved: tenant code must never create or act as a pool node
+		// (it would hold the identity a later object is given).
+		return nil, &apiError{Code: "bad_request", Detail: "class " + class + " is reserved"}
+	}
 	key := objKey(w.tenantID, w.name, class, name)
 	for {
 		h.mu.Lock()
@@ -203,11 +209,35 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 	if parent != nil {
 		req.Parent = &mgmtapi.ObjectRef{ObjectID: parent.ID}
 	}
+	// A pre-joined node of this class, if one is idle (ADR-031): mgmt takes
+	// it only for a new, non-ephemeral object of exactly its tags.
+	var pool *object
+	if parent == nil && ttl == "" && poolable(class) {
+		h.mu.Lock()
+		pool = h.takePoolLocked(w.tenantID, w.name, class)
+		h.mu.Unlock()
+		if pool != nil {
+			req.PoolObjectID = pool.ID
+		}
+		defer h.noteDemand(w.tenantID, w.name, class)
+	}
+	release := func() {
+		if pool != nil {
+			h.mu.Lock()
+			pool.reserved = false
+			h.mu.Unlock()
+		}
+	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	resp, err := h.mgmt.CreateObject(cctx, req)
 	if err != nil {
+		release()
 		return nil, err
+	}
+	if pool != nil && resp.Status != mgmtapi.StatusAssigned {
+		release() // mgmt minted instead (an existing object, or the node didn't qualify)
+		pool = nil
 	}
 	if resp.Hostname != "" && resp.Hostname != hn {
 		// mgmt names the node (M2: the object ID); keep the host's prefix
@@ -225,6 +255,21 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 		readyCh: make(chan struct{})}
 	if parent != nil {
 		o.Parent = parent.ID
+	}
+	if pool != nil {
+		// Assigned: the object takes over the pool node's netd node (and its
+		// state dir) under its own mgmt ID; the pool entry goes.
+		o.NetdID, o.live = pool.NetdID, true
+		h.mu.Lock()
+		h.forgetLocked(pool)
+		h.objects[o.ID] = o
+		h.byNetd[o.NetdID] = o
+		h.byKey[o.key()] = o
+		h.mu.Unlock()
+		h.saveObjects()
+		h.log.Info("object created on a pre-joined node", "object", o.ID, "class", class, "name", name, "hostname", hn, "pool", pool.ID)
+		go h.assignNode(o, pool.ID)
+		return o, nil
 	}
 	h.mu.Lock()
 	if old := h.objects[o.ID]; old != nil && old.terminal() && resp.Status == statusPending {
@@ -480,7 +525,7 @@ func (h *Host) killLocal(objectID, reason string) {
 	if o.ActingFor == OriginPublic && o.Class != "" {
 		h.pubCreates.forget(o.TenantID, o.Workload, o.Class, o.Name)
 	}
-	if w != nil && o.Class != "" && !o.isPublicNode() {
+	if w != nil && o.Class != "" && !o.isPublicNode() && !o.isPool() { // workerd never had a pool node's class
 		if inst := w.current(); inst != nil {
 			inst.admin(map[string]any{"kind": "admin", "op": "kill", "class": o.Class, "name": o.Name, "reason": reason})
 		}

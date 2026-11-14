@@ -4,14 +4,16 @@ package main
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 )
 
 type vmOptions struct {
 	kernel, rootfs, firecracker, jailer, helper, hugePages, containerKernel, vzVMM string
-	memMiB, vcpus                                                                  int
-	rosetta                                                                        bool
+	memMiB, vcpus, pool                                                            int
+	rosetta, snapshot, snapRefill                                                  bool
+	rotate                                                                         time.Duration
 }
 
 // vmBackend: the microVM tier needs Linux + KVM or macOS; this OS offers the

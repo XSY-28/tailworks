@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -39,6 +40,11 @@ type agent struct {
 	done    chan struct{}
 	ready   chan struct{}
 	readyOK atomic.Bool
+	// pool VMs (Firecracker warm pool / snapshot restores): closed when
+	// the guest first says "pooled" (warm, waiting for its load)
+	pooled   chan struct{}
+	pooledOK atomic.Bool
+	pooledAt time.Time
 	// onBoot, if set, is called with the count of "boot" reports (a guest
 	// that boots again was restarted by its hypervisor).
 	onBoot func(n int)
@@ -55,7 +61,10 @@ type agent struct {
 	// only if its "hello" carries it. Anything else in the guest that can
 	// open a vsock connection to the host (a container process that got
 	// past its seccomp filter) can't take the channel over, forge guest
-	// events or receive the host's ops.
+	// events or receive the host's ops. A pooled VM's (or a copy restored
+	// from a base snapshot, which shares the base's) is replaced at claim
+	// by a fresh one sent in the load (rekey); from then on only that one
+	// is accepted. Guarded by mu.
 	ctlToken string
 	// ctlConns counts the control connections accepted this boot (> 1:
 	// guestd reconnected after its connection died).
@@ -71,7 +80,26 @@ type agent struct {
 }
 
 func newAgent() agent {
-	return agent{done: make(chan struct{}), ready: make(chan struct{}), pending: map[int64]chan proto.Msg{}, ctlToken: newToken()}
+	return agent{done: make(chan struct{}), ready: make(chan struct{}), pooled: make(chan struct{}), pending: map[int64]chan proto.Msg{}, ctlToken: newToken()}
+}
+
+// rekey replaces the control-channel token with a fresh one and returns it
+// (a pooled VM's claim: the load carries it to guestd). Connections that
+// present the old token are refused from now on; the current channel,
+// already authenticated, stays.
+func (m *agent) rekey() string {
+	t := newToken()
+	m.mu.Lock()
+	m.ctlToken = t
+	m.mu.Unlock()
+	return t
+}
+
+// token is the control-channel token currently accepted.
+func (m *agent) token() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ctlToken
 }
 
 // newToken is a random 256-bit token (hex).
@@ -132,7 +160,7 @@ func (m *agent) route(c net.Conn) {
 		m.onStream(first.Exec, first.Token, &bufConn{Conn: c, r: br})
 		return
 	case "hello":
-		if tokenEqual(first.Token, m.ctlToken) {
+		if tokenEqual(first.Token, m.token()) {
 			break
 		}
 		fallthrough
@@ -194,14 +222,30 @@ func (m *agent) readCtl(c io.Reader) {
 		case "boot":
 			m.boots++
 			if m.boots == 1 {
+				m.mu.Lock()
 				m.info.Boot = time.Since(m.start)
+				m.mu.Unlock()
 			}
+			m.setGuestStages(msg.Stages)
 			if m.onBoot != nil {
 				m.onBoot(m.boots)
 			}
+		case "pooled":
+			m.setGuestStages(msg.Stages)
+			if m.pooledOK.CompareAndSwap(false, true) {
+				m.mu.Lock()
+				m.pooledAt = time.Now()
+				m.mu.Unlock()
+				close(m.pooled)
+			}
 		case "ready":
-			m.info.Ready = time.Since(m.start)
+			m.mu.Lock()
+			if src := m.info.Source; src != "pool" && src != "restore" {
+				m.info.Ready = time.Since(m.start) // a claim sets its own
+			}
 			m.info.GuestUptimeAtReady = time.Duration(msg.UptimeMS) * time.Millisecond
+			m.mu.Unlock()
+			m.setGuestStages(msg.Stages)
 			if m.readyOK.CompareAndSwap(false, true) {
 				close(m.ready)
 			}
@@ -212,6 +256,20 @@ func (m *agent) readCtl(c io.Reader) {
 			m.mu.Unlock()
 		}
 	}
+}
+
+func (m *agent) setGuestStages(st map[string]float64) {
+	if len(st) == 0 {
+		return
+	}
+	m.mu.Lock()
+	if m.info.GuestStages == nil {
+		m.info.GuestStages = map[string]float64{}
+	}
+	for k, v := range st {
+		m.info.GuestStages[k] = v
+	}
+	m.mu.Unlock()
 }
 
 func (m *agent) eventTypes() []string {
@@ -294,7 +352,13 @@ func (m *agent) DialGuest(ctx context.Context) (net.Conn, error) {
 func (m *agent) Done() <-chan struct{} { return m.done }
 
 // Info implements sandbox.VM.
-func (m *agent) Info() sandbox.Info { return m.info }
+func (m *agent) Info() sandbox.Info {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	i := m.info
+	i.Stages, i.GuestStages = maps.Clone(i.Stages), maps.Clone(i.GuestStages)
+	return i
+}
 
 // Refused implements sandbox.VM.
 func (m *agent) Refused() []string { return m.vn.refusedFlows() }

@@ -35,7 +35,7 @@ func TestSmoke(t *testing.T) {
 		t.Skip("TWD_VM_KERNEL / TWD_VM_ROOTFS not set")
 	}
 	b, err := New(Config{Kernel: kernel, Rootfs: rootfs, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"), VCPUs: envInt("TWD_VM_VCPUS"),
-		Helper: os.Getenv("TWD_VM_HELPER")})
+		Helper: os.Getenv("TWD_VM_HELPER"), Pool: -1 /* the cold path; pool_test.go covers the pool */})
 	if err != nil {
 		t.Skip(err)
 	}

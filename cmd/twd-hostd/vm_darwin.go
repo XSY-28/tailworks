@@ -4,6 +4,7 @@ package main
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/hostd/vm"
@@ -11,8 +12,9 @@ import (
 
 type vmOptions struct {
 	kernel, rootfs, firecracker, jailer, helper, hugePages, containerKernel, vzVMM string
-	memMiB, vcpus                                                                  int
-	rosetta                                                                        bool
+	memMiB, vcpus, pool                                                            int
+	rosetta, snapshot, snapRefill                                                  bool
+	rotate                                                                         time.Duration // fast-vm (pool, snapshots): Firecracker only; vz ignores them
 }
 
 // vmBackend enables the microVM tier on macOS when this host can run it:

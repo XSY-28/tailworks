@@ -80,8 +80,10 @@ func (s *ctrState) event(msg proto.Msg) bool {
 		s.mainPID = msg.PID
 		s.mu.Unlock()
 		m := s.m
+		m.mu.Lock()
 		m.info.Ready = time.Since(m.start)
 		m.info.GuestUptimeAtReady = time.Duration(msg.UptimeMS) * time.Millisecond
+		m.mu.Unlock()
 		if m.readyOK.CompareAndSwap(false, true) {
 			close(m.ready)
 		}
@@ -406,7 +408,7 @@ func (c *ctrVM) Op(ctx context.Context, msg proto.Msg) (proto.Msg, error) {
 	return c.m.Op(ctx, msg)
 }
 
-func (c *ctrVM) Info() sandbox.Info { return c.m.info }
+func (c *ctrVM) Info() sandbox.Info { return c.m.Info() }
 func (c *ctrVM) RSSKB() int64       { return c.m.RSSKB() }
 func (c *ctrVM) Log() string        { return c.s.log.String() }
 

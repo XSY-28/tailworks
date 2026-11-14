@@ -185,3 +185,53 @@ func waitFor(t *testing.T, f func() bool) {
 	}
 	t.Fatal("timed out")
 }
+
+// TestAgentRekeyAtClaim (ADR-032 × fast-vm): copies restored from one base
+// snapshot all start with the base's control token in guestd's memory, so a
+// pooled VM authenticates with it only until its claim. The claim's rekey
+// gives each copy its own token (sent in the load); after it, the base
+// token is refused, the new one is accepted (guestd's reconnects), and the
+// already authenticated channel keeps working.
+func TestAgentRekeyAtClaim(t *testing.T) {
+	base := newToken()
+	copyOf := func() *agent {
+		a := testAgent()
+		a.ctlToken = base // a restore: launch sets the base's token
+		return a
+	}
+	a, b := copyOf(), copyOf()
+	pre := dialAgent(t, a, proto.Msg{Type: "hello", Token: base})
+	pre.serve("pooled")
+	waitFor(t, func() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.enc != nil })
+	if got := opText(t, a); got != "pooled" {
+		t.Fatalf("pre-claim channel with the base token: op answered by %q", got)
+	}
+
+	ta, tb := a.rekey(), b.rekey()
+	if ta == tb || ta == base || tb == base || len(ta) != 64 {
+		t.Fatalf("claim tokens not unique per copy: base %s, a %s, b %s", base, ta, tb)
+	}
+	// The channel authenticated before the claim (which carried the load)
+	// stays.
+	if got := opText(t, a); got != "pooled" {
+		t.Fatalf("after rekey: op answered by %q", got)
+	}
+	// The base token no longer opens a control channel on either copy.
+	for name, x := range map[string]*agent{"a": a, "b": b} {
+		h := dialAgent(t, x, proto.Msg{Type: "hello", Token: base})
+		if !h.closedByHost(t) {
+			t.Fatalf("copy %s: a hello with the base token was accepted after the claim", name)
+		}
+	}
+	// Nor does the other copy's token.
+	if h := dialAgent(t, a, proto.Msg{Type: "hello", Token: tb}); !h.closedByHost(t) {
+		t.Fatal("copy a accepted copy b's token")
+	}
+	if got := opText(t, a); got != "pooled" {
+		t.Fatalf("a refused hello took the channel over: %q", got)
+	}
+	// guestd's reconnect with the load's token replaces the channel.
+	re := dialAgent(t, a, proto.Msg{Type: "hello", Token: ta})
+	re.serve("claimed")
+	waitFor(t, func() bool { return opText(t, a) == "claimed" })
+}

@@ -130,11 +130,21 @@ func newVnetOn(ep stack.LinkEndpoint, gw, guest netip.Addr, prefix int, handlers
 		go serveDNS(pc, gnet)
 	}
 
+	if err := v.serve(handlers); err != nil {
+		v.close()
+		return nil, err
+	}
+	return v, nil
+}
+
+// serve adds listeners on gateway:port for handlers. A pooled VM's stack
+// starts with none (every SYN is reset and recorded); its workload's
+// handlers are added when it is claimed.
+func (v *vnet) serve(handlers map[uint16]http.Handler) error {
 	for port, h := range handlers {
-		ln, err := gonet.ListenTCP(st, tcpip.FullAddress{NIC: nicID, Addr: tcpip.AddrFrom4(gw.As4()), Port: port}, ipv4.ProtocolNumber)
+		ln, err := gonet.ListenTCP(v.st, tcpip.FullAddress{NIC: nicID, Addr: tcpip.AddrFrom4(v.gw.As4()), Port: port}, ipv4.ProtocolNumber)
 		if err != nil {
-			v.close()
-			return nil, fmt.Errorf("listen gateway:%d: %w", port, err)
+			return fmt.Errorf("listen gateway:%d: %w", port, err)
 		}
 		srv := &http.Server{Handler: h, ReadHeaderTimeout: 30 * time.Second,
 			ConnState: func(c net.Conn, s http.ConnState) {
@@ -147,10 +157,17 @@ func newVnetOn(ep stack.LinkEndpoint, gw, guest netip.Addr, prefix int, handlers
 					}
 				}
 			}}
+		v.mu.Lock()
+		if v.closed {
+			v.mu.Unlock()
+			ln.Close()
+			return net.ErrClosed
+		}
 		v.servers = append(v.servers, srv)
+		v.mu.Unlock()
 		go srv.Serve(ln)
 	}
-	return v, nil
+	return nil
 }
 
 // serveDNS answers a container guest's DNS queries (gateway:53/udp) from
@@ -242,8 +259,9 @@ func (v *vnet) close() {
 		return
 	}
 	v.closed = true
+	servers := v.servers
 	v.mu.Unlock()
-	for _, s := range v.servers {
+	for _, s := range servers {
 		s.Close()
 	}
 	if v.udp != nil {
