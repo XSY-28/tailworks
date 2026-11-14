@@ -233,5 +233,8 @@ func TestAgentRekeyAtClaim(t *testing.T) {
 	// guestd's reconnect with the load's token replaces the channel.
 	re := dialAgent(t, a, proto.Msg{Type: "hello", Token: ta})
 	re.serve("claimed")
-	waitFor(t, func() bool { return opText(t, a) == "claimed" })
+	waitFor(t, func() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.ctlConns == 2 })
+	if got := opText(t, a); got != "claimed" {
+		t.Fatalf("after guestd's reconnect with the claim token: op answered by %q", got)
+	}
 }
