@@ -78,7 +78,9 @@ func run() error {
 		vmMem      = flag.Int("vm-mem-mib", 512, "microVM tier: guest memory")
 		vmCPUs     = flag.Int("vm-vcpus", 2, "microVM tier: guest vCPUs")
 		vmHuge     = flag.String("vm-hugepages", "auto", "microVM tier: back guest RAM with 2 MiB pages: auto | on | off")
-		vmSnap     = flag.Bool("vm-snapshot", false, "microVM tier: restore VMs from a base snapshot (no tenant code, no keys) with lazy memory instead of booting them; OFF by default pending the ADR on cross-tenant page sharing")
+		vmSnap     = flag.Bool("vm-snapshot", true, "microVM tier: when the warm pool is empty, restore a VM from a base snapshot of a warm VM without tenant code or keys (private, lazily loaded guest memory) instead of booting one (ADR-030)")
+		vmSnapFill = flag.Bool("vm-snapshot-refill", false, "microVM tier: also refill the warm pool by restoring the base snapshot (faster refills, slower claims) instead of booting")
+		vmRotate   = flag.Duration("vm-snapshot-rotate", time.Hour, "microVM tier: rebuild the base snapshot this often (and at every start); idle pool VMs restored from the old base are discarded; < 0 = never")
 		vmPool     = flag.Int("vm-pool", 0, "microVM tier: warm pool size (pre-booted VMs without tenant code; single use): 0 = auto (≤ 2, within the huge-page reservation), -1 = off")
 		sandboxF   = flag.String("sandbox", "auto", "process-tier workerd/Node sandbox: auto (seatbelt on macOS, landlock on Linux) | seatbelt | landlock | none")
 		insecureSH = flag.Bool("insecure-shared-host", false, "without a process sandbox, still run process-tier workloads of more than one tenant (tenants are NOT isolated from each other)")
@@ -159,7 +161,7 @@ func run() error {
 		Sandbox: *sandboxF, SandboxDeny: splitList(*sbDeny), InsecureSharedHost: *insecureSH, AllowSiblingEgress: *siblings,
 		DefaultTier: *tier, NodeBin: *nodeBin, VMVolumeMiB: *vmVolMiB,
 		VM: vmBackend(vmOptions{kernel: *vmKernel, rootfs: *vmRootfs, firecracker: *vmFC, jailer: *vmJailer, helper: *vmHelper,
-			memMiB: *vmMem, vcpus: *vmCPUs, hugePages: *vmHuge, pool: *vmPool, snapshot: *vmSnap}, log)}
+			memMiB: *vmMem, vcpus: *vmCPUs, hugePages: *vmHuge, pool: *vmPool, snapshot: *vmSnap, snapRefill: *vmSnapFill, rotate: *vmRotate}, log)}
 	if pushLn != nil {
 		hcfg.PushListener, hcfg.PushPort = pushLn, *pushPort
 	}

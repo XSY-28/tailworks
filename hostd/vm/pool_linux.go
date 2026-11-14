@@ -66,6 +66,7 @@ type PoolStats struct {
 	Failed    int `json:"failed"`       // pool boots that failed
 	DiedIdle  int `json:"diedIdle"`     // pooled VMs that exited before a claim
 	SkipQuota int `json:"skippedQuota"` // refills skipped: budget or free huge pages
+	Rotated   int `json:"rotated"`      // idle VMs discarded because their base was rotated out
 }
 
 // hugePagesTotal2M is vm.nr_hugepages for 2 MiB pages (the reservation).
@@ -138,7 +139,9 @@ func (p *pool) run() {
 			p.filling++
 			p.mu.Unlock()
 			o := bootOpts{name: "pool", pool: true}
-			if id := p.b.baseID(p.ctx, p.b.base != nil); id != "" {
+			if !p.b.cfg.SnapshotRefill {
+				// boot (the default): the fastest claims
+			} else if id := p.b.baseID(p.ctx, p.b.curBase() != nil); id != "" {
 				o.restore = id // snapshots on: refill by restoring the base
 			}
 			m, err := p.b.boot(p.ctx, o)
@@ -204,6 +207,36 @@ func (p *pool) run() {
 			return
 		}
 	}
+}
+
+// roomForOne: one more VM of this backend fits the budget and the free
+// huge pages now (the base VM's check; refills use wantMore).
+func (p *pool) roomForOne() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	need := p.b.cfg.MemMiB
+	return (len(p.live)+1)*need <= p.budgetMiB && (!p.hugeOnly || p.freePages()*2 >= need)
+}
+
+// dropBase destroys the idle pooled VMs restored from base id (rotated
+// out); the pool refills from the current base.
+func (p *pool) dropBase(id string) {
+	p.mu.Lock()
+	var drop, keep []*Machine
+	for _, m := range p.idle {
+		if m.info.Base == id {
+			drop = append(drop, m)
+		} else {
+			keep = append(keep, m)
+		}
+	}
+	p.idle = keep
+	p.st.Rotated += len(drop)
+	p.mu.Unlock()
+	for _, m := range drop {
+		m.Stop()
+	}
+	p.kick()
 }
 
 // take removes and returns the oldest live pooled VM (nil if none).

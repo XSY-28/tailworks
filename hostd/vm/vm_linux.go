@@ -74,7 +74,16 @@ type Config struct {
 	// empty. Guest memory is served lazily (userfaultfd). See
 	// snapshot_linux.go and the ADR draft on cross-tenant memory sharing.
 	Snapshot bool
-	Log      *slog.Logger
+	// SnapshotRefill: refill the pool by restoring the base (+ re-warm)
+	// instead of booting. Refills are 6x faster (~0.1 vs ~0.6 s, in the
+	// background), but claims of restored VMs were measured 20-50 ms slower
+	// (STATUS FV), so the default is off: boot-filled pool, and restores
+	// for pool misses only.
+	SnapshotRefill bool
+	// BaseRotate rebuilds the base snapshot this often (default 1 h; < 0:
+	// never). Idle pool VMs restored from the old base are discarded.
+	BaseRotate time.Duration
+	Log        *slog.Logger
 }
 
 // DefaultBootArgs: serial console, no PCI probing, panic → reboot (which
@@ -93,7 +102,13 @@ type Backend struct {
 	srvBase string
 	via     string
 	pool    *pool
-	base    *baseSnap
+
+	baseMu        sync.Mutex
+	base          *baseSnap // current base snapshot (Snapshot on)
+	baseRotations int
+	baseStop      context.CancelFunc
+	baseDone      chan struct{}
+	baseWG        sync.WaitGroup
 }
 
 // Available reports whether this host can run microVMs: KVM, the guest
@@ -170,7 +185,11 @@ func New(cfg Config) (*Backend, error) {
 		}
 	}
 	if cfg.Snapshot {
+		if b.cfg.BaseRotate == 0 {
+			b.cfg.BaseRotate = time.Hour
+		}
 		b.base = &baseSnap{ready: make(chan struct{})}
+		b.baseDone = make(chan struct{})
 	}
 	b.pool = newPool(b)
 	if b.base != nil {
@@ -205,6 +224,7 @@ func (b *Backend) startInProcessHelper() error {
 // Close stops the in-process helper (if any) and removes the backend's run
 // directory if it created it. Running VMs must be stopped first.
 func (b *Backend) Close() error {
+	b.stopBase()
 	if b.pool != nil {
 		b.pool.close()
 	}
@@ -293,7 +313,7 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (sandbox.VM, error) 
 			b.cfg.Log.Warn("pooled microVM failed its claim; booting cold", "spec", s.ID, "err", err)
 		}
 	}
-	if b.base != nil {
+	if b.curBase() != nil {
 		// Snapshots on and no pooled VM: restore one now and claim it.
 		t0 := time.Now()
 		if id := b.baseID(ctx, true); id != "" {
@@ -337,7 +357,7 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 		m.info.Source = "pool"
 	}
 	if o.restore != "" {
-		m.info.Source, o.pool = "restore", true
+		m.info.Source, m.info.Base, o.pool = "restore", o.restore, true
 	}
 	stage := func(name string) { m.info.Stages[name] = float64(time.Since(t0).Microseconds()) / 1000 }
 	m.log = b.cfg.Log.With("vm", id)

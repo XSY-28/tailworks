@@ -30,7 +30,7 @@ func snapBackend(t *testing.T, pool int) *Backend {
 			t.Skip("TWD_VM_KERNEL / TWD_VM_ROOTFS not set")
 		}
 		b, err := New(Config{Kernel: kernel, Rootfs: rootfs, Helper: os.Getenv("TWD_VM_HELPER"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
-			Pool: pool, Snapshot: true})
+			Pool: pool, Snapshot: true, SnapshotRefill: pool >= 0})
 		if err != nil {
 			t.Skip(err)
 		}
@@ -294,4 +294,91 @@ func TestSnapshotUniqueness(t *testing.T) {
 	}
 	_ = rand.Read
 	_ = hex.EncodeToString
+}
+
+// TestSnapshotRotate: the base is rebuilt on a timer; restores then use the
+// new one, idle pool VMs restored from the old one are discarded and
+// refilled from the new one, and the old base's files are removed after
+// the grace period (ADR-030 decision 3).
+func TestSnapshotRotate(t *testing.T) {
+	kernel, rootfs := os.Getenv("TWD_VM_KERNEL"), os.Getenv("TWD_VM_ROOTFS")
+	if kernel == "" || rootfs == "" {
+		t.Skip("TWD_VM_KERNEL / TWD_VM_ROOTFS not set")
+	}
+	defer func(g time.Duration) { BaseGrace = g }(BaseGrace)
+	BaseGrace = time.Second
+	b, err := New(Config{Kernel: kernel, Rootfs: rootfs, Helper: os.Getenv("TWD_VM_HELPER"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
+		Pool: 1, Snapshot: true, SnapshotRefill: true, BaseRotate: 4 * time.Second})
+	if err != nil {
+		t.Skip(err)
+	}
+	defer b.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	filesA, _, err := b.BaseSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idA := b.baseID(ctx, true)
+	if err := b.WaitPool(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	idleBase := func() string {
+		b.pool.mu.Lock()
+		defer b.pool.mu.Unlock()
+		if len(b.pool.idle) == 0 {
+			return ""
+		}
+		return b.pool.idle[0].info.Base
+	}
+	if got := idleBase(); got != idA {
+		t.Fatalf("pooled VM from base %q, want %q", got, idA)
+	}
+	var idB string
+	for idB == "" || idB == idA {
+		if ctx.Err() != nil {
+			t.Fatal("the base was not rotated")
+		}
+		time.Sleep(100 * time.Millisecond)
+		idB = b.baseID(ctx, false)
+	}
+	t.Logf("rotated %s → %s", idA, idB)
+	// The idle VM from A is replaced by one from B (or a later base).
+	for {
+		if got := idleBase(); got != "" && got != idA {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("idle pool VM still from the old base: %+v", *b.PoolStats())
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if ps := b.PoolStats(); ps.Rotated < 1 {
+		t.Fatalf("no pooled VM discarded on rotation: %+v", *ps)
+	}
+	// A's files go after the grace period.
+	deadline := time.Now().Add(10 * time.Second)
+	for _, f := range filesA {
+		for {
+			if _, err := os.Stat(f); os.IsNotExist(err) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("old base file %s still there", f)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	m, err := b.Boot(ctx, newMarkerApp(t, "rot", false).spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Stop()
+	if in := m.Info(); in.Source != "restore" || in.Base == idA || in.Base == "" {
+		t.Fatalf("claimed VM source %q base %q (old base %q)", in.Source, in.Base, idA)
+	}
+	if got := guestGet(t, m, "/"); !strings.HasPrefix(got, "hello ") {
+		t.Fatalf("GET /: %q", got)
+	}
+	t.Logf("pool %+v", *b.PoolStats())
 }

@@ -83,6 +83,7 @@ type Info struct {
 	// "pool" (a warm pooled VM, claimed and loaded), or "restore" (restored
 	// from the base snapshot, then loaded). PoolIdle: how long it had waited.
 	Source      string             `json:",omitempty"`
+	Base        string             `json:",omitempty"` // restore: the base snapshot it came from
 	PoolIdle    time.Duration      `json:",omitempty"`
 	GuestStages map[string]float64 `json:",omitempty"`
 	// Jail is how the VMM is confined (microVM tier: jailer chroot,

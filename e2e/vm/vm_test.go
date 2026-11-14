@@ -52,15 +52,21 @@ func (r *results) set(k string, v any) {
 	r.mu.Unlock()
 }
 
-func TestE2EVM(t *testing.T) { runE2EVM(t, false) }
+// TestE2EVM runs the product default (twd-hostd -vm-pool auto,
+// -vm-snapshot on): a boot-filled warm pool, with the base snapshot for
+// pool misses. Every workload VM here is a claimed pool VM (the suite waits
+// for the pool); NoKeysInGuest also scans the base. TWD_VM_E2E_SNAPSHOT=0:
+// snapshots off; TWD_VM_E2E_SNAPSHOT_REFILL=1: the pool refilled by restore.
+func TestE2EVM(t *testing.T) { runE2EVM(t, os.Getenv("TWD_VM_E2E_SNAPSHOT") != "0", 0) }
 
-// TestE2EVMSnapshot is the same suite with snapshot restore on (and the
-// pool off): every workload VM — first deploys, redeploys, crash
-// restarts — is restored on demand from the base snapshot and loaded.
+// TestE2EVMSnapshot is the same suite with the pool off: every workload VM
+// (first deploys, redeploys, crash restarts) is restored on demand.
+// (The boot-filled pool: hostd/vm TestPool*; the cold path: TestSmoke.)
+func TestE2EVMSnapshot(t *testing.T) { runE2EVM(t, true, -1) }
+
+// runE2EVM: snapshot on/off; pool as vm.Config.Pool. With snapshots on,
 // NoKeysInGuest also scans the base snapshot's files.
-func TestE2EVMSnapshot(t *testing.T) { runE2EVM(t, true) }
-
-func runE2EVM(t *testing.T, snapshot bool) {
+func runE2EVM(t *testing.T, snapshot bool, pool int) {
 	kernel, rootfs := os.Getenv("TWD_VM_KERNEL"), os.Getenv("TWD_VM_ROOTFS")
 	if kernel == "" || rootfs == "" {
 		t.Skip("TWD_VM_KERNEL and TWD_VM_ROOTFS must be set (make e2e-vm)")
@@ -72,8 +78,10 @@ func runE2EVM(t *testing.T, snapshot bool) {
 	vcfg := vm.Config{Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
 		Helper: os.Getenv("TWD_VM_HELPER")}
 	wantSource := "pool"
-	if snapshot {
-		vcfg.Pool, vcfg.Snapshot, wantSource = -1, true, "restore"
+	vcfg.Pool, vcfg.Snapshot = pool, snapshot
+	vcfg.SnapshotRefill = snapshot && pool >= 0 && os.Getenv("TWD_VM_E2E_SNAPSHOT_REFILL") == "1"
+	if snapshot && (pool < 0 || vcfg.SnapshotRefill) {
+		wantSource = "restore"
 	}
 	be, err := vm.New(vcfg)
 	if err != nil {
@@ -81,7 +89,7 @@ func runE2EVM(t *testing.T, snapshot bool) {
 	}
 	t.Cleanup(func() { be.Close() })
 	res := &results{m: map[string]any{"started": time.Now().UTC().Format(time.RFC3339), "kernel": kernel, "rootfs": rootfs, "vcpus": vcpus, "mem_mib": 512,
-		"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M(), "snapshot": snapshot}}
+		"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M(), "snapshot": snapshot, "pool": pool}}
 	if mb, err := os.ReadFile(filepath.Join(filepath.Dir(rootfs), "manifest.json")); err == nil {
 		var man map[string]any
 		json.Unmarshal(mb, &man)
@@ -960,7 +968,7 @@ func writeResults(t *testing.T, r *results) {
 	b, _ := json.MarshalIndent(r.m, "", "  ")
 	os.MkdirAll("results", 0o755)
 	name := "l3-"
-	if r.m["snapshot"] == true {
+	if r.m["snapshot"] == true && r.m["pool"] == -1 {
 		name = "fv-snapshot-"
 	}
 	p := filepath.Join("results", name+time.Now().UTC().Format("20060102T150405Z")+".json")

@@ -28,6 +28,13 @@ import (
 // private pages). The restored guest's vsock connection was reset by the
 // snapshot; guestd reconnects and says "pooled", and from there it is
 // claimed exactly like a pooled VM (Backend.claim).
+//
+// Rotation (vm.Config.BaseRotate, default 1 h; ADR-030 decision 3): the
+// base is rebuilt on a timer (and at every hostd start). Once the new one is
+// ready, restores use it, idle pool VMs restored from the old one are
+// discarded (refilled from the new one), and the old base's files are
+// removed after BaseGrace (restores already reading it finish first;
+// running VMs keep their own mapping of its memory).
 type baseSnap struct {
 	ready chan struct{}
 	conn  *helperapi.Conn
@@ -35,21 +42,96 @@ type baseSnap struct {
 	files []string
 	info  map[string]any
 	err   error
+	built time.Time
 }
 
-// startBase builds the base snapshot in the background (b.base is set
-// before the pool starts, so both see it).
+// BaseGrace is how long an old base outlives its replacement.
+var BaseGrace = 30 * time.Second
+
+func (b *Backend) curBase() *baseSnap {
+	b.baseMu.Lock()
+	defer b.baseMu.Unlock()
+	return b.base
+}
+
+// startBase builds the first base snapshot in the background (b.base is set
+// before the pool starts, so both see it), then rotates it.
 func (b *Backend) startBase() {
-	bs := b.base
+	ctx, cancel := context.WithCancel(context.Background())
+	b.baseStop = cancel
+	b.baseWG.Add(1)
 	go func() {
-		defer close(bs.ready)
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		bs.err = b.makeBase(ctx, bs)
+		defer b.baseWG.Done()
+		bs := b.curBase()
+		bs.err = b.buildBase(ctx, bs)
+		close(bs.ready)
+		every := b.cfg.BaseRotate
+		if every <= 0 {
+			return
+		}
+		next := every
 		if bs.err != nil {
-			b.cfg.Log.Warn("microVM base snapshot failed; booting instead of restoring", "err", bs.err)
+			next = min(every, time.Minute) // retry a failed first base soon
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(next):
+			}
+			nb := &baseSnap{ready: make(chan struct{})}
+			nb.err = b.buildBase(ctx, nb)
+			close(nb.ready)
+			if nb.err != nil {
+				if ctx.Err() == nil {
+					b.cfg.Log.Warn("microVM base rotation failed; keeping the current base", "err", nb.err)
+				}
+				next = min(every, time.Minute)
+				continue
+			}
+			next = every
+			b.baseMu.Lock()
+			old := b.base
+			b.base = nb
+			b.baseRotations++
+			b.baseMu.Unlock()
+			b.cfg.Log.Info("microVM base snapshot rotated", "old", old.id, "new", nb.id)
+			if b.pool != nil {
+				b.pool.dropBase(old.id)
+			}
+			b.retire(old)
 		}
 	}()
+}
+
+// retire removes an old base after BaseGrace.
+func (b *Backend) retire(old *baseSnap) {
+	if old == nil || old.conn == nil {
+		return
+	}
+	b.baseWG.Add(1)
+	go func() {
+		defer b.baseWG.Done()
+		select {
+		case <-time.After(BaseGrace):
+		case <-b.baseDone:
+		}
+		old.conn.Close() // the helper removes the base's files
+	}()
+}
+
+func (b *Backend) buildBase(ctx context.Context, bs *baseSnap) error {
+	if p := b.pool; p != nil && !p.roomForOne() {
+		return errors.New("no room in the huge-page budget for the base VM now")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	err := b.makeBase(ctx, bs)
+	if err != nil && ctx.Err() == nil {
+		b.cfg.Log.Warn("microVM base snapshot failed; booting instead of restoring", "err", err)
+	}
+	bs.built = time.Now()
+	return err
 }
 
 func (b *Backend) makeBase(ctx context.Context, bs *baseSnap) error {
@@ -87,10 +169,10 @@ func (b *Backend) makeBase(ctx context.Context, bs *baseSnap) error {
 	return nil
 }
 
-// baseID returns the base snapshot's ID once it is built ("" if snapshots
-// are off or the base failed). wait: block until it is decided.
+// baseID returns the current base snapshot's ID once it is built ("" if
+// snapshots are off or the base failed). wait: block until it is decided.
 func (b *Backend) baseID(ctx context.Context, wait bool) string {
-	bs := b.base
+	bs := b.curBase()
 	if bs == nil {
 		return ""
 	}
@@ -113,28 +195,43 @@ func (b *Backend) baseID(ctx context.Context, wait bool) string {
 	return bs.id
 }
 
-// BaseSnapshot reports the base snapshot (nil if snapshots are off): its
-// root-only files (for the key scan; readable when hostd is root) and how
-// it was made.
+// BaseSnapshot reports the current base snapshot (error if snapshots are
+// off or it failed): its root-only files (for the key scan; readable when
+// hostd is root) and how it was made.
 func (b *Backend) BaseSnapshot(ctx context.Context) ([]string, map[string]any, error) {
-	if b.base == nil {
+	bs := b.curBase()
+	if bs == nil {
 		return nil, nil, errors.New("snapshots are off")
 	}
 	if b.baseID(ctx, true) == "" {
-		return nil, nil, fmt.Errorf("no base snapshot: %v", b.base.err)
+		return nil, nil, fmt.Errorf("no base snapshot: %v", bs.err)
 	}
-	return b.base.files, b.base.info, nil
+	info := map[string]any{}
+	for k, v := range bs.info {
+		info[k] = v
+	}
+	b.baseMu.Lock()
+	info["rotations"] = b.baseRotations
+	b.baseMu.Unlock()
+	return bs.files, info, nil
 }
 
+// stopBase stops the rotator (before the pool closes).
+func (b *Backend) stopBase() {
+	if b.baseStop != nil {
+		b.baseStop()
+	}
+}
+
+// closeBase removes the bases (after the pool closed).
 func (b *Backend) closeBase() {
-	if b.base == nil {
+	bs := b.curBase()
+	if bs == nil {
 		return
 	}
-	select {
-	case <-b.base.ready:
-	case <-time.After(2 * time.Minute):
-	}
-	if b.base.conn != nil {
-		b.base.conn.Close() // the helper removes the base's files
+	close(b.baseDone)
+	b.baseWG.Wait()
+	if bs.conn != nil {
+		bs.conn.Close() // the helper removes the base's files
 	}
 }
