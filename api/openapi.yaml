@@ -1802,7 +1802,7 @@ paths:
       description: "`Content-Type` is the manifest's media type; `Docker-Content-Digest` its digest. `HEAD` answers the same headers without the body."
       x-twd-role: admin|host
       responses:
-        "200": { description: The manifest bytes, exactly as pushed. }
+        "200": { description: "The manifest bytes, exactly as pushed." }
         "403": { description: "`DENIED`: a host pulling a tenant namespace it serves no deployment of." }
         "404": { description: "`MANIFEST_UNKNOWN`." }
     head:
@@ -3326,25 +3326,56 @@ components:
         oboPublicKey: { type: string, description: base64 Ed25519 }
 
     # --------------------------------------------------------------- audit
+    # One kind per line in both the description and the enum, so parallel
+    # branches that add kinds touch different lines (see AGENTS.md).
     AuditKind:
       type: string
       description: |
-        Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
-        `principal`, `tenant_note` (source `tenant`, unverified),
-        `container_start`, `container_stop` (an object's container, ADR-032). mgmt chain:
-        `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
-        `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
-        `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-        `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
-        `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry),
+        Host chain (netd/hostd):
+        `allow`,
+        `deny`,
+        `egress`,
+        `spawn`,
+        `kill`,
+        `principal`,
+        `tenant_note` (source `tenant`, unverified),
+        `container_start` (an object's container, ADR-032),
+        `container_stop` (an object's container, ADR-032).
+        mgmt chain:
+        `tenant_create`,
+        `tenant_update`,
+        `tenant_delete`,
+        `host_register`,
+        `host_delete`,
+        `deploy`,
+        `undeploy`,
+        `create`,
+        `mint`,
+        `remint`,
+        `ready`,
+        `kill`,
+        `device_delete`,
+        `purge`,
+        `volume_key`,
+        `reap`,
+        `preflight` (optional; dryRun deploys),
+        `host_add`,
+        `credential`,
+        `obo_root`,
+        `object_update`,
+        `container_reserve`,
+        `container_release`,
+        `image_push` (a manifest pushed to the registry),
         `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
         `image_public` (a public base image added or removed),
-        `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
-        Public ingress (ADR-029), host chain: `public_request` (one per public
-        request), `public_rejected` (per-minute summary of requests the limits
-        refused), `public_object_created` (a name admitted for a public create);
-        `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
-        host: the listener opened/closed).
+        `transfer` (a `_pool` node went to an object, ADR-031),
+        `revoke` (an unused pooled key revoked).
+        Public ingress (ADR-029), host chain:
+        `public_request` (one per public request),
+        `public_rejected` (per-minute summary of requests the limits refused),
+        `public_object_created` (a name admitted for a public create).
+        Both chains:
+        `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
       enum:
         - allow
         - deny

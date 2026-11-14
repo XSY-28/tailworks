@@ -1,30 +1,59 @@
-// Package v1 is the generated /v1 contract (types, server interfaces, the
-// embedded spec) plus this small hand-written validation helper. Everything
-// in api.gen.go comes from api/openapi.yaml via `make api`.
+// Package v1 is the generated /v1 contract (types, server interfaces) plus
+// this small hand-written validation helper. Everything in api.gen.go comes
+// from api/openapi.yaml via `make api`; the spec itself is embedded by
+// package api.
 package v1
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
+
+	"github.com/rosskukulinski/twd/api"
 )
 
-// Spec returns the embedded, parsed OpenAPI document. The servers list is
+// Spec returns the embedded (api.OpenAPI), parsed OpenAPI document. The servers list is
 // cleared so that request validation matches on path alone (tests dial
 // arbitrary hosts and unix sockets).
 func Spec() (*openapi3.T, error) {
-	doc, err := GetSwagger()
+	doc, err := openapi3.NewLoader().LoadFromData(api.OpenAPI)
 	if err != nil {
 		return nil, err
 	}
 	doc.Servers = nil
+	dropTagged(doc, excludedTags...)
 	return doc, nil
+}
+
+// excludedTags mirrors exclude-tags in api/oapi-codegen.server.yaml: those
+// operations (the OCI registry under /v2) are served by hand-written
+// handlers, not the generated /v1 server, so they are not part of the
+// contract this package validates.
+var excludedTags = []string{"registry"}
+
+// dropTagged removes every operation carrying one of tags. Emptied path
+// items stay, matching oapi-codegen's pruning (and TestSpecValid's count).
+func dropTagged(doc *openapi3.T, tags ...string) {
+	if doc.Paths == nil {
+		return
+	}
+	for _, item := range doc.Paths.Map() {
+		for method, op := range item.Operations() {
+			for _, t := range op.Tags {
+				if slices.Contains(tags, t) {
+					item.SetOperation(method, nil)
+					break
+				}
+			}
+		}
+	}
 }
 
 // Validator validates HTTP requests and responses against the spec. Tests
