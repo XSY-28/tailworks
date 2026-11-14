@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"sync"
+	"tailscale.com/envknob"
 	"time"
 
 	"tailscale.com/client/local"
@@ -211,7 +212,8 @@ type Object struct {
 	nodeID   tailcfg.StableNodeID
 	dnsName  string
 	queued   time.Time
-	spans    *spanRec // the current join's stages (JoinSpans)
+	spans    *spanRec            // the current join's stages (JoinSpans)
+	pathOK   map[netip.Addr]bool // peers seen with a path (awaitPeerPath)
 	joinDur  time.Duration
 	rejoined bool
 	reminted bool // saved state was rejected by control; joined with a fresh key
@@ -467,7 +469,6 @@ func (o *Object) start(ctx context.Context) error {
 	close(o.ready)
 	o.mu.Unlock()
 	o.spans.at(func(s *JoinSpans) *float64 { return &s.Listening })
-	o.spans.finish()
 
 	r.mu.Lock()
 	for _, a := range []netip.Addr{ip4, ip6} {
@@ -813,3 +814,20 @@ func closeParallel(objs []*Object, par int, f func(*Object)) {
 }
 
 var _ io.Closer = (*Registry)(nil)
+
+var portMapOnce sync.Once
+
+// DisablePortMapping turns off UPnP / NAT-PMP / PCP for every tsnet node in
+// this process. A fresh node's first netcheck waits for the port-map probe
+// (a 250 ms timeout when nothing answers, as on most networks) before it
+// picks a home DERP and goes Running: about 250 ms of every join
+// (STATUS.md "Fast identity"). It also stops N object nodes from each
+// asking the router for a mapping. Cost: no router-assisted direct paths
+// through hard NATs (they fall back to DERP).
+//
+// Call it once at process start, BEFORE any tsnet node exists: it sets
+// tailscale's TS_DISABLE_PORTMAPPER envknob, which running nodes read
+// without synchronisation.
+func DisablePortMapping() {
+	portMapOnce.Do(func() { envknob.Setenv("TS_DISABLE_PORTMAPPER", "true") })
+}

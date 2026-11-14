@@ -396,6 +396,12 @@ CREATE TABLE IF NOT EXISTS secret_choice (
   name TEXT PRIMARY KEY, key_id TEXT NOT NULL, created_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS replicas (
   id TEXT PRIMARY KEY, custody TEXT NOT NULL, started_at BIGINT NOT NULL, last_seen BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS warm_keys (
+  key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, pool TEXT NOT NULL, tags TEXT NOT NULL, ephemeral BIGINT NOT NULL,
+  status TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL,
+  taken_by TEXT NOT NULL DEFAULT '', taken_at BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (tenant_id, key_id));
+CREATE INDEX IF NOT EXISTS warm_keys_pool ON warm_keys (tenant_id, pool, status, expires_at);
 `
 
 // Append-only audit: UPDATE/DELETE on audit rows abort (defence in depth;

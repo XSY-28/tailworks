@@ -27,6 +27,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -56,11 +57,12 @@ type env struct {
 	n          int                              // objects to create (sequentially)
 	gap        time.Duration                    // pause between creates
 	mutate     func(*mgmt.Config)               // optional (A/B experiments)
-	// dialAfterReady: the caller waits for the object's node to be ready
-	// (what a client told "ready" by twd does) instead of dialing as soon as
-	// the peer is in its netmap (what a client polling MagicDNS does).
-	dialAfterReady bool
-	onMint         func(keyID string) // every key mgmt minted (cleanup)
+	// dial is when the caller sends its first request:
+	//   "netmap"    as soon as the peer is in its netmap (a client polling MagicDNS);
+	//   "ready"     after the node is ready (tsnet.Up returned; twd's old "ready");
+	//   "path"      once the caller's own status shows a path (netd.WaitPeerPath).
+	dial   string
+	onMint func(keyID string) // every key mgmt minted (cleanup)
 }
 
 // sample is one object's timeline, every field ms after the create call.
@@ -72,7 +74,8 @@ type sample struct {
 	Throttle    float64 `json:"throttle"`    // claim + throttle token + re-claim done
 	CreateKey   float64 `json:"createKey"`   // CreateKey returned
 	Minted      float64 `json:"minted"`      // custody put + fenced commit done
-	CreateKeyMS float64 `json:"createKeyMs"` // the API call alone
+	CreateKeyMS float64 `json:"createKeyMs"` // the API call alone (pooled: the take)
+	Pooled      bool    `json:"pooled"`      // the key came from the warm-key pool
 	Released    float64 `json:"released"`    // credential released (mgmt side)
 	// netd (the object's own node)
 	NetdCreate   float64 `json:"netdCreate"`
@@ -88,6 +91,7 @@ type sample struct {
 	PeerSeen     float64 `json:"peerSeen"`     // the new node is in the caller's netmap
 	PeerDERP     float64 `json:"peerDERP"`     // …with a home DERP region
 	PeerEps      float64 `json:"peerEps"`      // …with endpoints
+	PeerPath     float64 `json:"peerPath"`     // dial "path": the caller's status shows a path
 	Handshake    float64 `json:"handshake"`    // first WireGuard handshake (peer LastHandshake)
 	FirstOK      float64 `json:"firstOK"`      // first HTTP 200 over the object's own node
 	FirstPath    string  `json:"firstPath"`    // "direct" | "derp:<region>" at the first 200
@@ -257,7 +261,7 @@ func runColdIdentity(t *testing.T, e env) []sample {
 			os.WriteFile(f, capt.buf.Bytes(), 0o600) // redacted tsnet + mgmt logs, for timelines
 		}
 		for _, r := range capt.recs {
-			if id, _ := r.attrs["keyID"].(string); r.msg == "mint spans" && id != "" && e.onMint != nil {
+			if id, _ := r.attrs["keyID"].(string); (r.msg == "mint spans" || r.msg == "warm key minted") && id != "" && e.onMint != nil {
 				e.onMint(id)
 			}
 		}
@@ -274,6 +278,9 @@ func runColdIdentity(t *testing.T, e env) []sample {
 	}
 	cfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: e.apiBase}, IDSecret: bytes.Repeat([]byte{7}, 32),
 		ReapInterval: time.Hour, Log: log}
+	if n, _ := strconv.Atoi(os.Getenv("TWD_COLDID_WARM")); n > 0 {
+		cfg.WarmKeys = n // the warm-key pool; the deploy seeds it, each take refills it
+	}
 	if e.mutate != nil {
 		e.mutate(&cfg)
 	}
@@ -284,7 +291,14 @@ func runColdIdentity(t *testing.T, e env) []sample {
 	if err := m.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(m.Close)
+	t.Cleanup(func() {
+		cctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if n, err := m.DrainWarmKeys(cctx); n > 0 || err != nil {
+			t.Logf("warm keys revoked at the end: %d (err %v)", n, err)
+		}
+		m.Close()
+	})
 
 	sock := filepath.Join(dir, "run", "mgmt.sock")
 	ln, err := mgmt.ListenUnix(sock)
@@ -373,6 +387,13 @@ func runColdIdentity(t *testing.T, e env) []sample {
 		reg.Close()
 	})
 
+	if cfg.WarmKeys > 0 {
+		for dl := time.Now().Add(30 * time.Second); time.Now().Before(dl); time.Sleep(50 * time.Millisecond) {
+			if st, _ := m.WarmKeyStats(ctx); len(st) > 0 {
+				break
+			}
+		}
+	}
 	ck, err := e.callerKey(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -446,18 +467,24 @@ func oneObject(ctx context.Context, t *testing.T, e env, call func(context.Conte
 
 	// The caller, concurrently: wait for the peer, then GET until 200.
 	type callerRes struct {
-		seen, hs, ok, direct time.Time
-		path                 string
-		attempts             int
-		err                  error
+		seen, hs, ok, direct, path0 time.Time
+		path                        string
+		attempts                    int
+		err                         error
 	}
 	cch := make(chan callerRes, 1)
 	go func() {
 		var r callerRes
 		var ip string
 		r.seen, ip, r.err = pw.wait(ctx, cr.Hostname)
-		if r.err == nil && e.dialAfterReady {
-			r.err = no.Ready(ctx)
+		if r.err == nil {
+			switch e.dial {
+			case "ready":
+				r.err = no.Ready(ctx)
+			case "path":
+				r.err = netd.WaitPeerPath(ctx, caller.LC, netip.MustParseAddr(ip))
+				r.path0 = time.Now()
+			}
 		}
 		if r.err != nil {
 			cch <- r
@@ -547,7 +574,7 @@ func oneObject(ctx context.Context, t *testing.T, e env, call func(context.Conte
 		return s, fmt.Errorf("caller: %w", cr2.err)
 	}
 	s.PeerSeen, s.Handshake, s.FirstOK, s.Direct = msSince(t0, cr2.seen), msSince(t0, cr2.hs), msSince(t0, cr2.ok), msSince(t0, cr2.direct)
-	s.FirstPath, s.HTTPAttempts = cr2.path, cr2.attempts
+	s.FirstPath, s.HTTPAttempts, s.PeerPath = cr2.path, cr2.attempts, msSince(t0, cr2.path0)
 	pw.mu.Lock()
 	s.PeerDERP, s.PeerEps = msSince(t0, pw.derp[cr.Hostname]), msSince(t0, pw.eps[cr.Hostname])
 	pw.mu.Unlock()
@@ -570,6 +597,7 @@ func oneObject(ctx context.Context, t *testing.T, e env, call func(context.Conte
 		s.Minted = end
 		s.CreateKey = end - commit - custody
 		s.CreateKeyMS = ck
+		s.Pooled, _ = r.attrs["pooled"].(bool)
 		s.Throttle = s.CreateKey - ck - num(r.attrs["broker_ms"])
 		s.MintStart = end - num(r.attrs["attempt_ms"])
 	}
@@ -666,7 +694,8 @@ func TestColdIdentityAggregate(t *testing.T) {
 		t.Skip("TWD_COLDID_AGG not set")
 	}
 	files, _ := filepath.Glob(pat)
-	var all, early, ready []sample
+	var all []sample
+	byEnv := map[string][]sample{}
 	for _, f := range files {
 		b, err := os.ReadFile(f)
 		if err != nil {
@@ -680,11 +709,7 @@ func TestColdIdentityAggregate(t *testing.T) {
 			t.Fatal(f, err)
 		}
 		all = append(all, r.Samples...)
-		if strings.HasSuffix(r.Env, "-dialready") {
-			ready = append(ready, r.Samples...)
-		} else {
-			early = append(early, r.Samples...)
-		}
+		byEnv[r.Env] = append(byEnv[r.Env], r.Samples...)
 	}
 	cell := func(ss []sample, st stage) string {
 		var v []float64
@@ -699,10 +724,22 @@ func TestColdIdentityAggregate(t *testing.T) {
 		return fmt.Sprintf("%.0f | %.0f", pctl(v, .5), pctl(v, .95))
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "files %d, samples %d (dial on netmap %d, dial on ready %d)\n", len(files), len(all), len(early), len(ready))
-	fmt.Fprintf(&b, "| stage | p50 | p95 | p50 (dial on netmap) | p95 | p50 (dial on ready) | p95 |\n|---|---|---|---|---|---|---|\n")
+	var envs []string
+	for k := range byEnv {
+		envs = append(envs, k)
+	}
+	sort.Strings(envs)
+	fmt.Fprintf(&b, "files %d, samples %d\n| stage | all p50 | p95 |", len(files), len(all))
+	for _, k := range envs {
+		fmt.Fprintf(&b, " %s (n=%d) p50 | p95 |", k, len(byEnv[k]))
+	}
+	b.WriteString("\n|---|---|---|" + strings.Repeat("---|---|", len(envs)) + "\n")
 	for _, st := range stages {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", st.name, cell(all, st), cell(early, st), cell(ready, st))
+		fmt.Fprintf(&b, "| %s | %s |", st.name, cell(all, st))
+		for _, k := range envs {
+			fmt.Fprintf(&b, " %s |", cell(byEnv[k], st))
+		}
+		b.WriteString("\n")
 	}
 	var slowKey, slowReg, slowMap, penalty, penN int
 	for _, s := range all {

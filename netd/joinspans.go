@@ -35,10 +35,9 @@ type JoinSpans struct {
 
 // spanRec collects JoinSpans for one join.
 type spanRec struct {
-	mu   sync.Mutex
-	t0   time.Time
-	s    JoinSpans
-	done bool
+	mu sync.Mutex
+	t0 time.Time
+	s  JoinSpans
 }
 
 func newSpanRec(t0 time.Time) *spanRec { return &spanRec{t0: t0} }
@@ -50,7 +49,7 @@ func (r *spanRec) at(f func(*JoinSpans) *float64) {
 	}
 	v := float64(time.Since(r.t0).Microseconds()) / 1000
 	r.mu.Lock()
-	if p := f(&r.s); !r.done && *p == 0 {
+	if p := f(&r.s); *p == 0 {
 		*p = v
 	}
 	r.mu.Unlock()
@@ -63,15 +62,6 @@ func (r *spanRec) get() JoinSpans {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.s
-}
-
-func (r *spanRec) finish() {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	r.done = true
-	r.mu.Unlock()
 }
 
 // logf wraps a tsnet logger, timestamping controlclient's login markers.

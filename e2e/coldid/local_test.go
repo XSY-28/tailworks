@@ -57,10 +57,15 @@ func TestColdIdentityLocal(t *testing.T) {
 	os.WriteFile(kf, []byte("TS_API_KEY=fake\n"), 0o600)
 	e := env{name: "local", controlURL: ctl.URL, tailnet: "ttest.example", apiBase: api.URL, apiKeyFile: kf,
 		tags: []string{"tag:ttest"}, prefix: "ttest-fi-local", n: envInt("TWD_COLDID_N", 30),
-		callerKey:      func(context.Context) (string, error) { return nettest.DummyKey, nil },
-		dialAfterReady: os.Getenv("TWD_COLDID_DIAL") == "ready"}
-	if e.dialAfterReady {
-		e.name += "-dialready"
+		callerKey: func(context.Context) (string, error) { return nettest.DummyKey, nil },
+		dial:      os.Getenv("TWD_COLDID_DIAL")}
+	if e.dial == "ready" {
+		e.name += "-dialready" // the Phase 1 name
+	} else if e.dial != "" && e.dial != "netmap" {
+		e.name += "-dial" + e.dial
+	}
+	if os.Getenv("TWD_COLDID_WARM") != "" {
+		e.name += "-warm"
 	}
 	ss := runColdIdentity(t, e)
 	if len(ss) < e.n*9/10 {

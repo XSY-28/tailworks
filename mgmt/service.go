@@ -64,6 +64,16 @@ type Config struct {
 	OperatorTailnet string
 	// OperatorControlURL is passed to hosts with their join key.
 	OperatorControlURL string
+	// WarmKeys caps the warm-key pool per (tenant, tag set, ephemeral):
+	// pre-minted single-use keys that let a create skip CreateKey
+	// (warmkeys.go). 0 disables the pool.
+	WarmKeys int
+	// WarmKeyTTL is a pooled key's expiry at the API (default 30 min); it is
+	// revoked unused WarmKeyTakeMargin + 30 s before that.
+	WarmKeyTTL time.Duration
+	// WarmPoolInterval is how often pools are refilled and expired
+	// (default 2 s; a take also triggers a refill at once).
+	WarmPoolInterval time.Duration
 }
 
 // Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
@@ -95,6 +105,9 @@ type Mgmt struct {
 	deviceKept    map[string]bool               // killed objects whose device delete was refused (403)
 	oboKeys       map[string]ed25519.PrivateKey // tenant → OBO root key (loaded from custody)
 	clockOK       bool                          // last checkClock result (logs on change)
+	poolKick      chan struct{}                 // wakes the warm-key loop
+	poolPause     map[string]time.Time          // tenant → no refills until (after an error)
+	poolRetried   time.Time                     // last retry of failed warm-key revocations
 	volMu         sync.Mutex                    // VolumeKey create-if-absent
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -127,7 +140,17 @@ func New(cfg Config) (*Mgmt, error) {
 	m := &Mgmt{cfg: cfg, store: cfg.Store, custody: cfg.Custody, broker: cfg.Broker, clock: cfg.Clock, log: cfg.Log,
 		throttles: map[string]*Throttle{}, queues: map[string]chan string{}, queued: map[string]bool{}, replicaID: cfg.ReplicaID, waiters: map[string]chan struct{}{},
 		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{},
-		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{}}
+		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
+		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
+	if m.cfg.WarmKeyTTL == 0 {
+		m.cfg.WarmKeyTTL = DefaultWarmKeyTTL
+	}
+	if m.cfg.WarmKeyTTL < 2*(WarmKeyTakeMargin+warmKeySafety) {
+		return nil, fmt.Errorf("mgmt: WarmKeyTTL %v is too short (≥ %v)", m.cfg.WarmKeyTTL, 2*(WarmKeyTakeMargin+warmKeySafety))
+	}
+	if m.cfg.WarmPoolInterval == 0 {
+		m.cfg.WarmPoolInterval = defaultWarmTick
+	}
 	if cfg.PushTimeout == 0 {
 		m.cfg.PushTimeout = 2 * time.Second
 	}
@@ -176,6 +199,10 @@ func (m *Mgmt) Start() error {
 	}
 	m.clockOK = true
 	m.checkClock()
+	if m.warmStore() != nil {
+		m.wg.Add(1)
+		go m.poolLoop()
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -1409,6 +1436,11 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 	// the KeyID check below make a late duplicate undo only its own key.
 	defer m.store.ReleaseMint(context.WithoutCancel(ctx), id, m.replicaID)
 	sp.mark(&sp.claim)
+	// Fast path: a pooled key (already minted, and its throttle token
+	// already spent by the refill).
+	if handled, err := m.adoptWarmKey(ctx, t, o, &sp); handled {
+		return false, err
+	}
 	// Only now take a registration token (the claim says this replica will
 	// mint), then refresh the claim: the wait may have been long.
 	if th != nil {

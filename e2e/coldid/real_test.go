@@ -50,12 +50,17 @@ func TestColdIdentityReal(t *testing.T) {
 		n = 20
 	}
 	e := env{name: "real", controlURL: prodControl, tailnet: tailnet, apiKeyFile: keyFile, tags: []string{"tag:ttest"},
-		prefix: prefix, n: n, gap: 2 * time.Second, track: tracker.Track, dialAfterReady: os.Getenv("TWD_COLDID_DIAL") == "ready",
+		prefix: prefix, n: n, gap: 2 * time.Second, track: tracker.Track, dial: os.Getenv("TWD_COLDID_DIAL"),
 		callerKey: func(ctx context.Context) (string, error) {
 			return minter.AuthKey(ctx, netd.KeyRequest{ObjectID: "caller", Hostname: prefix + "-caller", Tags: []string{"tag:ttest"}, Ephemeral: true})
 		}}
-	if e.dialAfterReady {
-		e.name += "-dialready"
+	if e.dial == "ready" {
+		e.name += "-dialready" // the Phase 1 name
+	} else if e.dial != "" && e.dial != "netmap" {
+		e.name += "-dial" + e.dial
+	}
+	if os.Getenv("TWD_COLDID_WARM") != "" {
+		e.name += "-warm"
 	}
 	var keyIDs []string
 	e.onMint = func(id string) { keyIDs = append(keyIDs, id) }

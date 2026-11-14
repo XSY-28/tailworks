@@ -1,5 +1,6 @@
 # twd STATUS (living log)
 
+Last update: 2026-11-13 22:20 PT. Fast identity, Phase 2 on branch `fast-identity`: callers wait for a new peer's path (b), warm-key pool (a, `-warm-keys`, default off), no port mapping on host nodes (c, default); pre-joined node pool measured and drafted as ADR-031 (Proposed). See "Fast identity, Phase 2".
 Last update: 2026-11-13 21:10 PT. Fast identity, Phase 1 (measurement only) on branch `fast-identity`: per-stage cold-identity breakdown, hermetic and tailnet 1; the bimodal join explained. See "Fast identity: where a new object's node time goes".
 Last update: 2026-11-07 23:55 PT. M0 and M1 by the first run; M2 (`twd-mgmt`) on branch `m2-mgmt`.
 Last update: 2026-11-08 00:10 PT. M0, M1 (main) and M3 (branch `m3-hostd`).
@@ -1500,4 +1501,112 @@ Outlier counts on tailnet 1 (59 objects): `CreateKey` > 1 s in **26**; register 
 - (b) report ready only once the node's home DERP has reached control, i.e. its own netmap's Self has it, and/or have twd's own dialers (netd egress, `@twd/tailnet`, CLI) wait for a peer path before the first packet [the 5 s caller retry];
 - (c) skip the port-map probe on object nodes [250 ms fixed per node; tradeoff: no UPnP-assisted direct paths];
 - (d) the pre-joined node pool (design only) [the register and map tails plus ~1.1 s fixed].
+
+## Fast identity, Phase 2: what was built and what it bought (branch `fast-identity`, 2026-11-13)
+Built in the order agreed after Phase 1: (b), (a), (c); (d) measured and drafted only.
+
+### (b) Callers wait for a new peer's path
+- **Mechanism:** `netd.HasPath` / `netd.WaitPeerPath`.
+  - A just-registered peer is in the netmap before it has a home DERP or endpoints.
+  - netd egress (`dialEgress`, which also carries hostd's raw connect) waits, bounded by `PeerPathWait` = 5 s (the WireGuard retry it replaces), until its own node has a path to the peer, then dials.
+  - Peers seen with a path are cached per object, so only the first dial to a peer costs a status read.
+  - The CLI's link-mode dial does the same.
+- **A node-side "reachable" signal was tried and dropped.**
+  - The idea: wait until control echoes the node's home DERP back to it (`SelfChange.HomeDERP`).
+  - testcontrol sends it; **production control never did** (all 8 objects of a run timed out waiting for it).
+  - That run was stopped and its 9 devices deleted by its unique run prefix (0 left).
+  - netd's `Ready` is unchanged.
+- **Test:** `netd.TestEgressWaitsForNewPeerPath`. Object a calls a node through netd egress the moment the node appears in a's netmap: **5.106 s → 286 ms**.
+
+### (a) Warm-key pool (`mgmt/warmkeys.go`, `twd-mgmt -warm-keys N`, default 0 = off)
+- **Storage.** A `warm_keys` table holds pre-minted, single-use, preauthorized keys per (tenant, canonical sorted tags, ephemeral), keyed `(tenant_id, key_id)` (key IDs are only unique per control plane). Secrets live in custody at `twd/<tenant>/_pool/authkey/<keyID>`.
+- **Take (in `mintOne`, after the mint claim, before any throttle token).**
+  - One conditional `UPDATE … RETURNING` marks a key taken by the object (`FOR UPDATE SKIP LOCKED` on Postgres).
+  - A taken key never returns to the pool.
+  - The secret is copied to the object's own per-key custody name, then the object commits `minted` with its `mint` audit record (`pooled: true`) in the same transaction (H22).
+  - Credential release is the unchanged lease-fenced `Credential`.
+  - Any pool trouble falls back to a fresh mint.
+- **Refill.**
+  - One replica per pool at a time (a store lease `warmpool/<tenant>/<pool>`).
+  - Only when this replica has no mint queued, and only with a free token from the shared per-tenant throttle (`Reserve`, never `Wait`), so real mints keep priority and the ADR-017 budget is shared.
+  - Each refill's `mint` record (tenant-level, `pool` in the detail) commits with its row.
+- **Sizing.** About the creates expected over 2 min (from the last 10 min), at least 1 for a pool with a create or a deploy in the last hour (a deploy seeds its classes' pools), at most `-warm-keys`.
+- **Expiry.**
+  - Keys live `-warm-key-ttl` (30 min) at the API and are handed out only with ≥ 60 s + 30 s safety left; decided on the store clock.
+  - Past that they are revoked and audited (`revoke`).
+  - Rows left `taken` by a replica that died mid-adoption are cleaned after 10 min: revoked unless an object holds the key.
+  - Failed revocations keep their row and retry every 30 s; a deleted tenant's rows are dropped (the key expires at the API within its TTL).
+  - `DrainWarmKeys` revokes all.
+- **Tests:**
+  - `TestStoreWarmKeyTakeOnce` (SQLite + Postgres): 20 concurrent takers get 3 keys exactly once, never another tenant's, pool's or an expired one.
+  - `TestWarmKeyPool`: deploy seeds pools; a create adopts a pooled key with no CreateKey of its own and exactly its tags; the credential is that key; the mint, refill and credential are audited; the pool refills; another class gets its own tags; kill revokes the adopted key; no `tskey-` in the logs.
+  - `TestWarmKeyExpiry`: store clock +60 s revokes nothing; +100 s revokes all, deletes custody, audits `revoke`, refills.
+  - `TestWarmKeyRefillRespectsThrottle`: at 10/min (burst 1) the seed takes the only token, and no refill happens until the next token (~6 s).
+  - `make test-pg` now also runs the pool's API tests on Postgres.
+- **Multi-replica** (`e2e/multimgmt`, 3 replicas, `TWD_MM_WARM_KEYS=5` turns the pool on in every replica):
+  - The fake API keeps pool keys apart from objects (I3 unchanged).
+  - New invariants: **PoolExclusive** (no key held by two objects) and **PoolTags** (an adopted pool key has exactly its object's tags and ephemeral flag).
+  - **Hypothesis suite 11/11 with the pool on, 11/11 with it off.** **Soak, 10 min, seed 211, pool on: PASS on every invariant**: I3, I5–I9, I11, Quota, AuditComplete, KillOnce, PoolExclusive, PoolTags. 245,038 ops; 35 objects adopted pooled keys, 0 with other tags, 0 keys shared; 45 refills; audit chain verified (29,786 records); outbox drained.
+  - Harness fix found on the way: the Postgres container name was fixed (`twd-mm-pg`), and each test starts with `docker rm -f` of it. Two worktrees running the harness at once removed each other's database mid-test. My first two suite runs did this to the `smart-placement` worktree's run, which had already switched to its own name and port. `TWD_MM_PG_NAME` (with the existing `TWD_MM_PG_PORT`) now isolates runs; all numbers above are from isolated runs (`twd-mm-pg-fi`, port 55481).
+
+### (c) No port mapping on host nodes (`netd.DisablePortMapping()`, called by `twd-hostd` at start; `-port-mapping` restores it)
+- A fresh node's first netcheck waits for the UPnP / NAT-PMP / PCP probe (250 ms timeout, which nothing answered on any network measured).
+- Skipping it: netmap → `Running` **259 → 99 ms** on production, **262 → 11 ms** hermetically.
+- It also stops every object node asking the router for a mapping.
+- **Process-wide** (tailscale's `TS_DISABLE_PORTMAPPER` envknob): it covers hostd's own node too; twd-mgmt runs in its own process and is unaffected.
+- **Process start only:** running nodes read the knob without synchronisation. A first version set it in `netd.New` (per tenant, while other nodes ran), and `make test`'s `-race` caught the data race in `TestHostd`. It is now a once-per-process call before any node exists.
+- **Cost:** no router-assisted direct paths through hard NATs; those fall back to DERP. All 20 objects in the production run still went direct (Mac ↔ Mac on one LAN; a hard-NAT host was not tested).
+
+### Before → after (tailnet 1, production control; ms)
+| configuration | n | create → key minted p50 / p95 | netmap → Running p50 | create → own node ready p50 / p95 | own node ready → first 200 p50 / p95 | first 200 > 3 s after ready | **create → first 200 on the own node** p50 / p95 |
+|---|---|---|---|---|---|---|---|
+| Phase 1: no pool, dial on netmap | 31 | 148 / 4776 | 252 | 4364 / 10420 | 591 / 5531 | 9/31 | **7009 / 15917** |
+| Phase 1: no pool, dial on ready | 28 | 1424 / 1987 | 254 | 2750 / 7609 | 5140 / 5307 | 28/28 | **7755 / 12917** |
+| (b) callers wait for a path | 12 | 207 / 5168 | 253 | 4989 / 6735 | 204 / 5205 | 1/12 | **5464 / 7391** |
+| (b) + (a) warm-key pool (all 20 pooled) | 20 | 3 / 6 | 253 | 1679 / 4695 | 194 / 380 | 1/20 | **1770 / 6555** |
+| (b) + (a) + (c) | 20 | 2 / 26 | **99** | **1522 / 4235** | **255 / 299** | **0/20** | **1714 / 4450** |
+
+Hermetic (testcontrol, where control and the key API cost ~nothing), create → first 200, path wait on throughout:
+- baseline, dial on netmap: 5141 / 5349 ms;
+- (b): 313 / 323 ms;
+- (b) + (c): **44 / 70 ms**, with create → own node ready **38 / 47 ms**.
+
+**Caveats.**
+- Production varies a lot between runs minutes apart: `CreateKey` was 145 ms p50 in some runs and 1.4 s p50 for a whole run in another.
+- Each row is one to three runs of 12–31 objects, created one at a time 2 s apart on one Mac.
+- Read the rows as orders of magnitude, not as precise deltas.
+
+### What is left: registration stalls on control
+- With the key in hand, the remaining tail is the register call: +2.1–5.4 s on 10/20 objects in each of the last two runs, **strictly every other object**.
+- At one create per ~4 s, a registration stalled whenever it followed the previous one by less than ~6 s. That looks like control-side pacing of registrations on this tailnet (held open, never answered 429; no `rate limited` line in any client log).
+- The tailnet had ~150 registrations from these runs in ~80 minutes, plus other worktrees' runs.
+- This is a **hypothesis**. It is far below ADR-017's planning figure (250/min) and matches M1's unverified "latency rose as registrations piled up".
+- **Next experiment:** fixed inter-registration gaps of 2, 4, 6, 8 and 10 s, fresh and after a cool-down, to find the spacing and whether it is per tailnet, per credential or per source IP.
+- Only taking registration off the critical path helps against it (d).
+
+### (d) Pre-joined node pool: measured, ADR-031 drafted (Proposed, uncommitted in the design repo)
+`e2e/coldid` `TestRenameOnAssignmentReal` on tailnet 1 (n=5 per operation, 20/20 seen by the peer, node reachable after every one; both devices deleted):
+
+| operation on an already-joined node | API call p50 | a peer's netmap shows it, p50 / max |
+|---|---|---|
+| node changes its own hostname (LocalAPI `EditPrefs`) | – | **209 / 337 ms** |
+| admin rename (`POST /device/{id}/name`) | 169 ms | 258 / **5168 ms** (one 5 s API outlier) |
+| retag, add a tag (`POST /device/{id}/tags`) | 165 ms | **188 / 190 ms** |
+| retag, remove it | 164 ms | **185 / 190 ms** |
+
+- Handing a pre-joined node to an object would therefore take ~0.2–0.35 s, with no registration on the critical path, versus 1.5 s p50 / 4.2 s p95 now.
+- ADR-031 lays out:
+  - two variants: a neutral pool per (host, tenant) with rename + retag, or a pool per (host, tenant, tag set) with rename only;
+  - how each meets the open problems: names, tags, node certificates, audit, device cost, kill;
+  - what still needs measuring: grant propagation after a retag, MagicDNS collisions, the registration pacing, Headscale.
+- Recommendation: the per-tag-set variant first.
+
+### Not done / follow-ups
+- `-warm-keys` is **off by default**; enabling it (the RFC says 5) is a product decision.
+  - Its cost: at most `cap` live, unused, preauthorized single-use keys per active pool, held in custody for up to 30 min.
+  - Idle pools stop refilling after an hour without creates or deploys.
+- `twd up` has no flag for `-warm-keys` or `-port-mapping` yet (twd-mgmt / twd-hostd flags only).
+- Tenant-level audit records (pool `mint`, `revoke`) have no object ID; `twd audit <object>` shows the object's own pooled `mint` record.
+- A peer can still lose the race in (b) (1/12 in the first production run): the path wait narrows the window but doesn't close it.
+- External clients (not twd's egress or CLI) still dial whenever they like; nothing on the node can tell when peers can reach it.
 
