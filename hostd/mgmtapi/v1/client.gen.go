@@ -914,7 +914,7 @@ type Deployment struct {
 	MaxLive    *int          `json:"maxLive,omitempty"`
 	Namespaces []ClassConfig `json:"namespaces"`
 
-	// Placement Why a deployment is on its host (smart placement, ADR-029).
+	// Placement Why a deployment is on its host (smart placement, ADR-030).
 	Placement *PlacementDecision `json:"placement,omitempty"`
 
 	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
@@ -941,7 +941,7 @@ type DeploymentCreate struct {
 	// Namespaces Override the classes read from `twd.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 
-	// Replace Re-place a running workload (smart placement, ADR-029): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
+	// Replace Re-place a running workload (smart placement, ADR-030): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
 	Replace  *bool  `json:"replace,omitempty"`
 	TenantID string `json:"tenantID"`
 	Workload string `json:"workload"`
@@ -1523,7 +1523,7 @@ type PathSample struct {
 	Target string `json:"target"`
 }
 
-// PlacementDecision Why a deployment is on its host (smart placement, ADR-029).
+// PlacementDecision Why a deployment is on its host (smart placement, ADR-030).
 type PlacementDecision struct {
 	Aggregate *PlacementDecisionAggregate `json:"aggregate,omitempty"`
 	Host      string                      `json:"host"`
@@ -2790,7 +2790,7 @@ type ClientInterface interface {
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
 	//
-	// **Placement** (ADR-029; the answer's `placement` says why):
+	// **Placement** (ADR-030; the answer's `placement` says why):
 	// 1. Eligible hosts are live, in the tenant's pool, offer the
 	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
 	//    otherwise), and have free capacity.
@@ -2844,7 +2844,7 @@ type ClientInterface interface {
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
 	//
-	// **Placement** (ADR-029; the answer's `placement` says why):
+	// **Placement** (ADR-030; the answer's `placement` says why):
 	// 1. Eligible hosts are live, in the tenant's pool, offer the
 	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
 	//    otherwise), and have free capacity.
@@ -3018,7 +3018,7 @@ type ClientInterface interface {
 
 	// ReportHostPathsWithBody Report measured tailnet paths (smart placement)
 	//
-	// Smart placement (ADR-029). The host reports, per tenant, the path
+	// Smart placement (ADR-030). The host reports, per tenant, the path
 	// from that tenant's nodes on this host to each target its workloads
 	// declare (`placementTargets` in its assignments): `direct` WireGuard,
 	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -3038,7 +3038,7 @@ type ClientInterface interface {
 
 	// ReportHostPaths Report measured tailnet paths (smart placement)
 	//
-	// Smart placement (ADR-029). The host reports, per tenant, the path
+	// Smart placement (ADR-030). The host reports, per tenant, the path
 	// from that tenant's nodes on this host to each target its workloads
 	// declare (`placementTargets` in its assignments): `direct` WireGuard,
 	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -3661,7 +3661,7 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
 //
-// **Placement** (ADR-029; the answer's `placement` says why):
+// **Placement** (ADR-030; the answer's `placement` says why):
 //  1. Eligible hosts are live, in the tenant's pool, offer the
 //     workload's tier (`microvm` needs a host with KVM; `503 no_host`
 //     otherwise), and have free capacity.
@@ -3725,7 +3725,7 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
 //
-// **Placement** (ADR-029; the answer's `placement` says why):
+// **Placement** (ADR-030; the answer's `placement` says why):
 //  1. Eligible hosts are live, in the tenant's pool, offer the
 //     workload's tier (`microvm` needs a host with KVM; `503 no_host`
 //     otherwise), and have free capacity.
@@ -4039,7 +4039,7 @@ func (c *Client) ListHostAssignments(ctx context.Context, id HostID, params *Lis
 
 // ReportHostPathsWithBody Report measured tailnet paths (smart placement)
 //
-// Smart placement (ADR-029). The host reports, per tenant, the path
+// Smart placement (ADR-030). The host reports, per tenant, the path
 // from that tenant's nodes on this host to each target its workloads
 // declare (`placementTargets` in its assignments): `direct` WireGuard,
 // `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -4069,7 +4069,7 @@ func (c *Client) ReportHostPathsWithBody(ctx context.Context, id HostID, content
 
 // ReportHostPaths Report measured tailnet paths (smart placement)
 //
-// Smart placement (ADR-029). The host reports, per tenant, the path
+// Smart placement (ADR-030). The host reports, per tenant, the path
 // from that tenant's nodes on this host to each target its workloads
 // declare (`placementTargets` in its assignments): `direct` WireGuard,
 // `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -7346,7 +7346,7 @@ type ClientWithResponsesInterface interface {
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
 	//
-	// **Placement** (ADR-029; the answer's `placement` says why):
+	// **Placement** (ADR-030; the answer's `placement` says why):
 	// 1. Eligible hosts are live, in the tenant's pool, offer the
 	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
 	//    otherwise), and have free capacity.
@@ -7400,7 +7400,7 @@ type ClientWithResponsesInterface interface {
 	// `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 	// or `failed`.
 	//
-	// **Placement** (ADR-029; the answer's `placement` says why):
+	// **Placement** (ADR-030; the answer's `placement` says why):
 	// 1. Eligible hosts are live, in the tenant's pool, offer the
 	//    workload's tier (`microvm` needs a host with KVM; `503 no_host`
 	//    otherwise), and have free capacity.
@@ -7592,7 +7592,7 @@ type ClientWithResponsesInterface interface {
 
 	// ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
 	//
-	// Smart placement (ADR-029). The host reports, per tenant, the path
+	// Smart placement (ADR-030). The host reports, per tenant, the path
 	// from that tenant's nodes on this host to each target its workloads
 	// declare (`placementTargets` in its assignments): `direct` WireGuard,
 	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -7612,7 +7612,7 @@ type ClientWithResponsesInterface interface {
 
 	// ReportHostPathsWithResponse Report measured tailnet paths (smart placement)
 	//
-	// Smart placement (ADR-029). The host reports, per tenant, the path
+	// Smart placement (ADR-030). The host reports, per tenant, the path
 	// from that tenant's nodes on this host to each target its workloads
 	// declare (`placementTargets` in its assignments): `direct` WireGuard,
 	// `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -12230,7 +12230,7 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
 //
-// **Placement** (ADR-029; the answer's `placement` says why):
+// **Placement** (ADR-030; the answer's `placement` says why):
 //  1. Eligible hosts are live, in the tenant's pool, offer the
 //     workload's tier (`microvm` needs a host with KVM; `503 no_host`
 //     otherwise), and have free capacity.
@@ -12290,7 +12290,7 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 // or `failed`.
 //
-// **Placement** (ADR-029; the answer's `placement` says why):
+// **Placement** (ADR-030; the answer's `placement` says why):
 //  1. Eligible hosts are live, in the tenant's pool, offer the
 //     workload's tier (`microvm` needs a host with KVM; `503 no_host`
 //     otherwise), and have free capacity.
@@ -12566,7 +12566,7 @@ func (c *ClientWithResponses) ListHostAssignmentsWithResponse(ctx context.Contex
 
 // ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
 //
-// Smart placement (ADR-029). The host reports, per tenant, the path
+// Smart placement (ADR-030). The host reports, per tenant, the path
 // from that tenant's nodes on this host to each target its workloads
 // declare (`placementTargets` in its assignments): `direct` WireGuard,
 // `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -12592,7 +12592,7 @@ func (c *ClientWithResponses) ReportHostPathsWithBodyWithResponse(ctx context.Co
 
 // ReportHostPathsWithResponse Report measured tailnet paths (smart placement)
 //
-// Smart placement (ADR-029). The host reports, per tenant, the path
+// Smart placement (ADR-030). The host reports, per tenant, the path
 // from that tenant's nodes on this host to each target its workloads
 // declare (`placementTargets` in its assignments): `direct` WireGuard,
 // `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.

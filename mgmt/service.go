@@ -594,7 +594,7 @@ type DeployRequest struct {
 	// stopped heartbeating, is really gone, so a stateful workload may move
 	// off it (ADR-028 §3). Audited.
 	ForceTakeover bool `json:"forceTakeover,omitempty"`
-	// Replace re-places the workload (`twd deploy --replace`, ADR-029):
+	// Replace re-places the workload (`twd deploy --replace`, ADR-030):
 	// the current live holder is not kept just because it holds the lease;
 	// the workload moves if another eligible host is clearly better (or to
 	// Host, when pinned). The lease moves at epoch+1 in one conditional
@@ -968,7 +968,7 @@ type Assignment struct {
 	// twd.jsonc "public" or the tenant's publicIngress is not allow.
 	Public *PublicAssignment `json:"public,omitempty"`
 	// PlacementTargets are what the host should measure paths to for this
-	// workload (smart placement, ADR-029; empty = nothing).
+	// workload (smart placement, ADR-030; empty = nothing).
 	PlacementTargets []string `json:"placementTargets,omitempty"`
 }
 

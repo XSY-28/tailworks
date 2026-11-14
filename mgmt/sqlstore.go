@@ -548,7 +548,7 @@ func (s *SQLStore) addColumns(ctx context.Context) error {
 		// deployment's validated twd.jsonc "public" (JSON, '' = none).
 		{"tenants", "public_ingress", "ALTER TABLE tenants ADD COLUMN public_ingress TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "public_spec", "ALTER TABLE deployments ADD COLUMN public_spec TEXT NOT NULL DEFAULT ''"},
-		// smart placement (ADR-029): why the deployment is on its host (JSON).
+		// smart placement (ADR-030): why the deployment is on its host (JSON).
 		{"deployments", "placement", "ALTER TABLE deployments ADD COLUMN placement TEXT NOT NULL DEFAULT ''"},
 	} {
 		rows, err := s.db.QueryContext(ctx, "SELECT "+c.col+" FROM "+c.table+" WHERE 1=0")
