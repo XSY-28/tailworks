@@ -328,8 +328,13 @@ node's tags) and admits admins by the `twd.dev/cap/admin` capability; it
 stores only the endpoint in `~/.twd/link.json`. No key, no token, nothing
 to rotate. If you are not an admin, `twd link` fails with `not_admin` and
 prints the grant to add. `twd ls` shows `by <login>` on each deployment
-and `twd audit` carries your login on the deploy record. Logs stay on the
-host (`twd logs` there). `twd link --unlink` forgets the endpoint.
+and `twd audit` carries your login on the deploy record. `twd logs
+<workload> [-n N] [-f]` works from here too: mgmt reads the workerd (or
+node) log from the host that holds the workload, over the same mgmt → host
+channel it uses for kills. A workload with `replicas` prints every
+replica's lines prefixed `[<host>]`; `--host <id>` picks one. The daemons'
+own logs (`twd logs --component mgmt|hostd|supervisor`) stay on the host.
+`twd link --unlink` forgets the endpoint.
 
 #### Transport: tsnet only
 
@@ -515,7 +520,11 @@ twd down --purge           # kill every object and delete its devices, then stop
 - A Node app on Linux gets `EACCES` from `net.connect` or its own
   dispatcher: that's the sandbox; send egress through `HTTP(S)_PROXY` /
   `@twd/node`'s `fetch`.
-- Logs: `twd logs --component mgmt|hostd|supervisor` (on the host).
+- Logs: `twd logs <workload>` (on the host or a linked machine; `-f` to
+  follow), `twd logs --component mgmt|hostd|supervisor` (on the host only).
+  From a linked machine, `host_unavailable` means mgmt could not reach the
+  workload's host on its push port (the policy grant `tag:twd-mgmt` →
+  `tag:twd-host` `tcp:7474`, or the host is down).
 
 ## Tuning: how fast a new object's own node comes up
 

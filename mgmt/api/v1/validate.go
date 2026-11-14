@@ -174,6 +174,9 @@ func (r *recorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap lets http.ResponseController flush a streamed response (logs).
+func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *recorder) Write(p []byte) (int, error) {
 	r.wrote = true
 	r.body = append(r.body, p...)

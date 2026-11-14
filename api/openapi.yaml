@@ -383,6 +383,62 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/logs:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [tenants, deployments]
+      operationId: GetWorkloadLogs
+      summary: Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+      description: |
+        The app's log is a file on the host that runs it. mgmt finds the
+        host holding the workload's namespace lease and reads the log from
+        that host's hostd over the mgmt → hostd channel (the push port);
+        hostd resolves the file from its own record of the tenant's
+        workload, never from a path the caller sends. The response is
+        `text/plain`: the last `n` lines, then (with `follow=true`) new
+        lines as they are written, streamed until the client disconnects
+        or the host ends the stream (at most an hour; follow again to
+        continue).
+
+        A workload with `replicas` reads every replica's host; each line
+        is then prefixed with `[<hostID>] `, and `host` selects one
+        replica. A host that does not answer contributes one
+        `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+        host answers). `404 unknown_workload` when the workload has no
+        running replica (on `host`); `404 no_logs` when the host has no
+        log file for it yet. A read, so not audited; mgmt logs the actor.
+        Only the workload's own app log: the daemons' logs
+        (`--component`) stay on the host.
+      x-twd-role: admin
+      parameters:
+        - name: "n"
+          in: query
+          description: Lines from the end of the log (0 with `follow` for new lines only).
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 50 }
+        - name: follow
+          in: query
+          description: Keep the stream open and send new lines as they are written.
+          schema: { type: boolean, default: false }
+        - name: host
+          in: query
+          description: Only the replica on this host (a host ID).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The log lines (UTF-8 as the app wrote them; a stream with `follow`).
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            text/plain:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/workloads/{workload}/public:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -2406,6 +2462,7 @@ components:
         | `not_found` | 404 | — |
         | `unknown_tenant` | 404 | — |
         | `unknown_namespace` | 404 | `(workload, class)` not declared |
+        | `no_logs` | 404 | the workload's host has no log file for it yet |
         | `exists` | 409 | create of an existing ID |
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
@@ -2433,6 +2490,7 @@ components:
         | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
         | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
         | `bootstrap_failed` | 502 | control plane refused the mint |
+        | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
         | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
         | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
         | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -2456,6 +2514,7 @@ components:
         - not_found
         - unknown_tenant
         - unknown_namespace
+        - no_logs
         - exists
         - lease_lost
         - lease_held
@@ -2480,6 +2539,7 @@ components:
         - spawn_budget_exceeded
         - container_quota_exceeded
         - bootstrap_failed
+        - host_unavailable
         - host_token_unconfigured
         - identity_pending
         - no_host

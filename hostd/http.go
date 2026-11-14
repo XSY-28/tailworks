@@ -478,6 +478,8 @@ func (h *Host) pushAPI() http.Handler {
 	m.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, h.Status())
 	})
+	m.HandleFunc("GET /v1/logs", h.logsHandler) // logs.go: one workload's app log
+
 	// Operator checks of a workload's microVM (twd host vmcheck): guest
 	// stats, DO volume fsync latency, and the no-keys-in-guest scan. The
 	// socket is the user's (0700 dir); answers carry no key material.
