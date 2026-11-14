@@ -346,7 +346,11 @@ func testLimits(t *testing.T, ev *egressEnv, vmAlive func(string) (int, bool), h
 		before := hostPids()
 		done := make(chan map[string]any, 1)
 		go func() {
-			done <- ev.call("/f/lim/exec", "argv", `["timeout","8","sh","-c","f() { f | f & }; f; sleep 10"]`)
+			// ev.call fails the test with FailNow, which ends only this
+			// goroutine: send anyway so the test fails instead of hanging.
+			var r map[string]any
+			defer func() { done <- r }()
+			r = ev.call("/f/lim/exec", "argv", `["timeout","8","sh","-c","f() { f | f & }; f; sleep 10"]`)
 		}()
 		time.Sleep(3 * time.Second)
 		during := hostPids()
