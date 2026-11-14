@@ -924,22 +924,51 @@ type AuditBatch struct {
 	Records []AuditRecord `json:"records"`
 }
 
-// AuditKind Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
-// `principal`, `tenant_note` (source `tenant`, unverified),
-// `container_start`, `container_stop` (an object's container, ADR-032). mgmt chain:
-// `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
-// `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
-// `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
-// `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry),
+// AuditKind Host chain (netd/hostd):
+// `allow`,
+// `deny`,
+// `egress`,
+// `spawn`,
+// `kill`,
+// `principal`,
+// `tenant_note` (source `tenant`, unverified),
+// `container_start` (an object's container, ADR-032),
+// `container_stop` (an object's container, ADR-032).
+// mgmt chain:
+// `tenant_create`,
+// `tenant_update`,
+// `tenant_delete`,
+// `host_register`,
+// `host_delete`,
+// `deploy`,
+// `undeploy`,
+// `create`,
+// `mint`,
+// `remint`,
+// `ready`,
+// `kill`,
+// `device_delete`,
+// `purge`,
+// `volume_key`,
+// `reap`,
+// `preflight` (optional; dryRun deploys),
+// `host_add`,
+// `credential`,
+// `obo_root`,
+// `object_update`,
+// `container_reserve`,
+// `container_release`,
+// `image_push` (a manifest pushed to the registry),
 // `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
 // `image_public` (a public base image added or removed),
-// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
-// Public ingress (ADR-029), host chain: `public_request` (one per public
-// request), `public_rejected` (per-minute summary of requests the limits
-// refused), `public_object_created` (a name admitted for a public create);
-// `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
-// host: the listener opened/closed).
+// `transfer` (a `_pool` node went to an object, ADR-031),
+// `revoke` (an unused pooled key revoked).
+// Public ingress (ADR-029), host chain:
+// `public_request` (one per public request),
+// `public_rejected` (per-minute summary of requests the limits refused),
+// `public_object_created` (a name admitted for a public create).
+// Both chains:
+// `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 type AuditKind string
 
 // AuditPage defines model for AuditPage.
@@ -974,22 +1003,51 @@ type AuditRecord struct {
 	// HostSig base64 ed25519 over utf8(hash); host chains only.
 	HostSig *string `json:"hostSig,omitempty"`
 
-	// Kind Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
-	// `principal`, `tenant_note` (source `tenant`, unverified),
-	// `container_start`, `container_stop` (an object's container, ADR-032). mgmt chain:
-	// `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
-	// `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
-	// `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-	// `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
-	// `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry),
+	// Kind Host chain (netd/hostd):
+	// `allow`,
+	// `deny`,
+	// `egress`,
+	// `spawn`,
+	// `kill`,
+	// `principal`,
+	// `tenant_note` (source `tenant`, unverified),
+	// `container_start` (an object's container, ADR-032),
+	// `container_stop` (an object's container, ADR-032).
+	// mgmt chain:
+	// `tenant_create`,
+	// `tenant_update`,
+	// `tenant_delete`,
+	// `host_register`,
+	// `host_delete`,
+	// `deploy`,
+	// `undeploy`,
+	// `create`,
+	// `mint`,
+	// `remint`,
+	// `ready`,
+	// `kill`,
+	// `device_delete`,
+	// `purge`,
+	// `volume_key`,
+	// `reap`,
+	// `preflight` (optional; dryRun deploys),
+	// `host_add`,
+	// `credential`,
+	// `obo_root`,
+	// `object_update`,
+	// `container_reserve`,
+	// `container_release`,
+	// `image_push` (a manifest pushed to the registry),
 	// `image_pin` (a deploy resolved its container images to digests, mirroring external ones),
 	// `image_public` (a public base image added or removed),
-	// `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
-	// Public ingress (ADR-029), host chain: `public_request` (one per public
-	// request), `public_rejected` (per-minute summary of requests the limits
-	// refused), `public_object_created` (a name admitted for a public create);
-	// `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
-	// host: the listener opened/closed).
+	// `transfer` (a `_pool` node went to an object, ADR-031),
+	// `revoke` (an unused pooled key revoked).
+	// Public ingress (ADR-029), host chain:
+	// `public_request` (one per public request),
+	// `public_rejected` (per-minute summary of requests the limits refused),
+	// `public_object_created` (a name admitted for a public create).
+	// Both chains:
+	// `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 	Kind     AuditKind `json:"kind"`
 	ObjectID *string   `json:"objectID,omitempty"`
 

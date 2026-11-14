@@ -313,11 +313,26 @@ func New(cfg Config) (*Host, error) {
 		return nil, err
 	}
 	cfg.Mgmt.HostID = cfg.HostID
-	h := &Host{cfg: cfg, sandbox: sb, log: cfg.Logger, mgmt: cfg.Mgmt, nowFn: cfg.CronClock,
-		tenants: map[string]*tenant{}, workloads: map[string]*workload{}, objects: map[string]*object{},
-		byNetd: map[string]*object{}, byKey: map[string]*object{}, creating: map[string]*createCall{},
-		poolDemand: map[string]time.Time{}, poolBusy: map[string]bool{},
-		public: map[string]*publicState{}, syncNow: make(chan struct{}, 1), quota: cfg.ContainerQuota, containers: containerLedger{held: map[ContainerKey]*ctrEntry{}}}
+	// One field per line: features that add a map here should not collide.
+	h := &Host{
+		cfg:        cfg,
+		sandbox:    sb,
+		log:        cfg.Logger,
+		mgmt:       cfg.Mgmt,
+		nowFn:      cfg.CronClock,
+		tenants:    map[string]*tenant{},
+		workloads:  map[string]*workload{},
+		objects:    map[string]*object{},
+		byNetd:     map[string]*object{},
+		byKey:      map[string]*object{},
+		creating:   map[string]*createCall{},
+		poolDemand: map[string]time.Time{},
+		poolBusy:   map[string]bool{},
+		public:     map[string]*publicState{},
+		syncNow:    make(chan struct{}, 1),
+		quota:      cfg.ContainerQuota,
+		containers: containerLedger{held: map[ContainerKey]*ctrEntry{}},
+	}
 	h.ctr = newCtrManager(h)
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err

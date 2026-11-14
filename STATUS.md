@@ -1,5 +1,9 @@
 # twd STATUS (living log)
 
+> **Frozen 2026-11-14. Don't add to this file.** New status goes in
+> `status/<branch>.md`, one file per workstream (see `status/README.md`).
+> This file stays as the history and is still cited by section name.
+
 Last update: 2026-11-14 00:30 PT. Fast identity: Ross approved the three decisions. `-warm-keys` now defaults to 5; port mapping stays off; **the pre-joined node pool (ADR-031 variant B) is built** (`twd-hostd -pool-nodes`, default 1 per hot class): create → first request on the object's own node **232 ms p50 / 297 ms p95** on production control. See "Fast identity, Phase 3".
 Last update: 2026-11-13 22:20 PT. Fast identity, Phase 2 on branch `fast-identity`: callers wait for a new peer's path (b), warm-key pool (a, `-warm-keys`, default off), no port mapping on host nodes (c, default); pre-joined node pool measured and drafted as ADR-031 (Proposed). See "Fast identity, Phase 2".
 Last update: 2026-11-13 21:10 PT. Fast identity, Phase 1 (measurement only) on branch `fast-identity`: per-stage cold-identity breakdown, hermetic and tailnet 1; the bimodal join explained. See "Fast identity: where a new object's node time goes".

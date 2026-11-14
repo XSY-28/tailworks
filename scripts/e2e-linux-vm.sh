@@ -12,7 +12,7 @@ VM=$1
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEV=${TWD_DEV_VM:-twd-dev}
 cd "$ROOT"
-VERSION=$(cat VERSION)-$(git rev-parse --short=8 HEAD)$(git diff --quiet HEAD -- . ':!STATUS.md' || echo -dirty)
+VERSION=$(cat VERSION)-$(git rev-parse --short=8 HEAD)$(git diff --quiet HEAD -- . ':!STATUS.md' ':!status' || echo -dirty)
 REL=/tmp/twd-l3-release
 echo "e2e-linux-vm: release $VERSION, built in $DEV:$REL"
 
