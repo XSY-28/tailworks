@@ -123,5 +123,5 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
   `twd.jsonc`; stateless workloads can also run on several hosts behind it
   (`"replicas": 3`). See [docs/services.md](docs/services.md).
 - **Build status and measured results:** [status/](status/) (one file per workstream) and the frozen history in [STATUS.md](STATUS.md).
-- **Design:** the RFC and ADRs live in
-  `rosskukulinski/tailnet-agents-design` (private).
+- **Design:** the RFC is [docs/design/RFC.md](docs/design/RFC.md) and the
+  ADRs are in [docs/design/adr/](docs/design/adr/), one file each.
