@@ -131,6 +131,18 @@ func TestE2EVM(t *testing.T) {
 	}
 	echoURL := "http://ttest-echo/"
 
+	// The warm pool (on by default) fills first, so that the workloads
+	// below run in claimed pool VMs: every check (keys, egress attribution,
+	// volume, kill/restart) then covers the pool path. TestSmoke covers the
+	// cold path.
+	if be.PoolStats() != nil {
+		wc, cancel := context.WithTimeout(ctx, 60*time.Second)
+		if err := be.WaitPool(wc, 2); err != nil {
+			t.Fatal(err)
+		}
+		cancel()
+	}
+
 	// Deploy hello + probe in the microVM tier (the tenant's tier), and a
 	// process-tier copy of probe for the latency comparison.
 	tDeploy := time.Now()
@@ -169,10 +181,12 @@ func TestE2EVM(t *testing.T) {
 				if ws.VM == nil || ws.VM.PID == 0 {
 					t.Fatalf("%s: no VM info", name)
 				}
-				res.set("boot_"+name, map[string]any{"instance_start_to_guest_init_ms": ws.VM.Boot.Milliseconds(),
-					"instance_start_to_workerd_ready_ms": ws.VM.Ready.Milliseconds(), "boot_call_total_ms": ws.VM.Total.Milliseconds(),
-					"guest_uptime_at_ready_ms": ws.VM.GuestUptimeAtReady.Milliseconds()})
-				t.Logf("%s VM: InstanceStart→init %v, →workerd ready %v, whole Boot() %v", name, ws.VM.Boot, ws.VM.Ready, ws.VM.Total)
+				res.set("boot_"+name, map[string]any{"source": ws.VM.Source, "boot_call_total_ms": ws.VM.Total.Milliseconds(),
+					"breakdown": vm.Breakdown(*ws.VM)})
+				if be.PoolStats() != nil && ws.VM.Source != "pool" {
+					t.Fatalf("%s: VM source %q, want a claimed pool VM", name, ws.VM.Source)
+				}
+				t.Logf("%s VM: %s, whole Boot() %v", name, ws.VM.Source, ws.VM.Total)
 			}
 		}
 	})
@@ -591,7 +605,17 @@ func TestE2EVM(t *testing.T) {
 		var deployMS, servingMS, restartMS []float64
 		var infos []sandbox.Info
 		var drive int64
+		waitPool := func() {
+			if be.PoolStats() != nil { // steady state: the pool has refilled
+				wc, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				if err := be.WaitPool(wc, 1); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
 		for i := 0; i < n; i++ {
+			waitPool()
 			old := e.Host.Sandbox(e.TenantID, "hello")
 			st := time.Now()
 			d := e.Deploy(hostdtest.Template("hello"), "hello", map[string]string{"UPSTREAM": echoURL})
@@ -618,6 +642,7 @@ func TestE2EVM(t *testing.T) {
 		// 400, 600 ms are included in kill→serving; the VM's own boot is in
 		// the stage breakdown).
 		for i := 0; i < min(n, 3); i++ {
+			waitPool()
 			old := e.Host.Sandbox(e.TenantID, "hello")
 			st := time.Now()
 			old.Kill()

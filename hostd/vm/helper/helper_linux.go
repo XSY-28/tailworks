@@ -276,6 +276,23 @@ func (s *Server) serveConn(c *net.UnixConn) {
 			if werr != nil {
 				return
 			}
+		case "attach":
+			if vm == nil || req.Attach == nil || len(fds) != 1 {
+				closeAll(fds)
+				helperapi.WriteResponse(c, helperapi.Response{Re: "attach", Code: helperapi.CodeBadRequest, Error: "attach needs a started VM, a volume and its image fd"})
+				continue
+			}
+			f := os.NewFile(uintptr(fds[0]), "volume")
+			resp, err := vm.attach(f, req.Attach)
+			f.Close()
+			req.Attach.Key = nil
+			if err != nil {
+				s.log.Warn("volume attach failed", "uid", uid, "vm", vm.id, "err", err)
+				helperapi.WriteResponse(c, errResp("attach", err))
+				continue
+			}
+			resp.Re, resp.OK = "attach", true
+			helperapi.WriteResponse(c, resp)
 		case "kill":
 			closeAll(fds)
 			if vm != nil {
@@ -426,14 +443,19 @@ func (s *Server) cleanupStale() {
 
 // ---- small utilities ----
 
+// freeHugePages2M: available 2 MiB pages, free minus reserved (a running
+// VM's guest RAM is reserved at mmap and counted as used only once touched).
 func freeHugePages2M() int {
-	b, err := os.ReadFile("/sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages")
-	if err != nil {
-		return 0
+	read := func(name string) int {
+		b, err := os.ReadFile("/sys/kernel/mm/hugepages/hugepages-2048kB/" + name)
+		if err != nil {
+			return 0
+		}
+		var n int
+		fmt.Sscan(strings.TrimSpace(string(b)), &n)
+		return n
 	}
-	var n int
-	fmt.Sscan(strings.TrimSpace(string(b)), &n)
-	return n
+	return max(0, read("free_hugepages")-read("resv_hugepages"))
 }
 
 func runStdin(stdin []byte, name string, args ...string) (string, error) {

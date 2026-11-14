@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
 	"golang.org/x/sys/unix"
@@ -35,12 +36,14 @@ type session struct {
 	cgroup string
 	mounts []string
 	vol    *attached
+	slot2  bool // started with a volume slot (placeholder DO drive)
 	cmd    *exec.Cmd
 	api    *http.Client
 	done   chan struct{}
 
 	stopOnce sync.Once
 	cleaned  sync.Once
+	volOnce  sync.Once
 	stopped  bool
 }
 
@@ -70,6 +73,9 @@ func (s *Server) start(c *net.UnixConn, uid int, req *helperapi.StartRequest, fd
 	}
 	if req.MemMiB < 128 || req.MemMiB > 32768 || req.VCPUs < 1 || req.VCPUs > 32 || req.MTU < 576 || req.MTU > 9000 {
 		return nil, resp, nil, herr(helperapi.CodeBadRequest, "bad machine config")
+	}
+	if req.VolumeSlot && req.Volume != nil {
+		return nil, resp, nil, herr(helperapi.CodeBadRequest, "volume and volume slot are exclusive")
 	}
 	if req.GuestCID < 3 || req.VsockPort <= 0 || req.VsockPort > 65535 {
 		return nil, resp, nil, herr(helperapi.CodeBadRequest, "bad vsock config")
@@ -179,6 +185,23 @@ func (s *Server) start(c *net.UnixConn, uid int, req *helperapi.StartRequest, fd
 		log.Info("volume attached", "volume", req.Volume.Name, "epoch", req.Volume.Epoch, "formatted", a.formatted, "ms", tm["volume"])
 	}
 
+	if req.VolumeSlot {
+		// A blank placeholder (1 MiB, sparse) behind the DO drive; attach
+		// swaps the real volume in.
+		p := filepath.Join(sess.chroot, "volslot")
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+		if err != nil {
+			return nil, resp, nil, err
+		}
+		err = f.Truncate(1 << 20)
+		f.Close()
+		if err != nil {
+			return nil, resp, nil, err
+		}
+		os.Chown(p, sess.jailID, sess.jailID)
+		sess.slot2 = true
+	}
+
 	// 4. The jailer: chroot, uid/gid, netns, cgroups; then Firecracker
 	// (default seccomp filters) with its API socket inside the jail.
 	hp := false
@@ -232,13 +255,17 @@ func (s *Server) start(c *net.UnixConn, uid int, req *helperapi.StartRequest, fd
 		{"/drives/rootfs", map[string]any{"drive_id": "rootfs", "path_on_host": "/rootfs.ext4", "is_root_device": true, "is_read_only": true}},
 		{"/drives/config", map[string]any{"drive_id": "config", "path_on_host": "/config.tar", "is_root_device": false, "is_read_only": true}},
 	}
-	if sess.vol != nil {
+	if sess.vol != nil || sess.slot2 {
 		// Writeback: the guest's flushes (fsync) reach the host as fsync
 		// of the dm-crypt device; "Unsafe" (the default) would drop them.
+		path := "/vol"
+		if sess.slot2 {
+			path = "/volslot"
+		}
 		calls = append(calls, struct {
 			path string
 			body any
-		}{"/drives/do", map[string]any{"drive_id": "do", "path_on_host": "/vol", "is_root_device": false, "is_read_only": false, "cache_type": "Writeback"}})
+		}{"/drives/do", map[string]any{"drive_id": "do", "path_on_host": path, "is_root_device": false, "is_read_only": false, "cache_type": "Writeback"}})
 	}
 	calls = append(calls,
 		struct {
@@ -357,28 +384,42 @@ func (sess *session) stop() {
 	})
 }
 
-// wait reaps the VMM, releases everything, then tells the client.
+// wait reaps the VMM and releases the volume, tells the client (whose next
+// VM may be waiting for that volume: a serial redeploy), then releases the
+// rest (mounts, netns, jail, cgroup, slot).
 func (sess *session) wait(exited <-chan struct{}) {
 	<-exited
+	t0 := time.Now()
 	st := sess.cmd.ProcessState
-	sess.cleanup()
-	ev := helperapi.Response{Event: "exit", OK: true}
+	sess.releaseVolume()
+	tv := ms(time.Since(t0))
+	ev := helperapi.Response{Event: "exit", OK: true, Timings: map[string]float64{"volume_release": tv}}
 	if !sess.stopped {
 		ev.Error = fmt.Sprintf("firecracker exited: %v", st)
 	}
 	helperapi.WriteResponse(sess.c, ev)
+	sess.cleanup()
+	sess.s.log.Debug("VM released", "vm", sess.id, "volume_ms", tv, "total_ms", ms(time.Since(t0)))
 	close(sess.done)
 	sess.c.Close()
 }
 
-// cleanup releases the volume, mounts, netns, jail and cgroup (idempotent).
-func (sess *session) cleanup() {
-	sess.cleaned.Do(func() {
+// releaseVolume closes the dm-crypt mapping and loop device and drops the
+// image's lock (idempotent).
+func (sess *session) releaseVolume() {
+	sess.volOnce.Do(func() {
 		if sess.vol != nil {
 			if err := sess.s.vols.release(sess.vol); err != nil {
 				sess.s.log.Warn("volume release", "vm", sess.id, "err", err)
 			}
 		}
+	})
+}
+
+// cleanup releases the volume, mounts, netns, jail and cgroup (idempotent).
+func (sess *session) cleanup() {
+	sess.cleaned.Do(func() {
+		sess.releaseVolume()
 		for i := len(sess.mounts) - 1; i >= 0; i-- {
 			unix.Unmount(sess.mounts[i], unix.MNT_DETACH)
 		}
@@ -396,6 +437,56 @@ func (sess *session) cleanup() {
 			close(sess.done) // never started: nothing will wait()
 		}
 	})
+}
+
+// attach opens the workload's volume for a VM started with a volume slot
+// and swaps it in behind the guest's DO drive (Firecracker PATCH /drives,
+// post-boot: the guest sees a capacity change on /dev/vdc). The guest has
+// not touched the placeholder (it only mounts after its load).
+func (sess *session) attach(f *os.File, req *helperapi.Volume) (resp helperapi.Response, err error) {
+	if !sess.slot2 || sess.vol != nil {
+		return resp, herr(helperapi.CodeBadRequest, "this VM has no free volume slot")
+	}
+	t0 := time.Now()
+	a, err := sess.s.vols.attach(f, req, sess.uid, sess.id)
+	if err != nil {
+		return resp, err
+	}
+	sess.vol = a // released in cleanup() from here on
+	var st unix.Stat_t
+	if err := unix.Stat(a.mapper, &st); err != nil {
+		return resp, err
+	}
+	node := filepath.Join(sess.chroot, "vol")
+	if err := unix.Mknod(node, unix.S_IFBLK|0o600, int(st.Rdev)); err != nil {
+		return resp, fmt.Errorf("mknod volume: %w", err)
+	}
+	os.Chown(node, sess.jailID, sess.jailID)
+	open := ms(time.Since(t0))
+	if err := sess.call("PATCH", "/drives/do", map[string]any{"drive_id": "do", "path_on_host": "/vol"}); err != nil {
+		return resp, err
+	}
+	sectors, err := blockSectors(a.mapper)
+	if err != nil {
+		return resp, err
+	}
+	resp.VolumeNew, resp.VolumeSectors = a.formatted, sectors
+	resp.Timings = map[string]float64{"volume": open, "patch": ms(time.Since(t0)) - open}
+	sess.s.log.Info("volume attached (slot)", "vm", sess.id, "volume", req.Name, "epoch", req.Epoch, "formatted", a.formatted, "ms", ms(time.Since(t0)))
+	return resp, nil
+}
+
+func blockSectors(dev string) (int64, error) {
+	fd, err := unix.Open(dev, unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer unix.Close(fd)
+	var n uint64
+	if _, _, e := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.BLKGETSIZE64, uintptr(unsafe.Pointer(&n))); e != 0 {
+		return 0, e
+	}
+	return int64(n / 512), nil
 }
 
 // memdump pauses the VM, writes a full snapshot inside the jail, resumes

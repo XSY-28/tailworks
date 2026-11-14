@@ -46,8 +46,8 @@ func Breakdown(i sandbox.Info) []Stage {
 		chain("host.", hv, 0,
 			[2]string{"claim", "claim (take a pooled VM)"},
 			[2]string{"restore", "snapshot restore (VMM spawn + load + resume)"},
-			[2]string{"volume_attach", "volume attach (helper: loop + dm-crypt + drive swap)"},
-			[2]string{"inject_sent", "bundle + config injection (vsock)"},
+			[2]string{"volume_attach", "volume attach (helper: loop + LUKS2 open + PATCH drive)"},
+			[2]string{"inject", "inject bundle + config over vsock (incl. guest extract, reseed, mount)"},
 		)
 	} else {
 		chain("host.", hv, 0,
@@ -67,7 +67,8 @@ func Breakdown(i sandbox.Info) []Stage {
 		{"healthy", "isolate + bundle load + first healthy response"},
 	}
 	if _, warm := h["claim"]; warm {
-		// The guest was idle until the host's inject message arrived.
+		// The guest was idle until the host's inject message arrived (the
+		// guest stages overlap the host's "inject" above).
 		chain("guest.", gv, g["inject_rx"], append([][2]string{
 			{"inject_done", "bundle extract + reseed + clock"},
 			{"volume", "DO volume mount"},

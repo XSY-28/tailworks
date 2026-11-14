@@ -11,7 +11,7 @@ Last update: 2026-11-08 01:40 PT. M7 (E2E-MULTI: one host, tenant A on tailnet 1
 Last update: 2026-11-08 08:30 PT. L3: `make e2e-linux-reboot` PASS (clean reboot + power cut). Earlier, 08:15 PT, L3 (production-shaped microVM tier on Linux) on branch `l3-microvm`: `make e2e-vm` PASS (13 subtests), `make e2e-linux-vm` PASS from the installed release on fresh `twdl-kvm-u24`.
 Last update: 2026-11-08 10:00 PT. Integration (Linux): L3 + L1 merged onto master (L2) on `int-linux`; redeploy-after-purge and lease_lost-retry fixes; full matrix green (macOS, real tailnets, twd-dev, Debian 12 / Ubuntu 24.04 arm64 with reboot + ephemeral / Ubuntu 24.04 amd64, e2e-linux-vm, e2e-linux-reboot); re-find delay diagnosed (WireGuard stale-session timeout, not DERP/netmap).
 Last update: 2026-11-08 09:05 PT. L1: ephemeral nodes now re-mint on a rejected rejoin (netd + mgmt `/remint` + hostd); reboot survival and the ephemeral restart measured on Ubuntu 24.04 arm64; 5/5 supported distros PASS.
-Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown measured (see the FV section at the end).
+Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown; Phase 2 warm pool, `Boot()` p50 602 → 58 ms, deploy → active 746 → 193 ms (see the FV section at the end).
 Last update: 2026-11-08 02:05 PT. Integration: master (M6 + M5 + M9, `57dd519`) merged into `m7-multi`; the full matrix passes on `4cce30d` (macOS, real tailnets, mbp from the release, Lima).
 
 ## M0: repo skeleton (DONE)
@@ -1494,4 +1494,85 @@ On top of `Boot()`, hostd's redeploy spends ~145 ms: the drain, the old guest's 
 - faulting in fresh guest RAM, which under nested virt means stage-2 faults per page.
 
 A VM that has run workerd once and then starts a *fresh* workerd process for the tenant skips almost all of it. That shapes both the pool (Phase 2) and the snapshot (Phase 3).
+
+### Phase 2: warm pool (built; on by default)
+**Design** (`hostd/vm/pool_linux.go`; guest side in `twd-guestd`; contract in `guest/proto`):
+- **What a pool VM is.** hostd's backend keeps N VMs booted ahead of time. A pool VM's config drive carries only the network config and twd's own **no-tenant warm-up app**: one request through a Durable Object with SQLite and KV storage, listening on loopback.
+- **Warm-up, then idle.** guestd runs that workerd once until healthy. This faults in the 155 MiB binary, V8, SQLite and guest RAM, which is the cold-start cost Phase 1 found. Then guestd SIGKILLs it, empties `/run/twd/app`, `/tmp` and `/dev/shm`, and says `pooled`.
+  - workerd can't swap configs in place, so the pool's "workerd idle" means a VM whose workerd has run and exited. The tenant always gets a **new workerd process**, sharing nothing with the warm-up but the read-only image's page cache.
+- **A deploy or restart claims one.** `Backend.Boot()` takes a pooled VM (hostd itself is unchanged: `bootVM` → `Boot`), then:
+  1. **Volume:** the helper opens the workload's LUKS2 volume and swaps it in behind the guest's `/dev/vdc`. That is the new `attach` op (helper protocol v2); the pool VM booted with a 1 MiB placeholder `volslot`, and the swap is Firecracker `PATCH /drives/do`, post-boot. The guest waits for the new capacity, flushes the placeholder's buffers and mounts.
+  2. **Handlers:** hostd adds the gateway listeners to the VM's gVisor stack. A pooled VM's stack has **none**, so every SYN from it is reset and recorded.
+  3. **Injection** over the existing vsock NDJSON channel (the config drive is read-only, so the bundle can't go there): `chunk` messages (≤ 1 MiB, base64, acknowledged), then one `load` carrying the sha256, workerd args, health blob, debug flag, volume device and size, the host's wall clock, **64 bytes of entropy** and a fresh **boot_id**. guestd verifies the hash, reseeds the kernel CRNG (`RNDADDENTROPY` + `RNDRESEEDCRNG`), bind-mounts the new boot_id, sets the clock, extracts, mounts and starts workerd.
+- **Single use, enforced on both sides.** guestd refuses a second `load` (`loading` is set before anything else). The backend never puts a claimed VM back, and a claim that fails destroys the VM. If the failure isn't a volume error (`volume_busy`, `volume_fenced`, `volume_key`), `Boot()` falls back to a cold boot.
+- **Sizing:** `-vm-pool N` (twd-hostd) / `vm.Config.Pool`: 0 = auto, which is half the huge-page reservation's VMs, at most 2 (with `twd host setup --microvm`'s default 4-VM reservation: 2). -1 = off.
+  - Refill runs in the background, one VM at a time, after each claim or exit.
+  - It happens only while **all of this backend's live VMs (pooled + claimed + cold) plus the next one fit `PoolBudgetMiB`** (default: `vm.nr_hugepages` × 2 MiB, i.e. the reservation), and only if that many 2 MiB pages are available (free − reserved).
+  - Pool VMs run with `huge_pages` **on**, never falling back to 4 KiB pages.
+  - A cold boot on a pool miss is not limited by the pool budget (same as before).
+- **Unchanged, and re-verified on pool VMs:** e2e-vm now waits for the pool before deploying, so `hello` and `probe` run in *claimed* pool VMs and every check covers that path; `TestSmoke` pins the cold path (`Pool: -1`).
+  - per-object egress attribution (MAC'd `x-twd-*`; forged headers still leave as the sender);
+  - the encrypted volume: key to the helper only; `volume_busy` for a second VM, through a claim too;
+  - serial blue/green (drain → guest unmount → release → *claim* → attach);
+  - the bounded restart policy (VM SIGKILL → 503 `upstream_unavailable` → the restart claims a pooled VM).
+- **Also changed:**
+  - The helper now sends the `exit` event right after the VMM is dead and the **volume is released**, then tears down the netns, jail and cgroup. A serial redeploy's next VM was waiting on all of it.
+  - guestd polls workerd's exit on `shutdown` every 1 ms (was 10).
+  - `FreeHugePages2M` and the helper's `auto` check now subtract `resv_hugepages`.
+  - `sandbox.Info.Source` is `cold` / `pool` (later `restore`), and `PoolIdle` is how long the VM waited.
+
+**Tests (in `make e2e-vm`, `hostd/vm`):**
+- **`TestPoolClaim`**:
+  - `Boot()` returns a pooled VM on huge pages;
+  - it serves the workload, its egress reaches *its* gateway handler, and its DO storage is the attached `/dev/vdc` ext4;
+  - a second `load` is refused (`not a pooled VM waiting for its load`);
+  - the claimed VM is never back in the pool, and the pool refills.
+- **`TestPoolNoCarryOver`** (fsscan before injection):
+  - workload A runs; its code, its responses and a volume write carry a random marker. A is stopped.
+  - The pool's refilled VM is taken *before* any injection. It is not A's VMM, and its state dirs (`/run`, `/tmp`, `/dev/shm`) hold **0 files**: the warm-up app and its marker file are gone too.
+  - Its **full 512 MiB RAM dump** does not contain A's marker.
+  - Then it is loaded with workload B and serves B, with none of A's files.
+- **`TestPoolBudget`** (budget 3 VMs, target 2):
+  - 2 claims → exactly 1 idle, 3 live, `MaxLive` 3, and refills skipped at quota;
+  - a 3rd claim → 0 idle, no refill past 3;
+  - after the claimed VMs stop → refilled to 2, `MaxLive` still 3;
+  - all VMs on huge pages.
+- **`make e2e-vm`: PASS** (TestPoolClaim, TestPoolNoCarryOver, TestPoolBudget, TestSmoke, TestVolume, TestE2EVM 14/14 incl. `DeployReadyBench` ×20; `e2e/vm/results/l3-20261114T050849Z.json`).
+
+**Before → after** (real `hello` platform bundle through hostd; 20 serial redeploys each; nested virt):
+
+| | before (cold boot) p50 / p95 ms | after (pool claim) p50 / p95 ms |
+|---|---|---|
+| **`Boot()`** (deploy/restart → workerd healthy in the guest) | 601.6 / 799.8 | **58.2 / 64.4** |
+| **deploy → active** (hostd: drain, release old VM, new VM, health, routing) | 745.7 / 768.6 | **193.0 / 213.0** |
+| deploy → first 200 over tsnet | 772.1 / 795.0 | 215.2 / 237.8 |
+| VM SIGKILL → serving (3 kills; includes the policy's 200/400/600 ms backoff) | 1305.9 / 1626.6 | 529.5 / 734.1 (343.6 min) |
+
+**Claim stages** (same 20 redeploys):
+
+| Stage | p50 ms | p95 ms |
+|---|---|---|
+| host: take a pooled VM | 0.0 | 0.0 |
+| host: volume attach (helper: loop + LUKS2 open + `PATCH /drives`) | 17.0 | 18.7 |
+| host: inject (chunks + `load`; includes the guest's extract, reseed and mount) | 9.1 | 12.3 |
+| guest: bundle extract + reseed + clock | 2.0 | 3.4 |
+| guest: DO volume mount | 4.8 | 7.7 |
+| guest: workerd fork/exec | 0.7 | 1.0 |
+| guest: workerd/V8 init (until listening) | 10.1 | 12.5 |
+| guest: **isolate + bundle load + first healthy response** | **21.9** | 23.7 |
+| **total `Boot()`** | **58.2** | 64.4 |
+
+**Against the target** ("deploy/restart → ready ≈ bundle load"):
+- **What's left of `Boot()`:** of 58 ms, 32 ms is workerd (10 ms process init, 22 ms bundle load + first request), 17 ms is the volume and 9 ms is the injection. **Without a volume** (`TestPoolClaim`'s smoke worker, no volume) the claim's guest side is ~20 ms.
+- **What's left of a redeploy (hostd log, `drain_ms` / `stop_old_ms` / `start_ms`):** deploy → active is 151–193 ms. **85–100 ms of it is releasing the old VM** (the guest stops workerd, syncs and unmounts: 33–44 ms; then VMM exit + the host's LUKS close). The single-attach volume fence makes that serial; making it overlap needs a hot volume handover (an L3 gap, not built).
+- **Restarts:** a crash restart is dominated by hostd's restart backoff (200 ms on the first crash), not the VM.
+- **A fresh volume** (first deploy) adds LUKS2 format + mkfs: the attach is ~90 ms then.
+- **Memory:** each idle pool VM has touched ~110 MiB of guest RAM (hugetlb) after its warm-up.
+
+**Findings (Phase 2):**
+1. **`resv_hugepages` stays 0 with running VMs.** Firecracker maps guest RAM without a hugetlb reservation, so a VM takes its 2 MiB pages only as the guest touches them. `free_hugepages` therefore overstates what's available, and an over-committed host would SIGBUS a VMM whose guest touches new memory.
+   - This was true before this branch; the helper's `auto` check has always only looked at free pages at boot.
+   - The pool counts every live VM at its **full** size against the reservation instead of trusting free pages. The cold path and the helper still don't; that's a follow-up: a per-backend or per-helper accounting of all VMs.
+2. **The workerd clock is frozen during execution**, so a `Date.now()` busy loop never ends. The heavy-top-level benchmark uses an iteration count.
+3. A pool VM's console log holds only the warm-up's output until the claim; after the claim, the workload's output follows in the same file.
 

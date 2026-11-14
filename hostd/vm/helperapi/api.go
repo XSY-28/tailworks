@@ -12,6 +12,7 @@
 //
 //	start  → kernel, rootfs, config drive, console log, [volume image]
 //	start  ← gv0 TAP (hostd's side of the VM's network), vsock listener
+//	attach → volume image (a warm-pool VM, started with VolumeSlot)
 //	memdump ← the guest memory file of a full snapshot
 //
 // One connection is one VM: the helper kills the VM and releases
@@ -38,7 +39,8 @@ import (
 const DefaultSocket = "/run/twd/vmhelper.sock"
 
 // Version is bumped when the protocol changes incompatibly.
-const Version = 1
+// 2: VolumeSlot + the attach op (warm pool).
+const Version = 2
 
 // Error codes.
 const (
@@ -54,8 +56,12 @@ const (
 
 // Request is one client → helper message.
 type Request struct {
-	Op    string        `json:"op"` // ping | start | kill | memdump
+	Op    string        `json:"op"` // ping | start | attach | kill | memdump
 	Start *StartRequest `json:"start,omitempty"`
+	// Attach opens a volume (fd: the image) for a VM started with
+	// VolumeSlot and swaps it in behind the guest's /dev/vdc (Firecracker
+	// PATCH /drives, post-boot). At most once per VM.
+	Attach *Volume `json:"attach,omitempty"`
 }
 
 // StartRequest boots one VM. File descriptors, in order: kernel (r),
@@ -72,6 +78,10 @@ type StartRequest struct {
 	GuestCID  int     `json:"guestCID"`
 	VsockPort int     `json:"vsockPort"` // host port the guest connects to
 	Volume    *Volume `json:"volume,omitempty"`
+	// VolumeSlot (warm pool; not with Volume): boot with a small blank
+	// placeholder as the DO drive, so that the workload's volume can be
+	// attached later (the attach op) without a reboot.
+	VolumeSlot bool `json:"volumeSlot,omitempty"`
 }
 
 // Volume is a persistent, encrypted block device for the guest (/dev/vdc).
@@ -117,6 +127,9 @@ type Response struct {
 	Timings   map[string]float64 `json:"timingsMs,omitempty"`
 	HugePages bool               `json:"hugePages,omitempty"`
 	VolumeNew bool               `json:"volumeNew,omitempty"`
+	// attach: the plaintext volume's size in 512-byte sectors (the guest
+	// waits for its /dev/vdc to show it).
+	VolumeSectors int64 `json:"volumeSectors,omitempty"`
 }
 
 // Jail describes how the VMM is confined.
