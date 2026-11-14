@@ -71,6 +71,8 @@ func run() error {
 		setecURL     = flag.String("setec-url", "", "setec server URL (with -custody setec)")
 		reapEvery    = flag.Duration("reap-interval", 10*time.Second, "reaper interval")
 		delDelay     = flag.Duration("device-delete-delay", 0, "defer kill tier 2 (device delete) this long after the tier-1 push, so the host's tombstone answers new connections with object_killed (keep < hostd -kill-tombstone)")
+		warmKeys     = flag.Int("warm-keys", 5, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
+		warmKeyTTL   = flag.Duration("warm-key-ttl", mgmt.DefaultWarmKeyTTL, "-warm-keys: a pooled key's expiry; unused keys are revoked shortly before it")
 		verbose      = flag.Bool("v", false, "debug logging")
 	)
 	flag.Parse()
@@ -200,7 +202,7 @@ func run() error {
 
 	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: *tsapiURL, Issuer: issuer},
 		IDSecret: secret, ReplicaID: replicaID, ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, Log: log,
-		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl}
+		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL}
 	if ts != nil {
 		mcfg.TailnetDial = ts.Dial // kill/assignment pushes to hosts' own nodes
 	}

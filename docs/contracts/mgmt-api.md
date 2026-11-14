@@ -263,7 +263,7 @@ Replaces `POST /v0/tenants/{id}/purge`.
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
 | `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
-| `state` | query | array of string: `killed` \| `failed` | no | Terminal states to purge. Repeatable. Any other value is `400 bad_request`. |
+| `state` | query | array of string: `killed` \| `failed` \| `transferred` | no | Terminal states to purge. Repeatable. Any other value is `400 bad_request`. |
 
 | Status | Body | Description |
 |---|---|---|
@@ -685,6 +685,11 @@ hostd calls this on first `create()`/`spawn()`. The identity is
 - The mint is queued behind the tenant throttle
   (`registrationsPerMinute`) and quota (`maxObjects`;
   `429 object_quota_exceeded`).
+- `namespace: "_pool"` creates a pre-joined pool node for the class in
+  `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+  made ready like any object, but serving nothing until a create
+  names it in `poolObjectID`. Then that create answers
+  `status: assigned` and mints nothing.
 Spawn checks are unchanged from v0.
 
 **Request** `application/json`: `ObjectCreate`
@@ -752,7 +757,7 @@ Any other field, or a host sending admin fields (and vice versa), is
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| 409 | `Error` | `lease_lost` (the caller does not hold the namespace lease at this epoch) or `identity_conflict` (an `assigned` object reported ready on another node than the pool node it was given). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
@@ -1147,14 +1152,15 @@ Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
 `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
 `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
 `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-`preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`.
+`preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
+`transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
 Public ingress (ADR-029), host chain: `public_request` (one per public
 request), `public_rejected` (per-minute summary of requests the limits
 refused), `public_object_created` (a name admitted for a public create);
 `expose_on` / `expose_off` on both chains (mgmt: the operator's change;
 host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -1182,7 +1188,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`. Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create); `expose_on` / `expose_off` on both chains (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create); `expose_on` / `expose_off` on both chains (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -1324,7 +1330,7 @@ The workload entry node (`_workload` object).
 | `magicDNS` | string | yes |  |
 | `node` | string | yes | hostname |
 | `objectID` | string | no |  |
-| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`. |
+| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; or, for an object given a pre-joined pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready` (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and `transferred` (a `_pool` node whose node went to an object). |
 
 #### `Error`
 
@@ -1552,7 +1558,7 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `oboPublicKey` | string | yes | base64 Ed25519 |
 | `payload` | `NodeCertificatePayload` | yes | `internal/nodecert.Payload`; signed with the tenant's OBO root key (Ed25519). |
 | `stableNodeID` | string | yes |  |
-| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`. |
+| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; or, for an object given a pre-joined pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready` (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and `transferred` (a `_pool` node whose node went to an object). |
 | `tenantID` | string | yes |  |
 
 #### `NodeCertificatePayload`
@@ -1608,7 +1614,7 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `parent` | string | no | Parent object ID (spawn). |
 | `root` | string | yes | Root of the spawn tree (itself for a root). |
 | `stableNodeID` | string | no |  |
-| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`. |
+| `status` | `ObjectStatus` | yes | `pending` → `minted` → `ready`; or, for an object given a pre-joined pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready` (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and `transferred` (a `_pool` node whose node went to an object). |
 | `tags` | array of string | yes |  |
 | `tenantID` | string | yes |  |
 | `tombstone` | `Tombstone` | no | The kill record of an object. Kept until the tenant's terminal objects are purged. |
@@ -1623,9 +1629,10 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `actingFor` | string | no | The principal this object acts for (feeds audit). |
 | `caps` | `Caps` | no | `{capName: value \| [values]}`; see `caps ⊆ parent` semantics in `CreateObject`. |
 | `hostname` | string | no | The hostname hostd proposes; mgmt answers with the one to use. |
-| `namespace` | string | yes | DO class name, or `_workload`. |
+| `namespace` | string | yes | DO class name, `_workload`, or `_pool` (a pre-joined pool node; then `objectName` is `<Class>/<suffix>` and `workload` is required). |
 | `objectName` | string | yes |  |
 | `parent` | `ObjectRef` | no |  |
+| `poolObjectID` | string | no | A ready `_pool` node of this tenant, workload and class with exactly the class's tags, offered for a new, non-ephemeral object. If every condition holds, the object is created `assigned` to that node (no mint) and the pool node becomes `transferred`, in one transaction; the host renames the node and sends `ready` with the same `stableNodeID`. Otherwise it is ignored and the object is minted. |
 | `tenantID` | string | yes |  |
 | `traceID` | string | no |  |
 | `ttl` | string \| integer | no | `10m`-style duration or seconds. Defaults to the class `ttl`. |
@@ -1660,9 +1667,12 @@ JSON Merge Patch. Hosts send the `ready` group; admins send `ttl`.
 
 #### `ObjectStatus`
 
-`pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`.
+`pending` → `minted` → `ready`; or, for an object given a pre-joined
+pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+(never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+`transferred` (a `_pool` node whose node went to an object).
 
-Enum: `pending`, `minted`, `ready`, `killed`, `failed`
+Enum: `pending`, `minted`, `assigned`, `ready`, `killed`, `failed`, `transferred`
 
 #### `Page`
 
@@ -1742,6 +1752,7 @@ netd's limits on a public listener (ADR-029 D5); defaults filled in.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `purged` | array of string | yes | Object IDs forgotten. |
+| `warmKeysRevoked` | integer | no | The tenant's unused pooled keys revoked with the purge. |
 
 #### `SelfInfo`
 

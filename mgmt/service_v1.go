@@ -160,7 +160,7 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 	if err != nil {
 		return res, err
 	}
-	live, err := m.store.ListObjects(ctx, ObjectFilter{TenantID: id, Status: []string{StatusPending, StatusMinted, StatusReady}})
+	live, err := m.store.ListObjects(ctx, ObjectFilter{TenantID: id, Status: LiveStatuses})
 	if err != nil {
 		return res, err
 	}
@@ -181,7 +181,7 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 		res.DevicesDeleting = append(res.DevicesDeleting, kr.DevicesDeleting...)
 	}
 	// Anything still live (a child whose root was already dead) goes too.
-	if rest, err := m.store.ListObjects(ctx, ObjectFilter{TenantID: id, Status: []string{StatusPending, StatusMinted, StatusReady}}); err == nil {
+	if rest, err := m.store.ListObjects(ctx, ObjectFilter{TenantID: id, Status: LiveStatuses}); err == nil {
 		for _, o := range rest {
 			if kr, err := m.Kill(ctx, o.ID, KillRequest{Reason: "tenant deleted", By: by}); err == nil {
 				res.Killed = append(res.Killed, kr.Killed...)
@@ -394,7 +394,7 @@ func (m *Mgmt) DeleteHost(ctx context.Context, id string, drain bool, by string)
 	}
 	for _, l := range leases {
 		tenantID, workload, _ := strings.Cut(l.Name, "/")
-		objs, _ := m.store.ListObjects(ctx, ObjectFilter{TenantID: tenantID, Workload: workload, Status: []string{StatusPending, StatusMinted, StatusReady}})
+		objs, _ := m.store.ListObjects(ctx, ObjectFilter{TenantID: tenantID, Workload: workload, Status: LiveStatuses})
 		for _, o := range objs {
 			if o.ParentID != "" {
 				continue
@@ -458,7 +458,7 @@ func (m *Mgmt) Undeploy(ctx context.Context, id, reason, by string) (KillResult,
 	if reason == "" {
 		reason = "undeployed"
 	}
-	objs, err := m.store.ListObjects(ctx, ObjectFilter{TenantID: d.TenantID, Workload: d.Workload, Status: []string{StatusPending, StatusMinted, StatusReady}})
+	objs, err := m.store.ListObjects(ctx, ObjectFilter{TenantID: d.TenantID, Workload: d.Workload, Status: LiveStatuses})
 	if err != nil {
 		return res, err
 	}

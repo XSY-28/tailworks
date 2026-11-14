@@ -221,6 +221,9 @@ type CreateObjectRequest struct {
 	// v0 clarifications: feed audit.
 	ActingFor string `json:"actingFor,omitempty"`
 	TraceID   string `json:"traceID,omitempty"`
+	// PoolObjectID offers a ready pre-joined "_pool" node for this object
+	// (ADR-031); mgmt answers status "assigned" if it took it.
+	PoolObjectID string `json:"poolObjectID,omitempty"`
 }
 
 // CreateObjectResponse is the part of the Object resource hostd uses
@@ -377,6 +380,10 @@ type Page[T any] struct {
 // (contract gap, see STATUS.md M3: mgmt must declare it like a class, with
 // the twd.jsonc tailnet.tags).
 const WorkloadNamespace = "_workload"
+
+// StatusAssigned is the status of an object created on a pre-joined pool
+// node (CreateObjectRequest.PoolObjectID, ADR-031): no key, rename + ready.
+const StatusAssigned = "assigned"
 
 // PublicNamespace is the object namespace of a workload's public node
 // (ADR-029); the object name is the workload name.

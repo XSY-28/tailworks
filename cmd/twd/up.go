@@ -143,6 +143,9 @@ func cmdUp(args []string) error {
 	tomb := f.Duration("kill-tombstone", 12*time.Second, "keep a killed node answering object_killed this long")
 	delDelay := f.Duration("device-delete-delay", 8*time.Second, "delete a killed object's device this long after the kill (< --kill-tombstone)")
 	siblings := f.Bool("allow-sibling-egress", false, "let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)")
+	warmKeys := f.Int("warm-keys", 5, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
+	poolNodes := f.Int("pool-nodes", 1, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
+	portMapping := f.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)")
 	service := f.Bool("service", false, "run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/twd.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.twd.up.plist)")
 	mgmtHost := f.String("mgmt-hostname", "", "mgmt's own tailnet node name (default "+defaultMgmtHostname+")")
 	issuerKey := f.String("issuer-authkey-file", "", "wif: TS_AUTHKEY=… file for the WIF issuer's own node (tag "+mgmt.IssuerTag+"; unattended join: tests, automation); default: interactive login")
@@ -502,6 +505,10 @@ func cmdUp(args []string) error {
 	s.Cfg.InsecureSharedHost = *insecureSH
 	s.Cfg.Heartbeat, s.Cfg.KillTombstone, s.Cfg.DeviceDeleteDelay = hb.String(), tomb.String(), delDelay.String()
 	s.Cfg.AllowSiblingEgress = *siblings
+	if *warmKeys < 0 || *poolNodes < 0 {
+		return fail("bad_request", "--warm-keys and --pool-nodes must be ≥ 0")
+	}
+	s.Cfg.WarmKeys, s.Cfg.PoolNodes, s.Cfg.PortMapping = warmKeys, poolNodes, *portMapping
 	s.Cfg.LocalDev, s.Cfg.PushPort = *localDev, *pushPort
 	if err := s.save(); err != nil {
 		return err
@@ -866,6 +873,7 @@ func cmdSupervise(args []string) error {
 		return err
 	}
 	margs := []string{mgmtBin, "-state-dir", filepath.Join(s.Dir, "mgmt"), "-device-delete-delay", s.Cfg.DeviceDeleteDelay, "-version", version}
+	margs = append(margs, s.Cfg.identityMgmtArgs()...)
 	if s.Cfg.LocalDev {
 		// RT-03: a fresh per-host token on every mgmt start (twd up, a
 		// supervisor/systemd restart). hostd re-reads the file when it
@@ -922,6 +930,7 @@ func cmdSupervise(args []string) error {
 	if s.Cfg.AllowSiblingEgress {
 		hargs = append(hargs, "-allow-sibling-egress")
 	}
+	hargs = append(hargs, s.Cfg.identityHostdArgs()...)
 	mg := &child{name: "twd-mgmt", args: margs, logPath: s.log("mgmt")}
 	hd := &child{name: "twd-hostd", args: hargs, logPath: s.log("hostd")}
 
@@ -1051,7 +1060,7 @@ func cmdDown(args []string) error {
 		{
 			live := map[string]bool{}
 			for _, o := range objs {
-				if o.Status != "killed" && o.Status != "failed" {
+				if o.Status != "killed" && o.Status != "failed" && o.Status != "transferred" {
 					live[o.ID] = true
 				}
 			}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rosskukulinski/twd/mgmt"
 )
 
 // ---- seeded scenario runner (LOOP.md "Scenarios") ----
@@ -440,6 +443,34 @@ func checkInvariants(t *testing.T, c *cluster, g *rng, s setup, h *history, r *r
 	var deadlocks int64
 	db.QueryRow("SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()").Scan(&deadlocks)
 	add("I11", deadlocks == 0, "deadlocks: %d", deadlocks)
+
+	// Warm-key pool (TWD_MM_WARM_KEYS): a pooled key is adopted by at most
+	// one object, and only by one with exactly its tags and ephemeral flag.
+	var shared int
+	db.QueryRow(`SELECT COUNT(*) FROM (SELECT key_id FROM objects WHERE key_id<>'' GROUP BY key_id HAVING COUNT(*)>1) d`).Scan(&shared)
+	add("PoolExclusive", shared == 0, "keys held by more than one object: %d", shared)
+	prows, _ := db.Query("SELECT id, key_id, tags, ephemeral FROM objects WHERE tenant_id=$1 AND key_id<>''", s.tenantID)
+	var pooled, wrongTags int
+	var wrongEx []string
+	c.ts.mu.Lock()
+	for prows.Next() {
+		var id, key, tags string
+		var eph int64
+		prows.Scan(&id, &key, &tags, &eph)
+		if !slices.Contains(c.ts.keysByObject["pool:"+key], key) {
+			continue // minted for the object itself
+		}
+		pooled++
+		var tl []string
+		json.Unmarshal([]byte(tags), &tl)
+		if want := mgmt.PoolName(tl, eph != 0); c.ts.keyTags[key] != want {
+			wrongTags++
+			wrongEx = append(wrongEx, fmt.Sprintf("%s: key %s is %s, object is %s", id, key, c.ts.keyTags[key], want))
+		}
+	}
+	c.ts.mu.Unlock()
+	prows.Close()
+	add("PoolTags", wrongTags == 0, "objects holding a pooled key with other tags: %d/%d %v", wrongTags, pooled, first(wrongEx, 3))
 
 	rep, _ := json.MarshalIndent(out, "", "  ")
 	os.WriteFile(filepath.Join(r.dir, "report.json"), rep, 0o600)

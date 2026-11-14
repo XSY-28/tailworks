@@ -64,6 +64,16 @@ type Config struct {
 	OperatorTailnet string
 	// OperatorControlURL is passed to hosts with their join key.
 	OperatorControlURL string
+	// WarmKeys caps the warm-key pool per (tenant, tag set, ephemeral):
+	// pre-minted single-use keys that let a create skip CreateKey
+	// (warmkeys.go). 0 disables the pool.
+	WarmKeys int
+	// WarmKeyTTL is a pooled key's expiry at the API (default 30 min); it is
+	// revoked unused WarmKeyTakeMargin + 30 s before that.
+	WarmKeyTTL time.Duration
+	// WarmPoolInterval is how often pools are refilled and expired
+	// (default 2 s; a take also triggers a refill at once).
+	WarmPoolInterval time.Duration
 }
 
 // Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
@@ -95,6 +105,9 @@ type Mgmt struct {
 	deviceKept    map[string]bool               // killed objects whose device delete was refused (403)
 	oboKeys       map[string]ed25519.PrivateKey // tenant → OBO root key (loaded from custody)
 	clockOK       bool                          // last checkClock result (logs on change)
+	poolKick      chan struct{}                 // wakes the warm-key loop
+	poolPause     map[string]time.Time          // tenant → no refills until (after an error)
+	poolRetried   time.Time                     // last retry of failed warm-key revocations
 	volMu         sync.Mutex                    // VolumeKey create-if-absent
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -127,7 +140,17 @@ func New(cfg Config) (*Mgmt, error) {
 	m := &Mgmt{cfg: cfg, store: cfg.Store, custody: cfg.Custody, broker: cfg.Broker, clock: cfg.Clock, log: cfg.Log,
 		throttles: map[string]*Throttle{}, queues: map[string]chan string{}, queued: map[string]bool{}, replicaID: cfg.ReplicaID, waiters: map[string]chan struct{}{},
 		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{},
-		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{}}
+		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
+		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
+	if m.cfg.WarmKeyTTL == 0 {
+		m.cfg.WarmKeyTTL = DefaultWarmKeyTTL
+	}
+	if m.cfg.WarmKeyTTL < 2*(WarmKeyTakeMargin+warmKeySafety) {
+		return nil, fmt.Errorf("mgmt: WarmKeyTTL %v is too short (≥ %v)", m.cfg.WarmKeyTTL, 2*(WarmKeyTakeMargin+warmKeySafety))
+	}
+	if m.cfg.WarmPoolInterval == 0 {
+		m.cfg.WarmPoolInterval = defaultWarmTick
+	}
 	if cfg.PushTimeout == 0 {
 		m.cfg.PushTimeout = 2 * time.Second
 	}
@@ -176,6 +199,10 @@ func (m *Mgmt) Start() error {
 	}
 	m.clockOK = true
 	m.checkClock()
+	if m.warmStore() != nil {
+		m.wg.Add(1)
+		go m.poolLoop()
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -988,6 +1015,13 @@ type CreateObjectRequest struct {
 	TTL       json.RawMessage `json:"ttl,omitempty"`
 	ActingFor string          `json:"actingFor,omitempty"`
 	TraceID   string          `json:"traceID,omitempty"`
+	// PoolObjectID offers a ready pre-joined node of namespace "_pool"
+	// (ADR-031) for a new object: if it is this tenant's and workload's,
+	// for this class, with exactly the class's tags, and the object is not
+	// ephemeral, the object is created "assigned" to that node (no mint)
+	// and the pool node is transferred in the same transaction. Otherwise
+	// it is ignored and the object is minted as usual.
+	PoolObjectID string `json:"poolObjectID,omitempty"`
 }
 
 // CreateObjectResponse is the reply. Hostname is an addition: the node
@@ -1065,6 +1099,14 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		parent = &p
 	}
 	workload := r.Workload
+	classNS := r.Namespace // the class whose config (tags) applies
+	if r.Namespace == PoolNamespace {
+		cls, suffix, ok := strings.Cut(r.ObjectName, "/")
+		if !ok || cls == "" || suffix == "" || workload == "" || parent != nil || strings.HasPrefix(cls, "_") {
+			return resp, errf(400, "bad_request", "a %s node needs workload and objectName \"<Class>/<suffix>\" (not a spawn)", PoolNamespace)
+		}
+		classNS = cls
+	}
 	switch {
 	case r.Namespace == WorkloadNamespace, r.Namespace == PublicNamespace:
 		if workload != "" && workload != r.ObjectName {
@@ -1087,7 +1129,7 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 			return resp, err
 		}
 	} else {
-		dep, class, err = m.store.FindClass(ctx, t.ID, workload, r.Namespace)
+		dep, class, err = m.store.FindClass(ctx, t.ID, workload, classNS)
 	}
 	if errors.Is(err, ErrAmbiguous) {
 		return resp, errf(409, "namespace_ambiguous", "%v", err)
@@ -1107,7 +1149,7 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	if err != nil {
 		return resp, errf(400, "bad_request", "%v", err)
 	}
-	if ttl == 0 && class.TTL != "" {
+	if ttl == 0 && class.TTL != "" && r.Namespace != PoolNamespace {
 		ttl, _ = time.ParseDuration(class.TTL)
 	}
 	l := m.tenantLock(t.ID)
@@ -1183,9 +1225,32 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	if ttl > 0 {
 		detail["ttl"] = ttl.String()
 	}
+	if r.Namespace == PoolNamespace {
+		detail["pool"] = classNS
+	}
+	pool := m.usablePool(ctx, r, o, class)
+	if pool != nil {
+		o.Status, o.NodeID, o.StableNodeID = StatusAssigned, pool.NodeID, pool.StableNodeID
+		detail["fromPool"], detail["stableNodeID"] = pool.ID, pool.StableNodeID
+	}
 	// The create/spawn record commits in the same transaction as the insert (H22).
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, ObjectID: o.ID, Kind: kind, TraceID: r.TraceID, ActingFor: r.ActingFor}, detail)
-	if err := m.store.CreateObjectChecked(actx, o, t.MaxObjects, spawnLimit); errors.Is(err, ErrQuota) {
+	var err2 error
+	var ti *auditIntent
+	if pool != nil {
+		// …and so does the pool node's transfer record.
+		actx, ti = m.intend(actx, AuditRecord{TenantID: t.ID, ObjectID: pool.ID, Kind: "transfer", TraceID: r.TraceID},
+			map[string]any{"to": o.ID, "stableNodeID": pool.StableNodeID, "class": r.Namespace, "name": r.ObjectName})
+		err2 = m.store.(poolStore).TransferPool(actx, o, pool.ID, pool.StableNodeID, t.MaxObjects, spawnLimit)
+		if errors.Is(err2, ErrPoolGone) {
+			// Another create took this pool node first: mint as usual.
+			r.PoolObjectID = ""
+			return m.CreateObject(ctx, r)
+		}
+	} else {
+		err2 = m.store.CreateObjectChecked(actx, o, t.MaxObjects, spawnLimit)
+	}
+	if err := err2; errors.Is(err, ErrQuota) {
 		// The fast-path CountLive saw room, but concurrent creates (possibly
 		// through other replicas) filled the quota first (H16).
 		return resp, errf(429, "object_quota_exceeded", "tenant %s has reached its maxObjects (%d)", t.ID, t.MaxObjects)
@@ -1214,8 +1279,53 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		return resp, err
 	}
 	m.recordIntent(ctx, ai, nil)
+	if pool != nil {
+		m.recordIntent(ctx, ti, nil)
+		m.log.Info("pool node assigned", "object", o.ID, "pool", pool.ID, "stableNodeID", pool.StableNodeID)
+		return CreateObjectResponse{ObjectID: o.ID, Status: StatusAssigned, Tags: o.Tags, Hostname: o.Hostname, Created: true}, nil
+	}
 	m.enqueue(t.ID, o.ID)
 	return CreateObjectResponse{ObjectID: o.ID, Status: StatusPending, Tags: o.Tags, Hostname: o.Hostname, Created: true}, nil
+}
+
+var errWrongNode = errors.New("ready on another node than the assigned one")
+
+// poolStore is implemented by stores that can transfer pool nodes.
+type poolStore interface {
+	TransferPool(ctx context.Context, o Object, poolID, stableID string, maxObjects, maxLive int) error
+}
+
+// usablePool returns the pool node r offers for o if every condition of
+// ADR-031 variant B holds, else nil (the object is then minted as usual).
+func (m *Mgmt) usablePool(ctx context.Context, r CreateObjectRequest, o Object, class ClassConfig) *Object {
+	// Never for a reserved namespace (_pool, _workload, the public node's).
+	if r.PoolObjectID == "" || strings.HasPrefix(r.Namespace, "_") || r.Namespace == PublicNamespace || o.Ephemeral {
+		return nil
+	}
+	if _, ok := m.store.(poolStore); !ok {
+		return nil
+	}
+	p, err := m.store.GetObject(ctx, r.PoolObjectID)
+	why := ""
+	switch {
+	case err != nil:
+		why = "not found"
+	case p.TenantID != o.TenantID || p.Workload != o.Workload || p.Namespace != PoolNamespace:
+		why = "another tenant's, workload's or namespace's"
+	case !strings.HasPrefix(p.Name, r.Namespace+"/"):
+		why = "for another class"
+	case p.Status != StatusReady || p.StableNodeID == "":
+		why = "not a ready node (" + p.Status + ")"
+	case p.Ephemeral:
+		why = "ephemeral"
+	case !slices.Equal(canonTags(p.Tags), canonTags(class.Tags)) || !slices.Equal(canonTags(o.Tags), canonTags(class.Tags)):
+		why = "tags differ from the class's"
+	}
+	if why != "" {
+		m.log.Warn("pool node not used", "pool", r.PoolObjectID, "object", o.ID, "why", why)
+		return nil
+	}
+	return &p
 }
 
 // findWorkloadClass finds the latest deployment of the workload named name
@@ -1492,12 +1602,15 @@ const MintClaimTTL = 60 * time.Second
 // mintOne mints one single-use, preauthorized, ≤5-min key tagged with the
 // object's tags, and puts it in custody. The key is never logged.
 func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (created bool, err error) {
+	sp := mintSpans{start: time.Now()}
 	o, err := m.store.GetObject(ctx, id)
 	if err != nil || o.Status != StatusPending {
 		return false, nil // gone, killed or already minted
 	}
 	// Claim the mint (H02): only one replica calls CreateKey for an object.
 	now := m.now()
+	sp.queued = now.Sub(time.UnixMilli(o.CreatedAt)) // create → this attempt (store clock; both sides ms)
+	sp.mark(&sp.load)
 	if ok, err := m.store.ClaimMint(ctx, id, m.replicaID, now, now.Add(-MintClaimTTL)); err != nil {
 		return false, err
 	} else if !ok {
@@ -1508,31 +1621,42 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 	// the others. Correctness does not rest on the TTL: keyed custody and
 	// the KeyID check below make a late duplicate undo only its own key.
 	defer m.store.ReleaseMint(context.WithoutCancel(ctx), id, m.replicaID)
+	sp.mark(&sp.claim)
+	// Fast path: a pooled key (already minted, and its throttle token
+	// already spent by the refill).
+	if handled, err := m.adoptWarmKey(ctx, t, o, &sp); handled {
+		return false, err
+	}
 	// Only now take a registration token (the claim says this replica will
 	// mint), then refresh the claim: the wait may have been long.
 	if th != nil {
 		if err := th.Wait(ctx); err != nil {
 			return false, err
 		}
+		sp.mark(&sp.throttle)
 		now := m.now()
 		if ok, err := m.store.ClaimMint(ctx, id, m.replicaID, now, now.Add(-MintClaimTTL)); err != nil || !ok {
 			return false, err // lost it meanwhile (killed, minted, or the claim went stale)
 		}
+		sp.mark(&sp.reclaim)
 	}
 	api, err := m.broker.API(ctx, t, purposeMint)
 	if err != nil {
 		return false, err
 	}
+	sp.mark(&sp.broker)
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: o.Tags, Ephemeral: o.Ephemeral, Preauthorized: true,
 		ExpirySeconds: int(KeyExpiry / time.Second), Description: "twd " + o.ID})
 	if err != nil {
 		return false, err
 	}
+	sp.mark(&sp.createKey)
 	own := custodyKeyName(o, k.ID)
 	if err := m.custody.Put(ctx, own, []byte(k.Secret)); err != nil {
 		api.DeleteKey(ctx, k.ID)
 		return true, err
 	}
+	sp.mark(&sp.custody)
 	exp := m.now().Add(KeyExpiry - 15*time.Second).UnixMilli() // released only with ≥15 s of life left
 	killed := false
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, ObjectID: id, Kind: "mint"}, map[string]any{"keyID": k.ID, "tags": o.Tags,
@@ -1553,8 +1677,10 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 		m.custody.Delete(ctx, own)
 		return true, err
 	}
+	sp.mark(&sp.commit)
 	m.recordIntent(ctx, ai, nil) // committed with the mint (H22)
 	m.notify(id)
+	m.log.Info("mint spans", append([]any{"object", id, "tenant", t.ID, "keyID", k.ID}, sp.attrs()...)...)
 	return true, nil
 }
 
@@ -1596,6 +1722,7 @@ func (c Credential) String() string { return "mgmt.Credential{[REDACTED]}" }
 // name themselves) fences on the epoch alone. It waits up to wait for a
 // pending mint.
 func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, wait time.Duration) (Credential, error) {
+	called := time.Now()
 	deadline := m.now().Add(wait)
 	for {
 		ch := m.changed(id)
@@ -1610,6 +1737,10 @@ func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, w
 			return Credential{}, errf(502, "bootstrap_failed", "minting a key for %s failed", id)
 		case StatusReady:
 			return Credential{}, errf(409, "already_joined", "object %s already joined; rejoin from saved node state", id)
+		case StatusAssigned:
+			return Credential{}, errf(409, "already_joined", "object %s was assigned a pre-joined node (%s); it needs no key", id, o.StableNodeID)
+		case StatusTransferred:
+			return Credential{}, errf(410, "killed", "pool node %s was transferred (%s)", id, o.KillReason)
 		case StatusMinted:
 			if m.now().UnixMilli() >= o.KeyExpires {
 				// Expired unused key: revoke it and mint again.
@@ -1645,6 +1776,8 @@ func (m *Mgmt) Credential(ctx context.Context, id, hostID string, epoch int64, w
 			}
 			t, _ := m.store.GetTenant(ctx, o.TenantID)
 			m.recordIntent(ctx, ai, nil)
+			m.log.Info("credential released", "object", id, "host", hostID, "keyID", o.KeyID,
+				"waited_ms", time.Since(called).Milliseconds(), "since_create_ms", m.now().UnixMilli()-o.CreatedAt)
 			return Credential{AuthKey: string(secret), ExpiresAt: o.KeyExpires, Tags: o.Tags, Hostname: o.Hostname,
 				Ephemeral: o.Ephemeral, ControlURL: t.ControlURL}, nil
 		}
@@ -1686,7 +1819,7 @@ func (m *Mgmt) Ready(ctx context.Context, id, hostID string, r ReadyRequest) (Ob
 	if r.Epoch > 0 {
 		fence = &Fence{Lease: o.Lease, Holder: hostID, Epoch: r.Epoch}
 	}
-	wasKilled := false
+	wasKilled, wrongNode, assignedTo := false, false, ""
 	// The ready record commits with the status change (H22); the node
 	// certificate outcome is added below.
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: o.TenantID, ObjectID: id, Kind: "ready"},
@@ -1703,9 +1836,17 @@ func (m *Mgmt) Ready(ctx context.Context, id, hostID string, r ReadyRequest) (Ob
 			}
 			return nil
 		}
+		if o.Status == StatusAssigned && r.StableNodeID != o.StableNodeID {
+			// An assigned object may only become ready on the node it was given.
+			wrongNode, assignedTo = true, o.StableNodeID
+			return errWrongNode
+		}
 		o.Status, o.NodeID, o.StableNodeID, o.MagicDNS, o.UpdatedAt = StatusReady, r.NodeID, r.StableNodeID, r.MagicDNS, m.now().UnixMilli()
 		return nil
 	})
+	if wrongNode {
+		return o, errf(409, "identity_conflict", "object %s was assigned node %s, not %s", id, assignedTo, r.StableNodeID)
+	}
 	if err != nil {
 		return o, err
 	}
@@ -2190,6 +2331,8 @@ func (m *Mgmt) PendingDeletes() int {
 // PurgeResult is POST /v0/tenants/{id}/purge.
 type PurgeResult struct {
 	Purged []string `json:"purged"`
+	// WarmKeysRevoked counts the tenant's unused pooled keys revoked by the purge.
+	WarmKeysRevoked int `json:"warmKeysRevoked,omitempty"`
 }
 
 // Purge forgets a tenant's killed and failed objects (twd down --purge):
@@ -2211,6 +2354,13 @@ func (m *Mgmt) Purge(ctx context.Context, tenantID string, statuses ...string) (
 	dead, err := m.store.DeleteDeadObjects(ctx, tenantID, statuses)
 	if err != nil {
 		return res, err
+	}
+	// A purge leaves nothing behind: the tenant's unused pooled keys are
+	// revoked too (the pool refills on the next create or deploy).
+	if n, err := m.drainWarm(ctx, tenantID); err != nil {
+		m.log.Warn("purge: warm keys", "tenant", tenantID, "err", err)
+	} else if n > 0 {
+		res.WarmKeysRevoked = n
 	}
 	for _, o := range dead {
 		res.Purged = append(res.Purged, o.ID)
@@ -2291,7 +2441,7 @@ func (m *Mgmt) deleteDevice(ctx context.Context, o Object) error {
 // Reap kills (cascade) every live object past its TTL and every live
 // sub-agent whose parent is dead. It returns how many it killed.
 func (m *Mgmt) Reap(ctx context.Context) (int, error) {
-	live, err := m.store.ListObjects(ctx, ObjectFilter{Status: []string{StatusPending, StatusMinted, StatusReady}})
+	live, err := m.store.ListObjects(ctx, ObjectFilter{Status: LiveStatuses})
 	if err != nil {
 		return 0, err
 	}

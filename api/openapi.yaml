@@ -325,8 +325,8 @@ paths:
           explode: true
           schema:
             type: array
-            items: { type: string, enum: [killed, failed] }
-            default: [killed, failed]
+            items: { type: string, enum: [killed, failed, transferred] }
+            default: [killed, failed, transferred]
       responses:
         "200":
           description: Purged.
@@ -910,6 +910,11 @@ paths:
         - The mint is queued behind the tenant throttle
           (`registrationsPerMinute`) and quota (`maxObjects`;
           `429 object_quota_exceeded`).
+        - `namespace: "_pool"` creates a pre-joined pool node for the class in
+          `objectName` (`<Class>/<suffix>`; ADR-031): minted, released and
+          made ready like any object, but serving nothing until a create
+          names it in `poolObjectID`. Then that create answers
+          `status: assigned` and mints nothing.
         Spawn checks are unchanged from v0.
       x-twd-role: host
       x-twd-audit: true
@@ -1111,7 +1116,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/LeaseLost" }
+        "409": { $ref: "#/components/responses/ReadyConflict" }
         "410": { $ref: "#/components/responses/Gone" }
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         default: { $ref: "#/components/responses/Error" }
@@ -1813,6 +1818,13 @@ components:
                 message: "dep_01j… was superseded by dep_01k…; undeploy the latest deployment"
                 doc_url: https://twd.dev/errors/superseded
                 trace_id: 7f3a…
+    ReadyConflict:
+      description: "`lease_lost` (the caller does not hold the namespace lease at this epoch) or `identity_conflict` (an `assigned` object reported ready on another node than the pool node it was given)."
+      headers:
+        Twd-Error: { schema: { type: string, enum: [lease_lost, identity_conflict] } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     LeaseLost:
       description: The caller does not hold the namespace lease at this epoch.
       headers:
@@ -2212,6 +2224,7 @@ components:
       required: [purged]
       properties:
         purged: { type: array, items: { type: string }, description: Object IDs forgotten. }
+        warmKeysRevoked: { type: integer, description: "The tenant's unused pooled keys revoked with the purge." }
     WIFCheckResult:
       type: object
       required: [mintMode, mint, lifecycle, policyRead, issuer]
@@ -2449,8 +2462,12 @@ components:
     # ------------------------------------------------------------- objects
     ObjectStatus:
       type: string
-      description: "`pending` → `minted` → `ready`; terminal: `killed` (tombstone, `410`), `failed`."
-      enum: [pending, minted, ready, killed, failed]
+      description: |
+        `pending` → `minted` → `ready`; or, for an object given a pre-joined
+        pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+        (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+        `transferred` (a `_pool` node whose node went to an object).
+      enum: [pending, minted, assigned, ready, killed, failed, transferred]
     ObjectRef:
       type: object
       required: [objectID]
@@ -2498,9 +2515,18 @@ components:
       properties:
         tenantID: { type: string }
         workload: { type: string, description: Always sent by hostd; see resolution rules in `CreateObject`. }
-        namespace: { type: string, description: "DO class name, or `_workload`." }
+        namespace: { type: string, description: "DO class name, `_workload`, or `_pool` (a pre-joined pool node; then `objectName` is `<Class>/<suffix>` and `workload` is required)." }
         objectName: { type: string }
         parent: { $ref: "#/components/schemas/ObjectRef" }
+        poolObjectID:
+          type: string
+          description: |
+            A ready `_pool` node of this tenant, workload and class with exactly
+            the class's tags, offered for a new, non-ephemeral object. If every
+            condition holds, the object is created `assigned` to that node (no
+            mint) and the pool node becomes `transferred`, in one transaction;
+            the host renames the node and sends `ready` with the same
+            `stableNodeID`. Otherwise it is ignored and the object is minted.
         caps: { $ref: "#/components/schemas/Caps" }
         ttl:
           description: "`10m`-style duration or seconds. Defaults to the class `ttl`."
@@ -2602,7 +2628,8 @@ components:
         `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`,
         `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`,
         `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
-        `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`.
+        `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
+        `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
         Public ingress (ADR-029), host chain: `public_request` (one per public
         request), `public_rejected` (per-minute summary of requests the limits
         refused), `public_object_created` (a name admitted for a public create);
@@ -2636,6 +2663,8 @@ components:
         - credential
         - obo_root
         - object_update
+        - transfer
+        - revoke
         - public_request
         - public_rejected
         - public_object_created

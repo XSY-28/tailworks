@@ -5,7 +5,7 @@ TS_CREDS  ?= $(HOME)/.config/tailnet-agents-design
 TAILNET1  ?= tail7906d5.ts.net
 WORKERD   := node_modules/.bin/workerd
 
-.PHONY: all build deps js-build api api-lint api-check test test-go test-js test-sdk test-pg e2e-local e2e-real e2e-mac e2e-multi e2e-keyless e2e-oauth e2e-public e2e-mbp e2e-linux e2e-vm guest-image release lint hooks clean gen-js test-node vm-assets e2e-linux-vm e2e-linux-reboot
+.PHONY: e2e-coldid e2e-coldid-real all build deps js-build api api-lint api-check test test-go test-js test-sdk test-pg e2e-local e2e-real e2e-mac e2e-multi e2e-keyless e2e-oauth e2e-public e2e-mbp e2e-linux e2e-vm guest-image release lint hooks clean gen-js test-node vm-assets e2e-linux-vm e2e-linux-reboot
 
 all: build
 
@@ -55,6 +55,18 @@ e2e-real: deps
 		echo "e2e-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ereal -count=1 -v -timeout 15m ./e2e/real/...
+
+## e2e-coldid: cold-identity breakdown (create → own node reachable, per stage), hermetic.
+## TWD_COLDID_N objects; TWD_COLDID_DIAL=ready makes the caller wait for "ready". Results: e2e/coldid/results/.
+e2e-coldid:
+	$(GO) test -tags e2e -count=1 -v -timeout 15m -run TestColdIdentityLocal ./e2e/coldid/
+
+## e2e-coldid-real: the same on tailnet 1 (production control; ttest-fi-* nodes, deleted by ID afterwards).
+e2e-coldid-real:
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-coldid-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestColdIdentityReal ./e2e/coldid/
 
 ## guest-image: the microVM guest rootfs (Linux only; reproducible): workerd + twd-guestd.
 GUEST_OUT ?= guest/out

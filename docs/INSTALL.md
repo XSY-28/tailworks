@@ -456,6 +456,25 @@ twd down --purge           # kill every object and delete its devices, then stop
   `@twd/node`'s `fetch`.
 - Logs: `twd logs --component mgmt|hostd|supervisor` (on the host).
 
+## Tuning: how fast a new object's own node comes up
+
+A new Durable Object answers through its workload in milliseconds. Its
+**own** tailnet node (its MagicDNS name, tags and grants) normally needs a
+key minted, a registration at the coordination server and a first network
+check. `twd up` keeps that off the critical path with three settings. The
+defaults are on, and each `twd up` stores them for the service:
+
+| flag | default | what it does | what it costs |
+|---|---|---|---|
+| `--warm-keys N` | 5 | keeps up to N pre-minted, single-use keys per tag set, so a new object skips the key-API call (145 ms normally, seconds when the API is slow) | unused keys sit in twd's custody for up to 30 min; `twd down --purge` revokes them |
+| `--pool-nodes N` | 1 | keeps N pre-joined nodes per class that had a new object on this host in the last hour; the next new object of that class is renamed onto one (~0.2 s) instead of joining a new node (1.5 s typical, 4–6 s when control is slow) | each pool node is a device on your tailnet (listed under `_pool` in `twd ls`); idle ones are deleted after an hour without new objects |
+| `--port-mapping` | off | asks your router for port mappings (UPnP / NAT-PMP / PCP) for twd's nodes | off saves ~250 ms on every new node and keeps twd's nodes from each asking the router for a mapping; turn it on only if this host is behind a NAT that needs router-assisted direct connections (otherwise traffic goes direct or over DERP as usual) |
+
+Measured on a production tailnet, with all three at their defaults: a new
+object's first request on its own node arrives **~0.23 s** after it is
+created (p95 ~0.3 s), down from ~7 s. Details: STATUS.md, "Fast identity".
+`--warm-keys 0 --pool-nodes 0` turns both pools off.
+
 ## Linux
 
 The same flow on a Linux host: one tarball per architecture, `install.sh`
