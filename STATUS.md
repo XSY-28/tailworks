@@ -11,7 +11,7 @@ Last update: 2026-11-08 01:40 PT. M7 (E2E-MULTI: one host, tenant A on tailnet 1
 Last update: 2026-11-08 08:30 PT. L3: `make e2e-linux-reboot` PASS (clean reboot + power cut). Earlier, 08:15 PT, L3 (production-shaped microVM tier on Linux) on branch `l3-microvm`: `make e2e-vm` PASS (13 subtests), `make e2e-linux-vm` PASS from the installed release on fresh `twdl-kvm-u24`.
 Last update: 2026-11-08 10:00 PT. Integration (Linux): L3 + L1 merged onto master (L2) on `int-linux`; redeploy-after-purge and lease_lost-retry fixes; full matrix green (macOS, real tailnets, twd-dev, Debian 12 / Ubuntu 24.04 arm64 with reboot + ephemeral / Ubuntu 24.04 amd64, e2e-linux-vm, e2e-linux-reboot); re-find delay diagnosed (WireGuard stale-session timeout, not DERP/netmap).
 Last update: 2026-11-08 09:05 PT. L1: ephemeral nodes now re-mint on a rejected rejoin (netd + mgmt `/remint` + hostd); reboot survival and the ephemeral restart measured on Ubuntu 24.04 arm64; 5/5 supported distros PASS.
-Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown; Phase 2 warm pool, `Boot()` p50 602 → 58 ms, deploy → active 746 → 193 ms (see the FV section at the end).
+Last update: 2026-11-13 PT. FV (fast microVM start) on branch `fast-vm`: Phase 1 boot breakdown; Phase 2 warm pool (on by default), `Boot()` p50 602 → 58 ms, deploy → active 746 → 193 ms; Phase 3 snapshot restore behind `-vm-snapshot` (off by default), restore → ready p50 100 ms on demand, 28 ms from a restore-filled pool; ADR-030 draft (design repo, uncommitted) awaits Ross's decision. `make test`, `make lint`, `make e2e-vm`, `make e2e-linux-vm` PASS (see the FV section at the end).
 Last update: 2026-11-08 02:05 PT. Integration: master (M6 + M5 + M9, `57dd519`) merged into `m7-multi`; the full matrix passes on `4cce30d` (macOS, real tailnets, mbp from the release, Lima).
 
 ## M0: repo skeleton (DONE)
@@ -1575,4 +1575,103 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
    - The pool counts every live VM at its **full** size against the reservation instead of trusting free pages. The cold path and the helper still don't; that's a follow-up: a per-backend or per-helper accounting of all VMs.
 2. **The workerd clock is frozen during execution**, so a `Date.now()` busy loop never ends. The heavy-top-level benchmark uses an iteration count.
 3. A pool VM's console log holds only the warm-up's output until the claim; after the claim, the workload's output follows in the same file.
+
+### Phase 3: snapshot restore (built; behind `-vm-snapshot`, **default off**)
+**Design** (`hostd/vm/snapshot_linux.go`, `helper/uffd_linux.go`; helper ops `snapshot-base` and `start` with `Restore`):
+- **Base snapshot.** With `Snapshot` on, hostd boots one pool VM at startup: kernel, guestd, the no-tenant warm-up run and exited, app dir empty, waiting for its load. hostd checks that `fsscan` shows no state files and nothing that looks like tailscale state.
+  - Then the helper, on a separate *holder* connection, pauses that VM, takes a Full snapshot, and moves the state (11 KB) and memory (512 MiB) files plus the config drive (8 KB) into `StateDir/snapshots/<id>/` (root, 0600).
+  - It then **kills the VM**, so the base's original never resumes.
+  - The base lives as long as the holder connection: hostd exit or `Close` removes it, and the helper's startup cleanup removes stale ones.
+  - Building it took 0.9–1.0 s (boot 0.56 s, snapshot 0.32 s, non-zero page map 0.1 s).
+- **Restore** is a fresh jail, netns and VMM with the same relative paths (`/rootfs.ext4`, `/config.tar`, `/volslot`, `fc0`, `/v.sock`), so the v1.17 `network_overrides` / `vsock_override` aren't needed. Then `PUT /snapshot/load` with `mem_backend: Uffd`.
+  - v1.17's `huge_pages: 2M` *requires* Uffd (`snapshot-support.md`).
+  - **The helper serves the guest memory**: it receives the userfaultfd and region map (`base_host_virt_addr`, `size`, `offset`, `page_size`, as in v1.17's `examples/uffd/uffd_utils.rs`), maps the base memory file read-only, and answers each fault with `UFFDIO_COPY` of the whole 2 MiB page.
+  - **Firecracker never maps the memory file**, and every restored VM gets private copies of the pages it touches, so no guest physical page is shared between VMs.
+- **Prefetch.** On the uffd handshake, a second goroutine copies every page that is non-zero *in the base*. The page map is computed once per base and never depends on what a tenant touched. Faults still win races (EEXIST).
+  - Effect: on-demand faults per restore fell from ~58 (no prefetch) to 4–9; the prefetch takes ~13 ms in the background, and the restore itself dropped from 39.8 to 27.8 ms p50.
+- **After the restore**, guestd's vsock connection was reset by the snapshot; it reconnects (1 ms backoff), says `pooled`, and is **claimed exactly like a pool VM**. Its `load` brings the entropy, boot_id and wall clock, and is stamped right before it is sent (it used to be stamped at claim start: 86 ms stale, found by the test, fixed).
+- **Where restores are used:**
+  - with the pool on, **refills restore and then re-warm** the copy (`rewarm` re-runs the warm-up from the still-attached config drive), in the background;
+  - with the pool empty or off, `Boot()` restores on demand.
+  - Restore failure → cold boot.
+
+**Uniqueness, tested (`TestSnapshotUniqueness`, 3 copies restored concurrently from one base):**
+
+| Property | Before `load` (recorded) | After `load` (asserted) |
+|---|---|---|
+| **Entropy.** No VMGenID: Firecracker always offers it, but this aarch64 6.1 guest kernel has no DeviceTree driver (needs ≥ 6.10, `random-for-clones.md`), so twd reseeds itself: 64 host bytes → `RNDADDENTROPY` + `RNDRESEEDCRNG` before workerd starts | first `getrandom` differed between copies in this run (early-boot reseeding plus interrupt entropy). That is luck, not a guarantee | kernel `getrandom` and `/proc/sys/kernel/random/uuid` differ between all copies |
+| workerd's randomness (`crypto.getRandomValues`, `randomUUID`, `Math.random`) | (no workerd in the base: the tenant's is a new process started after the reseed) | all differ between copies |
+| **boot_id** (identical in every copy otherwise) | differed (generated lazily on first read) | the injected one, bind-mounted, different per copy |
+| **Clocks** | wall clock lags the host by the base's age (0.70 s here); **monotonic doesn't jump** (resumes from snapshot time: 534 ms) | guest wall clock within **2–4 ms** of the host (incl. the ident round trip); workerd `Date.now()` within 1 s (asserted); TLS and egress MACs see real time |
+| **Network / vsock identity** | every copy has the same guest IP, MAC and vsock CID 3 by design, each in its own netns, TAP and jail; Firecracker's vsock is a per-VMM unix socket, not a host-global CID | each copy's egress reaches only *its own* gateway handler; each Machine's control channel answers with that copy's injected boot_id |
+| What guest init caches | guestd's start time (uptime accounting only); the Go runtime's seeds (map order; guestd uses no math/rand); the kernel's early-boot secrets (KASLR slide, `net_secret`, siphash keys) | the kernel secrets **stay identical across copies**: listed in the ADR as residual risk (d) |
+
+**Key safety, tested:**
+- `TestE2EVMSnapshot` is the whole e2e-vm suite with snapshots on and the pool off, so **every** workload VM (first deploys, redeploys, crash restarts) is an on-demand restore.
+- Its `NoKeysInGuest` scans the **restored** probe VM: 30 needles (tskey-, the test auth key, all node and machine private keys, the volume key as raw, hex and base64). None in its 3 disks, its guest files (fsscan) or a **full 512 MiB RAM dump**; the MAC-key positive control is present.
+- It also scans **the base snapshot's three files** (state 11 KB, memory 512 MiB, config drive 8 KB) for the same needles **plus the probe instance's MAC key**: none present.
+- The rest of the suite passes on restored VMs too: egress attribution 3/3, forged headers, ADR-019 refusals, volume double-mount refused, storage across a VMM SIGKILL and a redeploy, the jail checks.
+
+**Tests:** `TestSnapshotRestore` (restore → claim → serve, egress, volume, second load refused), `TestSnapshotPool`, `TestSnapshotUniqueness`, `TestE2EVMSnapshot`, all in `make e2e-vm`.
+
+**Numbers** (nested virt; smoke worker, no volume unless noted; `TWD_VM_BENCH=20`):
+
+| | p50 ms | p95 ms |
+|---|---|---|
+| **On-demand restore → workerd ready** (`Boot()`; 19 restores) | **100.5** | **125.3** |
+| of which: the restore (netns 6.1, jailer 10.4, `/snapshot/load` 3.5, guest resume + vsock reconnect 9.9, …) | 37.5 | 61.2 |
+| of which: inject + workerd (the restored guest's *first* workerd: listen 27.9, first response 29.3) | ~63 | — |
+| **Pool refilled by restore + re-warm: claim → ready** (`Boot()`; 20 claims) | **28.1** | **33.8** |
+| refill cost per VM (restore + rewarm, background) | 105.4 | 125.4 |
+| Real `hello` bundle through hostd, on-demand restore, existing volume (20 redeploys): `Boot()` | 125.2 | 146.4 |
+| same: deploy → active | 272.7 | 293.3 |
+| for comparison: cold boot `Boot()` / boot-filled pool claim (`hello`, volume) | 601.6 / 58.2 | 799.8 / 64.4 |
+
+- **The restored VM's first workerd is slower than a pool VM's** (listen 28 vs 10 ms; first response 29 vs 22 ms), even though uffd faults are prefetched.
+  - A **second** workerd in the same restored VM takes 7.8 + 4.8 ms, i.e. pool speed. So it's first-touch inside the restored VM, most likely KVM's stage-2 tables, which start empty after a restore. Each first guest access to a 2 MiB region exits to the host, and that is costly under nested virt.
+  - That's why refills re-warm, and why the on-demand number is ~3.5× the pool's.
+  - **On bare-metal KVM this cost should be far smaller, but it's not measured (no bare-metal machine was available).**
+- **Memory:** a restored VM holds the ~53 × 2 MiB pages (≈106 MiB) the base had touched, as **private** copies. Guest RAM is still reserved per VM at its full size (huge pages).
+
+**Why it's off:** cross-tenant memory sharing and cloned kernel state are a security decision. Draft **ADR-030** (number provisional) is in the design repo's `DECISIONS.md`, **uncommitted**. It recommends one shared base per host with private pages only, **never** sharing guest pages across tenants (no File backend, no KSM), and base rotation. Ross decides; the flag stays off until then.
+
+### FV: Definition-of-done runs (2026-11-13, on `fast-vm`)
+| Run | Result |
+|---|---|
+| `make test` (macOS) | **PASS** |
+| `make test` (Lima twd-dev, Linux arm64) | **PASS** |
+| `make lint` (macOS; incl. `GOOS=linux` vet of `hostd/vm`, `guest`, `e2e/vm`; check-secrets) | **PASS** |
+| `make e2e-vm` (twd-dev): TestPoolClaim, TestPoolNoCarryOver, TestPoolBudget, TestSnapshotRestore, TestSnapshotPool, TestSnapshotUniqueness, TestSmoke, TestVolume, TestE2EVM 14/14, TestE2EVMSnapshot 14/14 | **PASS** (several runs; results `e2e/vm/results/l3-*.json`, `fv-snapshot-*.json`) |
+| `make e2e-linux-vm` (fresh `twdl-kvm-u24`, installed release, systemd `twd-vmhelper` with protocol v2, tailnet 1, `ttest-l3-<run>`) | run `28c309`: **FAIL**, cleanup only (below; every functional check passed). Run `97a876` after the harness fix: **PASS** (`e2e/real/results/l3-linuxvm-20261113-213301-97a876.json`) |
+| `make test-pg` | **skipped**: mgmt not touched |
+| `make e2e-linux-reboot` | **not run** (not in this task's done list). Its cleanup got the same infra-node fix, untested |
+
+- **e2e-linux-vm through the real pool.** In both runs the agent and MCP VMs were **claimed pool VMs** through the installed systemd helper (`Info.Ready == Info.Total`, the claim signature).
+  - First-deploy `Boot()` was 412–540 ms: new volumes (LUKS format: 106–134 ms), two concurrent claims while the pool refilled, on a fresh 6-CPU nested VM.
+  - No keys in either guest: 30 and 32 needles; none in the rootfs, config drive, 76 / 51 guest files or 512 MiB of RAM.
+  - Storage survived the VMM SIGKILL (849 ms to serving) and the redeploy.
+- **Found on the way: a pre-existing harness gap** (since M11's tsnet-only transport). `twd down` keeps mgmt's node and the host's `tag:twd-host` node by design; e2e-mac deletes them by ID (`InfraNodeIDs`), but `e2e/linuxvm` did not.
+  - Run `28c309` therefore left `twd-l3-28c309-mgmt` (reported as untracked) and `twd-host-twd-l3-28c309` (not even reported: its name has a different prefix) on tailnet 1.
+  - **Both were deleted by ID by hand and verified gone** (0 devices with the run's prefixes); the run's keys had been revoked by the harness.
+  - Fixed in `e2e/linuxvm` (both tests) like e2e-mac, which also reports untracked `twd-host-<prefix>` devices. Run `97a876`: 9 devices tracked and deleted, 0 left, 0 untracked, 0 valid keys; verified independently afterwards: 0 devices with its prefixes.
+- **Also fixed:** the in-process helper (root tests, `make e2e-vm`) never removed its parent cgroup `twd-vmp<pid>`; `Server.Close` now removes it if empty.
+
+**Safety:**
+- **Tailnets:** no personal tailnet touched. Tailnet 1 only via `make e2e-linux-vm` (`ttest-l3-*` / `twd-l3-*` / `twd-host-twd-l3-*`), cleaned as above. No policy read or written. No `tskey-` logged or committed (pre-commit hook + check-secrets passed).
+- **Lima VMs:** `twdl-kvm-u24` was started by the harness and stopped by it (not deleted). `twd-dev` was already running and was left running. The base images in `~/fc` are untouched; work happened in a copy of the repo at `twd-dev:~/twd-fastvm`.
+- **sudo, inside Lima only:**
+  - via `make e2e-vm`'s own `sudo env …` and `twd host setup --microvm` inside `twdl-kvm-u24`;
+  - **deviation:** bench and test binaries were also run with the same `sudo env … bin/vmsmoke.test` invocation as the Makefile recipe, but directly rather than through `make`;
+  - **deviation:** once, `sudo rmdir` on 30 empty cgroup dirs `twd-vmp<pid>` left by this work's own test processes (pids ≥ 282431). That is outside "only via host setup or the documented helper"; it removed nothing that wasn't empty and this work's own.
+- **Left alone:** the 5-day-old Firecracker VM `twdp59144-0` (not mine; holds 256 huge pages in twd-dev), and 16 empty `twd-vmp<pid>` cgroups from earlier sessions.
+
+### Known gaps (FV)
+- **No bare-metal numbers**: every number is nested virt.
+- **Serial redeploys** still release the old VM's volume before the new VM attaches it: 85–100 ms of deploy → active. That needs a hot volume handover (L3 gap).
+- **Huge-page accounting outside the pool.** The cold path and the helper's `auto` mode still decide on available pages at boot time only, while Firecracker reserves nothing (Phase 2 finding 1). Per-helper accounting of all VMs is a follow-up.
+- **Base rotation** isn't built; the base lives as long as hostd.
+- **One base per hostd and VM shape.** A different `-vm-mem-mib` / `-vm-vcpus` needs its own base (not built: one shape per backend today).
+- **VMGenID:** not used, since the guest kernel would need ≥ 6.10 (or a backport). The explicit reseed covers it; a newer guest kernel would close the race window *before* the load too.
+- **Cloned guest-kernel secrets** across restored copies (KASLR slide, `net_secret`, early siphash keys) are by design of snapshots. See ADR-030 (d).
+- **One VM per object** (RFC §4.8 `isolation: "object"`) is not built (out of scope). The pool and restore make it affordable: a claim is 28–58 ms.
 

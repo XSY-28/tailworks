@@ -235,6 +235,9 @@ func (s *Server) Close() {
 	}
 	s.mu.Unlock()
 	s.wg.Wait()
+	if s.cgroup == "twd-vm"+s.cfg.Instance { // our own parent (not systemd's delegated subtree)
+		os.Remove(filepath.Join("/sys/fs/cgroup", s.cgroup)) // rmdir: only if empty
+	}
 }
 
 func peerUID(c *net.UnixConn) (int, error) {
