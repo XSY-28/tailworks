@@ -877,7 +877,7 @@ func (a *v1api) CreateObject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	resp, err := a.s.M.CreateObject(r.Context(), req)
+	resp, err := a.s.M.CreateObject(r.Context(), req.WithHost(hostOf(r)))
 	if err != nil {
 		var e *Error
 		if errors.As(err, &e) && e.Code == "killed" {

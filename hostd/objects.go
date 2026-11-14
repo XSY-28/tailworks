@@ -157,6 +157,7 @@ func (h *Host) ensure(ctx context.Context, w *workload, class, name string, pare
 		return nil, &apiError{Code: "bad_request", Detail: "class " + class + " is reserved"}
 	}
 	key := objKey(w.tenantID, w.name, class, name)
+	pubOK := false
 	for {
 		h.mu.Lock()
 		if o := h.byKey[key]; o != nil {
@@ -177,6 +178,15 @@ func (h *Host) ensure(ctx context.Context, w *workload, class, name string, pare
 			case <-ctx.Done():
 				return nil, &apiError{Code: "identity_pending", Detail: "object creation still in progress"}
 			}
+		}
+		if needsAdmission(class, parent) && !pubOK && !h.takeAdmissionLocked(key) {
+			h.mu.Unlock()
+			if !h.pubCreates.has(w.tenantID, w.name, class, name) {
+				return nil, &apiError{Code: "create_not_admitted", Detail: "object " + class + "/" + name + " does not exist and no request admitted its creation: " +
+					"a tailnet request reaches new objects through the env twd hands the handler (not a raw or cached binding), and a public request only through public.create"}
+			}
+			pubOK = true // a publicly created name (ADR-029 D5)
+			continue
 		}
 		c := &createCall{done: make(chan struct{})}
 		h.creating[key] = c
@@ -205,7 +215,7 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 		actingFor = parent.ActingFor // a sub-agent acts for its root's principal
 	}
 	req := mgmtapi.CreateObjectRequest{TenantID: w.tenantID, Workload: w.name, Namespace: mgmtapi.Namespace(w.name, class), ObjectName: name,
-		Caps: caps, TTL: ttl, Hostname: hn, ActingFor: actingFor}
+		Caps: caps, TTL: ttl, Hostname: hn, ActingFor: actingFor, Epoch: w.epochNow()}
 	if parent != nil {
 		req.Parent = &mgmtapi.ObjectRef{ObjectID: parent.ID}
 	}

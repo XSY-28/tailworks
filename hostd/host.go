@@ -168,13 +168,17 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
-	syncMu      sync.Mutex
-	syncNow     chan struct{}
-	pushSrv     *http.Server
-	pushSock    string
-	audit       *auditLog
-	public      map[string]*publicState // tenantID/workload (ADR-029)
-	pubCreates  *publicCreates
+	syncMu     sync.Mutex
+	syncNow    chan struct{}
+	pushSrv    *http.Server
+	pushSock   string
+	audit      *auditLog
+	public     map[string]*publicState // tenantID/workload (ADR-029)
+	pubCreates *publicCreates
+	// admits: objKey → expiry of a pending create admission (RT3-06/07):
+	// a tailnet request's ticket or an attested object admitted the name;
+	// ensure consumes it when it creates. See hostd/gen CreateTicket.
+	admits      map[string]time.Time
 	wg          sync.WaitGroup
 	runDirOwned bool
 	nowFn       func() time.Time // wall clock for cron triggers (tests)
@@ -238,6 +242,7 @@ func New(cfg Config) (*Host, error) {
 		return nil, err
 	}
 	h.pubCreates = newPublicCreates(h.publicCreatesPath())
+	h.admits = map[string]time.Time{}
 	os.Chmod(cfg.DataDir, 0o700)
 	if h.cfg.RunDir == "" {
 		d, err := os.MkdirTemp("/tmp", "twd-h-")

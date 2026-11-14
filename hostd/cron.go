@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/rosskukulinski/twd/hostd/gen"
 	"github.com/rosskukulinski/twd/internal/cron"
 	"github.com/rosskukulinski/twd/netd"
 )
@@ -202,9 +203,12 @@ func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at 
 	}
 	ctx, cancel = context.WithTimeout(ctx, timeout)
 	defer cancel()
+	trace := newTraceID()
 	blob, _ := json.Marshal(map[string]any{
-		"twd":     map[string]any{"kind": "scheduled", "cron": cronExpr, "scheduledTime": at.UnixMilli(), "workload": w.name},
-		"traceId": newTraceID(),
+		// The ticket lets scheduled() create objects through its guarded env.
+		"twd": map[string]any{"kind": "scheduled", "cron": cronExpr, "scheduledTime": at.UnixMilli(), "workload": w.name,
+			"ticket": gen.CreateTicket(inst.macKey(), trace, time.Now())},
+		"traceId": trace,
 	})
 	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_twd/scheduled", nil)
 	req.Header.Set(netd.HeaderCF, string(blob))

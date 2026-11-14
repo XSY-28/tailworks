@@ -2,6 +2,9 @@ package mgmt
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -350,7 +353,11 @@ func TestV1RoleMatrix(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &out)
 		return w.Code, out.Code
 	}
-	if c, _ := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", `{"capacityNodes":1,"tiers":["process"]}`); c != 201 {
+	matrixPub, _, _ := ed25519.GenerateKey(rand.Reader)
+	// Hosts register an audit key, as hostd does (RT3-05: audit ingest
+	// refuses hosts without one).
+	registerBody := `{"capacityNodes":1,"tiers":["process"],"auditPubKey":"` + base64.StdEncoding.EncodeToString(matrixPub) + `"}`
+	if c, _ := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", registerBody); c != 201 {
 		t.Fatalf("register host: %d", c)
 	}
 	roles, err := v1.OperationRoles()
@@ -364,7 +371,7 @@ func TestV1RoleMatrix(t *testing.T) {
 	for key, role := range roles {
 		// DELETE /v1/hosts/{id} (as admin) removes h1: re-register it so
 		// the host principal stays bound for every operation.
-		if c, _ := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", `{"capacityNodes":1,"tiers":["process"]}`); c/100 != 2 {
+		if c, _ := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", registerBody); c/100 != 2 {
 			t.Fatalf("re-register host: %d", c)
 		}
 		method, tmpl, _ := strings.Cut(key, " ")

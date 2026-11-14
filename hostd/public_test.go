@@ -220,6 +220,61 @@ func TestPublicIngress(t *testing.T) {
 		t.Fatalf("public spawn: %d %v (want public_create_denied)", code, r)
 	}
 
+	// 3b. RT3-06/07: bypassing the guarded env never creates. The raw
+	// binding (import { env } from "cloudflare:workers"), its RPC path, and
+	// a cached env from an earlier tailnet request all fail closed; the
+	// platform binding is not in the tenant's env; existing objects stay
+	// reachable through the raw binding (nothing to mint).
+	before = len(e.FM.Objects())
+	if code, h, r := pub("GET", "/raw/evil", nil); code != 403 || h.Get("twd-error") != "create_not_admitted" {
+		t.Fatalf("public -> raw binding room/evil: %d %q %v (want 403 create_not_admitted)", code, h.Get("twd-error"), r)
+	}
+	if code, _, r := pub("GET", "/rawrpc/evil2", nil); code != 299 || !strings.Contains(fmt.Sprint(r["error"]), "create_not_admitted") {
+		t.Fatalf("public -> raw binding RPC room/evil2: %d %v (want create_not_admitted)", code, r)
+	}
+	twdProbe := func(code int, r map[string]any, via string) {
+		t.Helper()
+		sp, _ := r["rawSpawn"].(map[string]any)
+		errm, _ := sp["error"].(map[string]any)
+		if code != 200 || r["handlerHas"] != false || sp["ok"] != false || errm["code"] != "create_not_admitted" {
+			t.Fatalf("__TWD (%s): %d %s (want: absent from the handler env; a raw spawn refused create_not_admitted)", via, code, js(r))
+		}
+	}
+	code, _, r = pub("GET", "/twd", nil)
+	twdProbe(code, r, "public")
+	tcode, tr = s.getJSON("http://" + wl.IP + "/twd")
+	twdProbe(tcode, tr, "tailnet")
+	if o, _ := e.Host.Object(e.TenantID, "pubprobe", "Room", "via-twd"); o.ID != "" {
+		t.Fatalf("room/via-twd was spawned through the raw platform binding: %+v", o)
+	}
+	// Even over the tailnet, a raw binding cannot create: creation goes
+	// through the handler's env (which admits with the request's ticket).
+	if code, r := s.getJSON("http://" + wl.IP + "/raw/evil3"); code != 403 || r["code"] != "create_not_admitted" {
+		t.Fatalf("tailnet -> raw binding room/evil3: %d %v (want 403 create_not_admitted)", code, r)
+	}
+	if code, r := s.getJSON("http://" + wl.IP + "/raw/alice"); code != 200 || r["object"] != "alice" {
+		t.Fatalf("tailnet -> raw binding, existing room/alice: %d %v", code, r)
+	}
+	if code, r := s.getJSON("http://" + wl.IP + "/agents/room/carol"); code != 200 || r["object"] != "carol" {
+		t.Fatalf("tailnet -> guarded env creates room/carol: %d %v", code, r)
+	}
+	e.WaitObject("pubprobe", "Room", "carol", 30*time.Second)
+	if code, _ := s.getJSON("http://" + wl.IP + "/cache"); code != 200 {
+		t.Fatalf("cache env: %d", code)
+	}
+	if code, h, r := pub("GET", "/cached/alice", nil); code != 200 || r["object"] != "alice" {
+		t.Fatalf("public -> cached env, existing room/alice: %d %q %v", code, h.Get("twd-error"), r)
+	}
+	time.Sleep(500 * time.Millisecond)
+	for _, n := range []string{"evil", "evil2", "evil3"} {
+		if o, _ := e.Host.Object(e.TenantID, "pubprobe", "Room", n); o.ID != "" {
+			t.Fatalf("room/%s was created through a bypass: %+v", n, o)
+		}
+	}
+	if n := len(e.FM.Objects()); n != before+1 { // carol only
+		t.Fatalf("mgmt objects %d -> %d across the bypass probes (want +1: carol)", before, n)
+	}
+
 	// 4. Body limit.
 	if code, h, _ := pub("POST", "/big", bytes.Repeat([]byte("x"), 4096)); code != 413 || h.Get("twd-error") != "payload_too_large" {
 		t.Fatalf("4 KiB body over a 1 KiB limit: %d %q", code, h.Get("twd-error"))

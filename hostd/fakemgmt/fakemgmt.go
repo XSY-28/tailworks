@@ -658,6 +658,12 @@ func (s *Server) createObject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "unknown_namespace", "no deployment of this tenant declares namespace "+req.Namespace)
 		return
 	}
+	// Like mgmt (RT3-01): the caller must hold the workload's lease, at the
+	// epoch it names. hostd always sends its epoch.
+	if hid := r.Header.Get("Twd-Host-ID"); (hid != "" && hid != l.host) || (req.Epoch != 0 && req.Epoch != l.epoch) {
+		writeErr(w, 409, mgmtapi.CodeLeaseLost, fmt.Sprintf("lease %s is held by %s at epoch %d (caller %q asked for epoch %d)", mgmtapi.LeaseName(req.TenantID, workload), l.host, l.epoch, hid, req.Epoch))
+		return
+	}
 	live := 0
 	for _, o := range s.objects {
 		if o.TenantID == req.TenantID && o.Status != "killed" {

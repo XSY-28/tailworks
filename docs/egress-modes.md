@@ -17,6 +17,7 @@ Each Durable Object class picks how its outbound `fetch()` is attributed, in `tw
 | Ingress identity | Own node (`getCaller()` per request) | Own node (`getCaller()` per request) |
 | Alarms (`setAlarm`, Agents SDK `schedule()`) | ❌ Facets have no alarm scheduler (workerd today) | ✅ |
 | `ctx.tailnet.spawn/kill` | Attested by the platform (unforgeable `as`) | Claimed by the tenant-side wrapper. Within one workload, code could claim to be another plain object of the same workload. Same trust domain (RFC §4.8 residual risk) |
+| Creating a new object through `env.X` | Admitted by the request's ticket or the object's attested identity ([create admission](create-admission.md)); a raw binding is refused `create_not_admitted` | Same; a plain DO whose creation was not admitted answers `create_not_admitted` and gets no node |
 | Kill | Enforced in platform code (the `Host_` flag, plus the facet aborted) | Enforced by the tenant-side wrapper's `fetch`; the node is killed by netd either way |
 | Env bindings to other DOs | Proxies: `env.X.getByName(name)` only. **Await** it, or call a method on it at once; don't store the un-awaited result. `idFromName`/`get(id)` are not available inside facets | Real namespaces |
 | `newUniqueId()` objects | Not supported (objects must have names; a name is the node's identity) | Work, but get no node (no `ctx.id.name`) |

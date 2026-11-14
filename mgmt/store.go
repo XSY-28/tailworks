@@ -51,8 +51,11 @@ type Store interface {
 	CreateChild(ctx context.Context, o Object, maxLive int) error
 	// CreateObjectChecked inserts o only within the tenant quota (maxObjects
 	// > 0) and, for a spawn, the root's budget (maxLive > 0), atomically
-	// across replicas (F14 H04, F17 H16).
-	CreateObjectChecked(ctx context.Context, o Object, maxObjects, maxLive int) error
+	// across replicas (F14 H04, F17 H16). With a non-nil fence, the
+	// workload's lease must be held by fence.Holder (and, if fence.Epoch >
+	// 0, at that epoch) in the same transaction, else ErrLeaseLost
+	// (RT3-01: a host may only create objects on leases it holds).
+	CreateObjectChecked(ctx context.Context, o Object, maxObjects, maxLive int, fence *Fence) error
 	GetObject(ctx context.Context, id string) (Object, error)
 	GetObjectByName(ctx context.Context, tenantID, workload, namespace, name string) (Object, error)
 	ListObjects(ctx context.Context, f ObjectFilter) ([]Object, error)
@@ -64,8 +67,9 @@ type Store interface {
 	// unclaimed, claimed by claimer, or claimed before staleBefore (H02).
 	ClaimMint(ctx context.Context, id, claimer string, now, staleBefore time.Time) (bool, error)
 	// SetDeploymentStatus records the host-reported status of a deployment
-	// so every replica reports it (F13, H08).
-	SetDeploymentStatus(ctx context.Context, id, status, errText string) error
+	// so every replica reports it (F13, H08). Only the host the deployment
+	// is assigned to may set it (RT3-12): a mismatch is a no-op.
+	SetDeploymentStatus(ctx context.Context, id, hostID, status, errText string) error
 	// Durable device deletes (F10, H07): SetDeviceDelete records when a
 	// killed object's device is due for deletion (unix ms); ClaimDeviceDelete
 	// takes a due one (at most one replica wins); DueDeviceDeletes lists them.

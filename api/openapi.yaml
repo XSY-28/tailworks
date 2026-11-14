@@ -2067,6 +2067,9 @@ components:
         - policy_unavailable
         - public_ingress_not_allowed
         - unknown_workload
+        - audit_key_required
+        - audit_object_foreign
+        - bad_host_sig
         - internal
     TombstoneError:
       description: "`410 Gone`: the error plus the kill record. `tombstone` is absent only when the 410 is `delegation_invalid` for a spawn whose parent is dead (the parent's record is then at `GET /v1/objects/{parent}`)."
@@ -2739,6 +2742,16 @@ components:
         hostname: { type: string, description: The hostname hostd proposes; mgmt answers with the one to use. }
         actingFor: { type: string, description: The principal this object acts for (feeds audit). }
         traceID: { type: string }
+        epoch:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            The lease epoch the calling host holds for the workload. hostd
+            always sends it. A host may only create objects on leases it
+            holds: the create is fenced on the lease's holder (and, when
+            `epoch` is given, its epoch) in the insert transaction;
+            otherwise `409 lease_lost`.
       additionalProperties: false
     ObjectPatch:
       type: object
@@ -2748,7 +2761,7 @@ components:
         nodeID: { type: string }
         stableNodeID: { type: string }
         magicDNS: { type: string }
-        epoch: { type: integer, format: int64, minimum: 1, description: Fences the ready commit. }
+        epoch: { type: integer, format: int64, minimum: 1, description: "Fences the ready commit. hostd always sends it; with or without it, a host may only report ready on objects whose lease it holds (`409 lease_lost`)." }
         ttl:
           type: [integer, "null"]
           format: int64

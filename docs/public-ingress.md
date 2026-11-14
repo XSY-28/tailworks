@@ -139,19 +139,24 @@ traffic must not be able to mint nodes.
     20 per minute per tenant.
   - **Audit:** such objects are recorded with `actingFor: "public"`.
 
-Known limits of the guard (v1):
+How the guard holds (see [docs/create-admission.md](create-admission.md)):
 
-- **Bypass:** it guards the `env` your handler is given. Code that reaches
-  the raw bindings some other way (`import { env } from
-  "cloudflare:workers"`, or an `env` saved in a global from an earlier
-  request) bypasses it.
-  - **Facet classes:** a `fetch()` through the bypass is still refused by
-    the platform.
-  - **Plain-DO and `"node": false` classes:** they rely on the guard alone.
+- **Creation is admitted, never implied.** hostd creates an object only
+  when something admitted it: a tailnet request's create ticket, an object
+  acting as itself, or `public.create` for a public request. Code that
+  reaches the raw bindings some other way (`import { env } from
+  "cloudflare:workers"`, an `env` saved in a global, the platform binding
+  itself) can reach **existing** objects but gets `403 create_not_admitted`
+  for new names, from the internet and from the tailnet alike.
+- **Residual:** a tailnet request's ticket is readable by your code and
+  valid for two minutes; code that saves it (or the guarded env) in a
+  global lets a public request in that window create through it. Don't
+  cache `env`.
 - **Chained creation:** an object a public request may reach can still
   create other objects in its own code. That is your app's logic.
-- **`"node": false` classes:** they have no registry, so they are
-  reachable from public requests only with `"public": {"create": true}`.
+- **`"node": false` classes:** they mint no node, so no admission applies;
+  they are reachable from public requests only with `"public": {"create":
+  true}`.
 
 ## Limits
 

@@ -987,3 +987,13 @@ func (inst *instance) stop() {
 		os.RemoveAll(inst.dir)
 	}
 }
+
+// macKey is the instance root key hostd issues and verifies create tickets
+// and egress MACs with ("" for instances without generated config, e.g. in
+// tests: then no ticket is issued and none verifies).
+func (i *instance) macKey() string {
+	if i == nil || i.res == nil {
+		return ""
+	}
+	return i.res.MACKey
+}

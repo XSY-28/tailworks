@@ -176,7 +176,7 @@ func TestStoreTenantQuota(t *testing.T) {
 				defer wg.Done()
 				id := fmt.Sprintf("%s-o%02d", tid, i)
 				err := s.CreateObjectChecked(ctx, Object{ID: id, TenantID: tid, Workload: "w", Namespace: "A", Name: id, Hostname: id,
-					RootID: id, Status: StatusPending}, 7, 0)
+					RootID: id, Status: StatusPending}, 7, 0, nil)
 				mu.Lock()
 				defer mu.Unlock()
 				switch {
