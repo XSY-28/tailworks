@@ -278,6 +278,9 @@ type deployResult struct {
 	// Public (ADR-029) is the workload's public URL and state, if any.
 	Public  *mgmt.DeploymentPublicView `json:"public,omitempty"`
 	Timings map[string]float64         `json:"timingsMs"`
+
+	// Replicas (twd.jsonc "replicas" > 1): every copy and its host.
+	Replicas []mgmt.ReplicaRef `json:"replicas,omitempty"`
 }
 
 func cmdDeploy(args []string) error {
@@ -433,10 +436,21 @@ func cmdDeploy(args []string) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	if err := waitReplicas(ctx, mc, dr, ds, *wait); err != nil {
+		return err
+	}
+	res.Replicas = dr.Replicas
 	res.Status, res.Endpoint, res.Public = v.Status, v.Endpoint, v.Public
 	res.Timings["ready"] = ms(time.Since(ds))
 	if !*f.json {
 		fmt.Printf("✓ deployed   %s@%s · node %s · http://%s/  (deploy → ready %.1fs)\n", a.Name, v.Host, v.Endpoint.Node, v.Endpoint.MagicDNS, res.Timings["ready"]/1000)
+		if len(dr.Replicas) > 1 {
+			parts := make([]string, 0, len(dr.Replicas))
+			for _, rp := range dr.Replicas {
+				parts = append(parts, rp.Workload+"@"+rp.Host)
+			}
+			fmt.Printf("✓ replicas   %d · %s\n", len(dr.Replicas), strings.Join(parts, ", "))
+		}
 		if sv := v.Endpoint.Service; sv != nil {
 			fmt.Printf("✓ service    %s · http://%s/  (stable across redeploys and host moves; callers need a grant to %s)\n", sv.Name, sv.MagicDNS, sv.Name)
 		}

@@ -182,6 +182,11 @@ type ClassConfig struct {
 	// Service (the _workload namespace only) is the Tailscale Service the
 	// workload entry node hosts (twd.jsonc tailnet.service).
 	Service string `json:"service,omitempty"`
+	// ReplicaOf (the _workload namespace of replicas 2..N only) names the
+	// workload this deployment is a replica of (twd.jsonc "replicas");
+	// Replicas (replica 1, the workload itself) is how many there are.
+	ReplicaOf string `json:"replicaOf,omitempty"`
+	Replicas  int    `json:"replicas,omitempty"`
 }
 
 // Deployment is one deploy of a workload.

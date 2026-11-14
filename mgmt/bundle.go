@@ -42,6 +42,11 @@ type TwdConfig struct {
 		Host      string   `json:"host"`
 		Hostname  string   `json:"hostname"`
 	} `json:"placement"`
+
+	// Replicas runs a stateless workload on this many distinct hosts
+	// (default 1); see workload_replicas.go.
+	Replicas int `json:"replicas"`
+
 	Tailnet struct {
 		// Tags are the workload entry node's tags (the "_workload" namespace).
 		Tags []string `json:"tags"`

@@ -302,6 +302,7 @@ const (
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
+	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
@@ -395,6 +396,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePublicIngressNotAllowed:
 		return true
 	case ErrorCodeRegistryUnavailable:
+		return true
+	case ErrorCodeReplicaConflict:
 		return true
 	case ErrorCodeServiceAPIFailed:
 		return true
@@ -1101,6 +1104,12 @@ type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
+	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
+	ReplicaOf *string `json:"replicaOf,omitempty"`
+
+	// Replicas `_workload` only, the workload itself: its replica count when > 1.
+	Replicas *int `json:"replicas,omitempty"`
+
 	// Service `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc` `tailnet.service`).
 	Service *string  `json:"service,omitempty"`
 	Tags    []string `json:"tags"`
@@ -1263,13 +1272,16 @@ type Deployment struct {
 	Placement *PlacementDecision `json:"placement,omitempty"`
 
 	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
-	Public       *DeploymentPublic `json:"public,omitempty"`
-	Status       DeploymentStatus  `json:"status"`
-	TenantID     string            `json:"tenantID"`
-	Tier         *Tier             `json:"tier,omitempty"`
-	UpdatedAt    *int64            `json:"updatedAt,omitempty"`
-	Workload     string            `json:"workload"`
-	WorkloadTags *[]string         `json:"workloadTags,omitempty"`
+	Public *DeploymentPublic `json:"public,omitempty"`
+
+	// Replicas A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
+	Replicas     *[]ReplicaRef    `json:"replicas,omitempty"`
+	Status       DeploymentStatus `json:"status"`
+	TenantID     string           `json:"tenantID"`
+	Tier         *Tier            `json:"tier,omitempty"`
+	UpdatedAt    *int64           `json:"updatedAt,omitempty"`
+	Workload     string           `json:"workload"`
+	WorkloadTags *[]string        `json:"workloadTags,omitempty"`
 }
 
 // DeploymentCreate defines model for DeploymentCreate.
@@ -1384,6 +1396,7 @@ type Error struct {
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
@@ -1448,6 +1461,7 @@ type Error struct {
 // | `lease_held` | 409 | another host holds the lease |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
 // | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
@@ -2154,6 +2168,16 @@ type PurgeResult struct {
 	WarmKeysRevoked *int `json:"warmKeysRevoked,omitempty"`
 }
 
+// ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
+type ReplicaRef struct {
+	DeploymentID string            `json:"deploymentID"`
+	Host         string            `json:"host"`
+	Status       *DeploymentStatus `json:"status,omitempty"`
+
+	// Workload Examples: web--r2
+	Workload string `json:"workload"`
+}
+
 // RunningContainer One running container in a heartbeat.
 type RunningContainer struct {
 	Class  string `json:"class"`
@@ -2437,6 +2461,7 @@ type TombstoneError struct {
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
