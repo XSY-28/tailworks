@@ -156,6 +156,21 @@ type Msg struct {
 	Offset int64  `json:"offset,omitempty"`
 	Total  int64  `json:"total,omitempty"`
 	Load   *Load  `json:"load,omitempty"`
+
+	// ident (debug): what makes this guest unique, for the snapshot
+	// uniqueness tests.
+	Ident *Ident `json:"ident,omitempty"`
+}
+
+// Ident is a guest's clocks, boot id and fresh kernel randomness.
+type Ident struct {
+	UnixNano int64  `json:"unixNano"` // wall clock
+	MonoNS   int64  `json:"monoNs"`   // CLOCK_MONOTONIC
+	BootNS   int64  `json:"bootNs"`   // CLOCK_BOOTTIME
+	BootID   string `json:"bootId"`   // /proc/sys/kernel/random/boot_id
+	Random   []byte `json:"random"`   // 32 bytes from getrandom(2)
+	UUID     string `json:"uuid"`     // /proc/sys/kernel/random/uuid
+	Pooled   bool   `json:"pooled"`   // still waiting for its load
 }
 
 // ProbeResult is the outcome of one TCP connect from inside the guest.

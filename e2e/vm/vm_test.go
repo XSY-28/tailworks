@@ -52,7 +52,15 @@ func (r *results) set(k string, v any) {
 	r.mu.Unlock()
 }
 
-func TestE2EVM(t *testing.T) {
+func TestE2EVM(t *testing.T) { runE2EVM(t, false) }
+
+// TestE2EVMSnapshot is the same suite with snapshot restore on (and the
+// pool off): every workload VM — first deploys, redeploys, crash
+// restarts — is restored on demand from the base snapshot and loaded.
+// NoKeysInGuest also scans the base snapshot's files.
+func TestE2EVMSnapshot(t *testing.T) { runE2EVM(t, true) }
+
+func runE2EVM(t *testing.T, snapshot bool) {
 	kernel, rootfs := os.Getenv("TWD_VM_KERNEL"), os.Getenv("TWD_VM_ROOTFS")
 	if kernel == "" || rootfs == "" {
 		t.Skip("TWD_VM_KERNEL and TWD_VM_ROOTFS must be set (make e2e-vm)")
@@ -61,14 +69,19 @@ func TestE2EVM(t *testing.T) {
 	if v := os.Getenv("TWD_VM_VCPUS"); v != "" {
 		fmt.Sscan(v, &vcpus)
 	}
-	be, err := vm.New(vm.Config{Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
-		Helper: os.Getenv("TWD_VM_HELPER")})
+	vcfg := vm.Config{Kernel: kernel, Rootfs: rootfs, MemMiB: 512, VCPUs: vcpus, BootArgs: os.Getenv("TWD_VM_BOOTARGS"), HugePages: os.Getenv("TWD_VM_HUGEPAGES"),
+		Helper: os.Getenv("TWD_VM_HELPER")}
+	wantSource := "pool"
+	if snapshot {
+		vcfg.Pool, vcfg.Snapshot, wantSource = -1, true, "restore"
+	}
+	be, err := vm.New(vcfg)
 	if err != nil {
 		t.Fatalf("microVM backend unavailable: %v", err)
 	}
 	t.Cleanup(func() { be.Close() })
 	res := &results{m: map[string]any{"started": time.Now().UTC().Format(time.RFC3339), "kernel": kernel, "rootfs": rootfs, "vcpus": vcpus, "mem_mib": 512,
-		"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M()}}
+		"hugepages": os.Getenv("TWD_VM_HUGEPAGES"), "free_hugepages_2m_at_start": vm.FreeHugePages2M(), "snapshot": snapshot}}
 	if mb, err := os.ReadFile(filepath.Join(filepath.Dir(rootfs), "manifest.json")); err == nil {
 		var man map[string]any
 		json.Unmarshal(mb, &man)
@@ -142,6 +155,15 @@ func TestE2EVM(t *testing.T) {
 		}
 		cancel()
 	}
+	if snapshot {
+		wc, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		_, info, err := be.BaseSnapshot(wc)
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.set("base_snapshot", info)
+	}
 
 	// Deploy hello + probe in the microVM tier (the tenant's tier), and a
 	// process-tier copy of probe for the latency comparison.
@@ -183,8 +205,8 @@ func TestE2EVM(t *testing.T) {
 				}
 				res.set("boot_"+name, map[string]any{"source": ws.VM.Source, "boot_call_total_ms": ws.VM.Total.Milliseconds(),
 					"breakdown": vm.Breakdown(*ws.VM)})
-				if be.PoolStats() != nil && ws.VM.Source != "pool" {
-					t.Fatalf("%s: VM source %q, want a claimed pool VM", name, ws.VM.Source)
+				if (be.PoolStats() != nil || snapshot) && ws.VM.Source != wantSource {
+					t.Fatalf("%s: VM source %q, want %q", name, ws.VM.Source, wantSource)
 				}
 				t.Logf("%s VM: %s, whole Boot() %v", name, ws.VM.Source, ws.VM.Total)
 			}
@@ -369,7 +391,31 @@ func TestE2EVM(t *testing.T) {
 		fi, _ := os.Stat(mem)
 		os.Remove(mem)
 		res.set("no_keys_in_guest", map[string]any{"needles": len(needles), "fsscan_files": r.Scanned, "memdump_mb": fi.Size() >> 20,
-			"memdump_ms": dumpMS, "disks": vmProbe.Disks()})
+			"memdump_ms": dumpMS, "disks": vmProbe.Disks(), "vm_source": vmProbe.Info().Source})
+		if snapshot {
+			// The base snapshot itself (VM state, the full guest memory
+			// file, its config drive): no key, and nothing instance-specific
+			// either — the probe instance's MAC key is not in it (it came
+			// with the restored copy's load; the dump above has it).
+			files, _, err := be.BaseSnapshot(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			withMAC := map[string][]byte{"probe's MAC key": []byte(mac)}
+			for k, v := range needles {
+				withMAC[k] = v
+			}
+			var sizes []int64
+			for _, f := range files {
+				if hit := scanFile(t, f, withMAC); hit != "" {
+					t.Fatalf("%s in the base snapshot file %s", hit, f)
+				}
+				fi, _ := os.Stat(f)
+				sizes = append(sizes, fi.Size())
+			}
+			res.set("no_keys_in_base_snapshot", map[string]any{"files": files, "bytes": sizes, "needles": len(withMAC)})
+			t.Logf("base snapshot: none of %d needles (incl. probe's MAC key) in %v (%v bytes)", len(withMAC), files, sizes)
+		}
 		t.Logf("%d needles (tskey-, the test auth key, node/machine private keys as text and raw bytes, the volume key): none in %d guest files, 3 disks or %d MiB of guest RAM",
 			len(needles), r.Scanned, fi.Size()>>20)
 		// After the pause/resume the guest still serves.
@@ -913,7 +959,11 @@ func writeResults(t *testing.T, r *results) {
 	r.m["passed"] = !t.Failed()
 	b, _ := json.MarshalIndent(r.m, "", "  ")
 	os.MkdirAll("results", 0o755)
-	p := filepath.Join("results", "l3-"+time.Now().UTC().Format("20060102T150405Z")+".json")
+	name := "l3-"
+	if r.m["snapshot"] == true {
+		name = "fv-snapshot-"
+	}
+	p := filepath.Join("results", name+time.Now().UTC().Format("20060102T150405Z")+".json")
 	os.WriteFile(p, b, 0o644)
 	t.Logf("results: %s\n%s", p, b)
 }

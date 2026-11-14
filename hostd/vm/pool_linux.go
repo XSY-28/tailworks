@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rosskukulinski/twd/guest/proto"
 )
 
 // pool keeps pre-booted, warm microVMs that hold no tenant code (see
@@ -135,7 +137,26 @@ func (p *pool) run() {
 			p.mu.Lock()
 			p.filling++
 			p.mu.Unlock()
-			m, err := p.b.boot(p.ctx, bootOpts{name: "pool", pool: true})
+			o := bootOpts{name: "pool", pool: true}
+			if id := p.b.baseID(p.ctx, p.b.base != nil); id != "" {
+				o.restore = id // snapshots on: refill by restoring the base
+			}
+			m, err := p.b.boot(p.ctx, o)
+			if err == nil && o.restore != "" {
+				// Re-warm the restored copy in the background (its first
+				// workerd would otherwise pay the restored VM's first-touch
+				// cost at claim time).
+				rctx, cancel := context.WithTimeout(p.ctx, 30*time.Second)
+				if r, rerr := m.Op(rctx, proto.Msg{Op: "rewarm"}); rerr != nil {
+					m.Stop()
+					err = fmt.Errorf("rewarm: %w", rerr)
+				} else {
+					m.mu.Lock()
+					m.info.Stages["rewarm"] = r.Stages["rewarm_ms"]
+					m.mu.Unlock()
+				}
+				cancel()
+			}
 			p.mu.Lock()
 			p.filling--
 			if err != nil {

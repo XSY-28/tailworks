@@ -68,7 +68,13 @@ type Config struct {
 	// PoolBudgetMiB caps the guest RAM of all of this backend's VMs for
 	// refills (default: the huge-page reservation, vm.nr_hugepages × 2 MiB).
 	PoolBudgetMiB int
-	Log           *slog.Logger
+	// Snapshot (off by default; twd-hostd -vm-snapshot): restore VMs from a
+	// base snapshot (a pooled VM: warm, no tenant code, no keys) instead of
+	// booting them — for pool refills, and on demand when the pool is
+	// empty. Guest memory is served lazily (userfaultfd). See
+	// snapshot_linux.go and the ADR draft on cross-tenant memory sharing.
+	Snapshot bool
+	Log      *slog.Logger
 }
 
 // DefaultBootArgs: serial console, no PCI probing, panic → reboot (which
@@ -87,6 +93,7 @@ type Backend struct {
 	srvBase string
 	via     string
 	pool    *pool
+	base    *baseSnap
 }
 
 // Available reports whether this host can run microVMs: KVM, the guest
@@ -162,7 +169,13 @@ func New(cfg Config) (*Backend, error) {
 			return nil, err
 		}
 	}
+	if cfg.Snapshot {
+		b.base = &baseSnap{ready: make(chan struct{})}
+	}
 	b.pool = newPool(b)
+	if b.base != nil {
+		b.startBase()
+	}
 	return b, nil
 }
 
@@ -195,6 +208,7 @@ func (b *Backend) Close() error {
 	if b.pool != nil {
 		b.pool.close()
 	}
+	b.closeBase()
 	if b.srv != nil {
 		b.srvLn.Close()
 		b.srv.Close()
@@ -255,8 +269,10 @@ type Machine struct {
 	events  []proto.Msg
 	lastErr string
 	cleanup sync.Once
-	// the helper's time from VMM exit to volume released (exit event)
+	// the helper's time from VMM exit to volume released (exit event), and
+	// its other exit stats (restored VMs: uffd faults served)
 	releaseMS float64
+	exitStats map[string]float64
 }
 
 // Boot implements sandbox.Backend. With a warm pool, it claims a pooled VM
@@ -277,6 +293,17 @@ func (b *Backend) Boot(ctx context.Context, s sandbox.Spec) (sandbox.VM, error) 
 			b.cfg.Log.Warn("pooled microVM failed its claim; booting cold", "spec", s.ID, "err", err)
 		}
 	}
+	if b.base != nil {
+		// Snapshots on and no pooled VM: restore one now and claim it.
+		t0 := time.Now()
+		if id := b.baseID(ctx, true); id != "" {
+			m, err := b.boot(ctx, bootOpts{name: s.ID, restore: id, log: s.Log})
+			if err == nil {
+				return b.claimAt(ctx, m, s, t0, true)
+			}
+			b.cfg.Log.Warn("microVM restore failed; booting cold", "spec", s.ID, "err", err)
+		}
+	}
 	m, err := b.boot(ctx, bootOpts{name: s.ID, spec: &s, volume: s.Volume, handlers: s.Handlers, log: s.Log})
 	if err != nil {
 		return nil, err // not a typed nil *Machine
@@ -295,6 +322,7 @@ type bootOpts struct {
 	handlers map[uint16]http.Handler
 	log      *slog.Logger
 	pool     bool
+	restore  string // restore this base snapshot (a pooled VM) instead of booting
 }
 
 func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error) {
@@ -307,6 +335,9 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	m.info.Source = "cold"
 	if o.pool {
 		m.info.Source = "pool"
+	}
+	if o.restore != "" {
+		m.info.Source, o.pool = "restore", true
 	}
 	stage := func(name string) { m.info.Stages[name] = float64(time.Since(t0).Microseconds()) / 1000 }
 	m.log = b.cfg.Log.With("vm", id)
@@ -325,7 +356,7 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	// 1. Config drive: the instance dir + guest.json, as a raw tar (a pool
 	// VM's: the warm-up app, no tenant code).
 	drive := filepath.Join(m.dir, "config.tar")
-	if o.pool {
+	if o.pool { // (a restore uses the base's own; the jail needs the file)
 		err = writePoolDrive(drive, b.cfg.MTU)
 	} else {
 		err = writeConfigDrive(drive, *o.spec, b.cfg.MTU)
@@ -357,7 +388,8 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 	files = append(files, console)
 	m.info.Console = console.Name()
 	req := &helperapi.StartRequest{Name: o.name, MemMiB: b.cfg.MemMiB, VCPUs: b.cfg.VCPUs, HugePages: b.cfg.HugePages,
-		BootArgs: b.cfg.BootArgs, MTU: b.cfg.MTU, GuestMAC: guestMAC, GuestCID: 3, VsockPort: proto.VsockPort, VolumeSlot: o.pool}
+		BootArgs: b.cfg.BootArgs, MTU: b.cfg.MTU, GuestMAC: guestMAC, GuestCID: 3, VsockPort: proto.VsockPort, VolumeSlot: o.pool && o.restore == "",
+		Restore: o.restore}
 	if o.pool && b.pool != nil && b.pool.hugeOnly {
 		req.HugePages = "on" // a pool VM never falls back to 4 KiB pages
 	}
@@ -458,7 +490,13 @@ func (b *Backend) boot(ctx context.Context, o bootOpts) (vmi *Machine, err error
 // VM is single-use: on any error it is destroyed, never returned to the
 // pool.
 func (b *Backend) claim(ctx context.Context, m *Machine, s sandbox.Spec) (vmi sandbox.VM, err error) {
-	t0 := time.Now()
+	return b.claimAt(ctx, m, s, time.Now(), false)
+}
+
+// claimAt is claim with stage times relative to t0 (Boot()'s start: an
+// on-demand restore happened in between, recorded as "restore").
+func (b *Backend) claimAt(ctx context.Context, m *Machine, s sandbox.Spec, t0 time.Time, restored bool) (vmi sandbox.VM, err error) {
+	restoreMS := float64(time.Since(t0).Microseconds()) / 1000
 	m.mu.Lock()
 	boot := m.info.Stages
 	m.info.Stages = map[string]float64{}
@@ -466,6 +504,9 @@ func (b *Backend) claim(ctx context.Context, m *Machine, s sandbox.Spec) (vmi sa
 		m.info.Stages["pool."+k] = v
 	}
 	m.info.PoolIdle = time.Since(m.pooledAt)
+	if restored {
+		m.info.Stages["restore"] = restoreMS
+	}
 	m.mu.Unlock()
 	stage := func(name string) {
 		m.mu.Lock()
@@ -532,6 +573,7 @@ func (b *Backend) claim(ctx context.Context, m *Machine, s sandbox.Spec) (vmi sa
 			return nil, fmt.Errorf("inject: %w", err)
 		}
 	}
+	ld.UnixNano = time.Now().UnixNano() // now, not at claim start: the guest's clock
 	if _, err := m.Op(ictx, proto.Msg{Op: "load", Load: ld}); err != nil {
 		return nil, fmt.Errorf("inject: %w; console: %s", err, m.consoleTail(1500))
 	}
@@ -613,6 +655,7 @@ func (m *Machine) watch() {
 		why = ev.Error
 		m.mu.Lock()
 		m.releaseMS = ev.Timings["volume_release"]
+		m.exitStats = ev.Timings
 		m.mu.Unlock()
 	case <-m.conn.Closed():
 		why = "helper connection closed"
@@ -796,6 +839,14 @@ func (m *Machine) DialGuest(ctx context.Context) (net.Conn, error) {
 
 // ---- lifecycle ----
 
+// ExitStats are the helper's stats from the VM's exit (volume release ms;
+// for a restored VM, uffd faults and pages copied). nil before the exit.
+func (m *Machine) ExitStats() map[string]float64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return maps.Clone(m.exitStats)
+}
+
 // Done implements sandbox.VM.
 func (m *Machine) Done() <-chan struct{} { return m.done }
 
@@ -854,7 +905,7 @@ func (m *Machine) Stop() {
 		m.mu.Lock()
 		rel := m.releaseMS
 		m.mu.Unlock()
-		m.log.Info("microVM stopped", "kill_to_exit_ms", time.Since(kt).Milliseconds(), "helper_volume_release_ms", rel)
+		m.log.Info("microVM stopped", "kill_to_exit_ms", time.Since(kt).Milliseconds(), "helper_volume_release_ms", rel, "exit", m.ExitStats())
 	case <-time.After(15 * time.Second):
 		m.log.Warn("microVM did not exit after kill")
 	}

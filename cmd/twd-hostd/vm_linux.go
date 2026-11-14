@@ -13,6 +13,7 @@ import (
 type vmOptions struct {
 	kernel, rootfs, firecracker, jailer, helper, hugePages string
 	memMiB, vcpus, pool                                    int
+	snapshot                                               bool
 }
 
 // vmBackend enables the microVM tier when this host can run it: KVM, the
@@ -26,7 +27,7 @@ func vmBackend(o vmOptions, log *slog.Logger) sandbox.Backend {
 		}
 	}
 	b, err := vm.New(vm.Config{Helper: o.helper, Firecracker: o.firecracker, Jailer: o.jailer, Kernel: o.kernel, Rootfs: o.rootfs,
-		MemMiB: o.memMiB, VCPUs: o.vcpus, HugePages: o.hugePages, Pool: o.pool, Log: log})
+		MemMiB: o.memMiB, VCPUs: o.vcpus, HugePages: o.hugePages, Pool: o.pool, Snapshot: o.snapshot, Log: log})
 	if err != nil {
 		log.Info("microVM tier unavailable; process tier only", "reason", err)
 		return nil

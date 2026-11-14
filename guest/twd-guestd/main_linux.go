@@ -213,12 +213,59 @@ func (g *guest) warmup() {
 	stage("warmup_done")
 }
 
+func (g *guest) rewarm() error {
+	g.mu.Lock()
+	ok := g.pooled && !g.loading && !g.warming
+	g.warming = ok
+	g.mu.Unlock()
+	if !ok {
+		return errors.New("not a pooled VM waiting for its load")
+	}
+	defer func() {
+		g.mu.Lock()
+		g.warming = false
+		g.mu.Unlock()
+	}()
+	st := bootMS()
+	if _, err := readConfigDrive("/dev/vdb"); err != nil {
+		return err
+	}
+	g.warmup()
+	stMu.Lock()
+	stages["rewarm_ms"] = bootMS() - st
+	stMu.Unlock()
+	return nil
+}
+
 // emptyDir removes everything inside dir (not dir itself).
 func emptyDir(dir string) {
 	ents, _ := os.ReadDir(dir)
 	for _, e := range ents {
 		os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
+}
+
+func (g *guest) isPooled() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.pooled
+}
+
+// ident reports this guest's clocks, boot id and fresh kernel randomness.
+func (g *guest) ident() *proto.Ident {
+	id := &proto.Ident{UnixNano: time.Now().UnixNano(), Pooled: g.isPooled()}
+	var ts unix.Timespec
+	unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts)
+	id.MonoNS = ts.Nano()
+	unix.ClockGettime(unix.CLOCK_BOOTTIME, &ts)
+	id.BootNS = ts.Nano()
+	b, _ := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	id.BootID = strings.TrimSpace(string(b))
+	u, _ := os.ReadFile("/proc/sys/kernel/random/uuid")
+	id.UUID = strings.TrimSpace(string(u))
+	id.Random = make([]byte, 32)
+	unix.Getrandom(id.Random, 0)
+	return id
 }
 
 func (g *guest) config() proto.GuestConfig {
@@ -256,7 +303,7 @@ const maxBundle = 256 << 20
 func (g *guest) load(l *proto.Load) error {
 	stage("inject_rx")
 	g.mu.Lock()
-	if !g.pooled || g.loading {
+	if !g.pooled || g.loading || g.warming {
 		g.mu.Unlock()
 		return errors.New("not a pooled VM waiting for its load")
 	}
@@ -561,6 +608,7 @@ type guest struct {
 	// never again), the bundle bytes so far, and closed when it's applied.
 	pooled  bool
 	loading bool
+	warming bool // rewarm running (a load waits for it)
 	bundle  []byte
 	loaded  chan struct{}
 }
@@ -649,6 +697,14 @@ func (g *guest) handle(m proto.Msg) proto.Msg {
 	case "fsscan":
 		r.Found, r.Scanned = fsscan("/")
 		r.State = stateFiles()
+	case "rewarm":
+		// A pooled VM restored from the base snapshot: run the warm-up
+		// workerd again (from the config drive, still attached), so the
+		// restored copy's guest memory is faulted in before its claim.
+		if err := g.rewarm(); err != nil {
+			r.Error = err.Error()
+		}
+		r.Stages = stageCopy()
 	case "chunk":
 		if err := g.chunk(m); err != nil {
 			r.Error = err.Error()
@@ -681,6 +737,12 @@ func (g *guest) handle(m proto.Msg) proto.Msg {
 			break
 		}
 		r.Stages = wbench(m.N)
+	case "ident":
+		if !g.config().Debug && !g.isPooled() {
+			r.Error = "ident needs debug mode"
+			break
+		}
+		r.Ident = g.ident()
 	case "wkill":
 		// SIGKILL workerd (the supervisor restarts it): warm-restart timing.
 		if !g.config().Debug {

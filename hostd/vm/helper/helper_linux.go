@@ -89,6 +89,63 @@ type Server struct {
 	vols  *volumes
 	conns map[*net.UnixConn]bool
 	wg    sync.WaitGroup
+	// running VMs by jail ID, and base snapshots by ID (each owned by the
+	// connection that made it)
+	sessions map[string]*session
+	bases    map[string]*base
+	baseSeq  int
+}
+
+// base is a base snapshot (snapshot-base): root-only files under
+// StateDir/snapshots/<id>, removed when its owner connection closes.
+type base struct {
+	id, dir, state, mem, config string
+	uid                         int
+	hugePages                   bool
+	owner                       *net.UnixConn
+	nonzero                     []uint64 // 4 KiB pages of mem that aren't all zero (uffd prefetch)
+}
+
+func (s *Server) register(sess *session) {
+	s.mu.Lock()
+	s.sessions[sess.id] = sess
+	s.mu.Unlock()
+}
+
+func (s *Server) unregister(sess *session) {
+	s.mu.Lock()
+	if s.sessions[sess.id] == sess {
+		delete(s.sessions, sess.id)
+	}
+	s.mu.Unlock()
+}
+
+func (s *Server) lookupBase(uid int, id string) *base {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if b := s.bases[id]; b != nil && b.uid == uid {
+		return b
+	}
+	return nil
+}
+
+// dropBases removes the base snapshots owned by c (it hung up). Restored
+// VMs that are still running keep their own uffd mapping of the memory
+// file (unlinking doesn't free it until they exit).
+func (s *Server) dropBases(c *net.UnixConn) {
+	s.mu.Lock()
+	var drop []*base
+	for id, b := range s.bases {
+		if b.owner == c {
+			drop = append(drop, b)
+			delete(s.bases, id)
+		}
+	}
+	s.mu.Unlock()
+	for _, b := range drop {
+		os.RemoveAll(b.dir)
+		s.log.Info("base snapshot removed", "base", b.id)
+	}
 }
 
 // New prepares a helper: checks its binaries, sets up the cgroup parent
@@ -142,7 +199,7 @@ func New(cfg Config) (*Server, error) {
 	if err := os.MkdirAll(cfg.StateDir, 0o700); err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, log: cfg.Log, slots: map[int]bool{}, conns: map[*net.UnixConn]bool{}}
+	s := &Server{cfg: cfg, log: cfg.Log, slots: map[int]bool{}, conns: map[*net.UnixConn]bool{}, sessions: map[string]*session{}, bases: map[string]*base{}}
 	s.vols = newVolumes(filepath.Join(cfg.StateDir, "volumes.json"))
 	cg, err := s.setupCgroup()
 	if err != nil {
@@ -227,6 +284,7 @@ func (s *Server) serveConn(c *net.UnixConn) {
 		s.mu.Lock()
 		delete(s.conns, c)
 		s.mu.Unlock()
+		s.dropBases(c)
 		c.Close()
 	}()
 	uid, err := peerUID(c)
@@ -293,6 +351,35 @@ func (s *Server) serveConn(c *net.UnixConn) {
 			}
 			resp.Re, resp.OK = "attach", true
 			helperapi.WriteResponse(c, resp)
+		case "snapshot-base":
+			closeAll(fds)
+			if req.Snapshot == nil {
+				helperapi.WriteResponse(c, helperapi.Response{Re: req.Op, Code: helperapi.CodeBadRequest, Error: "snapshot-base needs the VM's jail ID"})
+				continue
+			}
+			s.mu.Lock()
+			target := s.sessions[req.Snapshot.Of]
+			s.baseSeq++
+			id := fmt.Sprintf("%sbase%d", s.prefix(), s.baseSeq)
+			s.mu.Unlock()
+			if target == nil || target.uid != uid || target == vm {
+				helperapi.WriteResponse(c, helperapi.Response{Re: req.Op, Code: helperapi.CodeBadRequest, Error: "no such VM of this uid"})
+				continue
+			}
+			b, tm, err := target.snapshotBase(filepath.Join(s.cfg.StateDir, "snapshots", id))
+			if err != nil {
+				s.log.Warn("base snapshot failed", "uid", uid, "vm", req.Snapshot.Of, "err", err)
+				helperapi.WriteResponse(c, errResp(req.Op, err))
+				continue
+			}
+			b.id, b.uid, b.owner = id, uid, c
+			s.mu.Lock()
+			s.bases[id] = b
+			s.mu.Unlock()
+			fi, _ := os.Stat(b.mem)
+			s.log.Info("base snapshot created", "base", id, "from", req.Snapshot.Of, "mem_bytes", fi.Size(), "timings", tm)
+			helperapi.WriteResponse(c, helperapi.Response{Re: req.Op, OK: true, BaseID: id, BaseBytes: fi.Size(),
+				BaseFiles: []string{b.state, b.mem, b.config}, Timings: tm})
 		case "kill":
 			closeAll(fds)
 			if vm != nil {
@@ -425,6 +512,7 @@ func (s *Server) cleanupStale() {
 			}
 		}
 	}
+	os.RemoveAll(filepath.Join(s.cfg.StateDir, "snapshots")) // bases die with their owners
 	if ents, err := os.ReadDir("/run/netns"); err == nil {
 		for _, e := range ents {
 			if strings.HasPrefix(e.Name(), p) {

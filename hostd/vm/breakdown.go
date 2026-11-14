@@ -41,11 +41,25 @@ func Breakdown(i sandbox.Info) []Stage {
 		}
 	}
 	if _, ok := h["claim"]; ok {
+		if i.Source == "restore" {
+			// The restore itself (on demand in Boot(), or earlier at pool
+			// fill), relative to its own start.
+			chain("restore.", hv, 0,
+				[2]string{"pool.config_drive", "config drive"},
+				[2]string{"pool.helper.netns", "netns + bridge + 2 TAPs"},
+				[2]string{"pool.helper.jail", "jail dir"},
+				[2]string{"pool.helper.restore_jail", "snapshot state copy + uffd socket + base memory mmap"},
+				[2]string{"pool.helper.jailer", "jailer → firecracker API socket up"},
+				[2]string{"pool.helper.snapshot_load", "PUT /snapshot/load (uffd handshake, resume)"},
+				[2]string{"pool.vnet", "helper reply + host stack"},
+				[2]string{"pool.pooled", "guest resumes, vsock reconnect, says pooled"},
+			)
+		}
 		// Warm pool / snapshot restore: the VM was booted (or restored)
 		// before; Boot() is claim + inject + workerd start.
 		chain("host.", hv, 0,
+			[2]string{"restore", "snapshot restore, on demand (all of the above)"},
 			[2]string{"claim", "claim (take a pooled VM)"},
-			[2]string{"restore", "snapshot restore (VMM spawn + load + resume)"},
 			[2]string{"volume_attach", "volume attach (helper: loop + LUKS2 open + PATCH drive)"},
 			[2]string{"inject", "inject bundle + config over vsock (incl. guest extract, reseed, mount)"},
 		)
