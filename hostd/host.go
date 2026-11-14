@@ -187,6 +187,9 @@ type Config struct {
 	// CronTimeout bounds one cron trigger's scheduled() run (wall clock;
 	// default DefaultCronTimeout, 15 min).
 	CronTimeout time.Duration
+	// CronClock replaces the wall clock of the cron scheduler's own loop
+	// (tests that drive the scheduler's ticks themselves; nil = real time).
+	CronClock func() time.Time
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -310,7 +313,7 @@ func New(cfg Config) (*Host, error) {
 		return nil, err
 	}
 	cfg.Mgmt.HostID = cfg.HostID
-	h := &Host{cfg: cfg, sandbox: sb, log: cfg.Logger, mgmt: cfg.Mgmt,
+	h := &Host{cfg: cfg, sandbox: sb, log: cfg.Logger, mgmt: cfg.Mgmt, nowFn: cfg.CronClock,
 		tenants: map[string]*tenant{}, workloads: map[string]*workload{}, objects: map[string]*object{},
 		byNetd: map[string]*object{}, byKey: map[string]*object{}, creating: map[string]*createCall{},
 		poolDemand: map[string]time.Time{}, poolBusy: map[string]bool{},

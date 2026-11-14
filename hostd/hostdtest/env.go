@@ -63,6 +63,9 @@ type Options struct {
 	PublicListen func(srv *tsnet.Server) (net.Listener, error)
 	// CronTimeout is passed to hostd (cron trigger run limit).
 	CronTimeout time.Duration
+	// CronClock is passed to hostd (the cron loop's clock; tests that tick
+	// the scheduler themselves).
+	CronClock func() time.Time
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -142,7 +145,7 @@ func Start(t testing.TB, o Options) *Env {
 		ContainerCapacity: o.ContainerCapacity, ContainerQuota: o.ContainerQuota, ContainerMaxLife: o.ContainerMaxLife,
 		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter,
 		PublicListen: o.PublicListen,
-		CronTimeout:  o.CronTimeout,
+		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
 	})
 	if err != nil {
 		t.Fatal(err)
