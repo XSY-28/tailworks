@@ -594,6 +594,13 @@ type DeployRequest struct {
 	// stopped heartbeating, is really gone, so a stateful workload may move
 	// off it (ADR-028 §3). Audited.
 	ForceTakeover bool `json:"forceTakeover,omitempty"`
+	// Replace re-places the workload (`twd deploy --replace`, ADR-033):
+	// the current live holder is not kept just because it holds the lease;
+	// the workload moves if another eligible host is clearly better (or to
+	// Host, when pinned). The lease moves at epoch+1 in one conditional
+	// write. A stateful workload also needs ForceTakeover: its Durable
+	// Object storage stays on the old host's disk.
+	Replace bool `json:"replace,omitempty"`
 	// By is the deployer (set by the API layer from the principal, never
 	// from the request body): a WhoIs login over the tailnet, the local
 	// actor on the unix socket.
@@ -609,6 +616,7 @@ type DeployResponse struct {
 		Node     string `json:"node"`
 		MagicDNS string `json:"magicDNS"`
 	} `json:"endpoint"`
+	Placement *PlacementDecision `json:"placement,omitempty"`
 }
 
 func validName(s string) bool {
@@ -635,7 +643,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	classes := r.Namespaces
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
 	var pub *DeploymentPublic
-	tier := placementTier(t, nil)
+	var bcfg *TwdConfig
 	if len(r.Bundle) > 0 {
 		cfg, err := BundleConfig(r.Bundle)
 		if err != nil && len(classes) == 0 {
@@ -648,7 +656,8 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			if err := checkPublicDeploy(t, r.Workload, pub); err != nil {
 				return resp, err
 			}
-			tier = placementTier(t, cfg)
+			bcfg = cfg
+			bundlePlacement(r.Bundle, cfg)
 			if len(classes) == 0 {
 				classes = cfg.Classes()
 			} else if len(cfg.Tailnet.Tags) > 0 && !slices.ContainsFunc(classes, func(c ClassConfig) bool { return c.Class == WorkloadNamespace }) {
@@ -676,34 +685,75 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			}
 		}
 	}
-	host, err := m.pickHost(ctx, t, r.Workload, r.Host, tier)
+	dec, held, err := m.place(ctx, t, placementInput{Workload: r.Workload, Pinned: r.Host, Replace: r.Replace, Config: bcfg})
 	if err != nil {
 		return resp, err
 	}
+	host := dec.Host
 	takeoverFrom, err := m.guardTakeover(ctx, t, r, host)
 	if err != nil {
 		return resp, err
 	}
 	fence := true // no bundle (namespaces given directly): assume stateful
+	stateWhy := "no bundle to inspect"
 	if len(r.Bundle) > 0 {
-		fence, _ = BundleStateful(r.Bundle)
+		fence, stateWhy = BundleStateful(r.Bundle)
 	}
-	lease, err := m.store.AcquireLease(ctx, LeaseName(t.ID, r.Workload), host, NamespaceLeaseTTL, m.now())
-	if errors.Is(err, ErrLeaseHeld) {
-		return resp, m.leaseHeldError(ctx, LeaseName(t.ID, r.Workload), r.Workload)
-	}
-	if err != nil {
-		return resp, err
+	name := LeaseName(t.ID, r.Workload)
+	var lease Lease
+	movedFrom := ""
+	if held != nil && held.Holder != host {
+		// A live host runs the workload and placement chose another one.
+		if !r.Replace {
+			if dec.Reason == "pinned" {
+				return resp, m.leaseHeldError(ctx, name, r.Workload)
+			}
+			why := ""
+			for _, s := range dec.Hosts {
+				if s.Host == held.Holder && !s.Eligible {
+					why = s.Why
+				}
+			}
+			e := errf(409, "lease_held", "workload %q runs on host %s, which can no longer take it (%s); redeploy with --replace to move it to %s", r.Workload, held.Holder, why, host)
+			return resp, e
+		}
+		if fence && !r.ForceTakeover {
+			return resp, errf(409, "move_unconfirmed", "workload %q is stateful (%s): moving it from %s to %s starts its Durable Objects with empty storage on %s (DO storage stays on %s's disk). Redeploy with --replace --force-takeover to move it anyway, or pin it with --host %s. Classes that tolerate this can set \"fence\": \"never\" in twd.jsonc",
+				r.Workload, stateWhy, held.Holder, host, host, held.Holder, held.Holder)
+		}
+		lease, err = m.store.MoveLease(ctx, name, held.Holder, held.Epoch, host, NamespaceLeaseTTL, m.now())
+		if errors.Is(err, ErrLeaseLost) {
+			return resp, errf(409, "lease_changed", "workload %q: its lease changed while it was being moved (another deploy?); retry", r.Workload)
+		}
+		if err != nil {
+			return resp, err
+		}
+		movedFrom = held.Holder
+	} else {
+		lease, err = m.store.AcquireLease(ctx, name, host, NamespaceLeaseTTL, m.now())
+		if errors.Is(err, ErrLeaseHeld) {
+			return resp, m.leaseHeldError(ctx, name, r.Workload)
+		}
+		if err != nil {
+			return resp, err
+		}
 	}
 	d := Deployment{ID: newID("dp_"), TenantID: t.ID, Workload: r.Workload, HostID: host, Namespaces: classes,
 		MaxLive: maxLive, MaxDepth: maxDepth, Epoch: lease.Epoch, Bundle: r.Bundle, DeployedBy: r.By, CreatedAt: m.now().UnixMilli(), Fence: fence,
-		Public: pub}
-	detail := map[string]any{"deploymentID": d.ID, "workload": d.Workload, "host": host, "epoch": lease.Epoch, "by": r.By}
+		Public: pub, Placement: &dec}
+	detail := map[string]any{"deploymentID": d.ID, "workload": d.Workload, "host": host, "epoch": lease.Epoch, "by": r.By,
+		"placement": map[string]any{"reason": dec.Reason, "summary": dec.Summary, "targets": dec.Targets}}
 	if pub != nil {
 		detail["publicRoutes"] = pub.Spec.Routes
 	}
 	if takeoverFrom != "" {
 		detail["takeoverFrom"], detail["forced"] = takeoverFrom, true
+	}
+	if movedFrom != "" {
+		detail["movedFrom"], detail["replace"] = movedFrom, true
+		if fence {
+			detail["forced"] = true
+		}
 	}
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, Kind: "deploy", ActingFor: r.By}, detail)
 	if err := m.store.CreateDeployment(actx, d); err != nil { // the deploy record commits with it (H22)
@@ -718,12 +768,17 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		// from an earlier deploy must not keep serving (ADR-029).
 		m.killPublicNode(ctx, t.ID, r.Workload, "public routes removed", r.By)
 	}
-	resp.DeploymentID, resp.Host, resp.Epoch = d.ID, host, lease.Epoch
+	resp.DeploymentID, resp.Host, resp.Epoch, resp.Placement = d.ID, host, lease.Epoch, &dec
 	resp.Endpoint.Node = r.Workload + "-" + host
 	resp.Endpoint.MagicDNS = resp.Endpoint.Node + "." + t.Tailnet
 	m.setDepStatus(d.ID, DeploymentStatus{Status: "assigned"})
 	// Tell the host now instead of at its next heartbeat.
 	go m.push(host, "/v1/push/assignments", map[string]any{})
+	if movedFrom != "" && fence {
+		// A stateful move: stop the old copy now rather than at its next
+		// heartbeat (its renew at the old epoch fails either way).
+		go m.push(movedFrom, "/v1/push/assignments", map[string]any{})
+	}
 	return resp, nil
 }
 
@@ -761,8 +816,10 @@ type DeploymentView struct {
 	DeployedBy   string        `json:"deployedBy,omitempty"`
 	CreatedAt    int64         `json:"createdAt"`
 	// Public (ADR-029): the public URL and routes; nil when tailnet-only.
-	Public   *DeploymentPublicView `json:"public,omitempty"`
-	Endpoint struct {
+	Public *DeploymentPublicView `json:"public,omitempty"`
+	// Placement is why the deployment is on its host (ADR-033 draft).
+	Placement *PlacementDecision `json:"placement,omitempty"`
+	Endpoint  struct {
 		ObjectID string `json:"objectID,omitempty"`
 		Node     string `json:"node"`
 		MagicDNS string `json:"magicDNS"`
@@ -780,7 +837,7 @@ func (m *Mgmt) GetDeployment(ctx context.Context, id string) (DeploymentView, er
 		return v, err
 	}
 	v.DeploymentID, v.TenantID, v.Workload, v.Host, v.Epoch, v.Namespaces, v.CreatedAt = d.ID, d.TenantID, d.Workload, d.HostID, d.Epoch, d.Namespaces, d.CreatedAt
-	v.DeployedBy = d.DeployedBy
+	v.DeployedBy, v.Placement = d.DeployedBy, d.Placement
 	v.Status, v.Error = m.deploymentStatus(ctx, d)
 	v.Public = m.publicView(ctx, d)
 	if o, err := m.store.GetObjectByName(ctx, d.TenantID, d.Workload, WorkloadNamespace, d.Workload); err == nil {
@@ -884,62 +941,6 @@ func (h Host) offersTier(tier string) bool {
 	return tier == "" || slices.Contains(h.Tiers, tier)
 }
 
-// pickHost: MVP is a single host per tenant namespace. Eligible hosts are
-// live, in the tenant's pool and offer the deployment's tier. Keep the
-// current live lease holder; otherwise the eligible host with the most free
-// capacity.
-func (m *Mgmt) pickHost(ctx context.Context, t Tenant, workload, want, tier string) (string, error) {
-	now := m.now()
-	hosts, err := m.store.ListHosts(ctx, Page{})
-	if err != nil {
-		return "", err
-	}
-	live := map[string]Host{}
-	for _, h := range hosts {
-		if h.Live(now) && (t.Pool == "" || h.Pool == t.Pool) {
-			live[h.ID] = h
-		}
-	}
-	if want != "" {
-		h, ok := live[want]
-		if !ok {
-			return "", errf(503, "no_host", "host %q is not live (no heartbeat within %v)", want, HostLeaseTTL)
-		}
-		if !h.offersTier(tier) {
-			return "", errf(409, "tier_unavailable", "host %q does not offer the %q tier (it offers %s); deploy without --host, or pick a host set up with `sudo twd host setup --microvm`", want, tier, tierList(h))
-		}
-		return want, nil
-	}
-	if l, err := m.store.GetLease(ctx, LeaseName(t.ID, workload)); err == nil && l.Holder != "" {
-		if h, ok := live[l.Holder]; ok {
-			if !h.offersTier(tier) {
-				return "", errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer the %q tier it now asks for (the host offers %s); run `twd undeploy %s`, then deploy again to place it on a host with that tier", workload, h.ID, tier, tierList(h), workload)
-			}
-			return l.Holder, nil
-		}
-	}
-	best, bestFree, others := "", -1<<62, 0
-	for _, h := range hosts {
-		if _, ok := live[h.ID]; !ok {
-			continue
-		}
-		if !h.offersTier(tier) {
-			others++
-			continue
-		}
-		if free := h.CapacityNodes - h.LiveNodes; free > bestFree || free == bestFree && h.ID < best {
-			best, bestFree = h.ID, free
-		}
-	}
-	if best == "" {
-		if tier != "" && others > 0 {
-			return "", errf(503, "no_host", "no live host offers the %q tier (%d live host(s) offer only other tiers); set one up with `sudo twd host setup --microvm`, or deploy with \"tier\": \"process\"", tier, others)
-		}
-		return "", errf(503, "no_host", "no live host (register twd-hostd and heartbeat first)")
-	}
-	return best, nil
-}
-
 func tierList(h Host) string {
 	if len(h.Tiers) == 0 {
 		return "none listed (process only)"
@@ -966,6 +967,9 @@ type Assignment struct {
 	// Public (ADR-029): the workload's public ingress; nil when it has no
 	// twd.jsonc "public" or the tenant's publicIngress is not allow.
 	Public *PublicAssignment `json:"public,omitempty"`
+	// PlacementTargets are what the host should measure paths to for this
+	// workload (smart placement, ADR-033; empty = nothing).
+	PlacementTargets []string `json:"placementTargets,omitempty"`
 }
 
 func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, error) {
@@ -980,6 +984,9 @@ func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, er
 			BundleURL: "/v1/deployments/" + d.ID + "/bundle", Epoch: d.Epoch,
 			Lease: LeaseName(d.TenantID, d.Workload), Tailnet: t.Tailnet, ControlURL: t.ControlURL, Namespaces: []ClassConfig{}, Fence: d.Fence}
 		a.Public = m.publicAssignment(ctx, t, d)
+		if d.Placement != nil && d.Placement.Mode == PlacementSmart {
+			a.PlacementTargets = d.Placement.Targets
+		}
 		for _, c := range d.Namespaces {
 			if c.Class == WorkloadNamespace {
 				a.WorkloadTags = c.Tags
