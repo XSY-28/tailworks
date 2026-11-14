@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/twd/internal/tssvc"
 )
 
 // Config configures a Mgmt.
@@ -615,8 +616,18 @@ type DeployResponse struct {
 	Endpoint     struct {
 		Node     string `json:"node"`
 		MagicDNS string `json:"magicDNS"`
+		// Service (optional) is the workload's Tailscale Service.
+		Service *ServiceEndpoint `json:"service,omitempty"`
 	} `json:"endpoint"`
 	Placement *PlacementDecision `json:"placement,omitempty"`
+}
+
+// ServiceEndpoint is a workload's Tailscale Service: a stable name and VIPs
+// that don't change when the workload node is re-minted or moves host.
+type ServiceEndpoint struct {
+	Name     string   `json:"name"`
+	MagicDNS string   `json:"magicDNS"`
+	Addrs    []string `json:"addrs,omitempty"`
 }
 
 func validName(s string) bool {
@@ -640,8 +651,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if !validName(r.Workload) {
 		return resp, errf(400, "bad_request", "workload must be a DNS label ([a-z0-9-], ≤63)")
 	}
-	classes := r.Namespaces
+	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
+	var svcCfg *TwdConfig
 	var pub *DeploymentPublic
 	var bcfg *TwdConfig
 	if len(r.Bundle) > 0 {
@@ -649,6 +661,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
 		cfg, err := BundleConfig(r.Bundle)
+		svcCfg = cfg
 		if err != nil && len(classes) == 0 {
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
@@ -688,11 +701,25 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			}
 		}
 	}
+	svcName, err := applyService(svcCfg, r.Workload, classes)
+	if err != nil {
+		return resp, errf(400, "bad_bundle", "%v", err)
+	}
 	dec, held, err := m.place(ctx, t, placementInput{Workload: r.Workload, Pinned: r.Host, Replace: r.Replace, Config: bcfg})
 	if err != nil {
 		return resp, err
 	}
 	host := dec.Host
+	var svcDef *ServiceEndpoint
+	if svcName != "" {
+		// Before the lease and the record: a deploy whose Service can't
+		// exist (name taken, no API scope) fails without side effects.
+		def, err := m.ensureService(ctx, t, r.Workload, svcName)
+		if err != nil {
+			return resp, err
+		}
+		svcDef = &ServiceEndpoint{Name: svcName, MagicDNS: tssvc.Label(svcName) + "." + t.Tailnet, Addrs: def.Addrs}
+	}
 	takeoverFrom, err := m.guardTakeover(ctx, t, r, host)
 	if err != nil {
 		return resp, err
@@ -749,6 +776,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if pub != nil {
 		detail["publicRoutes"] = pub.Spec.Routes
 	}
+	if svcName != "" {
+		detail["service"] = svcName
+	}
 	if takeoverFrom != "" {
 		detail["takeoverFrom"], detail["forced"] = takeoverFrom, true
 	}
@@ -774,6 +804,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	resp.DeploymentID, resp.Host, resp.Epoch, resp.Placement = d.ID, host, lease.Epoch, &dec
 	resp.Endpoint.Node = r.Workload + "-" + host
 	resp.Endpoint.MagicDNS = resp.Endpoint.Node + "." + t.Tailnet
+	resp.Endpoint.Service = svcDef
 	m.setDepStatus(d.ID, DeploymentStatus{Status: "assigned"})
 	// Tell the host now instead of at its next heartbeat.
 	go m.push(host, "/v1/push/assignments", map[string]any{})
@@ -823,10 +854,11 @@ type DeploymentView struct {
 	// Placement is why the deployment is on its host (ADR-033 draft).
 	Placement *PlacementDecision `json:"placement,omitempty"`
 	Endpoint  struct {
-		ObjectID string `json:"objectID,omitempty"`
-		Node     string `json:"node"`
-		MagicDNS string `json:"magicDNS"`
-		Status   string `json:"status"`
+		ObjectID string           `json:"objectID,omitempty"`
+		Node     string           `json:"node"`
+		MagicDNS string           `json:"magicDNS"`
+		Status   string           `json:"status"`
+		Service  *ServiceEndpoint `json:"service,omitempty"`
 	} `json:"endpoint"`
 }
 
@@ -842,6 +874,10 @@ func (m *Mgmt) GetDeployment(ctx context.Context, id string) (DeploymentView, er
 	v.DeploymentID, v.TenantID, v.Workload, v.Host, v.Epoch, v.Namespaces, v.CreatedAt = d.ID, d.TenantID, d.Workload, d.HostID, d.Epoch, d.Namespaces, d.CreatedAt
 	v.DeployedBy, v.Placement = d.DeployedBy, d.Placement
 	v.Status, v.Error = m.deploymentStatus(ctx, d)
+	if svc := workloadService(d.Namespaces); svc != "" {
+		t, _ := m.store.GetTenant(ctx, d.TenantID)
+		v.Endpoint.Service = &ServiceEndpoint{Name: svc, MagicDNS: tssvc.Label(svc) + "." + t.Tailnet}
+	}
 	v.Public = m.publicView(ctx, d)
 	if o, err := m.store.GetObjectByName(ctx, d.TenantID, d.Workload, WorkloadNamespace, d.Workload); err == nil {
 		v.Endpoint.ObjectID, v.Endpoint.MagicDNS, v.Endpoint.Status = o.ID, o.MagicDNS, o.Status
@@ -964,6 +1000,9 @@ type Assignment struct {
 	Tailnet      string        `json:"tailnet"`
 	ControlURL   string        `json:"controlURL,omitempty"`
 	WorkloadTags []string      `json:"workloadTags,omitempty"`
+	// Service: the Tailscale Service the workload node advertises while the
+	// deployment is active and healthy ("" = none).
+	Service string `json:"service,omitempty"`
 	// Fence: stop serving this workload when mgmt is unreachable for
 	// FenceAfter (stateful). Hosts treat a missing field as true.
 	Fence bool `json:"fence"`
@@ -992,7 +1031,7 @@ func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, er
 		}
 		for _, c := range d.Namespaces {
 			if c.Class == WorkloadNamespace {
-				a.WorkloadTags = c.Tags
+				a.WorkloadTags, a.Service = c.Tags, c.Service
 				continue
 			}
 			if c.Class == PublicNamespace {
@@ -2646,6 +2685,9 @@ type PreflightRequest struct {
 	SrcTags  []string `json:"srcTags"`  // workload + object tags
 	Connects []string `json:"connects"` // tags ("tag:db") or "*"; names are reported unchecked
 	Port     string   `json:"port,omitempty"`
+	// Service, with WorkloadTags, checks autoApprovers.services.
+	Service      string   `json:"service,omitempty"`
+	WorkloadTags []string `json:"workloadTags,omitempty"`
 	// Public: the workload declares public routes, so tag:twd-public needs
 	// the funnel nodeAttr (ADR-029 D6).
 	Public bool `json:"public,omitempty"`
@@ -2666,6 +2708,13 @@ type PreflightResult struct {
 	MissingTagOwners []string           `json:"missingTagOwners"`
 	TagOwnersSnippet string             `json:"tagOwnersSnippet,omitempty"`
 	Unchecked        []string           `json:"unchecked,omitempty"`
+	// Service is the Tailscale Service the workload node would host;
+	// ServiceUnapproved: the policy's autoApprovers.services doesn't let the
+	// workload tags host it (control would never route it), ServiceSnippet
+	// is the entry to add.
+	Service           string `json:"service,omitempty"`
+	ServiceUnapproved bool   `json:"serviceUnapproved,omitempty"`
+	ServiceSnippet    string `json:"serviceSnippet,omitempty"`
 	// MissingNodeAttrs names missing nodeAttrs ("funnel on tag:twd-public");
 	// NodeAttrsSnippet is the policy to add (ADR-029 D6).
 	MissingNodeAttrs []string `json:"missingNodeAttrs,omitempty"`
@@ -2716,7 +2765,10 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 		res.MissingNodeAttrs = append(res.MissingNodeAttrs, "funnel on "+PublicTag)
 		res.NodeAttrsSnippet = PublicFunnelSnippet
 	}
-	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0
+	if r.Service != "" {
+		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
+	}
+	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved
 	return res, nil
 }
 

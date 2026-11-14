@@ -132,7 +132,10 @@ type Config struct {
 	// to mgmt at registration so pushes go to the WhoIs node's address.
 	// The unix push socket (local-dev) is always served too.
 	PushListener net.Listener
-	PushPort     int
+	// ServiceCheckEvery is how often a workload with a Tailscale Service is
+	// health-probed (advertised only while healthy). 0 = 2 s.
+	ServiceCheckEvery time.Duration
+	PushPort          int
 	// PathEvery is how often hostd measures and reports the tailnet paths
 	// to its assignments' placement targets (smart placement, ADR-033).
 	// 0 = DefaultPathEvery (60 s); negative disables measuring.
@@ -287,8 +290,9 @@ func (h *Host) Start(ctx context.Context) error {
 	h.mu.Lock()
 	h.lastHB = time.Now()
 	h.mu.Unlock()
-	h.wg.Add(2)
+	h.wg.Add(3) // loop, serviceLoop, cronLoop
 	go h.loop()
+	go h.serviceLoop()
 	if h.cfg.PathEvery > 0 {
 		h.wg.Add(1)
 		go h.pathLoop()

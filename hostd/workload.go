@@ -53,6 +53,17 @@ type workload struct {
 	wl           *object       // the workload entry node
 	classTags    map[string][]string
 	noFence      bool // assignment fence=false: stateless, keeps serving without mgmt
+
+	// Tailscale Service (service.go): service is the active deployment's
+	// Service; svcAdvertised/svcNetd what the workload node advertises now.
+	service       string
+	svcMu         sync.Mutex // serialises syncService
+	svcAdvertised string
+	svcNetd       string
+	svcReason     string
+	svcFails      int
+	svcHealthy    bool
+
 	// placementTargets: what to measure paths to (smart placement).
 	placementTargets []string
 	cronLast         time.Time       // the last minute whose cron triggers were evaluated (UTC)
@@ -268,12 +279,14 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 	}
 	w.mu.Lock()
 	w.active, w.app, w.activeDep, w.status = inst, app, a.DeploymentID, "active"
+	w.service, w.svcFails, w.svcHealthy = a.Service, 0, true // startInstance waited for health
 	if w.gate != nil {
 		close(w.gate)
 		w.gate = nil
 	}
 	w.mu.Unlock()
 	h.rejoinObjects(w, app)
+	h.syncService(w, false)
 	go h.applyPublic(w, a.Public)
 	h.log.Info("deployment active", "workload", w.name, "deployment", a.DeploymentID, "epoch", a.Epoch,
 		"tier", tier, "blue_green", old != nil, "ms", time.Since(st).Milliseconds())
@@ -345,9 +358,11 @@ func (h *Host) deploySerial(w *workload, a mgmtapi.Assignment, app *bundle.App, 
 		return
 	}
 	w.active, w.app, w.activeDep, w.status = inst, app, a.DeploymentID, "active"
+	w.service, w.svcFails, w.svcHealthy = a.Service, 0, true
 	w.mu.Unlock()
 	open()
 	h.rejoinObjects(w, app)
+	h.syncService(w, false)
 	go h.applyPublic(w, a.Public)
 	h.log.Info("deployment active", "workload", w.name, "deployment", a.DeploymentID, "epoch", a.Epoch,
 		"runtime", app.Runtime, "tier", tier, "restart", old != nil, "ms", time.Since(st).Milliseconds(),
@@ -379,6 +394,9 @@ func (h *Host) undeploy(w *workload, reason string) {
 	w.status, w.err = "stopped", reason
 	t := w.tenant
 	w.mu.Unlock()
+	// Withdraw the Service before stopping, so control stops routing new
+	// callers here while the instance goes away.
+	h.syncService(w, false)
 	if inst != nil {
 		inst.stop()
 	}
