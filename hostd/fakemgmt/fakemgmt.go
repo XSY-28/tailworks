@@ -104,6 +104,7 @@ type Server struct {
 	heartbeatsDown       bool
 	reg                  *registry.Registry
 	resolver             *registry.Resolver
+	services             map[string]string // workload -> Tailscale Service (SetService)
 }
 
 // SetHeartbeatsDown makes host heartbeats fail with 503 (tests: a host
@@ -116,6 +117,17 @@ func (s *Server) SetHeartbeatsDown(down bool) {
 
 // SetLeaseLostCredentials makes the next n credential calls fail with
 // lease_lost (tests: a host whose lease epoch went stale mid-join).
+// SetService makes every assignment of workload carry the Tailscale
+// Service name ("" clears it), as mgmt does from twd.jsonc tailnet.service.
+func (s *Server) SetService(workload, name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.services == nil {
+		s.services = map[string]string{}
+	}
+	s.services[workload] = name
+}
+
 func (s *Server) SetLeaseLostCredentials(n int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -451,7 +463,7 @@ func (s *Server) assignments(w http.ResponseWriter, r *http.Request) {
 		}
 		a := mgmtapi.Assignment{DeploymentID: d.DeploymentID, TenantID: d.tenantID, Workload: d.workload,
 			BundleURL: "/v1/deployments/" + d.DeploymentID + "/bundle", Namespaces: d.namespaces, Epoch: d.epoch,
-			WorkloadTags: d.wlTags, Lease: mgmtapi.LeaseName(d.tenantID, d.workload),
+			WorkloadTags: d.wlTags, Service: s.services[d.workload], Lease: mgmtapi.LeaseName(d.tenantID, d.workload),
 			Tailnet: s.tenants[d.tenantID].Tailnet, ControlURL: s.tenants[d.tenantID].ControlURL, CreatedAt: ms(d.created), Fence: &d.fence, Containers: d.containers}
 		if d.public != nil {
 			exposed, set := s.exposed[d.tenantID+"/"+d.workload]

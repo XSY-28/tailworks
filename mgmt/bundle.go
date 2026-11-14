@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/internal/container"
+	"github.com/rosskukulinski/twd/internal/cron"
 	"github.com/rosskukulinski/twd/internal/publicspec"
 	"github.com/tailscale/hujson"
 )
@@ -44,6 +45,9 @@ type TwdConfig struct {
 	Tailnet struct {
 		// Tags are the workload entry node's tags (the "_workload" namespace).
 		Tags []string `json:"tags"`
+		// Service: true ("svc:<workload>"), or a Service name the workload
+		// entry node hosts (Tailscale Services); see ServiceName.
+		Service json.RawMessage `json:"service"`
 		// Connects are declared dependencies (tags or names), preflighted by twd deploy.
 		Connects []string `json:"connects"`
 		Objects  map[string]struct {
@@ -196,6 +200,40 @@ func BundleStateful(bundle []byte) (stateful bool, reason string) {
 		return false, ""
 	}
 	return true, "Durable Object classes " + strings.Join(guarded, ", ")
+}
+
+// BundleCrons returns the bundle's cron triggers (wrangler.jsonc or
+// wrangler.json "triggers": {"crons": [...]}), validated: at most
+// cron.MaxTriggers, no duplicates, each a valid expression. A bundle with no
+// wrangler config, or no triggers, has none. Hosts re-validate on deploy.
+func BundleCrons(bundle []byte) ([]string, error) {
+	files, err := bundleFiles(bundle, "wrangler.jsonc", "wrangler.json")
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range []string{"wrangler.jsonc", "wrangler.json"} {
+		b, ok := files[f]
+		if !ok {
+			continue
+		}
+		std, err := hujson.Standardize(b)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		var w struct {
+			Triggers struct {
+				Crons []string `json:"crons"`
+			} `json:"triggers"`
+		}
+		if err := json.Unmarshal(std, &w); err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		if err := cron.ValidateTriggers(w.Triggers.Crons); err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		return w.Triggers.Crons, nil
+	}
+	return nil, nil
 }
 
 // bundleFiles returns the shallowest copy of each named file (by base name)

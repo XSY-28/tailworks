@@ -48,8 +48,10 @@ twd doctor                                     # every check prints a fix if it 
   ```
 - then generate an **OAuth client**: Settings › OAuth clients, **Auth Keys ›
   Write** with tag `tag:twd`. Optionally add **Devices › Core › Write** (so
-  kills also delete the device) and **Policy File › Read** (so deploys
-  preflight your grants).
+  kills also delete the device), **Policy File › Read** (so deploys
+  preflight your grants) and **Services › Write** (so workloads with
+  `tailnet.service` get a Tailscale Service; see
+  [docs/services.md](docs/services.md)).
 
 Save the client where only you can read it:
 
@@ -109,11 +111,16 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
 - **What runs and what doesn't:** [docs/COMPAT.md](docs/COMPAT.md)
   (Agents SDK, MCP, Vercel AI SDK) and [docs/node-tier.md](docs/node-tier.md)
   (Node.js apps).
+- **Cron triggers** (`triggers.crons` → `scheduled()`):
+  [docs/cron-triggers.md](docs/cron-triggers.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **Running several mgmt replicas on Postgres:** the chaos and soak harness
   and its findings are in [e2e/multimgmt/](e2e/multimgmt/)
-  (`LEDGER.md`).
+  (`LEDGER.md`). Replicas can share one Tailscale Service VIP
+  (`-tsnet-service svc:twd-mgmt`).
+- **Stable names for workloads (Tailscale Services):** `"service": true` in
+  `twd.jsonc`; see [docs/services.md](docs/services.md).
 - **Build status and measured results:** [STATUS.md](STATUS.md).
 - **Design:** the RFC and ADRs live in
   `rosskukulinski/tailnet-agents-design` (private).

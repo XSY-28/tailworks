@@ -99,7 +99,7 @@ func printPublicPreflight(pf mgmt.PreflightResult) {
 // preflightFailure is the typed error for a failed deploy preflight.
 func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 	code, msg := "acl_denied", "preflight failed: the tenant policy is missing grants or tagOwners this app needs"
-	if len(pf.MissingNodeAttrs) > 0 && len(pf.Missing) == 0 && onlyPublicTagOwner(pf.MissingTagOwners) {
+	if len(pf.MissingNodeAttrs) > 0 && len(pf.Missing) == 0 && !pf.ServiceUnapproved && onlyPublicTagOwner(pf.MissingTagOwners) {
 		code, msg = "funnel_required", "preflight failed: this app declares public routes, but the tenant policy does not let "+policy.PublicTag+" use Funnel"
 	}
 	e := fail(code, msg)
@@ -118,6 +118,9 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 		for _, l := range strings.Split(pf.NodeAttrsSnippet, "\n") {
 			e.Fix = append(e.Fix, "  "+l)
 		}
+	}
+	if pf.ServiceUnapproved {
+		e.Fix = append(e.Fix, "let the workload node host "+pf.Service+" (control won't route it otherwise):", "  "+pf.ServiceSnippet)
 	}
 	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants")
 	return e

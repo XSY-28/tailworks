@@ -523,10 +523,14 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 	if !validName(r.Workload) {
 		return res, errf(400, "bad_request", "workload must be a DNS label ([a-z0-9-], ≤63)")
 	}
-	classes := r.Namespaces
+	classes := slices.Clone(r.Namespaces)
 	var connects []string
+	var svcCfg *TwdConfig
 	var pub *DeploymentPublic
 	if len(r.Bundle) > 0 {
+		if _, err := BundleCrons(r.Bundle); err != nil {
+			return res, errf(400, "bad_bundle", "%v", err)
+		}
 		cfg, err := BundleConfig(r.Bundle)
 		if err != nil && len(classes) == 0 {
 			return res, errf(400, "bad_bundle", "%v", err)
@@ -543,6 +547,17 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 				classes = cfg.Classes()
 			}
 			connects = cfg.Tailnet.Connects
+			svcCfg = cfg
+		}
+	}
+	svcName, err := applyService(svcCfg, r.Workload, classes)
+	if err != nil {
+		return res, errf(400, "bad_bundle", "%v", err)
+	}
+	var wlTags []string
+	for _, c := range classes {
+		if c.Class == WorkloadNamespace {
+			wlTags = c.Tags
 		}
 	}
 	if len(classes) == 0 {
@@ -557,7 +572,7 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 			}
 		}
 	}
-	res, err = m.Preflight(ctx, r.TenantID, PreflightRequest{SrcTags: src, Connects: connects, Public: pub != nil})
+	res, err = m.Preflight(ctx, r.TenantID, PreflightRequest{SrcTags: src, Connects: connects, Public: pub != nil, Service: svcName, WorkloadTags: wlTags})
 	if err != nil {
 		return res, err
 	}
@@ -566,7 +581,8 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 		res.PublicURL = "https://" + r.Workload + "." + t.Tailnet + "/"
 	}
 	m.audit(ctx, AuditRecord{TenantID: r.TenantID, Kind: "preflight", ActingFor: r.By}, map[string]any{"workload": r.Workload,
-		"ok": res.OK, "missing": len(res.Missing), "missingTagOwners": res.MissingTagOwners, "by": r.By})
+		"ok": res.OK, "missing": len(res.Missing), "missingTagOwners": res.MissingTagOwners, "service": res.Service,
+		"serviceUnapproved": res.ServiceUnapproved, "by": r.By})
 	return res, nil
 }
 

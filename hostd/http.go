@@ -482,7 +482,9 @@ type WorkloadStatus struct {
 	Requests                                        int64
 	InstanceDir                                     string
 	Tier                                            string
-	VM                                              *sandbox.Info `json:",omitempty"`
+	// Crons are the active deployment's cron triggers (UTC).
+	Crons []string      `json:",omitempty"`
+	VM    *sandbox.Info `json:",omitempty"`
 	// VMRSSKB is the microVM's VMM resident set (incl. hugetlb guest RAM).
 	VMRSSKB int64 `json:",omitempty"`
 	// Process tier: the workerd (or node) pid, its sandbox ("none" |
@@ -498,6 +500,9 @@ type WorkloadStatus struct {
 	// Runtime is "node" for the Node process tier ("" = workerd).
 	Runtime string    `json:",omitempty"`
 	Node    *NodeInfo `json:",omitempty"`
+	// Service is the workload's Tailscale Service and whether this host
+	// advertises it now.
+	Service *ServiceStatus `json:",omitempty"`
 	// Egress (Node tier) says whether egress attribution is an enforcement
 	// boundary on this host: "enforced" only under a sandbox that confines
 	// the process's network to the egress proxy (Landlock ABI ≥ 4 on Linux,
@@ -587,10 +592,14 @@ func (h *Host) Status() StatusView {
 		w.mu.Lock()
 		ws := WorkloadStatus{TenantID: w.tenantID, Workload: w.name, DeploymentID: w.activeDep, Status: w.status, Error: w.err, Epoch: w.epoch,
 			Public: pubs[w.tenantID+"/"+w.name]}
+		ws.Service = w.serviceStatus()
 		if w.active != nil {
 			ws.Requests = w.active.reqs.Load()
 			ws.InstanceDir = w.active.dir
 			ws.Tier = w.active.tier
+			if w.active.app != nil {
+				ws.Crons = w.active.app.Crons
+			}
 			ws.LogFile = filepath.Join(w.active.dir, "workerd.log")
 			if w.active.node != nil {
 				ws.Runtime, ws.Node, ws.LogFile = bundle.RuntimeNode, w.active.nodeInfo(), w.active.node.logPath

@@ -152,7 +152,10 @@ type Config struct {
 	// to mgmt at registration so pushes go to the WhoIs node's address.
 	// The unix push socket (local-dev) is always served too.
 	PushListener net.Listener
-	PushPort     int
+	// ServiceCheckEvery is how often a workload with a Tailscale Service is
+	// health-probed (advertised only while healthy). 0 = 2 s.
+	ServiceCheckEvery time.Duration
+	PushPort          int
 
 	// Containers boots container guests (ADR-032; hostd/vm on Linux +
 	// KVM). Nil: this host offers no containers, and ctx.container.start()
@@ -181,6 +184,9 @@ type Config struct {
 	// to its assignments' placement targets (smart placement, ADR-033).
 	// 0 = DefaultPathEvery (60 s); negative disables measuring.
 	PathEvery time.Duration
+	// CronTimeout bounds one cron trigger's scheduled() run (wall clock;
+	// default DefaultCronTimeout, 15 min).
+	CronTimeout time.Duration
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -240,6 +246,7 @@ type Host struct {
 	wg          sync.WaitGroup
 	runDirOwned bool
 	ctr         *ctrManager
+	nowFn       func() time.Time // wall clock for cron triggers (tests)
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;
@@ -365,12 +372,14 @@ func (h *Host) Start(ctx context.Context) error {
 	h.mu.Lock()
 	h.lastHB = time.Now()
 	h.mu.Unlock()
-	h.wg.Add(1)
+	h.wg.Add(3) // loop, serviceLoop, cronLoop
 	go h.loop()
+	go h.serviceLoop()
 	if h.cfg.PathEvery > 0 {
 		h.wg.Add(1)
 		go h.pathLoop()
 	}
+	go h.cronLoop()
 	return nil
 }
 

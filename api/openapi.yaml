@@ -759,7 +759,10 @@ paths:
         `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
         `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
         wrangler's `placement`). A bundle with neither `tailnet.tags` nor
-        `tailnet.objects` is `400 bad_bundle`.
+        `tailnet.objects` is `400 bad_bundle`. mgmt also validates
+        `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
+        duplicates, each a valid five-field UTC expression that can fire); an
+        invalid one is `400 bad_bundle`.
 
         **Deploy** (`dryRun` absent or false): picks a host, acquires the
         `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -2388,7 +2391,7 @@ components:
         |---|---|---|
         | `bad_request` | 400 | malformed body, parameter or filter |
         | `bad_cursor` | 400 | `cursor` does not decode |
-        | `bad_bundle` | 400 | bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` |
+        | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
         | `immutable_field` | 400 | PATCH touches a field the caller may not change |
         | `no_identity` | 401 | WhoIs failed for the connection |
         | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
@@ -2408,6 +2411,8 @@ components:
         | `lease_held` | 409 | another host holds the lease |
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
         | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+        | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+        | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
         | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
         | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
         | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -2454,6 +2459,8 @@ components:
         - lease_lost
         - lease_held
         - takeover_unconfirmed
+        - service_conflict
+        - service_api_failed
         - tier_unavailable
         - move_unconfirmed
         - lease_changed
@@ -3005,6 +3012,23 @@ components:
         tags: { type: array, items: { type: string } }
         agent: { type: boolean }
         ttl: { type: string, description: "`10m`-style duration or seconds." }
+        service:
+          type: string
+          pattern: "^svc:[a-z0-9][a-z0-9-]{0,62}$"
+          description: >-
+            `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc`
+            `tailnet.service`).
+    ServiceEndpoint:
+      type: object
+      description: >-
+        A workload's Tailscale Service: a stable name and VIPs that survive the workload node being
+        re-minted or moving host. Callers need a grant to the `svc:` name; control routes it to the
+        workload node only when policy `autoApprovers.services` lets the workload tags host it.
+      required: [name, magicDNS]
+      properties:
+        name: { type: string, examples: ["svc:support"] }
+        magicDNS: { type: string, examples: [support.tail1234.ts.net] }
+        addrs: { type: array, items: { type: string }, description: The Service VIPs (on create). }
     Endpoint:
       type: object
       description: The workload entry node (`_workload` object).
@@ -3014,6 +3038,7 @@ components:
         node: { type: string, description: hostname }
         magicDNS: { type: string }
         status: { $ref: "#/components/schemas/ObjectStatus" }
+        service: { $ref: "#/components/schemas/ServiceEndpoint" }
     Deployment:
       type: object
       required: [deploymentID, tenantID, workload, host, epoch, status, namespaces, endpoint, createdAt]
@@ -3077,6 +3102,11 @@ components:
         bundleURL: { type: string, format: uri-reference }
         namespaces: { type: array, items: { $ref: "#/components/schemas/ClassConfig" } }
         workloadTags: { type: array, items: { type: string } }
+        service:
+          type: string
+          description: >-
+            The Tailscale Service the workload entry node advertises while the deployment is active and
+            healthy; the host withdraws it on drain, undeploy, fencing, kill, or failed health checks.
         fence:
           type: boolean
           description: >-
@@ -3121,6 +3151,13 @@ components:
         missingTagOwners: { type: array, items: { type: string } }
         tagOwnersSnippet: { type: string }
         unchecked: { type: array, items: { type: string }, description: "`tailnet.connects` entries that are names, not tags." }
+        service: { type: string, description: "The Tailscale Service the workload node would host (`tailnet.service`)." }
+        serviceUnapproved:
+          type: boolean
+          description: >-
+            The policy's `autoApprovers.services` doesn't let the workload tags host `service`: the node would
+            advertise it but control would never route it. `ok` is false.
+        serviceSnippet: { type: string, description: The `autoApprovers` entry to add (HuJSON). }
         missingNodeAttrs:
           type: array
           items: { type: string }

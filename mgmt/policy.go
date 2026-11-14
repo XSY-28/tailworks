@@ -19,7 +19,12 @@ import (
 type Policy struct {
 	TagOwners map[string][]string `json:"tagOwners"`
 	Grants    []Grant             `json:"grants"`
-	NodeAttrs []NodeAttr          `json:"nodeAttrs"`
+	// AutoApprovers.Services: Service name → tags/users that may host it
+	// without an admin approving each node.
+	AutoApprovers struct {
+		Services map[string][]string `json:"services"`
+	} `json:"autoApprovers"`
+	NodeAttrs []NodeAttr `json:"nodeAttrs"`
 }
 
 // NodeAttr is one nodeAttrs entry. Attr values may be strings or objects
