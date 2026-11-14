@@ -1,4 +1,4 @@
-Last update: 2026-11-14 PT. Merged remote `twd logs` (status/remote-logs.md); hostd's GET /v1/logs now admits only tag:twd-mgmt over the tailnet.
+Last update: 2026-11-14 PT. Merged Worker secrets (status/worker-secrets.md); node-tier secrets moved out of the process environment (macOS leak). Per-flag help, quiet twd dev, early port check.
 
 Earlier: DX pass: strict twd.jsonc + schema, release workflow + get.sh, app-named tags, policy-doc fix.
 
@@ -64,6 +64,50 @@ secrets are separate workstreams, each with its own status file.
   entry is refused with `checksum mismatch`.
 - Not run: the release workflow itself (it needs a pushed tag on GitHub),
   and the e2e suites against a real tailnet.
+
+## CLI polish
+
+- `twd <cmd> --help` lists each flag with its description and default
+  (`cmd/twd/helpflags.go`). Help mode runs the command only up to its flag
+  parsing; every command parses before it does anything.
+  `TestHelpListsFlags` checks that `twd init x --help` creates nothing.
+  (`--help` already exited 0. The review's "exits 1" came from a failed
+  shell glob in the same command, not from twd.)
+- `twd dev` drops tailscale stunserver's `STUN server listening on …`
+  line, which went through the global logger (`cmd/twd/devlog.go`).
+- `twd dev` checks `--port` before it bundles and starts the control
+  plane. The error names `wrangler dev`, which also uses 8787. It warns
+  when `[::1]:<port>` belongs to another server, because then `localhost`
+  reaches that server. The default stays 8787, as in wrangler.
+
+## Worker secrets: node tier on macOS
+
+The secrets branch passed node-tier secrets as environment variables. On
+macOS any process of the same user can read another process's exec-time
+environment with `sysctl KERN_PROCARGS2`. I tested this with a canary
+process: an `(allow default)` Seatbelt profile like twd's doesn't block
+the read. Neither `(deny process-info* (target others))` nor
+`sysctl-read` name filters stop it, because the call is MIB-based. The
+macOS process tier runs every tenant as one user, so another tenant's
+sandboxed Node app could read them.
+
+Fix (`hostd/secrets.go`, `writeNodeSecrets`): node secrets go into a
+`0600` file in the instance dir. Node starts with `--require` of a preload
+that copies them into `process.env` and deletes the file; every (re)start
+writes it again. `TestNodeSecrets`, with real node and
+`make test-node` deps, now also checks that the value is not in the
+process's exec-time environment (`procenv_{darwin,linux}_test.go`, with
+a positive control on `TWD_WORKLOAD=`) and that the file is gone after
+start.
+
+**Still open (older than this branch):** the node tier also passes
+`TWD_CALLER_KEY` and the egress proxy's credentials (`HTTP_PROXY` /
+`TWD_EGRESS_PROXY`, with a token) in the environment. On macOS, the
+same read lets another same-user process forge caller headers to that
+app or send egress through its proxy as that workload. Node reads the
+proxy variables at bootstrap, so moving them changes how egress is
+enforced and needs its own change and review. On Linux, Landlock hides
+other processes' `/proc` entries.
 
 ## Remote logs: caller check on hostd
 

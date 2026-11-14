@@ -57,8 +57,9 @@ check below runs in both.
 
 `twd secret put|ls|rm` and `.dev.vars` work like `wrangler secret` and
 `wrangler dev`. Your code reads a secret as `env.NAME`, a text binding,
-in the Worker and in Durable Objects. For the `node` runtime it is an
-environment variable. See [secrets.md](secrets.md).
+in the Worker and in Durable Objects. For the `node` runtime it is
+`process.env.NAME` (loaded by a preload, not passed in the process
+environment). See [secrets.md](secrets.md).
 
 There are three differences from Cloudflare:
 

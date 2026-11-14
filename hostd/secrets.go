@@ -16,8 +16,10 @@ package hostd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"maps"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -87,16 +89,61 @@ func applySecrets(app *bundle.App, tier, workload string, vals map[string]string
 	return &cp, nil
 }
 
-// nodeEnv is a node app's node.env (and deploy vars) with its secrets on
-// top: a secret overrides a variable of the same name.
+// nodeEnv is a node app's node.env (and deploy vars). Secrets are NOT
+// in it: they reach the app through nodeSecretsPreload, never the process's
+// exec-time environment. On macOS any process of the same user can read
+// another's initial environment (sysctl KERN_PROCARGS2), and Seatbelt
+// can't refuse it; Landlock hides /proc on Linux, but one path for both is
+// simpler to reason about.
 func nodeEnv(app *bundle.App) map[string]string {
-	if len(app.Secrets) == 0 {
-		return app.Node.Env
+	return app.Node.Env
+}
+
+// Node secrets preload: spawnNode writes the values to a 0600 file in the
+// instance dir (which only this workload's sandbox may read) and starts
+// node with `--require` of a preload that copies them into process.env,
+// overriding node.env of the same name, and deletes the file. Every
+// (re)start writes it again.
+const (
+	nodeSecretsFile    = ".twd-secrets.json"
+	nodeSecretsPreload = ".twd-secrets.cjs"
+)
+
+const nodeSecretsPreloadJS = `"use strict";
+// twd: load this workload's secrets into process.env, then delete them.
+const fs = require("fs");
+const p = require("path").join(__dirname, ` + "`" + nodeSecretsFile + "`" + `);
+let s;
+try {
+  s = JSON.parse(fs.readFileSync(p, "utf8"));
+} catch (e) {
+  if (e.code !== "ENOENT") throw e; // consumed already (a cluster fork): inherited env
+}
+if (s) {
+  fs.unlinkSync(p);
+  Object.assign(process.env, s);
+}
+`
+
+// writeNodeSecrets writes the secrets file and the preload into dir and
+// returns the node arguments that load them (none without secrets).
+func writeNodeSecrets(dir string, secrets map[string]string) ([]string, error) {
+	if len(secrets) == 0 {
+		return nil, nil
 	}
-	env := maps.Clone(app.Node.Env)
-	if env == nil {
-		env = map[string]string{}
+	b, err := json.Marshal(secrets)
+	if err != nil {
+		return nil, err
 	}
-	maps.Copy(env, app.Secrets)
-	return env
+	sp := filepath.Join(dir, nodeSecretsFile)
+	os.Remove(sp)
+	if err := os.WriteFile(sp, b, 0o600); err != nil {
+		return nil, err
+	}
+	pp := filepath.Join(dir, nodeSecretsPreload)
+	if err := os.WriteFile(pp, []byte(nodeSecretsPreloadJS), 0o600); err != nil {
+		os.Remove(sp)
+		return nil, err
+	}
+	return []string{"--require", pp}, nil
 }

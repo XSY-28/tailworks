@@ -71,8 +71,12 @@ merges to master.
      `twd-config.json` `vars`, which is where the platform builds a facet
      Durable Object's `env`. So `env.NAME` is the same string in the Worker,
      in facet classes and in plain-DO classes.
-   - Runtime `node`: secrets are added to the process environment, over
-     `node.env` and deploy vars. twd's own variables can't be replaced, and
+   - Runtime `node`: secrets are written to a `0600` file in the instance
+     directory; node starts with `--require` of a preload that copies them
+     into `process.env` (over `node.env` and deploy vars) and deletes the
+     file. They are never in the exec-time environment: on macOS a
+     same-user process can read that (`KERN_PROCARGS2`), Seatbelt can't
+     refuse it, and the process tier there runs every tenant as one user. twd's own variables can't be replaced, and
      a deploy that tries is refused with `bad_secret_name`.
    - Both files live in the `0700` instance directory, which is removed when
      the instance stops. Nothing is written to hostd's data directory.

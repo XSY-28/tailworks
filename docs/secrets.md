@@ -7,8 +7,8 @@ secrets:
 - You set a secret with `twd secret put <NAME>`. The value is read from
   stdin, never from the command line.
 - Your code reads it as `env.NAME`, a string, in the Worker and in every
-  Durable Object class. For `"runtime": "node"` it is the environment
-  variable `NAME`.
+  Durable Object class. For `"runtime": "node"` it is
+  `process.env.NAME`.
 - A secret overrides a var of the same name.
 
 The design and the threat model are in
@@ -115,7 +115,12 @@ The templates' `.gitignore` lists `.dev.vars`.
   is `0700` and is deleted when the instance stops:
   - workerd: text bindings in `config.capnp`, plus `twd-config.json`,
     where facet Durable Objects get their `env`;
-  - runtime `node`: the node process's environment.
+  - runtime `node`: a `0600` file there, which a `--require` preload
+    copies into `process.env` at start-up and then deletes (every start
+    writes it again). The values are deliberately **not** in the node
+    process's exec-time environment: on macOS any process of the same user
+    can read another process's environment (`ps -E`, `KERN_PROCARGS2`),
+    and Seatbelt can't refuse that read.
 
   The process sandbox keeps every other tenant's workloads out of that
   directory and, on Linux, out of other processes' `/proc` entries.

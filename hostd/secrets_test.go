@@ -1,6 +1,7 @@
 package hostd_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io/fs"
@@ -104,8 +105,10 @@ func TestWorkerSecrets(t *testing.T) {
 	}
 }
 
-// TestNodeSecrets: for runtime "node" a secret is an environment variable
-// and overrides node.env of the same name.
+// TestNodeSecrets: for runtime "node" a secret is in process.env and
+// overrides node.env of the same name, but it is NOT in the process's
+// exec-time environment (on macOS any same-user process can read that), and
+// the preload deletes its file once it has read it.
 func TestNodeSecrets(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short")
@@ -122,5 +125,28 @@ func TestNodeSecrets(t *testing.T) {
 	code, _, b := s.do("GET", "http://"+wl.IP+"/whoami", nil)
 	if code != 200 || !strings.Contains(string(b), `"greeting":"from-a-secret"`) {
 		t.Fatalf("whoami: %d %s", code, b)
+	}
+	var pid int
+	var dir string
+	for _, w := range e.Host.Status().Workloads {
+		if w.Workload == "nodeprobe" && w.PID > 0 {
+			pid, dir = w.PID, w.InstanceDir
+		}
+	}
+	if pid == 0 {
+		t.Fatal("no node pid in status")
+	}
+	pe, err := procEnv(pid)
+	if err != nil {
+		t.Fatalf("read pid %d env: %v", pid, err)
+	}
+	if bytes.Contains(pe, []byte("from-a-secret")) {
+		t.Fatalf("the secret is in node's exec-time environment (pid %d)", pid)
+	}
+	if !bytes.Contains(pe, []byte("TWD_WORKLOAD=")) {
+		t.Fatalf("procEnv read no environment for pid %d: the check above proves nothing", pid)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".twd-secrets.json")); !os.IsNotExist(err) {
+		t.Fatalf("secrets file still in the instance dir after start: %v", err)
 	}
 }

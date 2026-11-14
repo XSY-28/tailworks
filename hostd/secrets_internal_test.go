@@ -1,6 +1,8 @@
 package hostd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -33,8 +35,20 @@ func TestApplySecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := nodeEnv(ns)
-	if env["A"] != "env" || env["B"] != "secret" || env["C"] != "secret" || node.Node.Env["B"] != "env" {
-		t.Fatalf("node env %v (node.env %v)", env, node.Node.Env)
+	// Secrets never go in the environment, only in the preload's file.
+	if env := nodeEnv(ns); env["B"] != "env" || env["C"] != "" {
+		t.Fatalf("node env %v carries secrets", env)
+	}
+	dir := t.TempDir()
+	args, err := writeNodeSecrets(dir, ns.Secrets)
+	if err != nil || len(args) != 2 || args[0] != "--require" || args[1] != filepath.Join(dir, nodeSecretsPreload) {
+		t.Fatalf("args %v, %v", args, err)
+	}
+	st, err := os.Stat(filepath.Join(dir, nodeSecretsFile))
+	if err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("secrets file: %v %v", st, err)
+	}
+	if args, _ := writeNodeSecrets(t.TempDir(), nil); args != nil {
+		t.Fatalf("no secrets: args %v", args)
 	}
 }

@@ -180,7 +180,8 @@ INSTALL.md `host_sockets`).
   the variables above, `TWD_WORKLOAD`, `TWD_DEPLOYMENT` and
   `TWD_NODE_NAME`, plus `node.env` and `twd deploy --var`, and the
   workload's secrets (`twd secret put`, [secrets.md](secrets.md)) on top of
-  those.
+  those. Secrets are loaded into `process.env` by a `--require` preload,
+  not passed in the environment, so they aren't visible to `ps -E`.
 - **Deploys** are **stop-then-start**, with requests held at the gate.
   Durable runtimes such as Workflow's local World and SQLite files assume one
   process per data dir, so blue/green overlap is not used here.
