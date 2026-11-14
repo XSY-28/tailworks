@@ -648,6 +648,7 @@ func cmdLogs(args []string) error {
 	n := f.Int("n", 50, "lines")
 	follow := f.Bool("f", false, "follow")
 	tenantF := tenantFlag(f)
+	hostF := f.String("host", "", "linked machine: only the replica on this host")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -657,8 +658,7 @@ func cmdLogs(args []string) error {
 		return err
 	}
 	if s.remote() {
-		return fail("remote_unsupported", "logs are files on the host that runs twd up (this machine is linked to "+s.Link.Endpoint+")").
-			withFix("run `twd logs` on the host", "`twd ls` and `twd audit` work from here")
+		return remoteLogs(s, pos, *comp, *tenantF, *hostF, *n, *follow) // logs_remote.go
 	}
 	if !s.configured() {
 		return fail("not_up", "twd is not set up in "+s.Dir)

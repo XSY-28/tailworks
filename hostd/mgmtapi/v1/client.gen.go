@@ -282,6 +282,7 @@ const (
 	ErrorCodeHostTokenInvalid        ErrorCode = "host_token_invalid"
 	ErrorCodeHostTokenRequired       ErrorCode = "host_token_required"
 	ErrorCodeHostTokenUnconfigured   ErrorCode = "host_token_unconfigured"
+	ErrorCodeHostUnavailable         ErrorCode = "host_unavailable"
 	ErrorCodeIdentityConflict        ErrorCode = "identity_conflict"
 	ErrorCodeIdentityPending         ErrorCode = "identity_pending"
 	ErrorCodeImageUnavailable        ErrorCode = "image_unavailable"
@@ -296,6 +297,7 @@ const (
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
 	ErrorCodeNoHost                  ErrorCode = "no_host"
 	ErrorCodeNoIdentity              ErrorCode = "no_identity"
+	ErrorCodeNoLogs                  ErrorCode = "no_logs"
 	ErrorCodeNotAdmin                ErrorCode = "not_admin"
 	ErrorCodeNotFound                ErrorCode = "not_found"
 	ErrorCodeNotReady                ErrorCode = "not_ready"
@@ -360,6 +362,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeHostTokenUnconfigured:
 		return true
+	case ErrorCodeHostUnavailable:
+		return true
 	case ErrorCodeIdentityConflict:
 		return true
 	case ErrorCodeIdentityPending:
@@ -387,6 +391,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeNoHost:
 		return true
 	case ErrorCodeNoIdentity:
+		return true
+	case ErrorCodeNoLogs:
 		return true
 	case ErrorCodeNotAdmin:
 		return true
@@ -1400,6 +1406,7 @@ type Error struct {
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
+	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -1427,6 +1434,7 @@ type Error struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -1465,6 +1473,7 @@ type Error struct {
 // | `not_found` | 404 | — |
 // | `unknown_tenant` | 404 | — |
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
+// | `no_logs` | 404 | the workload's host has no log file for it yet |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
@@ -1492,6 +1501,7 @@ type Error struct {
 // | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
+// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -2472,6 +2482,7 @@ type TombstoneError struct {
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
+	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -2499,6 +2510,7 @@ type TombstoneError struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -2914,6 +2926,18 @@ type PurgeTenantObjectsParams struct {
 
 // PurgeTenantObjectsParamsState defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParamsState string
+
+// GetWorkloadLogsParams defines parameters for GetWorkloadLogs.
+type GetWorkloadLogsParams struct {
+	// N Lines from the end of the log (0 with `follow` for new lines only).
+	N *int `form:"n,omitempty" json:"n,omitempty"`
+
+	// Follow Keep the stream open and send new lines as they are written.
+	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
+
+	// Host Only the replica on this host (a host ID).
+	Host *string `form:"host,omitempty" json:"host,omitempty"`
+}
 
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
@@ -4150,6 +4174,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	//
+	// The app's log is a file on the host that runs it. mgmt finds the
+	// host holding the workload's namespace lease and reads the log from
+	// that host's hostd over the mgmt → hostd channel (the push port);
+	// hostd resolves the file from its own record of the tenant's
+	// workload, never from a path the caller sends. The response is
+	// `text/plain`: the last `n` lines, then (with `follow=true`) new
+	// lines as they are written, streamed until the client disconnects
+	// or the host ends the stream (at most an hour; follow again to
+	// continue).
+	//
+	// A workload with `replicas` reads every replica's host; each line
+	// is then prefixed with `[<hostID>] `, and `host` selects one
+	// replica. A host that does not answer contributes one
+	// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+	// host answers). `404 unknown_workload` when the workload has no
+	// running replica (on `host`); `404 no_logs` when the host has no
+	// log file for it yet. A read, so not audited; mgmt logs the actor.
+	// Only the workload's own app log: the daemons' logs
+	// (`--component`) stay on the host.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
+	GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
 	//
@@ -5645,6 +5694,41 @@ func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *Pu
 // Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 func (c *Client) CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckTenantWIFRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+//
+// The app's log is a file on the host that runs it. mgmt finds the
+// host holding the workload's namespace lease and reads the log from
+// that host's hostd over the mgmt → hostd channel (the push port);
+// hostd resolves the file from its own record of the tenant's
+// workload, never from a path the caller sends. The response is
+// `text/plain`: the last `n` lines, then (with `follow=true`) new
+// lines as they are written, streamed until the client disconnects
+// or the host ends the stream (at most an hour; follow again to
+// continue).
+//
+// A workload with `replicas` reads every replica's host; each line
+// is then prefixed with `[<hostID>] `, and `host` selects one
+// replica. A host that does not answer contributes one
+// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+// host answers). `404 unknown_workload` when the workload has no
+// running replica (on `host`); `404 no_logs` when the host has no
+// log file for it yet. A read, so not audited; mgmt logs the actor.
+// Only the workload's own app log: the daemons' logs
+// (`--component`) stay on the host.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
+func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetWorkloadLogsRequest(c.Server, id, workload, params)
 	if err != nil {
 		return nil, err
 	}
@@ -8306,6 +8390,98 @@ func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error)
 	return req, nil
 }
 
+// NewGetWorkloadLogsRequest constructs an http.Request for the GetWorkloadLogs method
+func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/logs", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.N != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "n", *params.N, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Follow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "follow", *params.Follow, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Host != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "host", *params.Host, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetWorkloadPublicRequest constructs an http.Request for the GetWorkloadPublic method
 func NewGetWorkloadPublicRequest(server string, id TenantID, workload WorkloadName) (*http.Request, error) {
 	var err error
@@ -9459,6 +9635,33 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error)
+
+	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	//
+	// The app's log is a file on the host that runs it. mgmt finds the
+	// host holding the workload's namespace lease and reads the log from
+	// that host's hostd over the mgmt → hostd channel (the push port);
+	// hostd resolves the file from its own record of the tenant's
+	// workload, never from a path the caller sends. The response is
+	// `text/plain`: the last `n` lines, then (with `follow=true`) new
+	// lines as they are written, streamed until the client disconnects
+	// or the host ends the stream (at most an hour; follow again to
+	// continue).
+	//
+	// A workload with `replicas` reads every replica's host; each line
+	// is then prefixed with `[<hostID>] `, and `host` selects one
+	// replica. A host that does not answer contributes one
+	// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+	// host answers). `404 unknown_workload` when the workload has no
+	// running replica (on `host`); `404 no_logs` when the host has no
+	// log file for it yet. A read, so not audited; mgmt logs the actor.
+	// Only the workload's own app log: the daemons' logs
+	// (`--component`) stay on the host.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
+	GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error)
 
 	// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
 	//
@@ -13743,6 +13946,103 @@ func (r CheckTenantWIFResponse) ContentType() string {
 	return ""
 }
 
+// GetWorkloadLogsResponse200Headers the declared response headers of an HTTP 200 response for GetWorkloadLogs
+type GetWorkloadLogsResponse200Headers struct {
+	CacheControl *string
+}
+
+// GetWorkloadLogsResponse400Headers the declared response headers of an HTTP 400 response for GetWorkloadLogs
+type GetWorkloadLogsResponse400Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadLogsResponse403Headers the declared response headers of an HTTP 403 response for GetWorkloadLogs
+type GetWorkloadLogsResponse403Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadLogsResponse404Headers the declared response headers of an HTTP 404 response for GetWorkloadLogs
+type GetWorkloadLogsResponse404Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadLogsResponseDefaultHeaders the declared response headers of an HTTP default response for GetWorkloadLogs
+type GetWorkloadLogsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetWorkloadLogsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetWorkloadLogsResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *GetWorkloadLogsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetWorkloadLogsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetWorkloadLogsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetWorkloadLogsResponseDefaultHeaders
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetWorkloadLogsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetWorkloadLogsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetWorkloadLogsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetWorkloadLogsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetWorkloadLogsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetWorkloadLogsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetWorkloadLogsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetWorkloadLogsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetWorkloadPublicResponse200Headers the declared response headers of an HTTP 200 response for GetWorkloadPublic
 type GetWorkloadPublicResponse200Headers struct {
 	ETag *string
@@ -15398,6 +15698,39 @@ func (c *ClientWithResponses) CheckTenantWIFWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseCheckTenantWIFResponse(rsp)
+}
+
+// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+//
+// The app's log is a file on the host that runs it. mgmt finds the
+// host holding the workload's namespace lease and reads the log from
+// that host's hostd over the mgmt → hostd channel (the push port);
+// hostd resolves the file from its own record of the tenant's
+// workload, never from a path the caller sends. The response is
+// `text/plain`: the last `n` lines, then (with `follow=true`) new
+// lines as they are written, streamed until the client disconnects
+// or the host ends the stream (at most an hour; follow again to
+// continue).
+//
+// A workload with `replicas` reads every replica's host; each line
+// is then prefixed with `[<hostID>] `, and `host` selects one
+// replica. A host that does not answer contributes one
+// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+// host answers). `404 unknown_workload` when the workload has no
+// running replica (on `host`); `404 no_logs` when the host has no
+// log file for it yet. A read, so not audited; mgmt logs the actor.
+// Only the workload's own app log: the daemons' logs
+// (`--component`) stay on the host.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
+func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error) {
+	rsp, err := c.GetWorkloadLogs(ctx, id, workload, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetWorkloadLogsResponse(rsp)
 }
 
 // GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
@@ -19735,6 +20068,106 @@ func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, e
 		response.Headers404 = &headers
 	case true:
 		var headers CheckTenantWIFResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetWorkloadLogsResponse parses an HTTP response from a GetWorkloadLogsWithResponse call
+func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetWorkloadLogsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetWorkloadLogsResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers GetWorkloadLogsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers GetWorkloadLogsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetWorkloadLogsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetWorkloadLogsResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

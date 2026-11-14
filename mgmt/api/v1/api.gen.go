@@ -284,6 +284,7 @@ const (
 	ErrorCodeHostTokenInvalid        ErrorCode = "host_token_invalid"
 	ErrorCodeHostTokenRequired       ErrorCode = "host_token_required"
 	ErrorCodeHostTokenUnconfigured   ErrorCode = "host_token_unconfigured"
+	ErrorCodeHostUnavailable         ErrorCode = "host_unavailable"
 	ErrorCodeIdentityConflict        ErrorCode = "identity_conflict"
 	ErrorCodeIdentityPending         ErrorCode = "identity_pending"
 	ErrorCodeImageUnavailable        ErrorCode = "image_unavailable"
@@ -298,6 +299,7 @@ const (
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
 	ErrorCodeNoHost                  ErrorCode = "no_host"
 	ErrorCodeNoIdentity              ErrorCode = "no_identity"
+	ErrorCodeNoLogs                  ErrorCode = "no_logs"
 	ErrorCodeNotAdmin                ErrorCode = "not_admin"
 	ErrorCodeNotFound                ErrorCode = "not_found"
 	ErrorCodeNotReady                ErrorCode = "not_ready"
@@ -362,6 +364,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeHostTokenUnconfigured:
 		return true
+	case ErrorCodeHostUnavailable:
+		return true
 	case ErrorCodeIdentityConflict:
 		return true
 	case ErrorCodeIdentityPending:
@@ -389,6 +393,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeNoHost:
 		return true
 	case ErrorCodeNoIdentity:
+		return true
+	case ErrorCodeNoLogs:
 		return true
 	case ErrorCodeNotAdmin:
 		return true
@@ -1402,6 +1408,7 @@ type Error struct {
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
+	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -1429,6 +1436,7 @@ type Error struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -1467,6 +1475,7 @@ type Error struct {
 // | `not_found` | 404 | — |
 // | `unknown_tenant` | 404 | — |
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
+// | `no_logs` | 404 | the workload's host has no log file for it yet |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
@@ -1494,6 +1503,7 @@ type Error struct {
 // | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
+// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -2474,6 +2484,7 @@ type TombstoneError struct {
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
+	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -2501,6 +2512,7 @@ type TombstoneError struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
@@ -2916,6 +2928,18 @@ type PurgeTenantObjectsParams struct {
 
 // PurgeTenantObjectsParamsState defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParamsState string
+
+// GetWorkloadLogsParams defines parameters for GetWorkloadLogs.
+type GetWorkloadLogsParams struct {
+	// N Lines from the end of the log (0 with `follow` for new lines only).
+	N *int `form:"n,omitempty" json:"n,omitempty"`
+
+	// Follow Keep the stream open and send new lines as they are written.
+	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
+
+	// Host Only the replica on this host (a host ID).
+	Host *string `form:"host,omitempty" json:"host,omitempty"`
+}
 
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
@@ -3377,6 +3401,9 @@ type ServerInterface interface {
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID)
+	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
+	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
 	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/public)
 	GetWorkloadPublic(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName)
@@ -5242,6 +5269,83 @@ func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkloadLogs operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkloadLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWorkloadLogsParams
+
+	// ------------- Optional query parameter "n" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "n", r.URL.Query(), &params.N, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "n"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "n", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "follow" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "follow", r.URL.Query(), &params.Follow, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "follow"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "follow", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "host" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "host", r.URL.Query(), &params.Host, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "host"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "host", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkloadLogs(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkloadPublic operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkloadPublic(w http.ResponseWriter, r *http.Request) {
 
@@ -5519,6 +5623,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}", wrapper.UpdateTenant)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/objects", wrapper.PurgeTenantObjects)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/wif-check", wrapper.CheckTenantWIF)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/logs", wrapper.GetWorkloadLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.GetWorkloadPublic)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.UpdateWorkloadPublic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts", wrapper.ListHosts)
@@ -9956,6 +10061,109 @@ func (response CheckTenantWIFdefaultJSONResponse) VisitCheckTenantWIFResponse(w 
 	return err
 }
 
+type GetWorkloadLogsRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   GetWorkloadLogsParams
+}
+
+type GetWorkloadLogsResponseObject interface {
+	VisitGetWorkloadLogsResponse(w http.ResponseWriter) error
+}
+
+type GetWorkloadLogs200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type GetWorkloadLogs200TextResponse struct {
+	Body    string
+	Headers GetWorkloadLogs200ResponseHeaders
+}
+
+func (response GetWorkloadLogs200TextResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/plain")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+
+	_, err := w.Write([]byte(fmt.Sprint(response.Body)))
+	return err
+}
+
+type GetWorkloadLogs400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetWorkloadLogs400JSONResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadLogs403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWorkloadLogs403JSONResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadLogs404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWorkloadLogs404JSONResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadLogsdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetWorkloadLogsdefaultJSONResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetWorkloadPublicRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -10490,6 +10698,9 @@ type StrictServerInterface interface {
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(ctx context.Context, request CheckTenantWIFRequestObject) (CheckTenantWIFResponseObject, error)
+	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
+	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
 	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/public)
 	GetWorkloadPublic(ctx context.Context, request GetWorkloadPublicRequestObject) (GetWorkloadPublicResponseObject, error)
@@ -11804,6 +12015,34 @@ func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CheckTenantWIFResponseObject); ok {
 		if err := validResponse.VisitCheckTenantWIFResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWorkloadLogs operation middleware
+func (sh *strictHandler) GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams) {
+	var request GetWorkloadLogsRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWorkloadLogs(ctx, request.(GetWorkloadLogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWorkloadLogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWorkloadLogsResponseObject); ok {
+		if err := validResponse.VisitGetWorkloadLogsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
