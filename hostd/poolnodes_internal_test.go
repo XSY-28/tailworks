@@ -72,3 +72,13 @@ func TestIdlePoolSelection(t *testing.T) {
 		t.Fatalf("retire %v, want %v", got, want)
 	}
 }
+
+// Only Durable Object classes use or warm a pool: never the workload entry
+// node, a pool node, or the public (Funnel) node.
+func TestPoolable(t *testing.T) {
+	for class, want := range map[string]bool{"SupportAgent": true, "": false, PoolClass: false, "_workload": false, "_public": false} {
+		if got := poolable(class); got != want {
+			t.Errorf("poolable(%q) = %v, want %v", class, got, want)
+		}
+	}
+}

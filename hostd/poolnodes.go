@@ -28,6 +28,13 @@ const PoolClass = "_pool"
 
 const poolDemandWindow = time.Hour
 
+// poolable reports whether objects of class may use (and warm) a pool: DO
+// classes only, never the workload entry node, a pool node or the public
+// node (reserved namespaces start with "_"; the public one is checked too).
+func poolable(class string) bool {
+	return class != "" && !strings.HasPrefix(class, "_") && class != mgmtapi.PublicNamespace
+}
+
 func poolKey(tenantID, workload, class string) string { return tenantID + "/" + workload + "/" + class }
 
 func randSuffix() string {
@@ -45,7 +52,7 @@ func (o *object) poolClassOf() string { c, _, _ := strings.Cut(o.Name, "/"); ret
 // takePoolLocked reserves a ready, idle pool node for (tenant, workload,
 // class), or returns nil. h.mu must be held.
 func (h *Host) takePoolLocked(tenantID, workload, class string) *object {
-	if h.cfg.PoolNodes <= 0 || class == "" || class == PoolClass {
+	if h.cfg.PoolNodes <= 0 || !poolable(class) {
 		return nil
 	}
 	for _, p := range h.objects {
@@ -59,7 +66,7 @@ func (h *Host) takePoolLocked(tenantID, workload, class string) *object {
 
 // noteDemand records a create of class on this host (sizing).
 func (h *Host) noteDemand(tenantID, workload, class string) {
-	if h.cfg.PoolNodes <= 0 || class == "" || class == PoolClass {
+	if h.cfg.PoolNodes <= 0 || !poolable(class) {
 		return
 	}
 	h.mu.Lock()

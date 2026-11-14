@@ -132,6 +132,8 @@ hostd's API, not this document's.
 | `DELETE` | `/v1/tenants/{id}` | admin | yes | `DeleteTenant` | Delete a tenant |
 | `DELETE` | `/v1/tenants/{id}/objects` | admin | yes | `PurgeTenantObjects` | Purge terminal objects of a tenant |
 | `POST` | `/v1/tenants/{id}/wif-check` | admin | no | `CheckTenantWIF` | Verify a wif tenant's trust credentials (diagnostic) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
+| `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
 | `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/.well-known/openid-configuration` | public | no | `GetOIDCConfiguration` | OIDC discovery (base issuer) |
@@ -290,6 +292,56 @@ control plane; it creates nothing. `400 bad_request` for non-wif tenants.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/public` — Read a workload's public-ingress exposure (`twd expose`)
+
+`GetWorkloadPublic` · role **admin** · audited: no
+
+ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+served over Funnel from its public node
+(`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
+the tenant's `publicIngress` is `allow`. A workload that was never
+toggled is exposed.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `WorkloadPublic` | The workload's exposure. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PATCH /v1/tenants/{id}/workloads/{workload}/public` — Expose or unexpose a workload's public routes (JSON Merge Patch)
+
+`UpdateWorkloadPublic` · role **admin** · audited: yes
+
+`twd expose on|off` (ADR-029 D1): an operator override that survives
+redeploys. `exposed: false` makes the host close the public node's
+Funnel listener and reset its flows (the node and its certificate
+stay); `true` reopens it. The lease holder is pushed at once.
+`404 unknown_workload` when the tenant has no deployment of the
+workload. Audited (`kind: expose_on` / `expose_off`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `If-Match` | header | string | no | Only apply if the resource's current `ETag` matches; otherwise `412 precondition_failed`. |
+
+**Request** `application/json` or `application/merge-patch+json`: `WorkloadPublicPatch`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `WorkloadPublic` | The updated exposure. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 412 | `Error` | `If-Match` did not match the current `ETag`. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
 ## Hosts
@@ -1065,6 +1117,7 @@ What a host must run; `bundleURL` is `GET /v1/deployments/{id}/bundle`.
 | `maxDepth` | integer | no |  |
 | `maxLive` | integer | no |  |
 | `namespaces` | array of `ClassConfig` | yes |  |
+| `public` | `PublicAssignment` | no | A workload's public ingress (ADR-029). The host runs one extra node for it (namespace `_public`, object name = the workload, hostname = the workload name, `tags`) whose Funnel listener serves `routes` while `exposed`. |
 | `tailnet` | string | yes |  |
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
@@ -1101,8 +1154,13 @@ Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`,
 `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`,
 `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`,
 `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked).
+Public ingress (ADR-029), host chain: `public_request` (one per public
+request), `public_rejected` (per-minute summary of requests the limits
+refused), `public_object_created` (a name admitted for a public create);
+`expose_on` / `expose_off` on both chains (mgmt: the operator's change;
+host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `transfer`, `revoke`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -1130,7 +1188,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create); `expose_on` / `expose_off` on both chains (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -1206,6 +1264,7 @@ A single-use auth key. Never logged; `String()` redacts it in Go.
 | `maxDepth` | integer | no |  |
 | `maxLive` | integer | no |  |
 | `namespaces` | array of `ClassConfig` | yes |  |
+| `public` | `DeploymentPublic` | no | The deployment's public routes (ADR-029); absent when tailnet-only. |
 | `status` | `DeploymentStatus` | yes |  |
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
@@ -1231,6 +1290,17 @@ Extends `Page`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `items` | array of `Deployment` | no |  |
+
+#### `DeploymentPublic`
+
+The deployment's public routes (ADR-029); absent when tailnet-only.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `allowed` | boolean | yes | The tenant's `publicIngress` is `allow`; false: declared but not served. |
+| `exposed` | boolean | yes | `twd expose` setting. |
+| `routes` | array of string | yes |  |
+| `url` | string (uri) | yes |  |
 
 #### `DeploymentReport`
 
@@ -1271,7 +1341,7 @@ is policy HuJSON to paste when a grant is missing; `doc_url` is
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}` \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, or neither `tailnet.tags` nor `tailnet.objects` \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}` \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -1305,6 +1375,7 @@ The catalog. Status in parentheses.
 | `lease_lost` | 409 | epoch/holder fence failed |
 | `lease_held` | 409 | another host holds the lease |
 | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
+| `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier |
 | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
 | `already_joined` | 409 | credential for an object that has a node |
 | `identity_conflict` | 409 | object ID collision across identities |
@@ -1324,7 +1395,7 @@ The catalog. Status in parentheses.
 | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `immutable_field`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `bootstrap_failed`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `immutable_field`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `tier_unavailable`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `bootstrap_failed`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `public_ingress_not_allowed`, `unknown_workload`, `internal`
 
 #### `Health`
 
@@ -1627,11 +1698,54 @@ the last page.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `missing` | array of `PreflightMissing` | yes |  |
+| `missingNodeAttrs` | array of string | no | Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes. |
 | `missingTagOwners` | array of string | yes |  |
+| `nodeAttrsSnippet` | string | no | The `tagOwners` + `nodeAttrs` policy to add (HuJSON). |
 | `ok` | boolean | yes |  |
+| `publicURL` | string (uri) | no | Where the workload's public routes will be served. |
 | `srcTags` | array of string | no | The tags checked (workload + object tags from the bundle). |
 | `tagOwnersSnippet` | string | no |  |
 | `unchecked` | array of string | no | `tailnet.connects` entries that are names, not tags. |
+
+#### `PublicAssignment`
+
+A workload's public ingress (ADR-029). The host runs one extra node
+for it (namespace `_public`, object name = the workload, hostname =
+the workload name, `tags`) whose Funnel listener serves `routes`
+while `exposed`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `exposed` | boolean | yes |  |
+| `limits` | `PublicLimits` | yes | netd's limits on a public listener (ADR-029 D5); defaults filled in. |
+| `routes` | array of string | yes |  |
+| `tags` | array of string | yes |  |
+| `upgrade` | array of string | no | Routes on which WebSocket/SSE upgrades are allowed. |
+
+#### `PublicIngress`
+
+Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
+tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+a deploy that declares them is refused `403 public_ingress_not_allowed`,
+and setting `deny` later makes hosts close every public listener.
+`twd up` (single-tenant) creates its tenant with `allow`.
+
+Enum: `allow`, `deny`
+
+#### `PublicLimits`
+
+netd's limits on a public listener (ADR-029 D5); defaults filled in.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `burst` | integer | no |  |
+| `ipBurst` | integer | no |  |
+| `ipRps` | number | no | Requests per second, per client IP. |
+| `maxBodyBytes` | integer (int64) | no |  |
+| `maxConns` | integer | no |  |
+| `maxHeaderBytes` | integer | no |  |
+| `rps` | number | no | Requests per second, per workload. |
+| `timeoutSeconds` | integer | no |  |
 
 #### `PurgeResult`
 
@@ -1701,6 +1815,7 @@ The mgmt replica registry (replicas sharing this store). `ok` is false (and the 
 | `oauthClientID` | string | no | `oauth` mode: the OAuth client's public ID (`TS_OAUTH_CLIENT_ID`). The secret is never stored or returned. |
 | `oboPublicKey` | string | no | base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. |
 | `pool` | string | no | Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host). |
+| `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | yes |  |
 | `tailnet` | string | yes | MagicDNS suffix of the customer tailnet. |
 | `tenantID` | string | yes |  |
@@ -1721,6 +1836,7 @@ The mgmt replica registry (replicas sharing this store). `ok` is false (and the 
 | `oauthClientFile` | string | no |  |
 | `oauthClientID` | string | no |  |
 | `pool` | string | no |  |
+| `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | no |  |
 | `tailnet` | string | yes |  |
 | `tenantID` | string | no | Optional; generated (`tn_…`) when absent. |
@@ -1758,6 +1874,7 @@ JSON Merge Patch over the updatable fields. `null` clears an optional field.
 | `oauthClientFile` | string \| null | no |  |
 | `oauthClientID` | string \| null | no |  |
 | `pool` | string \| null | no |  |
+| `publicIngress` | string \| null | no | The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`). |
 | `registrationsPerMinute` | integer | no |  |
 | `tier` | `Tier` | no |  |
 | `wifClientID` | string \| null | no |  |
@@ -1850,4 +1967,20 @@ Present in wif mode.
 | `mgmt` | `SelfInfo` | yes |  |
 | `nodeID` | string | no |  |
 | `tags` | array of string | no |  |
+
+#### `WorkloadPublic`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `exposed` | boolean | yes | `twd expose on` (true, the default) or `off`. |
+| `tenantID` | string | yes |  |
+| `updatedAt` | integer (int64) | no |  |
+| `updatedBy` | string | no | The actor who last toggled it (see Conventions). |
+| `workload` | string | yes |  |
+
+#### `WorkloadPublicPatch`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `exposed` | boolean | yes |  |
 
