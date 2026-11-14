@@ -2056,7 +2056,7 @@ A VM that has run workerd once and then starts a *fresh* workerd process for the
 - **Cloned guest-kernel secrets** across restored copies (KASLR slide, `net_secret`, early siphash keys) are by design of snapshots; risk accepted in ADR-030 (d), bounded in time by the hourly rotation.
 - **One VM per object** (RFC §4.8 `isolation: "object"`) is not built (out of scope). The pool and restore make it affordable: a claim is 28–58 ms.
 
-## Smart placement (branch `smart-placement`, 2026-11-13) — ADR-030 draft (Proposed, number provisional)
+## Smart placement (branch `smart-placement`, 2026-11-13) — ADR-033 draft (Proposed, number provisional)
 
 **What decides placement now** (`mgmt/placement.go` `scoreHosts`, pure; `mgmt/placement_service.go` `place`):
 1. **Eligibility.** A host must be:

@@ -594,7 +594,7 @@ type DeployRequest struct {
 	// stopped heartbeating, is really gone, so a stateful workload may move
 	// off it (ADR-028 §3). Audited.
 	ForceTakeover bool `json:"forceTakeover,omitempty"`
-	// Replace re-places the workload (`twd deploy --replace`, ADR-030):
+	// Replace re-places the workload (`twd deploy --replace`, ADR-033):
 	// the current live holder is not kept just because it holds the lease;
 	// the workload moves if another eligible host is clearly better (or to
 	// Host, when pinned). The lease moves at epoch+1 in one conditional
@@ -817,7 +817,7 @@ type DeploymentView struct {
 	CreatedAt    int64         `json:"createdAt"`
 	// Public (ADR-029): the public URL and routes; nil when tailnet-only.
 	Public *DeploymentPublicView `json:"public,omitempty"`
-	// Placement is why the deployment is on its host (ADR-030 draft).
+	// Placement is why the deployment is on its host (ADR-033 draft).
 	Placement *PlacementDecision `json:"placement,omitempty"`
 	Endpoint  struct {
 		ObjectID string `json:"objectID,omitempty"`
@@ -968,7 +968,7 @@ type Assignment struct {
 	// twd.jsonc "public" or the tenant's publicIngress is not allow.
 	Public *PublicAssignment `json:"public,omitempty"`
 	// PlacementTargets are what the host should measure paths to for this
-	// workload (smart placement, ADR-030; empty = nothing).
+	// workload (smart placement, ADR-033; empty = nothing).
 	PlacementTargets []string `json:"placementTargets,omitempty"`
 }
 

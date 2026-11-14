@@ -349,7 +349,7 @@ start `twd-hostd -host-id <id> -mgmt http://twd-mgmt.<tailnet> -tsnet-control-ur
 
 #### Where a workload runs (placement, multi-host)
 
-With more than one host, mgmt picks the host at deploy (ADR-030 draft, Proposed):
+With more than one host, mgmt picks the host at deploy (ADR-033 draft, Proposed):
 
 1. **Eligible hosts** are live (a heartbeat in the last 10 s), in the tenant's
    pool (`twd tenant set --pool`), offer the workload's tier (`"tier":

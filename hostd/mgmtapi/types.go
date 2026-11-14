@@ -185,7 +185,7 @@ type Assignment struct {
 	// Public (ADR-029) is the workload's public ingress. nil: tailnet-only
 	// (no twd.jsonc "public", or the tenant's publicIngress is not allow).
 	Public *PublicAssignment `json:"public,omitempty"`
-	// PlacementTargets (smart placement, ADR-030) are what this host should
+	// PlacementTargets (smart placement, ADR-033) are what this host should
 	// measure tailnet paths to, from this tenant's nodes.
 	PlacementTargets []string `json:"placementTargets,omitempty"`
 }

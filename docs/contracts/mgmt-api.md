@@ -486,7 +486,7 @@ operator credential when mgmt has one; otherwise it is reported in
 
 `ReportHostPaths` · role **host** · audited: no
 
-Smart placement (ADR-030). The host reports, per tenant, the path
+Smart placement (ADR-033). The host reports, per tenant, the path
 from that tenant's nodes on this host to each target its workloads
 declare (`placementTargets` in its assignments): `direct` WireGuard,
 `peer-relay`, `derp`, or `unresolved` / `unreachable`, with the RTT.
@@ -581,7 +581,7 @@ the assignment to the host and answers `202` with
 `Location: /v1/deployments/{id}`. Poll it until `status` is `active`
 or `failed`.
 
-**Placement** (ADR-030; the answer's `placement` says why):
+**Placement** (ADR-033; the answer's `placement` says why):
 1. Eligible hosts are live, in the tenant's pool, offer the
    workload's tier (`microvm` needs a host with KVM; `503 no_host`
    otherwise), and have free capacity.
@@ -1322,7 +1322,7 @@ A single-use auth key. Never logged; `String()` redacts it in Go.
 | `maxDepth` | integer | no |  |
 | `maxLive` | integer | no |  |
 | `namespaces` | array of `ClassConfig` | yes |  |
-| `placement` | `PlacementDecision` | no | Why a deployment is on its host (smart placement, ADR-030). |
+| `placement` | `PlacementDecision` | no | Why a deployment is on its host (smart placement, ADR-033). |
 | `public` | `DeploymentPublic` | no | The deployment's public routes (ADR-029); absent when tailnet-only. |
 | `status` | `DeploymentStatus` | yes |  |
 | `tenantID` | string | yes |  |
@@ -1339,7 +1339,7 @@ A single-use auth key. Never logged; `String()` redacts it in Go.
 | `forceTakeover` | boolean | no | Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there). |
 | `host` | string | no | Pin a host. |
 | `namespaces` | array of `ClassConfig` | no | Override the classes read from `twd.jsonc` (tests). |
-| `replace` | boolean | no | Re-place a running workload (smart placement, ADR-030): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`). |
+| `replace` | boolean | no | Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`). |
 | `tenantID` | string | yes |  |
 | `workload` | string | yes |  |
 
@@ -1779,7 +1779,7 @@ Enum: `direct`, `peer-relay`, `derp`, `unresolved`, `unreachable`, `unmeasured`
 
 #### `PlacementDecision`
 
-Why a deployment is on its host (smart placement, ADR-030).
+Why a deployment is on its host (smart placement, ADR-033).
 
 | Field | Type | Required | Description |
 |---|---|---|---|

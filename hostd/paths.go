@@ -18,7 +18,7 @@ import (
 	"tailscale.com/tailcfg"
 )
 
-// Smart placement measurements (ADR-030 draft, Proposed).
+// Smart placement measurements (ADR-033 draft, Proposed).
 //
 // The targets a workload connects to live on its tenant's tailnet; this
 // host's own node is on the operator tailnet. So hostd measures from a node
