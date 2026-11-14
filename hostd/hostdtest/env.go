@@ -20,6 +20,7 @@ import (
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
 	"github.com/rosskukulinski/twd/netd"
 	"github.com/rosskukulinski/twd/netd/nettest"
+	"tailscale.com/tsnet"
 )
 
 // Options configure an Env.
@@ -57,6 +58,9 @@ type Options struct {
 	ContainerInternet *hostd.ContainerInternet
 	// FenceAfter is passed to hostd (0: its default).
 	FenceAfter time.Duration
+	// PublicListen is passed to hostd (ADR-029 public nodes; tests inject a
+	// listener of *ipn.FunnelConn because testcontrol has no certificates).
+	PublicListen func(srv *tsnet.Server) (net.Listener, error)
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -135,6 +139,7 @@ func Start(t testing.TB, o Options) *Env {
 		Containers: o.Containers, Images: o.Images, ContainerIdle: o.ContainerIdle, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: o.ContainerCapacity, ContainerQuota: o.ContainerQuota, ContainerMaxLife: o.ContainerMaxLife,
 		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter,
+		PublicListen: o.PublicListen,
 	})
 	if err != nil {
 		t.Fatal(err)

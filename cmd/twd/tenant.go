@@ -396,6 +396,7 @@ func cmdTenantSet(args []string) error {
 	maxCtr := f.Int("max-containers", 0, "containers (ADR-032): running containers quota")
 	maxCtrMem := f.Int("max-container-mem-mib", 0, "containers: total guest memory quota (MiB)")
 	maxCtrCPU := f.Float64("max-container-vcpu", 0, "containers: total vCPU quota (fractional, e.g. 2.5)")
+	pubIngress := f.String("public-ingress", "", "public (Funnel) ingress gate for twd.jsonc \"public\" routes: allow | deny (ADR-029)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -448,6 +449,13 @@ func cmdTenantSet(args []string) error {
 	if *maxCtrCPU > 0 {
 		patch["maxContainerVCPU"] = *maxCtrCPU
 	}
+	switch *pubIngress {
+	case "":
+	case "allow", "deny":
+		patch["publicIngress"] = *pubIngress
+	default:
+		return fail("bad_request", "--public-ingress must be allow or deny", "usage: twd "+usageOf("tenant"))
+	}
 	if len(patch) == 0 {
 		return fail("bad_request", "nothing to set", "usage: twd "+usageOf("tenant"))
 	}
@@ -459,8 +467,12 @@ func cmdTenantSet(args []string) error {
 		return err
 	}
 	emit(f, t, func() {
-		fmt.Printf("✓ tenant   %s (%s) updated · mint mode %s · %d objects max · %d registrations/min · pool %q · tier %q · containers ≤ %d, ≤ %d MiB, ≤ %g vCPU\n",
-			t.Tailnet, t.ID, t.MintMode, t.MaxObjects, t.RegistrationsPerMinute, t.Pool, t.Tier, t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU)
+		gate := t.PublicIngress
+		if gate == "" {
+			gate = "deny"
+		}
+		fmt.Printf("✓ tenant   %s (%s) updated · mint mode %s · %d objects max · %d registrations/min · pool %q · tier %q · containers ≤ %d, ≤ %d MiB, ≤ %g vCPU · public ingress %s\n",
+			t.Tailnet, t.ID, t.MintMode, t.MaxObjects, t.RegistrationsPerMinute, t.Pool, t.Tier, t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU, gate)
 	})
 	return nil
 }

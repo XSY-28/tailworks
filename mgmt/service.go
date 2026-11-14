@@ -284,11 +284,16 @@ type TenantRequest struct {
 	MaxContainers      int     `json:"maxContainers,omitempty"`
 	MaxContainerMemMiB int     `json:"maxContainerMemMiB,omitempty"`
 	MaxContainerVCPU   float64 `json:"maxContainerVCPU,omitempty"`
+	// PublicIngress is the ADR-029 gate: "allow" or "deny" (default).
+	PublicIngress string `json:"publicIngress,omitempty"`
 }
 
 func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error) {
 	if r.Tailnet == "" || r.Tailnet == "-" {
 		return Tenant{}, errf(400, "bad_request", "tailnet must be named explicitly")
+	}
+	if err := validPublicIngress(r.PublicIngress); err != nil {
+		return Tenant{}, err
 	}
 	switch r.MintMode {
 	case MintAPIKey:
@@ -319,7 +324,7 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	}
 	t := Tenant{ID: r.ID, Tailnet: r.Tailnet, ControlURL: r.ControlURL, MintMode: r.MintMode, APIKeyFile: r.APIKeyFile,
 		WIFClientID: r.WIFClientID, WIFLifecycleClientID: r.WIFLifecycleClientID, OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
-		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, CreatedAt: m.now().UnixMilli(),
+		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, PublicIngress: r.PublicIngress, CreatedAt: m.now().UnixMilli(),
 		MaxContainers: r.MaxContainers, MaxContainerMemMiB: r.MaxContainerMemMiB, MaxContainerVCPU: r.MaxContainerVCPU}
 	t.containerDefaults()
 	if t.ID == registry.PublicNamespace {
@@ -337,7 +342,7 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	if err := m.store.CreateTenant(ctx, t); err != nil {
 		return Tenant{}, err
 	}
-	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode})
+	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "publicIngress": t.PublicIngress})
 	return t, nil
 }
 
@@ -671,6 +676,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	classes := r.Namespaces
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
+	var pub *DeploymentPublic
 	tier := placementTier(t, nil)
 	if len(r.Bundle) > 0 {
 		cfg, err := BundleConfig(r.Bundle)
@@ -678,6 +684,12 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
 		if err == nil {
+			if pub, err = bundlePublic(cfg); err != nil {
+				return resp, err
+			}
+			if err := checkPublicDeploy(t, r.Workload, pub); err != nil {
+				return resp, err
+			}
 			tier = placementTier(t, cfg)
 			if len(classes) == 0 {
 				classes = cfg.Classes()
@@ -695,6 +707,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if len(classes) == 0 {
 		return resp, errf(400, "bad_request", "no namespaces: the bundle's twd.jsonc declares neither tailnet.tags (the workload node) nor tailnet.objects")
 	}
+	classes = withPublicNamespace(classes, pub)
 	for _, c := range classes {
 		if c.Class == "" || len(c.Tags) == 0 {
 			return resp, errf(400, "bad_request", "namespace %q needs tags", c.Class)
@@ -746,8 +759,11 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	d := Deployment{ID: newID("dp_"), TenantID: t.ID, Workload: r.Workload, HostID: host, Namespaces: classes,
 		MaxLive: maxLive, MaxDepth: maxDepth, Epoch: lease.Epoch, Bundle: r.Bundle, DeployedBy: r.By, CreatedAt: m.now().UnixMilli(), Fence: fence,
-		Containers: ctrs}
+		Containers: ctrs, Public: pub}
 	detail := map[string]any{"deploymentID": d.ID, "workload": d.Workload, "host": host, "epoch": lease.Epoch, "by": r.By}
+	if pub != nil {
+		detail["publicRoutes"] = pub.Spec.Routes
+	}
 	if takeoverFrom != "" {
 		detail["takeoverFrom"], detail["forced"] = takeoverFrom, true
 	}
@@ -756,6 +772,14 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		return resp, err
 	}
 	m.recordIntent(ctx, ai, nil)
+	if pub != nil {
+		m.purgeDeadPublicNode(ctx, t.ID, r.Workload)
+	}
+	if pub == nil {
+		// Public routes removed (or never declared): a public node left
+		// from an earlier deploy must not keep serving (ADR-029).
+		m.killPublicNode(ctx, t.ID, r.Workload, "public routes removed", r.By)
+	}
 	resp.DeploymentID, resp.Host, resp.Epoch = d.ID, host, lease.Epoch
 	resp.Endpoint.Node = r.Workload + "-" + host
 	resp.Endpoint.MagicDNS = resp.Endpoint.Node + "." + t.Tailnet
@@ -800,7 +824,9 @@ type DeploymentView struct {
 	CreatedAt    int64         `json:"createdAt"`
 	// Containers are the container classes and their pinned images.
 	Containers []container.Class `json:"containers,omitempty"`
-	Endpoint   struct {
+	// Public (ADR-029): the public URL and routes; nil when tailnet-only.
+	Public   *DeploymentPublicView `json:"public,omitempty"`
+	Endpoint struct {
 		ObjectID string `json:"objectID,omitempty"`
 		Node     string `json:"node"`
 		MagicDNS string `json:"magicDNS"`
@@ -821,6 +847,7 @@ func (m *Mgmt) GetDeployment(ctx context.Context, id string) (DeploymentView, er
 	v.DeployedBy = d.DeployedBy
 	v.Containers = d.Containers
 	v.Status, v.Error = m.deploymentStatus(ctx, d)
+	v.Public = m.publicView(ctx, d)
 	if o, err := m.store.GetObjectByName(ctx, d.TenantID, d.Workload, WorkloadNamespace, d.Workload); err == nil {
 		v.Endpoint.ObjectID, v.Endpoint.MagicDNS, v.Endpoint.Status = o.ID, o.MagicDNS, o.Status
 		v.Endpoint.Node, _, _ = strings.Cut(o.MagicDNS, ".")
@@ -1060,6 +1087,9 @@ type Assignment struct {
 	// Containers are the container classes with their pinned images
 	// (ADR-032 D3): hosts pull only these digests.
 	Containers []container.Class `json:"containers,omitempty"`
+	// Public (ADR-029): the workload's public ingress; nil when it has no
+	// twd.jsonc "public" or the tenant's publicIngress is not allow.
+	Public *PublicAssignment `json:"public,omitempty"`
 }
 
 func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, error) {
@@ -1073,10 +1103,14 @@ func (m *Mgmt) Assignments(ctx context.Context, hostID string) ([]Assignment, er
 		a := Assignment{DeploymentID: d.ID, TenantID: d.TenantID, Workload: d.Workload,
 			BundleURL: "/v1/deployments/" + d.ID + "/bundle", Epoch: d.Epoch,
 			Lease: LeaseName(d.TenantID, d.Workload), Tailnet: t.Tailnet, ControlURL: t.ControlURL, Namespaces: []ClassConfig{}, Fence: d.Fence, Containers: d.Containers}
+		a.Public = m.publicAssignment(ctx, t, d)
 		for _, c := range d.Namespaces {
 			if c.Class == WorkloadNamespace {
 				a.WorkloadTags = c.Tags
 				continue
+			}
+			if c.Class == PublicNamespace {
+				continue // the public node is described by a.Public
 			}
 			a.Namespaces = append(a.Namespaces, c)
 		}
@@ -1183,9 +1217,12 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	}
 	workload := r.Workload
 	switch {
-	case r.Namespace == WorkloadNamespace:
+	case r.Namespace == WorkloadNamespace, r.Namespace == PublicNamespace:
 		if workload != "" && workload != r.ObjectName {
-			return resp, errf(400, "bad_request", "the %s object of workload %q must be named after it (got %q)", WorkloadNamespace, workload, r.ObjectName)
+			return resp, errf(400, "bad_request", "the %s object of workload %q must be named after it (got %q)", r.Namespace, workload, r.ObjectName)
+		}
+		if parent != nil {
+			return resp, errf(400, "bad_request", "the %s object of a workload cannot be spawned", r.Namespace)
 		}
 		workload = r.ObjectName
 	case workload == "" && parent != nil:
@@ -1195,6 +1232,11 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 	var class ClassConfig
 	if r.Namespace == WorkloadNamespace {
 		dep, class, err = m.findWorkloadClass(ctx, t.ID, workload)
+	} else if r.Namespace == PublicNamespace {
+		dep, class, err = m.findPublicClass(ctx, t, workload)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return resp, err
+		}
 	} else {
 		dep, class, err = m.store.FindClass(ctx, t.ID, workload, r.Namespace)
 	}
@@ -1248,7 +1290,12 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		// hand out an existing object's node.
 		return resp, errf(409, "identity_conflict", "object ID %s is already taken by another identity", id)
 	}
-	o := Object{ID: id, TenantID: t.ID, Workload: workload, Namespace: r.Namespace, Name: r.ObjectName, Hostname: id, DeploymentID: dep.ID,
+	hostname := id
+	if r.Namespace == PublicNamespace {
+		// The public URL is https://<workload>.<tailnet>.ts.net (ADR-029 D2).
+		hostname = workload
+	}
+	o := Object{ID: id, TenantID: t.ID, Workload: workload, Namespace: r.Namespace, Name: r.ObjectName, Hostname: hostname, DeploymentID: dep.ID,
 		Lease: LeaseName(t.ID, dep.Workload), Tags: class.Tags, Caps: r.Caps, RootID: id, TTLSeconds: int64(ttl / time.Second),
 		Status: StatusPending, ActingFor: r.ActingFor, CreatedAt: m.now().UnixMilli(), UpdatedAt: m.now().UnixMilli()}
 	kind := "create"
@@ -1275,6 +1322,9 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		spawnLimit = maxLive
 	}
 	detail := map[string]any{"workload": o.Workload, "namespace": o.Namespace, "name": o.Name, "tags": o.Tags, "root": o.RootID}
+	if r.ActingFor == ActingForPublic {
+		detail["origin"] = "public" // created by a public (Funnel) request (ADR-029 D5)
+	}
 	if o.ParentID != "" {
 		detail["parent"] = o.ParentID
 	}
@@ -2440,7 +2490,9 @@ const (
 var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": true, "spawn": true, "kill": true,
 	"create": true, "mint": true, "ready": true, "credential": true, "principal": true, "device_delete": true,
 	"tenant": true, "deploy": true, "obo_root": true, "container_start": true, "container_stop": true,
-	"image_push": true, "image_pin": true, "image_public": true}
+	"image_push": true, "image_pin": true, "image_public": true,
+	// ADR-029: public ingress records come from netd/hostd only.
+	"public_request": true, "public_rejected": true, "public_object_created": true, "expose_on": true, "expose_off": true}
 
 // checkAuditSource enforces the provenance contract on a host-submitted
 // record: a "tenant" source may only carry a tenant_note, and a tenant_note
@@ -2586,6 +2638,9 @@ type PreflightRequest struct {
 	SrcTags  []string `json:"srcTags"`  // workload + object tags
 	Connects []string `json:"connects"` // tags ("tag:db") or "*"; names are reported unchecked
 	Port     string   `json:"port,omitempty"`
+	// Public: the workload declares public routes, so tag:twd-public needs
+	// the funnel nodeAttr (ADR-029 D6).
+	Public bool `json:"public,omitempty"`
 }
 
 // PreflightMissing is one missing grant.
@@ -2603,6 +2658,12 @@ type PreflightResult struct {
 	MissingTagOwners []string           `json:"missingTagOwners"`
 	TagOwnersSnippet string             `json:"tagOwnersSnippet,omitempty"`
 	Unchecked        []string           `json:"unchecked,omitempty"`
+	// MissingNodeAttrs names missing nodeAttrs ("funnel on tag:twd-public");
+	// NodeAttrsSnippet is the policy to add (ADR-029 D6).
+	MissingNodeAttrs []string `json:"missingNodeAttrs,omitempty"`
+	NodeAttrsSnippet string   `json:"nodeAttrsSnippet,omitempty"`
+	// PublicURL is where the workload's public routes will be served.
+	PublicURL string `json:"publicURL,omitempty"`
 }
 
 // Preflight checks the request against the tenant's current policy (read
@@ -2643,7 +2704,11 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 			}
 		}
 	}
-	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0
+	if r.Public && !pol.HasNodeAttr(PublicTag, "funnel") {
+		res.MissingNodeAttrs = append(res.MissingNodeAttrs, "funnel on "+PublicTag)
+		res.NodeAttrsSnippet = PublicFunnelSnippet
+	}
+	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0
 	return res, nil
 }
 

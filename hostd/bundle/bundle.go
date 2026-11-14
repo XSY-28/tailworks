@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/rosskukulinski/twd/internal/container"
+	"github.com/rosskukulinski/twd/internal/publicspec"
 )
 
 // MaxBundle bounds an unpacked bundle.
@@ -54,6 +55,10 @@ type App struct {
 	// twd.jsonc "containers" overriding or pinning by class), by DO class:
 	// each instance of the class may run one container (ADR-032).
 	Containers map[string]container.Class
+	// Public (twd.jsonc "public", ADR-029) lists the path prefixes reachable
+	// from the public internet over Funnel, and their limits. nil: the
+	// workload is tailnet-only.
+	Public *publicspec.Spec
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -92,6 +97,9 @@ type Class struct {
 	// Node is false for internal classes (`"node": false`): no tailnet node,
 	// reachable only in-process; implies plain-DO mode.
 	Node bool
+	// Public (tailnet.objects.<Class>.public) lets public requests create
+	// objects of this class, up to MaxObjects (ADR-029 D5).
+	Public *publicspec.ClassSpec
 }
 
 // Facet reports whether the class runs in facet mode.
@@ -113,10 +121,11 @@ type wranglerConfig struct {
 }
 
 type twdConfig struct {
-	Name    string `json:"name"`
-	Tier    string `json:"tier"`
-	Runtime string `json:"runtime"`
-	Main    string `json:"main"`
+	Name    string           `json:"name"`
+	Public  *publicspec.Spec `json:"public"`
+	Tier    string           `json:"tier"`
+	Runtime string           `json:"runtime"`
+	Main    string           `json:"main"`
 	Node    struct {
 		Env    map[string]string `json:"env"`
 		Listen string            `json:"listen"`
@@ -131,11 +140,12 @@ type twdConfig struct {
 		Tags     []string `json:"tags"`
 		Connects []string `json:"connects"`
 		Objects  map[string]struct {
-			Tags   []string `json:"tags"`
-			Agent  bool     `json:"agent"`
-			Egress string   `json:"egress"`
-			TTL    string   `json:"ttl"`
-			Node   *bool    `json:"node"`
+			Tags   []string              `json:"tags"`
+			Agent  bool                  `json:"agent"`
+			Egress string                `json:"egress"`
+			TTL    string                `json:"ttl"`
+			Node   *bool                 `json:"node"`
+			Public *publicspec.ClassSpec `json:"public"`
 		} `json:"objects"`
 		Spawn struct {
 			MaxLive  int `json:"maxLive"`
@@ -192,7 +202,10 @@ func Parse(files map[string][]byte) (*App, error) {
 		CompatFlags: w.CompatibilityFlags, Vars: w.Vars, Classes: map[string]*Class{},
 		WorkloadTags: t.Tailnet.Tags, Modules: map[string][]byte{},
 		SpawnMaxLive: t.Tailnet.Spawn.MaxLive, SpawnMaxDepth: t.Tailnet.Spawn.MaxDepth,
-		Internet: t.Tailnet.Egress.Internet, Tier: t.Tier,
+		Internet: t.Tailnet.Egress.Internet, Tier: t.Tier, Public: t.Public,
+	}
+	if err := a.Public.Validate(); err != nil {
+		return nil, fmt.Errorf("bundle: twd.jsonc %w", err)
 	}
 	switch a.Tier {
 	case "", TierProcess, TierMicroVM:
@@ -254,6 +267,10 @@ func Parse(files map[string][]byte) (*App, error) {
 			return nil, fmt.Errorf("bundle: twd.jsonc tailnet.objects.%s has no durable_objects binding", name)
 		}
 		c.Tags, c.Agent, c.TTL = o.Tags, o.Agent, o.TTL
+		if err := o.Public.Validate(name); err != nil {
+			return nil, fmt.Errorf("bundle: twd.jsonc %w", err)
+		}
+		c.Public = o.Public
 		if o.Node != nil && !*o.Node {
 			c.Node = false
 			if o.Egress == EgressObject {
@@ -298,6 +315,9 @@ func parseNode(files map[string][]byte, t *twdConfig) (*App, error) {
 	a := &App{
 		Name: t.Name, Runtime: RuntimeNode, Classes: map[string]*Class{}, Modules: map[string][]byte{},
 		WorkloadTags: t.Tailnet.Tags, Internet: t.Tailnet.Egress.Internet, Tier: t.Tier,
+	}
+	if t.Public != nil {
+		return nil, errors.New("bundle: twd.jsonc \"public\" is not supported for runtime \"node\" yet (ADR-029 v1: workerd workloads only)")
 	}
 	if len(t.Tailnet.Objects) > 0 {
 		return nil, errors.New("bundle: runtime \"node\" has one tailnet identity per process (ADR-022); tailnet.objects is not supported")

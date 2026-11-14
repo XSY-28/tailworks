@@ -38,6 +38,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/internal/procsb"
 	"github.com/rosskukulinski/twd/netd"
+	"tailscale.com/tsnet"
 )
 
 // DefaultControlURL is used when a tenant record names no control server.
@@ -82,6 +83,10 @@ type Config struct {
 	JoinParallel int
 	Logger       *slog.Logger
 	TSNetLogs    bool
+	// PublicListen overrides how public nodes open their Funnel listener
+	// (netd.Config.PublicListen). Tests only: testcontrol issues no
+	// certificates, so they inject a listener of *ipn.FunnelConn.
+	PublicListen func(srv *tsnet.Server) (net.Listener, error)
 	// VM boots microVM sandboxes (hostd/vm: Firecracker on Linux + KVM).
 	// Nil means this host offers the process tier only: a microvm
 	// deployment is refused (tier_unavailable), never downgraded.
@@ -218,6 +223,8 @@ type Host struct {
 	pushSrv     *http.Server
 	pushSock    string
 	audit       *auditLog
+	public      map[string]*publicState // tenantID/workload (ADR-029)
+	pubCreates  *publicCreates
 	wg          sync.WaitGroup
 	runDirOwned bool
 	ctr         *ctrManager
@@ -284,11 +291,12 @@ func New(cfg Config) (*Host, error) {
 	h := &Host{cfg: cfg, sandbox: sb, log: cfg.Logger, mgmt: cfg.Mgmt,
 		tenants: map[string]*tenant{}, workloads: map[string]*workload{}, objects: map[string]*object{},
 		byNetd: map[string]*object{}, byKey: map[string]*object{}, creating: map[string]*createCall{},
-		syncNow: make(chan struct{}, 1), quota: cfg.ContainerQuota, containers: containerLedger{held: map[ContainerKey]*ctrEntry{}}}
+		public: map[string]*publicState{}, syncNow: make(chan struct{}, 1), quota: cfg.ContainerQuota, containers: containerLedger{held: map[ContainerKey]*ctrEntry{}}}
 	h.ctr = newCtrManager(h)
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err
 	}
+	h.pubCreates = newPublicCreates(h.publicCreatesPath())
 	os.Chmod(cfg.DataDir, 0o700)
 	if h.cfg.RunDir == "" {
 		d, err := os.MkdirTemp("/tmp", "twd-h-")
@@ -605,6 +613,8 @@ func (h *Host) syncAssignments(ctx context.Context) error {
 		h.mu.Unlock()
 		if w.wantDeploy(a) {
 			go h.deploy(w, a)
+		} else {
+			go h.applyPublic(w, a.Public)
 		}
 	}
 	h.mu.Lock()
