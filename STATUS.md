@@ -1607,7 +1607,7 @@ Hermetic (testcontrol, where control and the key API cost ~nothing), create → 
   - Cost: at most 5 live, unused, preauthorized single-use keys per active pool, held in custody for up to 30 min.
   - Idle pools stop refilling after an hour without creates or deploys.
   - A tenant purge (`twd down --purge`) now revokes them.
-- `twd up` has no flag for `-warm-keys` or `-port-mapping` yet (twd-mgmt / twd-hostd flags only).
+- ~~`twd up` has no flag for `-warm-keys` or `-port-mapping` yet.~~ Added: `twd up --warm-keys N --pool-nodes N --port-mapping` (stored in the state; state from before keeps the binaries' defaults; docs/INSTALL.md "Tuning").
 - Tenant-level audit records (pool `mint`, `revoke`) have no object ID; `twd audit <object>` shows the object's own pooled `mint` record.
 - A peer can still lose the race in (b) (1/12 in the first production run): the path wait narrows the window but doesn't close it.
 - External clients (not twd's egress or CLI) still dial whenever they like; nothing on the node can tell when peers can reach it.
@@ -1697,5 +1697,5 @@ The pool node's own join (registration, including control's stalls) happens ahea
 - Headscale's support for node-side renames is unverified (ADR-002).
 - Ephemeral objects (spawns with a TTL) never use the pool. Ephemeral pool nodes would need their own pools.
 - `twd ls` lists idle pool nodes (namespace `_pool`); each is a device.
-- `twd up` has no flags for `-warm-keys`, `-pool-nodes` or `-port-mapping` (binary flags only).
+- ~~`twd up` has no flags for these.~~ Added: `twd up --warm-keys N --pool-nodes N --port-mapping`, stored in the state for the service (`TestIdentityArgs`; the CLI e2e runs with them).
 

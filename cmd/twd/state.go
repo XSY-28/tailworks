@@ -67,12 +67,18 @@ type Config struct {
 	InsecureSharedHost bool `json:"insecureSharedHost,omitempty"`
 	// AllowSiblingEgress: objects may reach other objects on this host over
 	// the tailnet (single-host tests/demos).
-	AllowSiblingEgress bool   `json:"allowSiblingEgress,omitempty"`
-	Workerd            string `json:"workerd"`
-	Heartbeat          string `json:"heartbeat"`
-	KillTombstone      string `json:"killTombstone"`
-	DeviceDeleteDelay  string `json:"deviceDeleteDelay"`
-	CreatedAt          string `json:"createdAt"`
+	AllowSiblingEgress bool `json:"allowSiblingEgress,omitempty"`
+	// Fast identity (STATUS.md "Fast identity"). WarmKeys and PoolNodes are
+	// pointers so state written before they existed (nil) keeps the
+	// binaries' defaults instead of reading as 0 ("off").
+	WarmKeys          *int   `json:"warmKeys,omitempty"`    // twd-mgmt -warm-keys
+	PoolNodes         *int   `json:"poolNodes,omitempty"`   // twd-hostd -pool-nodes
+	PortMapping       bool   `json:"portMapping,omitempty"` // twd-hostd -port-mapping
+	Workerd           string `json:"workerd"`
+	Heartbeat         string `json:"heartbeat"`
+	KillTombstone     string `json:"killTombstone"`
+	DeviceDeleteDelay string `json:"deviceDeleteDelay"`
+	CreatedAt         string `json:"createdAt"`
 	// Tenants are the tenants added with `twd tenant add` (the operator
 	// tenant above is the default for every command).
 	Tenants []TenantRef `json:"tenants,omitempty"`
@@ -461,4 +467,25 @@ func nodePaths(createTwd string) []string {
 		}
 	}
 	return out
+}
+
+// identityMgmtArgs are twd-mgmt's fast-identity flags from c (none for
+// state written before they existed: the binary's defaults apply).
+func (c Config) identityMgmtArgs() []string {
+	if c.WarmKeys == nil {
+		return nil
+	}
+	return []string{"-warm-keys", strconv.Itoa(*c.WarmKeys)}
+}
+
+// identityHostdArgs are twd-hostd's fast-identity flags from c.
+func (c Config) identityHostdArgs() []string {
+	var a []string
+	if c.PoolNodes != nil {
+		a = append(a, "-pool-nodes", strconv.Itoa(*c.PoolNodes))
+	}
+	if c.PortMapping {
+		a = append(a, "-port-mapping")
+	}
+	return a
 }
