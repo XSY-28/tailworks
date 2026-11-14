@@ -137,6 +137,9 @@ type Config struct {
 	// to its assignments' placement targets (smart placement, ADR-033).
 	// 0 = DefaultPathEvery (60 s); negative disables measuring.
 	PathEvery time.Duration
+	// CronTimeout bounds one cron trigger's scheduled() run (wall clock;
+	// default DefaultCronTimeout, 15 min).
+	CronTimeout time.Duration
 }
 
 // Host is a running twd-hostd.
@@ -171,6 +174,7 @@ type Host struct {
 	pubCreates  *publicCreates
 	wg          sync.WaitGroup
 	runDirOwned bool
+	nowFn       func() time.Time // wall clock for cron triggers (tests)
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;
@@ -283,12 +287,13 @@ func (h *Host) Start(ctx context.Context) error {
 	h.mu.Lock()
 	h.lastHB = time.Now()
 	h.mu.Unlock()
-	h.wg.Add(1)
+	h.wg.Add(2)
 	go h.loop()
 	if h.cfg.PathEvery > 0 {
 		h.wg.Add(1)
 		go h.pathLoop()
 	}
+	go h.cronLoop()
 	return nil
 }
 

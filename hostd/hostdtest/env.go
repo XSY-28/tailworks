@@ -48,6 +48,8 @@ type Options struct {
 	// PublicListen is passed to hostd (ADR-029 public nodes; tests inject a
 	// listener of *ipn.FunnelConn because testcontrol has no certificates).
 	PublicListen func(srv *tsnet.Server) (net.Listener, error)
+	// CronTimeout is passed to hostd (cron trigger run limit).
+	CronTimeout time.Duration
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -117,6 +119,7 @@ func Start(t testing.TB, o Options) *Env {
 		KillTombstone: o.KillTombstone, HostnamePrefix: o.HostnamePrefix, Logger: log,
 		VM: o.VM, DefaultTier: o.DefaultTier, VMDebug: o.VMDebug, Sandbox: testSandbox(o.Sandbox), InsecureSharedHost: o.InsecureSharedHost, HostSockets: o.HostSockets, AllowSiblingEgress: o.AllowSiblingEgress,
 		PublicListen: o.PublicListen,
+		CronTimeout:  o.CronTimeout,
 	})
 	if err != nil {
 		t.Fatal(err)
