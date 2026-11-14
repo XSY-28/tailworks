@@ -57,15 +57,64 @@ type GuestConfig struct {
 	// Volume is the block device holding DO storage (ext4, created and
 	// decrypted on the host), mounted at DODir. "" = tmpfs (not persistent).
 	Volume string `json:"volume,omitempty"`
+
+	// Pool: this VM is a warm-pool (or snapshot-base) VM. Its config drive
+	// carries no tenant code: only the network config above and the
+	// warm-up workerd config (WarmupArgs, run in AppDir). guestd runs that
+	// workerd once until healthy (faulting in the workerd binary and guest
+	// memory, the cost of a cold start), kills it, empties AppDir and
+	// reports "pooled". It then waits for exactly one "load" from the host
+	// (the tenant bundle, see Load), and from there on behaves like a
+	// config-drive VM. A pooled VM is never loaded twice.
+	Pool           bool     `json:"pool,omitempty"`
+	WarmupArgs     []string `json:"warmupArgs,omitempty"`
+	WarmupHealthCF string   `json:"warmupHealthCF,omitempty"`
+}
+
+// WarmupMarker is a file in the warm-up app (pool config drive): fsscan
+// reports AppDir's contents, and a pooled VM must show none of it (nor
+// anything else) before its load.
+const WarmupMarker = "twd-warmup.txt"
+
+// Load is the host's one-time injection into a pooled (or restored) VM:
+// the tenant bundle (sent before it in "chunk" messages: Data at Offset,
+// Total bytes in all; a tar like the config drive's, without guest.json)
+// plus what the config drive would have said.
+type Load struct {
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"` // hex, of the whole bundle tar
+	// UnixNano: host wall-clock time now (a pooled VM may have idled for
+	// hours; a restored one resumes with the base snapshot's clock).
+	UnixNano    int64    `json:"unixNano"`
+	WorkerdArgs []string `json:"workerdArgs"`
+	HealthCF    string   `json:"healthCF"`
+	Debug       bool     `json:"debug,omitempty"`
+	// Volume is the DO volume's device ("" = tmpfs). The host has swapped
+	// the encrypted volume in behind it already; VolumeSectors is its size
+	// in 512-byte sectors, which guestd waits to see before mounting (the
+	// placeholder it booted with is smaller).
+	Volume        string `json:"volume,omitempty"`
+	VolumeSectors int64  `json:"volumeSectors,omitempty"`
+	// Entropy (host crypto/rand) is mixed into the guest kernel's pool and
+	// the CRNG is reseeded from it before workerd starts: copies restored
+	// from one snapshot share the kernel RNG state, and this guest kernel
+	// (6.1, aarch64 DeviceTree) has no VMGenID driver to reseed it.
+	Entropy []byte `json:"entropy"`
+	// BootID replaces /proc/sys/kernel/random/boot_id (identical in every
+	// copy of a snapshot otherwise).
+	BootID string `json:"bootId"`
 }
 
 // Msg is one control-channel message (either direction).
 //
 // guest → host: Type "boot" (once, on connect), "ready" (workerd healthy),
-// "workerd-exit", "log", or "resp" (answer to an op, same ID).
+// "workerd-exit", "log", "pooled" (a pool VM is warm and waits for its
+// load; sent again on every new connection while it waits, e.g. after a
+// snapshot restore), or "resp" (answer to an op, same ID).
 // host → guest: Op "probe", "stats", "fsscan", "ping", "shutdown" (stop
 // workerd, sync and unmount the volume: the host may then release it),
-// "fsbench" (write+fsync latency on the DO volume).
+// "fsbench" (write+fsync latency on the DO volume), and for pool VMs
+// "chunk" (bundle bytes) then "load" (Load: once).
 type Msg struct {
 	Type string `json:"type,omitempty"`
 	ID   int64  `json:"id,omitempty"`
@@ -78,6 +127,11 @@ type Msg struct {
 	Restarts  int    `json:"restarts,omitempty"`
 	Text      string `json:"text,omitempty"`
 	Error     string `json:"error,omitempty"`
+	// Stages (boot / ready) are guest-side stage timestamps in ms since the
+	// guest kernel started (CLOCK_BOOTTIME): "init" (guestd is PID 1),
+	// "mounts", "config", "clock", "net", "volume", "workerd_spawn"
+	// (exec returned), "workerd_listen" (ingress accepts TCP), "healthy".
+	Stages map[string]float64 `json:"stages,omitempty"`
 
 	// probe
 	Targets []string      `json:"targets,omitempty"`
@@ -90,9 +144,33 @@ type Msg struct {
 	N     int    `json:"n,omitempty"`
 	Bench *Bench `json:"bench,omitempty"`
 
-	// fsscan: files whose name looks like tailscale state
-	Found   []string `json:"found,omitempty"`
-	Scanned int      `json:"scanned,omitempty"`
+	// fsscan: files whose name looks like tailscale state; and every file
+	// under the guest's state dirs (AppDir, DODir, /tmp, /run/twd) with
+	// its size, so a test can check a pooled VM holds no workload's state.
+	Found   []string         `json:"found,omitempty"`
+	Scanned int              `json:"scanned,omitempty"`
+	State   map[string]int64 `json:"state,omitempty"`
+
+	// chunk / load (pool VMs)
+	Data   []byte `json:"data,omitempty"`
+	Offset int64  `json:"offset,omitempty"`
+	Total  int64  `json:"total,omitempty"`
+	Load   *Load  `json:"load,omitempty"`
+
+	// ident (debug): what makes this guest unique, for the snapshot
+	// uniqueness tests.
+	Ident *Ident `json:"ident,omitempty"`
+}
+
+// Ident is a guest's clocks, boot id and fresh kernel randomness.
+type Ident struct {
+	UnixNano int64  `json:"unixNano"` // wall clock
+	MonoNS   int64  `json:"monoNs"`   // CLOCK_MONOTONIC
+	BootNS   int64  `json:"bootNs"`   // CLOCK_BOOTTIME
+	BootID   string `json:"bootId"`   // /proc/sys/kernel/random/boot_id
+	Random   []byte `json:"random"`   // 32 bytes from getrandom(2)
+	UUID     string `json:"uuid"`     // /proc/sys/kernel/random/uuid
+	Pooled   bool   `json:"pooled"`   // still waiting for its load
 }
 
 // ProbeResult is the outcome of one TCP connect from inside the guest.

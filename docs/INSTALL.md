@@ -739,6 +739,18 @@ Add `"tier": "microvm"` to the app's `twd.jsonc`, then `twd deploy`.
   helper refuses a second attach (`volume_busy`) or an older epoch
   (`volume_fenced`).
 
+**Fast starts.** twd keeps a small **warm pool** of pre-booted VMs that hold
+no tenant code (`twd-hostd -vm-pool`; auto: 2 within the huge-page
+reservation; `-1` turns it off). A deploy or restart claims one and loads the
+workload into it, and the VM is never reused for another workload. When the
+pool is empty, a VM is **restored from a base snapshot** of a warm VM that
+holds no tenant code and no keys (`-vm-snapshot`, on by default) instead of
+booting one. Use `-vm-snapshot-refill` to refill the pool by restoring too:
+refills are faster, but claims are slower. Each restored VM gets private
+copies of its memory pages; no page is shared between VMs. The base is
+rebuilt at every start and every hour (`-vm-snapshot-rotate`). See STATUS.md
+"FV" for the numbers.
+
 Check a running VM: `twd host vmcheck <workload> [--keyscan]` (guest memory,
 DO volume fsync latency, and a scan of the guest's disks, files and full RAM
 for any node key, `tskey-` or the volume key).

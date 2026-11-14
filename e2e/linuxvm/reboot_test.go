@@ -104,8 +104,13 @@ func TestE2ELinuxReboot(t *testing.T) {
 		for _, id := range res.NodeIDs {
 			tracker.Track(id, "twd")
 		}
+		for _, id := range res.InfraNodeIDs {
+			tracker.Track(id, "twd-infra") // mgmt's and the host's own nodes: kept by twd down, deleted here by ID
+		}
 		crep := tracker.Cleanup(cctx, testPrefix)
 		trep := tracker.Cleanup(cctx, twdPrefix)
+		hrep := tracker.Cleanup(cctx, "twd-host-"+twdPrefix) // the host's node is named twd-host-<host id>
+		trep.Untracked = append(trep.Untracked, hrep.Untracked...)
 		for _, k := range keys {
 			api.DeleteKey(cctx, k)
 		}

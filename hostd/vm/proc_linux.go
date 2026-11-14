@@ -28,13 +28,19 @@ func procRSSKB(pid int) int64 {
 	return total
 }
 
-// FreeHugePages2M returns the host's free 2 MiB hugetlbfs pages.
+// FreeHugePages2M returns the host's available 2 MiB hugetlbfs pages:
+// free minus reserved. A VM's guest RAM is reserved when Firecracker maps it
+// and only counts as used once the guest touches it, so free_hugepages
+// alone overstates what the next VM can get.
 func FreeHugePages2M() int {
-	b, err := os.ReadFile("/sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages")
-	if err != nil {
-		return 0
+	read := func(name string) int {
+		b, err := os.ReadFile("/sys/kernel/mm/hugepages/hugepages-2048kB/" + name)
+		if err != nil {
+			return 0
+		}
+		var n int
+		fmt.Sscan(strings.TrimSpace(string(b)), &n)
+		return n
 	}
-	var n int
-	fmt.Sscan(strings.TrimSpace(string(b)), &n)
-	return n
+	return max(0, read("free_hugepages")-read("resv_hugepages"))
 }
