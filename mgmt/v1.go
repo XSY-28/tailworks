@@ -1515,7 +1515,12 @@ func (s *Server) Handler() http.Handler {
 	// api/openapi.yaml documents its routes and roles (tag "registry",
 	// excluded from code generation); the registry enforces them.
 	reg := s.M.Registry()
+	mcp := s.mcpHandler(gate) // mcp.go: twd's MCP server, tools over the /v1 handlers
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == MCPPath {
+			mcp.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/v2" || strings.HasPrefix(r.URL.Path, "/v2/") {
 			if reg == nil {
 				writeErr(w, r, errf(404, "registry_unavailable", "this twd-mgmt serves no registry (start it with -registry-dir)"))

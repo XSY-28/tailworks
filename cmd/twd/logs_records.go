@@ -123,6 +123,10 @@ func copyRecords(w io.Writer, body io.Reader) error {
 					}
 					io.WriteString(w, r.Text())
 				}
+			} else if jsonOut {
+				// A host's note ("twd: …"): still one JSON object per line.
+				ev := newEvents(true, w)
+				ev.emit("log", map[string]any{"line": string(bytes.TrimRight(line, "\r\n"))})
 			} else {
 				w.Write(line)
 			}
