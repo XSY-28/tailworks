@@ -26,6 +26,7 @@ import (
 	"github.com/rosskukulinski/twd/guest/proto"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/hostd/vm/vzapi"
+	"github.com/rosskukulinski/twd/internal/version"
 	"github.com/rosskukulinski/twd/netd"
 )
 
@@ -342,7 +343,7 @@ func (b *Backend) launch(ctx context.Context, l vzLaunch) (_ *Machine, err error
 	m.ingress = m.ingressProxy()
 
 	// 3. The VMM.
-	vc2 := vzapi.Config{Kernel: b.cfg.Kernel, Cmdline: b.cfg.BootArgs, CPUs: l.cpus, MemMiB: l.memMiB,
+	vc2 := vzapi.Config{Proto: version.VZProtocol, Kernel: b.cfg.Kernel, Cmdline: b.cfg.BootArgs, CPUs: l.cpus, MemMiB: l.memMiB,
 		Disks: disks, Volume: m.vol != nil,
 		Console: m.info.Console, MAC: guestMAC, MTU: b.cfg.MTU, VsockPort: proto.VsockPort, Rosetta: b.cfg.Rosetta}
 	cb, _ := json.Marshal(vc2)

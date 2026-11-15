@@ -316,7 +316,7 @@ func (s *Server) serveConn(c *net.UnixConn) {
 		switch req.Op {
 		case "ping":
 			closeAll(fds)
-			helperapi.WriteResponse(c, helperapi.Response{Re: "ping", OK: true, Version: helperapi.Version, UID: uid,
+			helperapi.WriteResponse(c, helperapi.Response{Re: "ping", OK: true, Version: helperapi.Version, MinVersion: helperapi.MinVersion, UID: uid,
 				Jailer: s.cfg.Jailer, Crypt: "dm-crypt (LUKS2, aes-xts-plain64)", Features: []string{helperapi.FeatureContainer}})
 		case "start":
 			if vm != nil || req.Start == nil {

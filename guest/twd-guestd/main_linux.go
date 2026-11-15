@@ -52,6 +52,7 @@ import (
 
 	"github.com/jsimonetti/rtnetlink"
 	"github.com/rosskukulinski/twd/guest/proto"
+	"github.com/rosskukulinski/twd/internal/version"
 	"golang.org/x/sys/unix"
 )
 
@@ -743,7 +744,8 @@ func (g *guest) serveHost(f *os.File) {
 	// The first line names the connection: control (this, authenticated
 	// by the boot's token, or once a pool VM is loaded by the load's) or
 	// an exec's stdio stream (proto.ExecStreamHello).
-	if write(proto.Msg{Type: "hello", Token: g.config().CtlToken, UptimeMS: time.Since(start).Milliseconds()}) != nil {
+	if write(proto.Msg{Type: "hello", Token: g.config().CtlToken, UptimeMS: time.Since(start).Milliseconds(),
+		Proto: version.GuestProtocol, GuestVersion: version.Version}) != nil {
 		return
 	}
 	g.mu.Lock()
