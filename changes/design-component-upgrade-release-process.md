@@ -37,7 +37,16 @@ You can now plan, check and undo upgrades (ADR-upgrades-and-releases).
 - **Upgrade runs.**
   - mgmt drives a fleet upgrade host by host, starting with a canary and
     health-checking each host before the next.
-  - The run keeps going if the CLI disconnects.
+  - The run keeps going if the CLI disconnects: it is stored in mgmt and
+    driven by whichever replica holds its lease.
+  - A host started with `twd-hostd -self-upgrade`, under a service manager,
+    downloads the release tarball from mgmt, installs it and restarts.
+    Other hosts show an operator step, and the run waits for them.
+  - `twd upgrade status`, `pause`, `resume` and `abort` control the run.
+- **Versioned data formats.** `objects.json`, node `object.json`,
+  `twd.json` and the R2 index entries now carry a version. A twd reads older
+  formats and refuses newer ones.
 
 Operator action: none for a homelab. For a fleet, upgrade twd-mgmt before
-any host.
+any host. Hosts that predate version reporting count as 0.1.x, so they stay
+within the window of a 0.2 twd-mgmt. See docs/upgrading.md.

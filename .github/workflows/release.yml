@@ -104,7 +104,7 @@ jobs:
       - name: make vm-assets
         run: |
           make deps
-          make vm-assets GUEST_ARCH=${{ matrix.arch }} VM_ASSETS=dist/vm-assets-${{ matrix.arch }}
+          TWD_VERSION="${TAG#v}" make vm-assets GUEST_ARCH=${{ matrix.arch }} VM_ASSETS=dist/vm-assets-${{ matrix.arch }}
           cat dist/vm-assets-${{ matrix.arch }}/manifest.json
           sha256sum dist/vm-assets-${{ matrix.arch }}/*
       - uses: actions/upload-artifact@v4
@@ -138,7 +138,7 @@ jobs:
           key: vz-assets-${{ hashFiles('guest/**', 'go.mod', 'go.sum', 'package-lock.json') }}
       - name: make vz-assets
         run: |
-          make vz-assets VZ_ASSETS=dist/vz-assets-arm64
+          TWD_VERSION="${TAG#v}" make vz-assets VZ_ASSETS=dist/vz-assets-arm64
           sha256sum dist/vz-assets-arm64/*
       - uses: actions/upload-artifact@v4
         with:
