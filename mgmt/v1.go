@@ -14,6 +14,7 @@ import (
 	"time"
 
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/twd/mgmt/ui"
 )
 
 // v1api implements the generated v1.ServerInterface (api/openapi.yaml is
@@ -115,6 +116,39 @@ func boolOf(p *bool) bool { return p != nil && *p }
 
 func location(w http.ResponseWriter, path string) { w.Header().Set("Location", path) }
 
+// requireLease is the host-role object scope (M2): a host principal may
+// touch an object only while it holds the object's (tenant, workload)
+// lease; admins and the local-dev socket pass. The epoch fence in the
+// service is on top of this.
+func (a *v1api) requireLease(r *http.Request, lease string) error {
+	p := principalOf(r.Context())
+	if p.Kind != "host" {
+		return nil
+	}
+	if l, err := a.s.M.store.GetLease(r.Context(), lease); err != nil || l.Holder != p.HostID {
+		return errf(403, "forbidden", "host %s does not hold the lease %s", p.HostID, lease)
+	}
+	return nil
+}
+
+// hostScope is what a host principal may read (M3): the leases it holds
+// and the tenants those deployments belong to. isHost is false for every
+// other principal (they see everything).
+func (a *v1api) hostScope(r *http.Request) (leases, tenants map[string]bool, isHost bool) {
+	p := principalOf(r.Context())
+	if p.Kind != "host" {
+		return nil, nil, false
+	}
+	leases, tenants = map[string]bool{}, map[string]bool{}
+	if ds, err := a.s.M.store.Assignments(r.Context(), p.HostID); err == nil {
+		for _, d := range ds {
+			leases[LeaseName(d.TenantID, d.Workload)] = true
+			tenants[d.TenantID] = true
+		}
+	}
+	return leases, tenants, true
+}
+
 // ---- views (what the spec's schemas require beyond the store types) ----
 
 type hostView struct {
@@ -146,7 +180,7 @@ func (a *v1api) hostView(r *http.Request, h Host) hostView {
 			Port int    `json:"port,omitempty"`
 			URL  string `json:"url,omitempty"`
 		}{Port: h.PushPort}
-		if strings.HasPrefix(u, "unix://") {
+		if strings.HasPrefix(u, "unix://") || strings.HasPrefix(u, "inproc://") {
 			v.Push.URL = u
 		}
 	}
@@ -355,15 +389,37 @@ func (a *v1api) ListTenants(w http.ResponseWriter, r *http.Request, params v1.Li
 		writeErr(w, r, err)
 		return
 	}
+	_, mine, isHost := a.hostScope(r)
+	if isHost {
+		pg.Limit = 0 // filter in memory, then page
+	}
 	ts, err := a.s.M.store.ListTenants(r.Context(), pg)
 	if err != nil {
 		writeErr(w, r, err)
 		return
 	}
+	if isHost {
+		// Hosts see only the tenants with a deployment assigned to them.
+		kept := make([]Tenant, 0, len(ts))
+		for _, t := range ts {
+			if mine[t.ID] {
+				kept = append(kept, t)
+			}
+		}
+		ts = kept
+		if len(ts) > n+1 {
+			ts = ts[:n+1]
+		}
+	}
 	writeJSON(w, 200, mkPage(ts, n, func(t Tenant) PageKey { return PageKey{Created: t.CreatedAt, ID: t.ID} }))
 }
 
 func (a *v1api) GetTenant(w http.ResponseWriter, r *http.Request, id v1.TenantID, _ v1.GetTenantParams) {
+	if _, mine, isHost := a.hostScope(r); isHost && !mine[id] {
+		// M3: as if it did not exist (no confirmation of other tenants).
+		writeErr(w, r, errf(404, "not_found", "host %s has no deployment of tenant %s", principalOf(r.Context()).HostID, id))
+		return
+	}
 	t, err := a.s.M.store.GetTenant(r.Context(), id)
 	if err != nil {
 		writeErr(w, r, err)
@@ -561,14 +617,15 @@ func (a *v1api) CreateHost(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	out := struct {
-		Host       hostView `json:"host"`
-		AuthKey    string   `json:"authKey"`
-		ExpiresAt  int64    `json:"expiresAt"`
-		Tags       []string `json:"tags"`
-		Hostname   string   `json:"hostname"`
-		ControlURL string   `json:"controlURL,omitempty"`
-		Tailnet    string   `json:"tailnet,omitempty"`
-	}{a.hostView(r, hj.Host), hj.AuthKey, hj.ExpiresAt, hj.Tags, hj.Hostname, hj.ControlURL, hj.Tailnet}
+		Host               hostView `json:"host"`
+		AuthKey            string   `json:"authKey"`
+		RegistrationSecret string   `json:"registrationSecret"`
+		ExpiresAt          int64    `json:"expiresAt"`
+		Tags               []string `json:"tags"`
+		Hostname           string   `json:"hostname"`
+		ControlURL         string   `json:"controlURL,omitempty"`
+		Tailnet            string   `json:"tailnet,omitempty"`
+	}{a.hostView(r, hj.Host), hj.AuthKey, hj.RegistrationSecret, hj.ExpiresAt, hj.Tags, hj.Hostname, hj.ControlURL, hj.Tailnet}
 	if created {
 		location(w, "/v1/hosts/"+hj.Host.ID)
 		writeJSON(w, 201, out)
@@ -876,6 +933,8 @@ func (a *v1api) CreateObject(w http.ResponseWriter, r *http.Request) {
 	if req.TraceID == "" {
 		req.TraceID = r.Header.Get("Twd-Trace-ID")
 	}
+	if p := principalOf(r.Context()); p.Kind == "host" {
+	}
 	// A killed identity answers 410 with its tombstone.
 	if req.Namespace != "" && req.ObjectName != "" {
 		wl := req.Workload
@@ -884,6 +943,10 @@ func (a *v1api) CreateObject(w http.ResponseWriter, r *http.Request) {
 		}
 		if wl != "" {
 			if o, err := a.s.M.store.GetObjectByName(r.Context(), req.TenantID, wl, req.Namespace, req.ObjectName); err == nil && o.Status == StatusKilled {
+				if err := a.requireLease(r, o.Lease); err != nil {
+					writeErr(w, r, err)
+					return
+				}
 				a.writeGone(w, r, o)
 				return
 			}
@@ -936,10 +999,27 @@ func (a *v1api) ListObjects(w http.ResponseWriter, r *http.Request, params v1.Li
 			f.Status = append(f.Status, string(s))
 		}
 	}
+	mine, _, isHost := a.hostScope(r)
+	if isHost {
+		f.Page.Limit = 0 // filter in memory, then page
+	}
 	objs, err := a.s.M.store.ListObjects(r.Context(), f)
 	if err != nil {
 		writeErr(w, r, err)
 		return
+	}
+	if isHost {
+		// M3: a host lists only objects whose lease it holds.
+		kept := make([]Object, 0, len(objs))
+		for _, o := range objs {
+			if mine[o.Lease] {
+				kept = append(kept, o)
+			}
+		}
+		objs = kept
+		if len(objs) > n+1 {
+			objs = objs[:n+1]
+		}
 	}
 	idx := map[string]Object{}
 	for _, o := range objs {
@@ -964,6 +1044,10 @@ func (a *v1api) GetObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID
 		writeErr(w, r, err)
 		return
 	}
+	if err := a.requireLease(r, o.Lease); err != nil {
+		writeErr(w, r, err)
+		return
+	}
 	if o.Status == StatusKilled {
 		a.writeGone(w, r, o)
 		return
@@ -974,6 +1058,10 @@ func (a *v1api) GetObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID
 func (a *v1api) UpdateObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID, _ v1.UpdateObjectParams) {
 	cur, err := a.s.M.GetObject(r.Context(), id)
 	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	if err := a.requireLease(r, cur.Lease); err != nil {
 		writeErr(w, r, err)
 		return
 	}
@@ -1076,11 +1164,9 @@ func (a *v1api) DeleteObject(w http.ResponseWriter, r *http.Request, id v1.Objec
 		return
 	}
 	p := principalOf(r.Context())
-	if p.Kind == "host" {
-		if l, err := a.s.M.store.GetLease(r.Context(), cur.Lease); err != nil || l.Holder != p.HostID {
-			writeErr(w, r, errf(403, "forbidden", "host %s does not hold %s", p.HostID, cur.Lease))
-			return
-		}
+	if err := a.requireLease(r, cur.Lease); err != nil {
+		writeErr(w, r, err)
+		return
 	}
 	res, err := a.s.M.Kill(r.Context(), id, KillRequest{Cascade: boolOf(params.Cascade), Reason: str(params.Reason), By: p.Actor(r)})
 	if err != nil {
@@ -1098,6 +1184,13 @@ func (a *v1api) CreateObjectCredential(w http.ResponseWriter, r *http.Request, i
 	wait := 10 * time.Second
 	if params.Wait != nil && *params.Wait >= 0 && *params.Wait <= 30 {
 		wait = time.Duration(*params.Wait) * time.Second
+	}
+	if cur, err := a.s.M.store.GetObject(r.Context(), id); err != nil {
+		writeErr(w, r, err)
+		return
+	} else if err := a.requireLease(r, cur.Lease); err != nil {
+		writeErr(w, r, err)
+		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	host := hostOf(r)
@@ -1357,6 +1450,10 @@ func (s *Server) roleAllowed(p Principal, role string) bool {
 	return s.allowed(p, roles)
 }
 
+// hostBodyLimit caps request bodies from the host role (L4); POST /v1/audit
+// is exempt (readJSON's 64 MiB applies there, as to admin bundle uploads).
+const hostBodyLimit = 1 << 20
+
 // roleGate gates every generated route by the spec's x-twd-role and binds
 // tsnet hosts to their own /v1/hosts/{id} records. It runs before the
 // generated parameter binding (mux.Handler resolves the pattern without
@@ -1377,6 +1474,11 @@ func (s *Server) roleGate(roles map[string]string, mux *http.ServeMux) http.Hand
 		if !s.roleAllowed(p, role) {
 			writeErr(w, r, errf(403, "forbidden", "caller (%s) may not call %s %s", p.Kind, r.Method, r.URL.Path))
 			return
+		}
+		if p.Kind == "host" && r.Body != nil && pattern != "POST /v1/audit" {
+			// L4: host-role bodies are small (registration, heartbeat, object
+			// create, ready) except audit batches, which keep readJSON's limit.
+			r.Body = http.MaxBytesReader(w, r.Body, hostBodyLimit)
 		}
 		if p.Kind == "host" && p.HostID != "" && strings.HasPrefix(pattern[strings.Index(pattern, " ")+1:], "/v1/hosts/{id}") {
 			// /v1/hosts/{id}[/...]: the id is the third path element.
@@ -1409,7 +1511,7 @@ func (s *Server) Handler() http.Handler {
 	// api/openapi.yaml documents its routes and roles (tag "registry",
 	// excluded from code generation); the registry enforces them.
 	reg := s.M.Registry()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v2" || strings.HasPrefix(r.URL.Path, "/v2/") {
 			if reg == nil {
 				writeErr(w, r, errf(404, "registry_unavailable", "this twd-mgmt serves no registry (start it with -registry-dir)"))
@@ -1423,6 +1525,36 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		gate.ServeHTTP(w, r)
+	})
+	// The admin UI (mgmt/ui) rides on the same principal; browserGuard
+	// refuses cross-site browser mutations (CSRF) for the UI and the API.
+	return browserGuard(s.mountUI(api, ui.Handler(api)))
+}
+
+// mountUI dispatches the admin UI (mgmt/ui) next to the API: /ui/* goes to
+// the UI once the caller is admitted (the local operator or an admin user;
+// never a host), GET / from a browser (Accept: text/html) is redirected to
+// /ui/, and everything else is the API. The UI itself renders from
+// in-process calls to api, so it sees exactly what the principal may see.
+func (s *Server) mountUI(api, uiH http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/"):
+			p := principalOf(r.Context())
+			if p.Kind == "" {
+				writeErr(w, r, errf(401, "no_identity", "unauthenticated"))
+				return
+			}
+			if p.Kind == "host" || !s.allowed(p, roleAdmin) {
+				writeErr(w, r, errf(403, "forbidden", "caller (%s) may not use the admin UI", p.Kind))
+				return
+			}
+			uiH.ServeHTTP(w, r)
+		case r.URL.Path == "/" && (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.Contains(r.Header.Get("Accept"), "text/html"):
+			http.Redirect(w, r, "/ui/", http.StatusFound)
+		default:
+			api.ServeHTTP(w, r)
+		}
 	})
 }
 

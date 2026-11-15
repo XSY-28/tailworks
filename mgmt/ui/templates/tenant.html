@@ -1,0 +1,71 @@
+{{define "content"}}
+<h1 class="mono">{{.Tenant.Tailnet}} <span class="muted">{{.Tenant.TenantID}}</span></h1>
+<section class="grid">
+  <div class="card">
+    <h2>config <span class="muted small">(secrets are never returned by the API)</span></h2>
+    <dl class="kv">
+      <dt>tailnet</dt><dd class="mono">{{.Tenant.Tailnet}}</dd>
+      {{if .Tenant.ControlURL}}<dt>control URL</dt><dd class="mono">{{.Tenant.ControlURL}}</dd>{{end}}
+      <dt>mint mode</dt><dd class="mono">{{.Tenant.MintMode}}</dd>
+      {{if .Tenant.APIKeyFile}}<dt>API key file</dt><dd class="mono">{{.Tenant.APIKeyFile}}</dd>{{end}}
+      {{if .Tenant.OAuthClientID}}<dt>OAuth client</dt><dd class="mono">{{.Tenant.OAuthClientID}}{{if .Tenant.OAuthClientFile}} <span class="muted small">{{.Tenant.OAuthClientFile}}</span>{{end}}</dd>{{end}}
+      {{if .Tenant.WIFClientID}}<dt>WIF client</dt><dd class="mono">{{.Tenant.WIFClientID}}</dd>{{end}}
+      {{if .Tenant.WIFLifecycleClientID}}<dt>WIF lifecycle client</dt><dd class="mono">{{.Tenant.WIFLifecycleClientID}}</dd>{{end}}
+      <dt>max objects</dt><dd class="mono">{{.Tenant.MaxObjects}}</dd>
+      <dt>registrations/min</dt><dd class="mono">{{.Tenant.RegistrationsPerMinute}} <span class="muted">(effective {{printf "%.1f" .Tenant.EffectiveRegistrationsPerMinute}})</span></dd>
+      <dt>mint queue</dt><dd class="mono">{{.Tenant.MintQueue}}</dd>
+      <dt>pool / tier</dt><dd class="mono">{{or .Tenant.Pool "-"}} / {{or .Tenant.Tier "-"}}</dd>
+      <dt>OBO public key</dt><dd class="mono small">{{or .Tenant.OBOPublicKey "-"}}</dd>
+      <dt>created</dt><dd class="mono">{{stamp .Tenant.CreatedAt}}</dd>
+    </dl>
+    {{if .Tenant.WIF}}<details><summary>WIF</summary><pre class="mono small">{{anyJSON .Tenant.WIF}}</pre></details>{{end}}
+  </div>
+  <div class="card">
+    <h2>objects</h2>
+    <dl class="kv" data-live="counts">
+      <dt>live</dt><dd class="mono">{{.Live}} / {{.Tenant.MaxObjects}}</dd>
+      {{range $k, $v := .Counts}}<dt>{{$k}}</dt><dd class="mono">{{$v}}</dd>{{end}}
+    </dl>
+  </div>
+</section>
+
+<section>
+  <h2>deployments <span class="count">{{len .Deployments}}</span></h2>
+  <div data-live="deployments">
+  <table>
+    <thead><tr><th>workload</th><th>deployment</th><th>host</th><th>by</th><th>created</th><th>status</th><th>endpoint</th></tr></thead>
+    <tbody>{{range .Deployments}}<tr>
+      <td class="mono">{{.Workload}}</td>
+      <td class="mono"><a href="/ui/deployments/{{.DeploymentID}}">{{.DeploymentID}}</a></td>
+      <td class="mono small"><a href="/ui/hosts/{{.Host}}">{{.Host}}</a></td>
+      <td class="small">{{or .DeployedBy "-"}}</td>
+      <td class="mono small">{{ago .CreatedAt}}</td>
+      <td>{{template "status" .Status}}</td>
+      <td class="mono small">{{if .Endpoint.MagicDNS}}<a href="http://{{.Endpoint.MagicDNS}}/" rel="noreferrer">{{.Endpoint.MagicDNS}}</a>{{else}}-{{end}}</td>
+    </tr>{{else}}<tr><td colspan="7" class="muted">no deployments</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>objects <span class="count">{{len .Objects}}</span></h2>
+  <div data-live="objects">
+  <table class="objects">
+    <thead>{{template "objhead"}}</thead>
+    <tbody>{{template "objrows" .Objects}}{{if not .Objects}}<tr><td colspan="9" class="muted">no objects</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card act">
+  <h2>delete tenant</h2>
+  <form method="post" action="/ui/tenants/{{.Tenant.TenantID}}/delete"
+        data-api="/v1/tenants/{{.Tenant.TenantID}}" data-method="DELETE"
+        data-confirm="Delete tenant {{.Tenant.Tailnet}} ({{.Tenant.TenantID}})? With force, its live objects are killed first."
+        data-after="/ui/">
+    <label><input type="checkbox" name="force" value="true"> force (kill {{.Live}} live object(s) and stop deployments first)</label>
+    <button type="submit" class="danger">Delete tenant</button>
+  </form>
+  <p class="small muted">Without force, the request is refused while objects are live (tenant_has_live_objects).</p>
+</section>
+{{end}}

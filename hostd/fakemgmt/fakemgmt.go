@@ -1204,8 +1204,9 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 		mgmtapi.ReadyRequest
 	}
-	if err := decode(r, &req); err != nil || req.Status != "ready" {
-		writeErr(w, 400, "bad_request", "fakemgmt: the patch must be {status: ready, nodeID, stableNodeID, magicDNS, epoch}")
+	if err := decode(r, &req); err != nil || req.Status != "ready" || req.Epoch <= 0 {
+		// Like mgmt (H2): epoch is required; the real server fences on it.
+		writeErr(w, 400, "bad_request", "fakemgmt: the patch must be {status: ready, nodeID, stableNodeID, magicDNS, epoch ≥ 1}")
 		return
 	}
 	s.mu.Lock()

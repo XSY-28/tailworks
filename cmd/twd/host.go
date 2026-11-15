@@ -184,7 +184,7 @@ func cmdHostVMCheck(args []string) error {
 func cmdHostAdd(args []string) error {
 	f := newFlags("host add")
 	tenantF := tenantFlag(f)
-	out := f.String("out", "", "write the join key here as TS_AUTHKEY=… (default ./<host-id>.join.env)")
+	out := f.String("out", "", "write the join key (TS_AUTHKEY=…) and the one-time registration secret (TWD_REGISTRATION_SECRET=…) here (default ./<host-id>.join.env)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -218,7 +218,10 @@ func cmdHostAdd(args []string) error {
 		}
 		return err
 	}
-	if err := os.WriteFile(path, []byte("TS_AUTHKEY="+hj.AuthKey+"\n"), 0o600); err != nil {
+	if hj.RegistrationSecret == "" {
+		return fail("bootstrap_failed", "mgmt returned no registration secret for host "+pos[0]).withFix("upgrade twd-mgmt (POST /v1/hosts must answer registrationSecret)")
+	}
+	if err := os.WriteFile(path, hj.joinFileContent(), 0o600); err != nil {
 		return err
 	}
 	res := map[string]any{"hostID": pos[0], "hostname": hj.Hostname, "tags": hj.Tags, "expiresAt": hj.ExpiresAt, "controlURL": hj.ControlURL,
@@ -229,7 +232,7 @@ func cmdHostAdd(args []string) error {
 		fmt.Printf("  on %s:  install twd, copy the file there (scp, 0600), then\n", pos[0])
 		fmt.Printf("    twd-hostd join --host-id %s --token-file %s --control-url %s\n", pos[0], filepath.Base(path), hj.ControlURL)
 		fmt.Printf("    twd-hostd -host-id %s -mgmt http://%s -tsnet-control-url %s\n", pos[0], s.Cfg.MgmtDNSName, hj.ControlURL)
-		fmt.Printf("  the key is used once by the join and the file is deleted; mgmt then binds the node to host %s on its first PUT /v1/hosts/%s\n", pos[0], pos[0])
+		fmt.Printf("  the key is used once by the join and the file is deleted (its registration secret is kept beside the node state);\n  mgmt binds the node to host %s on its first PUT /v1/hosts/%s, which must present that secret\n", pos[0], pos[0])
 	})
 	return nil
 }

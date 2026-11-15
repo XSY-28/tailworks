@@ -541,7 +541,7 @@ func TestRemintAfterRejectedRejoin(t *testing.T) {
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "SupportAgent", "objectName": "alice"}, &root)
 	var cred Credential
 	h1.ok("POST", "/v1/objects/"+root.ObjectID+"/credentials?epoch=1", nil, &cred)
-	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "nodeID": "1", "stableNodeID": "nOLD", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "epoch": 1, "nodeID": "1", "stableNodeID": "nOLD", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
 	h1.fail("POST", "/v1/objects/"+root.ObjectID+"/credentials?epoch=1", nil, 409, "already_joined")
 
 	// Other hosts can't remint it; a stale epoch can't either.
@@ -562,7 +562,7 @@ func TestRemintAfterRejectedRejoin(t *testing.T) {
 	if ro.Status != StatusMinted || ro.StableNodeID != "" || ro.NodeID != "" || ro.Hostname != root.ObjectID {
 		t.Fatalf("after remint: %+v", ro)
 	}
-	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "nodeID": "2", "stableNodeID": "nNEW", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "epoch": 1, "nodeID": "2", "stableNodeID": "nNEW", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
 	c.ok("GET", "/v1/objects/"+root.ObjectID, nil, &ro)
 	if ro.Status != StatusReady || ro.StableNodeID != "nNEW" || ro.Hostname != root.ObjectID {
 		t.Fatalf("after second ready: %+v", ro)
@@ -647,7 +647,7 @@ func TestAPIEndToEnd(t *testing.T) {
 		fmt.Sprint(create["tags"]) != "[tag:twd-agent-support]" {
 		t.Fatalf("minted key options %v", kb)
 	}
-	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "nodeID": "1", "stableNodeID": "nROOT", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "epoch": 1, "nodeID": "1", "stableNodeID": "nROOT", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
 	h1.fail("POST", "/v1/objects/"+root.ObjectID+"/credentials?epoch=1", nil, 409, "already_joined")
 
 	// Spawn checks.
@@ -710,7 +710,7 @@ func TestAPIEndToEnd(t *testing.T) {
 		if !cr.Ephemeral {
 			t.Fatal("TTL'd sub-agent key should be ephemeral")
 		}
-		h1.ok("PATCH", "/v1/objects/"+id, map[string]any{"status": "ready", "nodeID": fmt.Sprint(10 + i), "stableNodeID": fmt.Sprintf("nC%d", i)}, nil)
+		h1.ok("PATCH", "/v1/objects/"+id, map[string]any{"status": "ready", "epoch": 1, "nodeID": fmt.Sprint(10 + i), "stableNodeID": fmt.Sprintf("nC%d", i)}, nil)
 	}
 	var list []Object
 	c.items("/v1/objects?tenant="+tn.TenantID, &list)
@@ -832,12 +832,12 @@ func TestAPIThrottleBackoffAndTTLReaper(t *testing.T) {
 	if ti.EffectiveRate >= 120 || ti.EffectiveRate < 30 {
 		t.Fatalf("effective rate after two 429s: %v", ti.EffectiveRate)
 	}
-	h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "stableNodeID": "nA"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nA"}, nil)
 	// pending-forever: wait=0 on a fresh object can return identity_pending.
 	var b CreateObjectResponse
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "B", "objectName": "b", "parent": map[string]string{"objectID": a.ObjectID}}, &b)
 	h1.ok("POST", "/v1/objects/"+b.ObjectID+"/credentials?epoch=1&wait=10", nil, &cred)
-	h1.ok("PATCH", "/v1/objects/"+b.ObjectID, map[string]any{"status": "ready", "stableNodeID": "nB"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+b.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nB"}, nil)
 	time.Sleep(1100 * time.Millisecond)
 	n, err := e.m.Reap(context.Background())
 	if err != nil || n != 1 {
@@ -888,7 +888,8 @@ func TestAPIHostAuditChain(t *testing.T) {
 	if len(aud.Records) != 3 {
 		t.Fatal("by trace")
 	}
-	// A record signed by another key breaks verification.
+	// A record signed by another key is refused at ingest (M4): nothing is
+	// stored and the chain stays intact.
 	_, other, _ := ed25519.GenerateKey(rand.Reader)
 	// RT3-05: refused at ingest, never stored; the chain stays verified.
 	h1.fail("POST", "/v1/audit", map[string]any{"records": []any{mk("allow", "o1", other)}}, 400, "bad_host_sig")
@@ -932,19 +933,59 @@ func TestTailnetAuth(t *testing.T) {
 		return w.Code, out
 	}
 	code := func(from, method, path, body string) int { c, _ := call(from, method, path, body); return c }
+	// The operator tenant: twd host add mints the join key and the one-time
+	// registration secret through it (M1).
+	var tn struct{ TenantID string }
+	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	var hj1, hj2 struct{ RegistrationSecret string }
+	e.c.ok("POST", "/v1/hosts", map[string]any{"hostID": "h1", "tenantID": tn.TenantID}, &hj1)
+	e.c.ok("POST", "/v1/hosts", map[string]any{"hostID": "h2", "tenantID": tn.TenantID}, &hj2)
+	if len(hj1.RegistrationSecret) < 40 || hj1.RegistrationSecret == hj2.RegistrationSecret {
+		t.Fatalf("registration secrets: %q %q", hj1.RegistrationSecret, hj2.RegistrationSecret)
+	}
+	reg := func(secret string) string {
+		b := map[string]any{"capacityNodes": 1, "tiers": []string{"process"}}
+		if secret != "" {
+			b["registrationSecret"] = secret
+		}
+		j, _ := json.Marshal(b)
+		return string(j)
+	}
 	if c := code("100.64.0.1:1", "PUT", "/v1/hosts/h1/status", `{}`); c != 403 {
 		t.Fatalf("unregistered host heartbeat: %d", c)
 	}
-	if c := code("100.64.0.1:1", "PUT", "/v1/hosts/h1", `{"capacityNodes":1,"tiers":["process"]}`); c != 201 {
+	// A tag:twd-host node alone cannot claim a host ID: it needs the secret
+	// (host_identity_mismatch), and an ID the admin never added is refused
+	// outright (host_not_registered; no implicit creation over the tailnet).
+	if c, b := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", reg("")); c != 403 || b["code"] != "host_identity_mismatch" {
+		t.Fatalf("register without secret: %d %v", c, b)
+	}
+	if c, b := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", reg(hj2.RegistrationSecret)); c != 403 || b["code"] != "host_identity_mismatch" {
+		t.Fatalf("register with another host's secret: %d %v", c, b)
+	}
+	if c, b := call("100.64.0.1:1", "PUT", "/v1/hosts/h9", reg(hj1.RegistrationSecret)); c != 403 || b["code"] != "host_not_registered" {
+		t.Fatalf("register an ID never added: %d %v", c, b)
+	}
+	if c := code("100.64.0.1:1", "PUT", "/v1/hosts/h1", reg(hj1.RegistrationSecret)); c != 201 {
 		t.Fatalf("register: %d", c)
+	}
+	// Bound: re-registration needs no secret; the secret is spent.
+	if c := code("100.64.0.1:1", "PUT", "/v1/hosts/h1", reg("")); c != 200 {
+		t.Fatalf("re-register: %d", c)
+	}
+	if h, _ := e.m.store.GetHost(context.Background(), "h1"); h.NodeID != "nHOST1" || h.RegistrationSecretHash != "" {
+		t.Fatalf("after bind: node %q hash %q", h.NodeID, h.RegistrationSecretHash)
 	}
 	if c := code("100.64.0.1:1", "PUT", "/v1/hosts/h1/status", `{}`); c != 200 {
 		t.Fatalf("own heartbeat: %d", c)
 	}
-	if c := code("100.64.0.2:1", "PUT", "/v1/hosts/h1", `{"capacityNodes":1,"tiers":["process"]}`); c != 403 {
+	// Even with h1's (leaked) secret, another node cannot take a bound ID.
+	if c := code("100.64.0.2:1", "PUT", "/v1/hosts/h1", reg(hj1.RegistrationSecret)); c != 403 {
 		t.Fatalf("host2 hijacking h1: %d", c)
 	}
-	code("100.64.0.2:1", "PUT", "/v1/hosts/h2", `{"capacityNodes":1,"tiers":["process"]}`)
+	if c := code("100.64.0.2:1", "PUT", "/v1/hosts/h2", reg(hj2.RegistrationSecret)); c != 201 {
+		t.Fatalf("register h2: %d", c)
+	}
 	if c := code("100.64.0.2:1", "PUT", "/v1/hosts/h1/status", `{}`); c != 403 {
 		t.Fatalf("host2 acting as h1: %d", c)
 	}
@@ -987,8 +1028,6 @@ func TestTailnetAuth(t *testing.T) {
 		t.Fatalf("no whois: %d", c)
 	}
 	// deployedBy carries the WhoIs actor.
-	var tn struct{ TenantID string }
-	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
 	c, b := call("100.64.0.6:1", "POST", "/v1/deployments", `{"tenantID":"`+tn.TenantID+`","workload":"w","namespaces":[{"class":"A","tags":["tag:ttest"]}]}`)
 	if c != 202 {
 		t.Fatalf("deploy as admin: %d %v", c, b)
@@ -1034,7 +1073,7 @@ func TestWIFMintPath(t *testing.T) {
 	if !strings.HasPrefix(cred.AuthKey, "tskey-auth-") {
 		t.Fatal("no key via WIF")
 	}
-	h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "stableNodeID": "nW"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nW"}, nil)
 	var kr KillResult
 	c.ok("DELETE", "/v1/objects/"+a.ObjectID+killQuery(false, "t"), nil, &kr)
 	if len(kr.DevicesDeleted) != 1 || e.ts.devicesDeleted()[0] != "nW" {
@@ -1099,7 +1138,7 @@ func TestKillWhileJoining(t *testing.T) {
 		t.Fatal("unused key not revoked on kill")
 	}
 	// The join raced the kill: ready must fail and delete the new device.
-	h1.fail("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "stableNodeID": "nLATE"}, 410, "killed")
+	h1.fail("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nLATE"}, 410, "killed")
 	if d := e.ts.devicesDeleted(); len(d) != 1 || d[0] != "nLATE" {
 		t.Fatalf("late device not deleted: %v", d)
 	}
@@ -1123,7 +1162,7 @@ func TestPurgeAfterKill(t *testing.T) {
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "namespace": WorkloadNamespace, "objectName": "agent"}, &wl)
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "namespace": "A", "objectName": "a"}, &a)
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "namespace": "A", "objectName": "keep"}, &keep)
-	h1.ok("PATCH", "/v1/objects/"+wl.ObjectID, map[string]any{"status": "ready", "stableNodeID": "nWL", "magicDNS": "agent.t.ts.net"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+wl.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nWL", "magicDNS": "agent.t.ts.net"}, nil)
 	var kr KillResult
 	c.ok("DELETE", "/v1/objects/"+wl.ObjectID+killQuery(true, "twd down --purge"), nil, &kr)
 	c.ok("DELETE", "/v1/objects/"+a.ObjectID+killQuery(false, "twd down --purge"), nil, nil)

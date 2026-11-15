@@ -117,11 +117,17 @@ func TestMM_F21_DeviceDeleteIntentIsAtomic(t *testing.T) {
 	if o, _ := st.GetObject(ctx, "rdy"); o.DeviceDeleteAt == 0 {
 		t.Fatal("kill of an object with a device must record its device delete in the same write")
 	}
-	// An object killed while minted (no device yet); its node then reports ready.
+	// An object killed while minted (no device yet); its node then reports
+	// ready. Ready is always fenced on the lease holder's epoch (H2), so the
+	// late report comes from the host holding the namespace lease.
+	lease, err := st.AcquireLease(ctx, LeaseName(tn.ID, "w"), "h1", NamespaceLeaseTTL, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
 	st.CreateObject(ctx, Object{ID: "late", TenantID: tn.ID, Workload: "w", Namespace: "A", Name: "late", Hostname: "late", RootID: "late",
-		Status: StatusMinted})
+		Lease: lease.Name, Status: StatusMinted})
 	m.Kill(ctx, "late", KillRequest{Reason: "t"})
-	m.Ready(ctx, "late", "", ReadyRequest{NodeID: "2", StableNodeID: "nLATE", MagicDNS: "late.t.ts.net"})
+	m.Ready(ctx, "late", "h1", ReadyRequest{NodeID: "2", StableNodeID: "nLATE", MagicDNS: "late.t.ts.net", Epoch: lease.Epoch})
 	if o, _ := st.GetObject(ctx, "late"); o.StableNodeID != "nLATE" || o.DeviceDeleteAt == 0 {
 		t.Fatalf("a device that appears after the kill must be recorded for deletion: %+v", o)
 	}

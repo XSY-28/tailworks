@@ -242,6 +242,9 @@ func (c *Client) Register(ctx context.Context, r RegisterRequest) error {
 	if r.Capacity != nil {
 		reg["capacity"] = r.Capacity
 	}
+	if r.RegistrationSecret != "" {
+		reg["registrationSecret"] = r.RegistrationSecret
+	}
 	switch {
 	case r.PushPort > 0:
 		reg["push"] = map[string]any{"port": r.PushPort}

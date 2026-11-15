@@ -308,6 +308,7 @@ const (
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
+	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
@@ -409,6 +410,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeRegistryUnavailable:
 		return true
 	case ErrorCodeReplicaConflict:
+		return true
+	case ErrorCodeReservedTag:
 		return true
 	case ErrorCodeServiceAPIFailed:
 		return true
@@ -1376,10 +1379,11 @@ type Endpoint struct {
 	Status ObjectStatus `json:"status"`
 }
 
-// Error The DX.md error catalog shape. `code` is stable and machine-readable;
+// Error The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Error struct {
 	// Code The catalog. Status in parentheses.
 	//
@@ -1388,14 +1392,15 @@ type Error struct {
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-	// | `host_identity_mismatch` | 403 | host ID bound to another node |
+	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -1453,14 +1458,15 @@ type Error struct {
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
 // | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
 // | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-// | `host_identity_mismatch` | 403 | host ID bound to another node |
+// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 // | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 // | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 // | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -1602,9 +1608,12 @@ type HostJoin struct {
 	Host      Host  `json:"host"`
 
 	// Hostname `twd-host-<hostID>`
-	Hostname string   `json:"hostname"`
-	Tags     []string `json:"tags"`
-	Tailnet  *string  `json:"tailnet,omitempty"`
+	Hostname string `json:"hostname"`
+
+	// RegistrationSecret One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound.
+	RegistrationSecret string   `json:"registrationSecret"`
+	Tags               []string `json:"tags"`
+	Tailnet            *string  `json:"tailnet,omitempty"`
 }
 
 // HostPage defines model for HostPage.
@@ -1627,14 +1636,16 @@ type HostPathReport struct {
 type HostPush struct {
 	Port *int `json:"port,omitempty"`
 
-	// URL `unix:///path/hostd.sock`; local-dev only.
+	// URL `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport).
 	URL *string `json:"url,omitempty"`
 }
 
 // HostRegistration defines model for HostRegistration.
 type HostRegistration struct {
 	// Arch A Go GOARCH. Container images must match their host's.
-	Arch        *Arch   `json:"arch,omitempty"`
+	Arch *Arch `json:"arch,omitempty"`
+
+	// AuditPubKey Pinned on first bind; a later registration may only repeat it.
 	AuditPubKey *string `json:"auditPubKey,omitempty"`
 
 	// Capacity The capacity vector a host registers (ADR-032 D9). `nodes` is
@@ -1651,8 +1662,11 @@ type HostRegistration struct {
 	// `port` names hostd's push listener on **its own tsnet node** (the
 	// WhoIs node; mgmt never pushes anywhere else). `url` is accepted only
 	// on the local-dev socket and only as `unix:///…`.
-	Push  *HostPush  `json:"push,omitempty"`
-	Tiers []HostTier `json:"tiers"`
+	Push *HostPush `json:"push,omitempty"`
+
+	// RegistrationSecret Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound.
+	RegistrationSecret *string    `json:"registrationSecret,omitempty"`
+	Tiers              []HostTier `json:"tiers"`
 }
 
 // HostStatus The heartbeat body.
@@ -2460,14 +2474,15 @@ type TombstoneError struct {
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-	// | `host_identity_mismatch` | 403 | host ID bound to another node |
+	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -2645,55 +2660,63 @@ type VolumeID = string
 // WorkloadName defines model for workloadName.
 type WorkloadName = string
 
-// BadRequest The DX.md error catalog shape. `code` is stable and machine-readable;
+// BadRequest The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type BadRequest = Error
 
-// Conflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// Conflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Conflict = Error
 
-// Forbidden The DX.md error catalog shape. `code` is stable and machine-readable;
+// Forbidden The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Forbidden = Error
 
 // Gone `410 Gone`: the error plus the kill record. `tombstone` is absent only when the 410 is `delegation_invalid` for a spawn whose parent is dead (the parent's record is then at `GET /v1/objects/{parent}`).
 type Gone = TombstoneError
 
-// LeaseLost The DX.md error catalog shape. `code` is stable and machine-readable;
+// LeaseLost The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type LeaseLost = Error
 
-// NotFound The DX.md error catalog shape. `code` is stable and machine-readable;
+// NotFound The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type NotFound = Error
 
-// PreconditionFailed The DX.md error catalog shape. `code` is stable and machine-readable;
+// PreconditionFailed The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type PreconditionFailed = Error
 
-// ReadyConflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// ReadyConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type ReadyConflict = Error
 
-// Unauthorized The DX.md error catalog shape. `code` is stable and machine-readable;
+// Unauthorized The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Unauthorized = Error
 
 // ListAuditParams defines parameters for ListAudit.

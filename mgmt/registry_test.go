@@ -122,7 +122,11 @@ func newRegEnv(t *testing.T) *regEnv {
 		t.Fatal(err)
 	}
 	for id, node := range map[string]string{"h1": "nH1", "h2": "nH2"} {
-		if _, _, err := m.RegisterHost(ctx, RegisterRequest{HostID: id, CapacityNodes: 10, Tiers: []string{"process", "microvm", "containers"}, Arch: "arm64"}, node, ""); err != nil {
+		// A tailnet host registers only against an admin-created record,
+		// presenting its one-time registration secret (M1).
+		secret := addPendingHost(t, m, id)
+		if _, _, err := m.RegisterHost(ctx, RegisterRequest{HostID: id, CapacityNodes: 10, Tiers: []string{"process", "microvm", "containers"}, Arch: "arm64",
+			RegistrationSecret: secret}, node, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -296,7 +300,8 @@ func TestDeployPinsDigests(t *testing.T) {
 func TestDeployPlacesByPinnedArch(t *testing.T) {
 	ctx := context.Background()
 	e := newRegEnv(t)
-	if _, _, err := e.m.RegisterHost(ctx, RegisterRequest{HostID: "hx", CapacityNodes: 1, Tiers: []string{"process", "microvm", "containers"}, Arch: "amd64"}, "nHX", ""); err != nil {
+	if _, _, err := e.m.RegisterHost(ctx, RegisterRequest{HostID: "hx", CapacityNodes: 1, Tiers: []string{"process", "microvm", "containers"}, Arch: "amd64",
+		RegistrationSecret: addPendingHost(t, e.m, "hx")}, "nHX", ""); err != nil {
 		t.Fatal(err)
 	}
 	pushTestImage(t, e.upstream, "sandbox", "amd64", "1")
@@ -410,4 +415,17 @@ func memUpstream(m *oci.MemTarget) http.Handler {
 		}
 		w.WriteHeader(200)
 	})
+}
+
+// addPendingHost stands in for `twd host add`: it records the host ID with
+// the hash of a one-time registration secret (as POST /v1/hosts does,
+// minus the join key) and returns the secret the host must present.
+func addPendingHost(t *testing.T, m *Mgmt, id string) string {
+	t.Helper()
+	secret := "reg-secret-" + id
+	now := m.now().UnixMilli()
+	if err := m.store.UpsertHost(context.Background(), Host{ID: id, RegistrationSecretHash: hashRegistrationSecret(secret), CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	return secret
 }

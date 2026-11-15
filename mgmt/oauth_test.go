@@ -104,7 +104,7 @@ func TestOAuthMintPath(t *testing.T) {
 		if !strings.HasPrefix(cred.AuthKey, "tskey-auth-") {
 			t.Fatalf("no object key via oauth for %s", name)
 		}
-		h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "stableNodeID": "n-" + name}, nil)
+		h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "n-" + name}, nil)
 		return a.ObjectID
 	}
 	a := mintObj(tn.TenantID, "a")

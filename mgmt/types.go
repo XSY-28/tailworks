@@ -121,8 +121,12 @@ type Host struct {
 	Capacity    *HostCapacity `json:"capacity,omitempty"`
 	Usage       *HostUsage    `json:"usage,omitempty"`
 	NodeID      string        `json:"nodeID,omitempty"`      // operator-tailnet stable node ID (tsnet mode)
-	AuditPubKey string        `json:"auditPubKey,omitempty"` // base64 ed25519, verifies hostSig
-	Pool        string        `json:"pool,omitempty"`
+	AuditPubKey string        `json:"auditPubKey,omitempty"` // base64 ed25519, verifies hostSig; pinned on first bind
+	// RegistrationSecretHash is hex(SHA-256) of the one-time secret POST
+	// /v1/hosts handed out; the first tailnet PUT /v1/hosts/{id} must present
+	// the secret, after which the hash is cleared. Never serialised.
+	RegistrationSecretHash string `json:"-"`
+	Pool                   string `json:"pool,omitempty"`
 	// PushPort is hostd's push listener on its own tsnet node (0 = none;
 	// local-dev hosts register a unix:// push URL instead).
 	PushPort int `json:"pushPort,omitempty"`
@@ -327,7 +331,7 @@ type AuditRecord struct {
 	Raw       json.RawMessage `json:"raw,omitempty"` // host records: the record exactly as submitted (hash input)
 }
 
-// Error is a typed API error (DX.md catalog shape).
+// Error is a typed API error (the typed error catalog shape, docs/errors.md).
 type Error struct {
 	Status  int            `json:"-"`
 	Code    string         `json:"code"`
@@ -342,9 +346,14 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
 
+// DocBase is the prefix of every error's doc_url: the heading of the code
+// in the typed error catalog (docs/errors.md). It equals netd.DocBase;
+// mgmt keeps its own copy so it does not import netd.
+const DocBase = "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#"
+
 func errf(status int, code, format string, a ...any) *Error {
 	return &Error{Status: status, Code: code, Message: fmt.Sprintf(format, a...),
-		DocURL: "https://twd.dev/errors/" + code}
+		DocURL: DocBase + code}
 }
 
 // Store errors.

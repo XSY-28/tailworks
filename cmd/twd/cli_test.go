@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -681,4 +682,138 @@ func TestCLIOAuth(t *testing.T) {
 	res.Numbers["oauth_exchanges"] = float64(fts.oauthExchanges)
 	out, _ := json.MarshalIndent(res, "", "  ")
 	t.Logf("results:\n%s", out)
+}
+
+// TestCLISingleProcess is M13 hermetically: `twd up` in its default
+// single-process layout (no --separate-host): one supervisor process runs
+// mgmt (its own tsnet node, the only infrastructure device) with the host
+// agent embedded, talking to mgmt in-process as the host principal and
+// receiving kills through the in-process push. The whole E2E-MAC scenario
+// (a)–(f) runs on it, then the layout is asserted: no twd-host-* node, no
+// join key, status/doctor describe it, --separate-host on this state is a
+// state_conflict, and twd down stops everything.
+func TestCLISingleProcess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short")
+	}
+	wd, err := nettest.WorkerdBinary()
+	if err != nil || !hostdtest.HasNode() {
+		t.Skip("needs workerd and node (make deps)")
+	}
+	t.Setenv("TWD_WORKERD", wd)
+	ctl, err := nettest.StartControl()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctl.Close()
+	ctl.Server.SetGlobalAppCaps(tailcfg.PeerCapMap{
+		nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue},
+		cliflow.MCPCap:  []tailcfg.RawMessage{`{"tools":["lookup_order"]}`},
+	})
+	fts := newFakeTS(t)
+	api := httptest.NewServer(fts)
+	defer api.Close()
+	bin := cliflow.BuildBinaries(t)
+	state, _ := hostdtest.ShortDir("twd-sp-")
+	work := t.TempDir()
+	keyFile := filepath.Join(work, "api.env")
+	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	res := cliflow.NewResults("hermetic-single", "ttest.ts.net")
+	var nodes []*nettest.Node
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-s-", Res: res, SingleProcess: true,
+		NewNode: func(role string) *nettest.Node {
+			n, err := nettest.NewNode(context.Background(), ctl.URL, nettest.DummyKey, "ttest-"+role, filepath.Join(work, role))
+			if err != nil {
+				t.Fatal(err)
+			}
+			nodes = append(nodes, n)
+			return n
+		}}
+	t.Cleanup(func() {
+		if os.Getenv("TWD_KEEP") != "" {
+			t.Logf("TWD_KEEP: state left running in %s", state)
+			return
+		}
+		if t.Failed() {
+			for _, c := range []string{"supervisor", "mgmt", "hostd"} {
+				b, _ := os.ReadFile(filepath.Join(state, "logs", c+".log"))
+				t.Logf("%s log (tail):\n%s", c, hostdtest.Trim(string(b[max(0, len(b)-5000):]), 5000))
+			}
+		}
+		e.Twd("down", "--purge")
+		for _, n := range nodes {
+			n.Close()
+		}
+		os.RemoveAll(state)
+	})
+	e.Run() // (a)–(f): deploy → ready, requests reach the objects, kill --cascade (in-process push), audit
+	// One infrastructure device: mgmt's node (TrackInfra added the host's, which has none).
+	if len(res.InfraNodeIDs) != 1 {
+		t.Fatalf("infrastructure nodes %v: single-process mode must create mgmt's node only", res.InfraNodeIDs)
+	}
+	var cfg struct{ Mode, HostID string }
+	b, _ := os.ReadFile(filepath.Join(state, "twd.json"))
+	json.Unmarshal(b, &cfg)
+	if cfg.Mode != "single" {
+		t.Fatalf("twd.json mode %q", cfg.Mode)
+	}
+	// Status and the human output describe the layout.
+	var st struct {
+		Mode, Transport string
+		Healthy         bool
+		Host            bool
+	}
+	e.MustJSON(&st, "status")
+	if !st.Healthy || !st.Host || st.Mode != "single" || !strings.Contains(st.Transport, "host embedded") {
+		t.Fatalf("status: %+v", st)
+	}
+	so, _, _, err := e.Twd("status")
+	if err != nil || !strings.Contains(so, "embedded in the mgmt process") {
+		t.Fatalf("status text: %v\n%s", err, so)
+	}
+	again := []string{"up", "--tailnet", "ttest.ts.net", "--api-key-file", keyFile, "--yes", "--control-url", ctl.URL, "--tsapi-url", api.URL,
+		"--hostname-prefix", "twd-s-", "--mgmt-hostname", "twd-s-mgmt", "--host-id", "twd-s", "--ephemeral", "--allow-sibling-egress"}
+	so, se, _, err := e.Twd(again...)
+	if err != nil || !strings.Contains(so, "embedded in twd-mgmt (single process") || !strings.Contains(so, "one process: mgmt + embedded host") || !strings.Contains(so, "✓ policy") {
+		// (the fixture policy already has tag:twd-host and the host ⇄ mgmt grants, so no snippet is printed here)
+		t.Fatalf("second twd up (running) should describe the embedded host: %v\n%s\n%s", err, so, se)
+	}
+	if _, se, _, err := e.Twd(append(again, "--separate-host")...); err == nil || !strings.Contains(se, "state_conflict") {
+		t.Fatalf("--separate-host on a single-process state: %v %s", err, se)
+	}
+	// The supervisor is the only twd process: no twd-mgmt / twd-hostd children.
+	var pid struct{ Supervisor bool }
+	e.MustJSON(&pid, "status")
+	pb, _ := os.ReadFile(filepath.Join(state, "supervisor.pid"))
+	if kids := childPIDsOf(strings.TrimSpace(string(pb))); len(kids) != 0 {
+		t.Fatalf("single-process supervisor has child daemons: %v", kids)
+	}
+	mlog, _ := os.ReadFile(filepath.Join(state, "logs", "mgmt.log"))
+	hlog, _ := os.ReadFile(filepath.Join(state, "logs", "hostd.log"))
+	if !strings.Contains(string(mlog), "tailnet node") || !strings.Contains(string(hlog), "transport=embedded") {
+		t.Fatalf("component logs: mgmt %d bytes, hostd %d bytes (hostd must say transport=embedded)", len(mlog), len(hlog))
+	}
+	e.Down()
+	if fts.setPolicy != 0 {
+		t.Fatalf("twd wrote the policy without --policy-apply (%d times)", fts.setPolicy)
+	}
+	out, _ := json.MarshalIndent(res, "", "  ")
+	t.Logf("results:\n%s", out)
+}
+
+// childPIDsOf lists the direct children of pid that are twd daemons
+// (pgrep -P; the twd binary's own sandbox launcher helpers don't count).
+func childPIDsOf(pid string) []string {
+	out, err := exec.Command("pgrep", "-P", pid, "-l").Output()
+	if err != nil {
+		return nil
+	}
+	var kids []string
+	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.Contains(l, "twd-mgmt") || strings.Contains(l, "twd-hostd") {
+			kids = append(kids, l)
+		}
+	}
+	return kids
 }

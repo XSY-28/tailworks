@@ -1,0 +1,64 @@
+{{define "content"}}
+<h1 class="mono">{{.Host.HostID}} {{template "status" .Host.Status}}</h1>
+<section class="grid">
+  <div class="card">
+    <h2>host</h2>
+    <dl class="kv" data-live="host">
+      <dt>heartbeat</dt><dd class="mono">{{ago .Host.LastSeen}} ago{{if .Host.LastSeen}} · {{stamp .Host.LastSeen}}{{end}}</dd>
+      <dt>nodes</dt><dd class="mono">{{.Host.LiveNodes}} live / {{.Host.CapacityNodes}} capacity</dd>
+      <dt>tiers</dt><dd class="mono">{{join .Host.Tiers}}</dd>
+      <dt>pool</dt><dd class="mono">{{or .Host.Pool "-"}}</dd>
+      <dt>push</dt><dd class="mono">{{.Host.PushTransport}}{{if .Host.Push}}{{if .Host.Push.URL}} <span class="small muted">{{.Host.Push.URL}}</span>{{end}}{{end}}</dd>
+      <dt>node</dt><dd class="mono">{{or .Host.NodeID "-"}}{{if .Host.DNSName}} · {{.Host.DNSName}}{{end}}</dd>
+      <dt>created</dt><dd class="mono">{{stamp .Host.CreatedAt}}</dd>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>leases <span class="count">{{len .Host.Leases}}</span></h2>
+    <table>
+      <thead><tr><th>lease</th><th>epoch</th><th>expires</th></tr></thead>
+      <tbody>{{range .Host.Leases}}<tr><td class="mono">{{.Namespace}}</td><td class="mono">{{.Epoch}}</td><td class="mono small">{{stamp .ExpiresAt}}</td></tr>{{else}}<tr><td colspan="3" class="muted">none</td></tr>{{end}}</tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>assignments <span class="count">{{len .Assignments}}</span></h2>
+  <div data-live="assignments">
+  <table>
+    <thead><tr><th>workload</th><th>deployment</th><th>tenant</th><th>tailnet</th><th>epoch</th><th>lease</th><th>namespaces</th></tr></thead>
+    <tbody>{{range .Assignments}}<tr>
+      <td class="mono">{{.Workload}}</td>
+      <td class="mono"><a href="/ui/deployments/{{.DeploymentID}}">{{.DeploymentID}}</a></td>
+      <td class="mono small"><a href="/ui/tenants/{{.TenantID}}">{{.TenantID}}</a></td>
+      <td class="mono small">{{.Tailnet}}</td>
+      <td class="mono">{{.Epoch}}</td>
+      <td class="mono small">{{.Lease}}</td>
+      <td class="small">{{range .Namespaces}}<span class="mono">{{.Class}}</span> {{end}}</td>
+    </tr>{{else}}<tr><td colspan="7" class="muted">no assignments</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card act">
+  <h2>drain &amp; remove</h2>
+  <form method="post" action="/ui/hosts/{{.Host.HostID}}/remove"
+        data-api="/v1/hosts/{{.Host.HostID}}" data-method="DELETE"
+        data-confirm="Remove host {{.Host.HostID}}? With drain, every object it runs is killed and its leases released."
+        data-after="/ui/">
+    <label><input type="checkbox" name="drain" value="true" checked> drain (kill its objects, release its leases)</label>
+    <button type="submit" class="danger">Remove host</button>
+  </form>
+  <p class="small muted">Without drain, the request is refused while the host holds leases (host_holds_leases).</p>
+</section>
+
+<section>
+  <h2>objects <span class="count">{{len .Objects}}</span> <span class="muted small">live, on this host</span></h2>
+  <div data-live="objects">
+  <table class="objects">
+    <thead>{{template "objhead"}}</thead>
+    <tbody>{{template "objrows" .Objects}}{{if not .Objects}}<tr><td colspan="9" class="muted">no live objects</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+{{end}}

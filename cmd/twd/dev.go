@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -21,6 +24,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/hostd"
+	"github.com/rosskukulinski/twd/hostd/bundle"
 	"github.com/rosskukulinski/twd/hostd/fakemgmt"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"github.com/rosskukulinski/twd/netd"
@@ -38,7 +42,10 @@ import (
 // twd.dev.jsonc.
 
 type devResult struct {
-	URL      string             `json:"url"`
+	URL string `json:"url"`
+	// Serves is where the app answers: URL, plus the MCP route for an app
+	// that mounts an MCP server (the mcp template serves /mcp; / is 404).
+	Serves   string             `json:"serves"`
 	Workload string             `json:"workload"`
 	Node     string             `json:"node"`
 	As       string             `json:"as"`
@@ -49,7 +56,7 @@ type devResult struct {
 func cmdDev(args []string) error {
 	f := newFlags("dev")
 	port := f.Int("port", 8787, "local port (127.0.0.1)")
-	once := f.Bool("once", false, "start, make one request to /, print it and exit (smoke test)")
+	once := f.Bool("once", false, "start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)")
 	workerdFlag := f.String("workerd", "", "workerd binary")
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
@@ -181,9 +188,17 @@ func cmdDev(args []string) error {
 	go psrv.Serve(pl)
 	defer psrv.Close()
 	res.URL = "http://" + pl.Addr().String()
+	route := mcpRoute(a)
+	res.Serves = res.URL + route
 	if *once {
+		// Smoke: GET /. An MCP app answers 404 there (its server is
+		// mounted on a route, /mcp in the template), so ask it what an
+		// MCP client asks first instead: a JSON-RPC initialize.
 		res.Smoke = devGet(res.URL + "/")
-		emit(f, res, func() { fmt.Printf("twd dev · %s → %v\n", res.URL, res.Smoke) })
+		if route != "" && fmt.Sprint(res.Smoke["status"]) == "404" {
+			res.Smoke = devMCPInitialize(res.Serves)
+		}
+		emit(f, res, func() { fmt.Printf("twd dev · %s → %v\n", res.Serves, res.Smoke) })
 		return nil
 	}
 	fmt.Printf("twd dev · process tier · embedded control plane (127.0.0.1) · no policy evaluator yet: every dev node sees every other\n")
@@ -207,7 +222,11 @@ func cmdDev(args []string) error {
 			}
 		}
 	}
-	fmt.Printf("ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", res.URL, res.As, res.Timings["ready"]/1000)
+	where := res.URL
+	if route != "" {
+		where = res.Serves + "  (MCP server; / answers 404)"
+	}
+	fmt.Printf("ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -295,6 +314,86 @@ func devGet(u string) map[string]any {
 		m = map[string]any{"body": string(b)}
 	}
 	m["status"] = resp.StatusCode
+	return m
+}
+
+// mcpRouteRE matches the route option of createMcpHandler(server, { route:
+// "/mcp" }) or @twd/mcp's withTailnet(handler, { path: "/mcp" }).
+var mcpRouteRE = regexp.MustCompile(`(?:route|path)\s*:\s*"(/[^"]*)"`)
+
+// mcpRoute reports where the app mounts an MCP server, read from its entry
+// module (wrangler.jsonc / twd.jsonc "main"): the route passed to
+// createMcpHandler or withTailnet, "/mcp" if it has one without a route,
+// "" for an app that isn't MCP-shaped.
+func mcpRoute(a *app) string {
+	main, _ := a.Wrangler["main"].(string)
+	if main == "" {
+		var top struct {
+			Main string `json:"main"`
+		}
+		bundle.UnmarshalJSONC(a.TwdRaw, &top)
+		main = top.Main
+	}
+	if main == "" {
+		return ""
+	}
+	src, err := os.ReadFile(filepath.Join(a.Dir, main))
+	if err != nil || !bytes.Contains(src, []byte("createMcpHandler")) && !bytes.Contains(src, []byte("withTailnet(")) {
+		return ""
+	}
+	if m := mcpRouteRE.FindSubmatch(src); m != nil {
+		return string(m[1])
+	}
+	return "/mcp"
+}
+
+// devMCPInitialize is the smoke request for an MCP app: a JSON-RPC
+// initialize (what an MCP client sends first) to its route. The handler
+// answers with JSON or with one SSE event; either way the first data line
+// is the JSON-RPC response.
+func devMCPInitialize(u string) map[string]any {
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"twd dev","version":"0"}}}`
+	req, err := http.NewRequest("POST", u, strings.NewReader(body))
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("accept", "application/json, text/event-stream")
+	c := &http.Client{Timeout: 30 * time.Second}
+	resp, err := c.Do(req)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	defer resp.Body.Close()
+	m := map[string]any{"status": resp.StatusCode, "method": "initialize"}
+	payload := ""
+	sc := bufio.NewScanner(io.LimitReader(resp.Body, 1<<20))
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		l := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(l, "data:") {
+			payload = strings.TrimSpace(strings.TrimPrefix(l, "data:"))
+			break
+		}
+		if payload == "" && l != "" && !strings.HasPrefix(l, "event:") && !strings.HasPrefix(l, "id:") {
+			payload = l // plain JSON, or the first line of a non-MCP answer
+			if strings.HasPrefix(l, "{") {
+				break
+			}
+		}
+	}
+	var rpc struct {
+		Result map[string]any `json:"result"`
+		Error  any            `json:"error"`
+	}
+	switch {
+	case json.Unmarshal([]byte(payload), &rpc) == nil && rpc.Result != nil:
+		m["result"] = rpc.Result
+	case json.Unmarshal([]byte(payload), &rpc) == nil && rpc.Error != nil:
+		m["error"] = rpc.Error
+	default:
+		m["body"] = payload
+	}
 	return m
 }
 

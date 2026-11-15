@@ -30,12 +30,12 @@ func TestNodeCertificates(t *testing.T) {
 	var root, child CreateObjectResponse
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "SupportAgent", "objectName": "alice"}, &root)
 	h1.ok("POST", "/v1/objects/"+root.ObjectID+"/credentials?epoch=1", nil, &Credential{})
-	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "nodeID": "1", "stableNodeID": "nROOT", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "epoch": 1, "nodeID": "1", "stableNodeID": "nROOT", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
 	lim := map[string]any{"acme.com/cap/mcp": map[string]any{"tools": []string{"lookup_order"}}}
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "LookupAgent", "objectName": "c1",
 		"parent": map[string]string{"objectID": root.ObjectID}, "caps": lim}, &child)
 	h1.ok("POST", "/v1/objects/"+child.ObjectID+"/credentials?epoch=1", nil, &Credential{})
-	h1.ok("PATCH", "/v1/objects/"+child.ObjectID, map[string]any{"status": "ready", "nodeID": "2", "stableNodeID": "nCHILD"}, nil)
+	h1.ok("PATCH", "/v1/objects/"+child.ObjectID, map[string]any{"status": "ready", "epoch": 1, "nodeID": "2", "stableNodeID": "nCHILD"}, nil)
 
 	var tv struct {
 		OBOPublicKey string `json:"oboPublicKey"`

@@ -2,6 +2,10 @@ package mgmt
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -253,13 +257,17 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 // HostJoin is POST /v1/hosts: the record plus a single-use join key for
 // the host's tag:twd-host node.
 type HostJoin struct {
-	Host       Host     `json:"host"`
-	AuthKey    string   `json:"authKey"`
-	ExpiresAt  int64    `json:"expiresAt"`
-	Tags       []string `json:"tags"`
-	Hostname   string   `json:"hostname"`
-	ControlURL string   `json:"controlURL,omitempty"`
-	Tailnet    string   `json:"tailnet,omitempty"`
+	Host    Host   `json:"host"`
+	AuthKey string `json:"authKey"`
+	// RegistrationSecret (M1) is the one-time secret the host presents in
+	// its first PUT /v1/hosts/{id}; mgmt keeps only its SHA-256, so the
+	// join key alone (a tag:twd-host node) cannot claim this host ID.
+	RegistrationSecret string   `json:"registrationSecret"`
+	ExpiresAt          int64    `json:"expiresAt"`
+	Tags               []string `json:"tags"`
+	Hostname           string   `json:"hostname"`
+	ControlURL         string   `json:"controlURL,omitempty"`
+	Tailnet            string   `json:"tailnet,omitempty"`
 }
 
 // String never prints the key.
@@ -276,6 +284,19 @@ type HostCreate struct {
 
 // HostJoinKeyExpiry is how long a host join key lives.
 const HostJoinKeyExpiry = 10 * time.Minute
+
+// newRegistrationSecret returns 32 random bytes as base64url (no padding).
+func newRegistrationSecret() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// hashRegistrationSecret is what the store keeps: hex(SHA-256(secret)).
+func hashRegistrationSecret(secret string) string {
+	h := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(h[:])
+}
 
 // HostNodeName is the tsnet hostname of a host's own node.
 func HostNodeName(hostID string) string { return "twd-host-" + hostID }
@@ -342,7 +363,10 @@ func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, er
 	if len(tiers) == 0 {
 		tiers = []string{"process"}
 	}
-	h := Host{ID: r.HostID, Tiers: tiers, Pool: r.Pool, CreatedAt: old.CreatedAt, UpdatedAt: now}
+	// A fresh one-time secret each time (re-running host add for a pending
+	// host invalidates the previous join file as a whole).
+	secret := newRegistrationSecret()
+	h := Host{ID: r.HostID, Tiers: tiers, Pool: r.Pool, CreatedAt: old.CreatedAt, UpdatedAt: now, RegistrationSecretHash: hashRegistrationSecret(secret)}
 	if h.CreatedAt == 0 {
 		h.CreatedAt = now
 	}
@@ -352,7 +376,7 @@ func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, er
 	}
 	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "host_add", ActingFor: r.By}, map[string]any{"host": r.HostID, "keyID": k.ID,
 		"tags": tags, "mode": t.MintMode, "by": r.By, "new": created})
-	return HostJoin{Host: h, AuthKey: k.Secret, ExpiresAt: m.now().Add(HostJoinKeyExpiry).UnixMilli(), Tags: tags,
+	return HostJoin{Host: h, AuthKey: k.Secret, RegistrationSecret: secret, ExpiresAt: m.now().Add(HostJoinKeyExpiry).UnixMilli(), Tags: tags,
 		Hostname: HostNodeName(r.HostID), ControlURL: m.cfg.OperatorControlURL, Tailnet: t.Tailnet}, created, nil
 }
 
@@ -592,6 +616,9 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 	var src []string
 	for _, c := range classes {
 		for _, t := range c.Tags {
+			if e := validateObjectTag(c.Class, t); e != nil {
+				return res, e
+			}
 			if !slices.Contains(src, t) {
 				src = append(src, t)
 			}
