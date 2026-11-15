@@ -507,7 +507,7 @@ func (s *SQLStore) migrate(ctx context.Context) error {
 	if err := s.addIndexes(ctx); err != nil {
 		return err
 	}
-	return s.applyMigrations(ctx, Migrations(), StoreBinaryVersion)
+	return s.applyMigrations(ctx, Migrations(), StoreBinaryVersion, !s.olderReplicaLive(ctx, StoreBinaryVersion))
 }
 
 // addIndexes creates the cursor-pagination indexes (/v1 lists are ordered
@@ -916,7 +916,7 @@ func (s *SQLStore) ListTenants(ctx context.Context, pg Page) ([]Tenant, error) {
 // ---- hosts ----
 
 const hostCols = "id, capacity, tiers, node_id, audit_pubkey, live_nodes, last_seen, pool, push_port, created_at, updated_at, push_target, arch, capacity_vec, usage_vec, reg_secret_hash, " +
-	"version, protocols, features, cordoned_at, cordoned_by"
+	"version, os, protocols, features, cordoned_at, cordoned_by"
 
 func scanHost(sc interface{ Scan(...any) error }) (Host, error) {
 	var h Host
@@ -925,7 +925,7 @@ func scanHost(sc interface{ Scan(...any) error }) (Host, error) {
 	var port int64
 	err := sc.Scan(&h.ID, &capacity, &tiers, &h.NodeID, &h.AuditPubKey, &live, &h.LastSeen, &h.Pool, &port, &h.CreatedAt, &h.UpdatedAt, &h.PushTarget,
 		&h.Arch, &capVec, &usageVec, &h.RegistrationSecretHash,
-		&h.Version, &protocols, &features, &h.CordonedAt, &h.CordonedBy)
+		&h.Version, &h.OS, &protocols, &features, &h.CordonedAt, &h.CordonedBy)
 	if protocols != "" {
 		json.Unmarshal([]byte(protocols), &h.Protocols)
 	}
@@ -970,14 +970,14 @@ func (s *SQLStore) UpsertHost(ctx context.Context, h Host) error {
 	// usage_vec is the heartbeat's (TouchHost), kept across re-registration.
 	// cordoned_at/cordoned_by belong to SetHostCordon: a re-registration
 	// keeps them.
-	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO hosts (`+hostCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO hosts (`+hostCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (id) DO UPDATE SET capacity=excluded.capacity, tiers=excluded.tiers, node_id=excluded.node_id,
 		audit_pubkey=excluded.audit_pubkey, last_seen=excluded.last_seen, pool=excluded.pool, push_port=excluded.push_port, updated_at=excluded.updated_at,
 		push_target=excluded.push_target, arch=excluded.arch, capacity_vec=excluded.capacity_vec, reg_secret_hash=excluded.reg_secret_hash,
-		version=excluded.version, protocols=excluded.protocols, features=excluded.features`),
+		version=excluded.version, os=excluded.os, protocols=excluded.protocols, features=excluded.features`),
 		h.ID, h.CapacityNodes, jsonStr(h.Tiers), h.NodeID, h.AuditPubKey, h.LiveNodes, h.LastSeen, h.Pool, h.PushPort, h.CreatedAt, h.UpdatedAt, h.PushTarget,
 		h.Arch, vecStr(h.Capacity), vecStr(h.Usage), h.RegistrationSecretHash,
-		h.Version, optJSON(h.Protocols), optJSON(h.Features), h.CordonedAt, h.CordonedBy)
+		h.Version, h.OS, optJSON(h.Protocols), optJSON(h.Features), h.CordonedAt, h.CordonedBy)
 	return err
 }
 

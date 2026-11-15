@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
+	"github.com/rosskukulinski/twd/internal/version"
 	"log/slog"
 	"net"
 	"net/http"
@@ -217,6 +219,17 @@ type Config struct {
 	// R2 holds the bytes of R2 buckets (ADR-036; nil: files under
 	// <DataDir>/r2). Only hostd talks to it.
 	R2 r2.Backend
+
+	// Upgrades (ADR-upgrades-and-releases, upgrade.go): Version overrides
+	// the reported version (tests; "" = internal/version's). SelfUpgrade
+	// lets mgmt's upgrade runs install a release on this host and restart
+	// it: InstallPrefix is the install.sh prefix to install into, and
+	// Restart is called once the new release is installed (twd-hostd exits
+	// for its service manager to start the new binary).
+	Version       string
+	SelfUpgrade   bool
+	InstallPrefix string
+	Restart       func()
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -295,6 +308,8 @@ type Host struct {
 	// telemetry.go (ADR-observability)
 	tel        *telemetry
 	metricsSrv *http.Server
+
+	upg upgrader // upgrade.go
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;
@@ -493,7 +508,8 @@ func (h *Host) register(ctx context.Context) error {
 	req := mgmtapi.RegisterRequest{HostID: h.cfg.HostID, CapacityNodes: h.cfg.CapacityNodes, Tiers: h.tiers(),
 		Arch: runtime.GOARCH, Capacity: &capVec,
 		AuditPubKey:        base64.StdEncoding.EncodeToString(h.audit.key.Public().(ed25519.PublicKey)),
-		RegistrationSecret: h.cfg.RegistrationSecret}
+		RegistrationSecret: h.cfg.RegistrationSecret,
+		Version:            h.version(), OS: runtime.GOOS, Protocols: version.Protocols(helperapi.Version), Features: h.features()}
 	switch {
 	case h.cfg.PushInProcess:
 		// embedded in mgmt's process: pushes are served through PushHandler.

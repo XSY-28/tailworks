@@ -3588,6 +3588,8 @@ components:
         | `tenant_has_live_objects` | 409 | tenant delete without `force` |
         | `host_holds_leases` | 409 | host delete without `drain` |
         | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+        | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+        | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
         | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
         | `killed` | 410 | tombstone (`TombstoneError`) |
         | `precondition_failed` | 412 | `If-Match` mismatch |
@@ -3650,6 +3652,8 @@ components:
         - host_holds_leases
         - version_skew
         - feature_unavailable
+        - upgrade_blocked
+        - upgrade_state
         - killed
         - precondition_failed
         - object_quota_exceeded
@@ -4022,6 +4026,7 @@ components:
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
         version: { type: string, description: "The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x)." }
+        os: { type: string }
         protocols: { $ref: "#/components/schemas/Protocols" }
         features: { type: array, items: { type: string }, description: "Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses." }
         skew: { type: string, description: Why the host is outside the version window (placement skips it); absent when it is within. }
@@ -4071,6 +4076,7 @@ components:
           format: password
           description: Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound.
         version: { type: string, description: "The host's twd version. A host outside the version window is refused: `409 version_skew`." }
+        os: { type: string, enum: [darwin, linux], description: GOOS (which release tarball the host runs). }
         protocols: { $ref: "#/components/schemas/Protocols" }
         features: { type: array, items: { type: string }, maxItems: 64 }
       additionalProperties: false

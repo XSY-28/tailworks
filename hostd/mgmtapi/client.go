@@ -248,6 +248,18 @@ func (c *Client) Register(ctx context.Context, r RegisterRequest) error {
 	if r.RegistrationSecret != "" {
 		reg["registrationSecret"] = r.RegistrationSecret
 	}
+	if r.Version != "" {
+		reg["version"] = r.Version
+	}
+	if r.OS != "" {
+		reg["os"] = r.OS
+	}
+	if len(r.Protocols) > 0 {
+		reg["protocols"] = r.Protocols
+	}
+	if len(r.Features) > 0 {
+		reg["features"] = r.Features
+	}
 	switch {
 	case r.PushPort > 0:
 		reg["push"] = map[string]any{"port": r.PushPort}

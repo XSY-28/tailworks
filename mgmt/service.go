@@ -97,8 +97,11 @@ type Config struct {
 	WarmPoolInterval time.Duration
 
 	// Version is this replica's twd-mgmt version ("" = internal/version's),
-	// checked against hosts and other replicas (versions.go).
-	Version string
+	// checked against hosts and other replicas (versions.go). ReleaseDir
+	// holds imported release artifacts ("" = none: hosts can't upgrade
+	// themselves through this replica; upgrades.go).
+	Version    string
+	ReleaseDir string
 }
 
 // Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
@@ -143,6 +146,8 @@ type Mgmt struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+
+	upgradeKick chan struct{} // wakes the upgrade-run driver (upgrades.go)
 }
 
 // New returns a Mgmt; call Start to run the mint workers and reaper.
@@ -171,7 +176,8 @@ func New(cfg Config) (*Mgmt, error) {
 	m := &Mgmt{cfg: cfg, store: cfg.Store, custody: cfg.Custody, broker: cfg.Broker, clock: cfg.Clock, log: cfg.Log,
 		throttles: map[string]*Throttle{}, queues: map[string]chan string{}, queued: map[string]bool{}, replicaID: cfg.ReplicaID, waiters: map[string]chan struct{}{},
 		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{}, inprocPush: map[string]http.Handler{},
-		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
+		upgradeKick: make(chan struct{}, 1),
+		pending:     map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
 		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
 	if m.cfg.WarmKeyTTL == 0 {
 		m.cfg.WarmKeyTTL = DefaultWarmKeyTTL
@@ -239,6 +245,8 @@ func (m *Mgmt) Start() error {
 		m.wg.Add(1)
 		go m.poolLoop()
 	}
+	m.wg.Add(1)
+	go m.upgradeLoop() // upgrades.go
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -508,6 +516,7 @@ type RegisterRequest struct {
 	// Version, Protocols and Features: what the host runs and offers
 	// (ADR-upgrades-and-releases §7; versions.go).
 	Version   string         `json:"version,omitempty"`
+	OS        string         `json:"os,omitempty"`
 	Protocols map[string]int `json:"protocols,omitempty"`
 	Features  []string       `json:"features,omitempty"`
 }
@@ -628,7 +637,7 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	h := Host{ID: r.HostID, CapacityNodes: r.CapacityNodes, Tiers: r.Tiers, NodeID: nodeID, AuditPubKey: auditKey,
 		Pool: r.Pool, PushPort: r.PushPort, PushTarget: target, LastSeen: now, UpdatedAt: now, CreatedAt: old.CreatedAt,
 		Arch: r.Arch, Capacity: r.Capacity, Usage: old.Usage, RegistrationSecretHash: secretHash,
-		Version: r.Version, Protocols: r.Protocols, Features: r.Features, CordonedAt: old.CordonedAt, CordonedBy: old.CordonedBy}
+		Version: r.Version, OS: r.OS, Protocols: r.Protocols, Features: r.Features, CordonedAt: old.CordonedAt, CordonedBy: old.CordonedBy}
 	if h.CreatedAt == 0 {
 		h.CreatedAt = now
 	}

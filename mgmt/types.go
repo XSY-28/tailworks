@@ -141,6 +141,7 @@ type Host struct {
 	// last registration (ADR-upgrades-and-releases §7). Version "" = a
 	// hostd from before version reporting (0.1.x).
 	Version   string         `json:"version,omitempty"`
+	OS        string         `json:"os,omitempty"` // GOOS ("" = not reported)
 	Protocols map[string]int `json:"protocols,omitempty"`
 	Features  []string       `json:"features,omitempty"`
 

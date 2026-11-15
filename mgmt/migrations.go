@@ -9,6 +9,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rosskukulinski/twd/internal/version"
 )
@@ -257,7 +258,13 @@ func (s *SQLStore) ensureSchemaTables(ctx context.Context) error {
 // applyMigrations records the baseline and applies every pending
 // migration, each in its own transaction. Called by migrate() with the
 // Postgres advisory lock held.
-func (s *SQLStore) applyMigrations(ctx context.Context, known []Migration, self string) error {
+//
+// Contract migrations run only with allowContract: while an older replica
+// is live (it would break against the contracted schema), opening the
+// store defers them, and an upgrade run (or `twd-mgmt migrate --apply`)
+// applies them once every replica runs this version
+// (ApplyDeferredContract).
+func (s *SQLStore) applyMigrations(ctx context.Context, known []Migration, self string, allowContract bool) error {
 	now := s.clockNow()
 	if _, err := s.db.ExecContext(ctx, s.q("INSERT INTO schema_migrations (id, applied_at, applied_by) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING"),
 		BaselineMigration, now, self); err != nil {
@@ -268,7 +275,7 @@ func (s *SQLStore) applyMigrations(ctx context.Context, known []Migration, self 
 		return err
 	}
 	for _, m := range known {
-		if applied[m.ID] {
+		if applied[m.ID] || m.Contract && !allowContract {
 			continue
 		}
 		err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -358,3 +365,34 @@ func CheckSchema(ctx context.Context, dsn string) (SchemaStatus, error) {
 // is checked against the store's minimum. It is internal/version.Version;
 // tests override it.
 var StoreBinaryVersion = version.Version
+
+// olderReplicaLive reports whether a replica on an older version than self
+// was seen recently (contract migrations wait for it: applyMigrations).
+func (s *SQLStore) olderReplicaLive(ctx context.Context, self string) bool {
+	if version.IsDev(self) {
+		return false
+	}
+	sv, err := version.Parse(self)
+	if err != nil {
+		return false
+	}
+	rows, err := s.db.QueryContext(ctx, s.q("SELECT version FROM replicas WHERE last_seen > ?"),
+		time.Now().Add(-ReplicaLiveTTL).UnixMilli())
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var v string
+		if rows.Scan(&v) != nil || v == version.Dev {
+			continue
+		}
+		if v == "" {
+			v = version.Legacy
+		}
+		if ov, err := version.Parse(v); err == nil && ov.Compare(sv) < 0 {
+			return true
+		}
+	}
+	return false
+}

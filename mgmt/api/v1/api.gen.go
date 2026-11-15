@@ -392,6 +392,8 @@ const (
 	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
 	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
+	ErrorCodeUpgradeBlocked          ErrorCode = "upgrade_blocked"
+	ErrorCodeUpgradeState            ErrorCode = "upgrade_state"
 	ErrorCodeVersionSkew             ErrorCode = "version_skew"
 )
 
@@ -526,6 +528,10 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeUnknownWorkload:
 		return true
+	case ErrorCodeUpgradeBlocked:
+		return true
+	case ErrorCodeUpgradeState:
+		return true
 	case ErrorCodeVersionSkew:
 		return true
 	default:
@@ -542,6 +548,24 @@ const (
 func (e HealthOk) Valid() bool {
 	switch e {
 	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostRegistrationOs.
+const (
+	Darwin HostRegistrationOs = "darwin"
+	Linux  HostRegistrationOs = "linux"
+)
+
+// Valid indicates whether the value is a known member of the HostRegistrationOs enum.
+func (e HostRegistrationOs) Valid() bool {
+	switch e {
+	case Darwin:
+		return true
+	case Linux:
 		return true
 	default:
 		return false
@@ -1816,6 +1840,8 @@ type Error struct {
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
 	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 	// | `killed` | 410 | tombstone (`TombstoneError`) |
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
@@ -1892,6 +1918,8 @@ type Error struct {
 // | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 // | `host_holds_leases` | 409 | host delete without `drain` |
 // | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 // | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 // | `killed` | 410 | tombstone (`TombstoneError`) |
 // | `precondition_failed` | 412 | `If-Match` mismatch |
@@ -1956,6 +1984,7 @@ type Host struct {
 
 	// NodeID Stable node ID of the host's `tag:twd-host` tsnet node (bound at registration).
 	NodeID *string `json:"nodeID,omitempty"`
+	Os     *string `json:"os,omitempty"`
 	Pool   *string `json:"pool,omitempty"`
 
 	// Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
@@ -2086,6 +2115,8 @@ type HostDrainResult struct {
 		// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 		// | `host_holds_leases` | 409 | host delete without `drain` |
 		// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+		// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+		// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 		// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 		// | `killed` | 410 | tombstone (`TombstoneError`) |
 		// | `precondition_failed` | 412 | `If-Match` mismatch |
@@ -2168,7 +2199,10 @@ type HostRegistration struct {
 	Capacity      *HostCapacity `json:"capacity,omitempty"`
 	CapacityNodes int           `json:"capacityNodes"`
 	Features      *[]string     `json:"features,omitempty"`
-	Pool          *string       `json:"pool,omitempty"`
+
+	// Os GOOS (which release tarball the host runs).
+	Os   *HostRegistrationOs `json:"os,omitempty"`
+	Pool *string             `json:"pool,omitempty"`
 
 	// Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
 	Protocols *Protocols `json:"protocols,omitempty"`
@@ -2186,6 +2220,9 @@ type HostRegistration struct {
 	// Version The host's twd version. A host outside the version window is refused: `409 version_skew`.
 	Version *string `json:"version,omitempty"`
 }
+
+// HostRegistrationOs GOOS (which release tarball the host runs).
+type HostRegistrationOs string
 
 // HostStatus The heartbeat body.
 type HostStatus struct {
@@ -3401,6 +3438,8 @@ type TombstoneError struct {
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
 	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 	// | `killed` | 410 | tombstone (`TombstoneError`) |
 	// | `precondition_failed` | 412 | `If-Match` mismatch |

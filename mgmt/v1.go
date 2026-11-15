@@ -160,10 +160,12 @@ type hostView struct {
 		URL  string `json:"url,omitempty"`
 	} `json:"push,omitempty"`
 	Leases []Lease `json:"leases,omitempty"`
+
+	Skew string `json:"skew,omitempty"` // versions.go
 }
 
 func (a *v1api) hostView(r *http.Request, h Host) hostView {
-	v := hostView{Host: h}
+	v := hostView{Host: h, Skew: a.s.M.hostSkew(h)}
 	switch {
 	case h.Pending():
 		v.Status = "pending"

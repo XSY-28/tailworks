@@ -117,6 +117,8 @@ func run() error {
 		ctrMax     = flag.Int("container-max", 0, "containers: max running on this host (0 = unlimited)")
 		ctrMemMiB  = flag.Int("container-mem-mib", 0, "containers: max total guest memory on this host (0 = unlimited)")
 		ctrVCPU    = flag.Float64("container-vcpu", 0, "containers: max total vCPU on this host (0 = unlimited)")
+		selfUpg    = flag.Bool("self-upgrade", false, "let twd-mgmt's upgrade runs install a new release here and restart this host (exits with status 75 after installing; run under a service manager that restarts it, e.g. systemd Restart=always)")
+		instPrefix = flag.String("install-prefix", "", "with -self-upgrade: the install.sh prefix to upgrade (default: the prefix this twd-hostd runs from, if it has share/twd and VERSION)")
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
 	)
 	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
@@ -147,6 +149,22 @@ func run() error {
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
 		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log,
 		R2: r2b}
+	restart := make(chan struct{}, 1)
+	if *selfUpg {
+		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix
+		if o.InstallPrefix == "" {
+			o.InstallPrefix = installPrefix()
+		}
+		if o.InstallPrefix == "" {
+			return fmt.Errorf("-self-upgrade: this twd-hostd doesn't run from an install.sh prefix (no share/twd and VERSION next to its bin/): pass -install-prefix")
+		}
+		o.Restart = func() {
+			select {
+			case restart <- struct{}{}:
+			default:
+			}
+		}
+	}
 	rt, err := hostdrun.New(context.Background(), o)
 	if err != nil {
 		return err
@@ -157,9 +175,39 @@ func run() error {
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	select {
+	case <-sig:
+	case <-restart:
+		log.Info("restarting into the upgraded release (node state kept for rejoin)")
+		rt.Close()
+		os.Exit(ExitRestart)
+	}
 	log.Info("shutting down (node state kept for rejoin)")
 	return rt.Close()
+}
+
+// ExitRestart is the exit status after a self-upgrade installed a new
+// release (EX_TEMPFAIL): the service manager starts the new binary.
+const ExitRestart = 75
+
+// installPrefix is the install.sh prefix this binary runs from
+// (<prefix>/bin/twd-hostd with <prefix>/share/twd and <prefix>/VERSION),
+// or "".
+func installPrefix() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = r
+	}
+	p := filepath.Dir(filepath.Dir(exe))
+	for _, f := range []string{"VERSION", filepath.Join("share", "twd")} {
+		if _, err := os.Stat(filepath.Join(p, f)); err != nil {
+			return ""
+		}
+	}
+	return p
 }
 
 // runJoin is `twd-hostd join --token-file <file> [--token <key>] --control-url … --tsnet-dir …`:

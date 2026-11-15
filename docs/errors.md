@@ -100,6 +100,9 @@ printed anywhere.
 ### exists
 409 · mgmt, cli. **When:** create of an ID that already exists (`twd host add <id>` for a known host). **Fix:** `twd host rm <id> --drain`, then add again; or pick another ID.
 
+### feature_unavailable
+409 · mgmt, cli. **When:** the deployment needs a host feature (`kv`, `r2`, `d1`, `telemetry`, …) that no eligible host advertises, or the workload's current host runs a twd too old to offer it. Hosts report their features when they register ([upgrading.md](upgrading.md)). **Fix:** upgrade the hosts (`twd upgrade --plan` lists them), or redeploy with `--replace` to move off the old host.
+
 ### forbidden
 403 · mgmt, hostd. **When:** the caller's role is fine but the record is not its own: a host reading another host's deployment or lease, a request to a workerd instance from the wrong peer; a host node asking for the admin UI (`/ui/`); or, with the message `cross-site request refused`, a browser-originated mutation (it carried `Origin` or `Sec-Fetch-Mode`) whose `Sec-Fetch-Site` was not `same-origin`/`none`, whose `Origin` was not mgmt's own host, or which hit `/v1` without the `X-Twd-UI: 1` header (docs/ADMIN-UI.md). **Fix:** usually a bug or stale state; `twd status` and report it. For the cross-site refusal, use the admin UI from mgmt's own URL (`http(s)://twd-mgmt.<tailnet>/ui/`), never through another origin; CLI and hostd clients send none of those headers and are never affected.
 
@@ -361,11 +364,20 @@ printed anywhere.
 ### unsupported
 1 · cli. **When:** `twd host setup` on an OS without the microVM tier (it needs Linux with KVM). **Fix:** nothing to set up; every workload runs in the process tier here.
 
+### upgrade_blocked
+409 · mgmt, cli. **When:** `twd upgrade` can't start a fleet upgrade run because its plan has blockers: a release missing from the catalog, a host's tarball not imported, parts of the fleet more than one release line behind, or an intermediate release with contract migrations. **Fix:** `twd upgrade --plan` prints each blocker and its fix ([upgrading.md](upgrading.md)).
+
+### upgrade_state
+409 · mgmt, cli. **When:** `twd upgrade pause|resume|abort` on a run that isn't running (pause), paused (resume) or active (abort). **Fix:** `twd upgrade status` shows the run's state.
+
 ### upstream_unavailable
 503 · netd. **When:** the platform upstream (workerd or node behind netd) is not answering. **Fix:** it is restarting or crashed; `twd logs <workload>`.
 
 ### usermod_failed
 1 · cli. **When:** `twd host setup --microvm` could not add the user to the `kvm` group. **Fix:** `sudo usermod -aG kvm <user>` and log in again.
+
+### version_skew
+409 · mgmt, cli. **When:** two twd components are outside the supported version window: a host newer than twd-mgmt, or more than one release line behind it; a CLI more than one line behind mgmt (in `--json` mode); mgmt replicas more than one line apart; or a twd-mgmt older than the store's minimum (a newer twd-mgmt ran a contract migration). **Fix:** upgrade in order, mgmt first, then hosts ([upgrading.md](upgrading.md)); a store contracted by a newer twd-mgmt needs that version or newer, or the pre-upgrade backup restored.
 
 ### wif_credential_required
 412 · cli. **When:** `twd up --wif --yes` ran without the trust credential's client ID; the stack is running and the console steps were printed. **Fix:** add the trust credential in the admin console, then `twd up --wif-client-id <id>`.
