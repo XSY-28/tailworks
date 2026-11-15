@@ -70,6 +70,8 @@ type Options struct {
 	// QueueVisibility is passed to hostd (how long a claimed queue batch
 	// stays hidden; short in tests of crash recovery).
 	QueueVisibility time.Duration
+	// Telemetry is passed to hostd (ADR-observability).
+	Telemetry hostd.TelemetryOptions
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -151,6 +153,7 @@ func Start(t testing.TB, o Options) *Env {
 		PublicListen: o.PublicListen,
 		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
 		QueueVisibility: o.QueueVisibility,
+		Telemetry:       o.Telemetry,
 	})
 	if err != nil {
 		t.Fatal(err)

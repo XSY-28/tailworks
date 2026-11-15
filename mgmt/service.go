@@ -2082,6 +2082,7 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 	m.recordIntent(ctx, ai, nil) // committed with the mint (H22)
 	m.notify(id)
 	m.log.Info("mint spans", append([]any{"object", id, "tenant", t.ID, "keyID", k.ID}, sp.attrs()...)...)
+	sp.observe(t.ID, false) // metrics.go
 	return true, nil
 }
 

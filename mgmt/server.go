@@ -369,9 +369,11 @@ type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIsInfo, error)
 // or OPTIONS:
 //   - Sec-Fetch-Site, if present, must be same-origin or none;
 //   - Origin, if present, must name the request's own Host;
-//   - a /v1 mutation must carry X-Twd-UI: 1 (set by the UI's app.js; the
-//     custom header forces a CORS preflight, which mgmt never answers, so
-//     cross-origin JavaScript cannot reach the handler at all).
+//   - a /v1 mutation must carry X-Twd-UI: 1 (the custom header forces a
+//     CORS preflight, which mgmt never answers, so cross-origin JavaScript
+//     cannot reach the handler at all). The admin UI itself no longer
+//     sends it: its browser side only POSTs forms to /ui/..., and the UI
+//     makes the /v1 call server-side.
 //
 // Refusals are 403 forbidden "cross-site request refused": the spec's
 // ErrorCode enum is closed, so no cross_site_request code is minted.

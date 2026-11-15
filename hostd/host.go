@@ -210,6 +210,12 @@ type Config struct {
 	// mgmt (default DefaultQueueVisibility, 60 s; extended while queue()
 	// runs). It bounds how soon a crashed consumer's batch comes back.
 	QueueVisibility time.Duration
+	// Observability (ADR-observability, telemetry.go): MetricsListener,
+	// when set, serves GET /metrics (the host's own tailnet node; who may
+	// scrape is the tailnet policy's call). Telemetry tunes the request
+	// records and the OTLP export.
+	MetricsListener net.Listener
+	Telemetry       TelemetryOptions
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -284,6 +290,10 @@ type Host struct {
 	runDirOwned bool
 	ctr         *ctrManager
 	nowFn       func() time.Time // wall clock for cron triggers (tests)
+
+	// telemetry.go (ADR-observability)
+	tel        *telemetry
+	metricsSrv *http.Server
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;
@@ -374,6 +384,7 @@ func New(cfg Config) (*Host, error) {
 		containers: containerLedger{held: map[ContainerKey]*ctrEntry{}},
 	}
 	h.ctr = newCtrManager(h)
+	h.tel = newTelemetry(h)
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err
 	}
@@ -413,6 +424,9 @@ func (h *Host) closePushServers() {
 	if h.tsPushSrv != nil {
 		h.tsPushSrv.Close()
 	}
+	if h.metricsSrv != nil {
+		h.metricsSrv.Close()
+	}
 }
 
 // Start registers with mgmt and starts the heartbeat/assignment loop.
@@ -443,10 +457,15 @@ func (h *Host) Start(ctx context.Context) error {
 		h.tsPushSrv = &http.Server{Handler: h.tsnetPushAPI(), ReadHeaderTimeout: 10 * time.Second}
 		go h.tsPushSrv.Serve(h.cfg.PushListener)
 	}
+	if h.cfg.MetricsListener != nil {
+		h.metricsSrv = &http.Server{Handler: h.MetricsHandler(), ReadHeaderTimeout: 10 * time.Second}
+		go h.metricsSrv.Serve(h.cfg.MetricsListener)
+	}
 	if err := h.register(ctx); err != nil {
 		h.closePushServers()
 		return fmt.Errorf("hostd: register: %w", err)
 	}
+	h.tel.start()
 	h.mu.Lock()
 	h.lastHB = time.Now()
 	h.mu.Unlock()
@@ -524,6 +543,7 @@ func (h *Host) Close() error {
 		go func() { defer wg.Done(); t.reg.Close() }()
 	}
 	wg.Wait()
+	h.tel.close()
 	h.flushAudit(context.Background())
 	h.saveObjects()
 	if h.runDirOwned {

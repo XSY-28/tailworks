@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	v1 "github.com/rosskukulinski/twd/hostd/mgmtapi/v1"
@@ -16,6 +17,10 @@ type LogsOptions struct {
 	N      int
 	Follow bool
 	Host   string // only the replica on this host ("" = all)
+	// Source "requests" reads the structured request records (JSON Lines)
+	// with Filter (obs.Filter.Values); "" is the raw console.
+	Source string
+	Filter url.Values
 }
 
 // WorkloadLogs is GET /v1/tenants/{id}/workloads/{workload}/logs: the
@@ -37,6 +42,11 @@ func (c *Client) WorkloadLogs(ctx context.Context, tenantID, workload string, o 
 	p := &v1.GetWorkloadLogsParams{N: &n, Follow: &follow}
 	if o.Host != "" {
 		p.Host = &o.Host
+	}
+	if o.Source != "" {
+		src := v1.GetWorkloadLogsParamsSource(o.Source)
+		p.Source = &src
+		logsFilterParams(p, o.Filter)
 	}
 	resp, err := vc.GetWorkloadLogs(ctx, tenantID, workload, p)
 	if err != nil {

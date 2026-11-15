@@ -116,6 +116,8 @@ type Server struct {
 
 	// Queues (queues.go): tenant|queue -> queue.
 	queues map[string]*fakeQueue
+	// OTLP export (telemetry.go): tenantID -> config.
+	telemetry map[string]*mgmtapi.OTLPExport
 }
 
 // SetHeartbeatsDown makes host heartbeats fail with 503 (tests: a host
@@ -241,6 +243,7 @@ func New(cfg Config) *Server {
 	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages", s.sendQueue)
 	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/pull", s.pullQueue)
 	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/ack", s.ackQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants", s.telemetryGrant)
 	m.HandleFunc("PUT /v1/hosts/{id}", s.register)
 	m.HandleFunc("PUT /v1/hosts/{id}/status", s.heartbeat)
 	m.HandleFunc("GET /v1/hosts/{id}/assignments", s.assignments)

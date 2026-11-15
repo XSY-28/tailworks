@@ -9,6 +9,29 @@
 
 import { TailnetError, fromResponse, isTailnetError } from "./errors.js";
 import { createContainer, defineContainer, dispatchIntercept, notSupportedPreview, type ContainerSpec } from "./container.js";
+import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
+
+// Egress fetch() carries the running handler's trace context
+// (ADR-observability).
+installFetchPropagation();
+
+/** spanFlusher reports a handler's DO-call spans to hostd (TailnetApi "spans"). */
+function spanFlusher(tw: TailnetApiStub | undefined, ctx: any): (spans: SpanRecord[]) => void {
+  return (spans) => {
+    if (!tw || typeof tw.call !== "function") return;
+    const p = Promise.resolve()
+      .then(() => tw.call("spans", { spans }))
+      .catch(() => {});
+    try {
+      ctx?.waitUntil?.(p);
+    } catch {
+      /* no waitUntil: the report may be cut short */
+    }
+  };
+}
+
+// The platform binding of each wrapped DO instance (for span reports).
+const twOf = new WeakMap<object, TailnetApiStub | undefined>();
 
 /** The platform's TailnetApi stub (RPC). */
 export interface TailnetApiStub {
@@ -189,6 +212,7 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
         // ctx.container: the object is attested by the platform (props).
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
         super(ctx, e);
+        twOf.set(this, tw);
       }
       // Called by the Host DO when the delegated alarm fires.
       async __twd_alarm(info: unknown) {
@@ -202,6 +226,12 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
       }
     },
   }[name];
+  const ff = C.prototype?.fetch;
+  if (typeof ff === "function") {
+    W.prototype.fetch = function (this: any, req: Request) {
+      return runTraced(req, () => ff.call(this, req), spanFlusher(twOf.get(this), this.ctx));
+    };
+  }
   if (opts.container) noPreviewURLs(W);
   return W;
 }
@@ -252,6 +282,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
         if (tw && oname) define(ctx, createTailnetContext(tw, e, bindings, self));
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
+        twOf.set(this, tw);
         if (tw && oname && opts.node) {
           // The object's node comes up only if its creation was admitted
           // (RT3-06/07); fetch answers the refusal below.
@@ -287,7 +318,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
       if (k) return killedResponse(k);
       if (this.__twd_ensure) await this.__twd_ensure;
       if (this.__twd_denied) return (this.__twd_denied as TailnetError).toResponse();
-      return proto.fetch.call(this, req);
+      return runTraced(req, () => proto.fetch.call(this, req), spanFlusher(twOf.get(this), this.ctx));
     };
   }
   if (opts.container) noPreviewURLs(W);
@@ -364,6 +395,8 @@ function guardStub(adm: Admitter, cls: string, name: string, real: any): any {
           // RpcPromise: RPC methods pipeline on it, fetch() does not, so
           // settle it first.
           const target = real && typeof real.then === "function" ? await real : real;
+          // A stub fetch() is a traced hop (its callee's parent span).
+          if (p === "fetch") return tracedStubFetch(cls, name, args, (...a) => target.fetch(...a));
           return target[p](...args);
         };
       },
@@ -538,7 +571,7 @@ export function wrapHandler(H: any, bindings: BindingMap) {
           }
         }
         try {
-          return await f.call(this, req);
+          return await runTraced(req, () => f.call(this, req), spanFlusher(tw, this.ctx));
         } catch (e) {
           const r = asResponse(e);
           if (r) return r;
@@ -580,7 +613,7 @@ export function wrapHandler(H: any, bindings: BindingMap) {
       }
       let r: unknown;
       try {
-        r = H[k].call(H, a, env, ctx);
+        r = k === "fetch" ? runTraced(a, () => H[k].call(H, a, env, ctx), spanFlusher(tw, ctx)) : H[k].call(H, a, env, ctx);
       } catch (e) {
         const resp = k === "fetch" ? asResponse(e) : null;
         if (resp) return resp;

@@ -26,6 +26,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/hostdrun"
 	"github.com/rosskukulinski/twd/internal/inproc"
 	"github.com/rosskukulinski/twd/internal/mgmtd"
+	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/internal/policy"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
@@ -1144,7 +1145,8 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	delDelay, _ := time.ParseDuration(s.Cfg.DeviceDeleteDelay)
 	mo := mgmtd.Options{StateDir: filepath.Join(s.Dir, "mgmt"), DeviceDeleteDelay: delDelay, Version: version, TSAPIURL: s.Cfg.TSAPIURL,
 		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: []string{mgmt.MgmtTag}, TSNetTLS: true,
-		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog}
+		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog,
+		MetricsPort: obs.DefaultMetricsPort}
 	if mo.TSAPIURL == "" {
 		mo.TSAPIURL = tsapi.DefaultBaseURL
 	}
@@ -1181,6 +1183,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	// registers with push URL inproc:// (accepted only with the in-process
 	// marker the transport sets).
 	mrt.M.SetInProcessPush(s.Cfg.HostID, hrt.Host.PushHandler())
+	mrt.AddMetrics(hrt.Host.Metrics()) // the host has no node of its own: /metrics on mgmt's
 	if err := hrt.Start(ctx); err != nil {
 		hrt.Close()
 		logf("host agent failed to register: %v", err)

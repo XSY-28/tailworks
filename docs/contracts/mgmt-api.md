@@ -153,6 +153,9 @@ hostd's API, not this document's.
 | `POST` | `/v1/tenants/{id}/queues/{queue}/messages/ack` | admin\|host | no | `AckQueueMessages` | Settle claimed messages (ack, retry, extend) |
 | `POST` | `/v1/tenants/{id}/queues/{queue}/messages/pull` | admin\|host | no | `PullQueueMessages` | Claim a batch of messages (push consumers and HTTP pull) |
 | `POST` | `/v1/tenants/{id}/queues/{queue}/purge` | admin | yes | `PurgeQueue` | Delete every message of a queue, keeping the queue |
+| `GET` | `/v1/tenants/{id}/telemetry` | admin | no | `GetTenantTelemetry` | Read the tenant's OTLP export (`twd telemetry`), without header values |
+| `PUT` | `/v1/tenants/{id}/telemetry` | admin | yes | `PutTenantTelemetry` | Set the tenant's OTLP export (`twd telemetry set`) |
+| `DELETE` | `/v1/tenants/{id}/telemetry` | admin | yes | `DeleteTenantTelemetry` | Stop the tenant's OTLP export (`twd telemetry rm`) |
 | `POST` | `/v1/tenants/{id}/wif-check` | admin | no | `CheckTenantWIF` | Verify a wif tenant's trust credentials (diagnostic) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
@@ -167,6 +170,7 @@ hostd's API, not this document's.
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `DeleteWorkloadStore` | Delete a store and its data |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `ReadStoreJournal` | Read a store's journal after a sequence number |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
 | `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/.well-known/openid-configuration` | public | no | `GetOIDCConfiguration` | OIDC discovery (base issuer) |
@@ -373,10 +377,17 @@ Only the workload's own app log: the daemons' logs
 | `n` | query | integer | no | Lines from the end of the log (0 with `follow` for new lines only). |
 | `follow` | query | boolean | no | Keep the stream open and send new lines as they are written. |
 | `host` | query | string | no | Only the replica on this host (a host ID). |
+| `source` | query | string: `console` \| `requests` | no | `console`: the app's raw output (workerd's stdout, the node tier's `app.log`, the microVM console). `requests`: the workload's structured request records (ADR-observability), as JSON Lines (`application/x-ndjson`), one `RequestRecord` per line; `n` and the filters below then count records, not lines. |
+| `object` | query | string | no | `source=requests`: only records of this object (object ID, `Class/name`, `Class` or name). |
+| `status` | query | string | no | `source=requests`: only this HTTP status (`404`) or class (`5xx`). |
+| `outcome` | query | string | no | `source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …). |
+| `caller` | query | string | no | `source=requests`: only callers whose login or node name contains this (`public` for Funnel requests). |
+| `trace` | query | string | no | `source=requests`: only this W3C trace ID (or a prefix of it) or audit trace ID. |
+| `errors` | query | boolean | no | `source=requests`: only errors (status ≥ 400, an outcome other than `ok`, or an exception). |
 
 | Status | Body | Description |
 |---|---|---|
-| 200 | string | The log lines (UTF-8 as the app wrote them; a stream with `follow`). |
+| 200 | `RequestRecord` | The log lines (UTF-8 as the app wrote them; a stream with `follow`), or request records with `source=requests`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
@@ -1595,6 +1606,108 @@ Deletes all messages, in flight or not. Audited
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+## Telemetry
+
+A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
+
+### `GET /v1/tenants/{id}/telemetry` — Read the tenant's OTLP export (`twd telemetry`), without header values
+
+`GetTenantTelemetry` · role **admin** · audited: no
+
+ADR-observability. Header names only: no admin operation returns a
+header value. A tenant that exports nothing has no `otlp`.
+`404 unknown_tenant`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `TelemetryConfig` | The tenant's telemetry config. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/tenants/{id}/telemetry` — Set the tenant's OTLP export (`twd telemetry set`)
+
+`PutTenantTelemetry` · role **admin** · audited: yes
+
+Every workload of the tenant exports its request records (as log
+records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+**from the workload's own tailnet node**, so it must be a tailnet
+peer the tailnet policy lets that workload reach (a public
+internet endpoint is refused like any other egress). The config
+is stored encrypted in mgmt custody (custody name
+`twd/<tenant>/telemetry`); header values (collector credentials)
+are never logged, audited or returned. Hosts pick a change up
+within a minute. Audited (`kind: telemetry_put`, endpoint and
+header names).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+**Request** `application/json`: `TelemetryPut`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `TelemetryConfig` | The new config (header names only). |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/tenants/{id}/telemetry` — Stop the tenant's OTLP export (`twd telemetry rm`)
+
+`DeleteTenantTelemetry` · role **admin** · audited: yes
+
+Hosts stop exporting within a minute. Records stay on the hosts
+(`twd logs`) and in `/metrics`. Idempotent. Audited
+(`kind: telemetry_delete`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 204 | — | Deleted (or there was nothing to delete). |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants` — Release the tenant's OTLP export config to a workload's lease holder
+
+`CreateTelemetryGrant` · role **host** · audited: yes
+
+hostd calls this when it starts a workload, and every minute while
+it runs it, to export the workload's logs, metrics and spans
+(ADR-observability). As with secrets (ADR-034), the config, header
+values included, is released only to the host holding the
+workload's lease at `epoch` (`409 lease_lost`), with
+`Cache-Control: no-store`, and is never logged. `otlp` is absent
+when the tenant exports nothing. Audited (`kind:
+telemetry_release`, endpoint and header names) the first time a
+host gets each version of the config for a workload (hosts re-read
+it every minute); a refusal always is.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `epoch` | query | integer (int64) | yes | The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`). |
+
+| Status | Body | Description |
+|---|---|---|
+| 201 | `TelemetryGrant` | The grant. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ## Audit
 
 Hash-chained, append-only audit log.
@@ -2245,6 +2358,9 @@ mgmt chain:
 `queue_create` (a queue created, by its first use or an admin),
 `queue_delete` (a queue, its messages and its data key deleted),
 `queue_purge` (every message of a queue deleted),
+`telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+`telemetry_delete`,
+`telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 `reap`,
 `preflight` (optional; dryRun deploys),
 `host_add`,
@@ -2265,7 +2381,7 @@ Public ingress (ADR-029), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -2293,7 +2409,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -2872,6 +2988,32 @@ Enum: `oauth`, `wif`, `apikey`, `static`
 | `response_types_supported` | array of string | yes |  |
 | `subject_types_supported` | array of string | yes |  |
 
+#### `OTLPExport`
+
+A tenant's OTLP export, without header values.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | string (uri) | yes | OTLP/HTTP base URL; signals go to `<endpoint>/v1/<signal>`. |
+| `headerNames` | array of string | yes | Names of the headers sent with every export (values are never returned). |
+| `signals` | array of `TelemetrySignal` | yes |  |
+
+#### `OTLPExportPut`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | string (uri) | yes | http:// or https:// base URL of an OTLP/HTTP receiver on the tailnet (no user info, query or fragment). |
+| `headers` | object | no | Headers sent with every export, typically the collector's credentials (at most 16; values at most 4 KiB). Never logged, audited or returned. |
+| `signals` | array of `TelemetrySignal` | no | What to export (default all three). |
+
+#### `OTLPGrant`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | string | yes |  |
+| `headers` | object | no |  |
+| `signals` | array of `TelemetrySignal` | yes |  |
+
 #### `Object`
 
 | Field | Type | Required | Description |
@@ -3253,6 +3395,45 @@ One replica of a workload with `twd.jsonc` `replicas` > 1.
 | `status` | `DeploymentStatus` | no |  |
 | `workload` | string | yes |  |
 
+#### `RequestRecord`
+
+One line of a workload's request log (`twd logs --json`,
+ADR-observability): a request through hostd's ingress (`kind:
+request`), joined with its workerd invocation, or an invocation
+with no ingress half (`kind: invocation`: a DO called from the
+Worker, an alarm, a cron run), or a note that records were dropped
+by the workload's rate limit (`kind: dropped`). Never holds bodies,
+query strings, request headers or secret values.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `auditTraceId` | string | no |  |
+| `caller` | object | no | The verified caller (netd's WhoIs), never from tenant code. |
+| `class` | string | no |  |
+| `deployment` | string | no |  |
+| `dropped` | integer | no |  |
+| `durableObjectId` | string | no | workerd's ID of a plain-DO object whose name the invocation does not carry. |
+| `durationMs` | number | no |  |
+| `entrypoint` | string | no |  |
+| `event` | string | no | fetch, alarm, rpc, scheduled, websocket. |
+| `exceptions` | array of object | no |  |
+| `host` | string | no |  |
+| `kind` | string: `request` \| `invocation` \| `dropped` | yes |  |
+| `logs` | array of object | no |  |
+| `method` | string | no |  |
+| `name` | string | no |  |
+| `object` | string | no | The twd object ID. |
+| `outcome` | string | no |  |
+| `parentSpanId` | string | no |  |
+| `path` | string | no | The URL path (never the query string). |
+| `spanId` | string | no |  |
+| `status` | integer | no |  |
+| `tenant` | string | no |  |
+| `time` | string (date-time) | yes |  |
+| `traceId` | string | no |  |
+| `truncated` | boolean | no |  |
+| `workload` | string | no |  |
+
 #### `RunningContainer`
 
 One running container in a heartbeat.
@@ -3429,6 +3610,39 @@ Extends `Page`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `items` | array of `Store` | no |  |
+
+#### `TelemetryConfig`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `otlp` | `OTLPExport` | no | A tenant's OTLP export, without header values. |
+| `tenantID` | string | yes |  |
+| `updatedAt` | integer (int64) | no |  |
+| `updatedBy` | string | no |  |
+
+#### `TelemetryGrant`
+
+A fenced release of the tenant's OTLP export config. Never logged.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `epoch` | integer (int64) | yes |  |
+| `grantedAt` | integer (int64) | no |  |
+| `otlp` | `OTLPGrant` | no |  |
+| `tenantID` | string | yes |  |
+| `workload` | string | yes |  |
+
+#### `TelemetryPut`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `otlp` | `OTLPExportPut` | yes |  |
+
+#### `TelemetrySignal`
+
+An OTLP signal.
+
+Enum: `logs`, `metrics`, `traces`
 
 #### `Tenant`
 

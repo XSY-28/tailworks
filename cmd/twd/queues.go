@@ -216,7 +216,9 @@ func cmdQueuesSub(sub string, args []string) error {
 			return err
 		}
 		res.Sent = sr.IDs
-		emit(f, res, func() { fmt.Printf("✓ sent %s to queue %s (backlog %d)\n", strings.Join(sr.IDs, ", "), name, sr.Backlog) })
+		emit(f, res, func() {
+			fmt.Printf("✓ sent %s to queue %s (backlog %d)\n", strings.Join(sr.IDs, ", "), name, sr.Backlog)
+		})
 	default:
 		return fail("bad_request", fmt.Sprintf("unknown subcommand %q (%s)", sub, queuesSubs), "usage: twd "+usageOf("queues"))
 	}

@@ -92,7 +92,7 @@ printed anywhere.
 409 · mgmt, cli. **When:** create of an ID that already exists (`twd host add <id>` for a known host). **Fix:** `twd host rm <id> --drain`, then add again; or pick another ID.
 
 ### forbidden
-403 · mgmt, hostd. **When:** the caller's role is fine but the record is not its own: a host reading another host's deployment or lease, a request to a workerd instance from the wrong peer; a host node asking for the admin UI (`/ui/`); or, with the message `cross-site request refused`, a browser-originated mutation (it carried `Origin` or `Sec-Fetch-Mode`) whose `Sec-Fetch-Site` was not `same-origin`/`none`, whose `Origin` was not mgmt's own host, or which hit `/v1` without the admin UI's `X-Twd-UI: 1` header (docs/ADMIN-UI.md). **Fix:** usually a bug or stale state; `twd status` and report it. For the cross-site refusal, use the admin UI from mgmt's own URL (`http(s)://twd-mgmt.<tailnet>/ui/`), never through another origin; CLI and hostd clients send none of those headers and are never affected.
+403 · mgmt, hostd. **When:** the caller's role is fine but the record is not its own: a host reading another host's deployment or lease, a request to a workerd instance from the wrong peer; a host node asking for the admin UI (`/ui/`); or, with the message `cross-site request refused`, a browser-originated mutation (it carried `Origin` or `Sec-Fetch-Mode`) whose `Sec-Fetch-Site` was not `same-origin`/`none`, whose `Origin` was not mgmt's own host, or which hit `/v1` without the `X-Twd-UI: 1` header (docs/ADMIN-UI.md). **Fix:** usually a bug or stale state; `twd status` and report it. For the cross-site refusal, use the admin UI from mgmt's own URL (`http(s)://twd-mgmt.<tailnet>/ui/`), never through another origin; CLI and hostd clients send none of those headers and are never affected.
 
 ### forbidden_destination
 403 · netd. **When:** egress to a destination class netd refuses: loopback, link-local, multicast, cloud metadata, the object itself, a sibling object on the same host, the host, or a non-tailnet address (ADR-019). **Fix:** only tailnet peers are reachable from an object; talk to siblings through the tailnet name of another host, or `twd up --allow-sibling-egress` for dev.
@@ -348,3 +348,6 @@ printed anywhere.
 
 ### wif_exchange_failed
 401 · cli. **When:** Tailscale did not accept a token from mgmt's issuer for the mint credential: the credential's issuer or subject does not match what `twd up` printed (trailing slash, wrong tenant ID). **Fix:** fix it in the console and `twd up --wif-client-id <id>`.
+
+### wrangler_required
+1 · cli. **When:** `twd deploy --wrangler` / `twd dev --wrangler` found no wrangler CLI (`$TWD_WRANGLER`, the project's `node_modules/.bin/wrangler`, or `wrangler` on PATH). **Fix:** `npm install --save-dev wrangler`, or drop `--wrangler` to bundle with twd's built-in esbuild ([wrangler.md](wrangler.md)).
