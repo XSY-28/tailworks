@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,11 +17,31 @@ import (
 // real store is covered by mgmt/ui_integration_test.go.
 type fakeAPI struct {
 	routes map[string]any // "GET /v1/objects" → body (status 200), or *apiError
+	mu     sync.Mutex
 	calls  []string
+	reqs   []*http.Request // every request as received, for TestUsesOnlyPublicAPI
+}
+
+func (f *fakeAPI) last() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls[len(f.calls)-1]
+}
+
+// serve runs f as a real HTTP server and returns the UI pointed at it: the
+// UI reaches the API only over HTTP, as it would from its own process.
+func serve(t *testing.T, f *fakeAPI) http.Handler {
+	t.Helper()
+	ts := httptest.NewServer(f)
+	t.Cleanup(ts.Close)
+	return Handler(ts.Client(), ts.URL)
 }
 
 func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
 	f.calls = append(f.calls, r.Method+" "+r.URL.RequestURI())
+	f.reqs = append(f.reqs, r.Clone(context.Background()))
+	f.mu.Unlock()
 	key := r.Method + " " + r.URL.Path
 	v, ok := f.routes[key]
 	if !ok {
@@ -138,7 +160,7 @@ var pages = []string{"/ui/", "/ui/objects/obj_root", "/ui/objects/obj_kid", "/ui
 // (the overview and audit list are 200; records that do not exist are the
 // typed 404 page, also from a template).
 func TestPagesRenderEmpty(t *testing.T) {
-	h := Handler(emptyAPI())
+	h := serve(t, emptyAPI())
 	for _, p := range pages {
 		w := get(t, h, p)
 		wantStatus := 200
@@ -160,7 +182,7 @@ func TestPagesRenderEmpty(t *testing.T) {
 }
 
 func TestPagesRenderPopulated(t *testing.T) {
-	h := Handler(populatedAPI())
+	h := serve(t, populatedAPI())
 	for _, p := range pages {
 		w := get(t, h, p)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "</html>") {
@@ -190,15 +212,15 @@ func TestPagesRenderPopulated(t *testing.T) {
 	if rootAt < 0 || kidAt < rootAt {
 		t.Errorf("tree order: root %d kid %d", rootAt, kidAt)
 	}
-	// Object page: lineage, caps, cert, kill form with the API target.
+	// Object page: lineage, caps, cert, and the kill form (confirm, then POST to the UI).
 	ob := get(t, h, "/ui/objects/obj_kid").Body.String()
-	for _, want := range []string{`href="/ui/objects/obj_root"`, "(this object)", `data-api="/v1/objects/obj_kid"`, `data-method="DELETE"`, `action="/ui/objects/obj_kid/kill"`, `name="cascade"`, `name="reason"`} {
+	for _, want := range []string{`href="/ui/objects/obj_root"`, "(this object)", `data-confirm="Kill kid-def (obj_kid)?`, `action="/ui/objects/obj_kid/kill"`, `name="cascade"`, `name="reason"`} {
 		if !strings.Contains(ob, want) {
 			t.Errorf("object page lacks %q", want)
 		}
 	}
 	rb := get(t, h, "/ui/objects/obj_root").Body.String()
-	for _, want := range []string{"twd.dev/cap/x", "node certificate", "nROOTSTABLE0001", "kid-def", "dead-ghi"} {
+	for _, want := range []string{"twd.dev/cap/x", "Node certificate", "nROOTSTABLE0001", "kid-def", "dead-ghi"} {
 		if !strings.Contains(rb, want) {
 			t.Errorf("root page lacks %q", want)
 		}
@@ -214,13 +236,13 @@ func TestPagesRenderPopulated(t *testing.T) {
 		t.Error("tombstone page offers a kill form")
 	}
 	// Deployment, host and tenant pages carry their mutation forms.
-	if b := get(t, h, "/ui/deployments/dep_1").Body.String(); !strings.Contains(b, `data-api="/v1/deployments/dep_1"`) || !strings.Contains(b, "w-h1.t.ts.net") {
+	if b := get(t, h, "/ui/deployments/dep_1").Body.String(); !strings.Contains(b, `action="/ui/deployments/dep_1/undeploy"`) || !strings.Contains(b, "w-h1.t.ts.net") {
 		t.Error("deployment page lacks the undeploy form or endpoint")
 	}
-	if b := get(t, h, "/ui/hosts/h1").Body.String(); !strings.Contains(b, `data-api="/v1/hosts/h1"`) || !strings.Contains(b, `name="drain"`) || !strings.Contains(b, "dep_1") {
+	if b := get(t, h, "/ui/hosts/h1").Body.String(); !strings.Contains(b, `action="/ui/hosts/h1/remove"`) || !strings.Contains(b, `name="drain"`) || !strings.Contains(b, "dep_1") {
 		t.Error("host page lacks the remove form or assignments")
 	}
-	if b := get(t, h, "/ui/tenants/tn_1").Body.String(); !strings.Contains(b, `data-api="/v1/tenants/tn_1"`) || !strings.Contains(b, `name="force"`) || !strings.Contains(b, "/etc/twd/oauth.env") {
+	if b := get(t, h, "/ui/tenants/tn_1").Body.String(); !strings.Contains(b, `action="/ui/tenants/tn_1/delete"`) || !strings.Contains(b, `name="force"`) || !strings.Contains(b, "/etc/twd/oauth.env") {
 		t.Error("tenant page lacks the delete form or config")
 	}
 	// Audit page: filters echo back, paging link carries them, chains shown.
@@ -236,7 +258,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 // redirect back with the outcome (success and a typed refusal).
 func TestFormFallbacks(t *testing.T) {
 	api := populatedAPI()
-	h := Handler(api)
+	h := serve(t, api)
 	post := func(path, form string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net"+path, strings.NewReader(form))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -248,12 +270,12 @@ func TestFormFallbacks(t *testing.T) {
 	if w.Code != 303 || w.Header().Get("Location") != "/ui/objects/obj_root?ok=kill+accepted" {
 		t.Fatalf("kill form: %d %q", w.Code, w.Header().Get("Location"))
 	}
-	if last := api.calls[len(api.calls)-1]; last != "DELETE /v1/objects/obj_root?cascade=true&reason=why+not" {
+	if last := api.last(); last != "DELETE /v1/objects/obj_root?cascade=true&reason=why+not" {
 		t.Fatalf("kill call: %s", last)
 	}
 	w = post("/ui/deployments/dep_1/undeploy", "")
-	if w.Code != 303 || api.calls[len(api.calls)-1] != "DELETE /v1/deployments/dep_1" {
-		t.Fatalf("undeploy form: %d %s", w.Code, api.calls[len(api.calls)-1])
+	if w.Code != 303 || api.last() != "DELETE /v1/deployments/dep_1" {
+		t.Fatalf("undeploy form: %d %s", w.Code, api.last())
 	}
 	w = post("/ui/hosts/h1/remove", "")
 	if w.Code != 303 || !strings.Contains(w.Header().Get("Location"), "err=host_holds_leases") {
@@ -266,7 +288,7 @@ func TestFormFallbacks(t *testing.T) {
 }
 
 func TestStaticAndHeaders(t *testing.T) {
-	h := Handler(emptyAPI())
+	h := serve(t, emptyAPI())
 	for _, p := range []string{"/ui/static/app.css", "/ui/static/app.js", "/ui/"} {
 		w := get(t, h, p)
 		if w.Code != 200 {
@@ -311,6 +333,14 @@ func TestHelpers(t *testing.T) {
 		if got := ago(ms, now); got != want {
 			t.Errorf("ago(%d) = %q, want %q", ms, got, want)
 		}
+	}
+	// since: the instant goes in datetime= (app.js recomputes the text), so a
+	// live refresh doesn't see a change just because time passed.
+	if got := since(now.UnixMilli()-90_000, now); got != `<time datetime="1970-01-12T13:45:10Z" title="1970-01-12 13:45:10Z" data-ago>1m ago</time>` {
+		t.Errorf("since = %s", got)
+	}
+	if since(0, now) != "never" {
+		t.Error("since(0)")
 	}
 	if short("abcdefghijklmnopqrstuvwxyz") != "abcdefghijkl…" || short("short") != "short" {
 		t.Error("short")

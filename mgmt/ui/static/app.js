@@ -1,71 +1,69 @@
 // twd admin UI: progressive enhancement over server-rendered pages.
-//  - every 3 s, re-fetch the current page and swap the [data-live] regions
-//    (the server's templates stay the single renderer), and fetch
-//    /v1/status for the header counters;
-//  - forms with data-api perform their mutation with fetch against /v1
-//    (DELETE + query from the form fields) after a confirm dialog, sending
-//    X-Twd-UI: 1 (a custom header: cross-origin pages would need a CORS
-//    preflight mgmt never answers). Without JavaScript the same forms POST
-//    to their /ui/... action.
+//  - every 5 s, re-fetch the current page and swap the [data-live] regions
+//    whose data changed (the server's templates stay the single renderer).
+//    Relative times (<time data-ago>) are computed here, in the browser, so
+//    the passage of time alone never counts as a change: a quiet page is
+//    never re-rendered and nothing jumps under the reader. A region with
+//    text selected in it is left alone until the selection is cleared;
+//  - forms with data-confirm ask before they submit. The submit itself is
+//    a plain form POST to the UI's /ui/... action, which makes the /v1 call
+//    server-side: the browser never talks to the API directly.
 // Nothing is stored client-side: no cookies, no localStorage, no tokens
 // (the connection's tailnet identity is the credential).
 (function () {
   'use strict';
-  var REFRESH_MS = 3000;
+  var REFRESH_MS = 5000;
   var $ = function (sel, el) { return (el || document).querySelector(sel); };
   var $$ = function (sel, el) { return Array.prototype.slice.call((el || document).querySelectorAll(sel)); };
 
-  function toast(kind, head, text, link) {
-    var box = $('#toasts');
-    if (!box) return;
-    var t = document.createElement('div');
-    t.className = 'toast ' + kind;
-    var c = document.createElement('span');
-    c.className = 'code';
-    c.textContent = head;
-    t.appendChild(c);
-    if (text) t.appendChild(document.createTextNode(' ' + text));
-    if (link) {
-      var a = document.createElement('a');
-      a.href = link; a.rel = 'noreferrer'; a.target = '_blank'; a.textContent = link;
-      t.appendChild(a);
-    }
-    box.appendChild(t);
-    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, kind === 'bad' ? 12000 : 5000);
+  // ---- relative times ----
+  // Same buckets as the server's ago() in mgmt/ui/views.go.
+  function ago(ms, now) {
+    var s = Math.max(0, Math.floor((now - ms) / 1000));
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 48 * 3600) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+  function renderTimes(root, now) {
+    $$('time[data-ago]', root).forEach(function (el) {
+      var ms = Date.parse(el.getAttribute('datetime'));
+      if (isNaN(ms)) return;
+      var txt = ago(ms, now);
+      if (el.textContent !== txt) el.textContent = txt;
+    });
   }
 
   // ---- live refresh ----
   var state = $('#live-state');
   var busy = false;
-  function setState(s) { if (state) state.textContent = s; }
+  var shown = '';
+  function setState(kind, text) {
+    if (!state || shown === kind + text) return;
+    shown = kind + text;
+    state.className = 'live ' + kind;
+    state.textContent = text;
+  }
+
+  function selectionIn(el) {
+    var sel = window.getSelection && window.getSelection();
+    return !!(sel && !sel.isCollapsed && sel.anchorNode && el.contains(sel.anchorNode));
+  }
 
   function refreshPage() {
     return fetch(location.href, { headers: { 'Accept': 'text/html' }, cache: 'no-store', credentials: 'same-origin' })
       .then(function (res) {
-        if (!res.ok) throw new Error('page ' + res.status);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.text();
       })
       .then(function (html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
+        var now = Date.now();
+        renderTimes(doc, now);
+        renderTimes(document, now);
         $$('[data-live]').forEach(function (el) {
-          var name = el.getAttribute('data-live');
-          var fresh = doc.querySelector('[data-live="' + name + '"]');
-          if (fresh && fresh.innerHTML !== el.innerHTML) el.innerHTML = fresh.innerHTML;
-        });
-      });
-  }
-
-  function refreshStatus() {
-    return fetch('/v1/status', { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' })
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (st) {
-        if (!st) return;
-        var val = function (path) {
-          return path.split('.').reduce(function (o, k) { return o == null ? o : o[k]; }, st);
-        };
-        $$('[data-stat]').forEach(function (el) {
-          var v = val(el.getAttribute('data-stat'));
-          if (v !== undefined && v !== null) el.textContent = String(v);
+          var fresh = doc.querySelector('[data-live="' + el.getAttribute('data-live') + '"]');
+          if (fresh && fresh.innerHTML !== el.innerHTML && !selectionIn(el)) el.innerHTML = fresh.innerHTML;
         });
       });
   }
@@ -74,61 +72,23 @@
     if (document.hidden || busy) return;
     if (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
     busy = true;
-    Promise.all([refreshPage(), refreshStatus()])
-      .then(function () { setState('live · refreshed ' + new Date().toISOString().slice(11, 19) + 'Z'); })
-      .catch(function (e) { setState('refresh failed: ' + e.message); })
+    refreshPage()
+      .then(function () { setState('ok', 'Live'); })
+      .catch(function (e) { setState('bad', 'Can\'t reach mgmt (' + e.message + '), retrying'); })
       .then(function () { busy = false; });
   }
-  setState('live refresh every ' + (REFRESH_MS / 1000) + ' s');
+  renderTimes(document, Date.now());
+  setState('ok', 'Live');
   setInterval(tick, REFRESH_MS);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
 
-  // ---- mutations ----
-  function queryOf(form) {
-    var q = [];
-    $$('input[name]', form).forEach(function (inp) {
-      if (inp.type === 'checkbox') {
-        if (inp.checked) q.push(encodeURIComponent(inp.name) + '=true');
-      } else if (inp.value.trim() !== '') {
-        q.push(encodeURIComponent(inp.name) + '=' + encodeURIComponent(inp.value.trim()));
-      }
-    });
-    return q.length ? '?' + q.join('&') : '';
-  }
-
+  // ---- mutations: confirm, then let the form POST to /ui/... ----
   document.addEventListener('submit', function (ev) {
     var form = ev.target;
-    if (!form || !form.getAttribute || !form.getAttribute('data-api')) return;
-    ev.preventDefault();
-    var msg = form.getAttribute('data-confirm') || 'Proceed?';
-    if (!window.confirm(msg)) return;
-    var url = form.getAttribute('data-api') + queryOf(form);
-    var method = form.getAttribute('data-method') || 'DELETE';
-    var after = form.getAttribute('data-after') || location.href;
+    var msg = form && form.getAttribute && form.getAttribute('data-confirm');
+    if (!msg) return;
+    if (!window.confirm(msg)) { ev.preventDefault(); return; }
     var btn = $('button[type=submit]', form);
-    if (btn) btn.disabled = true;
-    fetch(url, {
-      method: method,
-      headers: { 'X-Twd-UI': '1', 'Accept': 'application/json' },
-      cache: 'no-store',
-      credentials: 'same-origin'
-    }).then(function (res) {
-      return res.text().then(function (body) {
-        var json = null;
-        try { json = body ? JSON.parse(body) : null; } catch (e) { /* not JSON */ }
-        if (res.ok) {
-          var n = json && Array.isArray(json.killed) ? json.killed.length + ' killed' : (res.status === 204 ? 'done' : 'accepted');
-          toast('ok', method + ' ' + res.status, n);
-          setTimeout(function () { location.assign(after); }, 600);
-          return;
-        }
-        var code = (json && json.code) || ('http_' + res.status);
-        var text = (json && json.message) || body || res.statusText;
-        toast('bad', code + ':', text, json && json.doc_url);
-        if (btn) btn.disabled = false;
-      });
-    }).catch(function (e) {
-      toast('bad', 'network_error:', e.message);
-      if (btn) btn.disabled = false;
-    });
+    if (btn) btn.disabled = true; // no double submit
   });
 })();

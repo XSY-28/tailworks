@@ -1,31 +1,34 @@
 {{define "content"}}
-<h1>audit</h1>
-<form method="get" action="/ui/audit" class="filters">
-  <label>object <input type="text" name="object" class="mono" value="{{if eq .Filter "object"}}{{.Value}}{{end}}" placeholder="object ID"></label>
-  <label>human <input type="text" name="human" value="{{if eq .Filter "human"}}{{.Value}}{{end}}" placeholder="login the records act for"></label>
-  <label>trace <input type="text" name="trace" class="mono" value="{{if eq .Filter "trace"}}{{.Value}}{{end}}" placeholder="trace ID"></label>
-  <label>limit <input type="number" name="limit" min="1" max="500" value="{{.Limit}}"></label>
-  <button type="submit">filter</button>
-  <a href="/ui/audit">all</a>
-</form>
-<p class="small muted">Showing {{if eq .Filter "all"}}every record{{else}}records with {{.Filter}} = <span class="mono">{{.Value}}</span>{{end}}, oldest first, {{.Limit}} per page. One filter at a time, like <span class="mono">twd audit</span>.</p>
+<h1>Audit log</h1>
+<p class="hint">A tamper-evident record of everything twd did. Each entry is hash-chained to the one before it, so any edit or deletion shows up as a broken chain.</p>
 
-<section class="card">
-  <h2>verification</h2>
-  <div data-live="verification">
-  <p>{{if .Verification.OK}}<span class="badge ok">all chains verified</span>{{else}}<span class="badge bad">NOT VERIFIED</span>{{end}}
-  {{if .Verification.VerifiedAt}}<span class="muted small">checked {{stamp .Verification.VerifiedAt}}</span>{{end}}</p>
+<section class="card" data-live="verification">
+  <h2>Integrity {{if .Verification.OK}}<span class="badge ok">all chains verified</span>{{else}}<span class="badge bad">NOT VERIFIED</span>{{end}}</h2>
+  {{if .Verification.VerifiedAt}}<p class="hint">Last checked {{since .Verification.VerifiedAt}} ({{stamp .Verification.VerifiedAt}}).</p>{{end}}
   <p class="chains">{{template "chains" .Verification.Chains}}</p>
-  </div>
 </section>
 
+<form method="get" action="/ui/audit" class="filters">
+  <label>Object <input type="text" name="object" class="mono" value="{{if eq .Filter "object"}}{{.Value}}{{end}}" placeholder="object ID"></label>
+  <label>Person <input type="text" name="human" value="{{if eq .Filter "human"}}{{.Value}}{{end}}" placeholder="login the records act for"></label>
+  <label>Trace <input type="text" name="trace" class="mono" value="{{if eq .Filter "trace"}}{{.Value}}{{end}}" placeholder="trace ID"></label>
+  <label>Per page <input type="number" name="limit" min="1" max="500" value="{{.Limit}}"></label>
+  <button type="submit">Filter</button>
+  <a href="/ui/audit">Clear</a>
+</form>
+<p class="small muted">Showing {{if eq .Filter "all"}}every record{{else}}records where {{.Filter}} = <span class="mono">{{.Value}}</span>{{end}}, oldest first, {{.Limit}} per page. One filter at a time, like <span class="mono">twd audit</span>.</p>
+
 <section>
-  <h2>records <span class="count">{{len .Records}}</span> {{if .Verified}}<span class="badge ok">page verified</span>{{else}}<span class="badge bad">page NOT VERIFIED</span>{{end}}</h2>
+  <div class="sect-head"><div>
+    <h2>Records <span class="count">{{len .Records}}</span> {{if .Verified}}<span class="badge ok">page verified</span>{{else}}<span class="badge bad">page NOT VERIFIED</span>{{end}}</h2>
+  </div></div>
+  <div class="tbl">
   <table>
     <thead>{{template "audithead"}}</thead>
-    <tbody>{{template "auditrows" (auditSet .Records .Names)}}{{if not .Records}}<tr><td colspan="6" class="muted">no records</td></tr>{{end}}</tbody>
+    <tbody>{{template "auditrows" (auditSet .Records .Names)}}{{if not .Records}}<tr><td colspan="6" class="empty">No records</td></tr>{{end}}</tbody>
   </table>
-  <p class="pager">{{if .NextURL}}<a href="{{.NextURL}}">next page →</a>{{else}}<span class="muted">last page</span>{{end}}</p>
+  </div>
+  <p class="pager">{{if .NextURL}}<a href="{{.NextURL}}">Next page →</a>{{else}}<span class="muted">Last page</span>{{end}}</p>
   <p class="chains">{{template "chains" .Chains}}</p>
 </section>
 {{end}}

@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"sort"
 	"strings"
 	"time"
@@ -326,6 +327,19 @@ func stamp(ms int64) string {
 		return ""
 	}
 	return time.UnixMilli(ms).UTC().Format("2006-01-02 15:04:05Z")
+}
+
+// since renders a relative time ("5m ago") as a <time> element carrying the
+// absolute instant. app.js recomputes the text in the browser, so the live
+// refresh sees identical HTML (and leaves the region alone) unless the data
+// itself changed. The values are formatted numbers, so the HTML is safe.
+func since(ms int64, now time.Time) template.HTML {
+	if ms == 0 {
+		return "never"
+	}
+	t := time.UnixMilli(ms).UTC()
+	return template.HTML(fmt.Sprintf(`<time datetime="%s" title="%s" data-ago>%s ago</time>`,
+		t.Format(time.RFC3339Nano), stamp(ms), ago(ms, now)))
 }
 
 // stampStr normalises an RFC 3339 audit timestamp to the same form.
