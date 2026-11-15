@@ -106,13 +106,19 @@ func (h *Host) selfUpgrade(ctx context.Context, o UpgradeOrder) error {
 	if err := h.downloadArtifact(ctx, o, tgz); err != nil {
 		return err
 	}
-	dir := filepath.Join(work, "x")
+	return h.installArtifact(ctx, tgz, filepath.Join(work, "x"))
+}
+
+// installArtifact extracts a verified release tarball into dir and runs
+// its install.sh into Config.InstallPrefix.
+func (h *Host) installArtifact(ctx context.Context, tgz, dir string) error {
+	name := filepath.Base(tgz)
 	if err := extractTarGz(tgz, dir); err != nil {
-		return fmt.Errorf("extract %s: %w", o.Name, err)
+		return fmt.Errorf("extract %s: %w", name, err)
 	}
 	inst, err := filepath.Glob(filepath.Join(dir, "twd-*", "install.sh"))
 	if err != nil || len(inst) != 1 {
-		return fmt.Errorf("%s has no install.sh", o.Name)
+		return fmt.Errorf("%s has no install.sh", name)
 	}
 	cmd := exec.CommandContext(ctx, "sh", inst[0], "--prefix", h.cfg.InstallPrefix, "--force")
 	cmd.Env = append(os.Environ(), "TWD_HOME="+h.cfg.InstallPrefix)
@@ -174,7 +180,7 @@ func extractTarGz(src, dir string) error {
 			return err
 		}
 		p := filepath.Join(dir, hd.Name)
-		if !strings.HasPrefix(p+string(os.PathSeparator), root) {
+		if filepath.IsAbs(hd.Name) || !strings.HasPrefix(p+string(os.PathSeparator), root) {
 			return fmt.Errorf("entry %q escapes the archive", hd.Name)
 		}
 		switch hd.Typeflag {
