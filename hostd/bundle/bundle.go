@@ -77,6 +77,10 @@ type App struct {
 	// | "wasm"), e.g. a wrangler "rules" Text module named *.md. Modules
 	// not listed are typed by extension.
 	ModuleTypes map[string]string
+
+	// Stores are the platform storage bindings (kv_namespaces, …;
+	// stores.go, ADR-platform-stores), in wrangler order.
+	Stores []StoreBinding
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -326,6 +330,11 @@ func Parse(files map[string][]byte) (*App, error) {
 			return nil, fmt.Errorf("bundle: tailnet.objects.%s.egress must be %q or %q", name, EgressObject, EgressWorkload)
 		}
 	}
+	stores, err := parseStores(StripJSONC(wb), a)
+	if err != nil {
+		return nil, err
+	}
+	a.Stores = stores
 	var twdJSON []byte
 	if tb, ok := files["twd.jsonc"]; ok {
 		twdJSON = StripJSONC(tb)

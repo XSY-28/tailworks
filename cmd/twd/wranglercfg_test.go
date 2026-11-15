@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/twd/hostd/hostdtest"
 )
 
 // tomlApp is the wrangler.toml-only example project (no twd.jsonc).
@@ -389,5 +390,18 @@ func TestReadWranglerOutEntry(t *testing.T) {
 	writeFiles(t, dir, map[string]string{"x.cjs": "module.exports = 1"})
 	if _, _, _, _, err := readWranglerOut(dir, "src/worker.ts", nil); err == nil || !strings.Contains(err.Error(), "CommonJS") {
 		t.Fatalf("cjs: %v", err)
+	}
+}
+
+// TestWranglerWarningsStoreKinds: a key registered as a platform store
+// binding (ADR-platform-stores) is supported, so it isn't warned about.
+func TestWranglerWarningsStoreKinds(t *testing.T) {
+	cfg := map[string]any{hostdtest.ProbeStoreKey: []any{map[string]any{"binding": "P", "name": "main"}}}
+	if w := wranglerWarnings("wrangler.toml", cfg, "esbuild"); len(w) != 1 || !strings.Contains(w[0], "unknown key") {
+		t.Fatalf("unregistered: %q", w)
+	}
+	hostdtest.RegisterProbeStore()
+	if w := wranglerWarnings("wrangler.toml", cfg, "esbuild"); len(w) != 0 {
+		t.Fatalf("registered store kind warned: %q", w)
 	}
 }

@@ -254,6 +254,10 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			h.containerAPI(inst, w, r) // ctx.container (containers.go)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v1/store/") {
+			h.storeAPI(inst, w, r) // platform stores (stores.go)
+			return
+		}
 		var req apiReq
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 			writeAPIError(w, &apiError{Code: "bad_request", Detail: err.Error()})

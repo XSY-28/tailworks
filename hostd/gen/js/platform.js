@@ -250,6 +250,7 @@ function makeHost(cls) {
           const env = { ...CFG.vars };
           for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
           env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
+          for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
           return {
             compatibilityDate: CFG.compatDate,
             compatibilityFlags: CFG.compatFlags,
@@ -335,6 +336,10 @@ function makeHost(cls) {
 }
 
 //@@HOST_CLASSES@@
+
+// Platform stores (twd-store.js; ADR-platform-stores), when the app has
+// storage bindings.
+//@@STORES@@
 
 // NsProxy stands in for a DO namespace binding inside a facet's env:
 // env.X.getByName(name) returns the real stub (RPC promise pipelining makes

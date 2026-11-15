@@ -1,4 +1,112 @@
-# SDK compatibility on twd (process tier)
+# Cloudflare Workers compatibility
+
+What of the Cloudflare Workers platform works on twd, surface by surface.
+It's **measured, not claimed**: every ✅ and ⚠️ row names the tests that
+prove it, and `make lint` fails if one of those tests doesn't exist. The
+README's [Compatibility at a glance](../README.md#compatibility-at-a-glance)
+table is the summary of this page; the two must agree.
+
+| Status | Meaning |
+|---|---|
+| ✅ | works as on Cloudflare, tested |
+| ⚠️ | partial, or works differently (the row says how), tested |
+| ❌ | not supported (yet) |
+| 🚫 | not supported **by design** (the row says why) |
+
+Each row says what **workerd** (the open-source runtime twd runs your code
+on) provides, what **twd adds** on top, how it **differs** from Cloudflare,
+what's **missing**, and the **tests**. Unless a row says otherwise, the
+tests run under `make test`; `e2e/sdk` runs under `make test-sdk`,
+`e2e/container` under `make e2e-container`, `e2e/node` under
+`make test-node`, `e2e/placement` under `make e2e-placement`.
+
+**Adding or changing a row.** One surface is one table row (one line), so
+parallel branches don't conflict. Its first cell starts with an anchor,
+`<a id="<id>"></a>`; its second cell is the status; its last cell lists
+tests as `` `<path>:<TestName>[/<subtest>]` `` (a Go package dir, or a test
+file). Add the same `<id>` to the README table, linking
+`docs/COMPAT.md#<id>` with the same status. Put new rows in their area's
+table, in logical position, not at the end. `make lint` runs
+`internal/compatdoc` to check all of this.
+
+## Runtime
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="fetch"></a>`fetch` handler and outbound `fetch()` | ⚠️ | the `fetch` handler, `Request`/`Response`, streams, outbound `fetch()` through the worker's `globalOutbound` | requests arrive over WireGuard with the caller's identity (`getCaller`, [below](#identity)); outbound `fetch()` leaves from the workload's node, or from the object's own node (facet mode), so tailnet policy decides what each can reach | outbound `fetch()` reaches **tailnet peers only**: a name that isn't in the netmap is refused with `peer_not_visible`, by design (RFC: deny the internet by default). Inbound is tailnet-only unless you add [public routes](#public-routes) | internet egress for Workers (only containers have an `egress.internet` allowlist, [containers](#containers)) | `hostd:TestHostd/HelloVerifiedCaller`, `hostd:TestHostd/EgressAttributedPerObject`, `hostd/gen:TestGeneratedWrapperProbe/WorkloadEgressIsWorkload`, `netd:TestChain/PeerNotVisible` |
+| <a id="websockets"></a>WebSockets | ✅ | `WebSocketPair`, upgrade responses, the hibernation API | the upgrade is proxied through netd ingress and hostd to the object's own node | — | — | `e2e/sdk:TestCloudflareAgents/WebSocketsAndHibernation`, `netd:TestPublicUpgrade` |
+| <a id="connect"></a>TCP sockets (`connect()`, `cloudflare:sockets`) | ❌ | `connect()` | — | — | twd's egress paths carry HTTP only, so `connect()` fails ("cannot connect to the specified address"). Raw TCP egress through netd isn't built; `ctx.tailnet.connect()` throws `plan_feature_missing` | `hostd/gen:TestRuntimeCompat/ConnectTCPRefused` |
+| <a id="wasm"></a>WebAssembly modules | ✅ | `.wasm` modules (`import mod from "./x.wasm"`), `WebAssembly.Instance` | the platform loads `.wasm` modules from the bundle, in the Worker and in both object modes; `twd deploy`'s bundlers ship them as wrangler does (`<sha1>-<file>.wasm`, also `.wasm?module`) | — | — | `hostd/gen:TestRuntimeCompatWasm`, `internal/esbundle:TestBuildAppWranglerSettings`, `e2e/wrangler:TestTwdDevWrangler/BuiltinEsbuild` |
+| <a id="nodejs-compat"></a>`nodejs_compat` | ✅ | the `node:*` modules behind `compatibility_flags: ["nodejs_compat"]` | the bundler maps bare Node builtins (`buffer`, `crypto`, …) to `node:*` | — | only a sample is tested: `Buffer`, `node:crypto` (`createHash`, `randomUUID`), `AsyncLocalStorage`, `EventEmitter`; for real Node, see [Node apps](#node-runtime) | `hostd/gen:TestRuntimeCompat/NodejsCompat` |
+| <a id="python"></a>Python Workers | ❌ | Python Workers (Pyodide) | — | — | twd's bundler is JavaScript-only. Python runs in a [container](#containers) | — |
+| <a id="node-runtime"></a>Node.js apps (`runtime: "node"`) | ✅ | — (twd-only) | runs a plain Node.js process as a workload with its own tailnet node, egress through netd's proxy; runs the Vercel Workflow SDK. [Details](#node-process-tier-m9) | not a Cloudflare surface. One tailnet identity per process: no Durable Objects, no `tailnet.objects` | crons and public routes on the Node runtime | `e2e/node:TestNodeTier`, `e2e/node:TestNodeWorkflow`, `hostd:TestNodeSecrets` |
+
+## Durable Objects
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="do-identity"></a>One tailnet node per object | ✅ | — (twd-only) | every DO instance is its own tailnet node, with its own MagicDNS name, tags and grants; its egress is attributed to it; `twd kill` cuts it off | Cloudflare has no per-object network identity | — | `hostd:TestHostd/ObjectsGetOwnNodes`, `hostd:TestHostd/KillFailsFast`, `netd:TestChain/PerObjectEgressAttribution` |
+| <a id="do-storage"></a>Storage: KV API and SQLite | ✅ | `ctx.storage` `get`/`put`/`list`/`delete`/`transaction`, `ctx.storage.sql` | storage on the host's local disk; it survives redeploys | an object lives on one host; there's no replication across hosts | point-in-time recovery (`getBookmarkForTime`, `onNextSessionRestoreBookmark`): not tested | `hostd/gen:TestRuntimeCompat/DOStorageKVAndSQL`, `hostd:TestHostd/BlueGreenRedeploy`, `e2e/sdk:TestCloudflareAgents/SetStateOnStateChangedSQL` |
+| <a id="alarms"></a>Alarms | ✅ | `setAlarm`/`getAlarm`/`deleteAlarm`, `alarm()` | workerd facets can't set alarms, so twd delegates a facet's alarm to its Host DO (a shim); plain-DO objects use workerd's directly | — | — | `hostd/gen:TestGeneratedWrapperProbe/PlainDOAlarm`, `hostd:TestHostd/PlainDOAlarmWorkloadEgress`, `e2e/sdk:TestCloudflareAgents/Schedule` |
+| <a id="hibernation"></a>Hibernation | ✅ | idle eviction; WebSocket hibernation (`acceptWebSocket`, attachments) | the object's tailnet node stays up while the object is evicted | — | — | `hostd:TestHostd/HibernationKeepsNode`, `e2e/sdk:TestCloudflareAgents/WebSocketsAndHibernation` |
+| <a id="do-rpc"></a>RPC (`stub.method()`) | ⚠️ | JS RPC to DO stubs | RPC from the Worker and from a sibling object is forwarded into the facet | — | bindings to another Worker's class (`durable_objects` `script_name`) are refused at deploy; call that workload over the tailnet instead | `hostd/gen:TestGeneratedWrapperProbe/RPCForwardedToFacet` |
+| <a id="facets"></a>Facets from tenant code (`ctx.facets`, `subAgent()`) | ❌ | Durable Object facets | twd itself runs each facet-mode object as a facet (that's how each object gets its own egress) | — | inside a facet-mode object, the Dynamic Worker's `ctx.exports` has no tenant classes, so the Agents SDK's `subAgent()` fails. Plain-DO mode: not tested. Use `ctx.tailnet.spawn` (own node, narrower caps) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings`, `hostd:TestHostd/SpawnChildNode` |
+
+## Bindings
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="kv"></a>Workers KV | ❌ | KV bindings backed by a service you supply | — | — | no KV binding (`env.KV` is `undefined`). Durable Object storage works | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
+| <a id="r2"></a>R2 | ❌ | R2 bindings backed by a service you supply | — | — | no R2 binding | — |
+| <a id="d1"></a>D1 | ❌ | D1 bindings backed by a service you supply | — | — | no D1 binding. Durable Object SQLite works | — |
+| <a id="queues"></a>Queues (producer) | ❌ | queue bindings backed by a service you supply | — | — | no Queues binding or broker | — |
+| <a id="workflows"></a>Workflows | ❌ | — | — | — | no Workflows binding or engine (`env.WORKFLOW` is `undefined`). The Vercel Workflow SDK runs on [Node apps](#node-runtime) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
+| <a id="workers-ai"></a>Workers AI (`env.AI`) | ❌ | — | — | — | no binding. Point an AI SDK provider at an LLM gateway on your tailnet (the `ai-agent` template) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
+| <a id="vectorize"></a>Vectorize | ❌ | — | — | — | no binding | — |
+| <a id="hyperdrive"></a>Hyperdrive | ❌ | — | — | — | no binding, and no [`connect()`](#connect) for a database driver. A [Node app](#node-runtime) can reach a database over the tailnet | — |
+| <a id="browser"></a>Browser Rendering (`env.BROWSER`) | ❌ | — | — | — | no binding | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
+| <a id="email"></a>Email (`cloudflare:email`, `send_email`, `email()`) | ❌ | `EmailMessage`, the `email()` handler | the bundler stubs `cloudflare:email`, so constructing an `EmailMessage` throws "not supported on twd" | — | sending and receiving. Funnel has no port 25: receive through a provider's webhook to a [public route](#public-routes) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
+| <a id="service-bindings"></a>Service bindings (`services`) | ❌ | service bindings, including RPC (`WorkerEntrypoint`) | — | — | `wrangler.jsonc` `services` is not read. Call the other workload by its MagicDNS name over the tailnet; it sees your workload as the caller | — |
+| <a id="secrets"></a>Secrets | ⚠️ | text bindings | `twd secret put\|ls\|rm` and `.dev.vars`, like `wrangler secret` and `wrangler dev`; `process.env` on [Node apps](#node-runtime). [Details](#secrets-details) | a secret overrides a var of the same name; a change takes effect on the next `twd deploy`; the microVM tier refuses workloads with secrets | `wrangler secret bulk`, secret versions, the Secrets Store binding | `hostd:TestWorkerSecrets`, `hostd:TestNodeSecrets`, `hostd/gen:TestGenerateSecrets` |
+| <a id="vars"></a>Environment variables (`vars`) | ✅ | text and JSON bindings | the same `env` in the Worker and in both object modes; platform bindings are never visible to tenant code | — | — | `hostd/gen:TestGeneratedWrapperProbe/FacetEnvAndPrivacy` |
+| <a id="assets"></a>Static assets (`assets`) | ❌ | — | — | — | `wrangler.jsonc` `assets` is not read; serve files from your `fetch` handler | — |
+
+## Triggers
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="cron"></a>Cron triggers | ✅ | the `scheduled()` handler | hostd runs `triggers.crons` on the host serving the active deployment (Cloudflare's syntax, UTC, 1 = Sunday). A run has no caller; its egress leaves from the workload's node. [Details](cron-triggers.md) | no backfill of missed minutes; an overlapping run is skipped, not queued; no retries | crons on the Node runtime | `hostd:TestCronTriggers`, `hostd/gen:TestGeneratedCron`, `hostd/bundle:TestParseCrons` |
+| <a id="queue-consumers"></a>Queue consumers (`queue()`) | ❌ | the `queue()` handler | — | — | no Queues ([above](#queues)) | — |
+
+## Platform
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="identity"></a>Caller identity and auth | 🚫 | — | `getCaller(req)`: the caller's tailnet node, user, tags and grant capabilities, from WireGuard; client copies of identity headers are stripped | by design there are no bearer tokens or API keys between workloads, and no Cloudflare Access JWTs: who's calling is the WireGuard peer, and what it may do is your tailnet policy (RFC) | on-behalf-of assertions (`actingFor`, RFC §4.6) | `hostd:TestHostd/HelloVerifiedCaller`, `hostd:TestHostd/ForgedHeadersStripped`, `netd:TestChain/ForgedIngressHeadersStripped` |
+| <a id="placement"></a>Placement (`placement`) | ⚠️ | — | `"mode": "smart"` places a workload at deploy on the host with the best measured tailnet path to what it connects to. [Details](#workers-platform-config) | a different signal (path class and RTT, not request durations). By design, twd never moves a running workload on its own; `twd deploy --replace` re-places it. `placement.region` is ignored with a warning | per-object placement (`locationHint`) | `mgmt:TestScoreHosts`, `mgmt:TestAPIPlacement`, `mgmt:TestResolvePlacement`, `e2e/placement:TestSmartPlacementHermetic` |
+| <a id="public-routes"></a>Public routes | ⚠️ | — | `public.routes` in `twd.jsonc` serves chosen paths over Tailscale Funnel; `getRequester(req)` returns `{kind: "public", ip}`; public requests can't create objects unless the class allows it. [Details](#public-routes-funnel-adr-029) | tailnet-only by default (Cloudflare Workers are public by default); `*.ts.net` names only | custom domains; `request.cf` geo fields | `hostd:TestPublicIngress`, `netd:TestPublicRoutes`, `netd:TestPublicHeadersAndBlob`, `hostd/gen:TestGeneratedWrapperPublic` |
+| <a id="containers"></a>Containers (`ctx.container`, Sandbox SDK) | ⚠️ | — | each container is its own microVM attached to one Durable Object; egress through the object's identity, `enableInternet` limited to `egress.internet`. [Details](#containers-ctxcontainer-and-the-cloudflare-sandbox-sdk-adr-032) | needs a microVM-capable host (Linux with KVM, or macOS); amd64 not verified | `getTcpPort().connect()`, snapshots, `exposePort` / preview URLs, backups, bucket mounts | `e2e/container:TestE2EContainer`, `e2e/container:TestE2EContainerRegistry`, `hostd:TestContainerEgress` |
+| <a id="logs"></a>Logs and tail | ⚠️ | `console.*` output | `twd logs <workload>` prints and follows a workload's log, also from a machine linked with `twd link`; replicas are prefixed by host | — | Tail Workers (`tail()`, `tail_consumers`), structured `wrangler tail` events, Workers Logs queries | `hostd:TestLogsHandlerTailAndRefusals`, `mgmt:TestWorkloadLogs`, `cmd/twd:TestRemoteLogs` |
+| <a id="wrangler-config"></a>Wrangler config (`wrangler.toml`, `wrangler.json`, `wrangler.jsonc`) | ⚠️ | — | `twd deploy` and `twd dev` read whichever file wrangler would (json, then jsonc, then toml) and use `name`, `main`, `compatibility_date`, `compatibility_flags`, `vars`, `durable_objects`, `migrations`, `triggers.crons`, `placement`, `containers` and the build settings; a project without a `twd.jsonc` gets defaults ([wrangler.md](wrangler.md)) | only the app directory is searched (wrangler also searches parents) | the keys twd can't use (`routes`, `workers_dev`, binding sections it has no binding for, `assets`, …) are ignored with one warning line each. [Details](#wrangler-config-details) | `cmd/twd:TestFindWranglerConfigPrecedence`, `cmd/twd:TestReadWranglerTOML`, `cmd/twd:TestWranglerWarnings`, `cmd/twd:TestLoadAppWranglerTOMLOnly`, `cmd/twd:TestCLIDeployWranglerTOML`, `hostd/bundle:TestParseCrons`, `hostd/bundle:TestParseContainers`, `mgmt:TestResolvePlacement` |
+| <a id="wrangler-env"></a>Environments (`env.<name>`, `--env`) | ✅ | — | `twd deploy --env <name>` / `twd dev --env <name>` resolve `env.<name>` with wrangler's inheritance (`vars`, `define` and bindings are not inherited, warned per key as wrangler does) | each environment is its own workload, `<name>-<env>` unless the env sets `name`; `twd.jsonc` has no environments | — | `cmd/twd:TestApplyWranglerEnv`, `cmd/twd:TestCLIDeployWranglerTOML` |
+| <a id="wrangler-bundling"></a>Bundling (`define`, `alias`, `rules`, custom builds) | ✅ | — | the built-in esbuild honours `define`, `alias`, `rules` (Text, Data, CompiledWasm, with wrangler's defaults), `minify`, `keep_names`, `jsx_*`, `tsconfig`; `--wrangler` bundles with `wrangler deploy --dry-run --outdir`, and `--from-wrangler-out <dir>` packs such a directory (needed for `build`, `no_bundle`, `find_additional_modules`) | — | CommonJS and Python modules | `internal/esbundle:TestBuildAppWranglerSettings`, `internal/esbundle:TestRuleGlobs`, `cmd/twd:TestBuildWranglerTOMLApp`, `e2e/wrangler:TestTwdDevWrangler/FromWranglerOut`, `e2e/wrangler:TestTwdDevWrangler/WranglerCLI` |
+| <a id="wrangler-api"></a>`wrangler deploy`, `wrangler secret`, `wrangler tail` against twd | 🚫 | — | `twd deploy`, `twd secret`, `twd logs -f` take the same project | twd serves no Cloudflare-compatible API: it would have to track about 50 wrangler endpoints across frequent wrangler releases and bring bearer tokens back, and preflight, placement and image pinning don't fit wrangler's flow ([why](wrangler.md#wrangler-commands-that-call-cloudflare)) | — | — |
+
+## SDKs
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="agents-sdk"></a>Cloudflare Agents SDK (`agents`) | ⚠️ | — | runs unmodified: routing, state, SQL, schedules, WebSockets and hibernation, MCP client and server, in both object modes. `getCaller` in `onRequest` and `onConnect`. [Details](#cloudflare-agents-sdk-agents-0330) | an agent can't call an MCP server on the same host over the tailnet (`forbidden_destination`) | `subAgent()`, `env.AI`, Workflows, email, browser, codemode; `McpAgent`, `@callable` and `AIChatAgent` not tested | `e2e/sdk:TestCloudflareAgents/RouteAgentRequest`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/sdk:TestCloudflareAgents/AgentAsMCPClient`, `e2e/sdk:TestAgentTemplate` |
+| <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@twd/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`) | — | stdio transport | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet` |
+| <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70165-and-mcp-handler-231) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@twd/mcp` `mcpFetch` | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow` |
+
+---
+
+# Details
+
+The sections below are the detailed measurements behind the rows above.
+
+## SDK conformance (process tier)
 
 What runs in-isolate on twd, as **measured** by the hermetic conformance suite
 `make test-sdk` (`e2e/sdk`): real SDK code on twd-hostd + the generated
@@ -53,7 +161,7 @@ check below runs in both.
 | `McpAgent` | not tested | | — | deprecated upstream; use `createMcpHandler` (ADR-022) |
 | `@callable` RPC, `useAgent`, `AIChatAgent` | not tested | | — | same DO/WebSocket primitives as above (assumption) |
 
-## Secrets
+## Secrets: details
 
 `twd secret put|ls|rm` and `.dev.vars` work like `wrangler secret` and
 `wrangler dev`. Your code reads a secret as `env.NAME`, a text binding,
@@ -129,25 +237,30 @@ no amd64 microVM has booted to ready there (STATUS.md, ADR-032 section).
 
 | Cloudflare | twd | Test | Notes |
 |---|---|---|---|
-| Config file `wrangler.toml` / `wrangler.json` / `wrangler.jsonc` | ✅ wrangler's order (json, jsonc, toml) | `TestFindWranglerConfigPrecedence`, `TestReadWranglerTOML`, `TestCLIDeployWranglerTOML` | the app directory only (wrangler also searches parents); a shadowed file is warned. The bundle carries the resolved config as JSON ([wrangler.md](wrangler.md)) |
-| Environments `env.<name>` (`--env`) | ✅ `twd deploy --env`, `twd dev --env` | `TestApplyWranglerEnv`, `TestCLIDeployWranglerTOML` | wrangler's inheritance: `vars`, `define` and bindings are not inherited (warned per key, as wrangler does). Workload `<name>-<env>` unless the env sets `name`. `twd.jsonc` has no environments |
-| A Workers project with no `twd.jsonc` | ✅ defaults | `TestLoadAppWranglerTOMLOnly`, `TestCLIDeployWranglerTOML` | workload tag `tag:twd-wl-<workload>`; Durable Object classes internal (`"node": false`), reachable through their binding as on Cloudflare |
-| Bundling: `define`, `alias`, `rules` (Text, Data, CompiledWasm; wrangler's defaults), `minify`, `keep_names`, `jsx_*`, `tsconfig` | ✅ built-in esbuild | `TestBuildAppWranglerSettings`, `e2e/wrangler` `BuiltinEsbuild` | additional modules named `<sha1>-<file>` as wrangler names them; `twd-bundle.json` `modules` types them on the host. `minify`, `keep_names`, `jsx_*`, `tsconfig` are mapped but not measured end to end |
-| Bundling with wrangler itself (`wrangler deploy --dry-run --outdir`) | ✅ `--wrangler`, `--from-wrangler-out <dir>` | `e2e/wrangler` `WranglerCLI`, `FromWranglerOut`; `TestBuildWranglerTOMLApp` | measured with wrangler 4.60.0. Needed for `build` (custom command), `no_bundle`, `find_additional_modules`, `preserve_file_names`, `base_dir`; the built-in bundler warns on these |
-| `nodejs_compat` | ✅ | `e2e/wrangler` (`node:buffer`) | built-in esbuild: bare built-ins become `node:*` and workerd provides them; wrangler also inlines unenv polyfills (toml-app: 21 KB vs 1.0 KB) |
-| CommonJS modules, `rules` of type CommonJS, Python modules | ❌ | `TestReadWranglerOutEntry`, `TestBuildAppUnsupportedRule` | twd ships ES modules (plus text, data, wasm, json) |
-| `routes`, `route`, `workers_dev`, `preview_urls`, `account_id` | ❌ by design, warned | `TestWranglerWarnings`, `TestCLIDeployWranglerTOML` | no Cloudflare zone: a workload answers at its MagicDNS name; internet exposure is `twd.jsonc` `public` (Funnel) |
-| Binding sections twd has no binding for (`kv_namespaces`, `r2_buckets`, `d1_databases`, `services`, `queues`, `ai`, …) | ❌ warned | `TestWranglerWarnings` | one line per section naming each `env.X` that will be undefined; the deploy goes ahead |
-| `assets`, `site` (static assets) | ❌ warned | `TestWranglerWarnings` | serve from the Worker or import files as Text/Data modules |
-| `observability`, `logpush`, `limits`, `upload_source_maps`, `tail_consumers`, other keys | ❌ ignored, warned | `TestWranglerWarnings` | an unknown key is warned too: nothing is ignored silently |
-| `wrangler dev` / Miniflare as the inner loop | ⚠ no tailnet | manual, `hello` template | runs, but `getCaller` throws `no_identity` (fail closed), egress leaves from the developer's own network, `tailnet.objects` is ignored, no `ctx.tailnet`. Use `twd dev` for anything tailnet-real |
-| `wrangler deploy` / `wrangler secret put` / `wrangler tail` against twd | ❌ by design | — | a Cloudflare-API shim (via `CLOUDFLARE_API_BASE_URL`) would track ~50 wrangler endpoints across fast wrangler releases and bring bearer tokens back; preflight, placement and image pinning don't fit wrangler's flow. Use `twd deploy`, `twd secret put`, `twd logs -f` ([wrangler.md](wrangler.md#wrangler-commands-that-call-cloudflare)) |
 | Smart Placement `placement: {"mode": "smart"}` | ✅ different signal | `TestScoreHosts`, `TestAPIPlacement`, `e2e/placement`, multimgmt S12 | Cloudflare moves a Worker toward its backend by analysing request durations per location (up to 15 min after deploy, `SUCCESS` / `INSUFFICIENT_INVOCATIONS`). twd places a workload **at deploy** on the host with the best **measured tailnet path** to what it connects to (`tailnet.connects`, or `placement.targets`): direct WireGuard > peer relay > DERP > unmeasured, then RTT; free capacity breaks ties. Smart is the default when `connects` is set; `"mode": "off"` turns it off. Read from `twd.jsonc`, or from `wrangler.jsonc` `placement` if `twd.jsonc` has none. ADR-033 (Proposed) |
 | `placement.host` / `placement.hostname` (probe targets) | ✅ as one target | `TestResolvePlacement` | the name (port dropped) is resolved in the tenant's netmap (MagicDNS name, host name or IP); Cloudflare probes it from public IPs with TCP/HTTP, twd with disco pings from the tenant's own nodes |
 | `placement.region` (`aws:us-east-1`) | ⚠ ignored, warned | `TestResolvePlacement` | there are no cloud regions; the deploy's `placement.summary` says so |
 | Placement status (`cf-placement` header, `placement_status`) | ⚠ different | `TestAPIPlacement` | `twd deploy` prints why (`placed on h2: tag:db direct 1.8 ms (h1: relayed 24 ms, h3: unmeasured)`); `GET /v1/deployments/{id}` `placement` and `twd ls` show it; the deploy audit record carries it. No per-request header |
 | Re-placement while running | ❌ by design | `TestAPIPlacement`, `e2e/placement` | Cloudflare re-routes continuously. twd never moves a running workload on its own (the lease holder is sticky); `twd deploy --replace` re-places it explicitly (hysteresis: a better path class, or ≥ 2 ms and ≥ 20 % lower RTT) |
 | Per-object placement (DO location hints, `locationHint`) | ❌ | — | every Durable Object instance of a workload runs on the workload's host |
+
+## Wrangler config: details
+
+Measured with `e2e/wrangler/testdata/toml-app` (a `wrangler.toml`-only
+project) and wrangler 4.60.0 (`make e2e-wrangler`). See
+[wrangler.md](wrangler.md).
+
+| Cloudflare / wrangler | twd | Tests | Notes |
+|---|---|---|---|
+| A Workers project with no `twd.jsonc` | ✅ defaults | `cmd/twd:TestLoadAppWranglerTOMLOnly`, `cmd/twd:TestCLIDeployWranglerTOML` | workload tag `tag:twd-wl-<workload>`; Durable Object classes internal (`"node": false`), reached through their binding as on Cloudflare |
+| `nodejs_compat` through either bundler | ✅ | `e2e/wrangler:TestTwdDevWrangler` | built-in: bare built-ins become `node:*` and workerd provides them; wrangler also inlines unenv polyfills (toml-app's entry: 21 KB against 1.0 KB) |
+| `minify`, `keep_names`, `jsx_*`, `tsconfig` | ⚠️ mapped, not measured | — | passed to esbuild's options |
+| CommonJS modules, `rules` of type ESModule / CommonJS, Python modules | ❌ | `cmd/twd:TestReadWranglerOutEntry`, `internal/esbundle:TestBuildAppUnsupportedRule` | twd ships ES modules (plus text, data, wasm, json) |
+| `routes`, `route`, `workers_dev`, `preview_urls`, `account_id` | 🚫 warned | `cmd/twd:TestWranglerWarnings`, `cmd/twd:TestCLIDeployWranglerTOML` | no Cloudflare zone: a workload answers at its MagicDNS name; internet exposure is `twd.jsonc` `public` (Funnel) |
+| Binding sections with no twd binding (`r2_buckets`, `d1_databases`, `services`, `queues`, `ai`, …) | ❌ warned | `cmd/twd:TestWranglerWarnings` | one line per section naming each `env.X` that will be undefined. A section registered as a [platform store](design/adr/platform-stores.md) is not warned (`cmd/twd:TestWranglerWarningsStoreKinds`) |
+| `assets`, `site` | ❌ warned | `cmd/twd:TestWranglerWarnings` | serve from the Worker or import files as Text/Data modules |
+| `observability`, `logpush`, `limits`, `upload_source_maps`, unknown keys | ❌ ignored, warned | `cmd/twd:TestWranglerWarnings` | nothing is ignored silently |
+| `wrangler dev` / Miniflare as the inner loop | ⚠️ no tailnet | manual (`hello` template) | runs, but `getCaller` throws `no_identity` (fail closed), egress leaves from the developer's own network, `tailnet.objects` is ignored, there is no `ctx.tailnet`. Use `twd dev` for anything tailnet-real |
 
 ## Public routes (Funnel, ADR-029)
 

@@ -217,6 +217,9 @@ func applyWranglerEnv(cfg map[string]any, env, file string) (out map[string]any,
 // twd uses map to "" (no warning).
 func wranglerKeyNote(k string, v any, builder string) string {
 	const bindingHint = "no such binding on twd: "
+	if bundle.IsStoreKey(k) {
+		return "" // a platform store binding (ADR-platform-stores)
+	}
 	switch k {
 	case "name", "main", "compatibility_date", "compatibility_flags", "vars", "durable_objects",
 		"migrations", "triggers", "containers", "placement", "$schema", "env":
