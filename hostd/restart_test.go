@@ -37,9 +37,8 @@ func groupGone(pgid int) bool { return errors.Is(syscall.Kill(-pgid, 0), syscall
 
 // TestWorkerdCrashRecovery (issue #43): a process-tier workerd killed with
 // SIGKILL (under the host's sandbox: Seatbelt on macOS, Landlock on Linux)
-// comes back by itself and serves; its old process group is gone. Killed
-// again and again it reports "crashloop" with the attempt count and keeps
-// restarting (never "failed"); left alone it is "active" again.
+// comes back by itself and serves; its old process group is gone. The
+// crash loop itself is TestWorkerdStuckSocketCrashLoop.
 func TestWorkerdCrashRecovery(t *testing.T) {
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.Sandbox = "auto" })
 	e := s.e
@@ -85,30 +84,6 @@ func TestWorkerdCrashRecovery(t *testing.T) {
 		if !groupGone(old) {
 			t.Errorf("the old workerd's process group %d is still alive", old)
 		}
-	})
-
-	t.Run("CrashLoop", func(t *testing.T) {
-		// Kill each new workerd as soon as it appears: exits in a row.
-		var last hostd.WorkloadStatus
-		for i := 0; i < 3; i++ {
-			pid := workloadStatus(t, e, "probe").PID
-			syscall.Kill(pid, syscall.SIGKILL)
-			last = waitWorkload(t, e, "probe", 30*time.Second, "a crashloop restart", func(w hostd.WorkloadStatus) bool {
-				return w.PID != 0 && w.PID != pid
-			})
-		}
-		w := waitWorkload(t, e, "probe", 10*time.Second, "crashloop status", func(w hostd.WorkloadStatus) bool {
-			return w.Status == "crashloop" || w.Status == "failed"
-		})
-		if w.Status != "crashloop" || w.Restarts < 2 || !strings.Contains(w.Error, "times in a row; restarting in") {
-			t.Fatalf("after %d kills: status=%s restarts=%d err=%q (pid %d)", 3, w.Status, w.Restarts, w.Error, last.PID)
-		}
-		t.Logf("crashloop: %s", w.Error)
-		// Left alone, the restarted workerd answers and it is active again.
-		waitWorkload(t, e, "probe", 30*time.Second, "active again", func(w hostd.WorkloadStatus) bool {
-			return w.Status == "active" && w.Error == ""
-		})
-		serves()
 	})
 }
 

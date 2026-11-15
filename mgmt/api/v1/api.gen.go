@@ -2032,9 +2032,22 @@ type DeploymentRecord struct {
 	HostStatus *string `json:"hostStatus,omitempty"`
 
 	// RollbackOf Set on a rollback: the deployment whose bundle it redeployed.
-	RollbackOf *string          `json:"rollbackOf,omitempty"`
-	Status     DeploymentStatus `json:"status"`
-	Workload   string           `json:"workload"`
+	RollbackOf *string `json:"rollbackOf,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status   DeploymentStatus `json:"status"`
+	Workload string           `json:"workload"`
 }
 
 // DeploymentReport defines model for DeploymentReport.

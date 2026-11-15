@@ -1,6 +1,40 @@
-Last update: 2026-11-15 13:50 PT. Issue #43: workerd crash recovery (root cause, group reap, never-give-up backoff, `crashloop` status).
+Last update: 2026-11-15 18:00 PT. Issue #43 finished on `workerd-restart-issue-43`: a deterministic regression test for crash -> EADDRINUSE -> permanent `failed`; merged master.
 
 # workerd crash recovery (issue #43)
+
+## 2026-11-15 18:00 PT: finishing the fix (branch `workerd-restart-issue-43`)
+
+The first round (below) was on `workerd-crash-recovery-issue-43`. Its PR
+(#60) was merged into the benchmark branch after that branch had already
+landed on master, so the fix never reached master. This branch is that
+work plus `origin/master` merged in (clean merge; `make api` regenerated
+the three generated files for master's new `DeploymentStatus` use). The
+status and release-note files were renamed to this branch's name.
+
+- New `TestWorkerdStuckSocketCrashLoop` (`hostd/restart_stuck_test.go`),
+  the regression test for #43. workerd is a wrapper that execs the real
+  one, except while a gate file exists: then it prints workerd's
+  `Socket "ingress": bind(): Address already in use` error and exits 1.
+  The test deploys, sets the gate, kills workerd with SIGKILL, waits past
+  the old give-up point (6 exits in a row) and checks `crashloop` with the
+  EADDRINUSE log tail, then removes the gate and checks `active` again and
+  serving. The gate, not a timer, decides how long the trouble lasts, so
+  the only possible statuses meanwhile are `crashloop` (fixed) or `failed`
+  (the bug); nothing races the recovery. Runs on any OS with the pinned
+  workerd (`Sandbox: none`), about 15 s.
+- Checked against the old policy: with only the old "give up after 5
+  restarts" put back, it fails with the production error line for line:
+  `after 6 exits with a stuck socket the deployment is "failed", want
+  crashloop (issue #43): workerd exited 6 times: Socket "ingress": bind():
+  Address already in use (os error 48)`.
+- Removed the `TestWorkerdCrashRecovery/CrashLoop` subtest. It killed each
+  new workerd "as soon as it appears" and then polled for `crashloop`, but
+  the restarted workerd could become healthy (and the status `active`)
+  before the poll saw it: a timing race of the kind quarantined in #75.
+  The new test covers the same path deterministically.
+
+# First round (branch `workerd-crash-recovery-issue-43`)
+
 
 ## Root cause (with evidence)
 
@@ -68,7 +102,7 @@ it gets the same fix.
 
 - `TestWorkerdCrashRecovery/KillWorkerd`: kill -9 → new pid, serves, old
   group gone.
-- `TestWorkerdCrashRecovery/CrashLoop`: 3 kills in a row → `crashloop`
+- (removed in the second round, see above) `TestWorkerdCrashRecovery/CrashLoop`: 3 kills in a row → `crashloop`
   (restarts ≥ 2), then `active` again and serving.
 - `TestWorkerdWrapperKilled`: kill -9 of a wrapper parent → its workerd
   child is killed, the group is gone, and a new one serves. Fails without
