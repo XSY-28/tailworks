@@ -230,12 +230,21 @@ function encodeEntry(id, stmts) {
     s: st.sql,
     p: st.params.map((v) => (v instanceof Uint8Array ? { $b: b64(v) } : v)),
   }));
-  return te.encode(JSON.stringify({ v: 1, id, q }));
+  return te.encode(JSON.stringify({ v: D1_ENTRY_V, id, q }));
 }
-function decodeEntry(data) {
+// D1_ENTRY_V is the journal entry version this twd writes
+// (ADR-upgrades-and-releases §4); every D1 entry has carried v since the
+// first release, and a missing v reads as v1.
+const D1_ENTRY_V = 1;
+// D1FormatError: an entry written by a newer twd. apply rethrows it (a
+// skipped write would silently lose data on replay).
+class D1FormatError extends Error {}
+export function decodeEntry(data) {
   // Not norm(): an entry was checked when it was written, and a later
   // change of the limits must not make the journal unreplayable.
   const e = JSON.parse(utf8(data));
+  const v = e.v ?? 1;
+  if (v > D1_ENTRY_V) throw new D1FormatError(`twd d1: journal entry v${v} was written by a newer twd (this one reads up to v${D1_ENTRY_V}); upgrade twd-hostd`);
   const stmts = e.q.map((q) => ({
     sql: q.s,
     params: (q.p ?? []).map((v) => (v && typeof v === "object" && typeof v.$b === "string" ? unb64(v.$b) : v)),
@@ -356,6 +365,7 @@ registerStoreKind("d1", {
     try {
       e = decodeEntry(data);
     } catch (err) {
+      if (err instanceof D1FormatError) throw err;
       console.warn(`twd d1 ${s.name}: journal entry ${seq} is not a D1 write; skipped (${err.message})`);
       return;
     }
