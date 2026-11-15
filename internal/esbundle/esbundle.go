@@ -3,7 +3,9 @@
 // js/packages/create-twd/lib/build.mjs (same options, same plugin), so a
 // release install can `twd deploy` with no Node.js and no esbuild binary:
 // workerd conditions, Node builtins mapped to node:* (needs nodejs_compat),
-// cloudflare:* and node:* external, cloudflare:email stubbed.
+// cloudflare:* and node:* external, cloudflare:email stubbed. Beyond
+// build.mjs it honours wrangler's build settings (define, alias, rules:
+// rules.go), so a wrangler.toml project bundles as wrangler would.
 package esbundle
 
 import (
@@ -13,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/evanw/esbuild/pkg/api"
 )
@@ -44,18 +47,55 @@ type Options struct {
 	Outfile   string   // absolute path of the output module
 	NodePaths []string // module fallbacks (twd's own node_modules)
 	Minify    bool
+
+	// Wrangler build settings the built-in bundler honours (wrangler
+	// config "define", "alias", "rules", "keep_names", "jsx_factory",
+	// "jsx_fragment", "tsconfig"). Rules are applied after
+	// EffectiveRules, so wrangler's defaults (.txt/.html/.sql text, .bin
+	// data, .wasm modules) hold with no rules set.
+	Define      map[string]string
+	Alias       map[string]string
+	Rules       []Rule
+	KeepNames   bool
+	JSXFactory  string
+	JSXFragment string
+	Tsconfig    string
+}
+
+// Result is what BuildApp wrote.
+type Result struct {
+	Size int // bytes of the entry module
+	// Modules are the additional modules (wrangler "rules" matches) to
+	// ship next to the entry, by name relative to it.
+	Modules map[string]Module
 }
 
 var bareRE = regexp.MustCompile(`^[a-z_][a-z0-9_/]*$`)
 
 // Build bundles and writes Outfile; it returns the output size.
 func Build(o Options) (int, error) {
+	r, err := BuildApp(o)
+	if err != nil {
+		return 0, err
+	}
+	return r.Size, nil
+}
+
+// BuildApp bundles, writes Outfile and returns it with the additional
+// modules (not written: the caller packs them next to Outfile).
+func BuildApp(o Options) (*Result, error) {
 	if o.Main == "" {
-		return 0, errors.New("wrangler.jsonc has no main")
+		return nil, errors.New("wrangler config has no main")
 	}
 	dir, err := filepath.Abs(o.Dir)
 	if err != nil {
-		return 0, err
+		return nil, err
+	}
+	res := &Result{Modules: map[string]Module{}}
+	var mu sync.Mutex
+	rules, err := rulesPlugin(EffectiveRules(o.Rules), res.Modules, &mu)
+	if err != nil {
+		return nil, err
 	}
 	twd := api.Plugin{Name: "twd", Setup: func(b api.PluginBuild) {
 		b.OnResolve(api.OnResolveOptions{Filter: `^cloudflare:email$`}, func(a api.OnResolveArgs) (api.OnResolveResult, error) {
@@ -94,15 +134,22 @@ func Build(o Options) (int, error) {
 		NodePaths:         o.NodePaths,
 		LegalComments:     api.LegalCommentsNone,
 		LogLevel:          api.LogLevelSilent,
-		Plugins:           []api.Plugin{twd},
+		Plugins:           []api.Plugin{twd, rules},
+		Define:            o.Define,
+		Alias:             o.Alias,
+		KeepNames:         o.KeepNames,
+		JSXFactory:        o.JSXFactory,
+		JSXFragment:       o.JSXFragment,
+		Tsconfig:          o.Tsconfig,
 	})
 	if len(r.Errors) > 0 {
 		msgs := api.FormatMessages(r.Errors, api.FormatMessagesOptions{Kind: api.ErrorMessage})
-		return 0, fmt.Errorf("esbuild: %d error(s)\n%s", len(r.Errors), strings.TrimSpace(strings.Join(msgs, "")))
+		return nil, fmt.Errorf("esbuild: %d error(s)\n%s", len(r.Errors), strings.TrimSpace(strings.Join(msgs, "")))
 	}
 	st, err := os.Stat(o.Outfile)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return int(st.Size()), nil
+	res.Size = int(st.Size())
+	return res, nil
 }

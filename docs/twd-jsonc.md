@@ -1,15 +1,22 @@
 # twd.jsonc reference
 
-Every twd app has a `twd.jsonc` next to its `wrangler.jsonc`. The split:
+A twd app has a `twd.jsonc` next to its wrangler config (`wrangler.jsonc`,
+`wrangler.json` or `wrangler.toml`; [wrangler.md](wrangler.md)). The split:
 
-- **`wrangler.jsonc`** is the Worker itself, as on Cloudflare: `main`,
+- **The wrangler config** is the Worker itself, as on Cloudflare: `main`,
   `compatibility_date`, `durable_objects` bindings, `migrations`, `vars`,
-  `triggers.crons`, `containers`, `d1_databases` ([d1.md](d1.md)).
+  `triggers.crons`, `containers`, `d1_databases` ([d1.md](d1.md)), and
+  `env.<name>` environments (`twd deploy --env`).
 - **`twd.jsonc`** is what twd adds: the tailnet identity of the workload and
   of each Durable Object class, the isolation tier, placement, and public
   routes.
 
-Both are JSONC: comments and trailing commas are fine.
+`twd.jsonc` is JSONC: comments and trailing commas are fine.
+
+A project with only a wrangler config deploys too. Then twd uses defaults:
+the workload node is tagged `tag:twd-wl-<workload>`, and every Durable
+Object class is internal (`"node": false`). `twd deploy` says when it does
+this ([wrangler.md](wrangler.md#without-a-twdjsonc)).
 
 ## Validation and editor completion
 

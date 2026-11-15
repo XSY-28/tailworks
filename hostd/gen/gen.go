@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -215,7 +214,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	type entry struct{ name, ident, kind string }
 	var ents []entry
 	for i, p := range mods {
-		k := moduleKind(p)
+		k := app.ModuleKind(p)
 		ents = append(ents, entry{p, fmt.Sprintf("m%d", i), k})
 		fmt.Fprintf(&tm, "import m%d from %s;\n", i, jsq("t/"+p))
 	}
@@ -258,7 +257,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 
 		// Stores are the storage bindings a facet's env gets (stores.go).
 		Stores []storeCfg `json:"stores"`
-	}{o.DeploymentID, o.Workload, app.CompatDate, nonNil(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app)}
+	}{o.DeploymentID, o.Workload, app.CompatDate, tenantFlags(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app)}
 	cfg.Vars = varsWithSecrets(cfg.Vars, app.Secrets)
 	if cfg.Vars == nil {
 		cfg.Vars = map[string]json.RawMessage{}
@@ -342,7 +341,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString(storeModules(app))
 	for _, p := range mods {
 		kind := "text"
-		if k := moduleKind(p); k == "wasm" || k == "data" {
+		if k := app.ModuleKind(p); k == "wasm" || k == "data" {
 			kind = "data"
 		}
 		fmt.Fprintf(&c, "    (name = %s, %s = embed %s),\n", cq("t/"+p), kind, cq("t/"+p))
@@ -363,7 +362,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 
 	// tenant service
 	fmt.Fprintf(&c, "const tenant :Workerd.Worker = (\n  compatibilityDate = %s,\n  compatibilityFlags = [", cq(app.CompatDate))
-	for i, f := range app.CompatFlags {
+	for i, f := range tenantFlags(app.CompatFlags) {
 		if i > 0 {
 			c.WriteString(", ")
 		}
@@ -372,7 +371,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("],\n  modules = [\n    (name = \"__twd_main.js\", esModule = embed \"__twd_main.js\"),\n    (name = \"__twd_rt.js\", esModule = embed \"__twd_rt.js\"),\n")
 	for _, p := range mods {
 		var kind string
-		switch moduleKind(p) {
+		switch app.ModuleKind(p) {
 		case "js":
 			kind = "esModule"
 		case "json":
@@ -415,7 +414,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	c.WriteString(secretBindings(app))
 	c.WriteString(storeTenantBindings(app))
-	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n);\n\n")
+	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n" + tailsLine + ");\n\n")
 	c.WriteString("const deny :Workerd.Worker = (\n  compatibilityDate = \"2026-04-01\",\n  modules = [ (name = \"deny.js\", esModule = embed \"deny.js\") ],\n);\n")
 	if err := write("config.capnp", []byte(c.String())); err != nil {
 		return nil, err
@@ -428,20 +427,6 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-func moduleKind(p string) string {
-	switch strings.ToLower(path.Ext(p)) {
-	case ".js", ".mjs":
-		return "js"
-	case ".json":
-		return "json"
-	case ".txt", ".html":
-		return "text"
-	case ".wasm":
-		return "wasm"
-	}
-	return "data"
 }
 
 // jsq quotes s as a JS string literal.

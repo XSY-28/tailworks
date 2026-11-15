@@ -66,6 +66,9 @@ type Options struct {
 	// CronClock is passed to hostd (the cron loop's clock; tests that tick
 	// the scheduler themselves).
 	CronClock func() time.Time
+
+	// Telemetry is passed to hostd (ADR-observability).
+	Telemetry hostd.TelemetryOptions
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -146,6 +149,7 @@ func Start(t testing.TB, o Options) *Env {
 		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter,
 		PublicListen: o.PublicListen,
 		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
+		Telemetry: o.Telemetry,
 	})
 	if err != nil {
 		t.Fatal(err)

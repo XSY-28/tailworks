@@ -27,6 +27,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/gen"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
+	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/internal/procsb"
 	"github.com/rosskukulinski/twd/netd"
 )
@@ -306,6 +307,7 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 	}
 	w.mu.Unlock()
 	h.rejoinObjects(w, app)
+	h.tel.workloadStarted(w) // OTLP config (telemetry.go)
 	h.syncService(w, false)
 	go h.applyPublic(w, a.Public)
 	h.log.Info("deployment active", "workload", w.name, "deployment", a.DeploymentID, "epoch", a.Epoch,
@@ -382,6 +384,7 @@ func (h *Host) deploySerial(w *workload, a mgmtapi.Assignment, app *bundle.App, 
 	w.mu.Unlock()
 	open()
 	h.rejoinObjects(w, app)
+	h.tel.workloadStarted(w) // OTLP config (telemetry.go)
 	h.syncService(w, false)
 	go h.applyPublic(w, a.Public)
 	h.log.Info("deployment active", "workload", w.name, "deployment", a.DeploymentID, "epoch", a.Epoch,
@@ -880,7 +883,8 @@ func (inst *instance) spawn() error {
 	if inst.tier == bundle.TierMicroVM {
 		return inst.bootVM()
 	}
-	logf, err := os.OpenFile(filepath.Join(inst.dir, "workerd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	// Size-capped: a noisy workload can't fill the disk (ADR-observability).
+	logf, err := obs.OpenRotating(filepath.Join(inst.dir, "workerd.log"), inst.h.tel.opt.AppLogMax)
 	if err != nil {
 		return err
 	}

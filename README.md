@@ -131,7 +131,7 @@ prove every ✅ and ⚠️.
 | Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers only (no internet, by default) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
 | Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
-| Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ⚠️ | runs; `twd deploy`'s bundler can't import `.wasm` yet |
+| Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
 | Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
 | Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
 | Runtime | [Node.js apps (`runtime: "node"`)](docs/COMPAT.md#node-runtime) | ✅ | twd-only |
@@ -164,8 +164,14 @@ prove every ✅ and ⚠️.
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
 | Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container |
-| Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `twd logs`; no Tail Workers |
-| Platform | [`wrangler.jsonc`](docs/COMPAT.md#wrangler-config) | ⚠️ | unknown keys ignored; no `wrangler.toml` |
+| Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `twd logs`: a structured line per request; no Tail Workers |
+| Platform | [Metrics](docs/COMPAT.md#metrics) | ⚠️ | Prometheus `/metrics` on the tailnet, and OTLP; no CPU time |
+| Platform | [Tracing (`traceparent`)](docs/COMPAT.md#traces) | ⚠️ | across DO calls and egress; not DO RPC |
+| Platform | [Export to OpenTelemetry](docs/COMPAT.md#otlp-export) | ⚠️ | `twd telemetry set`; collector on the tailnet |
+| Platform | [Wrangler config (`wrangler.toml`/`.json`/`.jsonc`)](docs/COMPAT.md#wrangler-config) | ⚠️ | keys twd can't use are warned, one line each |
+| Platform | [Environments (`--env`)](docs/COMPAT.md#wrangler-env) | ✅ | one workload per environment |
+| Platform | [Bundling (`define`, `alias`, `rules`, `--wrangler`)](docs/COMPAT.md#wrangler-bundling) | ✅ | built-in esbuild, or wrangler's own |
+| Platform | [`wrangler deploy` / `secret` / `tail`](docs/COMPAT.md#wrangler-api) | 🚫 | use `twd deploy` / `secret` / `logs` |
 | SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core runs unmodified; no `subAgent()` |
 | SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
@@ -187,11 +193,18 @@ prove every ✅ and ⚠️.
 - **Run an app locally with no tailnet at all:** `twd dev`.
 - **`twd.jsonc`, every key:** [docs/twd-jsonc.md](docs/twd-jsonc.md)
   (with a JSON Schema for editor completion).
+- **An existing Workers project** (`wrangler.toml`, environments, bundling
+  with wrangler): [docs/wrangler.md](docs/wrangler.md).
 - **What runs and what doesn't:** [docs/COMPAT.md](docs/COMPAT.md)
   (every Workers surface, with the tests behind it) and
   [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Logs, metrics and traces:** `twd logs <workload>` shows one structured
+  line per request (`--json`, `--errors`, …), hosts serve Prometheus
+  `/metrics` on their tailnet node, and `twd telemetry set --otlp …`
+  exports logs, metrics and traces to your OpenTelemetry collector. See
+  [docs/observability.md](docs/observability.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).

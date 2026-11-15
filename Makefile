@@ -66,6 +66,12 @@ test-images:
 e2e-placement: deps
 	$(GO) test -tags e2eplacement -count=1 -v -timeout 10m ./e2e/placement/...
 
+## e2e-observability: logs, metrics and traces (ADR-observability), hermetic: real twd-mgmt + twd-hostd processes
+## on testcontrol + local DERP, a caller, an echo and an OTLP collector node; traceparent, twd logs, /metrics, OTLP.
+.PHONY: e2e-observability
+e2e-observability: deps
+	$(GO) test -tags e2eobs -count=1 -v -timeout 10m ./e2e/observability/...
+
 ## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container).
 PG_CTX  ?= orbstack
 PG_PORT ?= 55433
@@ -77,6 +83,12 @@ test-pg:
 .PHONY: e2e-local
 e2e-local: deps
 	$(GO) test -tags e2e -count=1 -v ./e2e/local/...
+
+## e2e-wrangler: a wrangler.toml-only project through `twd dev` (twd + hostd + workerd), bundled by the
+## built-in esbuild, from a wrangler --outdir, and by the wrangler CLI (that one skips without wrangler).
+.PHONY: e2e-wrangler
+e2e-wrangler: deps
+	$(GO) test -tags e2e -count=1 -v ./e2e/wrangler/...
 
 ## e2e-real: the identity/egress/kill suite on tailnet 1 (runs only if the creds exist).
 .PHONY: e2e-real
@@ -436,6 +448,7 @@ lint: api-check compat-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
 	$(GO) vet -tags e2e ./e2e/local/...
+	$(GO) vet -tags e2e ./e2e/wrangler/...
 	$(GO) vet -tags e2ereal ./e2e/real/...
 	GOOS=linux $(GO) vet ./hostd/vm/... ./guest/... ./cmd/twd-hostd/... ./cmd/twd-vmhelper/... ./cmd/twd/...
 	GOOS=linux $(GO) vet -tags e2evm ./e2e/vm/...
@@ -457,6 +470,7 @@ lint: api-check compat-check
 	$(GO) vet -tags sdk ./e2e/sdk/...
 	$(GO) vet -tags nodetier ./e2e/node/...
 	$(GO) vet -tags e2eplacement ./e2e/placement/...
+	$(GO) vet -tags e2eobs ./e2e/observability/...
 	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...
 	@sh scripts/check-secrets.sh
 
@@ -472,7 +486,7 @@ clean:
 .PHONY: gen-js
 gen-js: $(WORKERD)
 	node_modules/.bin/esbuild js/packages/tailnet/src/runtime.ts --bundle --format=esm --platform=neutral \
-		--target=es2022 --legal-comments=none --log-level=warning --outfile=hostd/gen/js/twd-rt.js
+		--target=es2022 --legal-comments=none --log-level=warning --external:node:async_hooks --outfile=hostd/gen/js/twd-rt.js
 
 ## test-node: the opt-in Node process tier + Vercel Workflow (hermetic; npm ci of the pinned deps in e2e/node).
 .PHONY: test-node

@@ -704,7 +704,144 @@ function wrapStores(env) {
   }
 }
 
+// js/packages/tailnet/src/trace.ts
+import { AsyncLocalStorage } from "node:async_hooks";
+var MAX_SPANS = 64;
+var TP_RE = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})(-.*)?$/;
+function parseTraceparent(v) {
+  if (typeof v !== "string") return null;
+  const m = TP_RE.exec(v.trim());
+  if (!m || m[1] === "ff" || m[1] === "00" && m[5]) return null;
+  if (/^0+$/.test(m[2]) || /^0+$/.test(m[3])) return null;
+  return { traceId: m[2], spanId: m[3], flags: m[4] };
+}
+function randHex(bytes) {
+  const b = new Uint8Array(bytes);
+  for (; ; ) {
+    crypto.getRandomValues(b);
+    if (b.some((x) => x !== 0)) return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  }
+}
+function newSpanId() {
+  return randHex(8);
+}
+var als = null;
+try {
+  als = new AsyncLocalStorage();
+} catch {
+  als = null;
+}
+function headerOf(req) {
+  try {
+    return req?.headers?.get?.("traceparent");
+  } catch {
+    return null;
+  }
+}
+async function runTraced(req, fn, flush) {
+  if (!als) return fn();
+  const header = headerOf(req);
+  const tp = parseTraceparent(header);
+  if (!tp) return als.run(void 0, fn);
+  const st = { ...tp, incoming: String(header), spans: [] };
+  return als.run(st, async () => {
+    try {
+      return await fn();
+    } finally {
+      if (st.spans.length && flush) {
+        const spans = st.spans.splice(0);
+        try {
+          flush(spans);
+        } catch {
+        }
+      }
+    }
+  });
+}
+function withTraceparent(input, init, value, incoming) {
+  let base = init?.headers;
+  if (base === void 0 && typeof Request !== "undefined" && input instanceof Request) base = input.headers;
+  let h;
+  try {
+    h = new Headers(base);
+  } catch {
+    return null;
+  }
+  const cur = h.get("traceparent");
+  if (cur && cur !== incoming) return null;
+  h.set("traceparent", value);
+  return [input, { ...init ?? {}, headers: h }];
+}
+var installed = false;
+function installFetchPropagation() {
+  if (installed || !als || typeof globalThis.fetch !== "function") return;
+  installed = true;
+  const orig = globalThis.fetch;
+  const traced = function fetch2(input, init) {
+    const st = als?.getStore();
+    if (st) {
+      const a = withTraceparent(input, init, `00-${st.traceId}-${st.spanId}-${st.flags}`, st.incoming);
+      if (a) return orig.call(globalThis, a[0], a[1]);
+    }
+    return orig.call(globalThis, input, init);
+  };
+  try {
+    Object.defineProperty(globalThis, "fetch", { value: traced, writable: true, configurable: true });
+  } catch {
+  }
+}
+async function tracedStubFetch(cls, name, args, call) {
+  const st = als?.getStore();
+  if (!st) return call(...args);
+  const spanId = newSpanId();
+  const a = withTraceparent(args[0], args[1], `00-${st.traceId}-${spanId}-${st.flags}`, st.incoming);
+  if (!a) return call(...args);
+  let method = "GET";
+  try {
+    method = String(a[1]?.method ?? args[0]?.method ?? "GET").toUpperCase();
+  } catch {
+  }
+  const rec = {
+    traceId: st.traceId,
+    spanId,
+    parentSpanId: st.spanId,
+    name: `${cls} fetch`,
+    start: Date.now(),
+    end: 0,
+    error: false,
+    attrs: { "twd.do.class": cls, "twd.do.name": name, "http.request.method": method }
+  };
+  const done = () => {
+    rec.end = Date.now();
+    if (st.spans.length < MAX_SPANS) st.spans.push(rec);
+  };
+  try {
+    const r = await call(...a, ...args.slice(2));
+    rec.attrs["http.response.status_code"] = r?.status ?? 0;
+    rec.error = (r?.status ?? 0) >= 500;
+    done();
+    return r;
+  } catch (e) {
+    rec.error = true;
+    done();
+    throw e;
+  }
+}
+
 // js/packages/tailnet/src/runtime.ts
+installFetchPropagation();
+function spanFlusher(tw, ctx) {
+  return (spans) => {
+    if (!tw || typeof tw.call !== "function") return;
+    const p = Promise.resolve().then(() => tw.call("spans", { spans })).catch(() => {
+    });
+    try {
+      ctx?.waitUntil?.(p);
+    } catch {
+    }
+  };
+}
+var twOf = /* @__PURE__ */ new WeakMap();
 function createTailnetContext(tw, env, bindings, self, ticket) {
   if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "twd platform binding missing (not running on twd?)");
   const op = async (name, args = {}) => {
@@ -822,6 +959,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
         installAlarmShim(ctx, tw);
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
         super(ctx, e);
+        twOf.set(this, tw);
       }
       // Called by the Host DO when the delegated alarm fires.
       async __twd_alarm(info) {
@@ -835,6 +973,12 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
       }
     }
   }[name];
+  const ff = C.prototype?.fetch;
+  if (typeof ff === "function") {
+    W.prototype.fetch = function(req) {
+      return runTraced(req, () => ff.call(this, req), spanFlusher(twOf.get(this), this.ctx));
+    };
+  }
   if (opts.container) noPreviewURLs(W);
   return W;
 }
@@ -874,6 +1018,7 @@ function wrapPlainClass(C, name, bindings, opts) {
         if (tw && oname) define(ctx, createTailnetContext(tw, e, bindings, self));
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
+        twOf.set(this, tw);
         if (tw && oname && opts.node) {
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
@@ -907,7 +1052,7 @@ function wrapPlainClass(C, name, bindings, opts) {
       if (k) return killedResponse(k);
       if (this.__twd_ensure) await this.__twd_ensure;
       if (this.__twd_denied) return this.__twd_denied.toResponse();
-      return proto.fetch.call(this, req);
+      return runTraced(req, () => proto.fetch.call(this, req), spanFlusher(twOf.get(this), this.ctx));
     };
   }
   if (opts.container) noPreviewURLs(W);
@@ -952,6 +1097,7 @@ function guardStub(adm, cls, name, real) {
         return async (...args) => {
           await admit(adm, cls, name);
           const target = real && typeof real.then === "function" ? await real : real;
+          if (p === "fetch") return tracedStubFetch(cls, name, args, (...a) => target.fetch(...a));
           return target[p](...args);
         };
       }
@@ -1081,7 +1227,7 @@ function wrapHandler(H, bindings) {
           }
         }
         try {
-          return await f.call(this, req);
+          return await runTraced(req, () => f.call(this, req), spanFlusher(tw, this.ctx));
         } catch (e) {
           const r = asResponse(e);
           if (r) return r;
@@ -1108,7 +1254,7 @@ function wrapHandler(H, bindings) {
       }
       let r;
       try {
-        r = H[k].call(H, a, env, ctx);
+        r = k === "fetch" ? runTraced(a, () => H[k].call(H, a, env, ctx), spanFlusher(tw, ctx)) : H[k].call(H, a, env, ctx);
       } catch (e) {
         const resp = k === "fetch" ? asResponse(e) : null;
         if (resp) return resp;

@@ -26,15 +26,46 @@ Admission is the connection's WhoIs identity, exactly as for the API
 
 There is no login, no cookie and no token: the tailnet connection is the
 credential, so the UI shows exactly what the API would show the same
-caller. Every page is built by running in-process requests through the
-`/v1` handler with the caller's principal and decoding the JSON (one
-source of truth: `api/openapi.yaml`, `docs/contracts/mgmt-api.md`).
+caller.
+
+## Public API only
+
+The UI is an ordinary client of the public `/v1` API, so it could be
+moved into its own process later without changes. `ui.Handler` takes an
+`*http.Client` and the API's base URL, and the UI:
+
+- calls only operations, query parameters and headers documented in
+  `api/openapi.yaml` (`docs/contracts/mgmt-api.md`), and reads only the
+  documented JSON;
+- never imports `mgmt`, and decides admission itself from
+  `GET /v1/whoami` (`admin` and not `kind: host`). mgmt's own gate on
+  `/ui/` (the table above) stays as a second layer;
+- never sends the browser to the API: pages contain no `/v1` URLs, and
+  mutations are form posts to the UI, which makes the `/v1` call
+  server-side.
+
+Embedded in mgmt, the client's transport (`mgmt/uiclient.go`) serves
+each request with the API handler directly, without a socket, using the
+browser request's context. Each call therefore carries the browser's
+principal, and the role gate applies to it as to any other caller. A UI
+running as its own process would use a network transport instead. How
+that process would act on behalf of the browser's user is not decided
+yet; it would need a delegation mechanism in the API.
+
+`mgmt/ui/public_api_test.go` (`TestUsesOnlyPublicAPI`) enforces the first
+and third points. It records every request the UI sends while rendering
+every page and submitting every form, and checks each one against the
+spec.
 
 ## Pages
 
-- **`/ui/` overview**: mgmt itself (DNS name, tailnet, version, listeners,
-  transport, WIF issuer, the tenants' mint modes); the audit chain
-  verification; **hosts** (status live / pending / stale, heartbeat age,
+- **`/ui/` overview**: summary tiles (hosts online, deployments, tenants,
+  objects with pending device deletes, audit chain verification); then
+  **deployments**, **hosts**, **tenants**, **objects** and **recent
+  activity**, each with a one-line explanation; and a collapsed
+  "Control plane details" panel for mgmt itself (DNS name, tailnet,
+  version, listeners, transport, WIF issuer, the tenants' mint modes).
+  The sections show: **hosts** (status live / pending / stale, heartbeat age,
   nodes live/capacity, tiers, pool, push transport, leases, node ID);
   **tenants** (tailnet, mint mode, quotas, registrations/min and the
   effective rate, mint queue, pool/tier); **deployments** (latest per
@@ -76,9 +107,11 @@ abbreviated. Light and dark follow `prefers-color-scheme`.
 
 ## Mutations
 
-Each action is a plain HTML form. With JavaScript, `app.js` intercepts the
-submit, asks for confirmation, and performs the same `/v1` call the CLI
-makes with `fetch`:
+Each action is a plain HTML form that POSTs to the UI (for example
+`/ui/objects/{id}/kill`). With JavaScript, `app.js` asks for confirmation
+first. The UI then makes the same `/v1` call the CLI makes and redirects
+back to the page with the outcome as a banner. A refusal shows
+`code: message`.
 
 | form | call |
 |---|---|
@@ -87,16 +120,17 @@ makes with `fetch`:
 | Drain & remove | `DELETE /v1/hosts/{id}?drain=true` (202 / 204) |
 | Delete tenant | `DELETE /v1/tenants/{id}?force=true` (202 / 204) |
 
-The result is a toast; a refusal shows `code: message` and the error's
-`doc_url` (docs/errors.md). Without JavaScript the form POSTs to its
-`/ui/.../kill` (etc.) action, which performs the identical call in-process
-and redirects back with the outcome. The actor recorded in the audit trail
-is the WhoIs login (tagged nodes: tag and node), as for the CLI.
+The actor recorded in the audit trail is the WhoIs login (tagged nodes:
+tag and node), as for the CLI.
 
-`app.js` also refreshes the page's live regions every 3 seconds by
-re-fetching the page (the server's templates stay the single renderer) and
-updates the header counters from `GET /v1/status`. Pages are complete and
-readable with JavaScript off; only the live refresh and the toasts need it.
+`app.js` also refreshes the page's live regions every 5 seconds by
+re-fetching the page (the server's templates stay the single renderer).
+A region is replaced only when its data changed: relative times
+(`<time data-ago>`) are computed in the browser, so the passing of time
+alone never counts as a change. A region with text selected in it is
+left alone until the selection is cleared. Pages are complete and
+readable with JavaScript off; only the live refresh and the confirmation
+dialog need it.
 
 ## Browser-origin guard (CSRF, DNS rebinding)
 
@@ -112,10 +146,11 @@ API and UI, in a guard (`browserGuard`, `mgmt/server.go`):
 - A browser-originated mutation must have `Sec-Fetch-Site` in
   `{same-origin, none}` (when present) **and** an `Origin` whose host equals
   the request's `Host` (when present); `/v1` mutations must additionally
-  carry `X-Twd-UI: 1`, which `app.js` sets. A custom header forces a CORS
-  preflight that mgmt never answers, so cross-origin JavaScript cannot
-  reach the handler at all; the no-JS `/ui/...` form posts are covered by
-  the `Sec-Fetch-Site` / `Origin` checks.
+  carry `X-Twd-UI: 1`. A custom header forces a CORS preflight that mgmt
+  never answers, so cross-origin JavaScript cannot reach the handler at
+  all. The UI's own `/ui/...` form posts are covered by the
+  `Sec-Fetch-Site` / `Origin` checks. The UI no longer sends `X-Twd-UI`;
+  the rule stays for any same-origin script that opts in.
 - Anything else is 403 `forbidden` with the message `cross-site request
   refused: …`. (The spec's `ErrorCode` enum is closed, so no separate
   `cross_site_request` code was added.)
@@ -129,14 +164,16 @@ client-side: no cookies, no localStorage, no tokens.
 
 ## Tests
 
-- `mgmt/ui/*_test.go`: every page template over an empty and a populated
-  fake `/v1` (including a 410 tombstone, a broken chain and a hostile
-  tenant note), the no-JS form fallbacks, the static assets and headers,
-  the tree and formatting helpers.
+- `mgmt/ui/*_test.go`: the fake `/v1` runs as a real HTTP server, so the
+  UI reaches it only over HTTP. Covered: every page template over an
+  empty and a populated fake (including a 410 tombstone, a broken chain
+  and a hostile tenant note), the form posts, the UI's own admission via
+  `/v1/whoami`, the public-API contract (`TestUsesOnlyPublicAPI`), the
+  static assets and headers, and the tree and formatting helpers.
 - `mgmt/ui_integration_test.go`: a real `Server` over the SQLite store with
   a fake WhoIs: admission per principal, the `/` redirect, the browser
   guard (cross-site refused, same-origin with `X-Twd-UI` and CLI-style
   requests succeed), the tombstone page, and every `/v1` call the UI makes
-  passing the kin-openapi validator.
+  on every page and form passing the kin-openapi validator.
 
     go test -race -count=1 ./mgmt/...
