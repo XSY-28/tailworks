@@ -1,6 +1,6 @@
 ---
 name: twd-scaffold
-description: Use when creating a new twd app - a Worker, a Durable Object, a Cloudflare Agents SDK Agent, an MCP server, an AI SDK agent or a Node.js workflow - with `twd init`, or when editing an app's twd.jsonc or wrangler.jsonc.
+description: Use when creating a new twd app - a Worker, a Durable Object, a Cloudflare Agents SDK Agent, an MCP server, an AI SDK agent or a Node.js workflow - with `twd init`, when bringing an existing wrangler project to twd, or when editing an app's twd.jsonc or wrangler config.
 ---
 
 # Scaffold a twd app
@@ -37,13 +37,16 @@ cd hello-mcp
 - `src/index.ts`: the Worker. `getCaller(req)` (from `@twd/tailnet`)
   returns the verified caller: `nodeId`, `node`, `tags`, `user`. Use it
   instead of any token or API-key check.
-- `wrangler.jsonc`: the Cloudflare config twd reads (`name`, `main`,
-  `compatibility_date`, `compatibility_flags`, `vars`,
-  `durable_objects.bindings`, `triggers.crons`, `placement`,
-  `containers`). Other keys are ignored. `wrangler.toml` is not read.
-- `twd.jsonc`: twd's own settings. twd refuses keys it doesn't know, so
-  check `twd docs show twd-jsonc.md` before you add one. The ones you'll
-  use most:
+- `wrangler.jsonc`: the Cloudflare config. twd reads `wrangler.json`,
+  `wrangler.jsonc` or `wrangler.toml`, the first it finds, like wrangler,
+  and prints a warning for each setting it ignores (bindings it has no
+  equivalent for, `routes`, `assets`, ...). `--env <name>` on `twd dev` and
+  `twd deploy` selects `[env.<name>]` as wrangler does.
+- `twd.jsonc`: twd's own settings. It's optional: without it the
+  workload's tag is `tag:twd-wl-<workload>` and Durable Object classes get
+  no nodes of their own. twd refuses keys it doesn't know, so check
+  `twd docs show twd-jsonc.md` before you add one. The ones you'll use
+  most:
 
 ```jsonc
 {
@@ -58,6 +61,12 @@ cd hello-mcp
   }
 }
 ```
+
+## An existing wrangler project
+
+No `twd init` needed: `cd` into it and run `twd dev`, then `twd deploy`.
+Read the warnings they print; each one names a setting or binding that
+won't work on twd. More: `twd docs show wrangler.md`.
 
 ## Things that don't work on twd
 

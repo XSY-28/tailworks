@@ -1,0 +1,84 @@
+//go:build e2e
+
+// Package wrangler checks twd with the wrangler CLI (issue #19,
+// docs/wrangler.md) across processes: the twd binary runs `twd dev --once`
+// (twd-hostd, netd and stock workerd behind it) on testdata/toml-app, a
+// wrangler.toml-only Workers project, bundled three ways:
+//
+//   - twd's built-in esbuild (define, alias, rules from wrangler.toml);
+//   - --from-wrangler-out testdata/toml-app.wrangler-out, the checked-in
+//     output of `wrangler deploy --dry-run --outdir` (wrangler 4.60.0);
+//   - --wrangler, which runs that command itself (skipped without a
+//     wrangler CLI: $TWD_WRANGLER, node_modules/.bin or PATH).
+//
+// All three must answer the same. Regenerate the fixture after changing
+// the app (then strip the machine-specific path comments):
+//
+//	cd e2e/wrangler/testdata/toml-app && wrangler deploy --dry-run --outdir ../toml-app.wrangler-out --env= && rm ../toml-app.wrangler-out/index.js.map
+package wrangler
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"testing"
+
+	"github.com/rosskukulinski/twd/e2e/cliflow"
+	"github.com/rosskukulinski/twd/hostd/hostdtest"
+	"github.com/rosskukulinski/twd/netd/nettest"
+)
+
+type devOnce struct {
+	Workload string         `json:"workload"`
+	Smoke    map[string]any `json:"smoke"`
+}
+
+func TestTwdDevWrangler(t *testing.T) {
+	wd, err := nettest.WorkerdBinary()
+	if err != nil || !hostdtest.HasNode() {
+		t.Skip("needs workerd and node (make deps)")
+	}
+	t.Setenv("TWD_WORKERD", wd)
+	bin := cliflow.BuildBinaries(t)
+	work := t.TempDir()
+	app := filepath.Join(work, "toml-app")
+	if err := os.CopyFS(app, os.DirFS("testdata/toml-app")); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := filepath.Abs("testdata/toml-app.wrangler-out")
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
+
+	want := map[string]any{
+		"status":   float64(200),
+		"greeting": "hello from wrangler.toml",
+		"build":    "top",
+		"shout":    "ALIAS",
+		"notes":    "# notes\n\nShipped as a Text module.\n",
+		"hello":    "plain text module\n",
+		"wasm":     true,
+		"buffer":   "dHdk",
+		"count":    float64(1),
+		"cache":    "undefined",
+	}
+	run := func(t *testing.T, args ...string) devOnce {
+		var r devOnce
+		e.MustJSON(&r, append([]string{"dev", app, "--once", "--port", "0"}, args...)...)
+		if r.Workload != "wtoml" || !reflect.DeepEqual(r.Smoke, want) {
+			b, _ := json.MarshalIndent(r, "", "  ")
+			t.Fatalf("twd dev %v:\n%s", args, b)
+		}
+		return r
+	}
+	t.Run("BuiltinEsbuild", func(t *testing.T) { run(t) })
+	t.Run("FromWranglerOut", func(t *testing.T) { run(t, "--from-wrangler-out", out) })
+	t.Run("WranglerCLI", func(t *testing.T) {
+		if os.Getenv("TWD_WRANGLER") == "" {
+			if _, err := exec.LookPath("wrangler"); err != nil {
+				t.Skip("no wrangler CLI (set $TWD_WRANGLER or put wrangler on PATH)")
+			}
+		}
+		run(t, "--wrangler")
+	})
+}

@@ -14,6 +14,7 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 ## Building apps
 
 - [twd.jsonc reference](https://github.com/rosskukulinski/twd/blob/master/docs/twd-jsonc.md): every key, tags and `twd init`
+- [Using wrangler with twd](https://github.com/rosskukulinski/twd/blob/master/docs/wrangler.md): wrangler.toml/json/jsonc, `--env`, bundling, what's ignored
 - [Cloudflare Workers compatibility](https://github.com/rosskukulinski/twd/blob/master/docs/COMPAT.md): what works, surface by surface, with the tests behind it
 - [Worker secrets](https://github.com/rosskukulinski/twd/blob/master/docs/secrets.md): `twd secret`, `.dev.vars`
 - [Cron triggers](https://github.com/rosskukulinski/twd/blob/master/docs/cron-triggers.md): `triggers.crons`, `scheduled()`

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/rosskukulinski/twd/hostd/bundle"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/esbundle"
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
@@ -138,49 +136,65 @@ type app struct {
 	Cfg      *mgmt.TwdConfig
 	Wrangler map[string]any
 	TwdRaw   []byte
-	// Runtime is "node" for the Node process tier (no wrangler.jsonc).
+	// Runtime is "node" for the Node process tier (no wrangler config).
 	Runtime string
+
+	// Wrangler config (wranglerapp.go): the file read (wrangler.json,
+	// .jsonc or .toml), the flags, and one line per ignored setting.
+	WranglerFile string
+	Opts         appOpts
+	Warnings     []string
 }
 
-func loadApp(dir, name string) (*app, error) {
+func loadApp(dir, name string) (*app, error) { return loadAppWith(dir, name, appOpts{}) }
+
+func loadAppWith(dir, name string, o appOpts) (*app, error) {
 	dir, _ = filepath.Abs(dir)
-	a := &app{Dir: dir}
-	raw, err := os.ReadFile(filepath.Join(dir, "twd.jsonc"))
-	if err != nil {
-		return nil, fail("bad_request", "no twd.jsonc in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|node-workflow")
+	a := &app{Dir: dir, Opts: o}
+	raw, twdErr := os.ReadFile(filepath.Join(dir, "twd.jsonc"))
+	var top struct {
+		Name    string `json:"name"`
+		Runtime string `json:"runtime"`
+	}
+	if twdErr == nil {
+		bundle.UnmarshalJSONC(raw, &top)
+	}
+	a.Runtime = top.Runtime
+	a.Wrangler = map[string]any{}
+	wname := top.Name
+	if a.Runtime != bundle.RuntimeNode {
+		var err error
+		if wname, err = a.loadWrangler(top.Name); err != nil {
+			if _, none := err.(errNoWrangler); !none {
+				return nil, err
+			}
+			if twdErr != nil {
+				return nil, fail("bad_request", "no twd.jsonc or wrangler config in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|node-workflow")
+			}
+			return nil, fail("bad_request", "no wrangler.jsonc, wrangler.json or wrangler.toml in "+dir)
+		}
+	} else if o.Env != "" || o.Wrangler || o.WranglerOut != "" {
+		return nil, fail("bad_request", `--env, --wrangler and --from-wrangler-out need a wrangler (workerd) app; this one is runtime "node"`)
+	}
+	a.Name = name
+	if a.Name == "" {
+		a.Name = wname
+	}
+	if a.Name == "" {
+		a.Name = filepath.Base(dir)
+	}
+	if twdErr != nil {
+		// A wrangler-only project: twd's defaults stand in for twd.jsonc.
+		raw = defaultTwdConfig(workloadLabel(a.Name), a.Wrangler)
+		a.Warnings = append(a.Warnings, fmt.Sprintf("no twd.jsonc: using defaults (workload node tag:twd-wl-%s; Durable Object classes internal, no node of their own); add a twd.jsonc to change them", workloadLabel(a.Name)))
 	}
 	a.TwdRaw = raw
 	if err := checkTwdSchema(raw); err != nil {
 		return nil, err
 	}
+	var err error
 	if a.Cfg, err = mgmt.ParseTwdConfig(raw); err != nil {
 		return nil, fail("bad_request", err.Error())
-	}
-	var top struct {
-		Name    string `json:"name"`
-		Runtime string `json:"runtime"`
-	}
-	bundle.UnmarshalJSONC(raw, &top)
-	a.Runtime = top.Runtime
-	a.Wrangler = map[string]any{}
-	if a.Runtime != bundle.RuntimeNode {
-		wb, err := os.ReadFile(filepath.Join(dir, "wrangler.jsonc"))
-		if err != nil {
-			return nil, fail("bad_request", "no wrangler.jsonc in "+dir)
-		}
-		if err := bundle.UnmarshalJSONC(wb, &a.Wrangler); err != nil {
-			return nil, fail("bad_request", "wrangler.jsonc: "+err.Error())
-		}
-	}
-	a.Name = name
-	if a.Name == "" {
-		a.Name = top.Name
-	}
-	if a.Name == "" {
-		a.Name, _ = a.Wrangler["name"].(string)
-	}
-	if a.Name == "" {
-		a.Name = filepath.Base(dir)
 	}
 	if wl := workloadLabel(a.Name); wl != a.Name {
 		return nil, fail("bad_request", fmt.Sprintf("workload name %q is not a DNS label", a.Name)).withFix("twd deploy --name " + wl)
@@ -228,36 +242,22 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 		}
 		return a.buildNode(node, ct, out, vars)
 	}
-	outfile := filepath.Join(out, "index.js")
-	main, _ := a.Wrangler["main"].(string)
-	// In-process esbuild (Go API): no Node.js needed on this machine.
-	if _, err := esbundle.Build(esbundle.Options{Dir: a.Dir, Main: main, Outfile: outfile, NodePaths: nodePaths(ct)}); err != nil {
-		return nil, 0, fail("build_failed", "esbuild failed for "+a.Dir, strings.Split(strings.TrimSpace(err.Error()), "\n")...)
+	// In-process esbuild (Go API): no Node.js needed on this machine;
+	// or wrangler's own bundler (--wrangler, --from-wrangler-out).
+	var files map[string][]byte
+	var types map[string]string
+	var js int
+	main := "dist/index.js"
+	if a.Opts.builder() == "wrangler" {
+		files, main, types, js, err = a.buildWrangler(out)
+	} else {
+		files, types, js, err = a.buildEsbuild(out, nodePaths(ct))
 	}
-	js, err := os.ReadFile(outfile)
 	if err != nil {
 		return nil, 0, err
 	}
-	files := map[string][]byte{"dist/index.js": js, "twd-bundle.json": []byte(`{"main":"dist/index.js"}`), "twd.jsonc": a.TwdRaw}
-	w := map[string]any{}
-	for k, v := range a.Wrangler {
-		w[k] = v
-	}
-	if len(vars) > 0 {
-		v, _ := w["vars"].(map[string]any)
-		nv := map[string]any{}
-		for k, x := range v {
-			nv[k] = x
-		}
-		for k, x := range vars {
-			nv[k] = x
-		}
-		w["vars"] = nv
-	}
-	wb, _ := json.MarshalIndent(w, "", "  ")
-	files["wrangler.jsonc"] = wb
-	tb, err := bundle.Pack(files)
-	return tb, len(js), err
+	tb, err := a.packWorkerd(files, main, types, vars)
+	return tb, js, err
 }
 
 // buildNode bundles a runtime "node" app with create-twd's build-node.mjs
@@ -313,6 +313,9 @@ type deployResult struct {
 
 	// Replicas (twd.jsonc "replicas" > 1): every copy and its host.
 	Replicas []mgmt.ReplicaRef `json:"replicas,omitempty"`
+
+	// Warnings: wrangler config twd ignores, one line per key.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func cmdDeploy(args []string) error {
@@ -329,6 +332,7 @@ func cmdDeploy(args []string) error {
 	tenantF := tenantFlag(f)
 	vars := varFlags{}
 	f.Var(vars, "var", "override a wrangler var (KEY=VALUE, repeatable)")
+	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -348,12 +352,15 @@ func cmdDeploy(args []string) error {
 	if err != nil {
 		return err
 	}
-	a, err := loadApp(dir, *name)
+	a, err := loadAppWith(dir, *name, *ao)
 	if err != nil {
 		return err
 	}
+	if !*f.json {
+		a.printWarnings(os.Stdout)
+	}
 	t0 := time.Now()
-	res := deployResult{Workload: a.Name, Tenant: tn.Tailnet, TenantID: tn.TenantID, Timings: map[string]float64{}}
+	res := deployResult{Workload: a.Name, Tenant: tn.Tailnet, TenantID: tn.TenantID, Timings: map[string]float64{}, Warnings: a.Warnings}
 	ev := newEvents(*f.json, os.Stderr) // agentjson.go: NDJSON progress on stderr
 	ev.emit("start", map[string]any{"workload": a.Name, "tenant": tn.Tailnet, "dir": a.Dir})
 	ctx, cancel := context.WithTimeout(context.Background(), *wait+time.Minute)
@@ -403,7 +410,7 @@ func cmdDeploy(args []string) error {
 		if a.Runtime == bundle.RuntimeNode {
 			main = "dist/server.mjs (runtime node)"
 		}
-		fmt.Printf("✓ build      %s %.1f KB (esbuild) · bundle %.1f KB\n", main, float64(jsBytes)/1024, float64(len(tb))/1024)
+		fmt.Printf("✓ build      %s %.1f KB (%s) · bundle %.1f KB\n", main, float64(jsBytes)/1024, a.Opts.builder(), float64(len(tb))/1024)
 	}
 	// Containers (ADR-032 D3): build the Dockerfile images here and push them
 	// to twd's registry; mgmt pins every image to a digest at deploy.

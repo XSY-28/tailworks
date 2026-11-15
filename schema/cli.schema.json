@@ -1027,6 +1027,13 @@
             "type": "object"
           }
         },
+        "warnings": {
+          "type": "array",
+          "description": "wrangler config twd ignores, one line per key",
+          "items": {
+            "type": "string"
+          }
+        },
         "bundleBytes": {
           "type": "integer"
         },
