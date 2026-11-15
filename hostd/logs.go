@@ -96,6 +96,10 @@ func (h *Host) logsHandler(w http.ResponseWriter, r *http.Request) {
 		n = v
 	}
 	follow := q.Get("follow") == "1" || q.Get("follow") == "true"
+	if q.Get("source") == "requests" {
+		h.requestLogsHandler(w, r, tenantID, workload, n, follow) // logs_requests.go
+		return
+	}
 	resolve := func() (string, error) { return h.WorkloadLogFile(tenantID, workload) }
 	path, err := resolve()
 	if err != nil {
@@ -152,7 +156,13 @@ func serveLog(ctx context.Context, w http.ResponseWriter, path string, n int, fo
 			if err != nil {
 				return nil // undeployed: the stream ends
 			}
+			if np == path && rotated(f, path) {
+				np = "" // the capped log rotated under us: reopen the same path
+			}
 			if np != path {
+				if np == "" {
+					np = path
+				}
 				// A new instance: finish the old file, continue with the new one.
 				if err := copyFrom(ctx, w, rc, f, &pos, buf); err != nil {
 					return nil

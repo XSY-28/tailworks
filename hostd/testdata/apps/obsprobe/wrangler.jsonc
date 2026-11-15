@@ -1,0 +1,11 @@
+{
+  "name": "obsprobe",
+  "main": "src/index.js",
+  "compatibility_date": "2026-04-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "OBJ", "class_name": "Obj" },
+      { "name": "PLAIN", "class_name": "Plain" },
+    ],
+  },
+}

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/internal/mgmtd"
+	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
 	"github.com/rosskukulinski/twd/netd"
@@ -71,6 +72,7 @@ func run() error {
 		delDelay     = flag.Duration("device-delete-delay", 0, "defer kill tier 2 (device delete) this long after the tier-1 push, so the host's tombstone answers new connections with object_killed (keep < hostd -kill-tombstone)")
 		warmKeys     = flag.Int("warm-keys", mgmtd.DefaultWarmKeys, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
 		warmKeyTTL   = flag.Duration("warm-key-ttl", mgmt.DefaultWarmKeyTTL, "-warm-keys: a pooled key's expiry; unused keys are revoked shortly before it")
+		metricsPort  = flag.Int("metrics-port", obs.DefaultMetricsPort, "port on mgmt's own tailnet node serving GET /metrics (Prometheus; who may scrape is a tailnet policy grant); 0 = off")
 		verbose      = flag.Bool("v", false, "debug logging")
 		registryDir  = flag.String("registry-dir", "", "OCI registry blob store (ADR-032 D3; default <state-dir>/registry; \"off\" disables the registry). Replicas serving the registry must share it")
 		regInsecure  = flag.String("registry-insecure", "", "comma-separated upstream registry hosts mirrored over plain HTTP (tests: a local upstream)")
@@ -102,7 +104,8 @@ func run() error {
 		TSNetHostname: *tsHostname, TSNetControlURL: *tsControl, TSNetAuthKeyFile: *tsAuthFile, TSNetService: *tsService, TSNetTLS: *tsTLS,
 		NoLoopback: *noLoopback, Version: *version, Custody: *custodyKind, SetecURL: *setecURL,
 		ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL,
-		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log}
+		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log,
+		MetricsPort: *metricsPort}
 	// Like the flags: "" means no tags at all (Options nil means the default).
 	o.TSNetTags = []string{}
 	if *tsTags != "" {

@@ -71,6 +71,12 @@ func TestRemoteLogs(t *testing.T) {
 		mu.Lock()
 		queries = append(queries, r.URL.RawQuery)
 		mu.Unlock()
+		if q.Get("source") == "requests" {
+			// Structured records (ADR-observability), filtered by hostd.
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			fmt.Fprintf(w, `{"time":"2026-11-15T10:00:00.123Z","kind":"request","workload":%q,"method":"GET","path":"/a","status":500,"durationMs":12.5,"outcome":"exception","class":"Counter","name":"alice","caller":{"user":"ross@example.com"},"traceId":"4bf92f3577b34da6a3ce929d0e0e4736","logs":[{"level":"error","message":"boom"}]}`+"\n", q.Get("workload"))
+			return
+		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "%s/%s line 1\n%s/%s line 2\n", q.Get("tenant"), q.Get("workload"), q.Get("tenant"), q.Get("workload"))
 		if q.Get("follow") == "1" {
@@ -112,15 +118,32 @@ func TestRemoteLogs(t *testing.T) {
 		return <-done, err
 	}
 
-	out, err := run("web", "-n", "7")
+	out, err := run("web", "--console", "-n", "7")
 	if err != nil || out != "tn_a/web line 1\ntn_a/web line 2\n" {
 		t.Fatalf("remote logs: %q %v", out, err)
 	}
 	mu.Lock()
-	if len(queries) != 1 || !strings.Contains(queries[0], "n=7") || strings.Contains(queries[0], "follow") {
+	if len(queries) != 1 || !strings.Contains(queries[0], "n=7") || strings.Contains(queries[0], "follow") || strings.Contains(queries[0], "source") {
 		t.Fatalf("host query %v", queries)
 	}
 	mu.Unlock()
+	// The default: request records, rendered; the filters reach the host.
+	out, err = run("web", "--errors", "--status", "5xx", "--object", "Counter/alice", "-n", "3")
+	want := "2026-11-15T10:00:00.123Z GET /a 500 12ms exception  Counter/alice  caller=ross@example.com  trace=4bf92f3577b34da6a3ce929d0e0e4736\n    error boom\n"
+	if err != nil || out != want {
+		t.Fatalf("records: %q %v", out, err)
+	}
+	mu.Lock()
+	if q := queries[len(queries)-1]; !strings.Contains(q, "source=requests") || !strings.Contains(q, "errors=1") || !strings.Contains(q, "status=5xx") ||
+		!strings.Contains(q, "object=Counter%2Falice") || !strings.Contains(q, "n=3") {
+		t.Fatalf("host query %s", q)
+	}
+	queries = nil
+	mu.Unlock()
+	out, err = run("web", "--json")
+	if err != nil || !strings.HasPrefix(out, `{"time":"2026-11-15T10:00:00.123Z","kind":"request"`) || strings.Count(out, "\n") != 1 {
+		t.Fatalf("--json: %q %v", out, err)
+	}
 
 	// Refusals, each with its code.
 	for _, tc := range []struct {
@@ -131,6 +154,8 @@ func TestRemoteLogs(t *testing.T) {
 		{[]string{"web", "--component", "hostd"}, "remote_unsupported"},
 		{nil, "remote_unsupported"},
 		{[]string{"web", "-n", "10001"}, "bad_request"},
+		{[]string{"web", "--console", "--errors"}, "bad_request"},
+		{[]string{"web", "--status", "6xx"}, "bad_request"},
 		{[]string{"nope"}, "unknown_workload"},
 		{[]string{"web", "--tenant", "b.ts.net"}, "unknown_workload"}, // another tenant's path
 		{[]string{"web", "--host", "h9"}, "unknown_workload"},
@@ -161,7 +186,7 @@ func TestRemoteLogs(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}()
-	out, err = run("web", "-f", "-n", "2")
+	out, err = run("web", "--console", "-f", "-n", "2")
 	if err != nil || out != "tn_a/web line 1\ntn_a/web line 2\nfollowed n=2\n" {
 		t.Fatalf("remote follow: %q %v", out, err)
 	}
