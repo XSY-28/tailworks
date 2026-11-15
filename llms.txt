@@ -9,7 +9,10 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 - [README](https://github.com/rosskukulinski/twd/blob/master/README.md): what twd is, the quick start, and the compatibility table
 - [Using twd with a coding agent](https://github.com/rosskukulinski/twd/blob/master/docs/agents.md): skills, `twd agent setup`, safety rules
 - [Agent skills](https://github.com/rosskukulinski/twd/blob/master/agent/skills/twd/SKILL.md): the core skill; the others are next to it in agent/skills/
+- [Concepts](https://github.com/rosskukulinski/twd/blob/master/docs/concepts.md): the words twd uses (tenant, workload, object, tiers, facet mode, pool nodes, warm keys)
 - [Installing twd](https://github.com/rosskukulinski/twd/blob/master/docs/INSTALL.md): macOS and Linux, OAuth client, `twd link`, hosts, troubleshooting
+- [My first deploy doesn't answer](https://github.com/rosskukulinski/twd/blob/master/docs/troubleshooting.md): the caller grant, `identity_pending`, tagOwners after a rename, `peer_not_visible`, a `failed` deployment
+- [Where the install is tested](https://github.com/rosskukulinski/twd/blob/master/docs/install-testing.md): the Linux support matrix and measured timings
 - [Upgrading twd](https://github.com/rosskukulinski/twd/blob/master/docs/upgrading.md): what may run together, `twd upgrade`, fleet upgrade runs, cordon and drain
 - [Releasing twd](https://github.com/rosskukulinski/twd/blob/master/docs/RELEASING.md): versions, release-note fragments, the release gates
 - [Running twd on Headscale](https://github.com/rosskukulinski/twd/blob/master/docs/headscale.md): the Headscale profile, `twd up --control=headscale`, what's different from Tailscale

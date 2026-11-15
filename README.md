@@ -3,8 +3,10 @@
 **twd is a self-hosted, tailnet-native runtime for Cloudflare-style Workers and
 Durable Objects.** You run it on your own machines (macOS or Linux). It runs
 your Workers code on [workerd](https://github.com/cloudflare/workerd). Every
-workload, and **every Durable Object instance**, becomes its own node on your
-Tailscale tailnet, with its own MagicDNS name, tags and grants:
+[workload](docs/concepts.md#workload) (Cloudflare calls it a Worker), and
+**every Durable Object instance**, becomes its own node on your Tailscale
+tailnet, with its own MagicDNS name, tags and grants (the words are
+explained in [docs/concepts.md](docs/concepts.md)):
 - callers are identified by WireGuard identity (`getCaller`), not tokens;
 - outbound `fetch()` leaves from the object's own node, so your tailnet
   policy governs what each object can reach;
@@ -109,7 +111,24 @@ refuse a key they don't know. When it's done, it prints the workload's address,
 e.g. `http://twd-support-<id>.<tailnet>.ts.net/` (`<id>` is a short hash;
 copy the URL from the `✓ deployed` line).
 
-**5. Call it** from any device on your tailnet. Each name is a separate
+**5. Let people call it.** Nothing on your tailnet can reach a new workload
+until a grant allows it (unless your policy still allows everything). Add
+one for the workload's tag; workload nodes listen on port 80. When
+`twd deploy` prints the tagOwners for new tags, it prints this line too:
+
+```jsonc
+"grants": [
+  // everyone in the tailnet may call the support app
+  {"src": ["autogroup:member"], "dst": ["tag:twd-wl-support"], "ip": ["tcp:80"]},
+]
+```
+
+`autogroup:member` is every user of the tailnet. Name a user or group to
+narrow it, or a tag to let a tagged device (a server, another workload)
+call it. Without the grant, the `curl` below hangs or can't resolve the
+name.
+
+**6. Call it** from any device on your tailnet. Each name is a separate
 Durable Object instance. The JSON reply shows its verified `caller` (your
 tailnet identity) and its persisted `state.visits`:
 
@@ -120,6 +139,9 @@ twd ls                                         # deployments and objects (each w
 twd audit <object-id>                          # who created, called, spawned or killed it
 twd kill <object-id> --cascade                 # cut it (and its sub-agents) off the tailnet
 ```
+
+No answer, `identity_pending`, or a deployment `failed` in `twd ls`? See
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Using twd with a coding agent
 
@@ -212,8 +234,13 @@ prove every ✅ and ⚠️.
 
 ## More
 
+- **The words twd uses** (tenant, workload, tier, facet mode, pool node,
+  …): [docs/concepts.md](docs/concepts.md).
+- **A first deploy that doesn't answer:**
+  [docs/troubleshooting.md](docs/troubleshooting.md).
 - **Install details, other modes and troubleshooting:**
-  [docs/INSTALL.md](docs/INSTALL.md).
+  [docs/INSTALL.md](docs/INSTALL.md); where each platform is tested, and
+  the measured timings: [docs/install-testing.md](docs/install-testing.md).
   - [Upgrade](docs/INSTALL.md#upgrade),
     [back up and restore](docs/INSTALL.md#back-up-and-restore) and
     [uninstall](docs/INSTALL.md#uninstall).
