@@ -57,9 +57,12 @@ Last update: 2026-11-15 16:30 PT. Release signing (#71): mechanism, verification
   one, and installs a pre-v0.3.0 release on its checksum.
   Mutation check: with `TWD_ALLOW_UNSIGNED=1` exported the test fails
   (`FAIL: install.sh installed a release signed by an unpinned key`).
-- `make lint`: ok. `make test`: see the PR.
-- `make e2e-upgrade`: doesn't use self-upgrade or install.sh, so this branch
-  doesn't affect it. See the PR for the run.
+- `make lint`: ok. `make test`: all packages ok except
+  `TestGeneratedWorkflows/AppCannotApprove` (hostd/gen). That's a known
+  failure, already quarantined in ci.yml (#75), and this branch doesn't
+  touch hostd/gen.
+- `make e2e-upgrade`: `--- PASS: TestUpgradePreviousToCandidate (32.07s)`.
+  It doesn't use self-upgrade or install.sh.
 
 ## Open (needs the maintainer)
 
