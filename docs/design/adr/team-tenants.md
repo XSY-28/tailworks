@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-15
 **Status:** Proposed (results in `status/explain-tailnet-multi-tenancy-team-workloads.md`).
-Not implemented. The implementation plan is at the end.
+Not implemented; tracked in issue #80. The implementation plan is at the end.
 
 **Context.**
 
