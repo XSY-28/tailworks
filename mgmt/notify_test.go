@@ -127,8 +127,8 @@ func TestApprovalRequestedNotification(t *testing.T) {
 		return b
 	}
 	e.m.notifyHostRecord(obj, "approval_requested", rec("refunds", "inst 1"))
-	e.m.notifyHostRecord(obj, "approval_decision", rec("refunds", "x"))   // not an event
-	e.m.notifyHostRecord(nil, "approval_requested", rec("refunds", "y"))  // unknown object
+	e.m.notifyHostRecord(obj, "approval_decision", rec("refunds", "x"))  // not an event
+	e.m.notifyHostRecord(nil, "approval_requested", rec("refunds", "y")) // unknown object
 	e.m.notifyHostRecord(obj, "approval_requested", rec("payroll", "z")) // another workload's record
 	waitFor(t, "2 events", func() bool { return sink.count() == 2 })
 	time.Sleep(50 * time.Millisecond)
@@ -185,4 +185,3 @@ func TestNotifyDialPolicy(t *testing.T) {
 		t.Errorf("link without base: %s", l)
 	}
 }
-
