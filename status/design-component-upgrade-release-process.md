@@ -1,6 +1,46 @@
-Last update: 2026-11-15 PT. Resolved the three open questions: mgmt runs fleet upgrades, mgmt keeps a release catalog, gates cover both Headscale minors.
+Last update: 2026-11-15 PT. Built ADR-upgrades-and-releases: versions and skew, numbered migrations, feature-gated placement, cordon/drain, twd upgrade, release catalog, upgrade runs, release gates. make lint test and make e2e-upgrade pass.
 
-Earlier 2026-11-15: drafted ADR-upgrades-and-releases (Proposed). Design only, no code yet.
+## Built (2026-11-15)
+
+Merged origin/master twice (observability, agent DX + MCP, R2, KV, D1, queues, locks) and retrofitted them. The ADR's "Phases and what is built" section lists what is and isn't built.
+
+**Test results:**
+
+- `make lint`: passes. That covers api-check (the spec's audit and role conventions), compat-check, gofmt, vet, `changes-check` and `check-secrets`.
+- `make test`: passes. That covers the Go and JS suites.
+- `make e2e-upgrade`: passes, in 25 s. It builds v0.1.0 from its tag in a temporary worktree and runs real twd-mgmt and twd-hostd processes on testcontrol.
+  - DO storage survives: the counter goes 1→6 across the mgmt upgrade, the host upgrade, and a downgrade of mgmt and back.
+  - The workload's node ID is unchanged after the host upgrade.
+  - The store's migrations are applied, and v0.1.0's twd-mgmt still opens the migrated store.
+  - A host stamped 9.0.0 is refused with `version_skew`.
+  - Also run with `TWD_UPGRADE_TO_VERSION=0.2.0` (0.1.0 → 0.2.0) and with `TWD_UPGRADE_FROM=self`; both pass.
+- `make install-test` (install.sh `.prev` and `--rollback`): passes.
+- `make changes-check`: passes.
+- New unit and API tests, all spec-validated:
+  - `mgmt`: TestMigrationFiles, TestSchemaStatusAfterOpen, TestSchemaAheadAndDowngradeGuard, TestContractMigrationsWaitForOlderReplicas, TestRestoreFence, TestHostVersionSkew, TestFeatureGatedPlacementAndCordon (feature refusal, cordon, dry and real drain), TestUpgradeRun (plan, canary first, cordon during the step, pause/resume, operator-installed hosts, uncordon, done), TestReleaseArtifacts.
+  - `internal/version`, `internal/features`, `internal/catalog`.
+  - `hostd`: self-upgrade install and the tar escape checks; the helper and vz protocol ranges; guest hello; snapshot identity.
+  - Format fixtures in Go and JS.
+
+**Not built:** see the ADR. In short:
+
+- The Headscale gate: twd has no Headscale profile yet.
+- The root vmhelper updater (open question).
+- A microVM upgrade gate in CI: it needs a KVM runner.
+- Artifact attestations.
+- `--release-source github`.
+- A stale-skills check in doctor.
+- A format version on queue `v8` bodies.
+- Workload adoption across a hostd restart.
+
+**Findings:**
+
+- The D1 journal replay used to skip entries from a newer version, which loses writes silently. The R2 replay used to ignore unknown ops. Both now refuse.
+- CLI test fakes that register hosts must report features (`features.Host()`), otherwise deploys with KV, D1 or R2 bindings fail with `feature_unavailable`. That is the intended behaviour.
+
+Earlier 2026-11-15: resolved the three open questions (mgmt runs fleet upgrades, mgmt keeps a release catalog, gates cover both Headscale minors).
+
+Earlier 2026-11-15: drafted ADR-upgrades-and-releases (Proposed). Design only at that point.
 
 # Component upgrades and the release process
 
