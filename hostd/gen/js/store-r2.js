@@ -67,6 +67,9 @@ const ERR = {
   badUpload: () => new R2Err(500, 10048, "There was a problem with the multipart upload."),
 };
 
+// R2_ENTRY_V is the index journal entry version this twd writes.
+const R2_ENTRY_V = 1;
+
 function errResponse(e, meta) {
   const headers = { "cf-r2-error": JSON.stringify({ message: e.message, version: 1, v4code: e.v4code }) };
   if (meta) {
@@ -286,7 +289,11 @@ registerStoreKind("r2", {
       upload TEXT NOT NULL, n INTEGER NOT NULL, blob TEXT NOT NULL, size INTEGER NOT NULL,
       etag TEXT NOT NULL, md5 TEXT NOT NULL, PRIMARY KEY (upload, n))`);
   },
-  // Journal entries (JSON), with their compaction keys:
+  // Journal entries (JSON), with their compaction keys. Every entry
+  // carries v (ADR-upgrades-and-releases §4): R2_ENTRY_V is what this twd
+  // writes; an entry without v was written before versioning and is v1.
+  // A newer v (or an unknown op) was written by a newer twd: apply throws,
+  // so the store refuses to sync instead of silently dropping writes.
   //   {o:"put", k, row, up?}   ckey "o:"+k  (up: the multipart upload it completes)
   //   {o:"del", k}             ckey "o:"+k
   //   {o:"mpu", id, k, http, custom, created}  ckey "u:"+id
@@ -294,6 +301,8 @@ registerStoreKind("r2", {
   //   {o:"mpx", id}            ckey "u:"+id  (upload completed or aborted)
   apply(s, data) {
     const e = JSON.parse(utf8(data));
+    const v = e.v ?? 1;
+    if (v > R2_ENTRY_V) throw new Error(`twd r2: index entry v${v} was written by a newer twd (this one reads up to v${R2_ENTRY_V}); upgrade twd-hostd`);
     switch (e.o) {
       case "put": {
         const r = e.row;
@@ -320,6 +329,8 @@ registerStoreKind("r2", {
         s.sql.exec("DELETE FROM r2_uploads WHERE id = ?", e.id);
         s.sql.exec("DELETE FROM r2_parts WHERE upload = ?", e.id);
         break;
+      default:
+        throw new Error(`twd r2: unknown index entry op ${JSON.stringify(e.o)} (v${v}): written by a newer twd? upgrade twd-hostd`);
     }
   },
   // reset: the bucket's store was deleted (or deleted and created again).
@@ -350,7 +361,7 @@ registerStoreKind("r2", {
           return [];
         }
         res = { garbage: blobIDs(old) };
-        return [{ ckey: "o:" + key, data: JSON.stringify({ o: "put", k: key, row }) }];
+        return [{ ckey: "o:" + key, data: JSON.stringify({ v: R2_ENTRY_V, o: "put", k: key, row }) }];
       });
       return res;
     },
@@ -368,7 +379,7 @@ registerStoreKind("r2", {
             const old = getRow(s, k);
             if (!old) continue;
             g.push(...blobIDs(old));
-            es.push({ ckey: "o:" + k, data: JSON.stringify({ o: "del", k }) });
+            es.push({ ckey: "o:" + k, data: JSON.stringify({ v: R2_ENTRY_V, o: "del", k }) });
           }
           return es;
         });
@@ -432,7 +443,7 @@ registerStoreKind("r2", {
 
     async mpuCreate(s, key, http, custom) {
       const id = randomHex(24);
-      await s.commit([{ ckey: "u:" + id, data: JSON.stringify({ o: "mpu", id, k: key, http, custom, created: Date.now() }) }]);
+      await s.commit([{ ckey: "u:" + id, data: JSON.stringify({ v: R2_ENTRY_V, o: "mpu", id, k: key, http, custom, created: Date.now() }) }]);
       return id;
     },
 
@@ -450,7 +461,7 @@ registerStoreKind("r2", {
         }
         const old = partsOf(s, id).get(part.n);
         res = { garbage: old ? [old.blob] : [] };
-        return [{ ckey: "p:" + id + ":" + part.n, data: JSON.stringify({ o: "part", id, ...part }) }];
+        return [{ ckey: "p:" + id + ":" + part.n, data: JSON.stringify({ v: R2_ENTRY_V, o: "part", id, ...part }) }];
       });
       return res;
     },
@@ -514,8 +525,8 @@ registerStoreKind("r2", {
           const unused = [...again.rows.values()].filter((r) => !used.has(r.blob)).map((r) => r.blob);
           res = { row, garbage: [...blobIDs(getRow(s, key)), ...unused] };
           return [
-            { ckey: "o:" + key, data: JSON.stringify({ o: "put", k: key, row, up: id }) },
-            { ckey: "u:" + id, data: JSON.stringify({ o: "mpx", id }) },
+            { ckey: "o:" + key, data: JSON.stringify({ v: R2_ENTRY_V, o: "put", k: key, row, up: id }) },
+            { ckey: "u:" + id, data: JSON.stringify({ v: R2_ENTRY_V, o: "mpx", id }) },
           ];
         });
         if (!res.retry) return res;
@@ -529,7 +540,7 @@ registerStoreKind("r2", {
         garbage = [];
         if (!getUpload(s, id, key)) return [];
         garbage = [...partsOf(s, id).values()].map((r) => r.blob);
-        return [{ ckey: "u:" + id, data: JSON.stringify({ o: "mpx", id }) }];
+        return [{ ckey: "u:" + id, data: JSON.stringify({ v: R2_ENTRY_V, o: "mpx", id }) }];
       });
       return garbage;
     },
