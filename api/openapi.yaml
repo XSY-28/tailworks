@@ -1731,6 +1731,7 @@ paths:
         The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
         skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
       x-twd-role: admin
+      x-twd-audit: true
       responses:
         "200":
           description: Cordoned.
@@ -1746,6 +1747,7 @@ paths:
       summary: Uncordon a host
       description: Placement may choose the host again. Idempotent; audited `host_uncordon`.
       x-twd-role: admin
+      x-twd-audit: true
       responses:
         "200":
           description: Uncordoned.
@@ -1777,6 +1779,7 @@ paths:
         Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
         `DELETE /v1/hosts/{id}` removes it.
       x-twd-role: admin
+      x-twd-audit: true
       requestBody:
         content:
           application/json:
@@ -3173,6 +3176,7 @@ paths:
         then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
         `release_import`.
       x-twd-role: admin
+      x-twd-audit: true
       requestBody:
         required: true
         content:
@@ -3208,6 +3212,7 @@ paths:
         Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
         replicas that don't share that directory each need the upload. Audited `release_artifact`.
       x-twd-role: admin
+      x-twd-audit: true
       requestBody:
         required: true
         content:
@@ -3284,6 +3289,7 @@ paths:
         and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
         pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
       x-twd-role: admin
+      x-twd-audit: true
       requestBody:
         required: true
         content:
@@ -3341,6 +3347,7 @@ paths:
         fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
         host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
       x-twd-role: admin
+      x-twd-audit: true
       requestBody:
         required: true
         content:

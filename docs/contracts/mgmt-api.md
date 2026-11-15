@@ -123,9 +123,9 @@ hostd's API, not this document's.
 | `PUT` | `/v1/hosts/{id}` | host | yes | `RegisterHost` | Register or re-register a host (idempotent) |
 | `DELETE` | `/v1/hosts/{id}` | admin | yes | `DeleteHost` | Drain and remove a host |
 | `GET` | `/v1/hosts/{id}/assignments` | host\|admin | no | `ListHostAssignments` | List the deployments assigned to a host |
-| `PUT` | `/v1/hosts/{id}/cordon` | admin | no | `CordonHost` | Cordon a host (no new placements) |
-| `DELETE` | `/v1/hosts/{id}/cordon` | admin | no | `UncordonHost` | Uncordon a host |
-| `POST` | `/v1/hosts/{id}/drain` | admin | no | `DrainHost` | Cordon a host and move its workloads to other hosts |
+| `PUT` | `/v1/hosts/{id}/cordon` | admin | yes | `CordonHost` | Cordon a host (no new placements) |
+| `DELETE` | `/v1/hosts/{id}/cordon` | admin | yes | `UncordonHost` | Uncordon a host |
+| `POST` | `/v1/hosts/{id}/drain` | admin | yes | `DrainHost` | Cordon a host and move its workloads to other hosts |
 | `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
 | `GET` | `/v1/hosts/{id}/sandbox-deny` | host\|admin | no | `GetHostSandboxDeny` | Every tenant's credential file paths, for the host's sandbox deny list |
 | `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
@@ -141,9 +141,9 @@ hostd's API, not this document's.
 | `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | Read the object's node certificate |
 | `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
-| `POST` | `/v1/releases` | admin | no | `ImportReleases` | Import catalog entries (from a release's share/twd/catalog.json) |
+| `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/twd/catalog.json) |
 | `GET` | `/v1/releases/{version}/artifacts/{name}` | admin\|host | no | `GetReleaseArtifact` | Download a release tarball (hosts upgrading themselves) |
-| `PUT` | `/v1/releases/{version}/artifacts/{name}` | admin | no | `PutReleaseArtifact` | Upload a release tarball (or its SHA256SUMS) |
+| `PUT` | `/v1/releases/{version}/artifacts/{name}` | admin | yes | `PutReleaseArtifact` | Upload a release tarball (or its SHA256SUMS) |
 | `GET` | `/v1/status` | admin | no | `GetStatus` | mgmt status |
 | `GET` | `/v1/tenants` | admin\|host | no | `ListTenants` | List tenants |
 | `POST` | `/v1/tenants` | admin | yes | `CreateTenant` | Create a tenant |
@@ -185,9 +185,9 @@ hostd's API, not this document's.
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
 | `GET` | `/v1/upgrades` | admin | no | `ListUpgrades` | Upgrade runs, newest first |
-| `POST` | `/v1/upgrades` | admin | no | `CreateUpgrade` | Plan an upgrade, or start an upgrade run |
+| `POST` | `/v1/upgrades` | admin | yes | `CreateUpgrade` | Plan an upgrade, or start an upgrade run |
 | `GET` | `/v1/upgrades/{id}` | admin | no | `GetUpgrade` | One upgrade run |
-| `POST` | `/v1/upgrades/{id}/actions` | admin | no | `ActOnUpgrade` | Pause, resume or abort an upgrade run |
+| `POST` | `/v1/upgrades/{id}/actions` | admin | yes | `ActOnUpgrade` | Pause, resume or abort an upgrade run |
 | `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/.well-known/openid-configuration` | public | no | `GetOIDCConfiguration` | OIDC discovery (base issuer) |
@@ -612,7 +612,7 @@ operator credential when mgmt has one; otherwise it is reported in
 
 ### `PUT /v1/hosts/{id}/cordon` — Cordon a host (no new placements)
 
-`CordonHost` · role **admin** · audited: no
+`CordonHost` · role **admin** · audited: yes
 
 The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
 skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
@@ -630,7 +630,7 @@ skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
 
 ### `DELETE /v1/hosts/{id}/cordon` — Uncordon a host
 
-`UncordonHost` · role **admin** · audited: no
+`UncordonHost` · role **admin** · audited: yes
 
 Placement may choose the host again. Idempotent; audited `host_uncordon`.
 
@@ -647,7 +647,7 @@ Placement may choose the host again. Idempotent; audited `host_uncordon`.
 
 ### `POST /v1/hosts/{id}/drain` — Cordon a host and move its workloads to other hosts
 
-`DrainHost` · role **admin** · audited: no
+`DrainHost` · role **admin** · audited: yes
 
 Cordons the host, then re-places each workload assigned to it on another eligible host
 (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
@@ -2047,7 +2047,7 @@ notes, contract migrations, protocols and workerd pin. `current` is this replica
 
 ### `POST /v1/releases` — Import catalog entries (from a release's share/twd/catalog.json)
 
-`ImportReleases` · role **admin** · audited: no
+`ImportReleases` · role **admin** · audited: yes
 
 Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
 `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
@@ -2081,7 +2081,7 @@ then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audite
 
 ### `PUT /v1/releases/{version}/artifacts/{name}` — Upload a release tarball (or its SHA256SUMS)
 
-`PutReleaseArtifact` · role **admin** · audited: no
+`PutReleaseArtifact` · role **admin** · audited: yes
 
 Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
 Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
@@ -2113,7 +2113,7 @@ replicas that don't share that directory each need the upload. Audited `release_
 
 ### `POST /v1/upgrades` — Plan an upgrade, or start an upgrade run
 
-`CreateUpgrade` · role **admin** · audited: no
+`CreateUpgrade` · role **admin** · audited: yes
 
 Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
 features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
@@ -2152,7 +2152,7 @@ pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_star
 
 ### `POST /v1/upgrades/{id}/actions` — Pause, resume or abort an upgrade run
 
-`ActOnUpgrade` · role **admin** · audited: no
+`ActOnUpgrade` · role **admin** · audited: yes
 
 `pause` stops before the next step; `resume` continues a paused run (after the operator
 fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
