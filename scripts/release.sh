@@ -176,7 +176,22 @@ EOF
 			codesign --force --sign - --entitlements cmd/twd-vz/twd-vz.entitlements "$st/bin/twd-vz"
 			codesign -d --entitlements - "$st/bin/twd-vz" 2>/dev/null | grep -q com.apple.security.virtualization ||
 				{ echo "release: twd-vz lacks the virtualization entitlement"; exit 1; }
-			if [ -f "$st/share/twd/vm/vmlinux" ]; then "$st/bin/twd-vz" -check "$st/share/twd/vm/vmlinux"; fi
+			# The probe configures a VM, so it needs a Mac that can run one.
+			# GitHub's macOS runners are VMs without nested virtualization:
+			# there it reports "not available on this hardware" (VZErrorDomain
+			# Code=2), which says nothing about the tarball, so warn and go on.
+			# Any other failure (bad kernel, bad entitlement) still fails.
+			if [ -f "$st/share/twd/vm/vmlinux" ]; then
+				if ! out=$("$st/bin/twd-vz" -check "$st/share/twd/vm/vmlinux" 2>&1); then
+					case "$out" in
+					*"not available on this hardware"*)
+						echo "release: WARNING: twd-vz -check skipped: this machine can't run VMs ($(printf %s "$out" | head -n1))" ;;
+					*) printf '%s\n' "$out"; exit 1 ;;
+					esac
+				else
+					printf '%s\n' "$out"
+				fi
+			fi
 		fi
 		# workerd must run here (the native target).
 		if [ "$(uname -m)" = "$arch" ]; then

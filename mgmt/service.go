@@ -102,6 +102,11 @@ type Config struct {
 	// themselves through this replica; upgrades.go).
 	Version    string
 	ReleaseDir string
+
+	// BundleRetention is how many of each workload's newest bundles mgmt
+	// keeps for rollback (deployhistory.go): 0 = DefaultBundleRetention,
+	// < 0 = every bundle.
+	BundleRetention int
 }
 
 // Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
@@ -819,6 +824,10 @@ type DeployRequest struct {
 	// replica is set by deployGroup (workload_replicas.go): which replica
 	// of which workload this deploy is. nil only on the outer call.
 	replica *replicaCtx
+
+	// rollbackOf is set by Rollback (rollback.go): the deployment whose
+	// stored bundle this deploy redeploys (audited as kind "rollback").
+	rollbackOf string
 }
 
 // DeployResponse is the deploy reply.
@@ -1077,11 +1086,12 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			detail["forced"] = true
 		}
 	}
-	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, Kind: "deploy", ActingFor: r.By}, detail)
+	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, Kind: r.auditKind(), ActingFor: r.By}, r.auditDetail(detail))
 	if err := m.store.CreateDeployment(actx, d); err != nil { // the deploy record commits with it (H22)
 		return resp, err
 	}
 	m.recordIntent(ctx, ai, nil)
+	m.afterDeploy(ctx, d, r.rollbackOf) // deployhistory.go: bundle hash, retention
 	if pub != nil {
 		m.purgeDeadPublicNode(ctx, t.ID, r.Workload)
 	}
@@ -1124,6 +1134,7 @@ func (m *Mgmt) setDepStatus(hostID, id string, st DeploymentStatus) {
 	if err := m.store.SetDeploymentStatus(ctx, id, hostID, st.Status, st.Error); err != nil {
 		m.log.Warn("deployment status", "deployment", id, "err", err)
 	}
+	m.noteDeploymentStatus(ctx, hostID, id, st) // deployhistory.go
 }
 
 // DeploymentView is GET /v0/deployments/{id}.
@@ -2970,6 +2981,7 @@ var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": tru
 	"create": true, "mint": true, "ready": true, "credential": true, "principal": true, "device_delete": true,
 	"tenant": true, "deploy": true, "obo_root": true, "container_start": true, "container_stop": true,
 	"image_push": true, "image_pin": true, "image_public": true,
+	"rollback": true, // ADR-deploy-rollback: a deploy, from mgmt only
 	// ADR-029: public ingress records come from netd/hostd only.
 	"public_request": true, "public_rejected": true, "public_object_created": true, "expose_on": true, "expose_off": true,
 	// Workflow approvals (hostd/approvals.go): decisions are hostd's.

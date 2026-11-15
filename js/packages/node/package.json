@@ -2,6 +2,11 @@
   "name": "@twd/node",
   "version": "0.2.0",
   "description": "twd Node process tier SDK: verified caller (x-twd-caller), attributed egress (proxy fetch / undici dispatcher)",
+  "keywords": [
+    "twd",
+    "tailscale",
+    "node"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,7 +29,18 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "test": "node --test test/*.test.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rosskukulinski/twd.git",
+    "directory": "js/packages/node"
+  },
+  "homepage": "https://github.com/rosskukulinski/twd#readme",
+  "bugs": "https://github.com/rosskukulinski/twd/issues",
   "license": "BSD-3-Clause"
 }

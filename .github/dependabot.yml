@@ -1,0 +1,12 @@
+# Keeps the SHA-pinned actions in .github/workflows current: Dependabot
+# bumps the SHA and its "# vX.Y.Z" comment together, grouped into one
+# weekly PR. (Go and npm dependency updates aren't enabled here yet.)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

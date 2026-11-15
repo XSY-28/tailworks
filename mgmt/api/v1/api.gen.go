@@ -148,6 +148,7 @@ const (
 	AuditKindReleaseImport       AuditKind = "release_import"
 	AuditKindRemint              AuditKind = "remint"
 	AuditKindRevoke              AuditKind = "revoke"
+	AuditKindRollback            AuditKind = "rollback"
 	AuditKindSecretDelete        AuditKind = "secret_delete"
 	AuditKindSecretPut           AuditKind = "secret_put"
 	AuditKindSecretRelease       AuditKind = "secret_release"
@@ -269,6 +270,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindRemint:
 		return true
 	case AuditKindRevoke:
+		return true
+	case AuditKindRollback:
 		return true
 	case AuditKindSecretDelete:
 		return true
@@ -1512,6 +1515,7 @@ type AuditBatch struct {
 // `upgrade_abort`,
 // `deploy`,
 // `undeploy`,
+// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
 // `create`,
 // `mint`,
 // `remint`,
@@ -1620,6 +1624,7 @@ type AuditRecord struct {
 	// `upgrade_abort`,
 	// `deploy`,
 	// `undeploy`,
+	// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
 	// `create`,
 	// `mint`,
 	// `remint`,
@@ -1950,6 +1955,16 @@ type DeploymentCreate struct {
 	Workload string `json:"workload"`
 }
 
+// DeploymentHistoryPage defines model for DeploymentHistoryPage.
+type DeploymentHistoryPage struct {
+	// BundleRetention How many of each workload's newest bundles mgmt keeps (0 = every bundle).
+	BundleRetention int                `json:"bundleRetention"`
+	Items           []DeploymentRecord `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
 // DeploymentPage defines model for DeploymentPage.
 type DeploymentPage struct {
 	Items []Deployment `json:"items"`
@@ -1969,6 +1984,41 @@ type DeploymentPublic struct {
 
 	// URL Examples: https://support.tail7906d5.ts.net/
 	URL string `json:"url"`
+}
+
+// DeploymentRecord One entry of a workload's deployment history (ADR-deploy-rollback).
+type DeploymentRecord struct {
+	// ActiveAt When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history.
+	ActiveAt *int64 `json:"activeAt,omitempty"`
+
+	// BundleBytes Size of the retained bundle (0 once pruned).
+	BundleBytes *int64 `json:"bundleBytes,omitempty"`
+
+	// BundleRetained mgmt still holds the bundle, so it can be rolled back to.
+	BundleRetained bool `json:"bundleRetained"`
+
+	// BundleSHA256 Hex SHA-256 of the bundle as uploaded (empty: deployed without a bundle).
+	BundleSHA256 string `json:"bundleSHA256"`
+	CreatedAt    int64  `json:"createdAt"`
+
+	// DeployedBy The actor who deployed (see Conventions).
+	DeployedBy *string `json:"deployedBy,omitempty"`
+
+	// DeploymentID Examples: dp_3f9a1c2b7d8e4f50
+	DeploymentID string `json:"deploymentID"`
+	Epoch        int64  `json:"epoch"`
+
+	// Error The host's last error for this deployment.
+	Error *string `json:"error,omitempty"`
+	Host  string  `json:"host"`
+
+	// HostStatus The last status the host reported (or mgmt set) for this deployment, kept after it is superseded: `active` means it was serving when it was replaced.
+	HostStatus *string `json:"hostStatus,omitempty"`
+
+	// RollbackOf Set on a rollback: the deployment whose bundle it redeployed.
+	RollbackOf *string          `json:"rollbackOf,omitempty"`
+	Status     DeploymentStatus `json:"status"`
+	Workload   string           `json:"workload"`
 }
 
 // DeploymentReport defines model for DeploymentReport.
@@ -3360,6 +3410,32 @@ type RequestRecord struct {
 // RequestRecordKind defines model for RequestRecord.Kind.
 type RequestRecordKind string
 
+// Rollback A started rollback.
+type Rollback struct {
+	Deployment Deployment `json:"deployment"`
+
+	// RollbackOf The deployment whose bundle was redeployed.
+	RollbackOf string `json:"rollbackOf"`
+
+	// Target One entry of a workload's deployment history (ADR-deploy-rollback).
+	Target DeploymentRecord `json:"target"`
+}
+
+// RollbackCreate defines model for RollbackCreate.
+type RollbackCreate struct {
+	// DeploymentID The deployment to roll back to. Default the previous good one (see `CreateRollback`).
+	DeploymentID *string `json:"deploymentID,omitempty"`
+
+	// ForceTakeover As `POST /v1/deployments` `forceTakeover`.
+	ForceTakeover *bool `json:"forceTakeover,omitempty"`
+
+	// Host Pin a host, as for a deploy.
+	Host *string `json:"host,omitempty"`
+
+	// Replace Re-place the workload, as `POST /v1/deployments` `replace`.
+	Replace *bool `json:"replace,omitempty"`
+}
+
 // RunningContainer One running container in a heartbeat.
 type RunningContainer struct {
 	Class  string `json:"class"`
@@ -4017,14 +4093,23 @@ type WIFInfo struct {
 
 // WhoAmI defines model for WhoAmI.
 type WhoAmI struct {
-	Actor  string     `json:"actor"`
-	Admin  bool       `json:"admin"`
+	Actor string `json:"actor"`
+	Admin bool   `json:"admin"`
+
+	// Approver The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+	Approver *bool `json:"approver,omitempty"`
+
+	// Caps The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+	Caps   *[]string  `json:"caps,omitempty"`
 	HostID *string    `json:"hostID,omitempty"`
 	Kind   WhoAmIKind `json:"kind"`
 	Login  *string    `json:"login,omitempty"`
-	Mgmt   SelfInfo   `json:"mgmt"`
-	NodeID *string    `json:"nodeID,omitempty"`
-	Tags   *[]string  `json:"tags,omitempty"`
+
+	// McpTools The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
+	McpTools *[]string `json:"mcpTools,omitempty"`
+	Mgmt     SelfInfo  `json:"mgmt"`
+	NodeID   *string   `json:"nodeID,omitempty"`
+	Tags     *[]string `json:"tags,omitempty"`
 }
 
 // WhoAmIKind defines model for WhoAmI.Kind.
@@ -4454,6 +4539,15 @@ type PullQueueMessagesParams struct {
 	Epoch *QueueEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
 }
 
+// ListWorkloadDeploymentsParams defines parameters for ListWorkloadDeployments.
+type ListWorkloadDeploymentsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // GetWorkloadLogsParams defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParams struct {
 	// N Lines from the end of the log (0 with `follow` for new lines only).
@@ -4498,6 +4592,12 @@ type GetWorkloadLogsParamsSource string
 type UpdateWorkloadPublicParams struct {
 	// IfMatch Only apply if the resource's current `ETag` matches; otherwise `412 precondition_failed`.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// CreateRollbackParams defines parameters for CreateRollback.
+type CreateRollbackParams struct {
+	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
 }
 
 // CreateWorkloadSecretGrantParams defines parameters for CreateWorkloadSecretGrant.
@@ -4664,6 +4764,9 @@ type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
 // UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody defines body for UpdateWorkloadPublic for application/merge-patch+json ContentType.
 type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPublicPatch
+
+// CreateRollbackJSONRequestBody defines body for CreateRollback for application/json ContentType.
+type CreateRollbackJSONRequestBody = RollbackCreate
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
@@ -5152,6 +5255,9 @@ type ServerInterface interface {
 	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
 	QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
+	// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/deployments)
+	ListWorkloadDeployments(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadDeploymentsParams)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
@@ -5161,6 +5267,9 @@ type ServerInterface interface {
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id}/workloads/{workload}/public)
 	UpdateWorkloadPublic(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params UpdateWorkloadPublicParams)
+	// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// (POST /v1/tenants/{id}/workloads/{workload}/rollbacks)
+	CreateRollback(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateRollbackParams)
 	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
 	// (POST /v1/tenants/{id}/workloads/{workload}/secret-grants)
 	CreateWorkloadSecretGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateWorkloadSecretGrantParams)
@@ -8020,6 +8129,70 @@ func (siw *ServerInterfaceWrapper) QueryD1(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkloadDeployments operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkloadDeployments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkloadDeploymentsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkloadDeployments(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkloadLogs operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkloadLogs(w http.ResponseWriter, r *http.Request) {
 
@@ -8273,6 +8446,57 @@ func (siw *ServerInterfaceWrapper) UpdateWorkloadPublic(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateWorkloadPublic(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRollback operation middleware
+func (siw *ServerInterfaceWrapper) CreateRollback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRollbackParams
+
+	// ------------- Optional query parameter "dryRun" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "dryRun", r.URL.Query(), &params.DryRun, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "dryRun"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dryRun", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRollback(w, r, id, workload, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9468,6 +9692,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/logs", wrapper.GetWorkloadLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/approvals", wrapper.ListApprovals)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}", wrapper.DecideApproval)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/deployments", wrapper.ListWorkloadDeployments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/rollbacks", wrapper.CreateRollback)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.GetWorkloadPublic)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.UpdateWorkloadPublic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets", wrapper.ListWorkloadSecrets)
@@ -16126,6 +16352,102 @@ func (response QueryD1defaultJSONResponse) VisitQueryD1Response(w http.ResponseW
 	return err
 }
 
+type ListWorkloadDeploymentsRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   ListWorkloadDeploymentsParams
+}
+
+type ListWorkloadDeploymentsResponseObject interface {
+	VisitListWorkloadDeploymentsResponse(w http.ResponseWriter) error
+}
+
+type ListWorkloadDeployments200JSONResponse DeploymentHistoryPage
+
+func (response ListWorkloadDeployments200JSONResponse) VisitListWorkloadDeploymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadDeployments400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWorkloadDeployments400JSONResponse) VisitListWorkloadDeploymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadDeployments403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWorkloadDeployments403JSONResponse) VisitListWorkloadDeploymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadDeployments404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWorkloadDeployments404JSONResponse) VisitListWorkloadDeploymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadDeploymentsdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListWorkloadDeploymentsdefaultJSONResponse) VisitListWorkloadDeploymentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetWorkloadLogsRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -16478,6 +16800,144 @@ type UpdateWorkloadPublicdefaultJSONResponse struct {
 }
 
 func (response UpdateWorkloadPublicdefaultJSONResponse) VisitUpdateWorkloadPublicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollbackRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   CreateRollbackParams
+	Body     *CreateRollbackJSONRequestBody
+}
+
+type CreateRollbackResponseObject interface {
+	VisitCreateRollbackResponse(w http.ResponseWriter) error
+}
+
+type CreateRollback200JSONResponse PreflightResult
+
+func (response CreateRollback200JSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollback202ResponseHeaders struct {
+	Location *string
+}
+
+type CreateRollback202JSONResponse struct {
+	Body    Rollback
+	Headers CreateRollback202ResponseHeaders
+}
+
+func (response CreateRollback202JSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollback400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRollback400JSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollback403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRollback403JSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollback404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRollback404JSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollback409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRollback409JSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRollbackdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response CreateRollbackdefaultJSONResponse) VisitCreateRollbackResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -18788,6 +19248,9 @@ type StrictServerInterface interface {
 	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
 	QueryD1(ctx context.Context, request QueryD1RequestObject) (QueryD1ResponseObject, error)
+	// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/deployments)
+	ListWorkloadDeployments(ctx context.Context, request ListWorkloadDeploymentsRequestObject) (ListWorkloadDeploymentsResponseObject, error)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
@@ -18797,6 +19260,9 @@ type StrictServerInterface interface {
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id}/workloads/{workload}/public)
 	UpdateWorkloadPublic(ctx context.Context, request UpdateWorkloadPublicRequestObject) (UpdateWorkloadPublicResponseObject, error)
+	// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// (POST /v1/tenants/{id}/workloads/{workload}/rollbacks)
+	CreateRollback(ctx context.Context, request CreateRollbackRequestObject) (CreateRollbackResponseObject, error)
 	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
 	// (POST /v1/tenants/{id}/workloads/{workload}/secret-grants)
 	CreateWorkloadSecretGrant(ctx context.Context, request CreateWorkloadSecretGrantRequestObject) (CreateWorkloadSecretGrantResponseObject, error)
@@ -20874,6 +21340,34 @@ func (sh *strictHandler) QueryD1(w http.ResponseWriter, r *http.Request, id Tena
 	}
 }
 
+// ListWorkloadDeployments operation middleware
+func (sh *strictHandler) ListWorkloadDeployments(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadDeploymentsParams) {
+	var request ListWorkloadDeploymentsRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWorkloadDeployments(ctx, request.(ListWorkloadDeploymentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWorkloadDeployments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWorkloadDeploymentsResponseObject); ok {
+		if err := validResponse.VisitListWorkloadDeploymentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetWorkloadLogs operation middleware
 func (sh *strictHandler) GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams) {
 	var request GetWorkloadLogsRequestObject
@@ -20970,6 +21464,44 @@ func (sh *strictHandler) UpdateWorkloadPublic(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateWorkloadPublicResponseObject); ok {
 		if err := validResponse.VisitUpdateWorkloadPublicResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRollback operation middleware
+func (sh *strictHandler) CreateRollback(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateRollbackParams) {
+	var request CreateRollbackRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	var body CreateRollbackJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRollback(ctx, request.(CreateRollbackRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRollback")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRollbackResponseObject); ok {
+		if err := validResponse.VisitCreateRollbackResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

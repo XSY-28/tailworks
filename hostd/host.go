@@ -108,6 +108,13 @@ type Config struct {
 	// asks for, and the host registers the process tier only. Never set it
 	// on a host that serves real tenants (ADR-032 D5b).
 	ForceProcessTier bool
+
+	// WorkerdInspector (twd dev --inspector-port; only with
+	// ForceProcessTier) starts each workerd with its V8 inspector on a free
+	// 127.0.0.1 port (inspector.go). It gives full control of the isolate:
+	// never on a host serving tenants.
+	WorkerdInspector bool
+
 	// Capacity sets the capacity vector's VM dimensions (nil: measured; see
 	// capacity.go). Its nodes are always CapacityNodes; without a microVM
 	// backend every VM dimension is 0.

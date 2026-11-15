@@ -59,7 +59,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `twd up`, mgmt's or the host's own node failed to join. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`twd doctor`), then `twd logs --component mgmt`.
 
 ### build_failed
-500 · cli. **When:** esbuild (workerd apps) or `create-twd build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run.
+500 · cli. **When:** esbuild (workerd apps) or `create-twd build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@twd/…"` means twd's own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall twd; `twd doctor` checks it.
+
+### bundle_pruned
+409 · mgmt, cli. **When:** `twd rollback` to a deployment whose bundle mgmt no longer holds: mgmt keeps the bundles of each workload's newest deployments (twd-mgmt `-bundle-retention`, default 10) and prunes older ones, keeping their record and hash. Nothing is deployed. **Fix:** `twd deployments <workload>` marks pruned bundles with `*`; roll back to a retained one, or check out that version and `twd deploy` it.
 
 ### cancelled
 0 · cli. **When:** you answered no at a `twd up`, `twd agent setup` or `twd agent remove` confirmation prompt. **Fix:** nothing was started or written; re-run with the policy in place, or `--yes` to skip the prompt.
@@ -223,6 +226,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### no_logs
 404 · cli. **When:** `twd logs` found no log file for that component or workload. **Fix:** `twd ls`; logs live on the host that runs `twd up`.
 
+### no_rollback_target
+409 · mgmt, cli. **When:** `twd rollback <workload>` found no earlier deployment that ran (the host reported it `active` and it did not fail) with a bundle different from the current one; or the deployment named is the current one, or was deployed without a bundle. **Fix:** `twd deployments <workload>`, then `twd rollback <workload> <deployment>` to pick one.
+
 ### no_systemd
 1 · cli. **When:** `twd host setup --microvm` needs systemd for the helper service. **Fix:** a systemd distro, or skip the microVM tier.
 
@@ -358,6 +364,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### tenant_has_live_objects
 409 · mgmt, cli. **When:** `twd tenant rm` of a tenant with live objects. **Fix:** `twd tenant rm <tenant> --force` (kills and purges first).
 
+### types_stale
+1 · cli. **When:** `twd types --check` found the app's `worker-configuration.d.ts` (or `--out`) missing, or different from what `twd types` writes for the current wrangler config, twd.jsonc and secret names. **Fix:** run `twd types` and commit the file.
+
 ### unhealthy
 503 · cli. **When:** `twd status` finds twd not healthy: mgmt not answering, or no live host. **Fix:** `twd logs --component mgmt|hostd`.
 
@@ -381,6 +390,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### unsupported
 1 · cli. **When:** `twd host setup` on an OS without the microVM tier (it needs Linux with KVM). **Fix:** nothing to set up; every workload runs in the process tier here.
+
+### update_check_failed
+1 · cli. **When:** `twd version --check` could not find the latest release: GitHub was unreachable, answered with an error (rate limit), or the repository has no published release. **Fix:** retry later, or look at the releases page; `TWD_REPO` names another repository, as for `get.sh`.
 
 ### upgrade_blocked
 409 · mgmt, cli. **When:** `twd upgrade` can't start a fleet upgrade run because its plan has blockers: a release missing from the catalog, a host's tarball not imported, parts of the fleet more than one release line behind, or an intermediate release with contract migrations. **Fix:** `twd upgrade --plan` prints each blocker and its fix ([upgrading.md](upgrading.md)).

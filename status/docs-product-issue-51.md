@@ -1,6 +1,9 @@
 # docs-product-issue-51: docs as a product (issue #51)
 
-Items 1, 2, 4, 5 and 6 of #51. Item 3 (generated CLI reference) is #46's.
+All six items of #51. PR #59 merged this branch into the benchmark branch
+after that branch had already merged to master (#49), so none of it reached
+master; this branch was re-merged with master and re-opened against it.
+#46 closed without a CLI reference, so item 3 is done here too.
 #48 (caller grants, troubleshooting, glossary, splitting INSTALL) is PR #53.
 
 ## Done
@@ -14,6 +17,13 @@ Items 1, 2, 4, 5 and 6 of #51. Item 3 (generated CLI reference) is #46's.
   (no gateway node in dev; a direct internet `fetch()` is refused the same
   way), the others ran end to end (403 for another user's notes, 401 for a
   bad signature, `/__scheduled` then the KV keys).
+- **CLI reference** (`docs/cli.md`): `cliReference` (`cmd/twd/clidoc.go`)
+  writes each command's `--help` output, and the flag set of every
+  subcommand the completion tree knows, grouped as in `twd help`.
+  `TestCLIReferenceUpToDate` fails when it is stale (`make cli-docs`
+  rewrites it), so it can't drift from `--help`; `twd docs search` finds
+  flags through it. `up --host-id`'s hostname default is written as
+  `h-<hostname>`.
 - **Template READMEs**, one per template (what it shows, how to run, what
   to change). `twd init` copies them (`os.CopyFS`); schema and esbundle
   tests are unaffected. The agent, lock and ai-agent commands were run
@@ -50,6 +60,5 @@ Items 1, 2, 4, 5 and 6 of #51. Item 3 (generated CLI reference) is #46's.
 - The refund-approval template's `/refund` reply hard-codes
   `twd approve refunds <id>`, which is wrong after `twd init` renames the
   workload (its README says so).
-- README.md doesn't link CHANGELOG.md yet: README is being edited by PR
-  #53, so the link is in docs/README.md and llms.txt; add a README line
-  after #53 merges.
+- README.md now links CHANGELOG.md, SECURITY.md and docs/cli.md (#53 has
+  merged).

@@ -24,6 +24,9 @@ type appOpts struct {
 	Env         string // wrangler environment (--env): env.<name> in the config
 	Wrangler    bool   // bundle with the wrangler CLI (--wrangler)
 	WranglerOut string // bundle from a prebuilt `wrangler deploy --dry-run --outdir` (--from-wrangler-out)
+
+	// SourceMap: deploy follows upload_source_maps; twd dev sets it (sourcemap.go).
+	SourceMap sourceMapMode
 }
 
 // builder names the bundler for messages and warnings.
@@ -103,15 +106,19 @@ func (a *app) buildEsbuild(out string, np []string) (files map[string][]byte, ty
 	if err := esbuildWranglerOptions(a.Wrangler, &o); err != nil {
 		return nil, nil, 0, fail("bad_request", a.WranglerFile+": "+err.Error())
 	}
+	o.SourceMap, o.SourcesContent = a.wantSourceMap() // sourcemap.go
 	r, err := esbundle.BuildApp(o)
 	if err != nil {
-		return nil, nil, 0, fail("build_failed", "esbuild failed for "+a.Dir, strings.Split(strings.TrimSpace(err.Error()), "\n")...)
+		return nil, nil, 0, withBundleFix(fail("build_failed", "esbuild failed for "+a.Dir, strings.Split(strings.TrimSpace(err.Error()), "\n")...), err.Error()) // sourcehints.go
 	}
 	b, err := os.ReadFile(o.Outfile)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	files = map[string][]byte{"dist/index.js": b}
+	if err := a.addSourceMap(o, files, "dist/index.js"); err != nil {
+		return nil, nil, 0, err
+	}
 	for name, m := range r.Modules {
 		files["dist/"+name] = m.Data
 		if types == nil {

@@ -146,7 +146,7 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 | `minify`, `keep_names`, `jsx_factory`, `jsx_fragment`, `tsconfig` | ✅ mapped to esbuild options | ✅ | mapped, but not measured end to end |
 | `nodejs_compat` | ✅ bare built-ins become `node:*`; workerd provides them | ✅ plus wrangler's unenv polyfills | toml-app's entry: 1.0 KB built-in, 21 KB wrangler. Both pass the same checks (`node:buffer`) |
 | `node_compat` (legacy) | ❌ warned | ❌ wrangler 4 rejects it | use `compatibility_flags = ["nodejs_compat"]` |
-| `upload_source_maps` | ❌ warned | ❌ | twd ships no source maps |
+| `upload_source_maps` | ✅ on unless `false` | ❌ warned | the built-in esbuild ships `dist/index.js.map` (no sources); hosts map exception stacks to `src/…` with it ([dev-debugging.md](dev-debugging.md)) |
 | `assets`, `site` (static assets) | ❌ warned | ❌ | serve files from the Worker, or import them as Text/Data modules |
 
 `create-twd`'s `build.mjs` (the npm bundler) still reads only
@@ -170,7 +170,7 @@ before anything else. Nothing is ignored silently:
 | keys | what twd says |
 |---|---|
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `twd.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
-| `services`, `queues`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on twd; the warning names each `env.X` that will be undefined. A section twd supports as a [platform store](design/adr/platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) is not warned about |
+| `services`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on twd; the warning names each `env.X` that will be undefined. A section twd supports as a [platform store](design/adr/platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) is not warned about |
 | `assets`, `site` | not supported |
 | `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by twd |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
@@ -179,7 +179,38 @@ before anything else. Nothing is ignored silently:
 These keys are used without a warning: `name`, `main`, `compatibility_date`,
 `compatibility_flags`, `vars`, `durable_objects`, `kv_namespaces` ([kv.md](kv.md)), `r2_buckets` ([r2.md](r2.md)), `migrations`, `triggers`
 ([cron-triggers.md](cron-triggers.md)), `containers`
-([containers.md](containers.md)), `placement`, and the build settings above.
+([containers.md](containers.md)), `placement`, `secrets` (its `required`
+names, for `twd types`), and the build settings above.
+
+## Types: `twd types`
+
+`twd types` is twd's `wrangler types`. It writes `worker-configuration.d.ts`
+in the app directory: a global `Env` interface built from the wrangler
+config and `twd.jsonc`.
+
+| source | in `Env` as |
+|---|---|
+| `vars` | `string`, `number`, `boolean` or an object type (widened, not the literal value) |
+| `durable_objects` bindings | `DurableObjectNamespace<import("./src/index").Class>` (plain `DurableObjectNamespace` for a `script_name` binding) |
+| `kv_namespaces`, `r2_buckets`, `d1_databases` | `KVNamespace`, `R2Bucket`, `D1Database` |
+| `queues.producers` | `Queue` |
+| `workflows` | `Workflow` |
+| secret names: `.dev.vars`, `.dev.vars.example`, `secrets.required`, and with `--remote` the workload's secrets in mgmt (`twd secret ls`) | `string` |
+
+Bindings twd doesn't support are left out, because on twd they are
+undefined. `--env <name>` types that environment. A `"runtime": "node"` app
+gets `NodeJS.ProcessEnv` instead: the variables twd sets, `node.env` and the
+secret names.
+
+Every `twd init` template ships the file along with a `tsconfig.json`
+(`@cloudflare/workers-types` plus `@twd/tailnet`, which declares
+`ctx.tailnet`), so `npm install && npx tsc --noEmit` passes. Run
+`twd types` again after you change the config. In CI, run
+`twd types --check`: it writes nothing and fails with
+[`types_stale`](errors.md#types_stale) if the file is missing or out of date.
+`.dev.vars` isn't committed, so for `--check` to see the same secrets on
+every machine, list their names in `.dev.vars.example` or
+`secrets.required`.
 
 ## `wrangler dev` and Miniflare
 

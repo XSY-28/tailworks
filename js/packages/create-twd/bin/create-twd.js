@@ -4,6 +4,7 @@
 //   create-twd build [dir]        (bundles wrangler.jsonc main → dist/index.js)
 //   create-twd build-node [dir] [outdir]  (runtime "node" apps: dist/server.mjs + Workflow bundles)
 import { cpSync, existsSync, readdirSync, renameSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,7 +39,12 @@ if (existsSync(dir) && readdirSync(dir).length) {
   console.error(`create-twd: ${dir} exists and is not empty`);
   process.exit(2);
 }
+// `npm create twd`: with the twd CLI installed, `twd init` does it (it
+// also names the workload and its tags after the directory); without it,
+// copy the template as it is.
+const twd = spawnSync("twd", ["init", dir, "--template", template], { stdio: "inherit" });
+if (!twd.error) process.exit(twd.status ?? 1);
 cpSync(path.join(templates, template), dir, { recursive: true });
 // npm drops .gitignore from published packages: templates ship "gitignore".
 if (existsSync(path.join(dir, "gitignore"))) renameSync(path.join(dir, "gitignore"), path.join(dir, ".gitignore"));
-console.log(`created ${dir} from template ${template}\n  cd ${dir} && npm install && npx twd deploy`);
+console.log(`created ${dir} from template ${template}\n  cd ${dir} && npm install && npx tsc --noEmit\n  then install twd (https://github.com/rosskukulinski/twd/blob/master/docs/INSTALL.md) and run: twd deploy`);

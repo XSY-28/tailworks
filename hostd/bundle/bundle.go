@@ -89,6 +89,11 @@ type App struct {
 	// Workflows are wrangler.jsonc "workflows" (workflows.go), run by
 	// workerd's built-in engine.
 	Workflows []Workflow
+
+	// SourceMaps are the bundler's source maps (<module>.map, e.g.
+	// dist/index.js.map), not modules: hostd maps exception stacks in
+	// request records with them (hostd/stackmap.go).
+	SourceMaps map[string][]byte
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -291,6 +296,8 @@ func Parse(files map[string][]byte) (*App, error) {
 				continue
 			}
 			a.Modules[p] = b
+		case ".map":
+			a.addSourceMap(p, b) // sourcemaps.go
 		default:
 			if _, typed := a.ModuleTypes[p]; typed {
 				a.Modules[p] = b

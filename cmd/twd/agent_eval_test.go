@@ -192,6 +192,28 @@ func TestAgentEval(t *testing.T) {
 
 	testMCP(t, ag, doc(up), ctl.URL, work)
 
+	// History and rollback (ADR-deploy-rollback): the deploy and the MCP
+	// redeploy ran the same bundle, so a rollback with no ID has no target;
+	// naming the first deployment rolls back through the whole stack.
+	hr := ag.Exec("deployments", "hello-mcp", "--json")
+	ok("deployments", hr)
+	hist, _ := doc(hr)["deployments"].([]any)
+	if len(hist) < 2 {
+		t.Fatalf("twd deployments: %s", hr.Stdout)
+	}
+	if e, err := agenteval.CheckError(ag.Exec("rollback", "hello-mcp", "--json")); err != nil || e["code"] != "no_rollback_target" {
+		t.Fatalf("rollback to the running bundle: %v %v", e, err)
+	}
+	oldest, _ := hist[len(hist)-1].(map[string]any)["deploymentID"].(string)
+	rr := ag.Exec("rollback", "hello-mcp", oldest, "--json")
+	ok("rollback", rr)
+	if d := doc(rr); d["rollbackOf"] != oldest || d["status"] != "active" {
+		t.Fatalf("twd rollback: %s", rr.Stdout)
+	}
+	if _, err := agenteval.CheckStream("deploy.event", rr.Stderr); err != nil {
+		t.Fatalf("rollback events: %v", err)
+	}
+
 	// Every other command once, with --json, against this twd.
 	if _, err := agenteval.CheckLogs(ag.Exec("logs", "hello-mcp", "--console", "-n", "20", "--json").Stdout); err != nil {
 		t.Fatal(err)
