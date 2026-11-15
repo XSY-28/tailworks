@@ -51,6 +51,9 @@ type devResult struct {
 	As       string             `json:"as"`
 	Smoke    map[string]any     `json:"smoke,omitempty"`
 	Timings  map[string]float64 `json:"timingsMs"`
+
+	// D1 databases and the migrations dev applied to them (dev_d1.go).
+	D1 []devD1 `json:"d1,omitempty"`
 }
 
 func cmdDev(args []string) error {
@@ -141,6 +144,7 @@ func cmdDev(args []string) error {
 	}
 
 	var devVars []string // .dev.vars names (devvars.go): the workload's secrets in dev
+	var devD1s []devD1   // D1 databases and the migrations dev applied (dev_d1.go)
 	deploy := func() (hostd.ObjectStatus, error) {
 		if devVars, err = syncDevVars(ctx, mc, tr.TenantID, a.Name, a.Dir); err != nil {
 			return hostd.ObjectStatus{}, fail("bad_request", err.Error())
@@ -161,6 +165,9 @@ func cmdDev(args []string) error {
 				}
 				if w.Workload == a.Name && w.Status == "active" && w.DeploymentID == dr.DeploymentID {
 					if o, ok := h.Object(tr.TenantID, a.Name, "", a.Name); ok && o.Status == "ready" && o.IP != "" {
+						if devD1s, err = devD1Migrate(ctx, h, tr.TenantID, a); err != nil {
+							return hostd.ObjectStatus{}, fail("d1_error", "applying D1 migrations: "+err.Error())
+						}
 						return o, nil
 					}
 				}
@@ -174,6 +181,7 @@ func cmdDev(args []string) error {
 		return err
 	}
 	res.Node = wl.Hostname
+	res.D1 = devD1s
 	res.Timings["ready"] = ms(time.Since(t0))
 	var cur atomic.Value
 	cur.Store(wl.IP)
@@ -216,6 +224,9 @@ func cmdDev(args []string) error {
 	fmt.Printf("  node %-28s %s\n", wl.Hostname, strings.Join(a.Cfg.Tailnet.Tags, ","))
 	if len(devVars) > 0 {
 		fmt.Printf("  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
+	}
+	for _, d := range devD1s {
+		fmt.Printf("  d1    %-27s %s (in memory for this run; %d migration(s) applied)\n", d.Binding, d.Database, len(d.Applied))
 	}
 	for _, c := range a.Cfg.Classes() {
 		if c.Class != "_workload" {

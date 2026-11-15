@@ -51,6 +51,7 @@ func init() {
 		{name: "undeploy", usage: "undeploy <workload> [--tenant <tailnet>] [--reason <text>]", help: "stop a workload: kill its objects (cascade), release its lease", run: cmdUndeploy},
 		{name: "expose", usage: "expose on|off <workload> [--tenant <tailnet>]", help: "open or close a workload's public (Funnel) routes; survives redeploys (twd.jsonc \"public\", ADR-029)", run: cmdExpose},
 		{name: "secret", usage: "secret put <NAME> | secret ls | secret rm <NAME>   [--workload <workload>] [--tenant <tailnet>]", help: "a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), ls shows names only; changes apply on the next deploy", run: cmdSecret},
+		{name: "d1", usage: d1Usage, help: "a workload's D1 databases (like wrangler d1): create, list, delete, run SQL, export, and wrangler-layout migrations; execute/export/migrations reach the running workload", run: cmdD1},
 		{name: "kill", usage: "kill <object> [--tenant <tailnet>] [--cascade] [--reason <text>]", help: "kill an object (and with --cascade its sub-agents)", run: cmdKill},
 		{name: "audit", usage: "audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all", help: "show the hash-chained audit trail", run: cmdAudit},
 		{name: "logs", usage: "logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f]", help: "show logs (workerd for a workload, else the daemons)", run: cmdLogs},

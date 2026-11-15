@@ -4,7 +4,7 @@ Every twd app has a `twd.jsonc` next to its `wrangler.jsonc`. The split:
 
 - **`wrangler.jsonc`** is the Worker itself, as on Cloudflare: `main`,
   `compatibility_date`, `durable_objects` bindings, `migrations`, `vars`,
-  `triggers.crons`, `containers`.
+  `triggers.crons`, `containers`, `d1_databases` ([d1.md](d1.md)).
 - **`twd.jsonc`** is what twd adds: the tailnet identity of the workload and
   of each Durable Object class, the isolation tier, placement, and public
   routes.

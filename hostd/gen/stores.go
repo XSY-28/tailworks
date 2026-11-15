@@ -33,7 +33,9 @@ var storeJS string
 type StoreKindGen struct {
 	Kind string
 	// Binding is the workerd binding type of env.<Binding> in the tenant
-	// worker: "kvNamespace", "queue", "r2Bucket" or "service".
+	// worker: "kvNamespace", "queue", "r2Bucket", "service", or "wrapped"
+	// (a wrapped binding of WrappedModule whose inner "fetcher" is a
+	// service binding to Backend: workerd's D1 API).
 	Binding string
 	// Backend is the platform entrypoint class the binding targets.
 	Backend string
@@ -44,6 +46,14 @@ type StoreKindGen struct {
 	// JS is the kind's platform module (twd-store-<kind>.js). It imports
 	// from "twd-store.js" and exports Backend (and FacetProxy).
 	JS string
+
+	// WrappedModule is the module of a "wrapped" binding, e.g.
+	// "cloudflare-internal:d1-api".
+	WrappedModule string
+	// FacetWrap names the shim the facet runtime (twd-rt.js) puts around
+	// the facet's stub to Backend, for a "wrapped" binding (which can't be
+	// handed to a Dynamic Worker): "d1".
+	FacetWrap string
 }
 
 var (
@@ -65,6 +75,10 @@ func RegisterStoreKind(k StoreKindGen) {
 	case "service":
 		if k.FacetProxy != "" && !classRE.MatchString(k.FacetProxy) {
 			panic("gen: store kind " + k.Kind + ": bad FacetProxy")
+		}
+	case "wrapped":
+		if k.WrappedModule == "" || k.FacetWrap == "" || k.FacetProxy != "" {
+			panic("gen: store kind " + k.Kind + ": a wrapped binding needs WrappedModule and FacetWrap, and no FacetProxy")
 		}
 	default:
 		panic("gen: store kind " + k.Kind + ": bad binding type " + k.Binding)
@@ -93,6 +107,9 @@ type storeCfg struct {
 	Name    string         `json:"name"`
 	Facet   string         `json:"facet"` // platform entrypoint class
 	Props   map[string]any `json:"props"`
+
+	// Wrap is the facet runtime's shim around the stub (StoreKindGen.FacetWrap).
+	Wrap string `json:"wrap,omitempty"`
 }
 
 // checkStores refuses a binding of an unknown kind, and a secret with a
@@ -134,7 +151,7 @@ func storeConfig(app *bundle.App) []storeCfg {
 	out := []storeCfg{}
 	for _, b := range app.Stores {
 		k, _ := storeGen(b.Kind)
-		c := storeCfg{Binding: b.Binding, Kind: b.Kind, Name: b.Name, Facet: k.Backend, Props: map[string]any{"kind": b.Kind, "name": b.Name}}
+		c := storeCfg{Binding: b.Binding, Kind: b.Kind, Name: b.Name, Facet: k.Backend, Props: map[string]any{"kind": b.Kind, "name": b.Name}, Wrap: k.FacetWrap}
 		if k.FacetProxy != "" {
 			c.Facet, c.Props = k.FacetProxy, map[string]any{"binding": b.Binding}
 		}
@@ -196,6 +213,10 @@ func storeNamespace(app *bundle.App, workload string) string {
 }
 
 func storeBinding(name string, k StoreKindGen, b bundle.StoreBinding) string {
+	if k.Binding == "wrapped" {
+		return fmt.Sprintf("    (name = %s, wrapped = (moduleName = %s, innerBindings = [(name = \"fetcher\", service = (name = \"platform\", entrypoint = %s, props = (json = %s)))])),\n",
+			cq(name), cq(k.WrappedModule), cq(k.Backend), cq(storeProps(b)))
+	}
 	return fmt.Sprintf("    (name = %s, %s = (name = \"platform\", entrypoint = %s, props = (json = %s))),\n",
 		cq(name), k.Binding, cq(k.Backend), cq(storeProps(b)))
 }

@@ -828,6 +828,86 @@ paths:
         "409": { $ref: "#/components/responses/StoreConflict" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/d1/{name}/query:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    post:
+      tags: [stores]
+      operationId: QueryD1
+      summary: Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+      description: |
+        A D1 database (ADR-d1) is the workload's platform store of kind
+        `d1` named after the binding's `database_name`. Its data is served
+        by the store object in the workload's workerd, so mgmt sends the
+        statements to the host holding the workload's lease (the mgmt →
+        hostd channel, as for logs), which hands them to its platform
+        worker. They run as one batch: atomic, after the store object has
+        caught up with the journal, and a batch that writes is appended to
+        the journal before it is applied, like every write through the
+        binding.
+
+        `200` with one result per statement (D1's shape, rows and
+        columns). A failing statement fails the whole batch (`400
+        d1_error`, with SQLite's message; nothing is applied). `404
+        unknown_workload` when the workload isn't running (the database is
+        only reachable through a running deployment that binds it); `404
+        unknown_store` when its deployment binds no such database. A batch
+        that changed the database is audited (`kind: d1_write`, with the
+        statement count, never the SQL); a read is logged.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/D1Query" }
+      responses:
+        "200":
+          description: One result per statement.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/D1Result" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/d1/{name}/export:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ExportD1
+      summary: Export a D1 database as SQL (`twd d1 export`)
+      description: |
+        The database's schema and rows as SQL text, in the shape of
+        `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+        table and its `INSERT`s, then indexes, triggers and views), read
+        from the store object of the running workload after it has caught
+        up with the journal. At most 16 MiB (`400 store_limit` beyond).
+        Rows of virtual tables are not exported. A read: logged, not
+        audited.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The SQL.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            text/plain:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   # ------------------------------------------------------------------ hosts
   /v1/hosts:
     post:
@@ -2862,6 +2942,7 @@ components:
         | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
         | `immutable_field` | 400 | PATCH touches a field the caller may not change |
         | `too_many_secrets` | 400 | a workload already has 128 secrets |
+        | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
         | `no_identity` | 401 | WhoIs failed for the connection |
         | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
         | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -2920,6 +3001,7 @@ components:
         - reserved_tag
         - immutable_field
         - too_many_secrets
+        - d1_error
         - no_identity
         - host_token_required
         - host_token_invalid
@@ -3895,6 +3977,7 @@ components:
         `secret_release` (a workload's secrets released to its lease holder; names only),
         `store_create` (a platform store created, by its first write or an admin),
         `store_delete` (a platform store and its data key deleted),
+        `d1_write` (an operator's SQL changed a D1 database; statement count only),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -3943,6 +4026,7 @@ components:
         - secret_release
         - store_create
         - store_delete
+        - d1_write
         - reap
         - preflight
         - host_add
@@ -4071,7 +4155,7 @@ components:
     StoreKind:
       type: string
       pattern: "^[a-z][a-z0-9]{0,15}$"
-      description: A storage binding type (`kv`; later `d1`, `queue`, …).
+      description: A storage binding type (`kv`, `d1`; later `queue`, …).
     Store:
       type: object
       description: A platform storage object of a workload (ADR-platform-stores).
@@ -4132,6 +4216,43 @@ components:
         head: { type: integer, format: int64 }
         entries: { type: array, items: { $ref: "#/components/schemas/StoreEntry" } }
         more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
+
+    D1Query:
+      type: object
+      required: [queries]
+      properties:
+        queries:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [sql]
+            properties:
+              sql: { type: string, maxLength: 100000, description: "One statement (or several separated by `;`; parameters bind to the last)." }
+              params:
+                type: array
+                maxItems: 100
+                description: "Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values."
+                items: {}
+            additionalProperties: false
+      additionalProperties: false
+    D1Result:
+      type: object
+      description: One statement's result, as D1's wire protocol has it.
+      required: [success]
+      properties:
+        success: { type: boolean }
+        results:
+          type: object
+          properties:
+            columns: { type: array, items: { type: string } }
+            rows: { type: array, items: { type: array, items: {} }, description: "Values: null, numbers, strings, and BLOBs as arrays of byte values." }
+        meta:
+          type: object
+          description: "`changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`."
+          additionalProperties: true
+        error: { type: string }
 
     # ---------------------------------------------------------- containers
     ContainerResources:

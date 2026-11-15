@@ -45,6 +45,7 @@ const (
 	AuditKindContainerStop       AuditKind = "container_stop"
 	AuditKindCreate              AuditKind = "create"
 	AuditKindCredential          AuditKind = "credential"
+	AuditKindD1Write             AuditKind = "d1_write"
 	AuditKindDeny                AuditKind = "deny"
 	AuditKindDeploy              AuditKind = "deploy"
 	AuditKindDeviceDelete        AuditKind = "device_delete"
@@ -102,6 +103,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindCreate:
 		return true
 	case AuditKindCredential:
+		return true
+	case AuditKindD1Write:
 		return true
 	case AuditKindDeny:
 		return true
@@ -287,6 +290,7 @@ const (
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
+	ErrorCodeD1Error                 ErrorCode = "d1_error"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
@@ -362,6 +366,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBootstrapFailed:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
+		return true
+	case ErrorCodeD1Error:
 		return true
 	case ErrorCodeDelegationExceedsParent:
 		return true
@@ -1006,6 +1012,7 @@ type AuditBatch struct {
 // `secret_release` (a workload's secrets released to its lease holder; names only),
 // `store_create` (a platform store created, by its first write or an admin),
 // `store_delete` (a platform store and its data key deleted),
+// `d1_write` (an operator's SQL changed a D1 database; statement count only),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1090,6 +1097,7 @@ type AuditRecord struct {
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `store_create` (a platform store created, by its first write or an admin),
 	// `store_delete` (a platform store and its data key deleted),
+	// `d1_write` (an operator's SQL changed a D1 database; statement count only),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1305,6 +1313,32 @@ type Credential struct {
 	Tags     []string `json:"tags"`
 }
 
+// D1Query defines model for D1Query.
+type D1Query struct {
+	Queries []struct {
+		// Params Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values.
+		Params *[]interface{} `json:"params,omitempty"`
+
+		// SQL One statement (or several separated by `;`; parameters bind to the last).
+		SQL string `json:"sql"`
+	} `json:"queries"`
+}
+
+// D1Result One statement's result, as D1's wire protocol has it.
+type D1Result struct {
+	Error *string `json:"error,omitempty"`
+
+	// Meta `changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`.
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Results *struct {
+		Columns *[]string `json:"columns,omitempty"`
+
+		// Rows Values: null, numbers, strings, and BLOBs as arrays of byte values.
+		Rows *[][]interface{} `json:"rows,omitempty"`
+	} `json:"results,omitempty"`
+	Success bool `json:"success"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
@@ -1439,6 +1473,7 @@ type Error struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1512,6 +1547,7 @@ type Error struct {
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
+// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -2413,7 +2449,7 @@ type Store struct {
 	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
 	Incarnation string `json:"incarnation"`
 
-	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	// Kind A storage binding type (`kv`, `d1`; later `queue`, …).
 	Kind      StoreKind `json:"kind"`
 	Name      string    `json:"name"`
 	TenantID  string    `json:"tenantID"`
@@ -2465,7 +2501,7 @@ type StoreJournal struct {
 	More bool `json:"more"`
 }
 
-// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+// StoreKind A storage binding type (`kv`, `d1`; later `queue`, …).
 type StoreKind = string
 
 // StorePage defines model for StorePage.
@@ -2650,6 +2686,7 @@ type TombstoneError struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -3246,6 +3283,9 @@ type UpdateTenantJSONRequestBody = TenantPatch
 
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
+
+// QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
+type QueryD1JSONRequestBody = D1Query
 
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
@@ -4504,6 +4544,71 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	//
+	// The database's schema and rows as SQL text, in the shape of
+	// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+	// table and its `INSERT`s, then indexes, triggers and views), read
+	// from the store object of the running workload after it has caught
+	// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+	// Rows of virtual tables are not exported. A read: logged, not
+	// audited.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+	ExportD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1WithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
@@ -6278,6 +6383,101 @@ func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *Pu
 // Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 func (c *Client) CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckTenantWIFRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+//
+// The database's schema and rows as SQL text, in the shape of
+// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+// table and its `INSERT`s, then indexes, triggers and views), read
+// from the store object of the running workload after it has caught
+// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+// Rows of virtual tables are not exported. A read: logged, not
+// audited.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+func (c *Client) ExportD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExportD1Request(c.Server, id, workload, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-d1) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *Client) QueryD1WithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewQueryD1RequestWithBody(c.Server, id, workload, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-d1) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *Client) QueryD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewQueryD1Request(c.Server, id, workload, name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9302,6 +9502,115 @@ func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error)
 	return req, nil
 }
 
+// NewExportD1Request constructs an http.Request for the ExportD1 method
+func NewExportD1Request(server string, id TenantID, workload WorkloadName, name StoreName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/d1/%s/export", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewQueryD1Request calls the generic QueryD1 builder with application/json body
+func NewQueryD1Request(server string, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewQueryD1RequestWithBody(server, id, workload, name, "application/json", bodyReader)
+}
+
+// NewQueryD1RequestWithBody constructs an http.Request for the QueryD1 method, with any body, and a specified content type
+func NewQueryD1RequestWithBody(server string, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/d1/%s/query", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetWorkloadLogsRequest constructs an http.Request for the GetWorkloadLogs method
 func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams) (*http.Request, error) {
 	var err error
@@ -11330,6 +11639,73 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error)
+
+	// ExportD1WithResponse Export a D1 database as SQL (`twd d1 export`)
+	//
+	// The database's schema and rows as SQL text, in the shape of
+	// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+	// table and its `INSERT`s, then indexes, triggers and views), read
+	// from the store object of the running workload after it has caught
+	// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+	// Rows of virtual tables are not exported. A read: logged, not
+	// audited.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+	ExportD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*ExportD1Response, error)
+
+	// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1WithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
+
+	// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
 
 	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
@@ -15918,6 +16294,200 @@ func (r CheckTenantWIFResponse) ContentType() string {
 	return ""
 }
 
+// ExportD1Response200Headers the declared response headers of an HTTP 200 response for ExportD1
+type ExportD1Response200Headers struct {
+	CacheControl *string
+}
+
+// ExportD1Response400Headers the declared response headers of an HTTP 400 response for ExportD1
+type ExportD1Response400Headers struct {
+	TwdError *string
+}
+
+// ExportD1Response403Headers the declared response headers of an HTTP 403 response for ExportD1
+type ExportD1Response403Headers struct {
+	TwdError *string
+}
+
+// ExportD1Response404Headers the declared response headers of an HTTP 404 response for ExportD1
+type ExportD1Response404Headers struct {
+	TwdError *string
+}
+
+// ExportD1ResponseDefaultHeaders the declared response headers of an HTTP default response for ExportD1
+type ExportD1ResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ExportD1Response struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ExportD1Response200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ExportD1Response400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ExportD1Response403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ExportD1Response404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ExportD1ResponseDefaultHeaders
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ExportD1Response) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ExportD1Response) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ExportD1Response) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ExportD1Response) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ExportD1Response) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExportD1Response) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExportD1Response) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExportD1Response) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// QueryD1Response400Headers the declared response headers of an HTTP 400 response for QueryD1
+type QueryD1Response400Headers struct {
+	TwdError *string
+}
+
+// QueryD1Response403Headers the declared response headers of an HTTP 403 response for QueryD1
+type QueryD1Response403Headers struct {
+	TwdError *string
+}
+
+// QueryD1Response404Headers the declared response headers of an HTTP 404 response for QueryD1
+type QueryD1Response404Headers struct {
+	TwdError *string
+}
+
+// QueryD1ResponseDefaultHeaders the declared response headers of an HTTP default response for QueryD1
+type QueryD1ResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type QueryD1Response struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]D1Result
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *QueryD1Response400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *QueryD1Response403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *QueryD1Response404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *QueryD1ResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r QueryD1Response) GetJSON200() *[]D1Result {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r QueryD1Response) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r QueryD1Response) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r QueryD1Response) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r QueryD1Response) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r QueryD1Response) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r QueryD1Response) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r QueryD1Response) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r QueryD1Response) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetWorkloadLogsResponse200Headers the declared response headers of an HTTP 200 response for GetWorkloadLogs
 type GetWorkloadLogsResponse200Headers struct {
 	CacheControl *string
@@ -18732,6 +19302,91 @@ func (c *ClientWithResponses) CheckTenantWIFWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseCheckTenantWIFResponse(rsp)
+}
+
+// ExportD1WithResponse Export a D1 database as SQL (`twd d1 export`)
+//
+// The database's schema and rows as SQL text, in the shape of
+// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+// table and its `INSERT`s, then indexes, triggers and views), read
+// from the store object of the running workload after it has caught
+// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+// Rows of virtual tables are not exported. A read: logged, not
+// audited.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+func (c *ClientWithResponses) ExportD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*ExportD1Response, error) {
+	rsp, err := c.ExportD1(ctx, id, workload, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExportD1Response(rsp)
+}
+
+// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-d1) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *ClientWithResponses) QueryD1WithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*QueryD1Response, error) {
+	rsp, err := c.QueryD1WithBody(ctx, id, workload, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseQueryD1Response(rsp)
+}
+
+// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-d1) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *ClientWithResponses) QueryD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*QueryD1Response, error) {
+	rsp, err := c.QueryD1(ctx, id, workload, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseQueryD1Response(rsp)
 }
 
 // GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
@@ -23446,6 +24101,203 @@ func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, e
 		response.Headers404 = &headers
 	case true:
 		var headers CheckTenantWIFResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseExportD1Response parses an HTTP response from a ExportD1WithResponse call
+func ParseExportD1Response(rsp *http.Response) (*ExportD1Response, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExportD1Response{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ExportD1Response200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers ExportD1Response400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ExportD1Response403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ExportD1Response404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ExportD1ResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseQueryD1Response parses an HTTP response from a QueryD1WithResponse call
+func ParseQueryD1Response(rsp *http.Response) (*QueryD1Response, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &QueryD1Response{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []D1Result
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers QueryD1Response400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers QueryD1Response403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers QueryD1Response404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers QueryD1ResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

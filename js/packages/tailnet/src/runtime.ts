@@ -9,6 +9,7 @@
 
 import { TailnetError, fromResponse, isTailnetError } from "./errors.js";
 import { createContainer, defineContainer, dispatchIntercept, notSupportedPreview, type ContainerSpec } from "./container.js";
+import { wrapStores } from "./d1.js";
 
 /** The platform's TailnetApi stub (RPC). */
 export interface TailnetApiStub {
@@ -408,6 +409,7 @@ function guardEnv(env: any, bindings: BindingMap, mode: GuardMode, adm: Admitter
   if (!env || typeof env !== "object") return env;
   const out: Record<string, unknown> = { ...env };
   delete out.__TWD;
+  wrapStores(out); // a facet's storage bindings (D1)
   for (const [k, cls] of Object.entries(bindings)) {
     if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
   }

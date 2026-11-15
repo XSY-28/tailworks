@@ -47,6 +47,7 @@ const (
 	AuditKindContainerStop       AuditKind = "container_stop"
 	AuditKindCreate              AuditKind = "create"
 	AuditKindCredential          AuditKind = "credential"
+	AuditKindD1Write             AuditKind = "d1_write"
 	AuditKindDeny                AuditKind = "deny"
 	AuditKindDeploy              AuditKind = "deploy"
 	AuditKindDeviceDelete        AuditKind = "device_delete"
@@ -104,6 +105,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindCreate:
 		return true
 	case AuditKindCredential:
+		return true
+	case AuditKindD1Write:
 		return true
 	case AuditKindDeny:
 		return true
@@ -289,6 +292,7 @@ const (
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
+	ErrorCodeD1Error                 ErrorCode = "d1_error"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
@@ -364,6 +368,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBootstrapFailed:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
+		return true
+	case ErrorCodeD1Error:
 		return true
 	case ErrorCodeDelegationExceedsParent:
 		return true
@@ -1008,6 +1014,7 @@ type AuditBatch struct {
 // `secret_release` (a workload's secrets released to its lease holder; names only),
 // `store_create` (a platform store created, by its first write or an admin),
 // `store_delete` (a platform store and its data key deleted),
+// `d1_write` (an operator's SQL changed a D1 database; statement count only),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1092,6 +1099,7 @@ type AuditRecord struct {
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `store_create` (a platform store created, by its first write or an admin),
 	// `store_delete` (a platform store and its data key deleted),
+	// `d1_write` (an operator's SQL changed a D1 database; statement count only),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1307,6 +1315,32 @@ type Credential struct {
 	Tags     []string `json:"tags"`
 }
 
+// D1Query defines model for D1Query.
+type D1Query struct {
+	Queries []struct {
+		// Params Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values.
+		Params *[]interface{} `json:"params,omitempty"`
+
+		// SQL One statement (or several separated by `;`; parameters bind to the last).
+		SQL string `json:"sql"`
+	} `json:"queries"`
+}
+
+// D1Result One statement's result, as D1's wire protocol has it.
+type D1Result struct {
+	Error *string `json:"error,omitempty"`
+
+	// Meta `changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`.
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Results *struct {
+		Columns *[]string `json:"columns,omitempty"`
+
+		// Rows Values: null, numbers, strings, and BLOBs as arrays of byte values.
+		Rows *[][]interface{} `json:"rows,omitempty"`
+	} `json:"results,omitempty"`
+	Success bool `json:"success"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
@@ -1441,6 +1475,7 @@ type Error struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1514,6 +1549,7 @@ type Error struct {
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
+// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -2415,7 +2451,7 @@ type Store struct {
 	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
 	Incarnation string `json:"incarnation"`
 
-	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	// Kind A storage binding type (`kv`, `d1`; later `queue`, …).
 	Kind      StoreKind `json:"kind"`
 	Name      string    `json:"name"`
 	TenantID  string    `json:"tenantID"`
@@ -2467,7 +2503,7 @@ type StoreJournal struct {
 	More bool `json:"more"`
 }
 
-// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+// StoreKind A storage binding type (`kv`, `d1`; later `queue`, …).
 type StoreKind = string
 
 // StorePage defines model for StorePage.
@@ -2652,6 +2688,7 @@ type TombstoneError struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -3249,6 +3286,9 @@ type UpdateTenantJSONRequestBody = TenantPatch
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
 
+// QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
+type QueryD1JSONRequestBody = D1Query
+
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
@@ -3664,6 +3704,12 @@ type ServerInterface interface {
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID)
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
+	ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
+	QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
@@ -5588,6 +5634,94 @@ func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ExportD1 operation middleware
+func (siw *ServerInterfaceWrapper) ExportD1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportD1(w, r, id, workload, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// QueryD1 operation middleware
+func (siw *ServerInterfaceWrapper) QueryD1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.QueryD1(w, r, id, workload, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkloadLogs operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkloadLogs(w http.ResponseWriter, r *http.Request) {
 
@@ -6558,6 +6692,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.PutWorkloadStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.ReadStoreJournal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.AppendStoreJournal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/d1/{name}/query", wrapper.QueryD1)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/d1/{name}/export", wrapper.ExportD1)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts", wrapper.ListHosts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/hosts", wrapper.CreateHost)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/hosts/{id}", wrapper.DeleteHost)
@@ -11082,6 +11218,206 @@ func (response CheckTenantWIFdefaultJSONResponse) VisitCheckTenantWIFResponse(w 
 	return err
 }
 
+type ExportD1RequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+}
+
+type ExportD1ResponseObject interface {
+	VisitExportD1Response(w http.ResponseWriter) error
+}
+
+type ExportD1200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type ExportD1200TextResponse struct {
+	Body    string
+	Headers ExportD1200ResponseHeaders
+}
+
+func (response ExportD1200TextResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/plain")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+
+	_, err := w.Write([]byte(fmt.Sprint(response.Body)))
+	return err
+}
+
+type ExportD1400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ExportD1400JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ExportD1403JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ExportD1404JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1defaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ExportD1defaultJSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1RequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Body     *QueryD1JSONRequestBody
+}
+
+type QueryD1ResponseObject interface {
+	VisitQueryD1Response(w http.ResponseWriter) error
+}
+
+type QueryD1200JSONResponse []D1Result
+
+func (response QueryD1200JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response QueryD1400JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response QueryD1403JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response QueryD1404JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1defaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response QueryD1defaultJSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetWorkloadLogsRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -12727,6 +13063,12 @@ type StrictServerInterface interface {
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(ctx context.Context, request CheckTenantWIFRequestObject) (CheckTenantWIFResponseObject, error)
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
+	ExportD1(ctx context.Context, request ExportD1RequestObject) (ExportD1ResponseObject, error)
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
+	QueryD1(ctx context.Context, request QueryD1RequestObject) (QueryD1ResponseObject, error)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
@@ -14100,6 +14442,69 @@ func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CheckTenantWIFResponseObject); ok {
 		if err := validResponse.VisitCheckTenantWIFResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportD1 operation middleware
+func (sh *strictHandler) ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName) {
+	var request ExportD1RequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportD1(ctx, request.(ExportD1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportD1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportD1ResponseObject); ok {
+		if err := validResponse.VisitExportD1Response(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// QueryD1 operation middleware
+func (sh *strictHandler) QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName) {
+	var request QueryD1RequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	var body QueryD1JSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.QueryD1(ctx, request.(QueryD1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "QueryD1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(QueryD1ResponseObject); ok {
+		if err := validResponse.VisitQueryD1Response(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

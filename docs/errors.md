@@ -64,6 +64,9 @@ printed anywhere.
 ### credential_file_insecure
 403 · cli. **When:** the OAuth client file given to `twd up --oauth-client-file` is readable by other users. **Fix:** `chmod 600 <file>` then `twd up` again.
 
+### d1_error
+400 · mgmt, cli. **When:** a statement of `twd d1 execute`, `twd d1 migrations apply` or `POST …/d1/{name}/query` failed: SQLite's error (syntax, constraint, no such table) or a D1 limit (statement over 100 KB, over 100 parameters, a value over 2 MB, a result over 16 MiB, one write over 2 MiB encoded). Nothing of the batch was applied (a failing migration isn't recorded). In a Worker the same failures throw `D1_ERROR: …`, as on Cloudflare. **Fix:** fix the SQL; split a large import into several files or batches.
+
 ### delegation_exceeds_parent
 403 · mgmt, netd. **When:** `ctx.tailnet.spawn()` asked for capabilities, tags or destinations the parent object does not have (`missing: {src, dst, cap, field}`). **Fix:** spawn with a subset of the parent's grants, or widen the parent's grant in the policy.
 
@@ -323,7 +326,7 @@ printed anywhere.
 404 · mgmt, cli. **When:** no tenant with that tailnet or ID. **Fix:** `twd tenant ls`.
 
 ### unknown_workload
-404 · cli. **When:** `twd logs`, `twd undeploy` or `twd host vmcheck` named a workload with no deployment. **Fix:** `twd ls`.
+404 · cli, mgmt. **When:** `twd logs`, `twd undeploy` or `twd host vmcheck` named a workload with no deployment; `twd d1 execute|export|migrations` named a workload that isn't running (a D1 database is reached through the running deployment that binds it). **Fix:** `twd ls`; `twd deploy`.
 
 ### unsupported
 1 · cli. **When:** `twd host setup` on an OS without the microVM tier (it needs Linux with KVM). **Fix:** nothing to set up; every workload runs in the process tier here.

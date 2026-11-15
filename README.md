@@ -143,7 +143,10 @@ prove every ✅ and ⚠️.
 | Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
 | Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
 | Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
-| Bindings | [D1](docs/COMPAT.md#d1) | ❌ | DO SQLite works |
+| Bindings | [D1](docs/COMPAT.md#d1) | ⚠️ | one workload's database; survives host moves |
+| Bindings | [D1 sessions](docs/COMPAT.md#d1-sessions) | ⚠️ | bookmarks are journal positions |
+| Bindings | [D1 migrations](docs/COMPAT.md#d1-migrations) | ✅ | wrangler's layout |
+| Bindings | [`twd d1` commands](docs/COMPAT.md#d1-cli) | ⚠️ | reach the running workload |
 | Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ❌ | Vercel Workflow SDK on Node apps |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
