@@ -14,9 +14,12 @@ all: build
 ## build: every binary into bin/. On macOS, twd-vz (the microVM tier's per-VM VMM, cgo on
 ## Virtualization.framework) is ad-hoc signed with the virtualization entitlement it needs.
 VZ_ENTITLEMENTS := cmd/twd-vz/twd-vz.entitlements
+# Dev builds are stamped <VERSION>-dev (internal/version); releases set the
+# exact version (scripts/release.sh).
+VERSION_LDFLAGS := -X github.com/rosskukulinski/twd/internal/version.Version=$(shell cat VERSION)-dev -X github.com/rosskukulinski/twd/internal/version.Commit=$(shell git rev-parse HEAD 2>/dev/null)
 .PHONY: build
 build:
-	$(GO) build -o bin/ ./cmd/...
+	$(GO) build -ldflags "$(VERSION_LDFLAGS)" -o bin/ ./cmd/...
 	@if [ "$$(uname -s)" = Darwin ]; then codesign --force --sign - --entitlements $(VZ_ENTITLEMENTS) bin/twd-vz; fi
 
 $(WORKERD): package.json package-lock.json
@@ -90,6 +93,16 @@ PG_PORT ?= 55433
 .PHONY: test-pg
 test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
+
+## e2e-upgrade: the upgrade release gate (ADR-041 §9), hermetic: the previous
+## release's twd-mgmt + twd-hostd (TWD_UPGRADE_FROM: a git ref, default the last v* tag before
+## HEAD, built in a temporary worktree; "self" stamps this tree TWD_UPGRADE_FROM_VERSION) serve a
+## Durable Object workload; mgmt then the host move to this tree on the same state; storage, node
+## identity and the store must survive, the old mgmt must still open the store, a 9.0.0 host is refused.
+TWD_UPGRADE_FROM ?= $(shell git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || echo self)
+.PHONY: e2e-upgrade
+e2e-upgrade: deps
+	TWD_UPGRADE_FROM="$(TWD_UPGRADE_FROM)" $(GO) test -tags e2eupgrade -count=1 -v -timeout 20m ./e2e/upgrade/...
 
 ## e2e-local: the twd-netd binary as a real process against a local control plane + workerd.
 .PHONY: e2e-local
@@ -464,12 +477,24 @@ api-check: api
 compat-check:
 	$(GO) run ./internal/compatdoc/compatcheck
 
+## changes-check: release-note fragments (changes/*.md) are valid, and a branch that touches an
+## upgrade-relevant path (migrations, the API spec, the workerd pin, …) names it in one (changes/README.md).
+.PHONY: changes-check
+changes-check:
+	sh scripts/check-changes.sh
+
+## install-test: install.sh upgrade keeps .prev, --rollback swaps it back (hermetic, fake releases).
+.PHONY: install-test
+install-test:
+	sh scripts/install_test.sh
+
 .PHONY: lint
-lint: api-check compat-check
+lint: api-check compat-check changes-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
 	$(GO) vet -tags e2e ./e2e/local/...
 	$(GO) vet -tags e2e ./e2e/wrangler/...
+	$(GO) vet -tags e2eupgrade ./e2e/upgrade/...
 	$(GO) vet -tags e2ereal ./e2e/real/...
 	GOOS=linux $(GO) vet ./hostd/vm/... ./guest/... ./cmd/twd-hostd/... ./cmd/twd-vmhelper/... ./cmd/twd/...
 	GOOS=linux $(GO) vet -tags e2evm ./e2e/vm/...

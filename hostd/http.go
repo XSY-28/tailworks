@@ -516,6 +516,8 @@ func (h *Host) pushHandlers(m *http.ServeMux) {
 	})
 	// Smart placement (ADR-033): measure a tenant's targets now (mgmt, at deploy).
 	m.HandleFunc("POST /v1/push/probe", h.probeHandler)
+	// upgrade.go: install a release pushed by an upgrade run (Config.SelfUpgrade).
+	m.HandleFunc("POST /v1/push/upgrade", h.upgradeHandler)
 	// logs.go: one workload's app log, for `twd logs` from a linked machine
 	// (mgmt asks the lease holder; on the tsnet surface pushAuth admits
 	// mgmt's node only).

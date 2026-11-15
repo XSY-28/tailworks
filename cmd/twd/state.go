@@ -24,6 +24,9 @@ import (
 
 // Config is <state>/twd.json, written by `twd up`.
 type Config struct {
+	// V is the twd.json format version (ADR-041 §4): 0 =
+	// written before versioning (the same layout as 1).
+	V        int    `json:"v"`
 	Tailnet  string `json:"tailnet"`
 	TenantID string `json:"tenantID,omitempty"`
 	// MintMode is "oauth" (the default since M12: a Tailscale OAuth client
@@ -188,7 +191,22 @@ func openState(flagVal string) (*state, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s, json.Unmarshal(b, &s.Cfg)
+	return s, decodeConfig(b, &s.Cfg)
+}
+
+// configVersion is the twd.json format version this twd writes.
+const configVersion = 1
+
+// decodeConfig parses twd.json, refusing a version newer than this twd
+// knows (a newer twd wrote it).
+func decodeConfig(b []byte, c *Config) error {
+	if err := json.Unmarshal(b, c); err != nil {
+		return err
+	}
+	if c.V > configVersion {
+		return fmt.Errorf("twd.json format v%d was written by a newer twd (this one reads up to v%d); upgrade twd", c.V, configVersion)
+	}
+	return nil
 }
 
 func (s *state) configured() bool { return s.Cfg.Tailnet != "" }
@@ -228,6 +246,7 @@ func (s *state) save() error {
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
 		return err
 	}
+	s.Cfg.V = configVersion
 	b, _ := json.MarshalIndent(s.Cfg, "", "  ")
 	return os.WriteFile(s.configPath(), b, 0o600)
 }
@@ -361,6 +380,10 @@ func (s *state) transport() string {
 // the node's SOCKS5 loopback proxy, so the request carries mgmt's identity
 // and WhoIs makes it the operator.
 func (s *state) mgmt() *mgmtapi.Client {
+	return withVersionCheck(s.mgmtRaw()) // versioncheck.go
+}
+
+func (s *state) mgmtRaw() *mgmtapi.Client {
 	if s.remote() {
 		return s.Link.client()
 	}

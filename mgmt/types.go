@@ -136,8 +136,22 @@ type Host struct {
 	PushTarget string `json:"-"`
 	LiveNodes  int    `json:"liveNodes"`
 	LastSeen   int64  `json:"lastSeen"` // unix ms
-	CreatedAt  int64  `json:"createdAt"`
-	UpdatedAt  int64  `json:"updatedAt"`
+
+	// Version, Protocols and Features are what the host reported at its
+	// last registration (ADR-041 §7). Version "" = a
+	// hostd from before version reporting (0.1.x).
+	Version   string         `json:"version,omitempty"`
+	OS        string         `json:"os,omitempty"` // GOOS ("" = not reported)
+	Protocols map[string]int `json:"protocols,omitempty"`
+	Features  []string       `json:"features,omitempty"`
+
+	// CordonedAt (unix ms, 0 = not cordoned) and CordonedBy: a cordoned
+	// host keeps what it runs but takes no new placements (§5).
+	CordonedAt int64  `json:"cordonedAt,omitempty"`
+	CordonedBy string `json:"cordonedBy,omitempty"`
+
+	CreatedAt int64 `json:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt"`
 }
 
 // HostCapacity is a host's capacity vector (api/openapi.yaml HostCapacity).

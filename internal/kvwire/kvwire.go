@@ -71,6 +71,9 @@ func Encode(h Header, value []byte) []byte {
 
 // Decode decodes an entry.
 func Decode(b []byte) (Entry, error) {
+	if len(b) >= 1 && b[0] > version {
+		return Entry{}, fmt.Errorf("kvwire: entry v%d was written by a newer twd (this one reads v%d); upgrade twd", b[0], version)
+	}
 	if len(b) < 5 || b[0] != version {
 		return Entry{}, errors.New("kvwire: not a v1 KV entry")
 	}

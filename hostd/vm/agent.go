@@ -23,6 +23,7 @@ import (
 
 	"github.com/rosskukulinski/twd/guest/proto"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
+	"github.com/rosskukulinski/twd/internal/version"
 	"github.com/rosskukulinski/twd/netd"
 )
 
@@ -161,6 +162,14 @@ func (m *agent) route(c net.Conn) {
 		return
 	case "hello":
 		if tokenEqual(first.Token, m.token()) {
+			if p := first.HelloProto(); p != version.GuestProtocol && m.log != nil {
+				// The guest image and hostd ship in one release; another
+				// protocol means a mixed install (an upgrade in progress,
+				// or a hand-built guest). Ops newer than the guest's
+				// protocol get "unknown op" (proto.UnknownOp): feature absent.
+				m.log.Warn("guest speaks a different protocol", "guestProto", p, "hostProto", version.GuestProtocol,
+					"guestVersion", first.GuestVersion, "hostVersion", version.Version)
+			}
 			break
 		}
 		fallthrough

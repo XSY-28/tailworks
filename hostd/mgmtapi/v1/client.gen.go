@@ -117,8 +117,11 @@ const (
 	AuditKindExposeOff           AuditKind = "expose_off"
 	AuditKindExposeOn            AuditKind = "expose_on"
 	AuditKindHostAdd             AuditKind = "host_add"
+	AuditKindHostCordon          AuditKind = "host_cordon"
 	AuditKindHostDelete          AuditKind = "host_delete"
+	AuditKindHostDrain           AuditKind = "host_drain"
 	AuditKindHostRegister        AuditKind = "host_register"
+	AuditKindHostUncordon        AuditKind = "host_uncordon"
 	AuditKindImagePin            AuditKind = "image_pin"
 	AuditKindImagePublic         AuditKind = "image_public"
 	AuditKindImagePush           AuditKind = "image_push"
@@ -139,6 +142,8 @@ const (
 	AuditKindQueuePurge          AuditKind = "queue_purge"
 	AuditKindReady               AuditKind = "ready"
 	AuditKindReap                AuditKind = "reap"
+	AuditKindReleaseArtifact     AuditKind = "release_artifact"
+	AuditKindReleaseImport       AuditKind = "release_import"
 	AuditKindRemint              AuditKind = "remint"
 	AuditKindRevoke              AuditKind = "revoke"
 	AuditKindSecretDelete        AuditKind = "secret_delete"
@@ -156,6 +161,11 @@ const (
 	AuditKindTenantUpdate        AuditKind = "tenant_update"
 	AuditKindTransfer            AuditKind = "transfer"
 	AuditKindUndeploy            AuditKind = "undeploy"
+	AuditKindUpgradeAbort        AuditKind = "upgrade_abort"
+	AuditKindUpgradePause        AuditKind = "upgrade_pause"
+	AuditKindUpgradeResume       AuditKind = "upgrade_resume"
+	AuditKindUpgradeStart        AuditKind = "upgrade_start"
+	AuditKindUpgradeStep         AuditKind = "upgrade_step"
 	AuditKindVolumeKey           AuditKind = "volume_key"
 )
 
@@ -200,9 +210,15 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindHostAdd:
 		return true
+	case AuditKindHostCordon:
+		return true
 	case AuditKindHostDelete:
 		return true
+	case AuditKindHostDrain:
+		return true
 	case AuditKindHostRegister:
+		return true
+	case AuditKindHostUncordon:
 		return true
 	case AuditKindImagePin:
 		return true
@@ -244,6 +260,10 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindReap:
 		return true
+	case AuditKindReleaseArtifact:
+		return true
+	case AuditKindReleaseImport:
+		return true
 	case AuditKindRemint:
 		return true
 	case AuditKindRevoke:
@@ -277,6 +297,16 @@ func (e AuditKind) Valid() bool {
 	case AuditKindTransfer:
 		return true
 	case AuditKindUndeploy:
+		return true
+	case AuditKindUpgradeAbort:
+		return true
+	case AuditKindUpgradePause:
+		return true
+	case AuditKindUpgradeResume:
+		return true
+	case AuditKindUpgradeStart:
+		return true
+	case AuditKindUpgradeStep:
 		return true
 	case AuditKindVolumeKey:
 		return true
@@ -392,6 +422,7 @@ const (
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
+	ErrorCodeFeatureUnavailable      ErrorCode = "feature_unavailable"
 	ErrorCodeForbidden               ErrorCode = "forbidden"
 	ErrorCodeHostHoldsLeases         ErrorCode = "host_holds_leases"
 	ErrorCodeHostIdentityMismatch    ErrorCode = "host_identity_mismatch"
@@ -445,6 +476,9 @@ const (
 	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
 	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
+	ErrorCodeUpgradeBlocked          ErrorCode = "upgrade_blocked"
+	ErrorCodeUpgradeState            ErrorCode = "upgrade_state"
+	ErrorCodeVersionSkew             ErrorCode = "version_skew"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -479,6 +513,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeDelegationInvalid:
 		return true
 	case ErrorCodeExists:
+		return true
+	case ErrorCodeFeatureUnavailable:
 		return true
 	case ErrorCodeForbidden:
 		return true
@@ -586,6 +622,12 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeUnknownWorkload:
 		return true
+	case ErrorCodeUpgradeBlocked:
+		return true
+	case ErrorCodeUpgradeState:
+		return true
+	case ErrorCodeVersionSkew:
+		return true
 	default:
 		return false
 	}
@@ -600,6 +642,24 @@ const (
 func (e HealthOk) Valid() bool {
 	switch e {
 	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostRegistrationOs.
+const (
+	Darwin HostRegistrationOs = "darwin"
+	Linux  HostRegistrationOs = "linux"
+)
+
+// Valid indicates whether the value is a known member of the HostRegistrationOs enum.
+func (e HostRegistrationOs) Valid() bool {
+	switch e {
+	case Darwin:
+		return true
+	case Linux:
 		return true
 	default:
 		return false
@@ -924,6 +984,48 @@ func (e QueueContentType) Valid() bool {
 	}
 }
 
+// Defines values for ReleaseEntrySource.
+const (
+	Builtin  ReleaseEntrySource = "builtin"
+	Imported ReleaseEntrySource = "imported"
+)
+
+// Valid indicates whether the value is a known member of the ReleaseEntrySource enum.
+func (e ReleaseEntrySource) Valid() bool {
+	switch e {
+	case Builtin:
+		return true
+	case Imported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReleaseNoteKind.
+const (
+	Breaking ReleaseNoteKind = "breaking"
+	Feature  ReleaseNoteKind = "feature"
+	Fix      ReleaseNoteKind = "fix"
+	Security ReleaseNoteKind = "security"
+)
+
+// Valid indicates whether the value is a known member of the ReleaseNoteKind enum.
+func (e ReleaseNoteKind) Valid() bool {
+	switch e {
+	case Breaking:
+		return true
+	case Feature:
+		return true
+	case Fix:
+		return true
+	case Security:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RequestRecordKind.
 const (
 	Dropped    RequestRecordKind = "dropped"
@@ -1014,6 +1116,105 @@ func (e Transport) Valid() bool {
 	case LocalDev:
 		return true
 	case Tsnet:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpgradeRunState.
+const (
+	UpgradeRunStateAborted UpgradeRunState = "aborted"
+	UpgradeRunStateDone    UpgradeRunState = "done"
+	UpgradeRunStateFailed  UpgradeRunState = "failed"
+	UpgradeRunStatePaused  UpgradeRunState = "paused"
+	UpgradeRunStateRunning UpgradeRunState = "running"
+)
+
+// Valid indicates whether the value is a known member of the UpgradeRunState enum.
+func (e UpgradeRunState) Valid() bool {
+	switch e {
+	case UpgradeRunStateAborted:
+		return true
+	case UpgradeRunStateDone:
+		return true
+	case UpgradeRunStateFailed:
+		return true
+	case UpgradeRunStatePaused:
+		return true
+	case UpgradeRunStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpgradeStepKind.
+const (
+	UpgradeStepKindBackup   UpgradeStepKind = "backup"
+	UpgradeStepKindContract UpgradeStepKind = "contract"
+	UpgradeStepKindHost     UpgradeStepKind = "host"
+	UpgradeStepKindMgmt     UpgradeStepKind = "mgmt"
+)
+
+// Valid indicates whether the value is a known member of the UpgradeStepKind enum.
+func (e UpgradeStepKind) Valid() bool {
+	switch e {
+	case UpgradeStepKindBackup:
+		return true
+	case UpgradeStepKindContract:
+		return true
+	case UpgradeStepKindHost:
+		return true
+	case UpgradeStepKindMgmt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpgradeStepMethod.
+const (
+	Bounce UpgradeStepMethod = "bounce"
+	Drain  UpgradeStepMethod = "drain"
+)
+
+// Valid indicates whether the value is a known member of the UpgradeStepMethod enum.
+func (e UpgradeStepMethod) Valid() bool {
+	switch e {
+	case Bounce:
+		return true
+	case Drain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpgradeStepStatus.
+const (
+	UpgradeStepStatusDone    UpgradeStepStatus = "done"
+	UpgradeStepStatusFailed  UpgradeStepStatus = "failed"
+	UpgradeStepStatusPending UpgradeStepStatus = "pending"
+	UpgradeStepStatusRunning UpgradeStepStatus = "running"
+	UpgradeStepStatusSkipped UpgradeStepStatus = "skipped"
+	UpgradeStepStatusWaiting UpgradeStepStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the UpgradeStepStatus enum.
+func (e UpgradeStepStatus) Valid() bool {
+	switch e {
+	case UpgradeStepStatusDone:
+		return true
+	case UpgradeStepStatusFailed:
+		return true
+	case UpgradeStepStatusPending:
+		return true
+	case UpgradeStepStatusRunning:
+		return true
+	case UpgradeStepStatusSkipped:
+		return true
+	case UpgradeStepStatusWaiting:
 		return true
 	default:
 		return false
@@ -1113,6 +1314,27 @@ func (e GetWorkloadLogsParamsSource) Valid() bool {
 	case Console:
 		return true
 	case Requests:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ActOnUpgradeJSONBodyAction.
+const (
+	Abort  ActOnUpgradeJSONBodyAction = "abort"
+	Pause  ActOnUpgradeJSONBodyAction = "pause"
+	Resume ActOnUpgradeJSONBodyAction = "resume"
+)
+
+// Valid indicates whether the value is a known member of the ActOnUpgradeJSONBodyAction enum.
+func (e ActOnUpgradeJSONBodyAction) Valid() bool {
+	switch e {
+	case Abort:
+		return true
+	case Pause:
+		return true
+	case Resume:
 		return true
 	default:
 		return false
@@ -1276,6 +1498,16 @@ type AuditBatch struct {
 // `tenant_delete`,
 // `host_register`,
 // `host_delete`,
+// `host_cordon`,
+// `host_uncordon`,
+// `host_drain`,
+// `release_import`,
+// `release_artifact`,
+// `upgrade_start`,
+// `upgrade_step`,
+// `upgrade_pause`,
+// `upgrade_resume`,
+// `upgrade_abort`,
 // `deploy`,
 // `undeploy`,
 // `create`,
@@ -1374,6 +1606,16 @@ type AuditRecord struct {
 	// `tenant_delete`,
 	// `host_register`,
 	// `host_delete`,
+	// `host_cordon`,
+	// `host_uncordon`,
+	// `host_drain`,
+	// `release_import`,
+	// `release_artifact`,
+	// `upgrade_start`,
+	// `upgrade_step`,
+	// `upgrade_pause`,
+	// `upgrade_resume`,
+	// `upgrade_abort`,
 	// `deploy`,
 	// `undeploy`,
 	// `create`,
@@ -1819,6 +2061,10 @@ type Error struct {
 	// | `superseded` | 409 | undeploy of a non-latest deployment |
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
+	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
+	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 	// | `killed` | 410 | tombstone (`TombstoneError`) |
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
@@ -1898,6 +2144,10 @@ type Error struct {
 // | `superseded` | 409 | undeploy of a non-latest deployment |
 // | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 // | `host_holds_leases` | 409 | host delete without `drain` |
+// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
+// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 // | `killed` | 410 | tombstone (`TombstoneError`) |
 // | `precondition_failed` | 412 | `If-Match` mismatch |
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
@@ -1940,11 +2190,18 @@ type Host struct {
 	// reports 0 for every VM dimension.
 	Capacity      *HostCapacity `json:"capacity,omitempty"`
 	CapacityNodes int           `json:"capacityNodes"`
-	CreatedAt     int64         `json:"createdAt"`
+
+	// CordonedAt unix ms; absent when not cordoned.
+	CordonedAt *int64  `json:"cordonedAt,omitempty"`
+	CordonedBy *string `json:"cordonedBy,omitempty"`
+	CreatedAt  int64   `json:"createdAt"`
 
 	// DNSName `twd-host-<hostID>.<tailnet>`.
 	DNSName *string `json:"dnsName,omitempty"`
-	HostID  string  `json:"hostID"`
+
+	// Features Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses.
+	Features *[]string `json:"features,omitempty"`
+	HostID   string    `json:"hostID"`
 
 	// LastSeen unix ms of the last heartbeat
 	LastSeen int64 `json:"lastSeen"`
@@ -1955,13 +2212,20 @@ type Host struct {
 
 	// NodeID Stable node ID of the host's `tag:twd-host` tsnet node (bound at registration).
 	NodeID *string `json:"nodeID,omitempty"`
+	Os     *string `json:"os,omitempty"`
 	Pool   *string `json:"pool,omitempty"`
+
+	// Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
+	Protocols *Protocols `json:"protocols,omitempty"`
 
 	// Push Where mgmt pushes kills and assignment changes. Over the tailnet,
 	// `port` names hostd's push listener on **its own tsnet node** (the
 	// WhoIs node; mgmt never pushes anywhere else). `url` is accepted only
 	// on the local-dev socket and only as `unix:///…`.
 	Push *HostPush `json:"push,omitempty"`
+
+	// Skew Why the host is outside the version window (placement skips it); absent when it is within.
+	Skew *string `json:"skew,omitempty"`
 
 	// Status `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 	Status    HostStatusEnum `json:"status"`
@@ -1970,6 +2234,9 @@ type Host struct {
 
 	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
 	Usage *HostUsage `json:"usage,omitempty"`
+
+	// Version The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x).
+	Version *string `json:"version,omitempty"`
 }
 
 // HostCapacity The capacity vector a host registers (ADR-032 D9). `nodes` is
@@ -2005,6 +2272,105 @@ type HostDeleteResult struct {
 	HostID         string    `json:"hostID"`
 	Killed         []string  `json:"killed"`
 	LeasesReleased []string  `json:"leasesReleased"`
+}
+
+// HostDrainRequest defines model for HostDrainRequest.
+type HostDrainRequest struct {
+	// AllowLocalStateLoss Move workloads with Durable Objects too; their storage stays behind on this host.
+	AllowLocalStateLoss *bool `json:"allowLocalStateLoss,omitempty"`
+	DryRun              *bool `json:"dryRun,omitempty"`
+}
+
+// HostDrainResult defines model for HostDrainResult.
+type HostDrainResult struct {
+	Cordoned bool   `json:"cordoned"`
+	DryRun   *bool  `json:"dryRun,omitempty"`
+	HostID   string `json:"hostID"`
+	Moved    []struct {
+		DeploymentID *string `json:"deploymentID,omitempty"`
+		TenantID     string  `json:"tenantID"`
+
+		// To The host it moved (or would move) to.
+		To       string `json:"to"`
+		Workload string `json:"workload"`
+	} `json:"moved"`
+	Refused []struct {
+		// Code The catalog. Status in parentheses.
+		//
+		// | code | status | when |
+		// |---|---|---|
+		// | `bad_request` | 400 | malformed body, parameter or filter |
+		// | `bad_cursor` | 400 | `cursor` does not decode |
+		// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+		// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+		// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+		// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+		// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
+		// | `no_identity` | 401 | WhoIs failed for the connection |
+		// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+		// | `host_token_invalid` | 403 | local-dev socket, wrong token |
+		// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+		// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+		// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
+		// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+		// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
+		// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
+		// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
+		// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+		// | `not_found` | 404 | — |
+		// | `unknown_tenant` | 404 | — |
+		// | `unknown_namespace` | 404 | `(workload, class)` not declared |
+		// | `no_logs` | 404 | the workload's host has no log file for it yet |
+		// | `unknown_secret` | 404 | the workload has no secret of that name |
+		// | `unknown_store` | 404 | the workload has no store of that kind and name |
+		// | `unknown_queue` | 404 | the tenant has no queue of that name |
+		// | `exists` | 409 | create of an existing ID |
+		// | `lease_lost` | 409 | epoch/holder fence failed |
+		// | `lease_held` | 409 | another host holds the lease |
+		// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+		// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
+		// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
+		// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
+		// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
+		// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+		// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
+		// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+		// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
+		// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
+		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+		// | `already_joined` | 409 | credential for an object that has a node |
+		// | `identity_conflict` | 409 | object ID collision across identities |
+		// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
+		// | `not_ready` | 409 | certificate requested before `ready` |
+		// | `superseded` | 409 | undeploy of a non-latest deployment |
+		// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
+		// | `host_holds_leases` | 409 | host delete without `drain` |
+		// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+		// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+		// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
+		// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
+		// | `killed` | 410 | tombstone (`TombstoneError`) |
+		// | `precondition_failed` | 412 | `If-Match` mismatch |
+		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
+		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
+		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
+		// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
+		// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+		// | `bootstrap_failed` | 502 | control plane refused the mint |
+		// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
+		// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
+		// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
+		// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
+		// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+		// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
+		// | `internal` | 500 | — |
+		Code     ErrorCode `json:"code"`
+		Message  string    `json:"message"`
+		TenantID string    `json:"tenantID"`
+		Workload string    `json:"workload"`
+	} `json:"refused"`
 }
 
 // HostJoin A single-use join key for a host's `tag:twd-host` node. Never logged.
@@ -2065,7 +2431,14 @@ type HostRegistration struct {
 	// reports 0 for every VM dimension.
 	Capacity      *HostCapacity `json:"capacity,omitempty"`
 	CapacityNodes int           `json:"capacityNodes"`
-	Pool          *string       `json:"pool,omitempty"`
+	Features      *[]string     `json:"features,omitempty"`
+
+	// Os GOOS (which release tarball the host runs).
+	Os   *HostRegistrationOs `json:"os,omitempty"`
+	Pool *string             `json:"pool,omitempty"`
+
+	// Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
+	Protocols *Protocols `json:"protocols,omitempty"`
 
 	// Push Where mgmt pushes kills and assignment changes. Over the tailnet,
 	// `port` names hostd's push listener on **its own tsnet node** (the
@@ -2076,7 +2449,13 @@ type HostRegistration struct {
 	// RegistrationSecret Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound.
 	RegistrationSecret *string    `json:"registrationSecret,omitempty"`
 	Tiers              []HostTier `json:"tiers"`
+
+	// Version The host's twd version. A host outside the version window is refused: `409 version_skew`.
+	Version *string `json:"version,omitempty"`
 }
+
+// HostRegistrationOs GOOS (which release tarball the host runs).
+type HostRegistrationOs string
 
 // HostStatus The heartbeat body.
 type HostStatus struct {
@@ -2581,6 +2960,9 @@ type PreflightResult struct {
 	Unchecked *[]string `json:"unchecked,omitempty"`
 }
 
+// Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
+type Protocols map[string]int
+
 // PublicAssignment A workload's public ingress (ADR-029). The host runs one extra node
 // for it (namespace `_public`, object name = the workload, hostname =
 // the workload name, `tags`) whose Funnel listener serves `routes`
@@ -2850,6 +3232,56 @@ type QueueSendResult struct {
 	OldestAt *int64   `json:"oldestAt,omitempty"`
 }
 
+// ReleaseArtifact defines model for ReleaseArtifact.
+type ReleaseArtifact struct {
+	Name    string `json:"name"`
+	Sha256  string `json:"sha256"`
+	Size    int64  `json:"size"`
+	Version string `json:"version"`
+}
+
+// ReleaseCatalog defines model for ReleaseCatalog.
+type ReleaseCatalog struct {
+	Current string         `json:"current"`
+	Items   []ReleaseEntry `json:"items"`
+}
+
+// ReleaseEntry defines model for ReleaseEntry.
+type ReleaseEntry struct {
+	// Artifacts Artifacts stored on this replica.
+	Artifacts          *[]string     `json:"artifacts,omitempty"`
+	ContractMigrations *[]string     `json:"contractMigrations,omitempty"`
+	Date               *string       `json:"date,omitempty"`
+	Notes              []ReleaseNote `json:"notes"`
+
+	// Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
+	Protocols *Protocols          `json:"protocols,omitempty"`
+	Schema    *string             `json:"schema,omitempty"`
+	Source    *ReleaseEntrySource `json:"source,omitempty"`
+	Upgrade   *[]string           `json:"upgrade,omitempty"`
+	Version   string              `json:"version"`
+	Workerd   *string             `json:"workerd,omitempty"`
+}
+
+// ReleaseEntrySource defines model for ReleaseEntry.Source.
+type ReleaseEntrySource string
+
+// ReleaseImport defines model for ReleaseImport.
+type ReleaseImport struct {
+	Entries []ReleaseEntry `json:"entries"`
+}
+
+// ReleaseNote defines model for ReleaseNote.
+type ReleaseNote struct {
+	Kind    ReleaseNoteKind `json:"kind"`
+	Source  *string         `json:"source,omitempty"`
+	Text    string          `json:"text"`
+	Upgrade *[]string       `json:"upgrade,omitempty"`
+}
+
+// ReleaseNoteKind defines model for ReleaseNote.Kind.
+type ReleaseNoteKind string
+
 // ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
 type ReplicaRef struct {
 	DeploymentID string            `json:"deploymentID"`
@@ -2940,6 +3372,26 @@ type RunningContainer struct {
 	Workload  string             `json:"workload"`
 }
 
+// SchemaStatus defines model for SchemaStatus.
+type SchemaStatus struct {
+	// Ahead Applied migrations this replica doesn't know (a newer replica ran them).
+	Ahead *[]string `json:"ahead,omitempty"`
+
+	// Applied The newest migration applied to the store.
+	Applied string `json:"applied"`
+
+	// Latest The newest migration this replica knows.
+	Latest string `json:"latest"`
+
+	// MinBinary The oldest twd-mgmt that may open the store.
+	MinBinary *string   `json:"minBinary,omitempty"`
+	Pending   *[]string `json:"pending,omitempty"`
+
+	// PendingContract Contract migrations deferred until every replica runs this version.
+	PendingContract   *[]string `json:"pendingContract,omitempty"`
+	RestoreGeneration *int64    `json:"restoreGeneration,omitempty"`
+}
+
 // Secret A workload secret's metadata. The value is never part of it.
 type Secret struct {
 	CreatedAt int64  `json:"createdAt"`
@@ -3025,6 +3477,9 @@ type Status struct {
 	// Transport `tsnet` in normal operation; `local-dev` when the unix socket is serving.
 	Transport Transport `json:"transport"`
 	Version   *string   `json:"version,omitempty"`
+
+	// Versions What runs where (ADR-041 §7).
+	Versions *StatusVersions `json:"versions,omitempty"`
 }
 
 // StatusClock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
@@ -3054,6 +3509,19 @@ type StatusReplicas struct {
 	Live    int     `json:"live"`
 	Message *string `json:"message,omitempty"`
 	Ok      bool    `json:"ok"`
+}
+
+// StatusVersions What runs where (ADR-041 §7).
+type StatusVersions struct {
+	// Hosts Host count by reported version ("" = none reported).
+	Hosts map[string]int `json:"hosts"`
+
+	// Mgmt Each live replica's version, by replica ID.
+	Mgmt   map[string]string `json:"mgmt"`
+	Schema *SchemaStatus     `json:"schema,omitempty"`
+
+	// Skewed Hosts outside the version window.
+	Skewed *[]string `json:"skewed,omitempty"`
 }
 
 // Store A platform storage object of a workload (ADR-platform-stores).
@@ -3202,9 +3670,7 @@ type Tenant struct {
 	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute int            `json:"registrationsPerMinute"`
 
-	// Tailnet MagicDNS suffix of the customer tailnet.
-	//
-	// Examples: tail7906d5.ts.net
+	// Tailnet MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net]
 	Tailnet string `json:"tailnet"`
 
 	// TenantID Examples: tn_tail7906d5
@@ -3375,6 +3841,10 @@ type TombstoneError struct {
 	// | `superseded` | 409 | undeploy of a non-latest deployment |
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
+	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
+	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 	// | `killed` | 410 | tombstone (`TombstoneError`) |
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
@@ -3408,6 +3878,93 @@ type TombstoneError struct {
 
 // Transport `tsnet` in normal operation; `local-dev` when the unix socket is serving.
 type Transport string
+
+// UpgradePlan defines model for UpgradePlan.
+type UpgradePlan struct {
+	// Actions Notes that need an operator action.
+	Actions *[]ReleaseNote `json:"actions,omitempty"`
+
+	// Blockers Why the run can't start; empty when it can.
+	Blockers []string      `json:"blockers"`
+	Breaking []ReleaseNote `json:"breaking"`
+	From     struct {
+		// Hosts Host ID to version.
+		Hosts map[string]string `json:"hosts"`
+		Mgmt  []string          `json:"mgmt"`
+	} `json:"from"`
+
+	// Path Every release between the oldest running version and `to` that has a contract migration (each must be passed through).
+	Path     *[]string     `json:"path,omitempty"`
+	Steps    []UpgradeStep `json:"steps"`
+	To       string        `json:"to"`
+	Warnings []string      `json:"warnings"`
+}
+
+// UpgradeRequest defines model for UpgradeRequest.
+type UpgradeRequest struct {
+	// Canary The canary host (default: the first host in order).
+	Canary *string `json:"canary,omitempty"`
+	DryRun *bool   `json:"dryRun,omitempty"`
+
+	// Hosts Upgrade only these hosts (default: every host below `to`).
+	Hosts *[]string `json:"hosts,omitempty"`
+
+	// SettleSeconds How long a host may take to re-register and settle (default 300).
+	SettleSeconds *int `json:"settleSeconds,omitempty"`
+
+	// SoakSeconds How long to watch the canary before the rest (default 300).
+	SoakSeconds *int `json:"soakSeconds,omitempty"`
+
+	// To The target release version (it must be in the catalog).
+	To string `json:"to"`
+}
+
+// UpgradeRun defines model for UpgradeRun.
+type UpgradeRun struct {
+	CreatedAt int64        `json:"createdAt"`
+	CreatedBy *string      `json:"createdBy,omitempty"`
+	ID        string       `json:"id"`
+	Plan      *UpgradePlan `json:"plan,omitempty"`
+
+	// Reason Why the run is paused, failed or aborted.
+	Reason *string         `json:"reason,omitempty"`
+	State  UpgradeRunState `json:"state"`
+
+	// Step Index of the current step.
+	Step      *int          `json:"step,omitempty"`
+	Steps     []UpgradeStep `json:"steps"`
+	To        string        `json:"to"`
+	UpdatedAt int64         `json:"updatedAt"`
+}
+
+// UpgradeRunState defines model for UpgradeRun.State.
+type UpgradeRunState string
+
+// UpgradeStep defines model for UpgradeStep.
+type UpgradeStep struct {
+	Canary     *bool           `json:"canary,omitempty"`
+	Detail     *string         `json:"detail,omitempty"`
+	FinishedAt *int64          `json:"finishedAt,omitempty"`
+	Host       *string         `json:"host,omitempty"`
+	Kind       UpgradeStepKind `json:"kind"`
+
+	// Method Hosts: `drain` moves its workloads off first; `bounce` restarts in place (workloads with host-local state, or nowhere to move).
+	Method *UpgradeStepMethod `json:"method,omitempty"`
+
+	// NeedsOperator A command the operator must run before this step can finish.
+	NeedsOperator *string           `json:"needsOperator,omitempty"`
+	StartedAt     *int64            `json:"startedAt,omitempty"`
+	Status        UpgradeStepStatus `json:"status"`
+}
+
+// UpgradeStepKind defines model for UpgradeStep.Kind.
+type UpgradeStepKind string
+
+// UpgradeStepMethod Hosts: `drain` moves its workloads off first; `bounce` restarts in place (workloads with host-local state, or nowhere to move).
+type UpgradeStepMethod string
+
+// UpgradeStepStatus defines model for UpgradeStep.Status.
+type UpgradeStepStatus string
 
 // VolumeKeyGrant A fenced release of a volume's data key. Never logged.
 type VolumeKeyGrant struct {
@@ -4020,6 +4577,14 @@ type CreateTelemetryGrantParams struct {
 	Epoch Epoch `form:"epoch" json:"epoch"`
 }
 
+// ActOnUpgradeJSONBody defines parameters for ActOnUpgrade.
+type ActOnUpgradeJSONBody struct {
+	Action ActOnUpgradeJSONBodyAction `json:"action"`
+}
+
+// ActOnUpgradeJSONBodyAction defines parameters for ActOnUpgrade.
+type ActOnUpgradeJSONBodyAction string
+
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
 type CreateVolumeKeyGrantParams struct {
 	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
@@ -4041,6 +4606,9 @@ type CreateHostJSONRequestBody = HostCreate
 // RegisterHostJSONRequestBody defines body for RegisterHost for application/json ContentType.
 type RegisterHostJSONRequestBody = HostRegistration
 
+// DrainHostJSONRequestBody defines body for DrainHost for application/json ContentType.
+type DrainHostJSONRequestBody = HostDrainRequest
+
 // ReportHostPathsJSONRequestBody defines body for ReportHostPaths for application/json ContentType.
 type ReportHostPathsJSONRequestBody = HostPathReport
 
@@ -4058,6 +4626,9 @@ type UpdateObjectJSONRequestBody = ObjectPatch
 
 // UpdateObjectApplicationMergePatchPlusJSONRequestBody defines body for UpdateObject for application/merge-patch+json ContentType.
 type UpdateObjectApplicationMergePatchPlusJSONRequestBody = ObjectPatch
+
+// ImportReleasesJSONRequestBody defines body for ImportReleases for application/json ContentType.
+type ImportReleasesJSONRequestBody = ReleaseImport
 
 // CreateTenantJSONRequestBody defines body for CreateTenant for application/json ContentType.
 type CreateTenantJSONRequestBody = TenantCreate
@@ -4100,6 +4671,12 @@ type PutKVValueJSONRequestBody = KVPut
 
 // AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
 type AppendStoreJournalJSONRequestBody = StoreAppend
+
+// CreateUpgradeJSONRequestBody defines body for CreateUpgrade for application/json ContentType.
+type CreateUpgradeJSONRequestBody = UpgradeRequest
+
+// ActOnUpgradeJSONRequestBody defines body for ActOnUpgrade for application/json ContentType.
+type ActOnUpgradeJSONRequestBody ActOnUpgradeJSONBody
 
 // Getter for additional properties for OIDCConfiguration. Returns the specified
 // element and whether it was found
@@ -4879,6 +5456,61 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/hosts/{id}/assignments (the `ListHostAssignments` operationId).
 	ListHostAssignments(ctx context.Context, id HostID, params *ListHostAssignmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UncordonHost Uncordon a host
+	//
+	// Placement may choose the host again. Idempotent; audited `host_uncordon`.
+	//
+	// Corresponds with DELETE /v1/hosts/{id}/cordon (the `UncordonHost` operationId).
+	UncordonHost(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CordonHost Cordon a host (no new placements)
+	//
+	// The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
+	// skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
+	//
+	// Corresponds with PUT /v1/hosts/{id}/cordon (the `CordonHost` operationId).
+	CordonHost(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DrainHostWithBody Cordon a host and move its workloads to other hosts
+	//
+	// Cordons the host, then re-places each workload assigned to it on another eligible host
+	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	//
+	// - a stateless workload (no Durable Objects) moves;
+	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+	//   (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+	//   and its objects start empty on the new host;
+	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+	//
+	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// `DELETE /v1/hosts/{id}` removes it.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+	DrainHostWithBody(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DrainHost Cordon a host and move its workloads to other hosts
+	//
+	// Cordons the host, then re-places each workload assigned to it on another eligible host
+	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	//
+	// - a stateless workload (no Durable Objects) moves;
+	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+	//   (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+	//   and its objects start empty on the new host;
+	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+	//
+	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// `DELETE /v1/hosts/{id}` removes it.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+	DrainHost(ctx context.Context, id HostID, body DrainHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ReportHostPathsWithBody Report measured tailnet paths (smart placement)
 	//
 	// Smart placement (ADR-033). The host reports, per tenant, the path
@@ -5235,6 +5867,55 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/objects/{id}/credentials (the `CreateObjectCredential` operationId).
 	CreateObjectCredential(ctx context.Context, id ObjectID, params *CreateObjectCredentialParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListReleases The release catalog
+	//
+	// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+	// release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
+	// notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
+	//
+	// Corresponds with GET /v1/releases (the `ListReleases` operationId).
+	ListReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ImportReleasesWithBody Import catalog entries (from a release's share/twd/catalog.json)
+	//
+	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+	// `release_import`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+	ImportReleasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ImportReleases Import catalog entries (from a release's share/twd/catalog.json)
+	//
+	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+	// `release_import`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+	ImportReleases(ctx context.Context, body ImportReleasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetReleaseArtifact Download a release tarball (hosts upgrading themselves)
+	//
+	// Corresponds with GET /v1/releases/{version}/artifacts/{name} (the `GetReleaseArtifact` operationId).
+	GetReleaseArtifact(ctx context.Context, version string, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutReleaseArtifactWithBody Upload a release tarball (or its SHA256SUMS)
+	//
+	// Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
+	// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+	// replicas that don't share that directory each need the upload. Audited `release_artifact`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/releases/{version}/artifacts/{name} (the `PutReleaseArtifact` operationId).
+	PutReleaseArtifactWithBody(ctx context.Context, version string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetStatus mgmt status
 	//
@@ -6018,6 +6699,70 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
 	CreateTelemetryGrant(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListUpgrades Upgrade runs, newest first
+	//
+	// Corresponds with GET /v1/upgrades (the `ListUpgrades` operationId).
+	ListUpgrades(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateUpgradeWithBody Plan an upgrade, or start an upgrade run
+	//
+	// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+	// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+	// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+	// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+	// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+	// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+	// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+	// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+	CreateUpgradeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateUpgrade Plan an upgrade, or start an upgrade run
+	//
+	// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+	// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+	// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+	// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+	// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+	// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+	// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+	// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+	CreateUpgrade(ctx context.Context, body CreateUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUpgrade One upgrade run
+	//
+	// Corresponds with GET /v1/upgrades/{id} (the `GetUpgrade` operationId).
+	GetUpgrade(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ActOnUpgradeWithBody Pause, resume or abort an upgrade run
+	//
+	// `pause` stops before the next step; `resume` continues a paused run (after the operator
+	// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+	// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+	ActOnUpgradeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ActOnUpgrade Pause, resume or abort an upgrade run
+	//
+	// `pause` stops before the next step; `resume` continues a paused run (after the operator
+	// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+	// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+	ActOnUpgrade(ctx context.Context, id string, body ActOnUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	//
 	// Creates a key grant: the 256-bit data key of the `(tenant, workload)`
@@ -6769,6 +7514,101 @@ func (c *Client) ListHostAssignments(ctx context.Context, id HostID, params *Lis
 	return c.Client.Do(req)
 }
 
+// UncordonHost Uncordon a host
+//
+// Placement may choose the host again. Idempotent; audited `host_uncordon`.
+//
+// Corresponds with DELETE /v1/hosts/{id}/cordon (the `UncordonHost` operationId).
+func (c *Client) UncordonHost(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUncordonHostRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CordonHost Cordon a host (no new placements)
+//
+// The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
+// skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
+//
+// Corresponds with PUT /v1/hosts/{id}/cordon (the `CordonHost` operationId).
+func (c *Client) CordonHost(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCordonHostRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DrainHostWithBody Cordon a host and move its workloads to other hosts
+//
+// Cordons the host, then re-places each workload assigned to it on another eligible host
+// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+//
+//   - a stateless workload (no Durable Objects) moves;
+//   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+//     (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+//     and its objects start empty on the new host;
+//   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+//
+// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// `DELETE /v1/hosts/{id}` removes it.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+func (c *Client) DrainHostWithBody(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDrainHostRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DrainHost Cordon a host and move its workloads to other hosts
+//
+// Cordons the host, then re-places each workload assigned to it on another eligible host
+// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+//
+//   - a stateless workload (no Durable Objects) moves;
+//   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+//     (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+//     and its objects start empty on the new host;
+//   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+//
+// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// `DELETE /v1/hosts/{id}` removes it.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+func (c *Client) DrainHost(ctx context.Context, id HostID, body DrainHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDrainHostRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ReportHostPathsWithBody Report measured tailnet paths (smart placement)
 //
 // Smart placement (ADR-033). The host reports, per tenant, the path
@@ -7318,6 +8158,105 @@ func (c *Client) GetObjectCertificate(ctx context.Context, id ObjectID, reqEdito
 // Corresponds with POST /v1/objects/{id}/credentials (the `CreateObjectCredential` operationId).
 func (c *Client) CreateObjectCredential(ctx context.Context, id ObjectID, params *CreateObjectCredentialParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateObjectCredentialRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListReleases The release catalog
+//
+// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+// release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
+// notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
+//
+// Corresponds with GET /v1/releases (the `ListReleases` operationId).
+func (c *Client) ListReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListReleasesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ImportReleasesWithBody Import catalog entries (from a release's share/twd/catalog.json)
+//
+// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+// `release_import`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+func (c *Client) ImportReleasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewImportReleasesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ImportReleases Import catalog entries (from a release's share/twd/catalog.json)
+//
+// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+// `release_import`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+func (c *Client) ImportReleases(ctx context.Context, body ImportReleasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewImportReleasesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetReleaseArtifact Download a release tarball (hosts upgrading themselves)
+//
+// Corresponds with GET /v1/releases/{version}/artifacts/{name} (the `GetReleaseArtifact` operationId).
+func (c *Client) GetReleaseArtifact(ctx context.Context, version string, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReleaseArtifactRequest(c.Server, version, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutReleaseArtifactWithBody Upload a release tarball (or its SHA256SUMS)
+//
+// Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
+// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+// replicas that don't share that directory each need the upload. Audited `release_artifact`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/releases/{version}/artifacts/{name} (the `PutReleaseArtifact` operationId).
+func (c *Client) PutReleaseArtifactWithBody(ctx context.Context, version string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutReleaseArtifactRequestWithBody(c.Server, version, name, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8660,6 +9599,130 @@ func (c *Client) AppendStoreJournal(ctx context.Context, id TenantID, workload W
 // Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
 func (c *Client) CreateTelemetryGrant(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateTelemetryGrantRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListUpgrades Upgrade runs, newest first
+//
+// Corresponds with GET /v1/upgrades (the `ListUpgrades` operationId).
+func (c *Client) ListUpgrades(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUpgradesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateUpgradeWithBody Plan an upgrade, or start an upgrade run
+//
+// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+func (c *Client) CreateUpgradeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUpgradeRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateUpgrade Plan an upgrade, or start an upgrade run
+//
+// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+func (c *Client) CreateUpgrade(ctx context.Context, body CreateUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUpgradeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUpgrade One upgrade run
+//
+// Corresponds with GET /v1/upgrades/{id} (the `GetUpgrade` operationId).
+func (c *Client) GetUpgrade(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUpgradeRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ActOnUpgradeWithBody Pause, resume or abort an upgrade run
+//
+// `pause` stops before the next step; `resume` continues a paused run (after the operator
+// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+func (c *Client) ActOnUpgradeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewActOnUpgradeRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ActOnUpgrade Pause, resume or abort an upgrade run
+//
+// `pause` stops before the next step; `resume` continues a paused run (after the operator
+// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+func (c *Client) ActOnUpgrade(ctx context.Context, id string, body ActOnUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewActOnUpgradeRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10038,6 +11101,121 @@ func NewListHostAssignmentsRequest(server string, id HostID, params *ListHostAss
 	return req, nil
 }
 
+// NewUncordonHostRequest constructs an http.Request for the UncordonHost method
+func NewUncordonHostRequest(server string, id HostID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s/cordon", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCordonHostRequest constructs an http.Request for the CordonHost method
+func NewCordonHostRequest(server string, id HostID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s/cordon", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDrainHostRequest calls the generic DrainHost builder with application/json body
+func NewDrainHostRequest(server string, id HostID, body DrainHostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDrainHostRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewDrainHostRequestWithBody constructs an http.Request for the DrainHost method, with any body, and a specified content type
+func NewDrainHostRequestWithBody(server string, id HostID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s/drain", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewReportHostPathsRequest calls the generic ReportHostPaths builder with application/json body
 func NewReportHostPathsRequest(server string, id HostID, body ReportHostPathsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -10832,6 +12010,157 @@ func NewCreateObjectCredentialRequest(server string, id ObjectID, params *Create
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewListReleasesRequest constructs an http.Request for the ListReleases method
+func NewListReleasesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/releases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewImportReleasesRequest calls the generic ImportReleases builder with application/json body
+func NewImportReleasesRequest(server string, body ImportReleasesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewImportReleasesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewImportReleasesRequestWithBody constructs an http.Request for the ImportReleases method, with any body, and a specified content type
+func NewImportReleasesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/releases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetReleaseArtifactRequest constructs an http.Request for the GetReleaseArtifact method
+func NewGetReleaseArtifactRequest(server string, version string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/releases/%s/artifacts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutReleaseArtifactRequestWithBody constructs an http.Request for the PutReleaseArtifact method, with any body, and a specified content type
+func NewPutReleaseArtifactRequestWithBody(server string, version string, name string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/releases/%s/artifacts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -13647,6 +14976,154 @@ func NewCreateTelemetryGrantRequest(server string, id TenantID, workload Workloa
 	return req, nil
 }
 
+// NewListUpgradesRequest constructs an http.Request for the ListUpgrades method
+func NewListUpgradesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/upgrades")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateUpgradeRequest calls the generic CreateUpgrade builder with application/json body
+func NewCreateUpgradeRequest(server string, body CreateUpgradeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateUpgradeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateUpgradeRequestWithBody constructs an http.Request for the CreateUpgrade method, with any body, and a specified content type
+func NewCreateUpgradeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/upgrades")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetUpgradeRequest constructs an http.Request for the GetUpgrade method
+func NewGetUpgradeRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/upgrades/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewActOnUpgradeRequest calls the generic ActOnUpgrade builder with application/json body
+func NewActOnUpgradeRequest(server string, id string, body ActOnUpgradeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewActOnUpgradeRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewActOnUpgradeRequestWithBody constructs an http.Request for the ActOnUpgrade method, with any body, and a specified content type
+func NewActOnUpgradeRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/upgrades/%s/actions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewCreateVolumeKeyGrantRequest constructs an http.Request for the CreateVolumeKeyGrant method
 func NewCreateVolumeKeyGrantRequest(server string, id VolumeID, params *CreateVolumeKeyGrantParams) (*http.Request, error) {
 	var err error
@@ -14254,6 +15731,65 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/hosts/{id}/assignments (the `ListHostAssignments` operationId).
 	ListHostAssignmentsWithResponse(ctx context.Context, id HostID, params *ListHostAssignmentsParams, reqEditors ...RequestEditorFn) (*ListHostAssignmentsResponse, error)
 
+	// UncordonHostWithResponse Uncordon a host
+	//
+	// Placement may choose the host again. Idempotent; audited `host_uncordon`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/hosts/{id}/cordon (the `UncordonHost` operationId).
+	UncordonHostWithResponse(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*UncordonHostResponse, error)
+
+	// CordonHostWithResponse Cordon a host (no new placements)
+	//
+	// The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
+	// skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{id}/cordon (the `CordonHost` operationId).
+	CordonHostWithResponse(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*CordonHostResponse, error)
+
+	// DrainHostWithBodyWithResponse Cordon a host and move its workloads to other hosts
+	//
+	// Cordons the host, then re-places each workload assigned to it on another eligible host
+	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	//
+	// - a stateless workload (no Durable Objects) moves;
+	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+	//   (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+	//   and its objects start empty on the new host;
+	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+	//
+	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// `DELETE /v1/hosts/{id}` removes it.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+	DrainHostWithBodyWithResponse(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DrainHostResponse, error)
+
+	// DrainHostWithResponse Cordon a host and move its workloads to other hosts
+	//
+	// Cordons the host, then re-places each workload assigned to it on another eligible host
+	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	//
+	// - a stateless workload (no Durable Objects) moves;
+	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+	//   (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+	//   and its objects start empty on the new host;
+	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+	//
+	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// `DELETE /v1/hosts/{id}` removes it.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+	DrainHostWithResponse(ctx context.Context, id HostID, body DrainHostJSONRequestBody, reqEditors ...RequestEditorFn) (*DrainHostResponse, error)
+
 	// ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
 	//
 	// Smart placement (ADR-033). The host reports, per tenant, the path
@@ -14628,6 +16164,59 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/objects/{id}/credentials (the `CreateObjectCredential` operationId).
 	CreateObjectCredentialWithResponse(ctx context.Context, id ObjectID, params *CreateObjectCredentialParams, reqEditors ...RequestEditorFn) (*CreateObjectCredentialResponse, error)
+
+	// ListReleasesWithResponse The release catalog
+	//
+	// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+	// release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
+	// notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/releases (the `ListReleases` operationId).
+	ListReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListReleasesResponse, error)
+
+	// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+	//
+	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+	// `release_import`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+	ImportReleasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ImportReleasesResponse, error)
+
+	// ImportReleasesWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+	//
+	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+	// `release_import`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+	ImportReleasesWithResponse(ctx context.Context, body ImportReleasesJSONRequestBody, reqEditors ...RequestEditorFn) (*ImportReleasesResponse, error)
+
+	// GetReleaseArtifactWithResponse Download a release tarball (hosts upgrading themselves)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/releases/{version}/artifacts/{name} (the `GetReleaseArtifact` operationId).
+	GetReleaseArtifactWithResponse(ctx context.Context, version string, name string, reqEditors ...RequestEditorFn) (*GetReleaseArtifactResponse, error)
+
+	// PutReleaseArtifactWithBodyWithResponse Upload a release tarball (or its SHA256SUMS)
+	//
+	// Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
+	// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+	// replicas that don't share that directory each need the upload. Audited `release_artifact`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/releases/{version}/artifacts/{name} (the `PutReleaseArtifact` operationId).
+	PutReleaseArtifactWithBodyWithResponse(ctx context.Context, version string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutReleaseArtifactResponse, error)
 
 	// GetStatusWithResponse mgmt status
 	//
@@ -15470,6 +17059,74 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
 	CreateTelemetryGrantWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*CreateTelemetryGrantResponse, error)
+
+	// ListUpgradesWithResponse Upgrade runs, newest first
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/upgrades (the `ListUpgrades` operationId).
+	ListUpgradesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUpgradesResponse, error)
+
+	// CreateUpgradeWithBodyWithResponse Plan an upgrade, or start an upgrade run
+	//
+	// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+	// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+	// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+	// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+	// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+	// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+	// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+	// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+	CreateUpgradeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateUpgradeResponse, error)
+
+	// CreateUpgradeWithResponse Plan an upgrade, or start an upgrade run
+	//
+	// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+	// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+	// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+	// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+	// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+	// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+	// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+	// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+	CreateUpgradeWithResponse(ctx context.Context, body CreateUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUpgradeResponse, error)
+
+	// GetUpgradeWithResponse One upgrade run
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/upgrades/{id} (the `GetUpgrade` operationId).
+	GetUpgradeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetUpgradeResponse, error)
+
+	// ActOnUpgradeWithBodyWithResponse Pause, resume or abort an upgrade run
+	//
+	// `pause` stops before the next step; `resume` continues a paused run (after the operator
+	// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+	// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+	ActOnUpgradeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ActOnUpgradeResponse, error)
+
+	// ActOnUpgradeWithResponse Pause, resume or abort an upgrade run
+	//
+	// `pause` stops before the next step; `resume` continues a paused run (after the operator
+	// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+	// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+	ActOnUpgradeWithResponse(ctx context.Context, id string, body ActOnUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*ActOnUpgradeResponse, error)
 
 	// CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 	//
@@ -17574,6 +19231,255 @@ func (r ListHostAssignmentsResponse) ContentType() string {
 	return ""
 }
 
+// UncordonHostResponse403Headers the declared response headers of an HTTP 403 response for UncordonHost
+type UncordonHostResponse403Headers struct {
+	TwdError *string
+}
+
+// UncordonHostResponse404Headers the declared response headers of an HTTP 404 response for UncordonHost
+type UncordonHostResponse404Headers struct {
+	TwdError *string
+}
+
+// UncordonHostResponseDefaultHeaders the declared response headers of an HTTP default response for UncordonHost
+type UncordonHostResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type UncordonHostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Host
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *UncordonHostResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *UncordonHostResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *UncordonHostResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UncordonHostResponse) GetJSON200() *Host {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r UncordonHostResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UncordonHostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UncordonHostResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UncordonHostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UncordonHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UncordonHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UncordonHostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CordonHostResponse403Headers the declared response headers of an HTTP 403 response for CordonHost
+type CordonHostResponse403Headers struct {
+	TwdError *string
+}
+
+// CordonHostResponse404Headers the declared response headers of an HTTP 404 response for CordonHost
+type CordonHostResponse404Headers struct {
+	TwdError *string
+}
+
+// CordonHostResponseDefaultHeaders the declared response headers of an HTTP default response for CordonHost
+type CordonHostResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CordonHostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Host
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CordonHostResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *CordonHostResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CordonHostResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CordonHostResponse) GetJSON200() *Host {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CordonHostResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CordonHostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CordonHostResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CordonHostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CordonHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CordonHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CordonHostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DrainHostResponse403Headers the declared response headers of an HTTP 403 response for DrainHost
+type DrainHostResponse403Headers struct {
+	TwdError *string
+}
+
+// DrainHostResponse404Headers the declared response headers of an HTTP 404 response for DrainHost
+type DrainHostResponse404Headers struct {
+	TwdError *string
+}
+
+// DrainHostResponseDefaultHeaders the declared response headers of an HTTP default response for DrainHost
+type DrainHostResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DrainHostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *HostDrainResult
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DrainHostResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DrainHostResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DrainHostResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DrainHostResponse) GetJSON200() *HostDrainResult {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DrainHostResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DrainHostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DrainHostResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DrainHostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DrainHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DrainHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DrainHostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ReportHostPathsResponse400Headers the declared response headers of an HTTP 400 response for ReportHostPaths
 type ReportHostPathsResponse400Headers struct {
 	TwdError *string
@@ -19008,6 +20914,317 @@ func (r CreateObjectCredentialResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateObjectCredentialResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListReleasesResponse403Headers the declared response headers of an HTTP 403 response for ListReleases
+type ListReleasesResponse403Headers struct {
+	TwdError *string
+}
+
+// ListReleasesResponseDefaultHeaders the declared response headers of an HTTP default response for ListReleases
+type ListReleasesResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListReleasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReleaseCatalog
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListReleasesResponse403Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListReleasesResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListReleasesResponse) GetJSON200() *ReleaseCatalog {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListReleasesResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListReleasesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListReleasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListReleasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListReleasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListReleasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ImportReleasesResponse400Headers the declared response headers of an HTTP 400 response for ImportReleases
+type ImportReleasesResponse400Headers struct {
+	TwdError *string
+}
+
+// ImportReleasesResponse403Headers the declared response headers of an HTTP 403 response for ImportReleases
+type ImportReleasesResponse403Headers struct {
+	TwdError *string
+}
+
+// ImportReleasesResponseDefaultHeaders the declared response headers of an HTTP default response for ImportReleases
+type ImportReleasesResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ImportReleasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReleaseCatalog
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ImportReleasesResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ImportReleasesResponse403Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ImportReleasesResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ImportReleasesResponse) GetJSON200() *ReleaseCatalog {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ImportReleasesResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ImportReleasesResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ImportReleasesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ImportReleasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ImportReleasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ImportReleasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ImportReleasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetReleaseArtifactResponse403Headers the declared response headers of an HTTP 403 response for GetReleaseArtifact
+type GetReleaseArtifactResponse403Headers struct {
+	TwdError *string
+}
+
+// GetReleaseArtifactResponse404Headers the declared response headers of an HTTP 404 response for GetReleaseArtifact
+type GetReleaseArtifactResponse404Headers struct {
+	TwdError *string
+}
+
+// GetReleaseArtifactResponseDefaultHeaders the declared response headers of an HTTP default response for GetReleaseArtifact
+type GetReleaseArtifactResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetReleaseArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetReleaseArtifactResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetReleaseArtifactResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetReleaseArtifactResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetReleaseArtifactResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetReleaseArtifactResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetReleaseArtifactResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetReleaseArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetReleaseArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetReleaseArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetReleaseArtifactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PutReleaseArtifactResponse400Headers the declared response headers of an HTTP 400 response for PutReleaseArtifact
+type PutReleaseArtifactResponse400Headers struct {
+	TwdError *string
+}
+
+// PutReleaseArtifactResponse403Headers the declared response headers of an HTTP 403 response for PutReleaseArtifact
+type PutReleaseArtifactResponse403Headers struct {
+	TwdError *string
+}
+
+// PutReleaseArtifactResponseDefaultHeaders the declared response headers of an HTTP default response for PutReleaseArtifact
+type PutReleaseArtifactResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type PutReleaseArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ReleaseArtifact
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *PutReleaseArtifactResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *PutReleaseArtifactResponse403Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *PutReleaseArtifactResponseDefaultHeaders
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PutReleaseArtifactResponse) GetJSON201() *ReleaseArtifact {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutReleaseArtifactResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutReleaseArtifactResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PutReleaseArtifactResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutReleaseArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutReleaseArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutReleaseArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutReleaseArtifactResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23176,6 +25393,363 @@ func (r CreateTelemetryGrantResponse) ContentType() string {
 	return ""
 }
 
+// ListUpgradesResponse403Headers the declared response headers of an HTTP 403 response for ListUpgrades
+type ListUpgradesResponse403Headers struct {
+	TwdError *string
+}
+
+// ListUpgradesResponseDefaultHeaders the declared response headers of an HTTP default response for ListUpgrades
+type ListUpgradesResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListUpgradesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Items []UpgradeRun `json:"items"`
+	}
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListUpgradesResponse403Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListUpgradesResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListUpgradesResponse) GetJSON200() *struct {
+	Items []UpgradeRun `json:"items"`
+} {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListUpgradesResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListUpgradesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListUpgradesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListUpgradesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListUpgradesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListUpgradesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateUpgradeResponse400Headers the declared response headers of an HTTP 400 response for CreateUpgrade
+type CreateUpgradeResponse400Headers struct {
+	TwdError *string
+}
+
+// CreateUpgradeResponse403Headers the declared response headers of an HTTP 403 response for CreateUpgrade
+type CreateUpgradeResponse403Headers struct {
+	TwdError *string
+}
+
+// CreateUpgradeResponse409Headers the declared response headers of an HTTP 409 response for CreateUpgrade
+type CreateUpgradeResponse409Headers struct {
+	TwdError *string
+}
+
+// CreateUpgradeResponseDefaultHeaders the declared response headers of an HTTP default response for CreateUpgrade
+type CreateUpgradeResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CreateUpgradeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UpgradePlan
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *UpgradeRun
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *CreateUpgradeResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CreateUpgradeResponse403Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *CreateUpgradeResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CreateUpgradeResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateUpgradeResponse) GetJSON200() *UpgradePlan {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateUpgradeResponse) GetJSON201() *UpgradeRun {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateUpgradeResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateUpgradeResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateUpgradeResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateUpgradeResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateUpgradeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateUpgradeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateUpgradeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateUpgradeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetUpgradeResponse403Headers the declared response headers of an HTTP 403 response for GetUpgrade
+type GetUpgradeResponse403Headers struct {
+	TwdError *string
+}
+
+// GetUpgradeResponse404Headers the declared response headers of an HTTP 404 response for GetUpgrade
+type GetUpgradeResponse404Headers struct {
+	TwdError *string
+}
+
+// GetUpgradeResponseDefaultHeaders the declared response headers of an HTTP default response for GetUpgrade
+type GetUpgradeResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetUpgradeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UpgradeRun
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetUpgradeResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetUpgradeResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetUpgradeResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUpgradeResponse) GetJSON200() *UpgradeRun {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetUpgradeResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetUpgradeResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetUpgradeResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUpgradeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUpgradeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUpgradeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUpgradeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ActOnUpgradeResponse403Headers the declared response headers of an HTTP 403 response for ActOnUpgrade
+type ActOnUpgradeResponse403Headers struct {
+	TwdError *string
+}
+
+// ActOnUpgradeResponse404Headers the declared response headers of an HTTP 404 response for ActOnUpgrade
+type ActOnUpgradeResponse404Headers struct {
+	TwdError *string
+}
+
+// ActOnUpgradeResponse409Headers the declared response headers of an HTTP 409 response for ActOnUpgrade
+type ActOnUpgradeResponse409Headers struct {
+	TwdError *string
+}
+
+// ActOnUpgradeResponseDefaultHeaders the declared response headers of an HTTP default response for ActOnUpgrade
+type ActOnUpgradeResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ActOnUpgradeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UpgradeRun
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ActOnUpgradeResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ActOnUpgradeResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ActOnUpgradeResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ActOnUpgradeResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ActOnUpgradeResponse) GetJSON200() *UpgradeRun {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ActOnUpgradeResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ActOnUpgradeResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ActOnUpgradeResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ActOnUpgradeResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ActOnUpgradeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ActOnUpgradeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ActOnUpgradeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ActOnUpgradeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // CreateVolumeKeyGrantResponse201Headers the declared response headers of an HTTP 201 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse201Headers struct {
 	CacheControl *string
@@ -24016,6 +26590,89 @@ func (c *ClientWithResponses) ListHostAssignmentsWithResponse(ctx context.Contex
 	return ParseListHostAssignmentsResponse(rsp)
 }
 
+// UncordonHostWithResponse Uncordon a host
+//
+// Placement may choose the host again. Idempotent; audited `host_uncordon`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/hosts/{id}/cordon (the `UncordonHost` operationId).
+func (c *ClientWithResponses) UncordonHostWithResponse(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*UncordonHostResponse, error) {
+	rsp, err := c.UncordonHost(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUncordonHostResponse(rsp)
+}
+
+// CordonHostWithResponse Cordon a host (no new placements)
+//
+// The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
+// skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{id}/cordon (the `CordonHost` operationId).
+func (c *ClientWithResponses) CordonHostWithResponse(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*CordonHostResponse, error) {
+	rsp, err := c.CordonHost(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCordonHostResponse(rsp)
+}
+
+// DrainHostWithBodyWithResponse Cordon a host and move its workloads to other hosts
+//
+// Cordons the host, then re-places each workload assigned to it on another eligible host
+// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+//
+//   - a stateless workload (no Durable Objects) moves;
+//   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+//     (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+//     and its objects start empty on the new host;
+//   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+//
+// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// `DELETE /v1/hosts/{id}` removes it.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+func (c *ClientWithResponses) DrainHostWithBodyWithResponse(ctx context.Context, id HostID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DrainHostResponse, error) {
+	rsp, err := c.DrainHostWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDrainHostResponse(rsp)
+}
+
+// DrainHostWithResponse Cordon a host and move its workloads to other hosts
+//
+// Cordons the host, then re-places each workload assigned to it on another eligible host
+// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+//
+//   - a stateless workload (no Durable Objects) moves;
+//   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+//     (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+//     and its objects start empty on the new host;
+//   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+//
+// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// `DELETE /v1/hosts/{id}` removes it.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/hosts/{id}/drain (the `DrainHost` operationId).
+func (c *ClientWithResponses) DrainHostWithResponse(ctx context.Context, id HostID, body DrainHostJSONRequestBody, reqEditors ...RequestEditorFn) (*DrainHostResponse, error) {
+	rsp, err := c.DrainHost(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDrainHostResponse(rsp)
+}
+
 // ReportHostPathsWithBodyWithResponse Report measured tailnet paths (smart placement)
 //
 // Smart placement (ADR-033). The host reports, per tenant, the path
@@ -24511,6 +27168,89 @@ func (c *ClientWithResponses) CreateObjectCredentialWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseCreateObjectCredentialResponse(rsp)
+}
+
+// ListReleasesWithResponse The release catalog
+//
+// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+// release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
+// notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/releases (the `ListReleases` operationId).
+func (c *ClientWithResponses) ListReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListReleasesResponse, error) {
+	rsp, err := c.ListReleases(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListReleasesResponse(rsp)
+}
+
+// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+//
+// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+// `release_import`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+func (c *ClientWithResponses) ImportReleasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ImportReleasesResponse, error) {
+	rsp, err := c.ImportReleasesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseImportReleasesResponse(rsp)
+}
+
+// ImportReleasesWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+//
+// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+// `release_import`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
+func (c *ClientWithResponses) ImportReleasesWithResponse(ctx context.Context, body ImportReleasesJSONRequestBody, reqEditors ...RequestEditorFn) (*ImportReleasesResponse, error) {
+	rsp, err := c.ImportReleases(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseImportReleasesResponse(rsp)
+}
+
+// GetReleaseArtifactWithResponse Download a release tarball (hosts upgrading themselves)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/releases/{version}/artifacts/{name} (the `GetReleaseArtifact` operationId).
+func (c *ClientWithResponses) GetReleaseArtifactWithResponse(ctx context.Context, version string, name string, reqEditors ...RequestEditorFn) (*GetReleaseArtifactResponse, error) {
+	rsp, err := c.GetReleaseArtifact(ctx, version, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetReleaseArtifactResponse(rsp)
+}
+
+// PutReleaseArtifactWithBodyWithResponse Upload a release tarball (or its SHA256SUMS)
+//
+// Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
+// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+// replicas that don't share that directory each need the upload. Audited `release_artifact`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/releases/{version}/artifacts/{name} (the `PutReleaseArtifact` operationId).
+func (c *ClientWithResponses) PutReleaseArtifactWithBodyWithResponse(ctx context.Context, version string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutReleaseArtifactResponse, error) {
+	rsp, err := c.PutReleaseArtifactWithBody(ctx, version, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutReleaseArtifactResponse(rsp)
 }
 
 // GetStatusWithResponse mgmt status
@@ -25689,6 +28429,110 @@ func (c *ClientWithResponses) CreateTelemetryGrantWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseCreateTelemetryGrantResponse(rsp)
+}
+
+// ListUpgradesWithResponse Upgrade runs, newest first
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/upgrades (the `ListUpgrades` operationId).
+func (c *ClientWithResponses) ListUpgradesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUpgradesResponse, error) {
+	rsp, err := c.ListUpgrades(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListUpgradesResponse(rsp)
+}
+
+// CreateUpgradeWithBodyWithResponse Plan an upgrade, or start an upgrade run
+//
+// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+func (c *ClientWithResponses) CreateUpgradeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateUpgradeResponse, error) {
+	rsp, err := c.CreateUpgradeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateUpgradeResponse(rsp)
+}
+
+// CreateUpgradeWithResponse Plan an upgrade, or start an upgrade run
+//
+// Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+// features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+// upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+// every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+// turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+// (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+// and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+// pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/upgrades (the `CreateUpgrade` operationId).
+func (c *ClientWithResponses) CreateUpgradeWithResponse(ctx context.Context, body CreateUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUpgradeResponse, error) {
+	rsp, err := c.CreateUpgrade(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateUpgradeResponse(rsp)
+}
+
+// GetUpgradeWithResponse One upgrade run
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/upgrades/{id} (the `GetUpgrade` operationId).
+func (c *ClientWithResponses) GetUpgradeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetUpgradeResponse, error) {
+	rsp, err := c.GetUpgrade(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUpgradeResponse(rsp)
+}
+
+// ActOnUpgradeWithBodyWithResponse Pause, resume or abort an upgrade run
+//
+// `pause` stops before the next step; `resume` continues a paused run (after the operator
+// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+func (c *ClientWithResponses) ActOnUpgradeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ActOnUpgradeResponse, error) {
+	rsp, err := c.ActOnUpgradeWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseActOnUpgradeResponse(rsp)
+}
+
+// ActOnUpgradeWithResponse Pause, resume or abort an upgrade run
+//
+// `pause` stops before the next step; `resume` continues a paused run (after the operator
+// fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+// host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/upgrades/{id}/actions (the `ActOnUpgrade` operationId).
+func (c *ClientWithResponses) ActOnUpgradeWithResponse(ctx context.Context, id string, body ActOnUpgradeJSONRequestBody, reqEditors ...RequestEditorFn) (*ActOnUpgradeResponse, error) {
+	rsp, err := c.ActOnUpgrade(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseActOnUpgradeResponse(rsp)
 }
 
 // CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
@@ -27781,6 +30625,246 @@ func ParseListHostAssignmentsResponse(rsp *http.Response) (*ListHostAssignmentsR
 	return response, nil
 }
 
+// ParseUncordonHostResponse parses an HTTP response from a UncordonHostWithResponse call
+func ParseUncordonHostResponse(rsp *http.Response) (*UncordonHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UncordonHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Host
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers UncordonHostResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers UncordonHostResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers UncordonHostResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCordonHostResponse parses an HTTP response from a CordonHostWithResponse call
+func ParseCordonHostResponse(rsp *http.Response) (*CordonHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CordonHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Host
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers CordonHostResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers CordonHostResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers CordonHostResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseDrainHostResponse parses an HTTP response from a DrainHostWithResponse call
+func ParseDrainHostResponse(rsp *http.Response) (*DrainHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DrainHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HostDrainResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers DrainHostResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DrainHostResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers DrainHostResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseReportHostPathsResponse parses an HTTP response from a ReportHostPathsWithResponse call
 func ParseReportHostPathsResponse(rsp *http.Response) (*ReportHostPathsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -29230,6 +32314,302 @@ func ParseCreateObjectCredentialResponse(rsp *http.Response) (*CreateObjectCrede
 		response.Headers503 = &headers
 	case true:
 		var headers CreateObjectCredentialResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListReleasesResponse parses an HTTP response from a ListReleasesWithResponse call
+func ParseListReleasesResponse(rsp *http.Response) (*ListReleasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListReleasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReleaseCatalog
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers ListReleasesResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case true:
+		var headers ListReleasesResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseImportReleasesResponse parses an HTTP response from a ImportReleasesWithResponse call
+func ParseImportReleasesResponse(rsp *http.Response) (*ImportReleasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ImportReleasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReleaseCatalog
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ImportReleasesResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ImportReleasesResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case true:
+		var headers ImportReleasesResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetReleaseArtifactResponse parses an HTTP response from a GetReleaseArtifactWithResponse call
+func ParseGetReleaseArtifactResponse(rsp *http.Response) (*GetReleaseArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetReleaseArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetReleaseArtifactResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetReleaseArtifactResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetReleaseArtifactResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePutReleaseArtifactResponse parses an HTTP response from a PutReleaseArtifactWithResponse call
+func ParsePutReleaseArtifactResponse(rsp *http.Response) (*PutReleaseArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutReleaseArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ReleaseArtifact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers PutReleaseArtifactResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers PutReleaseArtifactResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case true:
+		var headers PutReleaseArtifactResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -33482,6 +36862,352 @@ func ParseCreateTelemetryGrantResponse(rsp *http.Response) (*CreateTelemetryGran
 		response.Headers409 = &headers
 	case true:
 		var headers CreateTelemetryGrantResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListUpgradesResponse parses an HTTP response from a ListUpgradesWithResponse call
+func ParseListUpgradesResponse(rsp *http.Response) (*ListUpgradesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListUpgradesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Items []UpgradeRun `json:"items"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers ListUpgradesResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case true:
+		var headers ListUpgradesResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreateUpgradeResponse parses an HTTP response from a CreateUpgradeWithResponse call
+func ParseCreateUpgradeResponse(rsp *http.Response) (*CreateUpgradeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateUpgradeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UpgradePlan
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest UpgradeRun
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers CreateUpgradeResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers CreateUpgradeResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 409:
+		var headers CreateUpgradeResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers CreateUpgradeResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetUpgradeResponse parses an HTTP response from a GetUpgradeWithResponse call
+func ParseGetUpgradeResponse(rsp *http.Response) (*GetUpgradeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUpgradeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UpgradeRun
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetUpgradeResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetUpgradeResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetUpgradeResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseActOnUpgradeResponse parses an HTTP response from a ActOnUpgradeWithResponse call
+func ParseActOnUpgradeResponse(rsp *http.Response) (*ActOnUpgradeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ActOnUpgradeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UpgradeRun
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers ActOnUpgradeResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ActOnUpgradeResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ActOnUpgradeResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ActOnUpgradeResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

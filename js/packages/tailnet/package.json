@@ -1,6 +1,6 @@
 {
   "name": "@twd/tailnet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Verified tailnet caller identity and per-object egress for twd Workers and Durable Objects",
   "type": "module",
   "main": "dist/index.js",

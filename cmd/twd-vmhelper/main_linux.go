@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/rosskukulinski/twd/internal/version"
 	"log/slog"
 	"net"
 	"os"
@@ -26,6 +27,10 @@ import (
 )
 
 func main() {
+	if version.Asked(os.Args) {
+		fmt.Println(version.String("twd-vmhelper"))
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "twd-vmhelper:", err)
 		os.Exit(1)

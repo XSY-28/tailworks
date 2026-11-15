@@ -14,6 +14,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rosskukulinski/twd/internal/features"
+	"github.com/rosskukulinski/twd/internal/version"
 	"log/slog"
 	"math"
 	"net"
@@ -93,6 +95,13 @@ type Config struct {
 	// WarmPoolInterval is how often pools are refilled and expired
 	// (default 2 s; a take also triggers a refill at once).
 	WarmPoolInterval time.Duration
+
+	// Version is this replica's twd-mgmt version ("" = internal/version's),
+	// checked against hosts and other replicas (versions.go). ReleaseDir
+	// holds imported release artifacts ("" = none: hosts can't upgrade
+	// themselves through this replica; upgrades.go).
+	Version    string
+	ReleaseDir string
 }
 
 // Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
@@ -137,6 +146,8 @@ type Mgmt struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+
+	upgradeKick chan struct{} // wakes the upgrade-run driver (upgrades.go)
 }
 
 // New returns a Mgmt; call Start to run the mint workers and reaper.
@@ -165,7 +176,8 @@ func New(cfg Config) (*Mgmt, error) {
 	m := &Mgmt{cfg: cfg, store: cfg.Store, custody: cfg.Custody, broker: cfg.Broker, clock: cfg.Clock, log: cfg.Log,
 		throttles: map[string]*Throttle{}, queues: map[string]chan string{}, queued: map[string]bool{}, replicaID: cfg.ReplicaID, waiters: map[string]chan struct{}{},
 		spawnMu: map[string]*sync.Mutex{}, pushURLs: map[string]string{}, inprocPush: map[string]http.Handler{},
-		pending: map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
+		upgradeKick: make(chan struct{}, 1),
+		pending:     map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
 		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
 	if m.cfg.WarmKeyTTL == 0 {
 		m.cfg.WarmKeyTTL = DefaultWarmKeyTTL
@@ -233,6 +245,8 @@ func (m *Mgmt) Start() error {
 		m.wg.Add(1)
 		go m.poolLoop()
 	}
+	m.wg.Add(1)
+	go m.upgradeLoop() // upgrades.go
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -502,6 +516,13 @@ type RegisterRequest struct {
 	// Arch (GOARCH) and Capacity, the capacity vector (ADR-032 D9).
 	Arch     string        `json:"arch,omitempty"`
 	Capacity *HostCapacity `json:"capacity,omitempty"`
+
+	// Version, Protocols and Features: what the host runs and offers
+	// (ADR-041 §7; versions.go).
+	Version   string         `json:"version,omitempty"`
+	OS        string         `json:"os,omitempty"`
+	Protocols map[string]int `json:"protocols,omitempty"`
+	Features  []string       `json:"features,omitempty"`
 }
 
 // EmbeddedPushURL is the push "URL" of a host agent that runs inside
@@ -537,6 +558,11 @@ func IsEmbeddedHost(ctx context.Context) bool { return embeddedHostOf(ctx) != ""
 func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, nodeAddr string) (Host, bool, error) {
 	if r.HostID == "" {
 		return Host{}, false, errf(400, "bad_request", "hostID required")
+	}
+	if err := version.CheckHost(r.Version, m.Version()); err != nil {
+		m.audit(ctx, AuditRecord{Kind: "deny", Code: "version_skew", ActingFor: "host:" + r.HostID},
+			map[string]any{"host": r.HostID, "hostVersion": r.Version, "mgmtVersion": m.Version()})
+		return Host{}, false, errf(409, "version_skew", "%v", err)
 	}
 	if r.Capacity != nil { // capacityNodes is the node dimension
 		c := *r.Capacity
@@ -614,7 +640,8 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	now := m.now().UnixMilli()
 	h := Host{ID: r.HostID, CapacityNodes: r.CapacityNodes, Tiers: r.Tiers, NodeID: nodeID, AuditPubKey: auditKey,
 		Pool: r.Pool, PushPort: r.PushPort, PushTarget: target, LastSeen: now, UpdatedAt: now, CreatedAt: old.CreatedAt,
-		Arch: r.Arch, Capacity: r.Capacity, Usage: old.Usage, RegistrationSecretHash: secretHash}
+		Arch: r.Arch, Capacity: r.Capacity, Usage: old.Usage, RegistrationSecretHash: secretHash,
+		Version: r.Version, OS: r.OS, Protocols: r.Protocols, Features: r.Features, CordonedAt: old.CordonedAt, CordonedBy: old.CordonedBy}
 	if h.CreatedAt == 0 {
 		h.CreatedAt = now
 	}
@@ -625,7 +652,8 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 		return Host{}, false, err
 	}
 	detail := map[string]any{"host": r.HostID, "node": nodeID,
-		"tiers": r.Tiers, "capacity": r.CapacityNodes, "arch": r.Arch, "capacityVector": r.Capacity, "push": m.pushTarget(r.HostID) != "", "new": created}
+		"tiers": r.Tiers, "capacity": r.CapacityNodes, "arch": r.Arch, "capacityVector": r.Capacity, "push": m.pushTarget(r.HostID) != "", "new": created,
+		"version": r.Version, "features": r.Features}
 	if embedded {
 		detail["transport"] = "embedded"
 	}
@@ -949,6 +977,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
 		need.Containers = len(ctrs) > 0
+		need.Features = features.RequiredByBundle(r.Bundle)
 	}
 	if ctrs, err = registry.ApplyBuilt(t.ID, ctrs, r.ContainerImages); err != nil {
 		return resp, errf(400, "bad_request", "%v", err)
@@ -1259,6 +1288,9 @@ type placementNeed struct {
 	// Arches, when set, are the arches the deploy's images were pinned for
 	// (the host's arch must be one of them).
 	Arches []string
+
+	// Features the bundle needs from its host (internal/features).
+	Features []string
 }
 
 func (h Host) offers(n placementNeed) bool {

@@ -102,6 +102,14 @@ type Candidate struct {
 	// Arch is the host's GOARCH ("" = not reported): container images run
 	// only on a host of their arch (ADR-032).
 	Arch string
+
+	// Skew is why the host is outside the version window ("" = within),
+	// and Features what it offers (ADR-041 §7). Version
+	// names it in messages.
+	Skew     string
+	Features []string
+	Version  string
+
 	// Free capacity per unit: "nodes" = capacityNodes - liveNodes; the
 	// capacity vector's units (ADR-032 D9: "vms", "vmMemMiB", "hugeMemMiB",
 	// "vcpus" with overcommit, "scratchMiB") come from the host's
@@ -116,7 +124,8 @@ func candidateOf(h Host, now time.Time) Candidate {
 	if len(tiers) == 0 {
 		tiers = []string{"process"} // hosts that predate tier reporting
 	}
-	return Candidate{ID: h.ID, Pool: h.Pool, Tiers: tiers, Live: h.Live(now), Arch: h.Arch, Free: freeUnits(h)}
+	return Candidate{ID: h.ID, Pool: h.Pool, Tiers: tiers, Live: h.Live(now), Arch: h.Arch, Free: freeUnits(h),
+		Draining: h.CordonedAt != 0, Features: h.Features, Version: h.Version}
 }
 
 // unboundedUnit stands in for a capacity-vector unit of a host that
@@ -173,6 +182,8 @@ type Requirements struct {
 	Containers bool
 	Arch       string
 	Arches     []string
+	// Features the workload needs (internal/features).
+	Features []string
 	// Pinned bypasses scoring: an explicit --host, or a sandbox that must
 	// run next to its parent DO. The pinned host must still be eligible.
 	Pinned string
@@ -351,7 +362,9 @@ func ineligible(c Candidate, req Requirements, need map[string]int, holder bool)
 	case !c.Live:
 		return "not live"
 	case c.Draining:
-		return "draining"
+		return "cordoned"
+	case c.Skew != "":
+		return "version skew: " + c.Skew
 	case req.Pool != "" && c.Pool != req.Pool:
 		return fmt.Sprintf("pool %q, want %q", c.Pool, req.Pool)
 	}
@@ -369,6 +382,9 @@ func ineligible(c Candidate, req Requirements, need map[string]int, holder bool)
 		case len(req.Arches) > 0 && !slices.Contains(req.Arches, c.Arch):
 			return fmt.Sprintf("containers for %s, the images were pinned for %s", archOrUnknown(c.Arch), strings.Join(req.Arches, ","))
 		}
+	}
+	if gap := featureGap(Host{Features: c.Features, Version: c.Version}, req.Features); gap != "" {
+		return gap
 	}
 	if holder {
 		return ""
