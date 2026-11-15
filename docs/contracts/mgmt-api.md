@@ -156,6 +156,10 @@ hostd's API, not this document's.
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `DeleteWorkloadSecret` | Delete a workload secret (`twd secret rm`) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores` | admin | no | `ListWorkloadStores` | List a workload's stores |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` | admin | no | `ListKVKeys` | List a KV namespace's keys |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin | no | `GetKVValue` | Get one KV value |
+| `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin | yes | `PutKVValue` | Write one KV value |
+| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin | yes | `DeleteKVValue` | Delete one KV value |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | no | `GetWorkloadStore` | Get one store |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `PutWorkloadStore` | Create a store (idempotent) |
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `DeleteWorkloadStore` | Delete a store and its data |
@@ -1217,6 +1221,111 @@ mgmt keeps, after compaction.
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+### `GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` — List a KV namespace's keys
+
+`ListKVKeys` · role **admin** · audited: no
+
+Workers KV's `list()` for operators (`twd kv key list`,
+ADR-037): live keys in UTF-8 byte order, with their
+expiration and metadata, `limit` at a time (default and maximum
+1000). Pass the answer's `cursor` to get the next page. mgmt reads
+the namespace's journal (its own copy), so the answer includes
+every acknowledged write. `404 unknown_store` if the namespace
+does not exist.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `prefix` | query | string | no | Only keys that start with this. |
+| `cursor` | query | string | no | The `cursor` of the previous page. |
+| `limit` | query | integer | no |  |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `KVKeyPage` | One page of keys. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Get one KV value
+
+`GetKVValue` · role **admin** · audited: no
+
+`twd kv key get`. `404 not_found` if the key does not exist or has
+expired, `404 unknown_store` if the namespace does not.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `key` | query | string | yes | The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `KVValue` | The value. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Write one KV value
+
+`PutKVValue` · role **admin** · audited: yes
+
+`twd kv key put`: a journal append, like a binding's `put()`, so
+running workloads see it on their next sync (within 60 s, or a
+read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+`expiration` at least 60 s ahead, metadata at most 1024 bytes of
+JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+`400 store_limit`). The namespace must exist (`404
+unknown_store`; `twd kv namespace create`). Audited (`kind:
+kv_put`) with the namespace and who wrote, not the key: key names
+can be sensitive, and mgmt keeps them only sealed and HMACed.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `key` | query | string | yes | The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`). |
+
+**Request** `application/json`: `KVPut`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `KVKey` | Written. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Delete one KV value
+
+`DeleteKVValue` · role **admin** · audited: yes
+
+`twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `key` | query | string | yes | The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`). |
+
+| Status | Body | Description |
+|---|---|---|
+| 204 | — | Deleted (or there was nothing to delete). |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Get one store
 
 `GetWorkloadStore` · role **admin** · audited: no
@@ -2159,6 +2268,8 @@ mgmt chain:
 `secret_release` (a workload's secrets released to its lease holder; names only),
 `store_create` (a platform store created, by its first write or an admin),
 `store_delete` (a platform store and its data key deleted),
+`kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+`kv_delete` (an admin deleted a Workers KV key; the namespace only),
 `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 `telemetry_delete`,
 `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
@@ -2182,7 +2293,7 @@ Public ingress (ADR-029), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -2210,7 +2321,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -2711,6 +2822,42 @@ Live usage against `HostCapacity`, reported with every heartbeat. `containers` i
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `keys` | array of object | yes |  |
+
+#### `KVKey`
+
+A Workers KV key as `list()` returns it (ADR-037).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `expiration` | integer (int64) | no | Unix seconds when the key expires (absent: never). |
+| `metadata` | any | no | The key's metadata (any JSON; absent: none). |
+| `name` | string | yes |  |
+
+#### `KVKeyPage`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cursor` | string | no | Pass as `cursor` for the next page (absent when `listComplete`). |
+| `keys` | array of `KVKey` | yes |  |
+| `listComplete` | boolean | yes |  |
+
+#### `KVPut`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `expiration` | integer (int64) | no | Unix seconds; at least 60 s ahead. |
+| `expirationTtl` | integer (int64) | no | Seconds from now (at least 60). Wins over `expiration`. |
+| `metadata` | any | no | Any JSON, at most 1024 bytes serialized. |
+| `value` | string (byte) | yes | The value's bytes (at most 2 MiB − 4 KiB). |
+
+#### `KVValue`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `expiration` | integer (int64) | no |  |
+| `metadata` | any | no |  |
+| `name` | string | yes |  |
+| `value` | string (byte) | yes | The value's bytes. |
 
 #### `KillResult`
 

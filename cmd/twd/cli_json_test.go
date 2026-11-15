@@ -47,6 +47,13 @@ var cliSurface = []struct {
 	{"secret put", []string{"secret", "put", "API_TOKEN", "--workload", "app"}},
 	{"secret ls", []string{"secret", "ls", "--workload", "app"}},
 	{"secret rm", []string{"secret", "rm", "API_TOKEN", "--workload", "app"}},
+	{"kv namespace create", []string{"kv", "namespace", "create", "sessions", "--workload", "app"}},
+	{"kv namespace list", []string{"kv", "namespace", "list", "--workload", "app"}},
+	{"kv namespace delete", []string{"kv", "namespace", "delete", "sessions", "--workload", "app"}},
+	{"kv key put", []string{"kv", "key", "put", "k", "v", "--namespace", "sessions", "--workload", "app"}},
+	{"kv key get", []string{"kv", "key", "get", "k", "--namespace", "sessions", "--workload", "app"}},
+	{"kv key delete", []string{"kv", "key", "delete", "k", "--namespace", "sessions", "--workload", "app"}},
+	{"kv key list", []string{"kv", "key", "list", "--namespace", "sessions", "--workload", "app"}},
 	{"kill", []string{"kill", "app"}},
 	{"audit", []string{"audit", "--all"}},
 	{"logs.line", []string{"logs", "app"}},
@@ -204,6 +211,8 @@ func subDepth(args []string) int {
 		return 2
 	case "tenant", "host", "secret", "docs", "agent":
 		return 2
+	case "kv":
+		return 3 // kv namespace create, kv key put, …
 	}
 	return 1
 }

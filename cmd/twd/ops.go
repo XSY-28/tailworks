@@ -412,6 +412,11 @@ func describe(r mgmt.AuditRecord, names map[string]string) string {
 		return fmt.Sprintf("secret %v of %v deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
 	case "secret_release":
 		return fmt.Sprintf("secrets %s of %v released to host %v (epoch %v)", compact(d["names"]), d["workload"], d["host"], d["epoch"])
+	// Workers KV writes by an admin: the namespace only, never the key.
+	case "kv_put":
+		return fmt.Sprintf("KV namespace %v of %v: a key written by %s", d["name"], d["workload"], orDash(r.ActingFor))
+	case "kv_delete":
+		return fmt.Sprintf("KV namespace %v of %v: a key deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
 	// OTLP export (ADR-observability): endpoint and header names only.
 	case "telemetry_put":
 		return fmt.Sprintf("OTLP export to %v (headers %s, signals %s) set by %s", d["endpoint"], compact(d["headers"]), compact(d["signals"]), orDash(r.ActingFor))

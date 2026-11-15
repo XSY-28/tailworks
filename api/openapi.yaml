@@ -881,6 +881,129 @@ paths:
         "409": { $ref: "#/components/responses/StoreConflict" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ListKVKeys
+      summary: List a KV namespace's keys
+      description: |
+        Workers KV's `list()` for operators (`twd kv key list`,
+        ADR-037): live keys in UTF-8 byte order, with their
+        expiration and metadata, `limit` at a time (default and maximum
+        1000). Pass the answer's `cursor` to get the next page. mgmt reads
+        the namespace's journal (its own copy), so the answer includes
+        every acknowledged write. `404 unknown_store` if the namespace
+        does not exist.
+      x-twd-role: admin
+      parameters:
+        - name: prefix
+          in: query
+          description: Only keys that start with this.
+          schema: { type: string, maxLength: 512 }
+        - name: cursor
+          in: query
+          description: The `cursor` of the previous page.
+          schema: { type: string, maxLength: 1024 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: One page of keys.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KVKeyPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+      - name: key
+        in: query
+        required: true
+        description: The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+        schema: { type: string, minLength: 1, maxLength: 512 }
+    get:
+      tags: [stores]
+      operationId: GetKVValue
+      summary: Get one KV value
+      description: |
+        `twd kv key get`. `404 not_found` if the key does not exist or has
+        expired, `404 unknown_store` if the namespace does not.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The value.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KVValue" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [stores]
+      operationId: PutKVValue
+      summary: Write one KV value
+      description: |
+        `twd kv key put`: a journal append, like a binding's `put()`, so
+        running workloads see it on their next sync (within 60 s, or a
+        read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+        `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+        JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+        `400 store_limit`). The namespace must exist (`404
+        unknown_store`; `twd kv namespace create`). Audited (`kind:
+        kv_put`) with the namespace and who wrote, not the key: key names
+        can be sensitive, and mgmt keeps them only sealed and HMACed.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KVPut" }
+      responses:
+        "200":
+          description: Written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KVKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [stores]
+      operationId: DeleteKVValue
+      summary: Delete one KV value
+      description: "`twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes."
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted (or there was nothing to delete).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+
   # ------------------------------------------------------------------ hosts
 
   /v1/tenants/{id}/workloads/{workload}/telemetry-grants:
@@ -4102,6 +4225,8 @@ components:
         `secret_release` (a workload's secrets released to its lease holder; names only),
         `store_create` (a platform store created, by its first write or an admin),
         `store_delete` (a platform store and its data key deleted),
+        `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+        `kv_delete` (an admin deleted a Workers KV key; the namespace only),
         `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
         `telemetry_delete`,
         `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
@@ -4153,6 +4278,8 @@ components:
         - secret_release
         - store_create
         - store_delete
+        - kv_put
+        - kv_delete
         - telemetry_put
         - telemetry_delete
         - telemetry_release
@@ -4473,6 +4600,38 @@ components:
         head: { type: integer, format: int64 }
         entries: { type: array, items: { $ref: "#/components/schemas/StoreEntry" } }
         more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
+    KVKey:
+      type: object
+      description: A Workers KV key as `list()` returns it (ADR-037).
+      required: [name]
+      properties:
+        name: { type: string }
+        expiration: { type: integer, format: int64, description: "Unix seconds when the key expires (absent: never)." }
+        metadata: { description: "The key's metadata (any JSON; absent: none)." }
+    KVKeyPage:
+      type: object
+      required: [keys, listComplete]
+      properties:
+        keys: { type: array, items: { $ref: "#/components/schemas/KVKey" } }
+        listComplete: { type: boolean }
+        cursor: { type: string, description: "Pass as `cursor` for the next page (absent when `listComplete`)." }
+    KVValue:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: string, format: byte, description: The value's bytes. }
+        expiration: { type: integer, format: int64 }
+        metadata: {}
+    KVPut:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, format: byte, description: "The value's bytes (at most 2 MiB − 4 KiB)." }
+        expiration: { type: integer, format: int64, description: "Unix seconds; at least 60 s ahead." }
+        expirationTtl: { type: integer, format: int64, description: "Seconds from now (at least 60). Wins over `expiration`." }
+        metadata: { description: "Any JSON, at most 1024 bytes serialized." }
+      additionalProperties: false
 
     # ---------------------------------------------------------- containers
     ContainerResources:

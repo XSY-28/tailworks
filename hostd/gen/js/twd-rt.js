@@ -1030,6 +1030,12 @@ async function runScheduled(scheduledFn, req, extra) {
     return Response.json({ outcome: "exception", noRetry, error: String(e?.message ?? e).slice(0, 512) });
   }
 }
+var HANDLER_METHODS = ["fetch", "scheduled", "queue", "tail", "tailStream", "trace", "email", "test", "connect"];
+function handlerKeys(H) {
+  const keys = new Set(Object.keys(H));
+  for (const k of HANDLER_METHODS) if (typeof H[k] === "function") keys.add(k);
+  return [...keys];
+}
 function wrapHandler(H, bindings) {
   if (!H) {
     return {
@@ -1074,7 +1080,7 @@ function wrapHandler(H, bindings) {
     return { [H.name || "Default"]: C }[H.name || "Default"];
   }
   const out = { ...H };
-  for (const k of Object.keys(H)) {
+  for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
     out[k] = function(a, env, ctx) {
       const tw = env?.__TWD;

@@ -32,10 +32,11 @@ class_name = "Counter"
 tag = "v1"
 new_sqlite_classes = ["Counter"]
 
-# No KV on twd: env.CACHE is undefined (warned).
-[[kv_namespaces]]
+# No D1 on twd: env.CACHE is undefined (warned).
+[[d1_databases]]
 binding = "CACHE"
-id = "0123456789abcdef"
+database_name = "cache"
+database_id = "0123456789abcdef"
 
 [env.staging]
 vars = { GREETING = "hello from staging" }
