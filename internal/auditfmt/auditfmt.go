@@ -142,7 +142,7 @@ func describeApproval(kind string, d map[string]any) (string, bool) {
 		}
 		return s, true
 	case "approval_decision":
-		s := fmt.Sprintf("%s %vd by %s", what, d["decision"], who)
+		s := fmt.Sprintf("%s %s by %s", what, Decided(fmt.Sprint(d["decision"])), who)
 		if c := d["comment"]; c != nil {
 			s += fmt.Sprintf(" %q", c)
 		}
@@ -175,4 +175,12 @@ func orAny(vs ...any) any {
 		}
 	}
 	return nil
+}
+
+// Decided is an approval decision in the past tense ("reject" → "rejected").
+func Decided(decision string) string {
+	if strings.HasSuffix(decision, "e") {
+		return decision + "d"
+	}
+	return decision + "ed"
 }

@@ -36,3 +36,15 @@ func TestDescribe(t *testing.T) {
 		}
 	}
 }
+
+func TestDecided(t *testing.T) {
+	for in, want := range map[string]string{"approve": "approved", "reject": "rejected"} {
+		if got := Decided(in); got != want {
+			t.Errorf("Decided(%q) = %q", in, got)
+		}
+	}
+	d := map[string]any{"workload": "w", "workflow": "f", "instance": "i", "step": "s", "decision": "reject", "approver": map[string]any{"user": "bob", "via": "ui"}}
+	if got := Describe("approval_decision", "", "", "", d, nil); !strings.Contains(got, "rejected by bob") {
+		t.Errorf("approval_decision: %q", got)
+	}
+}
