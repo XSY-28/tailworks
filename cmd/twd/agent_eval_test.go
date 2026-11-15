@@ -199,6 +199,7 @@ func TestAgentEval(t *testing.T) {
 			}
 		}
 	}
+	ok("telemetry", ag.Exec("telemetry", "--json"))
 	ok("tenant ls", ag.Exec("tenant", "ls", "--json"))
 	tenantID, _ := doc(up)["tenantID"].(string)
 	ok("tenant set", ag.Exec("tenant", "set", tenantID, "--max-objects", "500", "--json"))

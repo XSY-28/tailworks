@@ -49,6 +49,18 @@ Branch `agent-first-dx-issue-25` (worktree `ancient-alpacka`).
   `docs/cli-json.md`, three COMPAT.md rows (new "Tooling" area: `cli-json`,
   `agent-skills`, `docs-for-agents`) with README rows.
 
+## After merging observability (#30)
+
+`twd logs <workload>` now prints structured request records by default;
+with `--json` they are JSON Lines of `obs.Record` (`$defs/logs.record`).
+The `{"event": "log", "line"}` stream (`$defs/logs.line`) applies to raw
+output: `--console`, `--component`, and a host's notes in a remote record
+stream (which used to be printed as plain text in the middle of the JSON
+Lines). `twd telemetry [show|set|rm]` got `$defs/telemetry`;
+`TestCLIJSONContract` flagged it as a command without a schema. The
+`twd-debug` skill teaches the record filters (`--errors`, `--status`,
+`--trace`, ...).
+
 ## Bugs found by the `--json` audit (fixed)
 
 - `twd host rm <id>` failed with `internal: unexpected end of JSON input`
@@ -73,7 +85,7 @@ Branch `agent-first-dx-issue-25` (worktree `ancient-alpacka`).
 | `cmd/twd:TestSkillCommandsExist` | every `twd …` in every skill (code blocks and inline code; 121 commands) runs as `twd … --help`, which parses each flag: a stale command or flag fails `make test`. Negative cases prove the check catches them |
 | `cmd/twd:TestSkillsWellFormed` | front matter valid for every agent, cross-skill references and `twd docs show` refs resolve, eval steps present and placeholder-free |
 | `cmd/twd:TestAgentEval` | the scripted agent loop: replays the skills' `<!-- twd-eval -->` blocks (scaffold → dev → deploy → inspect → logs → teardown) on the hermetic harness (testcontrol, fake Tailscale API, `twd up` single process). First deploy fails `acl_denied` with the tagOwners line in `hint`; the "user" adds it; the agent retries as `twd-deploy` says. Every other command (status, version, doctor, tenant ls/set, host add/ls/rm, secret put/ls/rm, expose, audit, kill, image public ls, docs, agent) runs once and its output is checked against the schema |
-| `cmd/twd:TestCLIJSONContract` | every command and subcommand in `twd help` (38 entries) runs with `--json` against an empty state dir; results match the schema, errors match the contract with catalogued codes; fails if a command has no schema or the schema has a command that's gone |
+| `cmd/twd:TestCLIJSONContract` | every command and subcommand in `twd help` (41 entries) runs with `--json` against an empty state dir; results match the schema, errors match the contract with catalogued codes; fails if a command has no schema or the schema has a command that's gone |
 | `cmd/twd:TestDevJSONEvents` | `twd dev --json`: ready → reload after an edit → stopping on SIGINT |
 | `cmd/twd:TestAgentSetupSnapshot` | golden `cmd/twd/testdata/agent-setup.golden`: dry run for a home with five agents' dirs (user and project scope), writes nothing, idempotent, remove restores the user's files |
 | `agent:TestPlanStaleAndForeign`, `agent:TestPlanBlock`, `agent:TestCommandsParse` | stale removal, user files skipped, block replaced in place, broken block refused |

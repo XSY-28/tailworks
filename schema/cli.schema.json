@@ -473,6 +473,48 @@
         "digest"
       ]
     },
+    "telemetry": {
+      "type": "object",
+      "description": "twd telemetry [show], set and rm: the tenant's OTLP export (header values are never shown; rm prints only tenantID)",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "otlp": {
+          "type": "object",
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            },
+            "headerNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "signals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "endpoint",
+            "signals"
+          ]
+        },
+        "updatedAt": {
+          "type": "integer"
+        },
+        "updatedBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenantID"
+      ]
+    },
     "version": {
       "type": "object",
       "properties": {
