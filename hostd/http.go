@@ -266,6 +266,10 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			h.tel.hostAPI(inst, w, r) // telemetry.go
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v1/r2/") {
+			h.r2API(inst, w, r) // R2 bucket blobs (r2.go)
+			return
+		}
 		var req apiReq
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 			writeAPIError(w, &apiError{Code: "bad_request", Detail: err.Error()})

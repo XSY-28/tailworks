@@ -220,6 +220,9 @@ printed anywhere.
 ### not_running
 409 · cli. **When:** twd is set up in this state dir but its supervisor is not running. **Fix:** `twd up` (or `systemctl --user start twd`).
 
+### not_supported
+501 · cli, hostd. **When:** a command or call twd doesn't build yet: `twd r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs. **Fix:** go through the workload (its `env.BUCKET` binding); see [COMPAT.md](COMPAT.md).
+
 ### not_up
 409 · cli. **When:** this state dir has no twd config or tenant yet. **Fix:** `twd up …` on the host, or `twd link <mgmt>` on a developer machine.
 
@@ -252,6 +255,15 @@ printed anywhere.
 
 ### push_unauthorized
 403 · hostd. **When:** something other than mgmt's node pushed to hostd's push listener (port 7474). **Fix:** only `tag:twd-mgmt` may push; check the grant and who is on that tag.
+
+### r2_backend_unavailable
+503 · hostd. **When:** the host's R2 backend (its `-r2-backend` directory or S3-compatible service) failed a read, write or delete of an R2 object's bytes. In app code it surfaces as an R2 error (code 10001) whose message starts `twd r2: r2_backend_unavailable:`. **Fix:** the host's operator checks the backend (`twd logs --component hostd`): disk space, the S3 endpoint, its credentials. Retry the call.
+
+### r2_blob_missing
+500 · hostd. **When:** a bucket's index names an object whose bytes are not in this host's R2 backend: the workload moved from another host and the backend is `fs` (bytes stay on the old host's disk), or the backend lost them. Surfaces as an R2 error (code 10001) whose message starts `twd r2: r2_blob_missing:`. **Fix:** run hosts that share workloads on one S3-compatible backend (`-r2-backend s3`, [r2.md](r2.md)); write the object again.
+
+### r2_too_large
+400 · hostd. **When:** an R2 object or part over 5 GiB − 5 MiB. Surfaces as R2's "exceeds the maximum allowed object size" (code 100100). **Fix:** use a multipart upload, parts up to that size each.
 
 ### remote_unsupported
 400 · cli. **When:** a command that runs only on the host that runs `twd up` (`twd logs`, `twd tenant add`) was run on a linked developer machine. **Fix:** run it on the host.
