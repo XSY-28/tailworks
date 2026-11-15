@@ -166,10 +166,10 @@ func TestWranglerWarnings(t *testing.T) {
 		"wrangler.toml: ai: no such binding on twd: env.AI will be undefined",
 		"wrangler.toml: assets: not supported",
 		"wrangler.toml: build: needs wrangler's bundler",
-		"wrangler.toml: vectorize: no such binding on twd: env.CACHE, env.SESSIONS will be undefined",
 		"wrangler.toml: frobnicate: unknown key, ignored",
 		"wrangler.toml: observability: ignored by twd",
 		"wrangler.toml: routes: ignored",
+		"wrangler.toml: vectorize: no such binding on twd: env.CACHE, env.SESSIONS will be undefined",
 		"wrangler.toml: workers_dev: ignored",
 		"wrangler.toml: durable_objects binding REMOTE: script_name",
 	}
