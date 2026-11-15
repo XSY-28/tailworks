@@ -48,8 +48,12 @@ templates-typecheck: js-build
 test: deps test-go test-js
 
 .PHONY: test-go
+# GO_TEST_SKIP: a go test -skip regexp (CI quarantines known failures with it; see ci.yml).
+# Read from the environment as-is, so a regexp's "$" survives make.
+GO_TEST_SKIP ?=
+export GO_TEST_SKIP
 test-go:
-	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
+	$(GO) test -race -count=1 $(if $(GO_TEST_SKIP),-skip "$$GO_TEST_SKIP") ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:
