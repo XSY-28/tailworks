@@ -170,6 +170,8 @@ hostd's API, not this document's.
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/.well-known/openid-configuration` | public | no | `GetOIDCConfiguration` | OIDC discovery (base issuer) |
 | `GET` | `/jwks` | public | no | `GetJWKS` | Issuer signing keys |
+| `GET` | `/mcp` | admin\|mcp | no | `MCPStream` | Not supported (stateless server; no server-to-client stream) |
+| `POST` | `/mcp` | admin\|mcp | yes | `MCPRequest` | One MCP JSON-RPC request (initialize, ping, tools/list, tools/call) or notification |
 | `GET` | `/t/{tenant}/.well-known/openid-configuration` | public | no | `GetTenantOIDCConfiguration` | OIDC discovery (per-tenant issuer `…/t/{tenant}`) |
 | `GET` | `/t/{tenant}/jwks` | public | no | `GetTenantJWKS` | Per-tenant issuer signing keys (same key set) |
 | `GET` | `/v2/` | admin\|host | no | `RegistryBase` | OCI API version check |
@@ -1826,6 +1828,54 @@ New deploys then mirror the ref into each tenant's namespace; pinned deployments
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+## Mcp
+
+twd's own MCP server (ADR-035), served by twd-mgmt at `/mcp` on the same listeners and
+behind the same WhoIs gate as `/v1`. Its wire protocol is the external Model Context Protocol
+(Streamable HTTP, stateless: one JSON-RPC request per POST, answered with `application/json`);
+this entry documents the route and who may call it, and is excluded from code generation (the
+server is hand-written: `mgmt/mcp.go`). Tools run the `/v1` operations in process.
+
+- **admins** (`twd.dev/cap/admin`) and holders of `twd.dev/cap/mcp` get the read tools:
+  `whoami`, `status`, `ls`, `logs`, `audit`. A caller with only `twd.dev/cap/mcp` reaches
+  `/mcp` and nothing else.
+- `deploy`, `kill` and `undeploy` need a `twd.dev/cap/mcp` grant naming them
+  (`[{"tools": ["kill"]}]`, or `"*"`); being an admin is not enough.
+- the local operator (the `twd mcp` bridge on the twd host) gets the read tools, or exactly
+  the tools it lists in `Twd-MCP-Tools`; for tailnet callers that header only narrows.
+- hosts and browsers are refused.
+
+### `GET /mcp` — Not supported (stateless server; no server-to-client stream)
+
+`MCPStream` · role **admin\|mcp** · audited: no
+
+| Status | Body | Description |
+|---|---|---|
+| 405 | — | Use POST. |
+
+### `POST /mcp` — One MCP JSON-RPC request (initialize, ping, tools/list, tools/call) or notification
+
+`MCPRequest` · role **admin\|mcp** · audited: yes
+
+The body is one JSON-RPC 2.0 message (no batches). A request is answered `200` with the
+JSON-RPC response; a notification (no `id`) with `202` and no body. A tool the caller isn't
+granted is a tool result with `isError: true` and the twd error `cap_missing`, whose
+`snippet` is the grant (or the `twd mcp --allow` flag) that adds it. `kill`, `undeploy` and
+`deploy` are audited like the `/v1` operations they run, with the caller as the actor.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `Twd-MCP-Tools` | header | string | no | Comma-separated tools this request may use (narrows; see the tag description). |
+
+**Request** `application/json`: object
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | object | The JSON-RPC response. |
+| 202 | — | A notification was accepted. |
+| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Twd-Host-Token`. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 
 ## Registry
 

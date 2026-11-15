@@ -33,10 +33,10 @@ func Spec() (*openapi3.T, error) {
 }
 
 // excludedTags mirrors exclude-tags in api/oapi-codegen.server.yaml: those
-// operations (the OCI registry under /v2) are served by hand-written
-// handlers, not the generated /v1 server, so they are not part of the
-// contract this package validates.
-var excludedTags = []string{"registry"}
+// operations (twd's MCP server at /mcp, the OCI registry under /v2) are
+// served by hand-written handlers, not the generated /v1 server, so they
+// are not part of the contract this package validates.
+var excludedTags = []string{"mcp", "registry"}
 
 // dropTagged removes every operation carrying one of tags. Emptied path
 // items stay, matching oapi-codegen's pruning (and TestSpecValid's count).

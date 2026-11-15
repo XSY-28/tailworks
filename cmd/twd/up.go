@@ -261,8 +261,8 @@ func cmdUp(args []string) error {
 		}
 	}
 	if !*yes {
-		if !term.IsTerminal(int(os.Stdin.Fd())) {
-			return fail("bad_request", "not a terminal: pass --yes to run non-interactively")
+		if *f.json || !term.IsTerminal(int(os.Stdin.Fd())) { // --json never prompts (docs/cli-json.md)
+			return fail("bad_request", "not a terminal (or --json): pass --yes to run non-interactively")
 		}
 		what := "for tailnet " + *tailnet
 		switch {
@@ -426,7 +426,7 @@ func cmdUp(args []string) error {
 				fmt.Fprintln(out, l)
 			}
 			fmt.Fprintf(out, "  (tagOwners: the account you log in with must be allowed to own %s and %s · nodeAttrs: Funnel serves the WIF issuer from its own node, never mgmt's · grants: admins may use twd over the tailnet)\n", mgmt.MgmtTag, mgmt.IssuerTag)
-			if !*yes && isTerminal() {
+			if !*yes && !*f.json && isTerminal() { // --json never prompts
 				fmt.Fprintf(out, "Is this in your policy now? The login fails with \"requested tags [%s] are invalid or not permitted\" otherwise. [y/N] ", mgmt.MgmtTag)
 				ln, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 				if a := strings.ToLower(strings.TrimSpace(ln)); a != "y" && a != "yes" {

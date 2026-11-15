@@ -684,8 +684,10 @@ func cmdLogs(args []string) error {
 	if err != nil {
 		return err
 	}
+	out, flush := logsOut(*f.json, pos, *comp, s.remote()) // agentjson.go: NDJSON with --json
+	defer flush()
 	if s.remote() {
-		return remoteLogs(s, pos, *comp, *tenantF, *hostF, *n, *follow, lo) // logs_remote.go
+		return remoteLogs(out, s, pos, *comp, *tenantF, *hostF, *n, *follow, lo) // logs_remote.go
 	}
 	if !s.configured() {
 		return fail("not_up", "twd is not set up in "+s.Dir)
@@ -740,7 +742,7 @@ func cmdLogs(args []string) error {
 		lines = lines[len(lines)-*n:]
 	}
 	for _, l := range lines {
-		fmt.Println(string(l))
+		fmt.Fprintln(out, string(l))
 	}
 	if !*follow {
 		return nil
@@ -749,7 +751,7 @@ func cmdLogs(args []string) error {
 	for {
 		l, err := rd.ReadString('\n')
 		if l != "" {
-			fmt.Print(l)
+			fmt.Fprint(out, l)
 		}
 		if err != nil {
 			time.Sleep(300 * time.Millisecond)
