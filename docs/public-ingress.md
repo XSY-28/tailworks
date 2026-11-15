@@ -190,13 +190,20 @@ twd expose on  <workload>
 
 ## Audit
 
-- **Per request:** every public request is a `public_request` record in
-  the host audit chain (`twd audit <public-object-id>`). It holds the
-  method, the path **without the query string**, the matched route, the
-  status, the client IP, bytes and duration.
-- **Limit refusals:** requests the limits refused (429/413/431, and
-  connections over `maxConns`) are rolled up in one `public_rejected`
-  summary per minute, so a refused flood can't grow the chain.
+- **Per request:** every public request that matched a route is a
+  `public_request` record in the host audit chain
+  (`twd audit <public-object-id>`). It holds the method, the path
+  **without the query string**, the matched route, the status, the client
+  IP, bytes and duration.
+- **Refusals:** requests the limits refused (429/413/431, and connections
+  over `maxConns`) and paths refused before routing (`404 not_public`,
+  `400 bad_request`) are rolled up in one `public_rejected` summary per
+  minute, so a refused flood or a path scan can't grow the chain.
+- **Backlog:** while mgmt is unreachable, hostd queues host records in
+  memory and then on disk; none is dropped. If the disk queue reaches its
+  cap, further `public_request` records are refused and counted. Every
+  refused record is reported in an `audit_dropped` record, so the chain
+  still verifies and the gap is visible.
 - **Other records:** `public_object_created`, and `expose_on`/`expose_off`.
   The operator's change is recorded on mgmt's chain and the listener
   change on the host's.

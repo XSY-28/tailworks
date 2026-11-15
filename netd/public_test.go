@@ -292,6 +292,8 @@ func TestPublicHeadersAndBlob(t *testing.T) {
 }
 
 func TestPublicRoutes(t *testing.T) {
+	restore := netd.SetPublicRejectWindow(300 * time.Millisecond)
+	defer restore()
 	e := newPubEnv(t, netd.PublicOptions{Routes: []string{"/oauth/callback", "/webhooks/*"}, Limits: limits(nil), Enabled: true}, nil)
 	c := e.client(defaultSrc())
 	for _, p := range []string{"/webhooks", "/webhooks/x/y", "/oauth/callback"} {
@@ -317,16 +319,25 @@ func TestPublicRoutes(t *testing.T) {
 	if n := e.seenCount(); n != before {
 		t.Errorf("%d refused requests reached upstream", n-before)
 	}
-	// Refusals at the route step are reported.
-	n404 := 0
-	for range 3 + 8 {
-		r := <-e.recs
-		if r.Code == "not_public" && r.Route == "" {
-			n404++
+	// Refusals at the route step are summarized, not reported one by one
+	// (H03: a path scan must not grow the audit chain per request).
+	select {
+	case s := <-e.rejs:
+		if s.NotPublic != 4 || s.BadRequest != 4 || s.ObjectID != pubID || s.UniqueIPApprox != 1 {
+			t.Errorf("summary %+v, want 4 not_public and 4 bad_request", s)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no reject summary")
+	}
+	for range 3 {
+		if r := <-e.recs; r.Status != 200 || r.Route == "" {
+			t.Errorf("record %+v", r)
 		}
 	}
-	if n404 != 4 {
-		t.Errorf("not_public records: %d", n404)
+	select {
+	case r := <-e.recs:
+		t.Errorf("a route refusal was reported: %+v", r)
+	default:
 	}
 }
 

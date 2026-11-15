@@ -99,6 +99,11 @@ func Describe(kind, objectID, actingFor, code string, d map[string]any, name fun
 		return "public " + s
 	case "public_rejected":
 		s := fmt.Sprintf("public refused: %v rate-limited, %v too large, %v connections", orAny(d["rateLimited"], 0), orAny(d["tooLarge"], 0), orAny(d["connsRefused"], 0))
+		for _, k := range []string{"notPublic", "badRequest"} {
+			if n := fmt.Sprint(orAny(d[k], 0)); n != "0" {
+				s += fmt.Sprintf(", %s %s", n, map[string]string{"notPublic": "not public", "badRequest": "bad path"}[k])
+			}
+		}
 		if u := d["uniqueIPApprox"]; u != nil {
 			s += fmt.Sprintf(" · ~%v IPs", u)
 		}
@@ -106,6 +111,8 @@ func Describe(kind, objectID, actingFor, code string, d map[string]any, name fun
 			s += " · top " + compact(top)
 		}
 		return s
+	case "audit_dropped":
+		return fmt.Sprintf("%v audit records refused before chaining %s (%v → %v)", d["n"], compact(d["byReason"]), d["from"], d["to"])
 	case "public_object_created":
 		s := fmt.Sprintf("%v/%v created by a public request", orAny(d["class"], d["namespace"]), d["name"])
 		if ip := orAny(d["ip"], d["clientIP"]); ip != nil {
