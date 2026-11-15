@@ -1141,7 +1141,7 @@
     },
     "deploy.event": {
       "type": "object",
-      "description": "twd deploy --json: one per line on stderr: start, preflight, build, log (container image builds), placed, status (each change), ready, then public_wait and public with --wait-public. A failure ends with an error line ({\"error\": ...}) instead",
+      "description": "twd deploy --json: one per line on stderr: start, preflight, build, log (container image builds), placed, status (each change), ready, then public_wait and public with --wait-public. A failure ends with an error line ({\"error\": ...}) instead. twd rollback --json prints the same lines without build, log and public",
       "properties": {
         "event": {
           "type": "string",
@@ -1196,6 +1196,159 @@
       },
       "required": [
         "ts"
+      ]
+    },
+    "deploymentRecord": {
+      "type": "object",
+      "description": "one entry of a workload's deployment history (the /v1 DeploymentRecord, ADR-deploy-rollback)",
+      "properties": {
+        "deploymentID": {
+          "type": "string"
+        },
+        "workload": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "epoch": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "description": "the current deployment's status (assigned, starting, active, failed); older ones are superseded or stopped"
+        },
+        "error": {
+          "type": "string"
+        },
+        "hostStatus": {
+          "type": "string",
+          "description": "the host's last report, kept after the deployment is superseded: active means it was serving"
+        },
+        "deployedBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "activeAt": {
+          "type": "integer"
+        },
+        "bundleSHA256": {
+          "type": "string",
+          "description": "hex SHA-256 of the bundle; empty for a deployment without one"
+        },
+        "bundleBytes": {
+          "type": "integer"
+        },
+        "bundleRetained": {
+          "type": "boolean",
+          "description": "false once retention pruned the bundle: it can no longer be rolled back to"
+        },
+        "rollbackOf": {
+          "type": "string",
+          "description": "set on a rollback: the deployment whose bundle it redeployed"
+        }
+      },
+      "required": [
+        "deploymentID",
+        "workload",
+        "host",
+        "status",
+        "createdAt",
+        "bundleSHA256",
+        "bundleRetained"
+      ]
+    },
+    "deployments": {
+      "type": "object",
+      "description": "twd deployments <workload>: its history, newest first",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "bundleRetention": {
+          "type": "integer",
+          "description": "how many of the newest bundles per workload mgmt keeps (0 = every bundle)"
+        },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/deploymentRecord"
+          }
+        }
+      },
+      "required": [
+        "workload",
+        "tenant",
+        "tenantID",
+        "bundleRetention",
+        "deployments"
+      ]
+    },
+    "rollback": {
+      "type": "object",
+      "description": "the result, on stdout; progress is deploy.event lines on stderr (start, preflight, placed, status, ready)",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "rollbackOf": {
+          "type": "string",
+          "description": "the deployment whose bundle was redeployed"
+        },
+        "target": {
+          "$ref": "#/$defs/deploymentRecord"
+        },
+        "deploymentID": {
+          "type": "string",
+          "description": "the new deployment"
+        },
+        "host": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "active, or assigned with --no-wait"
+        },
+        "preflight": {
+          "type": "object"
+        },
+        "endpoint": {
+          "type": "object"
+        },
+        "placement": {
+          "type": "object"
+        },
+        "public": {
+          "type": "object"
+        },
+        "timingsMs": {
+          "$ref": "#/$defs/timings"
+        }
+      },
+      "required": [
+        "workload",
+        "tenant",
+        "tenantID",
+        "rollbackOf",
+        "target",
+        "deploymentID",
+        "host",
+        "status",
+        "timingsMs"
       ]
     },
     "ls": {

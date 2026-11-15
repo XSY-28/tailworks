@@ -89,6 +89,7 @@ func run() error {
 		registryDir  = flag.String("registry-dir", "", "OCI registry blob store (ADR-032 D3; default <state-dir>/registry; \"off\" disables the registry). Replicas serving the registry must share it")
 		regInsecure  = flag.String("registry-insecure", "", "comma-separated upstream registry hosts mirrored over plain HTTP (tests: a local upstream)")
 		noMirror     = flag.Bool("no-mirror", false, "refuse external image refs at deploy (only twd deploy builds and public bases); mgmt then makes no registry egress")
+		bundleKeep   = flag.Int("bundle-retention", mgmt.DefaultBundleRetention, "bundles kept per workload for twd rollback (older deployments keep their record and hash, not the bundle); 0 = the default, -1 = keep every bundle")
 		aliasFile    = flag.String("image-aliases", "", "JSON file [{from, to, arch}] replacing the default image alias map (cloudflare/sandbox → twd.local arm64 rebuilds)")
 	)
 	flag.Parse()
@@ -118,6 +119,7 @@ func run() error {
 		ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL,
 		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log,
 		MetricsPort: *metricsPort}
+	o.BundleRetention = *bundleKeep
 	// Like the flags: "" means no tags at all (Options nil means the default).
 	o.TSNetTags = []string{}
 	if *tsTags != "" {

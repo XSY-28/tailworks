@@ -604,6 +604,105 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/deployments:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [deployments]
+      operationId: ListWorkloadDeployments
+      summary: A workload's deployment history, newest first (`twd deployments`)
+      description: |
+        ADR-deploy-rollback. Every deployment of the workload, newest first:
+        who deployed it, when, the bundle's SHA-256, its status (the current
+        one is `assigned`, `starting`, `active` or `failed`; older ones are
+        `superseded` or `stopped`), the host's last report (`hostStatus`)
+        and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+        keeps the bundles of the newest `bundleRetention` deployments of
+        each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+        their records stay, without the bundle, so they can't be rolled back
+        to. `rollbackOf` names the deployment a rollback redeployed. A
+        workload with no deployment is `404 unknown_workload`.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: One page of the workload's deployments, ordered by `(createdAt, deploymentID)` descending.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeploymentHistoryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/rollbacks:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [deployments]
+      operationId: CreateRollback
+      summary: Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+      description: |
+        ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+        as a **new** deployment, through the same code path as
+        `POST /v1/deployments`: the same validation, placement, lease at
+        `epoch+1` and host fencing, and the same `409 lease_held`,
+        `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+        is sticky as for any deploy (the workload stays on its host unless
+        `replace` or `host` say otherwise), so Durable Object storage stays
+        where it is. Container images the original deploy built and pushed
+        to twd's registry are reused by digest.
+
+        Without `deploymentID`, the target is the newest earlier deployment
+        that ran (the host reported it `active` and it did not fail), whose
+        bundle is retained and differs from the current one's;
+        `409 no_rollback_target` if there is none. A target whose bundle was
+        pruned is `409 bundle_pruned`. Naming the current deployment is
+        `409 no_rollback_target`.
+
+        A rollback changes code and configuration only. Durable Object
+        storage, D1 databases (migrations are forward-only), KV, R2 and
+        queues keep their current data, and the workload gets the secrets
+        it has **now**: secrets are not versioned with bundles.
+
+        Audited as `kind: rollback` (in place of `deploy`), with
+        `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+        current policy, like `POST /v1/deployments?dryRun=true`.
+      x-twd-role: admin
+      x-twd-audit: true
+      parameters:
+        - name: dryRun
+          in: query
+          description: Preflight only (`200 PreflightResult`); nothing is deployed.
+          schema: { type: boolean, default: false }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RollbackCreate" }
+      responses:
+        "200":
+          description: "`dryRun=true`: the preflight report of the target's bundle. Nothing was deployed."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreflightResult" }
+        "202":
+          description: Accepted; the host is starting the rolled-back deployment.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rollback" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/workloads/{workload}/public:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -4201,6 +4300,16 @@ components:
         - type: object
           properties:
             items: { type: array, items: { $ref: "#/components/schemas/Deployment" } }
+    DeploymentHistoryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [bundleRetention]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/DeploymentRecord" } }
+            bundleRetention:
+              type: integer
+              description: How many of each workload's newest bundles mgmt keeps (0 = every bundle).
     ContainerReservationPage:
       allOf:
         - $ref: "#/components/schemas/Page"
@@ -4923,6 +5032,50 @@ components:
           items: { $ref: "#/components/schemas/ClassConfig" }
         containerImages: { $ref: "#/components/schemas/ContainerImages" }
       additionalProperties: false
+    DeploymentRecord:
+      type: object
+      description: One entry of a workload's deployment history (ADR-deploy-rollback).
+      required: [deploymentID, workload, host, epoch, status, createdAt, bundleSHA256, bundleRetained]
+      properties:
+        deploymentID: { type: string, examples: [dp_3f9a1c2b7d8e4f50] }
+        workload: { type: string }
+        host: { type: string }
+        epoch: { type: integer, format: int64 }
+        status: { $ref: "#/components/schemas/DeploymentStatus" }
+        error: { type: string, description: The host's last error for this deployment. }
+        hostStatus:
+          type: string
+          description: >-
+            The last status the host reported (or mgmt set) for this deployment, kept after it is superseded:
+            `active` means it was serving when it was replaced.
+        deployedBy: { type: string, description: The actor who deployed (see Conventions). }
+        createdAt: { type: integer, format: int64 }
+        activeAt:
+          type: integer
+          format: int64
+          description: When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history.
+        bundleSHA256: { type: string, description: "Hex SHA-256 of the bundle as uploaded (empty: deployed without a bundle)." }
+        bundleBytes: { type: integer, format: int64, description: Size of the retained bundle (0 once pruned). }
+        bundleRetained: { type: boolean, description: "mgmt still holds the bundle, so it can be rolled back to." }
+        rollbackOf: { type: string, description: "Set on a rollback: the deployment whose bundle it redeployed." }
+    RollbackCreate:
+      type: object
+      properties:
+        deploymentID:
+          type: string
+          description: The deployment to roll back to. Default the previous good one (see `CreateRollback`).
+        host: { type: string, description: "Pin a host, as for a deploy." }
+        replace: { type: boolean, description: "Re-place the workload, as `POST /v1/deployments` `replace`." }
+        forceTakeover: { type: boolean, description: "As `POST /v1/deployments` `forceTakeover`." }
+      additionalProperties: false
+    Rollback:
+      type: object
+      description: A started rollback.
+      required: [rollbackOf, target, deployment]
+      properties:
+        rollbackOf: { type: string, description: The deployment whose bundle was redeployed. }
+        target: { $ref: "#/components/schemas/DeploymentRecord" }
+        deployment: { $ref: "#/components/schemas/Deployment" }
     Assignment:
       type: object
       description: What a host must run; `bundleURL` is `GET /v1/deployments/{id}/bundle`.
@@ -5201,6 +5354,7 @@ components:
         `upgrade_abort`,
         `deploy`,
         `undeploy`,
+        `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
         `create`,
         `mint`,
         `remint`,
@@ -5274,6 +5428,7 @@ components:
         - upgrade_abort
         - deploy
         - undeploy
+        - rollback
         - create
         - mint
         - remint

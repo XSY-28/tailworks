@@ -79,6 +79,22 @@ in this order:
 
 A failure ends the stream with the usual `{"error": …}` line instead.
 
+### `twd rollback --json`: progress on stderr
+
+`twd rollback <workload> [<deployment>] --json` redeploys a stored bundle
+and waits like `twd deploy`. Its result (`$defs/rollback`) names the new
+`deploymentID`, the deployment it went back to (`rollbackOf`) and that
+deployment's history record (`target`). Progress goes to **stderr** as
+`$defs/deploy.event` lines: `start` (with `target`, empty for the default),
+`preflight`, `placed` (with `rollbackOf`), `status` and `ready`. There is no
+`build`: nothing is rebuilt.
+
+`twd deployments <workload> --json` (`$defs/deployments`) is one document:
+the history newest first, each entry a `$defs/deploymentRecord` with its
+`bundleSHA256` and `bundleRetained` (false once mgmt has pruned the bundle,
+so it can't be rolled back to), and `bundleRetention`, how many bundles
+mgmt keeps per workload.
+
 ### `twd dev --json`: events on stdout
 
 Without `--once`, `twd dev` runs until it is stopped, so its output is a
