@@ -24,6 +24,8 @@
 //                            the only place a kind changes its tables
 //   reset(store)             drop all its data (the store was deleted/recreated)
 //   ops: { name(store, ...args) }  what its backend calls (Store.op)
+//   adminOps: { name(store, ...args) }  optional: operator operations
+//                            (the platform's admin route, Store.adminOp)
 //   alarm(store)             optional: the object's alarm fired
 // and exports its backend entrypoint class(es).
 import { DurableObject } from "cloudflare:workers";
@@ -81,18 +83,21 @@ export class Store extends DurableObject {
     this.name = i > 0 ? n.slice(i + 1) : "";
     this.kind = KINDS.get(this.kindName);
     this.sql = ctx.storage.sql;
-    this.sql.exec("CREATE TABLE IF NOT EXISTS __twd_store_meta (k TEXT PRIMARY KEY, v)");
+    // The substrate's own state lives in the synchronous KV API (workerd's
+    // hidden _cf_KV table, in the same SQLite file and transactions), so a
+    // kind's SQL namespace holds only its own tables. D1 hands that
+    // namespace to tenant SQL.
+    this.kv = ctx.storage.kv;
     if (this.kind) this.kind.init(this);
     this.syncedAt = 0; // last successful catch-up of this boot (ms)
     this.chain = Promise.resolve();
   }
 
   #meta(k, d) {
-    const r = this.sql.exec("SELECT v FROM __twd_store_meta WHERE k = ?", k).toArray();
-    return r.length ? r[0].v : d;
+    return this.kv.get("__twd_store_" + k) ?? d;
   }
   #setMeta(k, v) {
-    this.sql.exec("INSERT INTO __twd_store_meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, v);
+    this.kv.put("__twd_store_" + k, v);
   }
   get seq() {
     return Number(this.#meta("seq", 0));
@@ -253,6 +258,17 @@ export class Store extends DurableObject {
     this.#check();
     const f = this.kind.ops?.[name];
     if (typeof f !== "function") throw new StoreError("bad_request", "unknown " + this.kindName + " operation " + name);
+    return f(this, ...args);
+  }
+
+  // adminOp runs one of the kind's operator operations (def.adminOps:
+  // `twd d1 execute`, exports, …). Only the platform's admin route calls
+  // it: hostd sends it for mgmt's admin API, for a store the running
+  // deployment declares.
+  async adminOp(name, args = []) {
+    this.#check();
+    const f = this.kind.adminOps?.[name];
+    if (typeof f !== "function") throw new StoreError("bad_request", "unknown " + this.kindName + " admin operation " + name);
     return f(this, ...args);
   }
 }

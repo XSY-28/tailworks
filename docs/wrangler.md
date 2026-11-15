@@ -137,7 +137,7 @@ use it.
 before anything else. Nothing is ignored silently:
 
 ```
-› wrangler.toml: d1_databases: no such binding on twd: env.CACHE will be undefined
+› wrangler.toml: vectorize: no such binding on twd: env.CACHE will be undefined
 › wrangler.toml: routes: ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (twd.jsonc "public" for the internet)
 › wrangler.toml: workers_dev: ignored: there is no Cloudflare zone or workers.dev; …
 › no twd.jsonc: using defaults (workload node tag:twd-wl-wtoml; Durable Object classes internal, no node of their own); add a twd.jsonc to change them
@@ -148,7 +148,7 @@ before anything else. Nothing is ignored silently:
 | keys | what twd says |
 |---|---|
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `twd.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
-| `d1_databases`, `services`, `queues`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `workflows`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on twd; the warning names each `env.X` that will be undefined. A section twd supports as a [platform store](design/adr/platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md)) is not warned about |
+| `services`, `queues`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `workflows`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on twd; the warning names each `env.X` that will be undefined. A section twd supports as a [platform store](design/adr/platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) is not warned about |
 | `assets`, `site` | not supported |
 | `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by twd |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
@@ -175,7 +175,8 @@ twd adds. Here is what changes under `wrangler dev`:
 | cron triggers | `/__scheduled` (`--test-scheduled`) | `/__scheduled` with `twd dev --test-scheduled` |
 | R2 (`r2_buckets`) | simulated locally | local files and an in-memory index, for one run ([r2.md](r2.md)) |
 | KV (`kv_namespaces`) | simulated locally | kept between runs in `<app>/.twd/dev-stores.json` ([kv.md](kv.md)) |
-| D1 and other Cloudflare bindings | simulated locally | absent (warned) |
+| D1 (`d1_databases`) | simulated locally | in memory for one run; pending migrations applied at start ([d1.md](d1.md)) |
+| other Cloudflare bindings | simulated locally | absent (warned) |
 
 Code that should run under both can catch the error:
 `isTailnetError(e) && e.code === "no_identity"`. Treat that as "not on

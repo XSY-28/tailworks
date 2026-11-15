@@ -5,8 +5,8 @@ A twd app has a `twd.jsonc` next to its wrangler config (`wrangler.jsonc`,
 
 - **The wrangler config** is the Worker itself, as on Cloudflare: `main`,
   `compatibility_date`, `durable_objects` bindings, `migrations`, `vars`,
-  `triggers.crons`, `containers`, and `env.<name>` environments
-  (`twd deploy --env`).
+  `triggers.crons`, `containers`, `d1_databases` ([d1.md](d1.md)), and
+  `env.<name>` environments (`twd deploy --env`).
 - **`twd.jsonc`** is what twd adds: the tailnet identity of the workload and
   of each Durable Object class, the isolation tier, placement, and public
   routes.

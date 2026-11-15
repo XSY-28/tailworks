@@ -495,6 +495,8 @@ func (h *Host) pushHandlers(m *http.ServeMux) {
 	// (mgmt asks the lease holder; on the tsnet surface pushAuth admits
 	// mgmt's node only).
 	m.HandleFunc("GET /v1/logs", h.logsHandler)
+	// storeadmin.go: an operator op on a platform store (twd d1 execute, …).
+	m.HandleFunc("POST /v1/store-admin", h.storeAdminHandler)
 }
 
 // tsnetPushAPI is what the host's own tailnet node serves (Config.
