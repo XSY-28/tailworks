@@ -266,6 +266,10 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			h.storeAPI(inst, w, r) // platform stores (stores.go)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v1/queue/") {
+			h.queueAPI(inst, w, r) // queue producers (queues.go)
+			return
+		}
 		if p := r.URL.Path; p == "/v1/tail" || p == "/v1/spans" {
 			h.tel.hostAPI(inst, w, r) // telemetry.go
 			return

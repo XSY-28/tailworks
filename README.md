@@ -173,7 +173,7 @@ prove every ✅ and ⚠️.
 | Bindings | [D1 sessions](docs/COMPAT.md#d1-sessions) | ⚠️ | bookmarks are journal positions |
 | Bindings | [D1 migrations](docs/COMPAT.md#d1-migrations) | ✅ | wrangler's layout |
 | Bindings | [`twd d1` commands](docs/COMPAT.md#d1-cli) | ⚠️ | reach the running workload |
-| Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
+| Bindings | [Queues](docs/COMPAT.md#queues) | ✅ | queues live in mgmt; producer and consumer on any hosts |
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ❌ | Vercel Workflow SDK on Node apps |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
@@ -185,7 +185,8 @@ prove every ✅ and ⚠️.
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ❌ | |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
-| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ❌ | |
+| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
+| Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | twd's API, admin only |
 | Platform | [Caller identity and auth](docs/COMPAT.md#identity) | 🚫 | `getCaller` from WireGuard, not tokens or Access JWTs |
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
@@ -233,6 +234,9 @@ prove every ✅ and ⚠️.
 - **Locks and leader election** ("only one worker runs this job"), with
   leases, fencing tokens and what twd guarantees when a host fails:
   [docs/locks.md](docs/locks.md) and `twd init --template lock`.
+- **Queues** (`queues.producers` → `env.Q.send()`, `queues.consumers` →
+  `queue()`, retries, dead-letter queues, `twd queues`):
+  [docs/queues.md](docs/queues.md).
 - **Logs, metrics and traces:** `twd logs <workload>` shows one structured
   line per request (`--json`, `--errors`, …), hosts serve Prometheus
   `/metrics` on their tailnet node, and `twd telemetry set --otlp …`

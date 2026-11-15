@@ -46,3 +46,4 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [036](036-r2-buckets.md) | R2 buckets as a platform store: the index in the journal, the bytes in an operator-configured blob backend that hostd talks to | 2026-11-15 | Proposed |
 | [037](037-workers-kv.md) | Workers KV: a platform store per workload behind workerd's own `kvNamespace` binding; read-your-writes per host, writes journaled in mgmt first | 2026-11-15 | Proposed |
 | [038](038-d1-databases.md) | D1 databases as platform-store Durable Objects behind workerd's own D1 API, with statement journals in mgmt | 2026-11-15 | Proposed |
+| [039](039-queues.md) | Queues: a sealed, lease-fenced broker in mgmt; hostd runs push consumers through workerd's own queue binding and `queue()` dispatch; the deploy is the grant | 2026-11-15 | Proposed |

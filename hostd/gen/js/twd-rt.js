@@ -1194,6 +1194,20 @@ async function runScheduled(scheduledFn, req, extra) {
     return Response.json({ outcome: "exception", noRetry, error: String(e?.message ?? e).slice(0, 512) });
   }
 }
+var QUEUE_TICKET_ID = "__twd_ticket";
+function queueBatch(batch) {
+  const msgs = Array.isArray(batch?.messages) ? batch.messages : [];
+  const t = msgs.find((m) => m?.id === QUEUE_TICKET_ID);
+  if (!t) return { batch };
+  const rest = Object.freeze(msgs.filter((m) => m?.id !== QUEUE_TICKET_ID));
+  const b = Object.freeze({
+    queue: batch.queue,
+    messages: rest,
+    ackAll: () => batch.ackAll(),
+    retryAll: (o) => batch.retryAll(o)
+  });
+  return { batch: b, ticket: typeof t.body === "string" && t.body ? t.body : void 0 };
+}
 var HANDLER_METHODS = ["fetch", "scheduled", "queue", "tail", "tailStream", "trace", "email", "test", "connect"];
 function handlerKeys(H) {
   const keys = new Set(Object.keys(H));
@@ -1241,6 +1255,16 @@ function wrapHandler(H, bindings) {
         }
       };
     }
+    if (typeof H.prototype?.queue === "function") {
+      const qf = H.prototype.queue;
+      C.prototype.queue = async function(batch) {
+        const tw = this.__twd;
+        const q = queueBatch(batch);
+        this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket: q.ticket }));
+        if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, void 0, q.ticket));
+        return qf.call(this, q.batch);
+      };
+    }
     return { [H.name || "Default"]: C }[H.name || "Default"];
   }
   const out = { ...H };
@@ -1253,7 +1277,9 @@ function wrapHandler(H, bindings) {
         env = guardEnv(env, bindings, "public", admitter(tw, {}));
         if (ctx && tw) define(ctx, publicTailnet(createTailnetContext(tw, env, bindings)));
       } else {
-        const ticket = k === "fetch" ? requestTicket(a) : void 0;
+        let ticket;
+        if (k === "fetch") ticket = requestTicket(a);
+        else if (k === "queue") ({ batch: a, ticket } = queueBatch(a));
         env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, void 0, ticket));
         if (k === "fetch" && isScheduledReq(a)) return runScheduled(H.scheduled, a, [env, ctx]);

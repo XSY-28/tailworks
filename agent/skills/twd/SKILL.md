@@ -72,7 +72,8 @@ user runs `twd mcp --config`.
    flag. Don't invent flags; twd refuses unknown ones with `bad_request`.
 4. **Ask before anything destructive.** `twd kill`, `twd undeploy`,
    `twd down`, `twd tenant rm`, `twd host rm`, `twd secret rm`,
-   `twd kv namespace delete` and `twd kv key delete` act immediately; they
+   `twd kv namespace delete`, `twd kv key delete`, `twd queues rm` and
+   `twd queues purge` act immediately; they
    have no undo. Run them only after the user has said
    yes to that specific action. Never pass `--yes` to `twd up` or
    `twd agent setup` on the user's behalf; those prompts exist so the user

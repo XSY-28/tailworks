@@ -207,6 +207,10 @@ type Config struct {
 	// (tests that drive the scheduler's ticks themselves; nil = real time).
 	CronClock func() time.Time
 
+	// QueueVisibility is how long a claimed queue batch stays hidden in
+	// mgmt (default DefaultQueueVisibility, 60 s; extended while queue()
+	// runs). It bounds how soon a crashed consumer's batch comes back.
+	QueueVisibility time.Duration
 	// Observability (ADR-observability, telemetry.go): MetricsListener,
 	// when set, serves GET /metrics (the host's own tailnet node; who may
 	// scrape is the tailnet policy's call). Telemetry tunes the request
@@ -485,6 +489,8 @@ func (h *Host) Start(ctx context.Context) error {
 		go h.pathLoop()
 	}
 	go h.cronLoop()
+	h.wg.Add(1)
+	go h.queueLoop() // queue consumers (queues.go)
 	return nil
 }
 
