@@ -82,7 +82,9 @@ func TestD1SurvivesRestartAndMove(t *testing.T) {
 	e.startHost("h1", false)
 	e.startHost("h2", false)
 	for i := 0; ; i++ {
-		var pg struct{ Items []struct{ HostID, Status string } }
+		var pg struct {
+			Items []struct{ HostID, Status string }
+		}
 		e.must("GET", "/v1/hosts", nil, &pg)
 		live := 0
 		for _, h := range pg.Items {

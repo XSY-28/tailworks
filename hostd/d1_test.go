@@ -287,10 +287,10 @@ func TestD1(t *testing.T) {
 	t.Run("JournalFirst", func(t *testing.T) {
 		w, f := W.with(t), F.with(t)
 		n0 := e.FM.StoreAppends()
-		w.q("SELECT * FROM kv ORDER BY v DESC", "all")                                // a read with a sort
-		w.q("WITH x AS (SELECT k FROM kv) SELECT count(*) FROM x", "all")             // a CTE read
-		w.q("UPDATE kv SET v = 0 WHERE k = 'no such key'", "run")                     // a write that writes nothing
-		w.q("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v)", "run")           // DDL that changes nothing
+		w.q("SELECT * FROM kv ORDER BY v DESC", "all")                      // a read with a sort
+		w.q("WITH x AS (SELECT k FROM kv) SELECT count(*) FROM x", "all")   // a CTE read
+		w.q("UPDATE kv SET v = 0 WHERE k = 'no such key'", "run")           // a write that writes nothing
+		w.q("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v)", "run") // DDL that changes nothing
 		if n := e.FM.StoreAppends(); n != n0 {
 			t.Fatalf("reads and no-op writes appended %d journal entries", n-n0)
 		}
