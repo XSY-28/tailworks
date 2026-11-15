@@ -211,7 +211,7 @@ func TestUIBrowserGuard(t *testing.T) {
 	if st, _ := u.call(fromAdmin, "GET", "/v1/objects/"+root, "", map[string]string{"Origin": "http://evil.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors"}); st != 200 {
 		t.Fatalf("cross-site GET: %d", st)
 	}
-	// Same-origin with the UI header succeeds (what app.js sends).
+	// Same-origin with the opt-in header succeeds.
 	st, w := u.call(fromAdmin, "DELETE", kill(kid), "", sameOrigin)
 	if st != 202 {
 		t.Fatalf("same-origin kill: %d %s", st, w.Body.String())
@@ -225,7 +225,7 @@ func TestUIBrowserGuard(t *testing.T) {
 	if st, w := u.call(fromAdmin, "GET", "/ui/objects/"+kid, "", nil); st != 200 || !strings.Contains(w.Body.String(), "ui test") || !strings.Contains(w.Body.String(), "alice@example.com") {
 		t.Fatalf("tombstone page: %d %s", st, w.Body.String())
 	}
-	// The no-JS form fallback: a same-origin POST to /ui/... (no X-Twd-UI
+	// The UI's mutation path: a same-origin form POST to /ui/... (no X-Twd-UI
 	// needed off /v1) runs the call in-process and redirects back with
 	// the outcome; a cross-site one is refused.
 	form := map[string]string{"Origin": "http://twd-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate", "Content-Type": "application/x-www-form-urlencoded"}
@@ -248,8 +248,9 @@ func TestUIBrowserGuard(t *testing.T) {
 }
 
 // TestUISpecConformance drives every /v1 call the UI makes through the
-// kin-openapi validator (ui.Handler takes the API handler, so the test
-// hands it a validated one) with populated data, as the admin.
+// kin-openapi validator (the UI is a /v1 client, so the test gives it a
+// transport onto a validated API) with populated data, as the admin:
+// every page, then every form mutation.
 func TestUISpecConformance(t *testing.T) {
 	u := newUIEnv(t)
 	dep, root, kid := u.seed(t)
@@ -259,7 +260,7 @@ func TestUISpecConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := val.Middleware(specReporter(t))(u.srv.Handler())
-	uiH := ui.Handler(api)
+	uiH := ui.Handler(&http.Client{Transport: uiTransport{api}}, uiBaseURL)
 	admin := Principal{Kind: "user", Login: "alice@example.com", NodeID: "nADM", Caps: []string{AdminCap}}
 	for _, p := range []string{"/ui/", "/ui/objects/" + root, "/ui/objects/" + kid, "/ui/deployments/" + dep, "/ui/hosts/h1", "/ui/tenants/" + u.tn, "/ui/audit", "/ui/audit?object=" + root + "&limit=2"} {
 		r := httptest.NewRequest("GET", "http://twd-mgmt.t.ts.net"+p, nil)
@@ -268,6 +269,21 @@ func TestUISpecConformance(t *testing.T) {
 		uiH.ServeHTTP(w, r)
 		if w.Code != 200 {
 			t.Errorf("%s: %d %s", p, w.Code, w.Body.String())
+		}
+	}
+	for _, f := range []struct{ path, form string }{
+		{"/ui/objects/" + root + "/kill", "cascade=true&reason=spec"},
+		{"/ui/deployments/" + dep + "/undeploy", "reason=spec"},
+		{"/ui/hosts/h1/remove", "drain=true"},
+		{"/ui/tenants/" + u.tn + "/delete", "force=true"},
+	} {
+		r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net"+f.path, strings.NewReader(f.form))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r = r.WithContext(WithPrincipal(r.Context(), admin))
+		w := httptest.NewRecorder()
+		uiH.ServeHTTP(w, r)
+		if loc := w.Header().Get("Location"); w.Code != 303 || !strings.Contains(loc, "ok=") {
+			t.Errorf("POST %s: %d %q", f.path, w.Code, loc)
 		}
 	}
 }
