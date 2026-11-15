@@ -256,7 +256,7 @@ func TestAgentEval(t *testing.T) {
 
 }
 
-// testMCP is twd's MCP server (ADR-mgmt-mcp) across processes: (a) the
+// testMCP is twd's MCP server (ADR-035) across processes: (a) the
 // stdio bridge (`twd mcp`) on the twd host, as the operator: read tools by
 // default, kill refused without --allow, a redeploy with --allow deploy
 // audited as the operator via MCP; (b) a separate tailnet node holding

@@ -1,6 +1,6 @@
 package main
 
-// twd mcp (issue #25, ADR-mgmt-mcp): twd's MCP server for coding agents.
+// twd mcp (issue #25, ADR-035): twd's MCP server for coding agents.
 //
 //	twd mcp [--allow kill,undeploy,deploy]   stdio MCP server: a bridge to mgmt's /mcp
 //	twd mcp --config                         how to register it with an agent

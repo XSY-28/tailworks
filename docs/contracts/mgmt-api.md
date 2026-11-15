@@ -1722,7 +1722,7 @@ New deploys then mirror the ref into each tenant's namespace; pinned deployments
 
 ## Mcp
 
-twd's own MCP server (ADR-mgmt-mcp), served by twd-mgmt at `/mcp` on the same listeners and
+twd's own MCP server (ADR-035), served by twd-mgmt at `/mcp` on the same listeners and
 behind the same WhoIs gate as `/v1`. Its wire protocol is the external Model Context Protocol
 (Streamable HTTP, stateless: one JSON-RPC request per POST, answered with `application/json`);
 this entry documents the route and who may call it, and is excluded from code generation (the

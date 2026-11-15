@@ -1,4 +1,4 @@
-# ADR-mgmt-mcp: twd's own MCP server on mgmt, gated per tool by a tailnet grant
+# ADR-035: twd's own MCP server on mgmt, gated per tool by a tailnet grant
 
 **Date:** 2026-11-15
 **Status:** Proposed (results in `status/agent-first-dx-issue-25.md`).

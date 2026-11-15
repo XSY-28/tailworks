@@ -1,6 +1,6 @@
 package mgmt
 
-// twd's own MCP server (issue #25, ADR-mgmt-mcp): POST /mcp on the same
+// twd's own MCP server (issue #25, ADR-035): POST /mcp on the same
 // listeners and behind the same WhoIs gate as /v1, so a coding agent on
 // any tailnet machine can operate twd with no credentials on disk.
 //

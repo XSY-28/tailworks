@@ -126,7 +126,7 @@ the schema: [cli-json.md](cli-json.md).
 As well as the CLI, an agent can operate twd through **MCP**. mgmt serves
 an MCP server at `/mcp`, next to its `/v1` API, behind the same tailnet
 identity check. The design is in
-[ADR-mgmt-mcp](design/adr/mgmt-mcp.md).
+[ADR-035](design/adr/035-mgmt-mcp.md).
 
 | Tool | What it does | Who gets it |
 |---|---|---|

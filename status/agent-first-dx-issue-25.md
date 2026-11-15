@@ -1,4 +1,4 @@
-Last update: 2026-11-15 PT. Added twd's own MCP server (`/mcp` on mgmt, `twd mcp` stdio bridge), ADR-mgmt-mcp.
+Last update: 2026-11-15 PT. Added twd's own MCP server (`/mcp` on mgmt, `twd mcp` stdio bridge), ADR-035.
 
 Earlier: agent-first developer experience (issue #25): skills, `twd agent`, stable `--json`, `twd docs`, `llms.txt`.
 
@@ -53,7 +53,7 @@ Branch `agent-first-dx-issue-25` (worktree `ancient-alpacka`).
 
 ## twd's MCP server (issue item 4)
 
-Design: `docs/design/adr/mgmt-mcp.md` (ADR-mgmt-mcp, Proposed).
+Design: `docs/design/adr/035-mgmt-mcp.md` (ADR-035, Proposed).
 
 - `mgmt/mcp.go`: `POST /mcp` on mgmt's listeners, through the same WhoIs
   gate as `/v1`; MCP Streamable HTTP, stateless (one JSON-RPC message per
