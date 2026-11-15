@@ -268,6 +268,7 @@ func cmdDev(args []string) error {
 		where = res.Serves + "  (MCP server; / answers 404)"
 	}
 	fmt.Fprintf(hout, "ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
+	go followDevRecords(ctx, h.RequestLogPath(tr.TenantID, a.Name), hout, ev) // devrecords.go
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
