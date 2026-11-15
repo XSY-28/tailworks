@@ -155,6 +155,12 @@ hostd's API, not this document's.
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `DeleteWorkloadSecret` | Delete a workload secret (`twd secret rm`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores` | admin | no | `ListWorkloadStores` | List a workload's stores |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | no | `GetWorkloadStore` | Get one store |
+| `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `PutWorkloadStore` | Create a store (idempotent) |
+| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `DeleteWorkloadStore` | Delete a store and its data |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `ReadStoreJournal` | Read a store's journal after a sequence number |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
 | `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
@@ -1180,6 +1186,180 @@ when the workload has no secret of that name. Audited
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+## Stores
+
+Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
+
+### `GET /v1/tenants/{id}/workloads/{workload}/stores` — List a workload's stores
+
+`ListWorkloadStores` · role **admin** · audited: no
+
+Every store of the workload (all kinds), ordered by `(kind, name)`.
+A store exists once something was written to it (a binding's first
+write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+mgmt keeps, after compaction.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `limit` | query | integer | no | Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`. |
+| `cursor` | query | string | no | Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged. |
+| `kind` | query | `StoreKind` | no | Only stores of this kind. |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `StorePage` | One page of stores. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Get one store
+
+`GetWorkloadStore` · role **admin** · audited: no
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `kind` | path | `StoreKind` | yes | The store kind (the binding type, e.g. `kv`). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `Store` | The store. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Create a store (idempotent)
+
+`PutWorkloadStore` · role **admin** · audited: yes
+
+Creates an empty store (`201`), or answers the existing one
+(`200`). A binding's first write creates its store too, so this is
+only needed to create one before the first deploy. Audited
+(`kind: store_create`) when it creates.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `kind` | path | `StoreKind` | yes | The store kind (the binding type, e.g. `kv`). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `Store` | The store already existed. |
+| 201 | `Store` | Created. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Delete a store and its data
+
+`DeleteWorkloadStore` · role **admin** · audited: yes
+
+Deletes the journal and the store's data key (custody), so the
+sealed entries can't be read again even from a backup of the
+database. A running workload's store object notices on its next
+sync (a new incarnation) and empties itself; a later write starts
+a new, empty store. `404 unknown_store` if there is none. Audited
+(`kind: store_delete`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `kind` | path | `StoreKind` | yes | The store kind (the binding type, e.g. `kv`). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+
+| Status | Body | Description |
+|---|---|---|
+| 204 | — | Deleted. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` — Read a store's journal after a sequence number
+
+`ReadStoreJournal` · role **admin\|host** · audited: no
+
+The entries with `seq > after`, in order, for a store object
+catching up (after a restart, on a new host, or when another
+writer appended). Entries superseded by a later entry with the same
+`ckey` are gone (compaction), so `seq` has gaps; the page is still
+a complete catch-up from `after`. An unknown store is an empty page
+with `head` 0 and no `incarnation`.
+
+A host must give `epoch`: the data is released only to the holder
+of the workload's lease at that epoch (`409 lease_lost`, as for
+secrets). An admin reads without it (`twd kv key get`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `kind` | path | `StoreKind` | yes | The store kind (the binding type, e.g. `kv`). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `epoch` | query | integer (int64) | no | Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out. |
+| `after` | query | integer (int64) | no | Return entries with a larger `seq` (default 0). |
+| `limit` | query | integer | no | At most this many entries (default and maximum 1000; a page also stops at about 4 MiB of data). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `StoreJournal` | A page of entries. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` — Append entries to a store's journal (conditional on its head)
+
+`AppendStoreJournal` · role **admin\|host** · audited: no
+
+The write path of a store object: it appends here **before** it
+applies the change locally, so an acknowledged write is never only
+on one host's disk. The append succeeds only if the journal's head
+is still `after` (and `incarnation` matches when given); otherwise
+`409 store_conflict`, and the writer catches up
+(`GET …/journal?after=`) and retries. That makes the journal
+linearizable across writers (a workload's replicas, an admin's
+`twd kv key put`). An entry with a `ckey` supersedes every earlier
+entry with the same `ckey`, which mgmt deletes in the same
+transaction. The first append creates the store.
+
+Entries are sealed at rest with the store's data key (AES-256-GCM,
+custody); `ckey` is stored as an HMAC under a key derived from it.
+
+A host must give `epoch` (lease holder at that epoch, `409
+lease_lost`): a host that lost the workload can't write. Not
+audited per append (stores are high volume); creation is
+(`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `kind` | path | `StoreKind` | yes | The store kind (the binding type, e.g. `kv`). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `epoch` | query | integer (int64) | no | Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out. |
+
+**Request** `application/json`: `StoreAppend`
+
+| Status | Body | Description |
+|---|---|---|
+| 201 | `StoreAppendResult` | Appended. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ## Telemetry
 
 A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
@@ -1927,6 +2107,8 @@ mgmt chain:
 `secret_put` (a workload secret set; name only),
 `secret_delete`,
 `secret_release` (a workload's secrets released to its lease holder; names only),
+`store_create` (a platform store created, by its first write or an admin),
+`store_delete` (a platform store and its data key deleted),
 `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 `telemetry_delete`,
 `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
@@ -1950,7 +2132,7 @@ Public ingress (ADR-029), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -1978,7 +2160,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -2222,7 +2404,7 @@ code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -2256,9 +2438,12 @@ The catalog. Status in parentheses.
 | `unknown_namespace` | 404 | `(workload, class)` not declared |
 | `no_logs` | 404 | the workload's host has no log file for it yet |
 | `unknown_secret` | 404 | the workload has no secret of that name |
+| `unknown_store` | 404 | the workload has no store of that kind and name |
 | `exists` | 409 | create of an existing ID |
 | `lease_lost` | 409 | epoch/holder fence failed |
 | `lease_held` | 409 | another host holds the lease |
+| `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+| `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2290,7 +2475,7 @@ The catalog. Status in parentheses.
 | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `exists`, `lease_lost`, `lease_held`, `store_conflict`, `store_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
 
 #### `Health`
 
@@ -2978,6 +3163,73 @@ The mgmt replica registry (replicas sharing this store). `ok` is false (and the 
 | `live` | integer | yes | Replicas seen within the last 30 s, this one included. |
 | `message` | string | no |  |
 | `ok` | boolean | yes |  |
+
+#### `Store`
+
+A platform storage object of a workload (ADR-platform-stores).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bytes` | integer (int64) | yes | Plaintext bytes of the kept entries. |
+| `createdAt` | integer (int64) | yes |  |
+| `entries` | integer (int64) | yes | Journal entries kept (after compaction). |
+| `head` | integer (int64) | yes | The last sequence number appended. |
+| `incarnation` | string | yes | Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself. |
+| `kind` | `StoreKind` | yes | A storage binding type (`kv`; later `d1`, `queue`, …). |
+| `name` | string | yes |  |
+| `tenantID` | string | yes |  |
+| `updatedAt` | integer (int64) | yes |  |
+| `workload` | string | yes |  |
+
+#### `StoreAppend`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `after` | integer (int64) | yes | The journal head the writer has applied; the append fails with `store_conflict` unless it is still the head. |
+| `entries` | array of `StoreEntryIn` | yes |  |
+| `incarnation` | string | no | The incarnation the writer has applied (empty for a new store). A mismatch is a `store_conflict`. |
+
+#### `StoreAppendResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `head` | integer (int64) | yes | The new head: the entries got `after+1 … head`, in order. |
+| `incarnation` | string | yes |  |
+
+#### `StoreEntry`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `data` | string (byte) | yes |  |
+| `seq` | integer (int64) | yes |  |
+
+#### `StoreEntryIn`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `ckey` | string | no | Compaction key: this entry supersedes every earlier entry with the same `ckey` (for KV, the key). Empty: never compacted. |
+| `data` | string (byte) | yes | The entry, opaque to mgmt (its kind's encoding), at most 2 MiB. |
+
+#### `StoreJournal`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `entries` | array of `StoreEntry` | yes |  |
+| `head` | integer (int64) | yes |  |
+| `incarnation` | string | no | Empty when the store does not exist. |
+| `more` | boolean | yes | True if entries after the last one returned remain: read again with `after` = its `seq`. |
+
+#### `StoreKind`
+
+A storage binding type (`kv`; later `d1`, `queue`, …).
+
+#### `StorePage`
+
+Extends `Page`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array of `Store` | no |  |
 
 #### `TelemetryConfig`
 

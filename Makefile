@@ -84,6 +84,12 @@ test-pg:
 e2e-local: deps
 	$(GO) test -tags e2e -count=1 -v ./e2e/local/...
 
+## e2e-wrangler: a wrangler.toml-only project through `twd dev` (twd + hostd + workerd), bundled by the
+## built-in esbuild, from a wrangler --outdir, and by the wrangler CLI (that one skips without wrangler).
+.PHONY: e2e-wrangler
+e2e-wrangler: deps
+	$(GO) test -tags e2e -count=1 -v ./e2e/wrangler/...
+
 ## e2e-real: the identity/egress/kill suite on tailnet 1 (runs only if the creds exist).
 .PHONY: e2e-real
 e2e-real: deps
@@ -431,11 +437,18 @@ api-check: api
 		git --no-pager diff --stat -- mgmt/api/v1 hostd/mgmtapi/v1 docs/contracts/mgmt-api.md; exit 1; fi
 	$(GO) test -count=1 ./mgmt/api/...
 
+## compat-check: the README's "Compatibility at a glance" rows match docs/COMPAT.md, and every
+## ✅/⚠️ row there names tests that exist (internal/compatdoc).
+.PHONY: compat-check
+compat-check:
+	$(GO) run ./internal/compatdoc/compatcheck
+
 .PHONY: lint
-lint: api-check
+lint: api-check compat-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
 	$(GO) vet -tags e2e ./e2e/local/...
+	$(GO) vet -tags e2e ./e2e/wrangler/...
 	$(GO) vet -tags e2ereal ./e2e/real/...
 	GOOS=linux $(GO) vet ./hostd/vm/... ./guest/... ./cmd/twd-hostd/... ./cmd/twd-vmhelper/... ./cmd/twd/...
 	GOOS=linux $(GO) vet -tags e2evm ./e2e/vm/...
