@@ -17,6 +17,7 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 - [Using wrangler with twd](https://github.com/rosskukulinski/twd/blob/master/docs/wrangler.md): wrangler.toml/json/jsonc, `--env`, bundling, what's ignored
 - [Cloudflare Workers compatibility](https://github.com/rosskukulinski/twd/blob/master/docs/COMPAT.md): what works, surface by surface, with the tests behind it
 - [Worker secrets](https://github.com/rosskukulinski/twd/blob/master/docs/secrets.md): `twd secret`, `.dev.vars`
+- [Workers KV](https://github.com/rosskukulinski/twd/blob/master/docs/kv.md): `kv_namespaces`, `twd kv`, consistency and limits
 - [Cron triggers](https://github.com/rosskukulinski/twd/blob/master/docs/cron-triggers.md): `triggers.crons`, `scheduled()`
 - [Public ingress (Funnel)](https://github.com/rosskukulinski/twd/blob/master/docs/public-ingress.md): public routes, `twd expose`
 - [Tailscale Services](https://github.com/rosskukulinski/twd/blob/master/docs/services.md): stable names and replicas

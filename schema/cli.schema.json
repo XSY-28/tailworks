@@ -1358,6 +1358,235 @@
         "deleted"
       ]
     },
+    "kvKey": {
+      "type": "object",
+      "description": "a Workers KV key as list() returns it",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "expiration": {
+          "type": "integer",
+          "description": "Unix seconds"
+        },
+        "metadata": {
+          "description": "any JSON"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "kv namespace create": {
+      "type": "object",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "created": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespace",
+        "created"
+      ]
+    },
+    "kv namespace list": {
+      "type": "object",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "entries": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "updatedAt": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespaces"
+      ]
+    },
+    "kv namespace delete": {
+      "type": "object",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespace",
+        "deleted"
+      ]
+    },
+    "kv key put": {
+      "type": "object",
+      "description": "never contains the value",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "key": {
+          "$ref": "#/$defs/kvKey"
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespace",
+        "key"
+      ]
+    },
+    "kv key get": {
+      "type": "object",
+      "description": "the value base64-encoded (without --json, the raw bytes on stdout)",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string",
+              "contentEncoding": "base64"
+            },
+            "expiration": {
+              "type": "integer"
+            },
+            "metadata": {}
+          },
+          "required": [
+            "name",
+            "value"
+          ]
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespace",
+        "value"
+      ]
+    },
+    "kv key delete": {
+      "type": "object",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespace",
+        "deleted"
+      ]
+    },
+    "kv key list": {
+      "type": "object",
+      "description": "names, expirations and metadata; never values",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "the KV namespace (its kv_namespaces id, or the binding name)"
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/kvKey"
+          }
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "namespace",
+        "keys"
+      ]
+    },
     "kill": {
       "type": "object",
       "properties": {

@@ -36,15 +36,15 @@ var kvInput = func() io.Reader { return os.Stdin }
 var kvOutput = func() io.Writer { return os.Stdout }
 
 type kvResult struct {
-	Workload   string           `json:"workload"`
-	TenantID   string           `json:"tenantID"`
-	Namespace  string           `json:"namespace,omitempty"`
-	Namespaces []mgmt.StoreInfo `json:"namespaces,omitempty"`
-	Created    *bool            `json:"created,omitempty"`
-	Deleted    string           `json:"deleted,omitempty"`
-	Key        *mgmt.KVKey      `json:"key,omitempty"`
-	Keys       []mgmt.KVKey     `json:"keys,omitempty"`
-	Value      *mgmt.KVValue    `json:"value,omitempty"`
+	Workload   string            `json:"workload"`
+	TenantID   string            `json:"tenantID"`
+	Namespace  string            `json:"namespace,omitempty"`
+	Namespaces *[]mgmt.StoreInfo `json:"namespaces,omitempty"` // namespace list: always present
+	Created    *bool             `json:"created,omitempty"`
+	Deleted    string            `json:"deleted,omitempty"`
+	Key        *mgmt.KVKey       `json:"key,omitempty"`
+	Keys       *[]mgmt.KVKey     `json:"keys,omitempty"` // key list: always present
+	Value      *mgmt.KVValue     `json:"value,omitempty"`
 }
 
 func kvUsage() string { return "usage: twd " + usageOf("kv") }
@@ -182,7 +182,8 @@ func cmdKV(args []string) error {
 		if err != nil {
 			return err
 		}
-		res.Namespaces = append([]mgmt.StoreInfo{}, items...)
+		nss := append([]mgmt.StoreInfo{}, items...)
+		res.Namespaces = &nss
 		emit(f, res, func() {
 			if len(items) == 0 {
 				fmt.Printf("no KV namespaces for workload %s (tenant %s) · create one: twd kv namespace create <NAME>, or deploy an app with kv_namespaces\n", workload, tn.Tailnet)
@@ -231,7 +232,8 @@ func cmdKV(args []string) error {
 		res.Deleted = key
 		emit(f, res, func() { fmt.Printf("✓ deleted %q from KV namespace %s of workload %s\n", key, ns, workload) })
 	case "key list":
-		res.Keys = []mgmt.KVKey{}
+		keys := []mgmt.KVKey{}
+		res.Keys = &keys
 		cursor := ""
 		for {
 			var p mgmt.KVKeyPage
@@ -239,19 +241,19 @@ func cmdKV(args []string) error {
 			if err := mc.Do(ctx, "GET", nsPath+"/keys?"+q.Encode(), nil, &p); err != nil {
 				return err
 			}
-			res.Keys = append(res.Keys, p.Keys...)
+			keys = append(keys, p.Keys...)
 			if p.ListComplete {
 				break
 			}
 			cursor = p.Cursor
 		}
 		emit(f, res, func() {
-			if len(res.Keys) == 0 {
+			if len(keys) == 0 {
 				fmt.Printf("no keys in KV namespace %s of workload %s\n", ns, workload)
 				return
 			}
 			fmt.Printf("%-40s %-20s %s\n", "KEY", "EXPIRES", "METADATA")
-			for _, k := range res.Keys {
+			for _, k := range keys {
 				exp := "-"
 				if k.Expiration != 0 {
 					exp = time.Unix(k.Expiration, 0).Local().Format("2006-01-02 15:04:05")

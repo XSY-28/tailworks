@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rosskukulinski/twd/schema"
 )
 
 // TestCLIKV: twd kv namespace create|list|delete and key put|get|list|
@@ -79,15 +81,16 @@ func TestCLIKV(t *testing.T) {
 	// list, --prefix, --json.
 	out := run("key", "list", "--binding", "OAUTH_KV", "--json")
 	var res kvResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil || len(res.Keys) != 3 {
+	if err := json.Unmarshal([]byte(out), &res); err != nil || res.Keys == nil || len(*res.Keys) != 3 {
 		t.Fatalf("list --json: %v %s", err, out)
 	}
 	var meta map[string]string
-	json.Unmarshal(res.Keys[0].Metadata, &meta)
-	if res.Keys[0].Name != "client:1" || meta["kind"] != "client" {
-		t.Fatalf("client:1: %+v %s", res.Keys[0], res.Keys[0].Metadata)
+	keys := *res.Keys
+	json.Unmarshal(keys[0].Metadata, &meta)
+	if keys[0].Name != "client:1" || meta["kind"] != "client" {
+		t.Fatalf("client:1: %+v %s", keys[0], keys[0].Metadata)
 	}
-	if x := res.Keys[1].Expiration; x < time.Now().Unix()+3500 {
+	if x := keys[1].Expiration; x < time.Now().Unix()+3500 {
 		t.Fatalf("grant:1 expiration %d", x)
 	}
 	if out := run("key", "list", "--binding", "OAUTH_KV", "--prefix", "tok"); !strings.Contains(out, `"token:1"`) || strings.Contains(out, "client") {
@@ -105,6 +108,26 @@ func TestCLIKV(t *testing.T) {
 	failing("not both", "key", "get", "k", "--binding", "OAUTH_KV", "--namespace", "oauth")
 	failing("illegal key", "key", "get", "..", "--namespace", "oauth")
 	failing("not_found", "key", "get", "nope", "--namespace", "oauth")
+
+	// Every subcommand's --json output matches schema/cli.schema.json.
+	checkJSON := func(def string, args ...string) {
+		t.Helper()
+		var v any
+		if err := json.Unmarshal([]byte(run(append(args, "--json")...)), &v); err != nil {
+			t.Fatalf("twd kv %v --json: %v", args, err)
+		}
+		if ps, err := schema.CheckCLI(def, v); err != nil || len(ps) > 0 {
+			t.Fatalf("twd kv %v --json vs $defs/%q: %v %v", args, def, ps, err)
+		}
+	}
+	checkJSON("kv namespace create", "namespace", "create", "scratch")
+	checkJSON("kv namespace list", "namespace", "list")
+	checkJSON("kv key put", "key", "put", "j", "v", "--namespace", "scratch", "--metadata", `{"a":1}`, "--ttl", "120")
+	checkJSON("kv key get", "key", "get", "j", "--namespace", "scratch")
+	checkJSON("kv key list", "key", "list", "--namespace", "scratch")
+	checkJSON("kv key delete", "key", "delete", "j", "--namespace", "scratch")
+	checkJSON("kv key list", "key", "list", "--namespace", "scratch") // empty: keys is []
+	checkJSON("kv namespace delete", "namespace", "delete", "scratch")
 
 	// delete a key, then the namespace.
 	run("key", "delete", "token:1", "--binding", "OAUTH_KV")

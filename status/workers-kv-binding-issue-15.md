@@ -1,4 +1,4 @@
-Last update: 2026-11-15 PT. Workers KV binding (issue #15, ADR-036) on the platform-store substrate: API, facets, TTL, operator CLI/REST, twd dev, process and microVM tiers, workers-oauth-provider.
+Last update: 2026-11-15 PT. Merged master (#32, agent-first DX); ADR numbered ADR-036; kv subcommands in the --json contract. Ready to merge.
 
 # Workers KV (`kv_namespaces`)
 
@@ -144,6 +144,28 @@ substrate's first real kind; nothing in the substrate had to change.
   ./cmd/... ./hostd/...`: all ok (cmd/twd 148 s, hostd 114 s). `npm test`:
   40/40. `e2e/sdk` (`TestOAuthProviderKV`, `TestCloudflareAgents`) and
   `e2e/vm:TestE2EVMKV`: ok after the merge.
+
+## Merge with #32 (agent-first DX), 2026-11-15
+
+- The design is numbered **ADR-036** (`docs/design/adr/036-workers-kv.md`,
+  slug replaced everywhere, row in `docs/design/adr/README.md`).
+- Semantic conflict: #32's `TestCLIJSONContract` requires every
+  subcommand in `twd help` to have a `cliSurface` entry and a
+  `schema/cli.schema.json` def. The `kv` usage now spells out each
+  subcommand. The test now has 7 `kv` entries (`subDepth` 3), and the
+  schema has 7 defs plus `kvKey`. `namespaces` and `keys` are always
+  present (`[]` when empty). `TestCLIKV` checks every subcommand's real
+  `--json` output against its def.
+- `llms.txt` lists `docs/kv.md`. The `twd` skill's ask-first list names
+  `twd kv namespace delete` and `twd kv key delete`.
+- Tests after the merge (`TWD_WORKERD` = the native workerd, see
+  Findings): `go test -race ./netd/... ./internal/... ./cmd/... ./mgmt/...
+  ./hostd/... ./security/... ./guest/...`: all ok except
+  `TestCLIJSONContract`, which the changes above fix. Then
+  `./cmd/... ./schema/... ./docs/` were re-run under `-race`: ok.
+  `npm test`: 40/40. `make lint`: ok.
+- Not done: KV tools for twd's MCP server (ADR-035 picks its tools by
+  hand).
 
 ## Gaps and next steps
 
