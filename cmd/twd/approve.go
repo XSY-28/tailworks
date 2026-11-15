@@ -221,4 +221,3 @@ func shortAge(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
-
