@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	twdversion "github.com/rosskukulinski/twd/internal/version"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,14 +21,15 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// version is set at release build time (-ldflags -X main.version=…).
-var version = "dev"
+// version is the release version (internal/version, set at build time).
+var version = twdversion.Version
 
-// workerdPin is the workerd npm version twd is built and tested against;
+// workerdPin is the workerd npm version twd is built and tested against
+// (internal/version.WorkerdPin, checked against package-lock.json);
 // `workerd --version` prints its date.
-const (
-	workerdPin     = "1.20261114.1"
-	workerdPinDate = "2026-11-14"
+var (
+	workerdPin     = twdversion.WorkerdPin
+	workerdPinDate = twdversion.WorkerdPinDate()
 )
 
 func cmdVersion(args []string) error {

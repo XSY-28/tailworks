@@ -8,6 +8,11 @@
 #                             kernel, firecracker + jailer (pinned, checked).
 #   vz-assets                 arm64 Linux: `make vz-assets`, the macOS
 #                             (Virtualization.framework) guest kernel + image.
+#   gates                     Linux: `make lint test`, the install.sh rollback
+#                             test, and `make e2e-upgrade` (upgrade from the
+#                             previous release to this tag: data, rejoin, old
+#                             bundles; ADR-041 §9). No draft
+#                             unless every gate passes.
 #   release                   macOS (the darwin binaries are ad-hoc signed,
 #                             twd-vz with the virtualization entitlement):
 #                             `make release` with the three asset dirs, and
@@ -40,6 +45,51 @@ env:
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0 # tags and history: check-changes and the upgrade test's previous release
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: make lint test
+        run: make lint test
+      - name: install.sh upgrade and rollback
+        run: make install-test
+      - name: make e2e-upgrade (previous release → this tag)
+        run: make e2e-upgrade
+
+  # The Headscale profile against every supported Headscale minor, in Docker
+  # (ADR-041 §9 gate 6). One minor until Headscale v0.30
+  # (docs/headscale.md); then add the newest two, one line each.
+  headscale:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        image:
+          - headscale/headscale:v0.29.7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: make e2e-headscale (${{ matrix.image }})
+        run: make e2e-headscale HEADSCALE_IMAGE=${{ matrix.image }}
+
   vm-assets:
     strategy:
       fail-fast: true
@@ -78,7 +128,7 @@ jobs:
       - name: make vm-assets
         run: |
           make deps
-          make vm-assets GUEST_ARCH=${{ matrix.arch }} VM_ASSETS=dist/vm-assets-${{ matrix.arch }}
+          TWD_VERSION="${TAG#v}" make vm-assets GUEST_ARCH=${{ matrix.arch }} VM_ASSETS=dist/vm-assets-${{ matrix.arch }}
           cat dist/vm-assets-${{ matrix.arch }}/manifest.json
           sha256sum dist/vm-assets-${{ matrix.arch }}/*
       - uses: actions/upload-artifact@v4
@@ -112,7 +162,7 @@ jobs:
           key: vz-assets-${{ hashFiles('guest/**', 'go.mod', 'go.sum', 'package-lock.json') }}
       - name: make vz-assets
         run: |
-          make vz-assets VZ_ASSETS=dist/vz-assets-arm64
+          TWD_VERSION="${TAG#v}" make vz-assets VZ_ASSETS=dist/vz-assets-arm64
           sha256sum dist/vz-assets-arm64/*
       - uses: actions/upload-artifact@v4
         with:
@@ -122,13 +172,14 @@ jobs:
           retention-days: 7
 
   release:
-    needs: [vm-assets, vz-assets]
+    needs: [vm-assets, vz-assets, gates, headscale]
     runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
+          fetch-depth: 0 # the previous tag, for the release notes
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -173,7 +224,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || echo -)
+          scripts/release-notes.sh "$prev" "$TAG" >"$RUNNER_TEMP/notes.md"
+          printf '\nInstall: see docs/INSTALL.md (or scripts/get.sh). Upgrade: `twd upgrade %s`. Built by .github/workflows/release.yml.\n' "$TAG" >>"$RUNNER_TEMP/notes.md"
           gh release view "$TAG" >/dev/null 2>&1 ||
-            gh release create "$TAG" --draft --verify-tag --title "twd $TAG" \
-              --notes "Install: see docs/INSTALL.md (or scripts/get.sh). Built by .github/workflows/release.yml."
+            gh release create "$TAG" --draft --verify-tag --title "twd $TAG" --notes-file "$RUNNER_TEMP/notes.md"
           gh release upload "$TAG" dist/twd-*.tar.gz dist/SHA256SUMS --clobber

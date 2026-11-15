@@ -1,6 +1,6 @@
 {
   "name": "@twd/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "withTailnet, caller(), authorizeTool and budget() for stateless MCP servers on twd",
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "dist"
   ],
   "dependencies": {
-    "@twd/tailnet": "0.1.0"
+    "@twd/tailnet": "0.2.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

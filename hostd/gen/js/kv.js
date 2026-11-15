@@ -49,7 +49,7 @@ export function encodeEntry(h, value) {
 }
 
 export function decodeEntry(u8) {
-  if (u8.length < 5 || u8[0] !== 1) throw new Error("kv: not a v1 KV entry");
+  if (u8.length < 5 || u8[0] !== 1) throw new Error(u8.length >= 1 && u8[0] > 1 ? `kv: entry v${u8[0]} was written by a newer twd (this one reads v1); upgrade twd-hostd` : "kv: not a v1 KV entry");
   const n = new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(1);
   if (n > u8.length - 5) throw new Error("kv: truncated KV entry");
   return { h: JSON.parse(utf8(u8.subarray(5, 5 + n))), v: u8.subarray(5 + n) };

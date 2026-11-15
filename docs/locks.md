@@ -164,7 +164,10 @@ token = max(lastToken + 1, epoch × 1 000 000 000 + 1)
 (`ctx.tailnet.self().epoch`). mgmt raises it on every deploy and on every
 move, and never reuses one. So even when a takeover starts the lock with
 empty storage on another host, its first token beats anything the old host
-handed out.
+handed out. That holds across a restore of mgmt's store from a backup too:
+the restore fence (`twd-mgmt restore-fence`, run by `twd upgrade`'s
+rollback; [upgrading.md](upgrading.md)) raises every lease epoch by 2²⁰, far
+past anything handed out after the backup.
 
 **Worked example.** A report table in Postgres (or any store with a
 conditional write) keeps the token of the last writer:

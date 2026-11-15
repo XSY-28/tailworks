@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rosskukulinski/twd/internal/features"
 	"io"
 	"net"
 	"net/http"
@@ -89,7 +90,7 @@ func TestRemoteLogs(t *testing.T) {
 	})}
 	go hsrv.Serve(ln)
 	t.Cleanup(func() { hsrv.Close() })
-	if _, _, err := m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}, PushURL: "unix://" + sock}, "", ""); err != nil {
+	if _, _, err := m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}, Features: features.Host(), PushURL: "unix://" + sock}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.AcquireLease(ctx, mgmt.LeaseName("tn_a", "web"), "h1", time.Minute, time.Now()); err != nil {

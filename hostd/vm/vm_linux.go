@@ -103,9 +103,12 @@ type Backend struct {
 	base          *baseSnap         // current base snapshot (Snapshot on)
 	baseTokens    map[string]string // base ID → its control-channel token (baseSnap.ctlToken), while the base exists
 	baseRotations int
-	baseStop      context.CancelFunc
-	baseDone      chan struct{}
-	baseWG        sync.WaitGroup
+	// baseStale: the guest changed since the current base was built
+	// (baseID refuses it; logged once until the next base).
+	baseStale bool
+	baseStop  context.CancelFunc
+	baseDone  chan struct{}
+	baseWG    sync.WaitGroup
 }
 
 // Available reports whether this host can run microVMs: KVM, the guest
@@ -127,8 +130,8 @@ func Available(cfg Config) error {
 		if err != nil {
 			return fmt.Errorf("microVM helper at %s: %w (run `sudo twd host setup --microvm`)", cfg.Helper, err)
 		}
-		if r.Version != helperapi.Version {
-			return fmt.Errorf("microVM helper at %s speaks protocol %d, want %d (re-run `sudo twd host setup --microvm`)", cfg.Helper, r.Version, helperapi.Version)
+		if err := helperapi.Check(r); err != nil {
+			return fmt.Errorf("microVM helper at %s: %w (re-run `sudo twd host setup --microvm`)", cfg.Helper, err)
 		}
 		return nil
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"github.com/rosskukulinski/twd/internal/features"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -94,7 +95,7 @@ func newPubEnv(t *testing.T) *pubEnv {
 	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: e.tenantID, Tailnet: "t.ts.net", MintMode: mgmt.MintAPIKey, APIKeyFile: keyFile}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}}, "", ""); err != nil {
+	if _, _, err := m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}, Features: features.Host()}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	return e

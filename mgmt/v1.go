@@ -1,6 +1,7 @@
 package mgmt
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -159,10 +160,12 @@ type hostView struct {
 		URL  string `json:"url,omitempty"`
 	} `json:"push,omitempty"`
 	Leases []Lease `json:"leases,omitempty"`
+
+	Skew string `json:"skew,omitempty"` // versions.go
 }
 
 func (a *v1api) hostView(r *http.Request, h Host) hostView {
-	v := hostView{Host: h}
+	v := hostView{Host: h, Skew: a.s.M.hostSkew(h)}
 	switch {
 	case h.Pending():
 		v.Status = "pending"
@@ -314,7 +317,8 @@ func (a *v1api) GetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"ok": st.Clock.OK && st.Replicas.OK, "transport": transport, "listeners": listeners,
 		"pendingDeviceDeletes": st.PendingDeletes, "hosts": map[string]int{"total": st.Hosts, "live": st.LiveHosts},
-		"tenants": st.Tenants, "objects": st.Objects, "version": a.s.Version, "clock": st.Clock, "replicas": st.Replicas})
+		"tenants": st.Tenants, "objects": st.Objects, "version": cmp.Or(a.s.Version, a.s.M.Version()), "clock": st.Clock, "replicas": st.Replicas,
+		"versions": st.Versions})
 }
 
 func (a *v1api) CreateDeviceDeleteRun(w http.ResponseWriter, r *http.Request) {
@@ -1539,7 +1543,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	// The admin UI (mgmt/ui) rides on the same principal; browserGuard
 	// refuses cross-site browser mutations (CSRF) for the UI and the API.
-	return browserGuard(s.mountUI(api, embeddedUI(api)))
+	return versionHeader(s.M.Version(), browserGuard(s.mountUI(api, embeddedUI(api))))
 }
 
 // mountUI dispatches the admin UI (mgmt/ui) next to the API: /ui/* goes to

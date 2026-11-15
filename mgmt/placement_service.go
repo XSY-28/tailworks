@@ -133,6 +133,7 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 			continue
 		}
 		c := candidateOf(h, now)
+		c.Skew = m.hostSkew(h)
 		cands = append(cands, c)
 		live[h.ID], byID[h.ID] = c.Live, h
 	}
@@ -141,7 +142,7 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 	need.Tier = placementTier(t, in.Config) // "" = any host (process)
 	req := Requirements{Pool: t.Pool, Pinned: in.Pinned, Replace: in.Replace,
 		Mode: pc.Mode, Targets: pc.Targets, Aggregate: pc.Aggregate, Now: now,
-		Containers: need.Containers, Arch: need.Arch, Arches: need.Arches}
+		Containers: need.Containers, Arch: need.Arch, Arches: need.Arches, Features: need.Features}
 	if need.Tier != "" {
 		req.Tiers = []string{need.Tier}
 	}
@@ -156,6 +157,9 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 		// Stickiness never keeps a workload on the wrong tier, or where its
 		// containers can't run: refuse (or, with --replace, let placement
 		// move it).
+		if h := byID[l.Holder]; !in.Replace && featureGap(h, need.Features) != "" {
+			return PlacementDecision{}, held, errf(409, "feature_unavailable", "workload %q runs on host %s, which %s; upgrade that host first, or redeploy with --replace to move the workload", in.Workload, h.ID, featureGap(h, need.Features))
+		}
 		if h := byID[l.Holder]; !h.offers(need) && !in.Replace {
 			return PlacementDecision{}, held, errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer %s it now asks for (the host offers %s); redeploy with --replace to move it to a host that does, or run `twd undeploy %s` and deploy again", in.Workload, h.ID, need, tierList(h), in.Workload)
 		}
@@ -184,6 +188,9 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 	if d.Host == "" {
 		if in.Pinned != "" && !live[in.Pinned] {
 			return d, held, errf(503, "no_host", "host %q is not live (no heartbeat within %v)", in.Pinned, HostLeaseTTL)
+		}
+		if len(need.Features) > 0 && onlyFeatureGaps(d.Hosts) {
+			return d, held, errf(409, "feature_unavailable", "%s", d.Summary)
 		}
 		return d, held, errf(503, "no_host", "%s", d.Summary)
 	}
@@ -337,4 +344,20 @@ func bundlePlacement(bundle []byte, cfg *TwdConfig) {
 		cfg.Placement.Mode, cfg.Placement.Region, cfg.Placement.Host, cfg.Placement.Hostname = w.Placement.Mode, w.Placement.Region, w.Placement.Host, w.Placement.Hostname
 		return
 	}
+}
+
+// onlyFeatureGaps: some live host was turned down, and every live host
+// that was turned down lacks a feature (so the fix is a host upgrade).
+func onlyFeatureGaps(hs []HostScore) bool {
+	n := 0
+	for _, h := range hs {
+		if h.Eligible || h.Why == "not live" {
+			continue
+		}
+		if !strings.HasPrefix(h.Why, "lacks feature ") {
+			return false
+		}
+		n++
+	}
+	return n > 0
 }
