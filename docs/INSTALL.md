@@ -72,8 +72,9 @@ macOS 26.6) by `make e2e-mbp`; measured numbers are in STATUS.md (M6).
 > Landlock ABI too), and while twd runs, that every workload is under it.
 > **Without a sandbox** (Linux without Landlock) `twd doctor` warns loudly,
 > and twd refuses to run a second tenant's process-tier workloads unless you
-> pass `twd up --insecure-shared-host`. **microVM isolation (Firecracker)
-> needs Linux with KVM.** Don't run code you don't trust on the process tier.
+> pass `twd up --insecure-shared-host`. **microVM isolation needs Linux with
+> KVM (Firecracker) or macOS (Virtualization.framework)**; see
+> [COMPAT.md](COMPAT.md#containers). Don't run code you don't trust on the process tier.
 
 ### What you need
 
