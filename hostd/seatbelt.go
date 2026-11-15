@@ -202,8 +202,9 @@ func (inst *instance) workerdCommand() (*exec.Cmd, error) {
 		}
 		args = append(args, "--socket-fd", "ingress=3")
 	}
+	args, bind := inst.inspectorArgs(args) // inspector.go: twd dev --inspector-port
 	cmd, err := inst.sandboxed(inst.h.cfg.WorkerdBin, args,
-		[]string{inst.dir, inst.doStorage}, []string{inst.h.cfg.WorkerdBin}, nil, nil, inst.loopPorts)
+		[]string{inst.dir, inst.doStorage}, []string{inst.h.cfg.WorkerdBin}, nil, bind, inst.loopPorts)
 	if err != nil {
 		if f != nil {
 			f.Close()

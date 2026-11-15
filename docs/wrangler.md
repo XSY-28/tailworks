@@ -146,7 +146,7 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 | `minify`, `keep_names`, `jsx_factory`, `jsx_fragment`, `tsconfig` | ✅ mapped to esbuild options | ✅ | mapped, but not measured end to end |
 | `nodejs_compat` | ✅ bare built-ins become `node:*`; workerd provides them | ✅ plus wrangler's unenv polyfills | toml-app's entry: 1.0 KB built-in, 21 KB wrangler. Both pass the same checks (`node:buffer`) |
 | `node_compat` (legacy) | ❌ warned | ❌ wrangler 4 rejects it | use `compatibility_flags = ["nodejs_compat"]` |
-| `upload_source_maps` | ❌ warned | ❌ | twd ships no source maps |
+| `upload_source_maps` | ✅ on unless `false` | ❌ warned | the built-in esbuild ships `dist/index.js.map` (no sources); hosts map exception stacks to `src/…` with it ([dev-debugging.md](dev-debugging.md)) |
 | `assets`, `site` (static assets) | ❌ warned | ❌ | serve files from the Worker, or import them as Text/Data modules |
 
 `create-twd`'s `build.mjs` (the npm bundler) still reads only

@@ -43,6 +43,7 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 
 - [CLI --json output](https://github.com/rosskukulinski/twd/blob/master/docs/cli-json.md): result documents, NDJSON events, the error shape
 - [CLI --json schema](https://github.com/rosskukulinski/twd/blob/master/schema/cli.schema.json): JSON Schema of every command's output
+- [Debugging in twd dev](https://github.com/rosskukulinski/twd/blob/master/docs/dev-debugging.md): source-mapped stacks, `req.url`, `--inspector-port` (Chrome DevTools, VS Code), hotkeys
 - [Observability](https://github.com/rosskukulinski/twd/blob/master/docs/observability.md): request records (`twd logs`), Prometheus `/metrics`, OTLP export (`twd telemetry`), traces
 - [Error catalog](https://github.com/rosskukulinski/twd/blob/master/docs/errors.md): every error code and its fix
 - [Admin UI](https://github.com/rosskukulinski/twd/blob/master/docs/ADMIN-UI.md): the operator console
