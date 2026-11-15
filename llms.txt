@@ -1,0 +1,53 @@
+# twd
+
+> twd is a self-hosted, tailnet-native runtime for Cloudflare-style Workers and Durable Objects on stock workerd. Every workload and every Durable Object instance is its own Tailscale tailnet node; callers are identified by WireGuard identity (`getCaller`), not tokens. You drive it with the `twd` CLI; every command takes `--json`.
+
+Coding agents: start with the skills. `twd agent setup` installs them for Claude Code, Codex, Cursor, Gemini CLI and OpenCode; `twd agent show <skill>` prints one; `twd docs search <words>` and `twd docs show <doc>[#<anchor>]` read these docs offline, at the version of the installed CLI.
+
+## Start here
+
+- [README](https://github.com/rosskukulinski/twd/blob/master/README.md): what twd is, the quick start, and the compatibility table
+- [Using twd with a coding agent](https://github.com/rosskukulinski/twd/blob/master/docs/agents.md): skills, `twd agent setup`, safety rules
+- [Agent skills](https://github.com/rosskukulinski/twd/blob/master/agent/skills/twd/SKILL.md): the core skill; the others are next to it in agent/skills/
+- [Installing twd](https://github.com/rosskukulinski/twd/blob/master/docs/INSTALL.md): macOS and Linux, OAuth client, `twd link`, hosts, troubleshooting
+
+## Building apps
+
+- [twd.jsonc reference](https://github.com/rosskukulinski/twd/blob/master/docs/twd-jsonc.md): every key, tags and `twd init`
+- [Using wrangler with twd](https://github.com/rosskukulinski/twd/blob/master/docs/wrangler.md): wrangler.toml/json/jsonc, `--env`, bundling, what's ignored
+- [Cloudflare Workers compatibility](https://github.com/rosskukulinski/twd/blob/master/docs/COMPAT.md): what works, surface by surface, with the tests behind it
+- [Worker secrets](https://github.com/rosskukulinski/twd/blob/master/docs/secrets.md): `twd secret`, `.dev.vars`
+- [Workers KV](https://github.com/rosskukulinski/twd/blob/master/docs/kv.md): `kv_namespaces`, `twd kv`, consistency and limits
+- [R2 buckets](https://github.com/rosskukulinski/twd/blob/master/docs/r2.md): `r2_buckets` bindings, the `fs` / `s3` blob backends, `twd r2`
+- [D1 databases](https://github.com/rosskukulinski/twd/blob/master/docs/d1.md): `d1_databases`, wrangler migrations, `twd d1`, sessions and limits
+- [Queues](https://github.com/rosskukulinski/twd/blob/master/docs/queues.md): `queues.producers` / `queues.consumers`, `queue()`, retries, dead-letter queues, `twd queues`
+- [Cron triggers](https://github.com/rosskukulinski/twd/blob/master/docs/cron-triggers.md): `triggers.crons`, `scheduled()`
+- [Public ingress (Funnel)](https://github.com/rosskukulinski/twd/blob/master/docs/public-ingress.md): public routes, `twd expose`
+- [Tailscale Services](https://github.com/rosskukulinski/twd/blob/master/docs/services.md): stable names and replicas
+- [Locks and leader election](https://github.com/rosskukulinski/twd/blob/master/docs/locks.md): Durable Objects as locks, leases, fencing tokens, the `lock` template, failure guarantees
+- [Per-object egress](https://github.com/rosskukulinski/twd/blob/master/docs/egress-modes.md): facet mode vs plain-DO mode
+- [Create admission](https://github.com/rosskukulinski/twd/blob/master/docs/create-admission.md): how a new Durable Object gets made
+- [Containers and code sandboxes](https://github.com/rosskukulinski/twd/blob/master/docs/containers.md): `ctx.container` on the microVM tier
+- [The Node process tier](https://github.com/rosskukulinski/twd/blob/master/docs/node-tier.md): `"runtime": "node"`
+
+## Operating and debugging
+
+- [CLI --json output](https://github.com/rosskukulinski/twd/blob/master/docs/cli-json.md): result documents, NDJSON events, the error shape
+- [CLI --json schema](https://github.com/rosskukulinski/twd/blob/master/schema/cli.schema.json): JSON Schema of every command's output
+- [Observability](https://github.com/rosskukulinski/twd/blob/master/docs/observability.md): request records (`twd logs`), Prometheus `/metrics`, OTLP export (`twd telemetry`), traces
+- [Error catalog](https://github.com/rosskukulinski/twd/blob/master/docs/errors.md): every error code and its fix
+- [Admin UI](https://github.com/rosskukulinski/twd/blob/master/docs/ADMIN-UI.md): the operator console
+- [twd.jsonc JSON Schema](https://github.com/rosskukulinski/twd/blob/master/schema/twd.schema.json): for editor completion
+
+## API and design
+
+- [Management API](https://github.com/rosskukulinski/twd/blob/master/docs/contracts/mgmt-api.md): the REST v1 contract, rendered from api/openapi.yaml
+- [OpenAPI spec](https://github.com/rosskukulinski/twd/blob/master/api/openapi.yaml): the source of truth for /v1
+- [twd-hostd additions](https://github.com/rosskukulinski/twd/blob/master/docs/contracts/hostd-additions.md): the host agent's contract
+- [RFC](https://github.com/rosskukulinski/twd/blob/master/docs/design/RFC.md): the design
+- [Architecture decision records](https://github.com/rosskukulinski/twd/blob/master/docs/design/adr/README.md): one file per decision
+
+## Optional
+
+- [Build status](https://github.com/rosskukulinski/twd/blob/master/status/README.md): one file per workstream, with measured results
+- [Threat model](https://github.com/rosskukulinski/twd/blob/master/security/THREAT-MODEL.md)

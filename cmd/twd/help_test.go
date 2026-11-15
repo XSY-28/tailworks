@@ -51,8 +51,8 @@ func TestHelp(t *testing.T) {
 		runOK(args...)
 	}
 	init := runOK("init", "--help")
-	if !strings.Contains(init, "hello|agent|mcp|ai-agent|refund-approval|node-workflow") || !strings.Contains(init, "Node.js") {
-		t.Errorf("init help lacks the five templates / the Node.js note:\n%s", init)
+	if !strings.Contains(init, "hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow") || !strings.Contains(init, "Node.js") {
+		t.Errorf("init help lacks the seven templates / the Node.js note:\n%s", init)
 	}
 	// After `--` nothing is a help flag; a bare `twd` with only flags is a usage error.
 	var so, se bytes.Buffer

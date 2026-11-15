@@ -163,6 +163,9 @@ the preflight and at the deploy.
   failover and spread load *across clients*, not round-robin per
   connection.
 
+For one-leader-at-a-time work among replicas (leader election), see
+[locks.md](locks.md#leader-election-among-replicas).
+
 Not done: the Cloudflare-style split for DO apps, where the Worker is
 replicated and its DOs stay single-homed, with stubs forwarded to the
 owning host.

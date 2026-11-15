@@ -145,9 +145,13 @@ func TestWranglerWarnings(t *testing.T) {
 		"name": "a", "main": "m.ts", "compatibility_date": "x", "compatibility_flags": []any{}, "vars": map[string]any{},
 		"migrations": []any{}, "triggers": map[string]any{}, "placement": map[string]any{}, "containers": []any{},
 		"define": map[string]any{}, "alias": map[string]any{}, "rules": []any{}, "$schema": "x",
-		"routes":        []any{"example.com/*"},
-		"workers_dev":   true,
-		"kv_namespaces": []any{map[string]any{"binding": "CACHE", "id": "x"}, map[string]any{"binding": "SESSIONS", "id": "y"}},
+		"routes":      []any{"example.com/*"},
+		"workers_dev": true,
+		"vectorize":   []any{map[string]any{"binding": "CACHE", "index_name": "x"}, map[string]any{"binding": "SESSIONS", "index_name": "y"}},
+		// Platform store bindings (Workers KV, ADR-037; R2, ADR-036; D1, ADR-038): no line.
+		"d1_databases":  []any{map[string]any{"binding": "DB", "database_name": "d"}},
+		"kv_namespaces": []any{map[string]any{"binding": "KV", "id": "k"}},
+		"r2_buckets":    []any{map[string]any{"binding": "BUCKET", "bucket_name": "b"}},
 		"ai":            map[string]any{"binding": "AI"},
 		"assets":        map[string]any{"directory": "public"},
 		"build":         map[string]any{"command": "npm run build"},
@@ -163,9 +167,9 @@ func TestWranglerWarnings(t *testing.T) {
 		"wrangler.toml: assets: not supported",
 		"wrangler.toml: build: needs wrangler's bundler",
 		"wrangler.toml: frobnicate: unknown key, ignored",
-		"wrangler.toml: kv_namespaces: no such binding on twd: env.CACHE, env.SESSIONS will be undefined",
 		"wrangler.toml: observability: ignored by twd",
 		"wrangler.toml: routes: ignored",
+		"wrangler.toml: vectorize: no such binding on twd: env.CACHE, env.SESSIONS will be undefined",
 		"wrangler.toml: workers_dev: ignored",
 		"wrangler.toml: durable_objects binding REMOTE: script_name",
 	}
@@ -197,7 +201,7 @@ func TestLoadAppWranglerTOMLOnly(t *testing.T) {
 	if o := a.Cfg.Tailnet.Objects["Counter"]; o.Node == nil || *o.Node {
 		t.Fatalf("Counter should be internal (node: false): %+v", o)
 	}
-	for _, w := range []string{"kv_namespaces: no such binding on twd: env.CACHE", "routes: ignored", "workers_dev: ignored", "no twd.jsonc: using defaults"} {
+	for _, w := range []string{"vectorize: no such binding on twd: env.CACHE", "routes: ignored", "workers_dev: ignored", "no twd.jsonc: using defaults"} {
 		if !slices.ContainsFunc(a.Warnings, func(s string) bool { return strings.Contains(s, w) }) {
 			t.Errorf("no warning %q in %q", w, a.Warnings)
 		}

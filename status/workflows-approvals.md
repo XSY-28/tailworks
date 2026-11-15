@@ -1,6 +1,6 @@
 Last update: 2026-11-15 10:30 PT. Workflows on workerd's built-in engine and approvals by tailnet identity (issue #24): built, tested hermetically, PR open.
 
-Design: [ADR-workflows-approvals](../docs/design/adr/workflows-approvals.md) (Proposed; no number yet).
+Design: [ADR-040](../docs/design/adr/040-workflows-approvals.md) (Proposed; numbered at the merge to master).
 User doc: [docs/approvals.md](../docs/approvals.md). Example: `twd init <dir> --template refund-approval`.
 
 ## What's built

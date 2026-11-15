@@ -14,6 +14,7 @@
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import CFG from "twd-config.json";
 import MODULES from "twd-modules.js";
+import { deliverQueue } from "twd-queue.js";
 
 const FACET_MODULES = MODULES;
 
@@ -129,6 +130,19 @@ async function admin(req, env, ctx, t) {
       }
       return json(200, { ok: true });
     }
+    case "store": {
+      // An operator operation on a platform store (twd d1 execute, …):
+      // hostd sends it only for a store this deployment declares.
+      if (!(CFG.stores ?? []).some((s) => s.kind === t.storeKind && s.name === t.name)) return errResponse("bad_request", "no such store in this deployment");
+      try {
+        const r = await ctx.exports.Store.getByName(t.storeKind + ":" + t.name).adminOp(t.action, [await req.json()]);
+        return json(200, r);
+      } catch (e) {
+        const m = String(e?.message ?? e);
+        const c = /^\[([a-z_]+)\]/.exec(m)?.[1] ?? "store_unavailable";
+        return json(c === "bad_request" ? 400 : 503, errBody(c, m));
+      }
+    }
   }
   return errResponse("bad_request", "unknown admin op");
 }
@@ -151,6 +165,8 @@ export default {
         return admin(req, env, ctx, t);
       case "scheduled":
         return scheduled(env, t, req);
+      case "queue":
+        return deliverQueue(env, t, req); // twd-queue.js (ADR-039)
       case "approval":
         return deliverApproval(env, t);
       case "object":
@@ -254,6 +270,9 @@ function makeHost(cls) {
           for (const w of CFG.workflows ?? []) env[w.binding] = exp.WorkflowGate({ props: { workflow: w.name } });
           env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
           for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
+          for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
+          const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
+          if (Object.keys(wrap).length) env.__TWD_WRAP = wrap; // twd-rt.js puts the API around these stubs (D1)
           return {
             compatibilityDate: CFG.compatDate,
             compatibilityFlags: CFG.compatFlags,
@@ -346,6 +365,9 @@ function makeHost(cls) {
 // Platform stores (twd-store.js; ADR-platform-stores), when the app has
 // storage bindings.
 //@@STORES@@
+
+// Queue producer bindings and their facet proxies (twd-queue.js; ADR-039).
+export { QueueProducer, QueueFacetProxy } from "twd-queue.js";
 
 // NsProxy stands in for a DO namespace binding inside a facet's env:
 // env.X.getByName(name) returns the real stub (RPC promise pipelining makes
@@ -650,7 +672,7 @@ export class Tail extends WorkerEntrypoint {
   }
 }
 
-// ---- Workflows and approvals (ADR-workflows-approvals) ----
+// ---- Workflows and approvals (ADR-040) ----
 //
 // WF_<name> binds workerd's built-in engine (its WorkflowBinding entrypoint).
 // Tenant code never holds it: its env.<binding> is the Workflow API over

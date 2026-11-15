@@ -9,7 +9,7 @@ import (
 
 // Workflow is one wrangler.jsonc "workflows" entry: a WorkflowEntrypoint
 // class run by workerd's built-in Workflows engine (/workerd/workflows.js),
-// reached as env.<Binding> (ADR-workflows-approvals).
+// reached as env.<Binding> (ADR-040).
 type Workflow struct {
 	Name    string // the Workflow's name (instances are keyed by it)
 	Binding string // env binding name

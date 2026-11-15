@@ -116,6 +116,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	if err := checkStores(app); err != nil {
 		return nil, err
 	}
+	if err := checkQueues(app); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(o.Dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -175,7 +178,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	// Facet main module.
 	var fs strings.Builder
 	fmt.Fprintf(&fs, "import * as T from %s;\nimport { wrapFacetClass } from \"./__twd_rt.js\";\nconst B = %s;\n", jsq(mainImport), bjs)
-	fmt.Fprintf(&fs, "const WF = %s;\n", workflowsFacetBindings(app)) // Workflow bindings (workflows.go)
+	fs.WriteString(storeFacetPrelude(app)) // facet shims of storage bindings (stores.go)
+	// Workflow bindings (workflows.go)
+	fmt.Fprintf(&fs, "const WF = %s;\n", workflowsFacetBindings(app))
 	// ctx.container (ADR-032) for classes with a wrangler "containers" entry.
 	ctrOpt := func(c string) string {
 		cc, ok := app.Containers[c]
@@ -194,10 +199,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	for _, c := range facets {
 		if o := ctrOpt(c); o != "" {
-			fmt.Fprintf(&fs, "export const %s = wrapFacetClass(T[%s], %s, B, { workflows: WF, container: %s });\n", c, jsq(c), jsq(c), o)
+			fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B, { workflows: WF, container: %s });\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c), o)
 			continue
 		}
-		fmt.Fprintf(&fs, "export const %s = wrapFacetClass(T[%s], %s, B, { workflows: WF });\n", c, jsq(c), jsq(c))
+		fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B, { workflows: WF });\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c))
 	}
 	// Tenant service main module.
 	var ms strings.Builder
@@ -220,6 +225,15 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		ents = append(ents, entry{p, fmt.Sprintf("m%d", i), k})
 		fmt.Fprintf(&tm, "import m%d from %s;\n", i, jsq("t/"+p))
 	}
+	shims := storeFacetShims(app) // facet modules of storage bindings (stores.go)
+	shimNames := make([]string, 0, len(shims))
+	for n := range shims {
+		shimNames = append(shimNames, n)
+	}
+	sort.Strings(shimNames)
+	for i, n := range shimNames {
+		fmt.Fprintf(&tm, "import shim%d from %s;\n", i, jsq(n+".txt"))
+	}
 	tm.WriteString("import facetMain from \"__twd_facet.js.txt\";\nimport rt from \"__twd_rt.js.txt\";\nexport default {\n")
 	for _, e := range ents {
 		switch e.kind {
@@ -234,6 +248,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		default:
 			fmt.Fprintf(&tm, "  %s: { data: %s },\n", jsq(e.name), e.ident)
 		}
+	}
+	for i, n := range shimNames {
+		fmt.Fprintf(&tm, "  %s: { js: shim%d },\n", jsq(n), i)
 	}
 	tm.WriteString("  \"__twd_facet.js\": { js: facetMain },\n  \"__twd_rt.js\": { js: rt },\n};\n")
 
@@ -260,8 +277,11 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		// Stores are the storage bindings a facet's env gets (stores.go).
 		Stores []storeCfg `json:"stores"`
 
+		// Queues are the consumers and producer bindings (queues.go).
+		Queues queueCfg `json:"queues"`
+
 		Workflows []workflowCfg `json:"workflows"`
-	}{o.DeploymentID, o.Workload, app.CompatDate, tenantFlags(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app), workflowsConfig(app)}
+	}{o.DeploymentID, o.Workload, app.CompatDate, tenantFlags(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app), queueConfig(app), workflowsConfig(app)}
 	cfg.Vars = varsWithSecrets(cfg.Vars, app.Secrets)
 	if cfg.Vars == nil {
 		cfg.Vars = map[string]json.RawMessage{}
@@ -286,6 +306,11 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	pjs := strings.Replace(platformJS, "//@@HOST_CLASSES@@", hc.String(), 1)
 	pjs = strings.Replace(pjs, "//@@STORES@@", storePlatformExports(app), 1)
+	for name, b := range shims {
+		if err := write(name, []byte(b)); err != nil {
+			return nil, err
+		}
+	}
 	for name, b := range storeFiles(app) {
 		if err := write(name, []byte(b)); err != nil {
 			return nil, err
@@ -295,6 +320,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	for name, b := range map[string]string{
 		"platform.js": pjs, "twd-config.json": string(cfgb), "twd-modules.js": tm.String(),
 		"__twd_facet.js": fs.String(), "__twd_main.js": ms.String(), "__twd_rt.js": runtimeJS, "deny.js": denyJS,
+		"twd-queue.js": queueJS,
 	} {
 		if err := write(name, []byte(b)); err != nil {
 			return nil, err
@@ -332,9 +358,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 
 	// platform worker
 	fmt.Fprintf(&c, "const platform :Workerd.Worker = (\n  compatibilityDate = %s,\n", cq(PlatformCompatDate))
-	if len(app.Crons) > 0 {
-		// TENANT.scheduled(): cron triggers run the default export's
-		// scheduled() handler through the platform's service binding.
+	if len(app.Crons) > 0 || hasQueueConsumers(app) {
+		// TENANT.scheduled() / TENANT.queue(): cron triggers and queue
+		// consumers run the default export's handlers through the
+		// platform's service binding.
 		c.WriteString("  compatibilityFlags = [\"service_binding_extra_handlers\"],\n")
 	}
 	c.WriteString("  modules = [\n")
@@ -343,7 +370,11 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("    (name = \"twd-modules.js\", esModule = embed \"twd-modules.js\"),\n")
 	c.WriteString("    (name = \"__twd_facet.js.txt\", text = embed \"__twd_facet.js\"),\n")
 	c.WriteString("    (name = \"__twd_rt.js.txt\", text = embed \"__twd_rt.js\"),\n")
+	c.WriteString("    (name = \"twd-queue.js\", esModule = embed \"twd-queue.js\"),\n")
 	c.WriteString(storeModules(app))
+	for _, n := range shimNames {
+		fmt.Fprintf(&c, "    (name = %s, text = embed %s),\n", cq(n+".txt"), cq(n))
+	}
 	for _, p := range mods {
 		kind := "text"
 		if k := app.ModuleKind(p); k == "wasm" || k == "data" {
@@ -360,6 +391,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("    (name = \"LOADER\", workerLoader = ()),\n    (name = \"NETD_EGRESS\", service = \"netd-egress\"),\n    (name = \"HOSTD\", service = \"hostd\"),\n    (name = \"EGRESS_WL\", service = \"egress-wl\"),\n    (name = \"TENANT\", service = \"tenant\"),\n")
 	fmt.Fprintf(&c, "    (name = \"MAC_KEY\", text = %s),\n", cq(res.MACKey))
 	c.WriteString(storePlatformBindings(app))
+	c.WriteString(queuePlatformBindings(app))
 	for _, cl := range plains {
 		fmt.Fprintf(&c, "    (name = %s, durableObjectNamespace = (className = %s, serviceName = \"tenant\")),\n", cq("NS_"+cl), cq(cl))
 	}
@@ -423,6 +455,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	c.WriteString(secretBindings(app))
 	c.WriteString(storeTenantBindings(app))
+	c.WriteString(queueTenantBindings(app))
 	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n" + tailsLine + ");\n\n")
 	c.WriteString(workflowsWorker(app))
 	c.WriteString("const deny :Workerd.Worker = (\n  compatibilityDate = \"2026-04-01\",\n  modules = [ (name = \"deny.js\", esModule = embed \"deny.js\") ],\n);\n")

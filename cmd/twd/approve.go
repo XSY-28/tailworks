@@ -11,7 +11,7 @@ import (
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
 )
 
-// Workflow approvals (ADR-workflows-approvals, docs/approvals.md):
+// Workflow approvals (ADR-040, docs/approvals.md):
 //
 //	twd approvals [workload] [--all]                        what waits for a decision
 //	twd approve <workload> <instance> [--reject] [--comment text] [--workflow name] [--step name]

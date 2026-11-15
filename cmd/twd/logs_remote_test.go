@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -189,5 +190,22 @@ func TestRemoteLogs(t *testing.T) {
 	out, err = run("web", "--console", "-f", "-n", "2")
 	if err != nil || out != "tn_a/web line 1\ntn_a/web line 2\nfollowed n=2\n" {
 		t.Fatalf("remote follow: %q %v", out, err)
+	}
+
+	// --console --json: one {"event": "log", "workload", "line"} per line
+	// (docs/cli-json.md); records are already JSON Lines.
+	remoteLogsContext = old
+	out, err = run("web", "--console", "-n", "2", "--json")
+	jsonOut = false
+	var evs []map[string]any
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		var m map[string]any
+		if json.Unmarshal([]byte(l), &m) != nil {
+			t.Fatalf("logs --json: not NDJSON: %q", out)
+		}
+		evs = append(evs, m)
+	}
+	if err != nil || len(evs) != 2 || evs[0]["event"] != "log" || evs[0]["workload"] != "web" || evs[1]["line"] != "tn_a/web line 2" || evs[0]["host"] != nil {
+		t.Fatalf("remote logs --json: %q %v", out, err)
 	}
 }

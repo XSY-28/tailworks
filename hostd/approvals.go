@@ -18,7 +18,7 @@ import (
 	"github.com/rosskukulinski/twd/netd"
 )
 
-// Approvals by tailnet identity (ADR-workflows-approvals, docs/approvals.md).
+// Approvals by tailnet identity (ADR-040, docs/approvals.md).
 //
 // A Workflow waits for an approval with step.waitForEvent({type:
 // "approval" | "approval-*"}) (the Agents SDK's waitForApproval does). The

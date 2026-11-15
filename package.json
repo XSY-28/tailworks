@@ -12,6 +12,7 @@
     "@ai-sdk/mcp": "2.0.93",
     "@ai-sdk/provider": "4.0.37",
     "@ai-sdk/provider-utils": "5.0.76",
+    "@cloudflare/workers-oauth-provider": "1.2.4",
     "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@modelcontextprotocol/server": "2.4.0",

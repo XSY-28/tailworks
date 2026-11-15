@@ -20,6 +20,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/container"
 	"github.com/rosskukulinski/twd/internal/cron"
 	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/twd/internal/queuecfg"
 )
 
 // MaxBundle bounds an unpacked bundle.
@@ -81,6 +82,9 @@ type App struct {
 	// Stores are the platform storage bindings (kv_namespaces, …;
 	// stores.go, ADR-platform-stores), in wrangler order.
 	Stores []StoreBinding
+
+	// Queues is wrangler.jsonc "queues" (queues.go, ADR-039); nil: none.
+	Queues *queuecfg.Config
 
 	// Workflows are wrangler.jsonc "workflows" (workflows.go), run by
 	// workerd's built-in engine.
@@ -209,6 +213,9 @@ func Parse(files map[string][]byte) (*App, error) {
 					return nil, err
 				}
 				return nil, errors.New("bundle: triggers.crons: cron triggers need the workerd runtime (a scheduled() handler); runtime \"node\" does not support them")
+			}
+			if err := refuseNodeQueues(files); err != nil {
+				return nil, err
 			}
 			return parseNode(files, &t)
 		default:
@@ -339,6 +346,9 @@ func Parse(files map[string][]byte) (*App, error) {
 		return nil, err
 	}
 	a.Stores = stores
+	if a.Queues, err = parseQueues(StripJSONC(wb), a); err != nil {
+		return nil, err
+	}
 	if err := parseWorkflows(wb, a); err != nil {
 		return nil, err
 	}

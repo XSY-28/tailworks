@@ -385,12 +385,16 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			if wi.UserProfile != nil {
 				info.Login = wi.UserProfile.LoginName
 			}
-			for c := range wi.CapMap {
+			for c, vals := range wi.CapMap {
 				info.Caps = append(info.Caps, string(c))
-			}
-			// Approval grants (ADR-workflows-approvals): their values matter.
-			for _, v := range wi.CapMap[approvecap.Cap] {
-				info.Approve = append(info.Approve, json.RawMessage(v))
+				if c == mgmt.MCPCap || c == approvecap.Cap { // approvals.go needs the grants' values too
+					if info.CapValues == nil {
+						info.CapValues = map[string][]json.RawMessage{}
+					}
+					for _, v := range vals {
+						info.CapValues[string(c)] = append(info.CapValues[string(c)], json.RawMessage(v))
+					}
+				}
 			}
 			return info, nil
 		}

@@ -51,6 +51,9 @@ type devResult struct {
 	As       string             `json:"as"`
 	Smoke    map[string]any     `json:"smoke,omitempty"`
 	Timings  map[string]float64 `json:"timingsMs"`
+
+	// D1 databases and the migrations dev applied to them (dev_d1.go).
+	D1 []devD1 `json:"d1,omitempty"`
 }
 
 func cmdDev(args []string) error {
@@ -142,7 +145,18 @@ func cmdDev(args []string) error {
 		}
 	}
 
+	// KV namespaces (and other platform stores) last between runs (devstores.go).
+	if _, err := loadDevStores(fm, tr.TenantID, a.Dir); err != nil {
+		return err
+	}
+	defer func() {
+		if err := saveDevStores(fm, tr.TenantID, a.Dir); err != nil {
+			fmt.Fprintf(os.Stderr, "twd dev: could not save the KV namespaces to %s: %v\n", devStoresFile(a.Dir), err)
+		}
+	}()
+
 	var devVars []string // .dev.vars names (devvars.go): the workload's secrets in dev
+	var devD1s []devD1   // D1 databases and the migrations dev applied (dev_d1.go)
 	deploy := func() (hostd.ObjectStatus, error) {
 		if devVars, err = syncDevVars(ctx, mc, tr.TenantID, a.Name, a.Dir); err != nil {
 			return hostd.ObjectStatus{}, fail("bad_request", err.Error())
@@ -163,6 +177,9 @@ func cmdDev(args []string) error {
 				}
 				if w.Workload == a.Name && w.Status == "active" && w.DeploymentID == dr.DeploymentID {
 					if o, ok := h.Object(tr.TenantID, a.Name, "", a.Name); ok && o.Status == "ready" && o.IP != "" {
+						if devD1s, err = devD1Migrate(ctx, h, tr.TenantID, a); err != nil {
+							return hostd.ObjectStatus{}, fail("d1_error", "applying D1 migrations: "+err.Error())
+						}
 						return o, nil
 					}
 				}
@@ -176,6 +193,7 @@ func cmdDev(args []string) error {
 		return err
 	}
 	res.Node = wl.Hostname
+	res.D1 = devD1s
 	res.Timings["ready"] = ms(time.Since(t0))
 	var cur atomic.Value
 	cur.Store(wl.IP)
@@ -211,17 +229,27 @@ func cmdDev(args []string) error {
 		emit(f, res, func() { fmt.Printf("twd dev · %s → %v\n", res.Serves, res.Smoke) })
 		return nil
 	}
-	fmt.Printf("twd dev · process tier · embedded control plane (127.0.0.1) · no policy evaluator yet: every dev node sees every other\n")
-	if a.Cfg.Tier == "microvm" {
-		fmt.Printf("  twd.jsonc asks for \"tier\": \"microvm\"; twd dev runs it in the process tier (deployed hosts refuse it without a microVM backend)\n")
+	// --json: NDJSON events on stdout (agentjson.go) instead of the text.
+	var hout io.Writer = os.Stdout
+	ev := newEvents(*f.json, os.Stdout)
+	if ev != nil {
+		hout = io.Discard
+		ev.emit("ready", devReadyFields(res, a))
 	}
-	fmt.Printf("  node %-28s %s\n", wl.Hostname, strings.Join(a.Cfg.Tailnet.Tags, ","))
+	fmt.Fprintf(hout, "twd dev · process tier · embedded control plane (127.0.0.1) · no policy evaluator yet: every dev node sees every other\n")
+	if a.Cfg.Tier == "microvm" {
+		fmt.Fprintf(hout, "  twd.jsonc asks for \"tier\": \"microvm\"; twd dev runs it in the process tier (deployed hosts refuse it without a microVM backend)\n")
+	}
+	fmt.Fprintf(hout, "  node %-28s %s\n", wl.Hostname, strings.Join(a.Cfg.Tailnet.Tags, ","))
 	if len(devVars) > 0 {
-		fmt.Printf("  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
+		fmt.Fprintf(hout, "  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
+	}
+	for _, d := range devD1s {
+		fmt.Printf("  d1    %-27s %s (in memory for this run; %d migration(s) applied)\n", d.Binding, d.Database, len(d.Applied))
 	}
 	for _, c := range a.Cfg.Classes() {
 		if c.Class != "_workload" {
-			fmt.Printf("  class %-27s %s (a node per object, on first use)\n", c.Class, strings.Join(c.Tags, ","))
+			fmt.Fprintf(hout, "  class %-27s %s (a node per object, on first use)\n", c.Class, strings.Join(c.Tags, ","))
 		}
 	}
 	for _, w := range h.Status().Workloads {
@@ -231,7 +259,7 @@ func cmdDev(args []string) error {
 				if *testScheduled {
 					hint = "  · " + res.URL + "/__scheduled?cron=" + url.QueryEscape(c)
 				}
-				fmt.Printf("  cron  %-27s UTC%s\n", c, hint)
+				fmt.Fprintf(hout, "  cron  %-27s UTC%s\n", c, hint)
 			}
 		}
 	}
@@ -239,7 +267,7 @@ func cmdDev(args []string) error {
 	if route != "" {
 		where = res.Serves + "  (MCP server; / answers 404)"
 	}
-	fmt.Printf("ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
+	fmt.Fprintf(hout, "ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -249,7 +277,8 @@ func cmdDev(args []string) error {
 	for {
 		select {
 		case <-sig:
-			fmt.Println("\nstopping")
+			ev.emit("stopping", nil)
+			fmt.Fprintln(hout, "\nstopping")
 			return nil
 		case <-tick.C:
 			now := snapshot(a.Dir)
@@ -263,11 +292,16 @@ func cmdDev(args []string) error {
 			}
 			o, err := deploy()
 			if err != nil {
-				printErr(err)
+				if ev != nil {
+					ev.error(err)
+				} else {
+					printErr(err)
+				}
 				continue
 			}
 			cur.Store(o.IP)
-			fmt.Printf("↻ reloaded in %.0f ms\n", ms(time.Since(rs)))
+			ev.emit("reload", map[string]any{"workload": a.Name, "node": o.Hostname, "ms": ms(time.Since(rs))})
+			fmt.Fprintf(hout, "↻ reloaded in %.0f ms\n", ms(time.Since(rs)))
 		}
 	}
 }

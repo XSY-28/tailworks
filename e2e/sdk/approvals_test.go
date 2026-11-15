@@ -15,7 +15,7 @@ import (
 )
 
 // TestWorkflowApprovals runs a real Agents SDK AgentWorkflow that calls
-// waitForApproval (ADR-workflows-approvals) on workerd's built-in Workflows
+// waitForApproval (ADR-040) on workerd's built-in Workflows
 // engine, in both object modes, and checks the approval surface:
 //
 //   - the wait is listed (GET /_twd/approvals on the workload node) only to

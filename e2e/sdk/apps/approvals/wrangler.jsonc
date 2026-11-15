@@ -9,6 +9,6 @@
     ]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RefundAgent", "PlainRefundAgent"] }],
-  // Cloudflare Workflows on workerd's built-in engine (ADR-workflows-approvals).
+  // Cloudflare Workflows on workerd's built-in engine (ADR-040).
   "workflows": [{ "name": "refund", "binding": "REFUND_WORKFLOW", "class_name": "RefundWorkflow" }]
 }

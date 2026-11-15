@@ -1,5 +1,5 @@
 // Package approvecap is the twd.dev/cap/approve app capability: who may
-// decide a Workflow approval (ADR-workflows-approvals, docs/approvals.md).
+// decide a Workflow approval (ADR-040, docs/approvals.md).
 // hostd enforces it before it delivers a decision; mgmt uses the same rules
 // to show a caller the approvals it may decide.
 package approvecap

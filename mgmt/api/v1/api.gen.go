@@ -111,6 +111,7 @@ const (
 	AuditKindContainerStop       AuditKind = "container_stop"
 	AuditKindCreate              AuditKind = "create"
 	AuditKindCredential          AuditKind = "credential"
+	AuditKindD1Write             AuditKind = "d1_write"
 	AuditKindDeny                AuditKind = "deny"
 	AuditKindDeploy              AuditKind = "deploy"
 	AuditKindDeviceDelete        AuditKind = "device_delete"
@@ -124,6 +125,8 @@ const (
 	AuditKindImagePublic         AuditKind = "image_public"
 	AuditKindImagePush           AuditKind = "image_push"
 	AuditKindKill                AuditKind = "kill"
+	AuditKindKvDelete            AuditKind = "kv_delete"
+	AuditKindKvPut               AuditKind = "kv_put"
 	AuditKindMint                AuditKind = "mint"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
@@ -133,6 +136,9 @@ const (
 	AuditKindPublicRejected      AuditKind = "public_rejected"
 	AuditKindPublicRequest       AuditKind = "public_request"
 	AuditKindPurge               AuditKind = "purge"
+	AuditKindQueueCreate         AuditKind = "queue_create"
+	AuditKindQueueDelete         AuditKind = "queue_delete"
+	AuditKindQueuePurge          AuditKind = "queue_purge"
 	AuditKindReady               AuditKind = "ready"
 	AuditKindReap                AuditKind = "reap"
 	AuditKindRemint              AuditKind = "remint"
@@ -180,6 +186,8 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindCredential:
 		return true
+	case AuditKindD1Write:
+		return true
 	case AuditKindDeny:
 		return true
 	case AuditKindDeploy:
@@ -206,6 +214,10 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindKill:
 		return true
+	case AuditKindKvDelete:
+		return true
+	case AuditKindKvPut:
+		return true
 	case AuditKindMint:
 		return true
 	case AuditKindObjectUpdate:
@@ -223,6 +235,12 @@ func (e AuditKind) Valid() bool {
 	case AuditKindPublicRequest:
 		return true
 	case AuditKindPurge:
+		return true
+	case AuditKindQueueCreate:
+		return true
+	case AuditKindQueueDelete:
+		return true
+	case AuditKindQueuePurge:
 		return true
 	case AuditKindReady:
 		return true
@@ -372,6 +390,7 @@ const (
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeCapMissing              ErrorCode = "cap_missing"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
+	ErrorCodeD1Error                 ErrorCode = "d1_error"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
@@ -406,6 +425,7 @@ const (
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
+	ErrorCodeQueueLimit              ErrorCode = "queue_limit"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
 	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
@@ -421,6 +441,7 @@ const (
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
 	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
+	ErrorCodeUnknownQueue            ErrorCode = "unknown_queue"
 	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
 	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
@@ -451,6 +472,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeCapMissing:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
+		return true
+	case ErrorCodeD1Error:
 		return true
 	case ErrorCodeDelegationExceedsParent:
 		return true
@@ -520,6 +543,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodePublicIngressNotAllowed:
 		return true
+	case ErrorCodeQueueLimit:
+		return true
 	case ErrorCodeRegistryUnavailable:
 		return true
 	case ErrorCodeReplicaConflict:
@@ -549,6 +574,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTooManySecrets:
 		return true
 	case ErrorCodeUnknownNamespace:
+		return true
+	case ErrorCodeUnknownQueue:
 		return true
 	case ErrorCodeUnknownSecret:
 		return true
@@ -863,6 +890,30 @@ func (e PublicIngress) Valid() bool {
 	case PublicIngressAllow:
 		return true
 	case PublicIngressDeny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QueueContentType.
+const (
+	Bytes QueueContentType = "bytes"
+	JSON  QueueContentType = "json"
+	Text  QueueContentType = "text"
+	V8    QueueContentType = "v8"
+)
+
+// Valid indicates whether the value is a known member of the QueueContentType enum.
+func (e QueueContentType) Valid() bool {
+	switch e {
+	case Bytes:
+		return true
+	case JSON:
+		return true
+	case Text:
+		return true
+	case V8:
 		return true
 	default:
 		return false
@@ -1236,6 +1287,12 @@ type AuditBatch struct {
 // `secret_release` (a workload's secrets released to its lease holder; names only),
 // `store_create` (a platform store created, by its first write or an admin),
 // `store_delete` (a platform store and its data key deleted),
+// `queue_create` (a queue created, by its first use or an admin),
+// `queue_delete` (a queue, its messages and its data key deleted),
+// `queue_purge` (every message of a queue deleted),
+// `d1_write` (an operator's SQL changed a D1 database; statement count only),
+// `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+// `kv_delete` (an admin deleted a Workers KV key; the namespace only),
 // `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 // `telemetry_delete`,
 // `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
@@ -1256,7 +1313,7 @@ type AuditBatch struct {
 // `public_request` (one per public request),
 // `public_rejected` (per-minute summary of requests the limits refused),
 // `public_object_created` (a name admitted for a public create).
-// Workflow approvals (ADR-workflows-approvals), host chain:
+// Workflow approvals (ADR-040), host chain:
 // `approval_requested` (a Workflow instance waits for an approval),
 // `approval_decision` (approved or rejected, with the approver's identity),
 // `approval_denied` (a decision refused, e.g. `cap_missing`),
@@ -1328,6 +1385,12 @@ type AuditRecord struct {
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `store_create` (a platform store created, by its first write or an admin),
 	// `store_delete` (a platform store and its data key deleted),
+	// `queue_create` (a queue created, by its first use or an admin),
+	// `queue_delete` (a queue, its messages and its data key deleted),
+	// `queue_purge` (every message of a queue deleted),
+	// `d1_write` (an operator's SQL changed a D1 database; statement count only),
+	// `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+	// `kv_delete` (an admin deleted a Workers KV key; the namespace only),
 	// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 	// `telemetry_delete`,
 	// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
@@ -1348,7 +1411,7 @@ type AuditRecord struct {
 	// `public_request` (one per public request),
 	// `public_rejected` (per-minute summary of requests the limits refused),
 	// `public_object_created` (a name admitted for a public create).
-	// Workflow approvals (ADR-workflows-approvals), host chain:
+	// Workflow approvals (ADR-040), host chain:
 	// `approval_requested` (a Workflow instance waits for an approval),
 	// `approval_decision` (approved or rejected, with the approver's identity),
 	// `approval_denied` (a decision refused, e.g. `cap_missing`),
@@ -1551,6 +1614,32 @@ type Credential struct {
 	Tags     []string `json:"tags"`
 }
 
+// D1Query defines model for D1Query.
+type D1Query struct {
+	Queries []struct {
+		// Params Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values.
+		Params *[]interface{} `json:"params,omitempty"`
+
+		// SQL One statement (or several separated by `;`; parameters bind to the last).
+		SQL string `json:"sql"`
+	} `json:"queries"`
+}
+
+// D1Result One statement's result, as D1's wire protocol has it.
+type D1Result struct {
+	Error *string `json:"error,omitempty"`
+
+	// Meta `changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`.
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Results *struct {
+		Columns *[]string `json:"columns,omitempty"`
+
+		// Rows Values: null, numbers, strings, and BLOBs as arrays of byte values.
+		Rows *[][]interface{} `json:"rows,omitempty"`
+	} `json:"results,omitempty"`
+	Success bool `json:"success"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
@@ -1685,6 +1774,7 @@ type Error struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1702,11 +1792,13 @@ type Error struct {
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `unknown_store` | 404 | the workload has no store of that kind and name |
+	// | `unknown_queue` | 404 | the tenant has no queue of that name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
 	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
+	// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -1760,6 +1852,7 @@ type Error struct {
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
+// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1777,11 +1870,13 @@ type Error struct {
 // | `no_logs` | 404 | the workload's host has no log file for it yet |
 // | `unknown_secret` | 404 | the workload has no secret of that name |
 // | `unknown_store` | 404 | the workload has no store of that kind and name |
+// | `unknown_queue` | 404 | the tenant has no queue of that name |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
 // | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
 // | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
+// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 // | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2039,6 +2134,49 @@ type ImageAliasList struct {
 // JWKS defines model for JWKS.
 type JWKS struct {
 	Keys []map[string]interface{} `json:"keys"`
+}
+
+// KVKey A Workers KV key as `list()` returns it (ADR-037).
+type KVKey struct {
+	// Expiration Unix seconds when the key expires (absent: never).
+	Expiration *int64 `json:"expiration,omitempty"`
+
+	// Metadata The key's metadata (any JSON; absent: none).
+	Metadata interface{} `json:"metadata,omitempty"`
+	Name     string      `json:"name"`
+}
+
+// KVKeyPage defines model for KVKeyPage.
+type KVKeyPage struct {
+	// Cursor Pass as `cursor` for the next page (absent when `listComplete`).
+	Cursor       *string `json:"cursor,omitempty"`
+	Keys         []KVKey `json:"keys"`
+	ListComplete bool    `json:"listComplete"`
+}
+
+// KVPut defines model for KVPut.
+type KVPut struct {
+	// Expiration Unix seconds; at least 60 s ahead.
+	Expiration *int64 `json:"expiration,omitempty"`
+
+	// ExpirationTTL Seconds from now (at least 60). Wins over `expiration`.
+	ExpirationTTL *int64 `json:"expirationTtl,omitempty"`
+
+	// Metadata Any JSON, at most 1024 bytes serialized.
+	Metadata interface{} `json:"metadata,omitempty"`
+
+	// Value The value's bytes (at most 2 MiB − 4 KiB).
+	Value []byte `json:"value"`
+}
+
+// KVValue defines model for KVValue.
+type KVValue struct {
+	Expiration *int64      `json:"expiration,omitempty"`
+	Metadata   interface{} `json:"metadata,omitempty"`
+	Name       string      `json:"name"`
+
+	// Value The value's bytes.
+	Value []byte `json:"value"`
 }
 
 // KillResult defines model for KillResult.
@@ -2537,6 +2675,175 @@ type PurgeResult struct {
 	WarmKeysRevoked *int `json:"warmKeysRevoked,omitempty"`
 }
 
+// Queue A tenant's queue (ADR-039).
+type Queue struct {
+	// Backlog Messages kept: not yet acked, in flight or delayed included.
+	Backlog int64 `json:"backlog"`
+
+	// Bytes Body bytes of the kept messages.
+	Bytes int64 `json:"bytes"`
+
+	// ConsumedAt unix ms of the last claim.
+	ConsumedAt *int64 `json:"consumedAt,omitempty"`
+
+	// Consumer The workload (or `admin`) that last claimed messages.
+	Consumer  *string `json:"consumer,omitempty"`
+	CreatedAt int64   `json:"createdAt"`
+
+	// Delayed Not yet visible (a delay or a retry delay).
+	Delayed int64 `json:"delayed"`
+
+	// InFlight Claimed by a consumer and not settled (lease not expired).
+	InFlight int64 `json:"inFlight"`
+
+	// Incarnation Random per creation.
+	Incarnation string `json:"incarnation"`
+	Name        string `json:"name"`
+
+	// OldestAt Send time (unix ms) of the oldest message; absent when empty.
+	OldestAt  *int64 `json:"oldestAt,omitempty"`
+	TenantID  string `json:"tenantID"`
+	UpdatedAt int64  `json:"updatedAt"`
+}
+
+// QueueAck defines model for QueueAck.
+type QueueAck struct {
+	// Acks Lease IDs to delete.
+	Acks            *[]string `json:"acks,omitempty"`
+	DeadLetterQueue *string   `json:"deadLetterQueue,omitempty"`
+
+	// Extend Lease IDs to keep hidden for `visibilityTimeoutMs` more.
+	Extend *[]string `json:"extend,omitempty"`
+
+	// MaxRetries Admin pull consumers, as for pull.
+	MaxRetries *int `json:"maxRetries,omitempty"`
+
+	// Release Lease IDs to hand back, visible again at once, without counting the attempt (the consumer never ran them: its instance was restarting or went away).
+	Release *[]string     `json:"release,omitempty"`
+	Retries *[]QueueRetry `json:"retries,omitempty"`
+
+	// RetryDelaySeconds Admin pull consumers: the default retry delay.
+	RetryDelaySeconds *int `json:"retryDelaySeconds,omitempty"`
+
+	// VisibilityTimeoutMs For `extend` (default 30000).
+	VisibilityTimeoutMs *int `json:"visibilityTimeoutMs,omitempty"`
+}
+
+// QueueAckResult defines model for QueueAckResult.
+type QueueAckResult struct {
+	Acked int `json:"acked"`
+
+	// DeadLettered Retries that went to the dead-letter queue (or were dropped) instead.
+	DeadLettered int `json:"deadLettered"`
+	Extended     int `json:"extended"`
+	Released     int `json:"released"`
+	Retried      int `json:"retried"`
+
+	// Stale Lease IDs that were no longer current.
+	Stale int `json:"stale"`
+}
+
+// QueueContentType How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer).
+type QueueContentType string
+
+// QueueMessage defines model for QueueMessage.
+type QueueMessage struct {
+	// Attempts Deliveries so far, this one included (pull); 0 for a message never delivered.
+	Attempts int    `json:"attempts"`
+	Body     []byte `json:"body"`
+
+	// ContentType How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer).
+	ContentType QueueContentType `json:"contentType"`
+	ID          string           `json:"id"`
+
+	// LeaseID Settle the message with this (pull only).
+	LeaseID *string `json:"leaseId,omitempty"`
+
+	// Timestamp Send time (unix ms).
+	Timestamp int64 `json:"timestamp"`
+
+	// VisibleAt When the message is (or was) visible (unix ms).
+	VisibleAt *int64 `json:"visibleAt,omitempty"`
+}
+
+// QueueMessageIn defines model for QueueMessageIn.
+type QueueMessageIn struct {
+	// Body The encoded body (see `contentType`), at most 128 KB.
+	Body []byte `json:"body"`
+
+	// ContentType How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer).
+	ContentType *QueueContentType `json:"contentType,omitempty"`
+
+	// DelaySeconds Hide the message this long (default: the call's `delaySeconds`).
+	DelaySeconds *int `json:"delaySeconds,omitempty"`
+}
+
+// QueueMessageList defines model for QueueMessageList.
+type QueueMessageList struct {
+	Messages []QueueMessage `json:"messages"`
+}
+
+// QueuePage defines model for QueuePage.
+type QueuePage struct {
+	Items []Queue `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// QueuePull defines model for QueuePull.
+type QueuePull struct {
+	// BatchSize At most this many messages (default 10).
+	BatchSize *int `json:"batchSize,omitempty"`
+
+	// DeadLetterQueue Admin pull consumers: where messages go after `maxRetries` (absent: dropped).
+	DeadLetterQueue *string `json:"deadLetterQueue,omitempty"`
+
+	// MaxRetries Admin pull consumers: deliveries beyond the first before a message is dead-lettered (default 3).
+	MaxRetries *int `json:"maxRetries,omitempty"`
+
+	// VisibilityTimeoutMs How long claimed messages stay hidden (default 30000).
+	VisibilityTimeoutMs *int `json:"visibilityTimeoutMs,omitempty"`
+
+	// WaitMs If nothing is visible, wait this long for a message (default 0).
+	WaitMs *int `json:"waitMs,omitempty"`
+}
+
+// QueuePullResult defines model for QueuePullResult.
+type QueuePullResult struct {
+	// DeadLettered Expired messages moved to the dead-letter queue (or dropped) by this claim.
+	DeadLettered *int           `json:"deadLettered,omitempty"`
+	Messages     []QueueMessage `json:"messages"`
+}
+
+// QueuePurgeResult defines model for QueuePurgeResult.
+type QueuePurgeResult struct {
+	Purged int64 `json:"purged"`
+}
+
+// QueueRetry defines model for QueueRetry.
+type QueueRetry struct {
+	DelaySeconds *int   `json:"delaySeconds,omitempty"`
+	LeaseID      string `json:"leaseId"`
+}
+
+// QueueSend defines model for QueueSend.
+type QueueSend struct {
+	// DelaySeconds The default delay of the messages.
+	DelaySeconds *int             `json:"delaySeconds,omitempty"`
+	Messages     []QueueMessageIn `json:"messages"`
+}
+
+// QueueSendResult defines model for QueueSendResult.
+type QueueSendResult struct {
+	Backlog int64 `json:"backlog"`
+	Bytes   int64 `json:"bytes"`
+
+	// Ids The new messages' IDs, in order.
+	Ids      []string `json:"ids"`
+	OldestAt *int64   `json:"oldestAt,omitempty"`
+}
+
 // ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
 type ReplicaRef struct {
 	DeploymentID string            `json:"deploymentID"`
@@ -2758,7 +3065,7 @@ type Store struct {
 	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
 	Incarnation string `json:"incarnation"`
 
-	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	// Kind A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
 	Kind      StoreKind `json:"kind"`
 	Name      string    `json:"name"`
 	TenantID  string    `json:"tenantID"`
@@ -2810,7 +3117,7 @@ type StoreJournal struct {
 	More bool `json:"more"`
 }
 
-// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+// StoreKind A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
 type StoreKind = string
 
 // StorePage defines model for StorePage.
@@ -3021,6 +3328,7 @@ type TombstoneError struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -3038,11 +3346,13 @@ type TombstoneError struct {
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `unknown_store` | 404 | the workload has no store of that kind and name |
+	// | `unknown_queue` | 404 | the tenant has no queue of that name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
 	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
+	// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -3194,6 +3504,15 @@ type Limit = int
 
 // ObjectID defines model for objectID.
 type ObjectID = string
+
+// QueueEpoch defines model for queueEpoch.
+type QueueEpoch = int64
+
+// QueueName defines model for queueName.
+type QueueName = string
+
+// QueueWorkload defines model for queueWorkload.
+type QueueWorkload = string
 
 // RepositoryName defines model for repositoryName.
 type RepositoryName = string
@@ -3518,6 +3837,57 @@ type PurgeTenantObjectsParams struct {
 // PurgeTenantObjectsParamsState defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParamsState string
 
+// ListQueuesParams defines parameters for ListQueues.
+type ListQueuesParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetQueueParams defines parameters for GetQueue.
+type GetQueueParams struct {
+	// Workload Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out.
+	Workload *QueueWorkload `form:"workload,omitempty" json:"workload,omitempty"`
+
+	// Epoch Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`).
+	Epoch *QueueEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
+// PeekQueueMessagesParams defines parameters for PeekQueueMessages.
+type PeekQueueMessagesParams struct {
+	// Limit At most this many messages (default 20, maximum 100).
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SendQueueMessagesParams defines parameters for SendQueueMessages.
+type SendQueueMessagesParams struct {
+	// Workload Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out.
+	Workload *QueueWorkload `form:"workload,omitempty" json:"workload,omitempty"`
+
+	// Epoch Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`).
+	Epoch *QueueEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
+// AckQueueMessagesParams defines parameters for AckQueueMessages.
+type AckQueueMessagesParams struct {
+	// Workload Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out.
+	Workload *QueueWorkload `form:"workload,omitempty" json:"workload,omitempty"`
+
+	// Epoch Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`).
+	Epoch *QueueEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
+// PullQueueMessagesParams defines parameters for PullQueueMessages.
+type PullQueueMessagesParams struct {
+	// Workload Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out.
+	Workload *QueueWorkload `form:"workload,omitempty" json:"workload,omitempty"`
+
+	// Epoch Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`).
+	Epoch *QueueEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
 // GetWorkloadLogsParams defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParams struct {
 	// N Lines from the end of the log (0 with `follow` for new lines only).
@@ -3589,6 +3959,34 @@ type ListWorkloadStoresParams struct {
 
 	// Kind Only stores of this kind.
 	Kind *StoreKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListKVKeysParams defines parameters for ListKVKeys.
+type ListKVKeysParams struct {
+	// Prefix Only keys that start with this.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Cursor The `cursor` of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteKVValueParams defines parameters for DeleteKVValue.
+type DeleteKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
+// GetKVValueParams defines parameters for GetKVValue.
+type GetKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
+// PutKVValueParams defines parameters for PutKVValue.
+type PutKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
 }
 
 // ReadStoreJournalParams defines parameters for ReadStoreJournal.
@@ -3663,11 +4061,23 @@ type UpdateTenantJSONRequestBody = TenantPatch
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
 
+// SendQueueMessagesJSONRequestBody defines body for SendQueueMessages for application/json ContentType.
+type SendQueueMessagesJSONRequestBody = QueueSend
+
+// AckQueueMessagesJSONRequestBody defines body for AckQueueMessages for application/json ContentType.
+type AckQueueMessagesJSONRequestBody = QueueAck
+
+// PullQueueMessagesJSONRequestBody defines body for PullQueueMessages for application/json ContentType.
+type PullQueueMessagesJSONRequestBody = QueuePull
+
 // PutTenantTelemetryJSONRequestBody defines body for PutTenantTelemetry for application/json ContentType.
 type PutTenantTelemetryJSONRequestBody = TelemetryPut
 
 // DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
 type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
+
+// QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
+type QueryD1JSONRequestBody = D1Query
 
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
@@ -3677,6 +4087,9 @@ type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPubl
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
+
+// PutKVValueJSONRequestBody defines body for PutKVValue for application/json ContentType.
+type PutKVValueJSONRequestBody = KVPut
 
 // AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
 type AppendStoreJournalJSONRequestBody = StoreAppend
@@ -4084,6 +4497,33 @@ type ServerInterface interface {
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(w http.ResponseWriter, r *http.Request, id TenantID, params PurgeTenantObjectsParams)
+	// ListQueues List a tenant's queues
+	// (GET /v1/tenants/{id}/queues)
+	ListQueues(w http.ResponseWriter, r *http.Request, id TenantID, params ListQueuesParams)
+	// DeleteQueue Delete a queue and its messages
+	// (DELETE /v1/tenants/{id}/queues/{queue})
+	DeleteQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName)
+	// GetQueue Get one queue and its backlog
+	// (GET /v1/tenants/{id}/queues/{queue})
+	GetQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params GetQueueParams)
+	// PutQueue Create a queue (idempotent)
+	// (PUT /v1/tenants/{id}/queues/{queue})
+	PutQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName)
+	// PeekQueueMessages Read messages without claiming them
+	// (GET /v1/tenants/{id}/queues/{queue}/messages)
+	PeekQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params PeekQueueMessagesParams)
+	// SendQueueMessages Send messages to a queue
+	// (POST /v1/tenants/{id}/queues/{queue}/messages)
+	SendQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params SendQueueMessagesParams)
+	// AckQueueMessages Settle claimed messages (ack, retry, extend)
+	// (POST /v1/tenants/{id}/queues/{queue}/messages/ack)
+	AckQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params AckQueueMessagesParams)
+	// PullQueueMessages Claim a batch of messages (push consumers and HTTP pull)
+	// (POST /v1/tenants/{id}/queues/{queue}/messages/pull)
+	PullQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params PullQueueMessagesParams)
+	// PurgeQueue Delete every message of a queue, keeping the queue
+	// (POST /v1/tenants/{id}/queues/{queue}/purge)
+	PurgeQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName)
 	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
 	// (DELETE /v1/tenants/{id}/telemetry)
 	DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
@@ -4099,6 +4539,12 @@ type ServerInterface interface {
 	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string)
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
+	ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
+	QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
@@ -4123,6 +4569,18 @@ type ServerInterface interface {
 	// ListWorkloadStores List a workload's stores
 	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
 	ListWorkloadStores(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadStoresParams)
+	// ListKVKeys List a KV namespace's keys
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys)
+	ListKVKeys(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params ListKVKeysParams)
+	// DeleteKVValue Delete one KV value
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	DeleteKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params DeleteKVValueParams)
+	// GetKVValue Get one KV value
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	GetKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params GetKVValueParams)
+	// PutKVValue Write one KV value
+	// (PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	PutKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params PutKVValueParams)
 	// DeleteWorkloadStore Delete a store and its data
 	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
 	DeleteWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName)
@@ -6055,6 +6513,473 @@ func (siw *ServerInterfaceWrapper) PurgeTenantObjects(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListQueues operation middleware
+func (siw *ServerInterfaceWrapper) ListQueues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListQueuesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListQueues(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteQueue operation middleware
+func (siw *ServerInterfaceWrapper) DeleteQueue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteQueue(w, r, id, queue)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetQueue operation middleware
+func (siw *ServerInterfaceWrapper) GetQueue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetQueueParams
+
+	// ------------- Optional query parameter "workload" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workload", r.URL.Query(), &params.Workload, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workload"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetQueue(w, r, id, queue, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutQueue operation middleware
+func (siw *ServerInterfaceWrapper) PutQueue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutQueue(w, r, id, queue)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PeekQueueMessages operation middleware
+func (siw *ServerInterfaceWrapper) PeekQueueMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PeekQueueMessagesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PeekQueueMessages(w, r, id, queue, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendQueueMessages operation middleware
+func (siw *ServerInterfaceWrapper) SendQueueMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SendQueueMessagesParams
+
+	// ------------- Optional query parameter "workload" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workload", r.URL.Query(), &params.Workload, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workload"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendQueueMessages(w, r, id, queue, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AckQueueMessages operation middleware
+func (siw *ServerInterfaceWrapper) AckQueueMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AckQueueMessagesParams
+
+	// ------------- Optional query parameter "workload" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workload", r.URL.Query(), &params.Workload, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workload"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AckQueueMessages(w, r, id, queue, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PullQueueMessages operation middleware
+func (siw *ServerInterfaceWrapper) PullQueueMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PullQueueMessagesParams
+
+	// ------------- Optional query parameter "workload" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workload", r.URL.Query(), &params.Workload, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workload"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PullQueueMessages(w, r, id, queue, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PurgeQueue operation middleware
+func (siw *ServerInterfaceWrapper) PurgeQueue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "queue" -------------
+	var queue QueueName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "queue", r.PathValue("queue"), &queue, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PurgeQueue(w, r, id, queue)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTenantTelemetry operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request) {
 
@@ -6203,6 +7128,94 @@ func (siw *ServerInterfaceWrapper) DecideApproval(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DecideApproval(w, r, id, workload, workflow, instance)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportD1 operation middleware
+func (siw *ServerInterfaceWrapper) ExportD1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportD1(w, r, id, workload, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// QueryD1 operation middleware
+func (siw *ServerInterfaceWrapper) QueryD1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.QueryD1(w, r, id, workload, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6745,6 +7758,272 @@ func (siw *ServerInterfaceWrapper) ListWorkloadStores(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListWorkloadStores(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListKVKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListKVKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListKVKeysParams
+
+	// ------------- Optional query parameter "prefix" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "prefix", r.URL.Query(), &params.Prefix, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "prefix"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "prefix", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListKVKeys(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteKVValue operation middleware
+func (siw *ServerInterfaceWrapper) DeleteKVValue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteKVValueParams
+
+	// ------------- Required query parameter "key" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "key", r.URL.Query(), &params.Key, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "key"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteKVValue(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetKVValue operation middleware
+func (siw *ServerInterfaceWrapper) GetKVValue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetKVValueParams
+
+	// ------------- Required query parameter "key" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "key", r.URL.Query(), &params.Key, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "key"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetKVValue(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutKVValue operation middleware
+func (siw *ServerInterfaceWrapper) PutKVValue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutKVValueParams
+
+	// ------------- Required query parameter "key" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "key", r.URL.Query(), &params.Key, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "key"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutKVValue(w, r, id, workload, name, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7326,6 +8605,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.PutWorkloadStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.ReadStoreJournal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.AppendStoreJournal)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys", wrapper.ListKVKeys)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.DeleteKVValue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.GetKVValue)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.PutKVValue)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/d1/{name}/query", wrapper.QueryD1)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/d1/{name}/export", wrapper.ExportD1)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/queues", wrapper.ListQueues)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}", wrapper.DeleteQueue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}", wrapper.GetQueue)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}", wrapper.PutQueue)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/purge", wrapper.PurgeQueue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/messages", wrapper.PeekQueueMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/messages", wrapper.SendQueueMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/messages/pull", wrapper.PullQueueMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/messages/ack", wrapper.AckQueueMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/telemetry-grants", wrapper.CreateTelemetryGrant)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.DeleteTenantTelemetry)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.GetTenantTelemetry)
@@ -11838,6 +13132,931 @@ func (response PurgeTenantObjectsdefaultJSONResponse) VisitPurgeTenantObjectsRes
 	return err
 }
 
+type ListQueuesRequestObject struct {
+	ID     TenantID `json:"id"`
+	Params ListQueuesParams
+}
+
+type ListQueuesResponseObject interface {
+	VisitListQueuesResponse(w http.ResponseWriter) error
+}
+
+type ListQueues200JSONResponse QueuePage
+
+func (response ListQueues200JSONResponse) VisitListQueuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListQueues400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListQueues400JSONResponse) VisitListQueuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListQueues403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListQueues403JSONResponse) VisitListQueuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListQueues404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListQueues404JSONResponse) VisitListQueuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListQueuesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListQueuesdefaultJSONResponse) VisitListQueuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteQueueRequestObject struct {
+	ID    TenantID  `json:"id"`
+	Queue QueueName `json:"queue"`
+}
+
+type DeleteQueueResponseObject interface {
+	VisitDeleteQueueResponse(w http.ResponseWriter) error
+}
+
+type DeleteQueue204Response struct {
+}
+
+func (response DeleteQueue204Response) VisitDeleteQueueResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteQueue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteQueue403JSONResponse) VisitDeleteQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteQueue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteQueue404JSONResponse) VisitDeleteQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteQueuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteQueuedefaultJSONResponse) VisitDeleteQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueueRequestObject struct {
+	ID     TenantID  `json:"id"`
+	Queue  QueueName `json:"queue"`
+	Params GetQueueParams
+}
+
+type GetQueueResponseObject interface {
+	VisitGetQueueResponse(w http.ResponseWriter) error
+}
+
+type GetQueue200JSONResponse Queue
+
+func (response GetQueue200JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetQueue400JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetQueue403JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetQueue404JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueue409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response GetQueue409JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetQueuedefaultJSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutQueueRequestObject struct {
+	ID    TenantID  `json:"id"`
+	Queue QueueName `json:"queue"`
+}
+
+type PutQueueResponseObject interface {
+	VisitPutQueueResponse(w http.ResponseWriter) error
+}
+
+type PutQueue200JSONResponse Queue
+
+func (response PutQueue200JSONResponse) VisitPutQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutQueue201JSONResponse Queue
+
+func (response PutQueue201JSONResponse) VisitPutQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutQueue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutQueue400JSONResponse) VisitPutQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutQueue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutQueue403JSONResponse) VisitPutQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutQueue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutQueue404JSONResponse) VisitPutQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutQueuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutQueuedefaultJSONResponse) VisitPutQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PeekQueueMessagesRequestObject struct {
+	ID     TenantID  `json:"id"`
+	Queue  QueueName `json:"queue"`
+	Params PeekQueueMessagesParams
+}
+
+type PeekQueueMessagesResponseObject interface {
+	VisitPeekQueueMessagesResponse(w http.ResponseWriter) error
+}
+
+type PeekQueueMessages200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type PeekQueueMessages200JSONResponse struct {
+	Body    QueueMessageList
+	Headers PeekQueueMessages200ResponseHeaders
+}
+
+func (response PeekQueueMessages200JSONResponse) VisitPeekQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PeekQueueMessages400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PeekQueueMessages400JSONResponse) VisitPeekQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PeekQueueMessages403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PeekQueueMessages403JSONResponse) VisitPeekQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PeekQueueMessages404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PeekQueueMessages404JSONResponse) VisitPeekQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PeekQueueMessagesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PeekQueueMessagesdefaultJSONResponse) VisitPeekQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendQueueMessagesRequestObject struct {
+	ID     TenantID  `json:"id"`
+	Queue  QueueName `json:"queue"`
+	Params SendQueueMessagesParams
+	Body   *SendQueueMessagesJSONRequestBody
+}
+
+type SendQueueMessagesResponseObject interface {
+	VisitSendQueueMessagesResponse(w http.ResponseWriter) error
+}
+
+type SendQueueMessages201JSONResponse QueueSendResult
+
+func (response SendQueueMessages201JSONResponse) VisitSendQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendQueueMessages400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SendQueueMessages400JSONResponse) VisitSendQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendQueueMessages403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SendQueueMessages403JSONResponse) VisitSendQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendQueueMessages404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SendQueueMessages404JSONResponse) VisitSendQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendQueueMessages409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response SendQueueMessages409JSONResponse) VisitSendQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendQueueMessagesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response SendQueueMessagesdefaultJSONResponse) VisitSendQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AckQueueMessagesRequestObject struct {
+	ID     TenantID  `json:"id"`
+	Queue  QueueName `json:"queue"`
+	Params AckQueueMessagesParams
+	Body   *AckQueueMessagesJSONRequestBody
+}
+
+type AckQueueMessagesResponseObject interface {
+	VisitAckQueueMessagesResponse(w http.ResponseWriter) error
+}
+
+type AckQueueMessages200JSONResponse QueueAckResult
+
+func (response AckQueueMessages200JSONResponse) VisitAckQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AckQueueMessages400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response AckQueueMessages400JSONResponse) VisitAckQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AckQueueMessages403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AckQueueMessages403JSONResponse) VisitAckQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AckQueueMessages404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AckQueueMessages404JSONResponse) VisitAckQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AckQueueMessages409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response AckQueueMessages409JSONResponse) VisitAckQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AckQueueMessagesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response AckQueueMessagesdefaultJSONResponse) VisitAckQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PullQueueMessagesRequestObject struct {
+	ID     TenantID  `json:"id"`
+	Queue  QueueName `json:"queue"`
+	Params PullQueueMessagesParams
+	Body   *PullQueueMessagesJSONRequestBody
+}
+
+type PullQueueMessagesResponseObject interface {
+	VisitPullQueueMessagesResponse(w http.ResponseWriter) error
+}
+
+type PullQueueMessages200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type PullQueueMessages200JSONResponse struct {
+	Body    QueuePullResult
+	Headers PullQueueMessages200ResponseHeaders
+}
+
+func (response PullQueueMessages200JSONResponse) VisitPullQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PullQueueMessages400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PullQueueMessages400JSONResponse) VisitPullQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PullQueueMessages403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PullQueueMessages403JSONResponse) VisitPullQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PullQueueMessages404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PullQueueMessages404JSONResponse) VisitPullQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PullQueueMessages409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response PullQueueMessages409JSONResponse) VisitPullQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PullQueueMessagesdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PullQueueMessagesdefaultJSONResponse) VisitPullQueueMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeQueueRequestObject struct {
+	ID    TenantID  `json:"id"`
+	Queue QueueName `json:"queue"`
+}
+
+type PurgeQueueResponseObject interface {
+	VisitPurgeQueueResponse(w http.ResponseWriter) error
+}
+
+type PurgeQueue200JSONResponse QueuePurgeResult
+
+func (response PurgeQueue200JSONResponse) VisitPurgeQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeQueue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PurgeQueue403JSONResponse) VisitPurgeQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeQueue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PurgeQueue404JSONResponse) VisitPurgeQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeQueuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PurgeQueuedefaultJSONResponse) VisitPurgeQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteTenantTelemetryRequestObject struct {
 	ID TenantID `json:"id"`
 }
@@ -12276,6 +14495,206 @@ type DecideApprovaldefaultJSONResponse struct {
 }
 
 func (response DecideApprovaldefaultJSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1RequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+}
+
+type ExportD1ResponseObject interface {
+	VisitExportD1Response(w http.ResponseWriter) error
+}
+
+type ExportD1200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type ExportD1200TextResponse struct {
+	Body    string
+	Headers ExportD1200ResponseHeaders
+}
+
+func (response ExportD1200TextResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/plain")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+
+	_, err := w.Write([]byte(fmt.Sprint(response.Body)))
+	return err
+}
+
+type ExportD1400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ExportD1400JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ExportD1403JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ExportD1404JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1defaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ExportD1defaultJSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1RequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Body     *QueryD1JSONRequestBody
+}
+
+type QueryD1ResponseObject interface {
+	VisitQueryD1Response(w http.ResponseWriter) error
+}
+
+type QueryD1200JSONResponse []D1Result
+
+func (response QueryD1200JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response QueryD1400JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response QueryD1403JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response QueryD1404JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1defaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response QueryD1defaultJSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -13141,6 +15560,443 @@ type ListWorkloadStoresdefaultJSONResponse struct {
 }
 
 func (response ListWorkloadStoresdefaultJSONResponse) VisitListWorkloadStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeysRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   ListKVKeysParams
+}
+
+type ListKVKeysResponseObject interface {
+	VisitListKVKeysResponse(w http.ResponseWriter) error
+}
+
+type ListKVKeys200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type ListKVKeys200JSONResponse struct {
+	Body    KVKeyPage
+	Headers ListKVKeys200ResponseHeaders
+}
+
+func (response ListKVKeys200JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeys400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListKVKeys400JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeys403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListKVKeys403JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeys404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListKVKeys404JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeysdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListKVKeysdefaultJSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValueRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   DeleteKVValueParams
+}
+
+type DeleteKVValueResponseObject interface {
+	VisitDeleteKVValueResponse(w http.ResponseWriter) error
+}
+
+type DeleteKVValue204Response struct {
+}
+
+func (response DeleteKVValue204Response) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteKVValue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteKVValue400JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteKVValue403JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteKVValue404JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValue409JSONResponse struct{ StoreConflictJSONResponse }
+
+func (response DeleteKVValue409JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteKVValuedefaultJSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValueRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   GetKVValueParams
+}
+
+type GetKVValueResponseObject interface {
+	VisitGetKVValueResponse(w http.ResponseWriter) error
+}
+
+type GetKVValue200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type GetKVValue200JSONResponse struct {
+	Body    KVValue
+	Headers GetKVValue200ResponseHeaders
+}
+
+func (response GetKVValue200JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetKVValue400JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetKVValue403JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetKVValue404JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetKVValuedefaultJSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValueRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   PutKVValueParams
+	Body     *PutKVValueJSONRequestBody
+}
+
+type PutKVValueResponseObject interface {
+	VisitPutKVValueResponse(w http.ResponseWriter) error
+}
+
+type PutKVValue200JSONResponse KVKey
+
+func (response PutKVValue200JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutKVValue400JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutKVValue403JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutKVValue404JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue409JSONResponse struct{ StoreConflictJSONResponse }
+
+func (response PutKVValue409JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutKVValuedefaultJSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -14105,6 +16961,33 @@ type StrictServerInterface interface {
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(ctx context.Context, request PurgeTenantObjectsRequestObject) (PurgeTenantObjectsResponseObject, error)
+	// ListQueues List a tenant's queues
+	// (GET /v1/tenants/{id}/queues)
+	ListQueues(ctx context.Context, request ListQueuesRequestObject) (ListQueuesResponseObject, error)
+	// DeleteQueue Delete a queue and its messages
+	// (DELETE /v1/tenants/{id}/queues/{queue})
+	DeleteQueue(ctx context.Context, request DeleteQueueRequestObject) (DeleteQueueResponseObject, error)
+	// GetQueue Get one queue and its backlog
+	// (GET /v1/tenants/{id}/queues/{queue})
+	GetQueue(ctx context.Context, request GetQueueRequestObject) (GetQueueResponseObject, error)
+	// PutQueue Create a queue (idempotent)
+	// (PUT /v1/tenants/{id}/queues/{queue})
+	PutQueue(ctx context.Context, request PutQueueRequestObject) (PutQueueResponseObject, error)
+	// PeekQueueMessages Read messages without claiming them
+	// (GET /v1/tenants/{id}/queues/{queue}/messages)
+	PeekQueueMessages(ctx context.Context, request PeekQueueMessagesRequestObject) (PeekQueueMessagesResponseObject, error)
+	// SendQueueMessages Send messages to a queue
+	// (POST /v1/tenants/{id}/queues/{queue}/messages)
+	SendQueueMessages(ctx context.Context, request SendQueueMessagesRequestObject) (SendQueueMessagesResponseObject, error)
+	// AckQueueMessages Settle claimed messages (ack, retry, extend)
+	// (POST /v1/tenants/{id}/queues/{queue}/messages/ack)
+	AckQueueMessages(ctx context.Context, request AckQueueMessagesRequestObject) (AckQueueMessagesResponseObject, error)
+	// PullQueueMessages Claim a batch of messages (push consumers and HTTP pull)
+	// (POST /v1/tenants/{id}/queues/{queue}/messages/pull)
+	PullQueueMessages(ctx context.Context, request PullQueueMessagesRequestObject) (PullQueueMessagesResponseObject, error)
+	// PurgeQueue Delete every message of a queue, keeping the queue
+	// (POST /v1/tenants/{id}/queues/{queue}/purge)
+	PurgeQueue(ctx context.Context, request PurgeQueueRequestObject) (PurgeQueueResponseObject, error)
 	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
 	// (DELETE /v1/tenants/{id}/telemetry)
 	DeleteTenantTelemetry(ctx context.Context, request DeleteTenantTelemetryRequestObject) (DeleteTenantTelemetryResponseObject, error)
@@ -14120,6 +17003,12 @@ type StrictServerInterface interface {
 	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(ctx context.Context, request DecideApprovalRequestObject) (DecideApprovalResponseObject, error)
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
+	ExportD1(ctx context.Context, request ExportD1RequestObject) (ExportD1ResponseObject, error)
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
+	QueryD1(ctx context.Context, request QueryD1RequestObject) (QueryD1ResponseObject, error)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
@@ -14144,6 +17033,18 @@ type StrictServerInterface interface {
 	// ListWorkloadStores List a workload's stores
 	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
 	ListWorkloadStores(ctx context.Context, request ListWorkloadStoresRequestObject) (ListWorkloadStoresResponseObject, error)
+	// ListKVKeys List a KV namespace's keys
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys)
+	ListKVKeys(ctx context.Context, request ListKVKeysRequestObject) (ListKVKeysResponseObject, error)
+	// DeleteKVValue Delete one KV value
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	DeleteKVValue(ctx context.Context, request DeleteKVValueRequestObject) (DeleteKVValueResponseObject, error)
+	// GetKVValue Get one KV value
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	GetKVValue(ctx context.Context, request GetKVValueRequestObject) (GetKVValueResponseObject, error)
+	// PutKVValue Write one KV value
+	// (PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	PutKVValue(ctx context.Context, request PutKVValueRequestObject) (PutKVValueResponseObject, error)
 	// DeleteWorkloadStore Delete a store and its data
 	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
 	DeleteWorkloadStore(ctx context.Context, request DeleteWorkloadStoreRequestObject) (DeleteWorkloadStoreResponseObject, error)
@@ -15504,6 +18405,275 @@ func (sh *strictHandler) PurgeTenantObjects(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListQueues operation middleware
+func (sh *strictHandler) ListQueues(w http.ResponseWriter, r *http.Request, id TenantID, params ListQueuesParams) {
+	var request ListQueuesRequestObject
+
+	request.ID = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListQueues(ctx, request.(ListQueuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListQueues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListQueuesResponseObject); ok {
+		if err := validResponse.VisitListQueuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteQueue operation middleware
+func (sh *strictHandler) DeleteQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName) {
+	var request DeleteQueueRequestObject
+
+	request.ID = id
+	request.Queue = queue
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteQueue(ctx, request.(DeleteQueueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteQueue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteQueueResponseObject); ok {
+		if err := validResponse.VisitDeleteQueueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetQueue operation middleware
+func (sh *strictHandler) GetQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params GetQueueParams) {
+	var request GetQueueRequestObject
+
+	request.ID = id
+	request.Queue = queue
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetQueue(ctx, request.(GetQueueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetQueue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetQueueResponseObject); ok {
+		if err := validResponse.VisitGetQueueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutQueue operation middleware
+func (sh *strictHandler) PutQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName) {
+	var request PutQueueRequestObject
+
+	request.ID = id
+	request.Queue = queue
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutQueue(ctx, request.(PutQueueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutQueue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutQueueResponseObject); ok {
+		if err := validResponse.VisitPutQueueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PeekQueueMessages operation middleware
+func (sh *strictHandler) PeekQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params PeekQueueMessagesParams) {
+	var request PeekQueueMessagesRequestObject
+
+	request.ID = id
+	request.Queue = queue
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PeekQueueMessages(ctx, request.(PeekQueueMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PeekQueueMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PeekQueueMessagesResponseObject); ok {
+		if err := validResponse.VisitPeekQueueMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendQueueMessages operation middleware
+func (sh *strictHandler) SendQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params SendQueueMessagesParams) {
+	var request SendQueueMessagesRequestObject
+
+	request.ID = id
+	request.Queue = queue
+	request.Params = params
+
+	var body SendQueueMessagesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendQueueMessages(ctx, request.(SendQueueMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendQueueMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendQueueMessagesResponseObject); ok {
+		if err := validResponse.VisitSendQueueMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AckQueueMessages operation middleware
+func (sh *strictHandler) AckQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params AckQueueMessagesParams) {
+	var request AckQueueMessagesRequestObject
+
+	request.ID = id
+	request.Queue = queue
+	request.Params = params
+
+	var body AckQueueMessagesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AckQueueMessages(ctx, request.(AckQueueMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AckQueueMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AckQueueMessagesResponseObject); ok {
+		if err := validResponse.VisitAckQueueMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PullQueueMessages operation middleware
+func (sh *strictHandler) PullQueueMessages(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName, params PullQueueMessagesParams) {
+	var request PullQueueMessagesRequestObject
+
+	request.ID = id
+	request.Queue = queue
+	request.Params = params
+
+	var body PullQueueMessagesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PullQueueMessages(ctx, request.(PullQueueMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PullQueueMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PullQueueMessagesResponseObject); ok {
+		if err := validResponse.VisitPullQueueMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PurgeQueue operation middleware
+func (sh *strictHandler) PurgeQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName) {
+	var request PurgeQueueRequestObject
+
+	request.ID = id
+	request.Queue = queue
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PurgeQueue(ctx, request.(PurgeQueueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PurgeQueue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PurgeQueueResponseObject); ok {
+		if err := validResponse.VisitPurgeQueueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteTenantTelemetry operation middleware
 func (sh *strictHandler) DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
 	var request DeleteTenantTelemetryRequestObject
@@ -15644,6 +18814,69 @@ func (sh *strictHandler) DecideApproval(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DecideApprovalResponseObject); ok {
 		if err := validResponse.VisitDecideApprovalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportD1 operation middleware
+func (sh *strictHandler) ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName) {
+	var request ExportD1RequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportD1(ctx, request.(ExportD1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportD1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportD1ResponseObject); ok {
+		if err := validResponse.VisitExportD1Response(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// QueryD1 operation middleware
+func (sh *strictHandler) QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName) {
+	var request QueryD1RequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	var body QueryD1JSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.QueryD1(ctx, request.(QueryD1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "QueryD1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(QueryD1ResponseObject); ok {
+		if err := validResponse.VisitQueryD1Response(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -15894,6 +19127,129 @@ func (sh *strictHandler) ListWorkloadStores(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListWorkloadStoresResponseObject); ok {
 		if err := validResponse.VisitListWorkloadStoresResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListKVKeys operation middleware
+func (sh *strictHandler) ListKVKeys(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params ListKVKeysParams) {
+	var request ListKVKeysRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListKVKeys(ctx, request.(ListKVKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListKVKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListKVKeysResponseObject); ok {
+		if err := validResponse.VisitListKVKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteKVValue operation middleware
+func (sh *strictHandler) DeleteKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params DeleteKVValueParams) {
+	var request DeleteKVValueRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteKVValue(ctx, request.(DeleteKVValueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteKVValue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteKVValueResponseObject); ok {
+		if err := validResponse.VisitDeleteKVValueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetKVValue operation middleware
+func (sh *strictHandler) GetKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params GetKVValueParams) {
+	var request GetKVValueRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetKVValue(ctx, request.(GetKVValueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetKVValue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetKVValueResponseObject); ok {
+		if err := validResponse.VisitGetKVValueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutKVValue operation middleware
+func (sh *strictHandler) PutKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params PutKVValueParams) {
+	var request PutKVValueRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	var body PutKVValueJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutKVValue(ctx, request.(PutKVValueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutKVValue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutKVValueResponseObject); ok {
+		if err := validResponse.VisitPutKVValueResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

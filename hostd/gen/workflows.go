@@ -8,7 +8,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/bundle"
 )
 
-// Workflows (ADR-workflows-approvals). workerd's built-in engine, the
+// Workflows (ADR-040). workerd's built-in engine, the
 // bundled Worker /workerd/workflows.js (workerd 1.20261114.1+, run with
 // --experimental), runs a deployment's Workflows:
 //

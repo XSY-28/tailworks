@@ -94,7 +94,7 @@ func TestApproveCLI(t *testing.T) {
 	srv := &mgmt.Server{M: m}
 	api := httptest.NewServer(srv.TailnetHandler(func(context.Context, string) (mgmt.WhoIsInfo, error) {
 		return mgmt.WhoIsInfo{NodeID: "nBOB", Name: "bob-laptop.a.ts.net.", Login: "bob@example.com", Caps: []string{approvecap.Cap},
-			Approve: []json.RawMessage{json.RawMessage(`{"workflows":["refund"]}`)}}, nil
+			CapValues: map[string][]json.RawMessage{approvecap.Cap: {json.RawMessage(`{"workflows":["refund"]}`)}}}, nil
 	}, srv.Handler()))
 	t.Cleanup(api.Close)
 	devDir := filepath.Join(dir, "dev")

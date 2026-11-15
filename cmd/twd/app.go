@@ -33,7 +33,7 @@ func workloadLabel(s string) string {
 
 func cmdInit(args []string) error {
 	f := newFlags("init")
-	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | refund-approval | node-workflow")
+	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | lock | refund-approval | node-workflow")
 	name := f.String("name", "", "workload name (default: the directory name)")
 	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:twd-wl-<workload>, tag:twd-<workload>-<class>)")
 	pos, err := f.parse(args)
@@ -169,7 +169,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 				return nil, err
 			}
 			if twdErr != nil {
-				return nil, fail("bad_request", "no twd.jsonc or wrangler config in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|refund-approval|node-workflow")
+				return nil, fail("bad_request", "no twd.jsonc or wrangler config in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow")
 			}
 			return nil, fail("bad_request", "no wrangler.jsonc, wrangler.json or wrangler.toml in "+dir)
 		}
@@ -361,6 +361,8 @@ func cmdDeploy(args []string) error {
 	}
 	t0 := time.Now()
 	res := deployResult{Workload: a.Name, Tenant: tn.Tailnet, TenantID: tn.TenantID, Timings: map[string]float64{}, Warnings: a.Warnings}
+	ev := newEvents(*f.json, os.Stderr) // agentjson.go: NDJSON progress on stderr
+	ev.emit("start", map[string]any{"workload": a.Name, "tenant": tn.Tailnet, "dir": a.Dir})
 	ctx, cancel := context.WithTimeout(context.Background(), *wait+time.Minute)
 	defer cancel()
 	mc := s.mgmt()
@@ -390,6 +392,7 @@ func cmdDeploy(args []string) error {
 	}
 	res.Preflight = pf
 	res.Timings["preflight"] = ms(time.Since(t0))
+	ev.emit("preflight", map[string]any{"ok": pf.OK, "skipped": policyUnavailable != "", "preflight": pf})
 	if !*f.json {
 		if policyUnavailable != "" {
 			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n             add a lifecycle trust credential with scope policy_file:read (twd up --wif-lifecycle-client-id) to preflight grants; tags are still checked by Tailscale at mint\n", firstLine(policyUnavailable))
@@ -413,8 +416,11 @@ func cmdDeploy(args []string) error {
 	// to twd's registry; mgmt pins every image to a digest at deploy.
 	var ilog io.Writer = os.Stdout
 	if *f.json {
-		ilog = os.Stderr
+		lw := &lineWriter{ev: ev, fields: map[string]any{"source": "image-build"}}
+		defer lw.Flush()
+		ilog = lw
 	}
+	ev.emit("build", map[string]any{"bundleBytes": jsBytes, "runtime": a.Runtime})
 	bctx, bcancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	builtImages, err := buildContainerImages(bctx, mc, a, tb, tn.TenantID, *platform, ilog)
 	bcancel()
@@ -440,6 +446,7 @@ func cmdDeploy(args []string) error {
 		return err
 	}
 	res.DeploymentID, res.Host, res.Placement = dr.DeploymentID, dr.Host, dr.Placement
+	ev.emit("placed", map[string]any{"deploymentID": dr.DeploymentID, "host": dr.Host, "placement": dr.Placement})
 	if !*f.json && dr.Placement != nil {
 		fmt.Printf("✓ placed     %s\n", dr.Placement.Summary)
 	}
@@ -453,9 +460,14 @@ func cmdDeploy(args []string) error {
 	}
 	var v mgmt.DeploymentView
 	activeAt := time.Duration(0)
+	lastStatus := ""
 	for {
 		if err := mc.Do(ctx, "GET", "/v1/deployments/"+dr.DeploymentID, nil, &v); err != nil {
 			return err
+		}
+		if st := v.Status + "/" + v.Endpoint.Status; st != lastStatus {
+			ev.emit("status", map[string]any{"deploymentID": dr.DeploymentID, "status": v.Status, "node": v.Endpoint.Status})
+			lastStatus = st
 		}
 		if v.Status == "failed" {
 			return fail("deploy_failed", "the host could not start "+a.Name, strings.Split(v.Error, "\n")...).withFix("twd logs " + a.Name)
@@ -481,6 +493,7 @@ func cmdDeploy(args []string) error {
 	res.Replicas = dr.Replicas
 	res.Status, res.Endpoint, res.Public = v.Status, v.Endpoint, v.Public
 	res.Timings["ready"] = ms(time.Since(ds))
+	ev.emit("ready", map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": "http://" + v.Endpoint.MagicDNS + "/"})
 	if !*f.json {
 		fmt.Printf("✓ deployed   %s@%s · node %s · http://%s/  (deploy → ready %.1fs)\n", a.Name, v.Host, v.Endpoint.Node, v.Endpoint.MagicDNS, res.Timings["ready"]/1000)
 		if len(dr.Replicas) > 1 {
@@ -498,6 +511,9 @@ func cmdDeploy(args []string) error {
 	if p := v.Public; *waitPublic > 0 && p != nil && p.Allowed && p.Exposed {
 		last := ""
 		d, err := waitPublicURL(ctx, p.URL, *waitPublic, func(s string) {
+			if s != last {
+				ev.emit("public_wait", map[string]any{"url": p.URL, "detail": firstLine(s)})
+			}
 			if !*f.json && s != last {
 				fmt.Printf("  … waiting for %s from the public internet: %s\n", p.URL, firstLine(s))
 				last = s
@@ -507,6 +523,7 @@ func cmdDeploy(args []string) error {
 			return err
 		}
 		res.Timings["public"] = ms(d)
+		ev.emit("public", map[string]any{"url": p.URL})
 		if !*f.json {
 			fmt.Printf("✓ public     %s answers from the public internet (%.0fs)\n", p.URL, d.Seconds())
 		}

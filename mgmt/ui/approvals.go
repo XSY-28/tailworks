@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Approvals (ADR-workflows-approvals): /ui/approvals lists the Workflow
+// Approvals (ADR-040): /ui/approvals lists the Workflow
 // approvals waiting in every tenant the caller can list (or ?tenant=, for
 // an approver who is not a twd admin) and offers Approve / Reject. The
 // decision is POST /v1/tenants/{id}/workloads/{w}/approvals/{wf}/{instance}

@@ -34,10 +34,12 @@ type Principal struct {
 	// CapMap): twd.dev/cap/admin makes a tailnet caller an admin.
 	Caps []string
 
-	// Approvals (approvals.go): the caller's MagicDNS name and its
-	// twd.dev/cap/approve grants toward mgmt.
-	Name    string
-	Approve []json.RawMessage
+	// CapValues are the grants' values per capability (WhoIs CapMap);
+	// MCPCap's name the MCP tools the caller may use (mcp.go).
+	CapValues map[string][]json.RawMessage
+
+	// Name is the caller's MagicDNS name (approvals.go: the approver).
+	Name string
 }
 
 // Actor names the principal for audit records (deployedBy, kill by):
@@ -370,8 +372,8 @@ type WhoIsInfo struct {
 	Login  string   // UserProfile.LoginName (tagged nodes: "tagged-devices")
 	Caps   []string // app capabilities the caller holds toward mgmt (CapMap keys)
 
-	// Approve are the values of twd.dev/cap/approve (approvals.go).
-	Approve []json.RawMessage
+	// CapValues are the CapMap values per capability (MCPCap's tools).
+	CapValues map[string][]json.RawMessage
 }
 
 // WhoIsFunc resolves a tailnet caller (tsnet LocalClient.WhoIs).
@@ -418,6 +420,10 @@ func browserGuard(h http.Handler) http.Handler {
 				return
 			}
 		}
+		if r.URL.Path == MCPPath {
+			refuse("browsers may not call the MCP server")
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/v1/") && r.Header.Get("X-Twd-UI") != "1" {
 			refuse("browser mutations of /v1 need the X-Twd-UI header (use the admin UI)")
 			return
@@ -439,7 +445,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			writeErr(w, r, errf(401, "no_identity", "WhoIs failed for %s", r.RemoteAddr))
 			return
 		}
-		p := Principal{NodeID: wi.NodeID, Tags: wi.Tags, Caps: wi.Caps, Name: wi.Name, Approve: wi.Approve}
+		p := Principal{NodeID: wi.NodeID, Tags: wi.Tags, Caps: wi.Caps, CapValues: wi.CapValues, Name: wi.Name}
 		switch {
 		case s.Self.NodeID != "" && wi.NodeID == s.Self.NodeID:
 			// mgmt's own node: the operator console on the host machine
@@ -468,7 +474,9 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			if len(wi.Tags) > 0 {
 				p.Login = wi.Tags[0]
 			}
-			if !s.allowed(p, roleAdmin|roleApprover) {
+			if !s.allowed(p, roleAdmin) && r.URL.Path == MCPPath && slices.Contains(wi.Caps, MCPCap) {
+				p.Kind = "mcp" // MCPCap without AdminCap: /mcp only (mcp.go)
+			} else if !s.allowed(p, roleAdmin|roleApprover) {
 				who := wi.Login
 				src := wi.Login
 				if len(wi.Tags) > 0 {
@@ -481,6 +489,14 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 					e.Snippet = AdminGrantSnippet("autogroup:admin")
 				}
 				e.Missing = map[string]any{"src": src, "dst": MgmtTag, "cap": AdminCap}
+				if r.URL.Path == MCPPath {
+					e.Message = fmt.Sprintf("%s may not use twd's MCP server: no %s (or %s) capability from a grant to %s", who, MCPCap, AdminCap, MgmtTag)
+					e.Snippet = MCPGrantSnippet(src)
+					if src == "" {
+						e.Snippet = MCPGrantSnippet("autogroup:admin")
+					}
+					e.Missing["cap"] = MCPCap
+				}
 				writeErr(w, r, e)
 				return
 			}

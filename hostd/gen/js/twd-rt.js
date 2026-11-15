@@ -666,6 +666,169 @@ function workflowClient(f) {
   };
 }
 
+// js/packages/tailnet/src/d1.ts
+var SESSION_HEADER = "x-cf-d1-session-commit-token";
+var FIRST_UNCONSTRAINED = "first-unconstrained";
+var FIRST_PRIMARY = "first-primary";
+function d1Error(prefix, message) {
+  return new Error(`${prefix}: ${message}`, { cause: new Error(message) });
+}
+function first(r) {
+  return Array.isArray(r) ? r[0] : r;
+}
+function toObjects(r) {
+  const res = r.results;
+  if (res === void 0) return { ...r, results: [] };
+  if (Array.isArray(res)) return { ...r, results: res };
+  return { ...r, results: res.rows.map((row) => Object.fromEntries(row.map((c, i) => [res.columns[i], c]))) };
+}
+var D1Session = class {
+  #f;
+  #token;
+  constructor(f, token) {
+    this.#f = f;
+    this.#token = token;
+  }
+  get fetcher() {
+    return this.#f;
+  }
+  prepare(sql) {
+    return new D1Statement(this, sql, []);
+  }
+  async batch(stmts) {
+    const r = await this.sendOrThrow("/query", stmts.map((s) => ({ sql: s.statement, params: s.params })), "ROWS_AND_COLUMNS");
+    return (Array.isArray(r) ? r : [r]).map(toObjects);
+  }
+  getBookmark() {
+    return this.#token === FIRST_UNCONSTRAINED || this.#token === FIRST_PRIMARY ? null : this.#token;
+  }
+  update(b) {
+    b = b.trim();
+    const cur = this.getBookmark();
+    if (b && (cur === null || cur.localeCompare(b) < 0)) this.#token = b;
+  }
+  async send(path, body, format) {
+    const headers = { "content-type": "application/json" };
+    if (this.#token) headers[SESSION_HEADER] = this.#token;
+    const resp = await this.#f.fetch("http://d1" + path + "?resultsFormat=" + format, { method: "POST", headers, body: JSON.stringify(body) });
+    const bm = resp.headers.get(SESSION_HEADER);
+    if (bm) this.update(bm);
+    const text = await resp.text();
+    let j;
+    try {
+      j = JSON.parse(text);
+    } catch {
+      throw d1Error("D1_ERROR", `Failed to parse body as JSON, got: ${text}`);
+    }
+    const norm = (r) => r.error ? { success: false, error: r.error } : { success: true, meta: r.meta, ..."results" in r ? { results: r.results } : {} };
+    return Array.isArray(j) ? j.map(norm) : norm(j);
+  }
+  async sendOrThrow(path, body, format) {
+    const r = await this.send(path, body, format);
+    const f = first(r);
+    if (!f.success) throw d1Error("D1_ERROR", f.error ?? "Something went wrong");
+    return r;
+  }
+};
+var D1AlwaysPrimary = class extends D1Session {
+  constructor(f) {
+    super(f, null);
+  }
+  getBookmark() {
+    return null;
+  }
+  update() {
+  }
+};
+var D1Database = class extends D1AlwaysPrimary {
+  async exec(query) {
+    const lines = query.trim().split("\n");
+    const r = await this.send("/execute", lines.map((sql) => ({ sql })), "NONE");
+    const rs = Array.isArray(r) ? r : [r];
+    let duration = 0;
+    for (const [i, x] of rs.entries()) {
+      if (!x.success) throw d1Error("D1_EXEC_ERROR", `Error in line ${i + 1}: ${lines[i]}: ${x.error || "Something went wrong"}`);
+      duration += Number(x.meta?.duration ?? 0);
+    }
+    return { count: rs.length, duration };
+  }
+  withSession(constraintOrBookmark) {
+    const t = constraintOrBookmark?.trim();
+    return new D1Session(this.fetcher, t ? t : FIRST_UNCONSTRAINED);
+  }
+  async dump() {
+    throw d1Error("D1_DUMP_ERROR", "dump() is not supported on twd; use `twd d1 export`");
+  }
+};
+var D1Statement = class _D1Statement {
+  statement;
+  params;
+  #s;
+  constructor(s, statement, params) {
+    this.#s = s;
+    this.statement = statement;
+    this.params = params;
+  }
+  bind(...values) {
+    const out = values.map((v) => {
+      const t = typeof v;
+      if (t === "number" || t === "string") return v;
+      if (t === "boolean") return v ? 1 : 0;
+      if (t === "object") {
+        if (v == null) return v;
+        if (Array.isArray(v) && v.every((b) => typeof b === "number" && b >= 0 && b < 256)) return v;
+        if (v instanceof ArrayBuffer) return Array.from(new Uint8Array(v));
+        if (ArrayBuffer.isView(v)) return Array.from(v);
+      }
+      throw d1Error("D1_TYPE_ERROR", `Type '${t}' not supported for value '${String(v)}'`);
+    });
+    return new _D1Statement(this.#s, this.statement, out);
+  }
+  async #one(path, format) {
+    return first(await this.#s.sendOrThrow(path, { sql: this.statement, params: this.params }, format));
+  }
+  async first(col) {
+    const rows = toObjects(await this.#one("/query", "ROWS_AND_COLUMNS")).results;
+    if (!rows.length) return null;
+    if (col === void 0) return rows[0];
+    if (rows[0][col] === void 0) throw d1Error("D1_COLUMN_NOTFOUND", `Column not found (${col})`);
+    return rows[0][col];
+  }
+  async run() {
+    return this.#one("/execute", "NONE");
+  }
+  async all() {
+    return toObjects(await this.#one("/query", "ROWS_AND_COLUMNS"));
+  }
+  async raw(opts) {
+    const r = await this.#one("/query", "ROWS_AND_COLUMNS");
+    const res = r.results;
+    if (!res) return [];
+    if (Array.isArray(res)) {
+      const out = [];
+      for (const row of res) {
+        if (opts?.columnNames && out.length === 0) out.push(Object.keys(row));
+        out.push(Object.values(row));
+      }
+      return out;
+    }
+    return [...opts?.columnNames ? [res.columns] : [], ...res.rows];
+  }
+};
+function makeD1(fetcher) {
+  return new D1Database(fetcher);
+}
+var WRAPS = { d1: makeD1 };
+function wrapStores(env) {
+  const w = env.__TWD_WRAP;
+  if (!w || typeof w !== "object") return;
+  delete env.__TWD_WRAP;
+  for (const [k, kind] of Object.entries(w)) {
+    const f = WRAPS[kind];
+    if (f && env[k]) env[k] = f(env[k]);
+  }
+}
+
 // js/packages/tailnet/src/trace.ts
 import { AsyncLocalStorage } from "node:async_hooks";
 var MAX_SPANS = 64;
@@ -1034,8 +1197,8 @@ var ADMIT_CACHE_MAX = 1e4;
 var admitted = /* @__PURE__ */ new Map();
 function remember(key) {
   if (admitted.size >= ADMIT_CACHE_MAX) {
-    const first = admitted.keys().next().value;
-    if (first !== void 0) admitted.delete(first);
+    const first2 = admitted.keys().next().value;
+    if (first2 !== void 0) admitted.delete(first2);
   }
   admitted.set(key, true);
 }
@@ -1100,6 +1263,7 @@ function guardEnv(env, bindings, mode, adm) {
   if (!env || typeof env !== "object") return env;
   const out = { ...env };
   delete out.__TWD;
+  wrapStores(out);
   for (const [k, cls] of Object.entries(bindings)) {
     if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
   }
@@ -1159,6 +1323,26 @@ async function runScheduled(scheduledFn, req, extra) {
     return Response.json({ outcome: "exception", noRetry, error: String(e?.message ?? e).slice(0, 512) });
   }
 }
+var QUEUE_TICKET_ID = "__twd_ticket";
+function queueBatch(batch) {
+  const msgs = Array.isArray(batch?.messages) ? batch.messages : [];
+  const t = msgs.find((m) => m?.id === QUEUE_TICKET_ID);
+  if (!t) return { batch };
+  const rest = Object.freeze(msgs.filter((m) => m?.id !== QUEUE_TICKET_ID));
+  const b = Object.freeze({
+    queue: batch.queue,
+    messages: rest,
+    ackAll: () => batch.ackAll(),
+    retryAll: (o) => batch.retryAll(o)
+  });
+  return { batch: b, ticket: typeof t.body === "string" && t.body ? t.body : void 0 };
+}
+var HANDLER_METHODS = ["fetch", "scheduled", "queue", "tail", "tailStream", "trace", "email", "test", "connect"];
+function handlerKeys(H) {
+  const keys = new Set(Object.keys(H));
+  for (const k of HANDLER_METHODS) if (typeof H[k] === "function") keys.add(k);
+  return [...keys];
+}
 function wrapHandler(H, bindings) {
   if (!H) {
     return {
@@ -1200,10 +1384,20 @@ function wrapHandler(H, bindings) {
         }
       };
     }
+    if (typeof H.prototype?.queue === "function") {
+      const qf = H.prototype.queue;
+      C.prototype.queue = async function(batch) {
+        const tw = this.__twd;
+        const q = queueBatch(batch);
+        this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket: q.ticket }));
+        if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, void 0, q.ticket));
+        return qf.call(this, q.batch);
+      };
+    }
     return { [H.name || "Default"]: C }[H.name || "Default"];
   }
   const out = { ...H };
-  for (const k of Object.keys(H)) {
+  for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
     out[k] = function(a, env, ctx) {
       const tw = env?.__TWD;
@@ -1212,7 +1406,9 @@ function wrapHandler(H, bindings) {
         env = guardEnv(env, bindings, "public", admitter(tw, {}));
         if (ctx && tw) define(ctx, publicTailnet(createTailnetContext(tw, env, bindings)));
       } else {
-        const ticket = k === "fetch" ? requestTicket(a) : void 0;
+        let ticket;
+        if (k === "fetch") ticket = requestTicket(a);
+        else if (k === "queue") ({ batch: a, ticket } = queueBatch(a));
         env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, void 0, ticket));
         if (k === "fetch" && isScheduledReq(a)) return runScheduled(H.scheduled, a, [env, ctx]);

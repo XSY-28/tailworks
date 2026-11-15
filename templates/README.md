@@ -1,7 +1,7 @@
 # templates
 
 The app templates live in `js/packages/create-twd/templates/` so they ship
-with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|refund-approval|node-workflow`):
+with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow`):
 
 - `hello`: a Worker that returns its verified caller and does a private fetch.
 - `agent`: a Cloudflare Agents SDK `Agent` (state, `this.sql`, per-object node
@@ -15,6 +15,11 @@ with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai
   tailnet (`@ai-sdk/mcp` + `@twd/mcp` `mcpFetch`); it streams a UI message
   response. It ships with a scripted mock model (`src/model.ts`, no keys);
   swap in a real provider.
+- `lock`: a lease-based lock and leader-election service: one Durable
+  Object per lock name, holders recorded by tailnet identity, fencing tokens
+  that keep increasing across a move to another host, and a copyable client
+  (`src/client.ts`: `acquire`, `renew`, `release`, `withLock`). See
+  `docs/locks.md`.
 - `refund-approval`: a Cloudflare Workflow (`AgentWorkflow`) started by an
   Agent that waits for a person's approval (`waitForApproval`). twd delivers
   the approval only from a tailnet identity holding `twd.dev/cap/approve`

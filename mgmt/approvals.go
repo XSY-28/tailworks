@@ -18,7 +18,7 @@ import (
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
 )
 
-// Workflow approvals through mgmt (ADR-workflows-approvals): `twd
+// Workflow approvals through mgmt (ADR-040): `twd
 // approvals`, `twd approve` and the admin UI. The approvals live on the
 // hosts that run the Workflows; mgmt reads and forwards them over the same
 // mgmt → hostd channel as kills and logs (GET /v1/approvals, POST
@@ -189,7 +189,7 @@ func (m *Mgmt) DecideApproval(ctx context.Context, p Principal, tenantID, worklo
 	if err != nil {
 		return nil, err
 	}
-	grants := p.Approve
+	grants := p.CapValues[approvecap.Cap]
 	if grants == nil {
 		grants = []json.RawMessage{}
 	}
@@ -247,7 +247,7 @@ func (a *v1api) ListApprovals(w http.ResponseWriter, r *http.Request, id v1.Tena
 			if ap.Facts != nil {
 				facts = *ap.Facts
 			}
-			if approvecap.MayDecide(p.Approve, approvecap.Target{Workload: ap.Workload, Workflow: ap.Workflow, Step: ap.Step, Facts: facts}) {
+			if approvecap.MayDecide(p.CapValues[approvecap.Cap], approvecap.Target{Workload: ap.Workload, Workflow: ap.Workflow, Step: ap.Step, Facts: facts}) {
 				mine = append(mine, ap)
 			}
 		}

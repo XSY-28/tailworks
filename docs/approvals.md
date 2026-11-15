@@ -9,7 +9,7 @@ delivers the decision, the Workflow sees who decided (verified over
 WireGuard), and the audit log records it. There is no approval link to
 forward and no token to leak.
 
-The design is [ADR-workflows-approvals](design/adr/workflows-approvals.md).
+The design is [ADR-040](design/adr/040-workflows-approvals.md).
 The template `twd init refunds --template refund-approval` is a working
 example.
 

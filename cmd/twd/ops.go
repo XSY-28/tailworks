@@ -415,6 +415,11 @@ func describe(r mgmt.AuditRecord, names map[string]string) string {
 		return fmt.Sprintf("secret %v of %v deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
 	case "secret_release":
 		return fmt.Sprintf("secrets %s of %v released to host %v (epoch %v)", compact(d["names"]), d["workload"], d["host"], d["epoch"])
+	// Workers KV writes by an admin: the namespace only, never the key.
+	case "kv_put":
+		return fmt.Sprintf("KV namespace %v of %v: a key written by %s", d["name"], d["workload"], orDash(r.ActingFor))
+	case "kv_delete":
+		return fmt.Sprintf("KV namespace %v of %v: a key deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
 	// OTLP export (ADR-observability): endpoint and header names only.
 	case "telemetry_put":
 		return fmt.Sprintf("OTLP export to %v (headers %s, signals %s) set by %s", d["endpoint"], compact(d["headers"]), compact(d["signals"]), orDash(r.ActingFor))
@@ -682,8 +687,10 @@ func cmdLogs(args []string) error {
 	if err != nil {
 		return err
 	}
+	out, flush := logsOut(*f.json, pos, *comp, s.remote()) // agentjson.go: NDJSON with --json
+	defer flush()
 	if s.remote() {
-		return remoteLogs(s, pos, *comp, *tenantF, *hostF, *n, *follow, lo) // logs_remote.go
+		return remoteLogs(out, s, pos, *comp, *tenantF, *hostF, *n, *follow, lo) // logs_remote.go
 	}
 	if !s.configured() {
 		return fail("not_up", "twd is not set up in "+s.Dir)
@@ -738,7 +745,7 @@ func cmdLogs(args []string) error {
 		lines = lines[len(lines)-*n:]
 	}
 	for _, l := range lines {
-		fmt.Println(string(l))
+		fmt.Fprintln(out, string(l))
 	}
 	if !*follow {
 		return nil
@@ -747,7 +754,7 @@ func cmdLogs(args []string) error {
 	for {
 		l, err := rd.ReadString('\n')
 		if l != "" {
-			fmt.Print(l)
+			fmt.Fprint(out, l)
 		}
 		if err != nil {
 			time.Sleep(300 * time.Millisecond)

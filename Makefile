@@ -40,7 +40,7 @@ test: deps test-go test-js
 
 .PHONY: test-go
 test-go:
-	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/...
+	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:
@@ -60,12 +60,24 @@ CRANE ?= $(shell command -v crane)
 test-images:
 	TWD_TEST_DOCKER=1 TWD_CRANE="$(CRANE)" $(GO) test -count=1 -v -run 'TestBuildAndPush|TestCraneConformance|TestCLIImages' ./internal/imagebuild/ ./internal/registry/ ./cmd/twd/
 
-## e2e-placement: smart placement (ADR-033), hermetic: real twd-mgmt + two twd-hostd processes on
+## e2e-placement: smart placement (ADR-033) and D1 across a restart and a move (ADR-038), hermetic: real twd-mgmt + two twd-hostd processes on
 ## testcontrol + local DERP, a tag:db peer, one host forced onto DERP; placement, stickiness, --replace.
 .PHONY: e2e-placement
 e2e-placement: deps
 	$(GO) test -tags e2eplacement -count=1 -v -timeout 10m ./e2e/placement/...
 
+## e2e-locks: locks and leader election on DO leases (docs/locks.md), hermetic: real twd-mgmt + two
+## twd-hostd processes, default timings; one host cut off from mgmt while still on the tailnet.
+.PHONY: e2e-locks
+e2e-locks: deps
+	$(GO) test -tags e2elocks -count=1 -v -timeout 10m ./e2e/locks/...
+
+## e2e-queues: Queues (ADR-039), hermetic: real twd-mgmt + two twd-hostd processes on testcontrol +
+## local DERP; a producer on one host, a consumer on the other; nothing lost across a hostd restart,
+## a crash of hostd and workerd mid-batch, and a lease move (deploy --replace).
+.PHONY: e2e-queues
+e2e-queues: deps
+	$(GO) test -tags e2equeues -count=1 -v -timeout 10m ./e2e/queues/...
 ## e2e-observability: logs, metrics and traces (ADR-observability), hermetic: real twd-mgmt + twd-hostd processes
 ## on testcontrol + local DERP, a caller, an echo and an OTLP collector node; traceparent, twd logs, /metrics, OTLP.
 .PHONY: e2e-observability
@@ -470,6 +482,8 @@ lint: api-check compat-check
 	$(GO) vet -tags sdk ./e2e/sdk/...
 	$(GO) vet -tags nodetier ./e2e/node/...
 	$(GO) vet -tags e2eplacement ./e2e/placement/...
+	$(GO) vet -tags e2elocks ./e2e/locks/...
+	$(GO) vet -tags e2equeues ./e2e/queues/...
 	$(GO) vet -tags e2eobs ./e2e/observability/...
 	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...
 	@sh scripts/check-secrets.sh

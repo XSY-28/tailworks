@@ -254,7 +254,7 @@ func cmdLink(args []string) error {
 	if *unlink {
 		had := s.Link != nil
 		os.Remove(s.linkPath())
-		emit(f, linkResult{Unlinked: true, Path: s.linkPath()}, func() {
+		emit(f, linkResult{Unlinked: true, Path: s.linkPath(), Tenants: []TenantRef{}}, func() {
 			if had {
 				fmt.Println("✓ unlinked  removed " + s.linkPath())
 			} else {

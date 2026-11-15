@@ -94,7 +94,7 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-twd init support --template agent              # also: hello, mcp, ai-agent, refund-approval, node-workflow
+twd init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
 cd support
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```
@@ -119,6 +119,30 @@ twd audit <object-id>                          # who created, called, spawned or
 twd kill <object-id> --cascade                 # cut it (and its sub-agents) off the tailnet
 ```
 
+## Using twd with a coding agent
+
+twd ships skills that teach coding agents (Claude Code, Codex, Cursor,
+Gemini CLI, OpenCode) to drive the CLI: scaffold an app, run it with
+`twd dev`, deploy it, read its logs, debug a failing deploy, draft the
+tailnet policy it needs, and stop it. Install them for the agents on your
+machine:
+
+```sh
+twd agent setup --dry-run      # shows every file it would write
+twd agent setup                # asks first; twd agent remove undoes it
+```
+
+Then ask your agent something like "build me an MCP server and run it on
+twd". The skills are built into the CLI (`twd agent show <skill>` prints
+one), every command takes `--json` with a documented schema, and errors carry
+a code and a hint. The skills tell agents to leave credentials and tailnet
+policy changes to you, and to ask before anything destructive.
+
+Agents can also operate twd over MCP: `claude mcp add twd -- twd mcp`
+(`twd mcp --config` prints the setup for others). Read tools work for
+anyone you grant; `kill`, `undeploy` and `deploy` only for callers whose
+tailnet grant names them. Details: [docs/agents.md](docs/agents.md).
+
 ## Compatibility at a glance
 
 What of Cloudflare Workers works on twd. ✅ works, tested · ⚠️ partial or
@@ -139,12 +163,17 @@ prove every ✅ and ⚠️.
 | Durable Objects | [Storage (KV API, SQLite)](docs/COMPAT.md#do-storage) | ✅ | one host, no replication |
 | Durable Objects | [Alarms](docs/COMPAT.md#alarms) | ✅ | |
 | Durable Objects | [Hibernation](docs/COMPAT.md#hibernation) | ✅ | |
+| Durable Objects | [Locks / leader election (pattern)](docs/COMPAT.md#locks) | ⚠️ | manual failover; [docs/locks.md](docs/locks.md) |
 | Durable Objects | [RPC](docs/COMPAT.md#do-rpc) | ⚠️ | no cross-Worker `script_name` |
 | Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
-| Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
-| Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
-| Bindings | [D1](docs/COMPAT.md#d1) | ❌ | DO SQLite works |
-| Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
+| Bindings | [KV](docs/COMPAT.md#kv) | ⚠️ | per workload; values ≤ 2 MiB |
+| Bindings | [R2](docs/COMPAT.md#r2) | ⚠️ | bytes on the host's disk or an S3-compatible service |
+| Bindings | [R2 multipart upload](docs/COMPAT.md#r2-multipart) | ⚠️ | unfinished uploads are kept |
+| Bindings | [D1](docs/COMPAT.md#d1) | ⚠️ | one workload's database; survives host moves |
+| Bindings | [D1 sessions](docs/COMPAT.md#d1-sessions) | ⚠️ | bookmarks are journal positions |
+| Bindings | [D1 migrations](docs/COMPAT.md#d1-migrations) | ✅ | wrangler's layout |
+| Bindings | [`twd d1` commands](docs/COMPAT.md#d1-cli) | ⚠️ | reach the running workload |
+| Bindings | [Queues](docs/COMPAT.md#queues) | ✅ | queues live in mgmt; producer and consumer on any hosts |
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ✅ | workerd's built-in engine; approval events are twd's |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
@@ -156,7 +185,8 @@ prove every ✅ and ⚠️.
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ❌ | |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
-| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ❌ | |
+| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
+| Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | twd's API, admin only |
 | Platform | [Caller identity and auth](docs/COMPAT.md#identity) | 🚫 | `getCaller` from WireGuard, not tokens or Access JWTs |
 | Platform | [Workflow approvals by tailnet identity](docs/COMPAT.md#approvals) | ✅ | twd-only: `twd approve`, decided under `twd.dev/cap/approve` grants |
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
@@ -173,6 +203,10 @@ prove every ✅ and ⚠️.
 | SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core and `AgentWorkflow` run unmodified; no `subAgent()` |
 | SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
+| Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
+| Tooling | [Coding-agent skills (`twd agent`)](docs/COMPAT.md#agent-skills) | ✅ | Claude Code, Codex, Cursor, Gemini CLI, OpenCode |
+| Tooling | [twd's MCP server (`/mcp`, `twd mcp`)](docs/COMPAT.md#twd-mcp) | ✅ | tools gated per tool by a tailnet grant |
+| Tooling | [Docs for agents (`llms.txt`, `twd docs`)](docs/COMPAT.md#docs-for-agents) | ✅ | offline search |
 
 ## More
 
@@ -198,6 +232,12 @@ prove every ✅ and ⚠️.
   [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Locks and leader election** ("only one worker runs this job"), with
+  leases, fencing tokens and what twd guarantees when a host fails:
+  [docs/locks.md](docs/locks.md) and `twd init --template lock`.
+- **Queues** (`queues.producers` → `env.Q.send()`, `queues.consumers` →
+  `queue()`, retries, dead-letter queues, `twd queues`):
+  [docs/queues.md](docs/queues.md).
 - **Durable Workflows that wait for a person's approval**, decided by a
   tailnet identity under a `twd.dev/cap/approve` grant (`twd approve`):
   [docs/approvals.md](docs/approvals.md).
@@ -210,6 +250,10 @@ prove every ✅ and ⚠️.
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).
 - **Every typed error code and its fix:** [docs/errors.md](docs/errors.md).
+- **Scripting twd, or driving it from a coding agent:** `--json` output and
+  its schema in [docs/cli-json.md](docs/cli-json.md); skills and
+  `twd agent setup` in [docs/agents.md](docs/agents.md); an index of these
+  docs for agents in [llms.txt](llms.txt), and `twd docs search` offline.
 - **Security:** [security/THREAT-MODEL.md](security/THREAT-MODEL.md) and
   [security/RED-TEAM.md](security/RED-TEAM.md) (the attacker's view,
   findings and fixes).

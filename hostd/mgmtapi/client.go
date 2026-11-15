@@ -152,6 +152,9 @@ func (c *Client) DoHeaders(ctx context.Context, method, path string, in, out any
 		*raw = b
 		return nil
 	}
+	if len(bytes.TrimSpace(b)) == 0 {
+		return nil // 204 No Content (e.g. DELETE /v1/hosts/{id} with nothing to clean up): out keeps its zero value
+	}
 	return json.Unmarshal(b, out)
 }
 

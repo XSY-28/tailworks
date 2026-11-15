@@ -1,4 +1,4 @@
-// Workflows on twd (ADR-workflows-approvals): the runtime side.
+// Workflows on twd (ADR-040): the runtime side.
 //
 // - wrapWorkflowClass wraps each WorkflowEntrypoint class the engine runs
 //   (the tenant service's exports). Its run() reports every approval wait

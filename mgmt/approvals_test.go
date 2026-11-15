@@ -96,7 +96,7 @@ func TestApprovals(t *testing.T) {
 			return WhoIsInfo{NodeID: "nEVE", Name: "eve-laptop.a.ts.net.", Login: "eve@example.com"}, nil
 		case "100.64.0.5:1": // an approver up to 100, not an admin
 			return WhoIsInfo{NodeID: "nBOB", Name: "bob-laptop.a.ts.net.", Login: "bob@example.com", Caps: []string{approvecap.Cap},
-				Approve: []json.RawMessage{json.RawMessage(`{"workflows":["refund"],"limits":{"amount":100}}`)}}, nil
+				CapValues: map[string][]json.RawMessage{approvecap.Cap: {json.RawMessage(`{"workflows":["refund"],"limits":{"amount":100}}`)}}}, nil
 		case "100.64.0.6:1": // an admin without an approve grant
 			return WhoIsInfo{NodeID: "nADM", Name: "alice-laptop.a.ts.net.", Login: "alice@example.com", Caps: []string{AdminCap}}, nil
 		}
