@@ -61,6 +61,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### build_failed
 500 · cli. **When:** esbuild (workerd apps) or `create-twd build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@twd/…"` means twd's own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall twd; `twd doctor` checks it.
 
+### bundle_pruned
+409 · mgmt, cli. **When:** `twd rollback` to a deployment whose bundle mgmt no longer holds: mgmt keeps the bundles of each workload's newest deployments (twd-mgmt `-bundle-retention`, default 10) and prunes older ones, keeping their record and hash. Nothing is deployed. **Fix:** `twd deployments <workload>` marks pruned bundles with `*`; roll back to a retained one, or check out that version and `twd deploy` it.
+
 ### cancelled
 0 · cli. **When:** you answered no at a `twd up`, `twd agent setup` or `twd agent remove` confirmation prompt. **Fix:** nothing was started or written; re-run with the policy in place, or `--yes` to skip the prompt.
 
@@ -222,6 +225,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### no_logs
 404 · cli. **When:** `twd logs` found no log file for that component or workload. **Fix:** `twd ls`; logs live on the host that runs `twd up`.
+
+### no_rollback_target
+409 · mgmt, cli. **When:** `twd rollback <workload>` found no earlier deployment that ran (the host reported it `active` and it did not fail) with a bundle different from the current one; or the deployment named is the current one, or was deployed without a bundle. **Fix:** `twd deployments <workload>`, then `twd rollback <workload> <deployment>` to pick one.
 
 ### no_systemd
 1 · cli. **When:** `twd host setup --microvm` needs systemd for the helper service. **Fix:** a systemd distro, or skip the microVM tier.
