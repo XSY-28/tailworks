@@ -22,9 +22,11 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 - [Workers KV](https://github.com/rosskukulinski/twd/blob/master/docs/kv.md): `kv_namespaces`, `twd kv`, consistency and limits
 - [R2 buckets](https://github.com/rosskukulinski/twd/blob/master/docs/r2.md): `r2_buckets` bindings, the `fs` / `s3` blob backends, `twd r2`
 - [D1 databases](https://github.com/rosskukulinski/twd/blob/master/docs/d1.md): `d1_databases`, wrangler migrations, `twd d1`, sessions and limits
+- [Queues](https://github.com/rosskukulinski/twd/blob/master/docs/queues.md): `queues.producers` / `queues.consumers`, `queue()`, retries, dead-letter queues, `twd queues`
 - [Cron triggers](https://github.com/rosskukulinski/twd/blob/master/docs/cron-triggers.md): `triggers.crons`, `scheduled()`
 - [Public ingress (Funnel)](https://github.com/rosskukulinski/twd/blob/master/docs/public-ingress.md): public routes, `twd expose`
 - [Tailscale Services](https://github.com/rosskukulinski/twd/blob/master/docs/services.md): stable names and replicas
+- [Locks and leader election](https://github.com/rosskukulinski/twd/blob/master/docs/locks.md): Durable Objects as locks, leases, fencing tokens, the `lock` template, failure guarantees
 - [Per-object egress](https://github.com/rosskukulinski/twd/blob/master/docs/egress-modes.md): facet mode vs plain-DO mode
 - [Create admission](https://github.com/rosskukulinski/twd/blob/master/docs/create-admission.md): how a new Durable Object gets made
 - [Containers and code sandboxes](https://github.com/rosskukulinski/twd/blob/master/docs/containers.md): `ctx.container` on the microVM tier

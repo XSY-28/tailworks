@@ -139,6 +139,9 @@ type Options struct {
 	// <DataDir>/r2).
 	R2 r2.Backend
 
+	// QueueVisibility is hostd.Config.QueueVisibility (0 = default).
+	QueueVisibility time.Duration
+
 	// SelfUpgrade, InstallPrefix and Restart are hostd.Config's (upgrade
 	// runs install a pushed release here and restart the host).
 	SelfUpgrade   bool
@@ -345,6 +348,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		InstallPrefix: o.InstallPrefix,
 		Restart:       o.Restart,
 	}
+	hcfg.QueueVisibility = o.QueueVisibility
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {

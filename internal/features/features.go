@@ -20,6 +20,8 @@ import (
 // Feature strings. A platform store kind (hostd/bundle RegisterStoreKind)
 // is its own feature: "d1", "kv", "r2", …
 const (
+	// Queues is queue producers and consumers (ADR-039).
+	Queues = "queues"
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).
 	Telemetry = "telemetry"
 )
@@ -28,6 +30,7 @@ const (
 // kind plus the static features above, sorted.
 func Host() []string {
 	out := []string{
+		Queues,
 		Telemetry,
 	}
 	out = append(out, bundle.StoreKindNames()...)
@@ -40,6 +43,9 @@ func Required(app *bundle.App) []string {
 	var out []string
 	for _, s := range app.Stores {
 		out = append(out, s.Kind)
+	}
+	if app.Queues != nil && (len(app.Queues.Producers) > 0 || len(app.Queues.Consumers) > 0) {
+		out = append(out, Queues)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)

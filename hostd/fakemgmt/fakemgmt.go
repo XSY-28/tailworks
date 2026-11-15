@@ -117,6 +117,8 @@ type Server struct {
 	// storesDown: the store journal answers 503 (storesdown.go).
 	storesDown bool
 
+	// Queues (queues.go): tenant|queue -> queue.
+	queues map[string]*fakeQueue
 	// OTLP export (telemetry.go): tenantID -> config.
 	telemetry map[string]*mgmtapi.OTLPExport
 }
@@ -235,6 +237,15 @@ func New(cfg Config) *Server {
 	m.HandleFunc("DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", s.deleteStore)
 	m.HandleFunc("GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", s.readJournal)
 	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", s.appendJournal)
+	m.HandleFunc("GET /v1/tenants/{id}/queues", s.listQueues)
+	m.HandleFunc("GET /v1/tenants/{id}/queues/{queue}", s.getQueue)
+	m.HandleFunc("PUT /v1/tenants/{id}/queues/{queue}", s.putQueue)
+	m.HandleFunc("DELETE /v1/tenants/{id}/queues/{queue}", s.deleteQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/purge", s.purgeQueue)
+	m.HandleFunc("GET /v1/tenants/{id}/queues/{queue}/messages", s.peekQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages", s.sendQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/pull", s.pullQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/ack", s.ackQueue)
 	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants", s.telemetryGrant)
 	m.HandleFunc("PUT /v1/hosts/{id}", s.register)
 	m.HandleFunc("PUT /v1/hosts/{id}/status", s.heartbeat)

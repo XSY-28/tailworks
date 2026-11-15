@@ -427,8 +427,8 @@ per contract:
 ## Merged features and work still in flight
 
 Since this ADR was drafted, observability (#30), agent DX (#32), R2 (#35,
-ADR-036), KV (#37, ADR-037) and D1 (#33, ADR-038) merged. This branch
-retrofits them:
+ADR-036), KV (#37, ADR-037), D1 (#33, ADR-038), Queues (#36, ADR-039) and
+Locks (#31) merged. This branch retrofits them:
 
 | Feature | Done here |
 |---|---|
@@ -436,15 +436,15 @@ retrofits them:
 | R2 (ADR-036) | **Index entries now carry `v:1`**, and a missing `v` reads as v1. The JS replay and `twd r2` refuse a newer `v`. The replay also refuses unknown ops, which it used to skip. Feature `r2`. |
 | D1 (ADR-038) | Feature `d1`. The journal replay refuses a newer `v`; it used to skip it silently, which loses writes. Release notes say "D1 migrations" for tenant migrations. |
 | Observability | Feature `telemetry`. |
+| Queues (ADR-039) | Feature `queues` (static: queues are a mgmt broker, not a store kind), required by any bundle with producers or consumers. Its tables went into the baseline DDL before `mgmt/migrations/` existed, which is fine: the baseline is idempotent. **Still open:** a format version on stored `v8` bodies, since V8 serialization can change with workerd. |
+| Locks | `docs/locks.md` says the epoch-based tokens stay monotonic across a restore because of the restore fence. |
 | Agent DX (ADR-035) | `upgrade`, `release` and `host cordon|uncordon|drain` are in `schema/cli.schema.json` and the CLI contract test. |
 
 Still in flight, and what each must do before it merges:
 
 | Branch / issue | Before merge |
 |---|---|
-| Queues #18 | Its tables go in a timestamped file in `mgmt/migrations/`, not appended to the `migrate()` DDL line. Its store kind gives feature `queues`. Stored `v8` bodies carry a format version, because V8 serialization can change with workerd. |
 | Workflows #24 | Extract the workerd bump into its own PR under §6, with a Workflows instance fixture, and bump `internal/version.WorkerdPin` in the same change (the test fails otherwise). Features `workflows` and `approvals`. `approvals.json` is host-local state: versioned, and drain refuses to move it, until it moves to mgmt. |
-| Locks #26 | Fencing tokens are monotonic across a restore only because of `RestoreFence`; cite it in `docs/locks.md`. |
 | do-split PR #11 | Existing workloads keep today's ID derivation; only workloads that opt in with `"objects": "single-homed"` use the group-derived ID, so there is no ID migration. Feature `do-split`; the host-to-host request carries a version. |
 
 ## Phases and what is built

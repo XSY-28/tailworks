@@ -1,7 +1,7 @@
 # templates
 
 The app templates live in `js/packages/create-twd/templates/` so they ship
-with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|node-workflow`):
+with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|lock|node-workflow`):
 
 - `hello`: a Worker that returns its verified caller and does a private fetch.
 - `agent`: a Cloudflare Agents SDK `Agent` (state, `this.sql`, per-object node
@@ -15,6 +15,11 @@ with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai
   tailnet (`@ai-sdk/mcp` + `@twd/mcp` `mcpFetch`); it streams a UI message
   response. It ships with a scripted mock model (`src/model.ts`, no keys);
   swap in a real provider.
+- `lock`: a lease-based lock and leader-election service: one Durable
+  Object per lock name, holders recorded by tailnet identity, fencing tokens
+  that keep increasing across a move to another host, and a copyable client
+  (`src/client.ts`: `acquire`, `renew`, `release`, `withLock`). See
+  `docs/locks.md`.
 - `node-workflow`: the opt-in Node process tier (`docs/node-tier.md`): a
   `node:http` server with a Vercel Workflow (`"use workflow"`) behind
   `@twd/node`. Needs Node.js and `npm install` on the deploying machine; it is

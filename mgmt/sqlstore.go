@@ -480,7 +480,7 @@ func (s *SQLStore) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	ddl := fmt.Sprintf(schemaCommon, blob) + fmt.Sprintf(schemaStores, blob)
+	ddl := fmt.Sprintf(schemaCommon, blob) + fmt.Sprintf(schemaStores, blob) + fmt.Sprintf(schemaQueues, blob)
 	if s.d == dialectPostgres {
 		// pgx runs multi-statement strings as one simple-protocol batch.
 		if _, err := s.db.ExecContext(ctx, ddl+trig); err != nil {

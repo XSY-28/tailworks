@@ -64,7 +64,13 @@ export interface TailnetContext {
   spawn<T = any>(ns: any, opts: SpawnOptions): Promise<Spawned<T>>;
   kill(opts?: { reason?: string; cascade?: boolean; target?: { class: string; name: string } }): Promise<{ killed: string[] }>;
   audit(records: Array<Record<string, unknown>>): Promise<void>;
-  self(): Promise<{ objectId: string; hostname: string; magicDNS?: string; status: string; kind: string }>;
+  /**
+   * This object's (or the workload's) node, and `epoch`: the workload's
+   * lease epoch on this host. mgmt raises it on every deploy and every move
+   * to another host, so it orders this incarnation after every earlier one
+   * (fencing tokens, docs/locks.md).
+   */
+  self(): Promise<{ objectId: string; hostname: string; magicDNS?: string; status: string; kind: string; epoch: number }>;
   connect(): never;
 }
 
@@ -516,6 +522,28 @@ async function runScheduled(scheduledFn: ((c: any, ...rest: any[]) => unknown) |
   }
 }
 
+/**
+ * QUEUE_TICKET_ID: the platform's first message of a queue batch carries the
+ * delivery's create ticket in its body (message IDs come from mgmt, so no
+ * producer can send one). queueBatch strips it before the handler sees the
+ * batch; hostd verifies the ticket like a request's.
+ */
+const QUEUE_TICKET_ID = "__twd_ticket";
+
+function queueBatch(batch: any): { batch: any; ticket?: string } {
+  const msgs: any[] = Array.isArray(batch?.messages) ? batch.messages : [];
+  const t = msgs.find((m) => m?.id === QUEUE_TICKET_ID);
+  if (!t) return { batch };
+  const rest = Object.freeze(msgs.filter((m) => m?.id !== QUEUE_TICKET_ID));
+  const b = Object.freeze({
+    queue: batch.queue,
+    messages: rest,
+    ackAll: () => batch.ackAll(),
+    retryAll: (o?: unknown) => batch.retryAll(o),
+  });
+  return { batch: b, ticket: typeof t.body === "string" && t.body ? t.body : undefined };
+}
+
 /** wrapHandler installs ctx.tailnet (workload identity) on the default export. */
 // HANDLER_METHODS are the Workers handler entry points. A default export
 // that is a class instance (`export default new OAuthProvider(...)`, as
@@ -571,6 +599,16 @@ export function wrapHandler(H: any, bindings: BindingMap) {
         }
       };
     }
+    if (typeof H.prototype?.queue === "function") {
+      const qf = H.prototype.queue;
+      (C.prototype as any).queue = async function (this: any, batch: any) {
+        const tw: TailnetApiStub | undefined = this.__twd;
+        const q = queueBatch(batch);
+        this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket: q.ticket }));
+        if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, undefined, q.ticket));
+        return qf.call(this, q.batch);
+      };
+    }
     return { [H.name || "Default"]: C }[H.name || "Default"];
   }
   const out: Record<string, unknown> = { ...H };
@@ -584,8 +622,11 @@ export function wrapHandler(H: any, bindings: BindingMap) {
         if (ctx && tw) define(ctx, publicTailnet(createTailnetContext(tw, env, bindings)));
       } else {
         // The create ticket rides on the request (a cron run is dispatched
-        // as a fetch with cf.twd.kind "scheduled" and its own ticket).
-        const ticket = k === "fetch" ? requestTicket(a) : undefined;
+        // as a fetch with cf.twd.kind "scheduled" and its own ticket), or on
+        // a queue batch's first message.
+        let ticket: string | undefined;
+        if (k === "fetch") ticket = requestTicket(a);
+        else if (k === "queue") ({ batch: a, ticket } = queueBatch(a));
         env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, undefined, ticket));
         if (k === "fetch" && isScheduledReq(a)) return runScheduled(H.scheduled, a, [env, ctx]);

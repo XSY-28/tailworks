@@ -9,7 +9,7 @@ import (
 
 func TestHostListsStoreKinds(t *testing.T) {
 	h := Host()
-	for _, want := range []string{"d1", "kv", "r2", Telemetry} {
+	for _, want := range []string{"d1", "kv", "r2", Queues, Telemetry} {
 		if !slices.Contains(h, want) {
 			t.Errorf("Host() = %v, lacks %q", h, want)
 		}

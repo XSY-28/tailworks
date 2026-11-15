@@ -338,7 +338,7 @@ on `tag:twd-mgmt`). Install twd there too (steps 1–2), then:
 
 ```sh
 twd link twd-mgmt.<tailnet>.ts.net       # https first, then http on :80; or just `twd link`: finds twd-mgmt through MagicDNS
-twd init support --template agent        # or hello, mcp, ai-agent; node-workflow needs Node.js on this machine
+twd init support --template agent        # or hello, mcp, ai-agent, lock; node-workflow needs Node.js on this machine
 cd support && twd dev                    # optional: run it locally against an embedded control plane
 twd deploy                               # bundles here (built-in esbuild), uploads to mgmt over the tailnet, waits until the node is ready
 twd ls · twd audit <object> · twd kill <object> --cascade

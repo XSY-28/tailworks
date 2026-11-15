@@ -138,6 +138,8 @@ tags:
     description: Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
   - name: telemetry
     description: A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
+  - name: queues
+    description: Cloudflare-style Queues (ADR-039). A queue belongs to the tenant; its messages are sealed rows here. Producers send through their host, push consumers' hosts claim batches with a visibility timeout and settle them, and admins can pull, peek, purge and delete.
   - name: audit
     description: Hash-chained, append-only audit log.
   - name: upgrades
@@ -1087,6 +1089,280 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ----------------------------------------------------------------- queues
+  /v1/tenants/{id}/queues:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [queues]
+      operationId: ListQueues
+      summary: List a tenant's queues
+      description: |
+        Every queue of the tenant, by name, with its backlog. A queue
+        exists once something sent to or pulled from it, or after
+        `PUT /v1/tenants/{id}/queues/{queue}`.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: One page of queues.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueuePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/queues/{queue}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/queueName"
+    get:
+      tags: [queues]
+      operationId: GetQueue
+      summary: Get one queue and its backlog
+      description: |
+        The queue's counters: messages kept (`backlog`), of which claimed by
+        a consumer and not settled (`inFlight`) and not yet visible
+        (`delayed`), their bytes, and the oldest message's send time. A
+        host reads it for a producer binding's `metrics()` (with
+        `workload` and `epoch`, as for a send).
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/queueWorkload"
+        - $ref: "#/components/parameters/queueEpoch"
+      responses:
+        "200":
+          description: The queue.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [queues]
+      operationId: PutQueue
+      summary: Create a queue (idempotent)
+      description: |
+        Creates an empty queue (`201`) or answers the existing one (`200`).
+        A queue is also created by its first send or pull, and a
+        dead-letter queue by the first message moved to it. Audited
+        (`kind: queue_create`) when it creates.
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: The queue already existed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [queues]
+      operationId: DeleteQueue
+      summary: Delete a queue and its messages
+      description: |
+        Deletes every message and the queue's data key (custody), so the
+        sealed bodies can't be read again even from a database backup.
+        Consumers holding claimed messages find their lease IDs stale. A
+        later send creates a new, empty queue. `404 unknown_queue` if there
+        is none. Audited (`kind: queue_delete`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/queues/{queue}/purge:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/queueName"
+    post:
+      tags: [queues]
+      operationId: PurgeQueue
+      summary: Delete every message of a queue, keeping the queue
+      description: |
+        Deletes all messages, in flight or not. Audited
+        (`kind: queue_purge`, with the count).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: Purged.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueuePurgeResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/queues/{queue}/messages:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/queueName"
+    get:
+      tags: [queues]
+      operationId: PeekQueueMessages
+      summary: Read messages without claiming them
+      description: |
+        The oldest messages, bodies included, without changing them (no
+        lease, no attempt counted). This is how an operator inspects a
+        dead-letter queue (`twd queues messages <queue>`).
+      x-twd-role: admin
+      parameters:
+        - name: limit
+          in: query
+          description: At most this many messages (default 20, maximum 100).
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: The messages, oldest first.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueMessageList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [queues]
+      operationId: SendQueueMessages
+      summary: Send messages to a queue
+      description: |
+        A producer's `send()` / `sendBatch()` (through its host), or an
+        operator's `twd queues send`. The messages are durable in mgmt's
+        database when this answers. Each gets a random ID. A host must give
+        `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
+        the workload's latest deployment must bind the queue as a producer
+        (`403 forbidden` otherwise). Not audited (volume). Limits: 100
+        messages and 256 KB per call, 128 KB per message, `delaySeconds` ≤
+        43200 (`400 queue_limit`); 1 GiB kept per queue.
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/queueWorkload"
+        - $ref: "#/components/parameters/queueEpoch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueueSend" }
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueSendResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/queues/{queue}/messages/pull:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/queueName"
+    post:
+      tags: [queues]
+      operationId: PullQueueMessages
+      summary: Claim a batch of messages (push consumers and HTTP pull)
+      description: |
+        Claims up to `batchSize` visible messages, oldest first: each is
+        hidden for `visibilityTimeoutMs`, gets a new `leaseId` and counts an
+        attempt. Settle them with `…/messages/ack` before the timeout, or
+        they become visible again (at-least-once). If none is visible, waits
+        up to `waitMs` for one. A message that already failed more than
+        `maxRetries` times and whose last lease expired is moved to the
+        dead-letter queue (or dropped) instead of being delivered again.
+
+        A host (a push consumer's hostd) must give `workload` and `epoch`;
+        the workload's latest deployment must declare a consumer of the
+        queue, and its `max_retries` and `dead_letter_queue` apply (the
+        body's are ignored). An admin is an HTTP pull consumer and gives
+        them in the body.
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/queueWorkload"
+        - $ref: "#/components/parameters/queueEpoch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueuePull" }
+      responses:
+        "200":
+          description: The claimed messages (possibly none).
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueuePullResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/queues/{queue}/messages/ack:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/queueName"
+    post:
+      tags: [queues]
+      operationId: AckQueueMessages
+      summary: Settle claimed messages (ack, retry, extend)
+      description: |
+        `acks` deletes messages; `release` hands them back uncounted (the
+        consumer never ran them); `retries` makes them visible again after
+        `delaySeconds` (default: the consumer's `retry_delay`), or moves
+        them to the dead-letter queue (or drops them) once they have been
+        delivered more than `maxRetries` times; `extend` keeps them hidden
+        for another `visibilityTimeoutMs` (a long handler). A lease ID that
+        is no longer current (its timeout passed and the message was
+        claimed again, or settled) changes nothing and is counted in
+        `stale`. Host rules as for `…/pull`.
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/queueWorkload"
+        - $ref: "#/components/parameters/queueEpoch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueueAck" }
+      responses:
+        "200":
+          description: Settled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueAckResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
         default: { $ref: "#/components/responses/Error" }
 
   # ------------------------------------------------------------------ hosts
@@ -3268,6 +3544,22 @@ components:
       in: query
       description: "Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out."
       schema: { type: integer, format: int64, minimum: 1 }
+    queueName:
+      name: queue
+      in: path
+      required: true
+      description: "The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule)."
+      schema: { type: string, pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" }
+    queueWorkload:
+      name: workload
+      in: query
+      description: "Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out."
+      schema: { type: string, pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" }
+    queueEpoch:
+      name: epoch
+      in: query
+      description: "Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`)."
+      schema: { type: integer, format: int64, minimum: 1 }
     tenantID:
       name: id
       in: path
@@ -3567,11 +3859,13 @@ components:
         | `no_logs` | 404 | the workload's host has no log file for it yet |
         | `unknown_secret` | 404 | the workload has no secret of that name |
         | `unknown_store` | 404 | the workload has no store of that kind and name |
+        | `unknown_queue` | 404 | the tenant has no queue of that name |
         | `exists` | 409 | create of an existing ID |
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
         | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
         | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
+        | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
         | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
         | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -3630,11 +3924,13 @@ components:
         - no_logs
         - unknown_secret
         - unknown_store
+        - unknown_queue
         - exists
         - lease_lost
         - lease_held
         - store_conflict
         - store_limit
+        - queue_limit
         - takeover_unconfirmed
         - service_conflict
         - service_api_failed
@@ -4744,6 +5040,9 @@ components:
         `secret_release` (a workload's secrets released to its lease holder; names only),
         `store_create` (a platform store created, by its first write or an admin),
         `store_delete` (a platform store and its data key deleted),
+        `queue_create` (a queue created, by its first use or an admin),
+        `queue_delete` (a queue, its messages and its data key deleted),
+        `queue_purge` (every message of a queue deleted),
         `d1_write` (an operator's SQL changed a D1 database; statement count only),
         `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
         `kv_delete` (an admin deleted a Workers KV key; the namespace only),
@@ -4808,6 +5107,9 @@ components:
         - secret_release
         - store_create
         - store_delete
+        - queue_create
+        - queue_delete
+        - queue_purge
         - d1_write
         - kv_put
         - kv_delete
@@ -5201,6 +5503,127 @@ components:
           additionalProperties: true
         error: { type: string }
 
+
+    # -------------------------------------------------------------- queues
+    QueueContentType:
+      type: string
+      enum: [json, text, bytes, v8]
+      description: "How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer)."
+    Queue:
+      type: object
+      description: A tenant's queue (ADR-039).
+      required: [tenantID, name, incarnation, backlog, bytes, inFlight, delayed, createdAt, updatedAt]
+      properties:
+        tenantID: { type: string }
+        name: { type: string }
+        incarnation: { type: string, description: "Random per creation." }
+        backlog: { type: integer, format: int64, description: "Messages kept: not yet acked, in flight or delayed included." }
+        bytes: { type: integer, format: int64, description: "Body bytes of the kept messages." }
+        inFlight: { type: integer, format: int64, description: "Claimed by a consumer and not settled (lease not expired)." }
+        delayed: { type: integer, format: int64, description: "Not yet visible (a delay or a retry delay)." }
+        oldestAt: { type: integer, format: int64, description: "Send time (unix ms) of the oldest message; absent when empty." }
+        consumer: { type: string, description: "The workload (or `admin`) that last claimed messages." }
+        consumedAt: { type: integer, format: int64, description: "unix ms of the last claim." }
+        createdAt: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
+    QueuePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Queue" } }
+    QueueMessageIn:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, format: byte, description: "The encoded body (see `contentType`), at most 128 KB." }
+        contentType: { $ref: "#/components/schemas/QueueContentType" }
+        delaySeconds: { type: integer, minimum: 0, maximum: 43200, description: "Hide the message this long (default: the call's `delaySeconds`)." }
+      additionalProperties: false
+    QueueSend:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/QueueMessageIn" }
+        delaySeconds: { type: integer, minimum: 0, maximum: 43200, description: "The default delay of the messages." }
+      additionalProperties: false
+    QueueSendResult:
+      type: object
+      required: [ids, backlog, bytes]
+      properties:
+        ids: { type: array, items: { type: string }, description: "The new messages' IDs, in order." }
+        backlog: { type: integer, format: int64 }
+        bytes: { type: integer, format: int64 }
+        oldestAt: { type: integer, format: int64 }
+    QueuePull:
+      type: object
+      properties:
+        batchSize: { type: integer, minimum: 1, maximum: 100, description: "At most this many messages (default 10)." }
+        visibilityTimeoutMs: { type: integer, minimum: 1000, maximum: 43200000, description: "How long claimed messages stay hidden (default 30000)." }
+        waitMs: { type: integer, minimum: 0, maximum: 20000, description: "If nothing is visible, wait this long for a message (default 0)." }
+        maxRetries: { type: integer, minimum: 0, maximum: 100, description: "Admin pull consumers: deliveries beyond the first before a message is dead-lettered (default 3)." }
+        deadLetterQueue: { type: string, pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", description: "Admin pull consumers: where messages go after `maxRetries` (absent: dropped)." }
+      additionalProperties: false
+    QueueMessage:
+      type: object
+      required: [id, body, contentType, attempts, timestamp]
+      properties:
+        id: { type: string }
+        leaseId: { type: string, description: "Settle the message with this (pull only)." }
+        body: { type: string, format: byte }
+        contentType: { $ref: "#/components/schemas/QueueContentType" }
+        attempts: { type: integer, description: "Deliveries so far, this one included (pull); 0 for a message never delivered." }
+        timestamp: { type: integer, format: int64, description: "Send time (unix ms)." }
+        visibleAt: { type: integer, format: int64, description: "When the message is (or was) visible (unix ms)." }
+    QueuePullResult:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: "#/components/schemas/QueueMessage" } }
+        deadLettered: { type: integer, description: "Expired messages moved to the dead-letter queue (or dropped) by this claim." }
+    QueueMessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: "#/components/schemas/QueueMessage" } }
+    QueueRetry:
+      type: object
+      required: [leaseId]
+      properties:
+        leaseId: { type: string }
+        delaySeconds: { type: integer, minimum: 0, maximum: 43200 }
+      additionalProperties: false
+    QueueAck:
+      type: object
+      properties:
+        acks: { type: array, maxItems: 100, items: { type: string }, description: "Lease IDs to delete." }
+        retries: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/QueueRetry" } }
+        extend: { type: array, maxItems: 100, items: { type: string }, description: "Lease IDs to keep hidden for `visibilityTimeoutMs` more." }
+        release: { type: array, maxItems: 100, items: { type: string }, description: "Lease IDs to hand back, visible again at once, without counting the attempt (the consumer never ran them: its instance was restarting or went away)." }
+        visibilityTimeoutMs: { type: integer, minimum: 1000, maximum: 43200000, description: "For `extend` (default 30000)." }
+        retryDelaySeconds: { type: integer, minimum: 0, maximum: 43200, description: "Admin pull consumers: the default retry delay." }
+        maxRetries: { type: integer, minimum: 0, maximum: 100, description: "Admin pull consumers, as for pull." }
+        deadLetterQueue: { type: string, pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$" }
+      additionalProperties: false
+    QueueAckResult:
+      type: object
+      required: [acked, retried, deadLettered, extended, released, stale]
+      properties:
+        acked: { type: integer }
+        retried: { type: integer }
+        released: { type: integer }
+        deadLettered: { type: integer, description: "Retries that went to the dead-letter queue (or were dropped) instead." }
+        extended: { type: integer }
+        stale: { type: integer, description: "Lease IDs that were no longer current." }
+    QueuePurgeResult:
+      type: object
+      required: [purged]
+      properties:
+        purged: { type: integer, format: int64 }
 
     # ---------------------------------------------------------- containers
     ContainerResources:

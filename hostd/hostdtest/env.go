@@ -68,6 +68,9 @@ type Options struct {
 	// the scheduler themselves).
 	CronClock func() time.Time
 
+	// QueueVisibility is passed to hostd (how long a claimed queue batch
+	// stays hidden; short in tests of crash recovery).
+	QueueVisibility time.Duration
 	// Telemetry is passed to hostd (ADR-observability).
 	Telemetry hostd.TelemetryOptions
 
@@ -160,6 +163,7 @@ func Start(t testing.TB, o Options) *Env {
 		Telemetry: o.Telemetry,
 		R2:        o.R2,
 	}
+	cfg.QueueVisibility = o.QueueVisibility
 	h, err := hostd.New(cfg)
 	if err != nil {
 		t.Fatal(err)
