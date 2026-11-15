@@ -30,6 +30,10 @@ export class Flow extends WorkflowEntrypoint {
       return a.n + 1;
     });
     await step.sleep("nap", 10);
+    if (event.payload.long) {
+      await step.sleepUntil("later", new Date(Date.now() + 3600_000));
+      return { b, slept: true };
+    }
     if (!event.payload.approve) return { b };
     const ev = await step.waitForEvent("ok?", { type: "approval", timeout: "1 hour" });
     return { b, payload: ev.payload };
@@ -41,8 +45,20 @@ async function drive(env, url) {
   try {
     switch (u.pathname) {
       case "/create": {
-        const i = await env.FLOW.create({ id, params: { n: Number(u.searchParams.get("n") ?? 1), approve: u.searchParams.has("approve") } });
+        const i = await env.FLOW.create({ id, params: { n: Number(u.searchParams.get("n") ?? 1), approve: u.searchParams.has("approve"), long: u.searchParams.has("long") } });
         return { id: i.id };
+      }
+      case "/pause":
+      case "/resume":
+      case "/terminate":
+      case "/restart": {
+        const i = await env.FLOW.get(id);
+        await i[u.pathname.slice(1)]();
+        return { done: u.pathname.slice(1), status: (await i.status()).status };
+      }
+      case "/batch": {
+        const r = await env.FLOW.createBatch([{ id: id + "-1", params: { n: 1 } }, { id: id + "-2", params: { n: 2 } }]);
+        return { ids: r.map((x) => x.id) };
       }
       case "/status":
         return await (await env.FLOW.get(id)).status();
@@ -130,6 +146,34 @@ func TestGeneratedWorkflows(t *testing.T) {
 		}
 	})
 
+	t.Run("InstanceLifecycle", func(t *testing.T) {
+		// pause / resume / terminate / restart and createBatch through the
+		// real binding (Worker, plain DO) and the facet's Workflow client.
+		for w, twd := range where {
+			id := "l-" + strings.ToLower(w)
+			in.get("/create?long=1&id="+id, twd)
+			waitStatus(twd, id, "waiting") // sleepUntil an hour from now
+			for _, op := range []struct{ op, want string }{{"pause", "paused"}, {"resume", ""}, {"terminate", "terminated"}} {
+				code, _, r := in.get("/"+op.op+"?id="+id, twd)
+				if code != 200 || r["done"] != op.op || r["error"] != nil {
+					t.Fatalf("%s %s: %d %v", w, op.op, code, r)
+				}
+				if op.want != "" {
+					waitStatus(twd, id, op.want)
+				}
+			}
+			if code, _, r := in.get("/restart?id="+id, twd); code != 200 || r["error"] != nil {
+				t.Fatalf("%s restart: %d %v", w, code, r)
+			}
+			waitStatus(twd, id, "waiting") // running again, from the start
+			_, _, r := in.get("/batch?id=b-"+strings.ToLower(w), twd)
+			if jsonOf(r["ids"]) != `["b-`+strings.ToLower(w)+`-1","b-`+strings.ToLower(w)+`-2"]` {
+				t.Fatalf("%s createBatch: %v", w, r)
+			}
+			waitStatus(twd, "b-"+strings.ToLower(w)+"-2", "complete")
+		}
+	})
+
 	t.Run("AppCannotApprove", func(t *testing.T) {
 		for w, twd := range where {
 			id := "a-" + strings.ToLower(w)
@@ -149,21 +193,28 @@ func TestGeneratedWorkflows(t *testing.T) {
 		}
 		// Each wait was reported to hostd once (a durable step), with the
 		// instance's numeric params as facts.
-		n := 0
-		in.f.mu.Lock()
-		ops := append([]map[string]any(nil), in.f.ops...)
-		in.f.mu.Unlock()
-		for _, op := range ops {
-			if op["op"] != "approval" {
-				continue
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			n := 0
+			in.f.mu.Lock()
+			ops := append([]map[string]any(nil), in.f.ops...)
+			in.f.mu.Unlock()
+			for _, op := range ops {
+				if op["op"] != "approval" {
+					continue
+				}
+				ap, _ := op["approval"].(map[string]any)
+				if ap["op"] == "requested" && ap["workflow"] == "flow" && ap["step"] == "ok?" && ap["type"] == "approval" && jsonOf(ap["facts"]) == `{"n":1}` {
+					n++
+				}
 			}
-			ap, _ := op["approval"].(map[string]any)
-			if ap["op"] == "requested" && ap["workflow"] == "flow" && ap["step"] == "ok?" && ap["type"] == "approval" && jsonOf(ap["facts"]) == `{"n":1}` {
-				n++
+			if n == 3 {
+				break
 			}
-		}
-		if n != 3 {
-			t.Fatalf("approval reports: %d, want 3: %v", n, ops)
+			if n > 3 || time.Now().After(deadline) {
+				t.Fatalf("approval reports: %d, want 3: %v", n, ops)
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
 	})
 

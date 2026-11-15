@@ -34,6 +34,12 @@ printed anywhere.
 ### ambiguous_object
 400 · cli. **When:** the object reference you gave (`twd kill`, `twd audit`) matches more than one object. **Fix:** name it by object ID (`twd ls` prints them).
 
+### approval_not_pending
+409 · hostd, mgmt, cli. **When:** a decision (`twd approve`, the admin UI, `POST /_twd/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, timed out, or it never asked. **Fix:** `twd approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
+
+### approval_requires_identity
+Thrown in the Worker · platform. **When:** app code sent an event of type `approval` or `approval-*` to a Workflow instance (for example the Agents SDK's `approveWorkflow()`). On twd an approval is a decision by a tailnet identity, so only twd delivers it. **Fix:** approve with `twd approve <workload> <instance>`, the admin UI, or a same-origin `POST /_twd/approvals/<workflow>/<instance>` from the app's page on the workload's node ([approvals](approvals.md)).
+
 ### audit_unverified
 500 · cli. **When:** `twd audit` found an audit chain whose hashes or host signatures do not verify (tampering, or a store problem). **Fix:** treat the trail as suspect; `twd logs --component mgmt` and report it.
 
@@ -59,7 +65,7 @@ printed anywhere.
 403 · netd (SDK `@twd/mcp`). **When:** the caller holds the tool but a numeric limit or budget in its grant is exceeded (e.g. `maxUsd`, `perDayUsd`). **Fix:** raise the limit in the `app` capability of the grant, or wait for the daily budget to reset.
 
 ### cap_missing
-403 · netd (SDK `@twd/mcp`). **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it).
+403 · netd (SDK `@twd/mcp`), hostd, mgmt, cli. **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires; or (approvals) the approver's `twd.dev/cap/approve` grants do not cover the workload, Workflow, step, decision or a param limit (`missing` says which). **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it); for approvals, grant `twd.dev/cap/approve` to the approver on the workload's tag (the app's page, `/_twd/approvals`) and on `tag:twd-mgmt` (`twd approve`, the admin UI) ([approvals](approvals.md)).
 
 ### credential_file_insecure
 403 · cli. **When:** the OAuth client file given to `twd up --oauth-client-file` is readable by other users. **Fix:** `chmod 600 <file>` then `twd up` again.

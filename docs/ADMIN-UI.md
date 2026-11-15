@@ -21,6 +21,7 @@ Admission is the connection's WhoIs identity, exactly as for the API
 |---|---|
 | a user or tagged node holding `twd.dev/cap/admin` (granted to `tag:twd-mgmt`; `autogroup:admin` gets it from the base snippet), or a login in `-admins` | 200, the UI |
 | mgmt's own node (the operator console on the host machine) | 200, the UI |
+| a user or tagged node holding only `twd.dev/cap/approve` (toward `tag:twd-mgmt`) | the **approvals** page only (with `?tenant=<tenant ID>`); 403 `forbidden` elsewhere |
 | any other tailnet user | 403 `not_admin`, with the grant snippet to add |
 | a `tag:twd-host` node (registered or not) | 403 `forbidden` (or `host_not_registered`); hosts never reach the UI or its assets |
 
@@ -63,6 +64,15 @@ source of truth: `api/openapi.yaml`, `docs/contracts/mgmt-api.md`).
   mode, client IDs and file paths, quotas, OBO public key; secrets are
   never returned by the API and so never shown), object counts by status,
   deployments, objects, and **Delete tenant** (force checkbox).
+- **`/ui/approvals`**: the Workflow approvals waiting in every tenant the
+  caller can list (or `?tenant=`), oldest first: workload, Workflow,
+  instance, step, the instance's numeric params, age, host; `all` adds the
+  decided ones with who decided. Each waiting row has **Approve** and
+  **Reject** forms with a comment. The decision is made with the browser's
+  own tailnet identity and checked against its `twd.dev/cap/approve` grants
+  by the host running the Workflow; an admin without a grant gets
+  `cap_missing`, and the operator console `no_identity`
+  ([approvals](approvals.md)).
 - **`/ui/audit`**: one filter at a time, like `twd audit`: object, human
   (acting-for login), trace, or all; page size; `nextCursor` paging that
   keeps the filter; the verification report and the per-chain status
@@ -86,6 +96,7 @@ makes with `fetch`:
 | Undeploy | `DELETE /v1/deployments/{id}?reason=…` (202) |
 | Drain & remove | `DELETE /v1/hosts/{id}?drain=true` (202 / 204) |
 | Delete tenant | `DELETE /v1/tenants/{id}?force=true` (202 / 204) |
+| Approve / Reject | `POST /v1/tenants/{id}/workloads/{w}/approvals/{workflow}/{instance}` with JSON `{decision, comment}` (200) |
 
 The result is a toast; a refusal shows `code: message` and the error's
 `doc_url` (docs/errors.md). Without JavaScript the form POSTs to its
@@ -138,5 +149,8 @@ client-side: no cookies, no localStorage, no tokens.
   guard (cross-site refused, same-origin with `X-Twd-UI` and CLI-style
   requests succeed), the tombstone page, and every `/v1` call the UI makes
   passing the kin-openapi validator.
+- `mgmt/approvals_test.go`: the approvals page per principal (approver,
+  admin, no grant), and the no-JS Approve / Reject fallback forwarding the
+  browser's identity to the host.
 
     go test -race -count=1 ./mgmt/...

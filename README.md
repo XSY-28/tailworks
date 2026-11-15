@@ -145,7 +145,7 @@ prove every ✅ and ⚠️.
 | Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
 | Bindings | [D1](docs/COMPAT.md#d1) | ❌ | DO SQLite works |
 | Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
-| Bindings | [Workflows](docs/COMPAT.md#workflows) | ❌ | Vercel Workflow SDK on Node apps |
+| Bindings | [Workflows](docs/COMPAT.md#workflows) | ✅ | workerd's built-in engine; approval events are twd's |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
 | Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
@@ -158,12 +158,13 @@ prove every ✅ and ⚠️.
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ❌ | |
 | Platform | [Caller identity and auth](docs/COMPAT.md#identity) | 🚫 | `getCaller` from WireGuard, not tokens or Access JWTs |
+| Platform | [Workflow approvals by tailnet identity](docs/COMPAT.md#approvals) | ✅ | twd-only: `twd approve`, decided under `twd.dev/cap/approve` grants |
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
 | Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container |
 | Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `twd logs`; no Tail Workers |
 | Platform | [`wrangler.jsonc`](docs/COMPAT.md#wrangler-config) | ⚠️ | unknown keys ignored; no `wrangler.toml` |
-| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core runs unmodified; no `subAgent()` |
+| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core and `AgentWorkflow` run unmodified; no `subAgent()` |
 | SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
 
@@ -189,6 +190,9 @@ prove every ✅ and ⚠️.
   [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Durable Workflows that wait for a person's approval**, decided by a
+  tailnet identity under a `twd.dev/cap/approve` grant (`twd approve`):
+  [docs/approvals.md](docs/approvals.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).
