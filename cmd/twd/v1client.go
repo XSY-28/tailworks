@@ -26,7 +26,7 @@ type page[T any] struct {
 // listAll fetches a /v1 list, following nextCursor. max > 0 stops after
 // that many items (twd ls --limit); 0 fetches everything (--all).
 func listAll[T any](ctx context.Context, c *mgmtapi.Client, path string, max int) ([]T, error) {
-	var out []T
+	out := []T{} // never nil: --json prints an empty list as [], not null
 	cursor := ""
 	for {
 		u := path

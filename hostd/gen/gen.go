@@ -175,6 +175,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	// Facet main module.
 	var fs strings.Builder
 	fmt.Fprintf(&fs, "import * as T from %s;\nimport { wrapFacetClass } from \"./__twd_rt.js\";\nconst B = %s;\n", jsq(mainImport), bjs)
+	fs.WriteString(storeFacetPrelude(app)) // facet shims of storage bindings (stores.go)
 	// ctx.container (ADR-032) for classes with a wrangler "containers" entry.
 	ctrOpt := func(c string) string {
 		cc, ok := app.Containers[c]
@@ -193,10 +194,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	for _, c := range facets {
 		if o := ctrOpt(c); o != "" {
-			fmt.Fprintf(&fs, "export const %s = wrapFacetClass(T[%s], %s, B, { container: %s });\n", c, jsq(c), jsq(c), o)
+			fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B, { container: %s });\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c), o)
 			continue
 		}
-		fmt.Fprintf(&fs, "export const %s = wrapFacetClass(T[%s], %s, B);\n", c, jsq(c), jsq(c))
+		fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B);\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c))
 	}
 	// Tenant service main module.
 	var ms strings.Builder
@@ -218,6 +219,15 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		ents = append(ents, entry{p, fmt.Sprintf("m%d", i), k})
 		fmt.Fprintf(&tm, "import m%d from %s;\n", i, jsq("t/"+p))
 	}
+	shims := storeFacetShims(app) // facet modules of storage bindings (stores.go)
+	shimNames := make([]string, 0, len(shims))
+	for n := range shims {
+		shimNames = append(shimNames, n)
+	}
+	sort.Strings(shimNames)
+	for i, n := range shimNames {
+		fmt.Fprintf(&tm, "import shim%d from %s;\n", i, jsq(n+".txt"))
+	}
 	tm.WriteString("import facetMain from \"__twd_facet.js.txt\";\nimport rt from \"__twd_rt.js.txt\";\nexport default {\n")
 	for _, e := range ents {
 		switch e.kind {
@@ -232,6 +242,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		default:
 			fmt.Fprintf(&tm, "  %s: { data: %s },\n", jsq(e.name), e.ident)
 		}
+	}
+	for i, n := range shimNames {
+		fmt.Fprintf(&tm, "  %s: { js: shim%d },\n", jsq(n), i)
 	}
 	tm.WriteString("  \"__twd_facet.js\": { js: facetMain },\n  \"__twd_rt.js\": { js: rt },\n};\n")
 
@@ -257,7 +270,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 
 		// Stores are the storage bindings a facet's env gets (stores.go).
 		Stores []storeCfg `json:"stores"`
-	}{o.DeploymentID, o.Workload, app.CompatDate, nonNil(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app)}
+	}{o.DeploymentID, o.Workload, app.CompatDate, tenantFlags(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app)}
 	cfg.Vars = varsWithSecrets(cfg.Vars, app.Secrets)
 	if cfg.Vars == nil {
 		cfg.Vars = map[string]json.RawMessage{}
@@ -282,6 +295,11 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	pjs := strings.Replace(platformJS, "//@@HOST_CLASSES@@", hc.String(), 1)
 	pjs = strings.Replace(pjs, "//@@STORES@@", storePlatformExports(app), 1)
+	for name, b := range shims {
+		if err := write(name, []byte(b)); err != nil {
+			return nil, err
+		}
+	}
 	for name, b := range storeFiles(app) {
 		if err := write(name, []byte(b)); err != nil {
 			return nil, err
@@ -339,6 +357,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("    (name = \"__twd_facet.js.txt\", text = embed \"__twd_facet.js\"),\n")
 	c.WriteString("    (name = \"__twd_rt.js.txt\", text = embed \"__twd_rt.js\"),\n")
 	c.WriteString(storeModules(app))
+	for _, n := range shimNames {
+		fmt.Fprintf(&c, "    (name = %s, text = embed %s),\n", cq(n+".txt"), cq(n))
+	}
 	for _, p := range mods {
 		kind := "text"
 		if k := app.ModuleKind(p); k == "wasm" || k == "data" {
@@ -362,7 +383,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 
 	// tenant service
 	fmt.Fprintf(&c, "const tenant :Workerd.Worker = (\n  compatibilityDate = %s,\n  compatibilityFlags = [", cq(app.CompatDate))
-	for i, f := range app.CompatFlags {
+	for i, f := range tenantFlags(app.CompatFlags) {
 		if i > 0 {
 			c.WriteString(", ")
 		}
@@ -414,7 +435,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	c.WriteString(secretBindings(app))
 	c.WriteString(storeTenantBindings(app))
-	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n);\n\n")
+	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n" + tailsLine + ");\n\n")
 	c.WriteString("const deny :Workerd.Worker = (\n  compatibilityDate = \"2026-04-01\",\n  modules = [ (name = \"deny.js\", esModule = embed \"deny.js\") ],\n);\n")
 	if err := write("config.capnp", []byte(c.String())); err != nil {
 		return nil, err

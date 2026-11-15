@@ -412,6 +412,18 @@ func describe(r mgmt.AuditRecord, names map[string]string) string {
 		return fmt.Sprintf("secret %v of %v deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
 	case "secret_release":
 		return fmt.Sprintf("secrets %s of %v released to host %v (epoch %v)", compact(d["names"]), d["workload"], d["host"], d["epoch"])
+	// Workers KV writes by an admin: the namespace only, never the key.
+	case "kv_put":
+		return fmt.Sprintf("KV namespace %v of %v: a key written by %s", d["name"], d["workload"], orDash(r.ActingFor))
+	case "kv_delete":
+		return fmt.Sprintf("KV namespace %v of %v: a key deleted by %s", d["name"], d["workload"], orDash(r.ActingFor))
+	// OTLP export (ADR-observability): endpoint and header names only.
+	case "telemetry_put":
+		return fmt.Sprintf("OTLP export to %v (headers %s, signals %s) set by %s", d["endpoint"], compact(d["headers"]), compact(d["signals"]), orDash(r.ActingFor))
+	case "telemetry_delete":
+		return fmt.Sprintf("OTLP export removed by %s", orDash(r.ActingFor))
+	case "telemetry_release":
+		return fmt.Sprintf("OTLP export to %v released to host %v for %v (epoch %v)", d["endpoint"], d["host"], d["workload"], d["epoch"])
 	// Public ingress (ADR-029). Host records are best-effort rendered from
 	// whichever of these fields they carry; the rest is shown compactly.
 	case "public_request":
@@ -656,16 +668,26 @@ func cmdLogs(args []string) error {
 	follow := f.Bool("f", false, "follow")
 	tenantF := tenantFlag(f)
 	hostF := f.String("host", "", "linked machine: only the replica on this host")
+	lopts := logsFlags(f) // logs_records.go
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
+	}
+	lo, err := lopts()
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 && !lo.filter.Empty() {
+		return fail("bad_request", "the record filters need a workload: twd logs <workload> --errors")
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
 		return err
 	}
+	out, flush := logsOut(*f.json, pos, *comp, s.remote()) // agentjson.go: NDJSON with --json
+	defer flush()
 	if s.remote() {
-		return remoteLogs(s, pos, *comp, *tenantF, *hostF, *n, *follow) // logs_remote.go
+		return remoteLogs(out, s, pos, *comp, *tenantF, *hostF, *n, *follow, lo) // logs_remote.go
 	}
 	if !s.configured() {
 		return fail("not_up", "twd is not set up in "+s.Dir)
@@ -686,6 +708,9 @@ func cmdLogs(args []string) error {
 		for _, w := range hv.Workloads {
 			if w.TenantID != tn.TenantID || w.Workload != pos[0] {
 				continue
+			}
+			if !lo.console && w.RequestLog != "" {
+				return localRecords(w.RequestLog, pos[0], *n, *follow, lo.filter) // logs_records.go
 			}
 			if w.LogFile != "" {
 				path = w.LogFile // workerd.log, or app.log for runtime "node"
@@ -717,7 +742,7 @@ func cmdLogs(args []string) error {
 		lines = lines[len(lines)-*n:]
 	}
 	for _, l := range lines {
-		fmt.Println(string(l))
+		fmt.Fprintln(out, string(l))
 	}
 	if !*follow {
 		return nil
@@ -726,7 +751,7 @@ func cmdLogs(args []string) error {
 	for {
 		l, err := rd.ReadString('\n')
 		if l != "" {
-			fmt.Print(l)
+			fmt.Fprint(out, l)
 		}
 		if err != nil {
 			time.Sleep(300 * time.Millisecond)

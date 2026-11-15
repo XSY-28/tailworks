@@ -13,4 +13,4 @@ output-options:
   skip-prune: false
   name-normalizer: ToCamelCaseWithInitialisms
   # Keep in sync with excludedTags in mgmt/api/v1/validate.go.
-  exclude-tags: [registry]
+  exclude-tags: [mcp, registry]
