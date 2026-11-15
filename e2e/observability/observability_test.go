@@ -296,7 +296,9 @@ func TestObservabilityHermetic(t *testing.T) {
 		"-host-id", "h1", "-data-dir", filepath.Join(hd, "data"), "-run-dir", filepath.Join(hd, "run"),
 		"-control-url", ctl.URL, "-ephemeral", "-heartbeat", "500ms", "-sandbox", "none", "-workerd", wd, "-hostname-prefix", "h1-")
 	waitFor(t, e, "host h1 live", 30*time.Second, func() bool {
-		var pg struct{ Items []struct{ HostID, Status string } }
+		var pg struct {
+			Items []struct{ HostID, Status string }
+		}
 		e.must("GET", "/v1/hosts", nil, &pg)
 		return len(pg.Items) == 1 && pg.Items[0].Status == "live"
 	})
