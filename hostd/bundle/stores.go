@@ -111,3 +111,16 @@ func parseStores(wranglerJSON []byte, a *App) ([]StoreBinding, error) {
 	}
 	return out, nil
 }
+
+// StoreKindNames lists the registered store kinds, sorted. Each is a
+// placement feature (internal/features).
+func StoreKindNames() []string {
+	storeKindsMu.RLock()
+	defer storeKindsMu.RUnlock()
+	out := make([]string, 0, len(storeKinds))
+	for _, k := range storeKinds {
+		out = append(out, k.Kind)
+	}
+	sort.Strings(out)
+	return out
+}

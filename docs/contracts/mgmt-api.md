@@ -123,6 +123,9 @@ hostd's API, not this document's.
 | `PUT` | `/v1/hosts/{id}` | host | yes | `RegisterHost` | Register or re-register a host (idempotent) |
 | `DELETE` | `/v1/hosts/{id}` | admin | yes | `DeleteHost` | Drain and remove a host |
 | `GET` | `/v1/hosts/{id}/assignments` | host\|admin | no | `ListHostAssignments` | List the deployments assigned to a host |
+| `PUT` | `/v1/hosts/{id}/cordon` | admin | no | `CordonHost` | Cordon a host (no new placements) |
+| `DELETE` | `/v1/hosts/{id}/cordon` | admin | no | `UncordonHost` | Uncordon a host |
+| `POST` | `/v1/hosts/{id}/drain` | admin | no | `DrainHost` | Cordon a host and move its workloads to other hosts |
 | `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
 | `GET` | `/v1/hosts/{id}/sandbox-deny` | host\|admin | no | `GetHostSandboxDeny` | Every tenant's credential file paths, for the host's sandbox deny list |
 | `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
@@ -137,6 +140,10 @@ hostd's API, not this document's.
 | `DELETE` | `/v1/objects/{id}` | admin\|host | yes | `DeleteObject` | Kill an object |
 | `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | Read the object's node certificate |
 | `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
+| `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
+| `POST` | `/v1/releases` | admin | no | `ImportReleases` | Import catalog entries (from a release's share/twd/catalog.json) |
+| `GET` | `/v1/releases/{version}/artifacts/{name}` | admin\|host | no | `GetReleaseArtifact` | Download a release tarball (hosts upgrading themselves) |
+| `PUT` | `/v1/releases/{version}/artifacts/{name}` | admin | no | `PutReleaseArtifact` | Upload a release tarball (or its SHA256SUMS) |
 | `GET` | `/v1/status` | admin | no | `GetStatus` | mgmt status |
 | `GET` | `/v1/tenants` | admin\|host | no | `ListTenants` | List tenants |
 | `POST` | `/v1/tenants` | admin | yes | `CreateTenant` | Create a tenant |
@@ -168,6 +175,10 @@ hostd's API, not this document's.
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `ReadStoreJournal` | Read a store's journal after a sequence number |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
+| `GET` | `/v1/upgrades` | admin | no | `ListUpgrades` | Upgrade runs, newest first |
+| `POST` | `/v1/upgrades` | admin | no | `CreateUpgrade` | Plan an upgrade, or start an upgrade run |
+| `GET` | `/v1/upgrades/{id}` | admin | no | `GetUpgrade` | One upgrade run |
+| `POST` | `/v1/upgrades/{id}/actions` | admin | no | `ActOnUpgrade` | Pause, resume or abort an upgrade run |
 | `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/.well-known/openid-configuration` | public | no | `GetOIDCConfiguration` | OIDC discovery (base issuer) |
@@ -586,6 +597,71 @@ operator credential when mgmt has one; otherwise it is reported in
 |---|---|---|
 | 200 | `AssignmentPage` | One page of assignments, ordered by `(createdAt, deploymentID)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/hosts/{id}/cordon` — Cordon a host (no new placements)
+
+`CordonHost` · role **admin** · audited: no
+
+The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
+skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Host ID (one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `Host` | Cordoned. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/hosts/{id}/cordon` — Uncordon a host
+
+`UncordonHost` · role **admin** · audited: no
+
+Placement may choose the host again. Idempotent; audited `host_uncordon`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Host ID (one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `Host` | Uncordoned. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/hosts/{id}/drain` — Cordon a host and move its workloads to other hosts
+
+`DrainHost` · role **admin** · audited: no
+
+Cordons the host, then re-places each workload assigned to it on another eligible host
+(`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+
+- a stateless workload (no Durable Objects) moves;
+- a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+  (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+  and its objects start empty on the new host;
+- a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+
+`dryRun` reports what would happen and changes nothing (the host is not cordoned).
+Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+`DELETE /v1/hosts/{id}` removes it.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Host ID (one safe path element). |
+
+**Request** `application/json`: `HostDrainRequest`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `HostDrainResult` | The drain's outcome per workload. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
@@ -1703,6 +1779,153 @@ Recomputes every hash and link of every chain and checks each chain head; detect
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+## Upgrades
+
+Releases and upgrades (ADR-upgrades-and-releases). twd-mgmt keeps a release catalog (the
+releases it was built with, plus imported ones), plans upgrades from it and the fleet's
+reported versions and features, and runs fleet upgrades as durable upgrade runs.
+
+### `GET /v1/releases` — The release catalog
+
+`ListReleases` · role **admin** · audited: no
+
+Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
+notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `ReleaseCatalog` | The catalog. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/releases` — Import catalog entries (from a release's share/twd/catalog.json)
+
+`ImportReleases` · role **admin** · audited: no
+
+Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+`twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+`release_import`.
+
+**Request** `application/json`: `ReleaseImport`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `ReleaseCatalog` | The catalog after the import. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/releases/{version}/artifacts/{name}` — Download a release tarball (hosts upgrading themselves)
+
+`GetReleaseArtifact` · role **admin\|host** · audited: no
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `version` | path | string | yes |  |
+| `name` | path | string | yes | `twd-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`. |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | string (binary) | The file. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/releases/{version}/artifacts/{name}` — Upload a release tarball (or its SHA256SUMS)
+
+`PutReleaseArtifact` · role **admin** · audited: no
+
+Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
+Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+replicas that don't share that directory each need the upload. Audited `release_artifact`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `version` | path | string | yes |  |
+| `name` | path | string | yes | `twd-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`. |
+
+**Request** `application/octet-stream`: string (binary)
+
+| Status | Body | Description |
+|---|---|---|
+| 201 | `ReleaseArtifact` | Stored. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/upgrades` — Upgrade runs, newest first
+
+`ListUpgrades` · role **admin** · audited: no
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | object | The runs. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/upgrades` — Plan an upgrade, or start an upgrade run
+
+`CreateUpgrade` · role **admin** · audited: no
+
+Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+(it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+
+**Request** `application/json`: `UpgradeRequest`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `UpgradePlan` | The plan (`dryRun`). |
+| 201 | `UpgradeRun` | The run. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 409 | `Error` | The request conflicts with the resource's current state. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/upgrades/{id}` — One upgrade run
+
+`GetUpgrade` · role **admin** · audited: no
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes |  |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `UpgradeRun` | The run. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/upgrades/{id}/actions` — Pause, resume or abort an upgrade run
+
+`ActOnUpgrade` · role **admin** · audited: no
+
+`pause` stops before the next step; `resume` continues a paused run (after the operator
+fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes |  |
+
+**Request** `application/json`: object
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `UpgradeRun` | The run. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The request conflicts with the resource's current state. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ## Volumes
 
 dm-crypt data keys for DO volumes (microVM tier).
@@ -2320,6 +2543,16 @@ mgmt chain:
 `tenant_delete`,
 `host_register`,
 `host_delete`,
+`host_cordon`,
+`host_uncordon`,
+`host_drain`,
+`release_import`,
+`release_artifact`,
+`upgrade_start`,
+`upgrade_step`,
+`upgrade_pause`,
+`upgrade_resume`,
+`upgrade_abort`,
 `deploy`,
 `undeploy`,
 `create`,
@@ -2361,7 +2594,7 @@ Public ingress (ADR-029), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -2389,7 +2622,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -2650,7 +2883,7 @@ code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -2706,6 +2939,8 @@ The catalog. Status in parentheses.
 | `superseded` | 409 | undeploy of a non-latest deployment |
 | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 | `host_holds_leases` | 409 | host delete without `drain` |
+| `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+| `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 | `killed` | 410 | tombstone (`TombstoneError`) |
 | `precondition_failed` | 412 | `If-Match` mismatch |
 | `object_quota_exceeded` | 429 | tenant `maxObjects` |
@@ -2722,7 +2957,7 @@ The catalog. Status in parentheses.
 | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `d1_error`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `exists`, `lease_lost`, `lease_held`, `store_conflict`, `store_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `d1_error`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `exists`, `lease_lost`, `lease_held`, `store_conflict`, `store_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `version_skew`, `feature_unavailable`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
 
 #### `Health`
 
@@ -2738,19 +2973,25 @@ Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_fiel
 | `auditPubKey` | string | no | base64 ed25519; verifies `hostSig`. |
 | `capacity` | `HostCapacity` | no | The capacity vector a host registers (ADR-032 D9). `nodes` is tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO instances and containers alike): their count, guest memory (all, and the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit` for scheduling) and scratch disk. A host without a microVM backend reports 0 for every VM dimension. |
 | `capacityNodes` | integer | yes |  |
+| `cordonedAt` | integer (int64) | no | unix ms; absent when not cordoned. |
+| `cordonedBy` | string | no |  |
 | `createdAt` | integer (int64) | yes |  |
 | `dnsName` | string | no | `twd-host-<hostID>.<tailnet>`. |
+| `features` | array of string | no | Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses. |
 | `hostID` | string | yes |  |
 | `lastSeen` | integer (int64) | yes | unix ms of the last heartbeat |
 | `leases` | array of `Lease` | no | Namespace leases the host currently holds. |
 | `liveNodes` | integer | yes |  |
 | `nodeID` | string | no | Stable node ID of the host's `tag:twd-host` tsnet node (bound at registration). |
 | `pool` | string | no |  |
+| `protocols` | `Protocols` | no | Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`. |
 | `push` | `HostPush` | no | Where mgmt pushes kills and assignment changes. Over the tailnet, `port` names hostd's push listener on **its own tsnet node** (the WhoIs node; mgmt never pushes anywhere else). `url` is accepted only on the local-dev socket and only as `unix:///…`. |
+| `skew` | string | no | Why the host is outside the version window (placement skips it); absent when it is within. |
 | `status` | `HostStatusEnum` | yes | `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted. |
 | `tiers` | array of `HostTier` | yes |  |
 | `updatedAt` | integer (int64) | yes |  |
 | `usage` | `HostUsage` | no | Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`). |
+| `version` | string | no | The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x). |
 
 #### `HostCapacity`
 
@@ -2788,6 +3029,23 @@ reports 0 for every VM dimension.
 | `hostID` | string | yes |  |
 | `killed` | array of string | yes |  |
 | `leasesReleased` | array of string | yes |  |
+
+#### `HostDrainRequest`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `allowLocalStateLoss` | boolean | no | Move workloads with Durable Objects too; their storage stays behind on this host. |
+| `dryRun` | boolean | no |  |
+
+#### `HostDrainResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cordoned` | boolean | yes |  |
+| `dryRun` | boolean | no |  |
+| `hostID` | string | yes |  |
+| `moved` | array of object | yes |  |
+| `refused` | array of object | yes |  |
 
 #### `HostJoin`
 
@@ -2838,10 +3096,13 @@ on the local-dev socket and only as `unix:///…`.
 | `auditPubKey` | string | no | Pinned on first bind; a later registration may only repeat it. |
 | `capacity` | `HostCapacity` | no | The capacity vector a host registers (ADR-032 D9). `nodes` is tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO instances and containers alike): their count, guest memory (all, and the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit` for scheduling) and scratch disk. A host without a microVM backend reports 0 for every VM dimension. |
 | `capacityNodes` | integer | yes |  |
+| `features` | array of string | no |  |
 | `pool` | string | no |  |
+| `protocols` | `Protocols` | no | Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`. |
 | `push` | `HostPush` | no | Where mgmt pushes kills and assignment changes. Over the tailnet, `port` names hostd's push listener on **its own tsnet node** (the WhoIs node; mgmt never pushes anywhere else). `url` is accepted only on the local-dev socket and only as `unix:///…`. |
 | `registrationSecret` | string (password) | no | Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound. |
 | `tiers` | array of `HostTier` | yes |  |
+| `version` | string | no | The host's twd version. A host outside the version window is refused: `409 version_skew`. |
 
 #### `HostStatus`
 
@@ -3206,6 +3467,10 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `tagOwnersSnippet` | string | no |  |
 | `unchecked` | array of string | no | `tailnet.connects` entries that are names, not tags. |
 
+#### `Protocols`
+
+Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
+
 #### `PublicAssignment`
 
 A workload's public ingress (ADR-029). The host runs one extra node
@@ -3287,6 +3552,52 @@ netd's limits on a public listener (ADR-029 D5); defaults filled in.
 | `purged` | array of string | yes | Object IDs forgotten. |
 | `warmKeysRevoked` | integer | no | The tenant's unused pooled keys revoked with the purge. |
 
+#### `ReleaseArtifact`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `sha256` | string | yes |  |
+| `size` | integer (int64) | yes |  |
+| `version` | string | yes |  |
+
+#### `ReleaseCatalog`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `current` | string | yes |  |
+| `items` | array of `ReleaseEntry` | yes |  |
+
+#### `ReleaseEntry`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `artifacts` | array of string | no | Artifacts stored on this replica. |
+| `contractMigrations` | array of string | no |  |
+| `date` | string | no |  |
+| `notes` | array of `ReleaseNote` | yes |  |
+| `protocols` | `Protocols` | no | Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`. |
+| `schema` | string | no |  |
+| `source` | string: `builtin` \| `imported` | no |  |
+| `upgrade` | array of string | no |  |
+| `version` | string | yes |  |
+| `workerd` | string | no |  |
+
+#### `ReleaseImport`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `entries` | array of `ReleaseEntry` | yes |  |
+
+#### `ReleaseNote`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `kind` | string: `feature` \| `fix` \| `breaking` \| `security` | yes |  |
+| `source` | string | no |  |
+| `text` | string | yes |  |
+| `upgrade` | array of string | no |  |
+
 #### `ReplicaRef`
 
 One replica of a workload with `twd.jsonc` `replicas` > 1.
@@ -3349,6 +3660,18 @@ One running container in a heartbeat.
 | `resources` | `ContainerResources` | yes | What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`). |
 | `tenantID` | string | yes |  |
 | `workload` | string | yes |  |
+
+#### `SchemaStatus`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `ahead` | array of string | no | Applied migrations this replica doesn't know (a newer replica ran them). |
+| `applied` | string | yes | The newest migration applied to the store. |
+| `latest` | string | yes | The newest migration this replica knows. |
+| `minBinary` | string | no | The oldest twd-mgmt that may open the store. |
+| `pending` | array of string | no |  |
+| `pendingContract` | array of string | no | Contract migrations deferred until every replica runs this version. |
+| `restoreGeneration` | integer (int64) | no |  |
 
 #### `Secret`
 
@@ -3423,6 +3746,7 @@ A workload's Tailscale Service: a stable name and VIPs that survive the workload
 | `tenants` | integer | yes |  |
 | `transport` | `Transport` | yes | `tsnet` in normal operation; `local-dev` when the unix socket is serving. |
 | `version` | string | no |  |
+| `versions` | `StatusVersions` | no | What runs where (ADR-upgrades-and-releases §7). |
 
 #### `StatusClock`
 
@@ -3446,6 +3770,17 @@ The mgmt replica registry (replicas sharing this store). `ok` is false (and the 
 | `live` | integer | yes | Replicas seen within the last 30 s, this one included. |
 | `message` | string | no |  |
 | `ok` | boolean | yes |  |
+
+#### `StatusVersions`
+
+What runs where (ADR-upgrades-and-releases §7).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `hosts` | object | yes | Host count by reported version ("" = none reported). |
+| `mgmt` | object | yes | Each live replica's version |
+| `schema` | `SchemaStatus` | no |  |
+| `skewed` | array of string | no | Hosts outside the version window. |
 
 #### `Store`
 
@@ -3672,6 +4007,59 @@ Extends `Error`.
 `tsnet` in normal operation; `local-dev` when the unix socket is serving.
 
 Enum: `tsnet`, `local-dev`
+
+#### `UpgradePlan`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `actions` | array of `ReleaseNote` | no | Notes that need an operator action. |
+| `blockers` | array of string | yes | Why the run can't start; empty when it can. |
+| `breaking` | array of `ReleaseNote` | yes |  |
+| `from` | object | yes |  |
+| `path` | array of string | no | Every release between the oldest running version and `to` that has a contract migration (each must be passed through). |
+| `steps` | array of `UpgradeStep` | yes |  |
+| `to` | string | yes |  |
+| `warnings` | array of string | yes |  |
+
+#### `UpgradeRequest`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `canary` | string | no | The canary host (default: the first host in order). |
+| `dryRun` | boolean | no |  |
+| `hosts` | array of string | no | Upgrade only these hosts (default: every host below `to`). |
+| `settleSeconds` | integer | no | How long a host may take to re-register and settle (default 300). |
+| `soakSeconds` | integer | no | How long to watch the canary before the rest (default 300). |
+| `to` | string | yes | The target release version (it must be in the catalog). |
+
+#### `UpgradeRun`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `createdAt` | integer (int64) | yes |  |
+| `createdBy` | string | no |  |
+| `id` | string | yes |  |
+| `plan` | `UpgradePlan` | no |  |
+| `reason` | string | no | Why the run is paused |
+| `state` | string: `running` \| `paused` \| `done` \| `aborted` \| `failed` | yes |  |
+| `step` | integer | no | Index of the current step. |
+| `steps` | array of `UpgradeStep` | yes |  |
+| `to` | string | yes |  |
+| `updatedAt` | integer (int64) | yes |  |
+
+#### `UpgradeStep`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `canary` | boolean | no |  |
+| `detail` | string | no |  |
+| `finishedAt` | integer (int64) | no |  |
+| `host` | string | no |  |
+| `kind` | string: `backup` \| `mgmt` \| `contract` \| `host` | yes |  |
+| `method` | string: `drain` \| `bounce` | no | Hosts: `drain` moves its workloads off first; `bounce` restarts in place (workloads with host-local state, or nowhere to move). |
+| `needsOperator` | string | no | A command the operator must run before this step can finish. |
+| `startedAt` | integer (int64) | no |  |
+| `status` | string: `pending` \| `running` \| `waiting` \| `done` \| `skipped` \| `failed` | yes |  |
 
 #### `VolumeKeyGrant`
 
