@@ -298,7 +298,8 @@ func (a *v1api) WhoAmI(w http.ResponseWriter, r *http.Request) {
 		self.Transport = "local-dev"
 	}
 	who := WhoAmI{Kind: kind, Login: p.Login, NodeID: p.NodeID, Tags: p.Tags, HostID: p.HostID,
-		Admin: a.s.allowed(p, roleAdmin), Actor: p.Actor(r), Mgmt: self}
+		Admin: a.s.allowed(p, roleAdmin), Actor: p.Actor(r), Mgmt: self,
+		Caps: twdCaps(p), Approver: p.Kind == "user" && isApprover(p), MCPTools: a.s.mcpToolNames(p)}
 	a.s.whoamiScope(r.Context(), p, &who) // whoami_tenants.go
 	writeJSON(w, 200, who)
 }

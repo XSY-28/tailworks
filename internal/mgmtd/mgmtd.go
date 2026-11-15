@@ -122,6 +122,10 @@ type Options struct {
 	// MetricsPort serves GET /metrics on mgmt's own tailnet node
 	// (ADR-observability; 0 = off; flag default obs.DefaultMetricsPort).
 	MetricsPort int
+
+	// BundleRetention is how many bundles per workload mgmt keeps for
+	// rollback (mgmt.Config; 0 = mgmt.DefaultBundleRetention, < 0 = all).
+	BundleRetention int
 }
 
 // Runtime is a running mgmt.
@@ -306,6 +310,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	default:
 		mcfg.RegistryDir = o.RegistryDir
 	}
+	mcfg.BundleRetention = o.BundleRetention // ADR-deploy-rollback
 	if len(o.RegistryInsecure) > 0 {
 		mcfg.RegistryInsecure = o.RegistryInsecure
 	}

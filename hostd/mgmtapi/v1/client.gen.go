@@ -150,6 +150,7 @@ const (
 	AuditKindReleaseImport       AuditKind = "release_import"
 	AuditKindRemint              AuditKind = "remint"
 	AuditKindRevoke              AuditKind = "revoke"
+	AuditKindRollback            AuditKind = "rollback"
 	AuditKindSecretDelete        AuditKind = "secret_delete"
 	AuditKindSecretPut           AuditKind = "secret_put"
 	AuditKindSecretRelease       AuditKind = "secret_release"
@@ -279,6 +280,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindRemint:
 		return true
 	case AuditKindRevoke:
+		return true
+	case AuditKindRollback:
 		return true
 	case AuditKindSecretDelete:
 		return true
@@ -1567,6 +1570,7 @@ type AuditBatch struct {
 // `upgrade_abort`,
 // `deploy`,
 // `undeploy`,
+// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
 // `create`,
 // `mint`,
 // `remint`,
@@ -1679,6 +1683,7 @@ type AuditRecord struct {
 	// `upgrade_abort`,
 	// `deploy`,
 	// `undeploy`,
+	// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
 	// `create`,
 	// `mint`,
 	// `remint`,
@@ -2013,6 +2018,16 @@ type DeploymentCreate struct {
 	Workload string `json:"workload"`
 }
 
+// DeploymentHistoryPage defines model for DeploymentHistoryPage.
+type DeploymentHistoryPage struct {
+	// BundleRetention How many of each workload's newest bundles mgmt keeps (0 = every bundle).
+	BundleRetention int                `json:"bundleRetention"`
+	Items           []DeploymentRecord `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
 // DeploymentPage defines model for DeploymentPage.
 type DeploymentPage struct {
 	Items []Deployment `json:"items"`
@@ -2032,6 +2047,41 @@ type DeploymentPublic struct {
 
 	// URL Examples: https://support.tail7906d5.ts.net/
 	URL string `json:"url"`
+}
+
+// DeploymentRecord One entry of a workload's deployment history (ADR-deploy-rollback).
+type DeploymentRecord struct {
+	// ActiveAt When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history.
+	ActiveAt *int64 `json:"activeAt,omitempty"`
+
+	// BundleBytes Size of the retained bundle (0 once pruned).
+	BundleBytes *int64 `json:"bundleBytes,omitempty"`
+
+	// BundleRetained mgmt still holds the bundle, so it can be rolled back to.
+	BundleRetained bool `json:"bundleRetained"`
+
+	// BundleSHA256 Hex SHA-256 of the bundle as uploaded (empty: deployed without a bundle).
+	BundleSHA256 string `json:"bundleSHA256"`
+	CreatedAt    int64  `json:"createdAt"`
+
+	// DeployedBy The actor who deployed (see Conventions).
+	DeployedBy *string `json:"deployedBy,omitempty"`
+
+	// DeploymentID Examples: dp_3f9a1c2b7d8e4f50
+	DeploymentID string `json:"deploymentID"`
+	Epoch        int64  `json:"epoch"`
+
+	// Error The host's last error for this deployment.
+	Error *string `json:"error,omitempty"`
+	Host  string  `json:"host"`
+
+	// HostStatus The last status the host reported (or mgmt set) for this deployment, kept after it is superseded: `active` means it was serving when it was replaced.
+	HostStatus *string `json:"hostStatus,omitempty"`
+
+	// RollbackOf Set on a rollback: the deployment whose bundle it redeployed.
+	RollbackOf *string          `json:"rollbackOf,omitempty"`
+	Status     DeploymentStatus `json:"status"`
+	Workload   string           `json:"workload"`
 }
 
 // DeploymentReport defines model for DeploymentReport.
@@ -3451,6 +3501,32 @@ type RequestRecord struct {
 // RequestRecordKind defines model for RequestRecord.Kind.
 type RequestRecordKind string
 
+// Rollback A started rollback.
+type Rollback struct {
+	Deployment Deployment `json:"deployment"`
+
+	// RollbackOf The deployment whose bundle was redeployed.
+	RollbackOf string `json:"rollbackOf"`
+
+	// Target One entry of a workload's deployment history (ADR-deploy-rollback).
+	Target DeploymentRecord `json:"target"`
+}
+
+// RollbackCreate defines model for RollbackCreate.
+type RollbackCreate struct {
+	// DeploymentID The deployment to roll back to. Default the previous good one (see `CreateRollback`).
+	DeploymentID *string `json:"deploymentID,omitempty"`
+
+	// ForceTakeover As `POST /v1/deployments` `forceTakeover`.
+	ForceTakeover *bool `json:"forceTakeover,omitempty"`
+
+	// Host Pin a host, as for a deploy.
+	Host *string `json:"host,omitempty"`
+
+	// Replace Re-place the workload, as `POST /v1/deployments` `replace`.
+	Replace *bool `json:"replace,omitempty"`
+}
+
 // RunningContainer One running container in a heartbeat.
 type RunningContainer struct {
 	Class  string `json:"class"`
@@ -4136,12 +4212,21 @@ type WhoAmI struct {
 	// `tag:twd-mgmt` (docs/approvals.md): what it may decide through
 	// `twd approve` and the admin UI. Empty when it holds none.
 	ApproveGrants *[]ApproveGrant `json:"approveGrants,omitempty"`
-	HostID        *string         `json:"hostID,omitempty"`
-	Kind          WhoAmIKind      `json:"kind"`
-	Login         *string         `json:"login,omitempty"`
-	Mgmt          SelfInfo        `json:"mgmt"`
-	NodeID        *string         `json:"nodeID,omitempty"`
-	Tags          *[]string       `json:"tags,omitempty"`
+
+	// Approver The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+	Approver *bool `json:"approver,omitempty"`
+
+	// Caps The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+	Caps   *[]string  `json:"caps,omitempty"`
+	HostID *string    `json:"hostID,omitempty"`
+	Kind   WhoAmIKind `json:"kind"`
+	Login  *string    `json:"login,omitempty"`
+
+	// McpTools The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
+	McpTools *[]string `json:"mcpTools,omitempty"`
+	Mgmt     SelfInfo  `json:"mgmt"`
+	NodeID   *string   `json:"nodeID,omitempty"`
+	Tags     *[]string `json:"tags,omitempty"`
 
 	// Tailnet The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts.
 	Tailnet *string `json:"tailnet,omitempty"`
@@ -4596,6 +4681,15 @@ type PullQueueMessagesParams struct {
 	Epoch *QueueEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
 }
 
+// ListWorkloadDeploymentsParams defines parameters for ListWorkloadDeployments.
+type ListWorkloadDeploymentsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // GetWorkloadLogsParams defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParams struct {
 	// N Lines from the end of the log (0 with `follow` for new lines only).
@@ -4640,6 +4734,12 @@ type GetWorkloadLogsParamsSource string
 type UpdateWorkloadPublicParams struct {
 	// IfMatch Only apply if the resource's current `ETag` matches; otherwise `412 precondition_failed`.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// CreateRollbackParams defines parameters for CreateRollback.
+type CreateRollbackParams struct {
+	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
 }
 
 // CreateWorkloadSecretGrantParams defines parameters for CreateWorkloadSecretGrant.
@@ -4809,6 +4909,9 @@ type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
 // UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody defines body for UpdateWorkloadPublic for application/merge-patch+json ContentType.
 type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPublicPatch
+
+// CreateRollbackJSONRequestBody defines body for CreateRollback for application/json ContentType.
+type CreateRollbackJSONRequestBody = RollbackCreate
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
@@ -6587,6 +6690,22 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
 	QueryD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+	//
+	// ADR-deploy-rollback. Every deployment of the workload, newest first:
+	// who deployed it, when, the bundle's SHA-256, its status (the current
+	// one is `assigned`, `starting`, `active` or `failed`; older ones are
+	// `superseded` or `stopped`), the host's last report (`hostStatus`)
+	// and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+	// keeps the bundles of the newest `bundleRetention` deployments of
+	// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+	// their records stay, without the bundle, so they can't be rolled back
+	// to. `rollbackOf` names the deployment a rollback redeployed. A
+	// workload with no deployment is `404 unknown_workload`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/deployments (the `ListWorkloadDeployments` operationId).
+	ListWorkloadDeployments(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
 	// The app's log is a file on the host that runs it. mgmt finds the
@@ -6664,6 +6783,72 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRollbackWithBody Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	//
+	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// as a **new** deployment, through the same code path as
+	// `POST /v1/deployments`: the same validation, placement, lease at
+	// `epoch+1` and host fencing, and the same `409 lease_held`,
+	// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+	// is sticky as for any deploy (the workload stays on its host unless
+	// `replace` or `host` say otherwise), so Durable Object storage stays
+	// where it is. Container images the original deploy built and pushed
+	// to twd's registry are reused by digest.
+	//
+	// Without `deploymentID`, the target is the newest earlier deployment
+	// that ran (the host reported it `active` and it did not fail), whose
+	// bundle is retained and differs from the current one's;
+	// `409 no_rollback_target` if there is none. A target whose bundle was
+	// pruned is `409 bundle_pruned`. Naming the current deployment is
+	// `409 no_rollback_target`.
+	//
+	// A rollback changes code and configuration only. Durable Object
+	// storage, D1 databases (migrations are forward-only), KV, R2 and
+	// queues keep their current data, and the workload gets the secrets
+	// it has **now**: secrets are not versioned with bundles.
+	//
+	// Audited as `kind: rollback` (in place of `deploy`), with
+	// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+	// current policy, like `POST /v1/deployments?dryRun=true`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+	CreateRollbackWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	//
+	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// as a **new** deployment, through the same code path as
+	// `POST /v1/deployments`: the same validation, placement, lease at
+	// `epoch+1` and host fencing, and the same `409 lease_held`,
+	// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+	// is sticky as for any deploy (the workload stays on its host unless
+	// `replace` or `host` say otherwise), so Durable Object storage stays
+	// where it is. Container images the original deploy built and pushed
+	// to twd's registry are reused by digest.
+	//
+	// Without `deploymentID`, the target is the newest earlier deployment
+	// that ran (the host reported it `active` and it did not fail), whose
+	// bundle is retained and differs from the current one's;
+	// `409 no_rollback_target` if there is none. A target whose bundle was
+	// pruned is `409 bundle_pruned`. Naming the current deployment is
+	// `409 no_rollback_target`.
+	//
+	// A rollback changes code and configuration only. Durable Object
+	// storage, D1 databases (migrations are forward-only), KV, R2 and
+	// queues keep their current data, and the workload gets the secrets
+	// it has **now**: secrets are not versioned with bundles.
+	//
+	// Audited as `kind: rollback` (in place of `deploy`), with
+	// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+	// current policy, like `POST /v1/deployments?dryRun=true`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+	CreateRollback(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, body CreateRollbackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
 	//
@@ -9388,6 +9573,32 @@ func (c *Client) QueryD1(ctx context.Context, id TenantID, workload WorkloadName
 	return c.Client.Do(req)
 }
 
+// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+//
+// ADR-deploy-rollback. Every deployment of the workload, newest first:
+// who deployed it, when, the bundle's SHA-256, its status (the current
+// one is `assigned`, `starting`, `active` or `failed`; older ones are
+// `superseded` or `stopped`), the host's last report (`hostStatus`)
+// and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+// keeps the bundles of the newest `bundleRetention` deployments of
+// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+// their records stay, without the bundle, so they can't be rolled back
+// to. `rollbackOf` names the deployment a rollback redeployed. A
+// workload with no deployment is `404 unknown_workload`.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/deployments (the `ListWorkloadDeployments` operationId).
+func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkloadDeploymentsRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 //
 // The app's log is a file on the host that runs it. mgmt finds the
@@ -9506,6 +9717,92 @@ func (c *Client) UpdateWorkloadPublic(ctx context.Context, id TenantID, workload
 // Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 func (c *Client) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateWorkloadPublicRequestWithApplicationMergePatchPlusJSONBody(c.Server, id, workload, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRollbackWithBody Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+//
+// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// as a **new** deployment, through the same code path as
+// `POST /v1/deployments`: the same validation, placement, lease at
+// `epoch+1` and host fencing, and the same `409 lease_held`,
+// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+// is sticky as for any deploy (the workload stays on its host unless
+// `replace` or `host` say otherwise), so Durable Object storage stays
+// where it is. Container images the original deploy built and pushed
+// to twd's registry are reused by digest.
+//
+// Without `deploymentID`, the target is the newest earlier deployment
+// that ran (the host reported it `active` and it did not fail), whose
+// bundle is retained and differs from the current one's;
+// `409 no_rollback_target` if there is none. A target whose bundle was
+// pruned is `409 bundle_pruned`. Naming the current deployment is
+// `409 no_rollback_target`.
+//
+// A rollback changes code and configuration only. Durable Object
+// storage, D1 databases (migrations are forward-only), KV, R2 and
+// queues keep their current data, and the workload gets the secrets
+// it has **now**: secrets are not versioned with bundles.
+//
+// Audited as `kind: rollback` (in place of `deploy`), with
+// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+// current policy, like `POST /v1/deployments?dryRun=true`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+func (c *Client) CreateRollbackWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRollbackRequestWithBody(c.Server, id, workload, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+//
+// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// as a **new** deployment, through the same code path as
+// `POST /v1/deployments`: the same validation, placement, lease at
+// `epoch+1` and host fencing, and the same `409 lease_held`,
+// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+// is sticky as for any deploy (the workload stays on its host unless
+// `replace` or `host` say otherwise), so Durable Object storage stays
+// where it is. Container images the original deploy built and pushed
+// to twd's registry are reused by digest.
+//
+// Without `deploymentID`, the target is the newest earlier deployment
+// that ran (the host reported it `active` and it did not fail), whose
+// bundle is retained and differs from the current one's;
+// `409 no_rollback_target` if there is none. A target whose bundle was
+// pruned is `409 bundle_pruned`. Naming the current deployment is
+// `409 no_rollback_target`.
+//
+// A rollback changes code and configuration only. Durable Object
+// storage, D1 databases (migrations are forward-only), KV, R2 and
+// queues keep their current data, and the workload gets the secrets
+// it has **now**: secrets are not versioned with bundles.
+//
+// Audited as `kind: rollback` (in place of `deploy`), with
+// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+// current policy, like `POST /v1/deployments?dryRun=true`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+func (c *Client) CreateRollback(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, body CreateRollbackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRollbackRequest(c.Server, id, workload, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -14079,6 +14376,86 @@ func NewQueryD1RequestWithBody(server string, id TenantID, workload WorkloadName
 	return req, nil
 }
 
+// NewListWorkloadDeploymentsRequest constructs an http.Request for the ListWorkloadDeployments method
+func NewListWorkloadDeploymentsRequest(server string, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/deployments", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetWorkloadLogsRequest constructs an http.Request for the GetWorkloadLogs method
 func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams) (*http.Request, error) {
 	var err error
@@ -14372,6 +14749,87 @@ func NewUpdateWorkloadPublicRequestWithBody(server string, id TenantID, workload
 		}
 
 	}
+
+	return req, nil
+}
+
+// NewCreateRollbackRequest calls the generic CreateRollback builder with application/json body
+func NewCreateRollbackRequest(server string, id TenantID, workload WorkloadName, params *CreateRollbackParams, body CreateRollbackJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRollbackRequestWithBody(server, id, workload, params, "application/json", bodyReader)
+}
+
+// NewCreateRollbackRequestWithBody constructs an http.Request for the CreateRollback method, with any body, and a specified content type
+func NewCreateRollbackRequestWithBody(server string, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/rollbacks", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.DryRun != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "dryRun", *params.DryRun, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -17279,6 +17737,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
 	QueryD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
 
+	// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`twd deployments`)
+	//
+	// ADR-deploy-rollback. Every deployment of the workload, newest first:
+	// who deployed it, when, the bundle's SHA-256, its status (the current
+	// one is `assigned`, `starting`, `active` or `failed`; older ones are
+	// `superseded` or `stopped`), the host's last report (`hostStatus`)
+	// and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+	// keeps the bundles of the newest `bundleRetention` deployments of
+	// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+	// their records stay, without the bundle, so they can't be rolled back
+	// to. `rollbackOf` names the deployment a rollback redeployed. A
+	// workload with no deployment is `404 unknown_workload`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/deployments (the `ListWorkloadDeployments` operationId).
+	ListWorkloadDeploymentsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams, reqEditors ...RequestEditorFn) (*ListWorkloadDeploymentsResponse, error)
+
 	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
 	// The app's log is a file on the host that runs it. mgmt finds the
@@ -17360,6 +17836,72 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error)
+
+	// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	//
+	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// as a **new** deployment, through the same code path as
+	// `POST /v1/deployments`: the same validation, placement, lease at
+	// `epoch+1` and host fencing, and the same `409 lease_held`,
+	// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+	// is sticky as for any deploy (the workload stays on its host unless
+	// `replace` or `host` say otherwise), so Durable Object storage stays
+	// where it is. Container images the original deploy built and pushed
+	// to twd's registry are reused by digest.
+	//
+	// Without `deploymentID`, the target is the newest earlier deployment
+	// that ran (the host reported it `active` and it did not fail), whose
+	// bundle is retained and differs from the current one's;
+	// `409 no_rollback_target` if there is none. A target whose bundle was
+	// pruned is `409 bundle_pruned`. Naming the current deployment is
+	// `409 no_rollback_target`.
+	//
+	// A rollback changes code and configuration only. Durable Object
+	// storage, D1 databases (migrations are forward-only), KV, R2 and
+	// queues keep their current data, and the workload gets the secrets
+	// it has **now**: secrets are not versioned with bundles.
+	//
+	// Audited as `kind: rollback` (in place of `deploy`), with
+	// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+	// current policy, like `POST /v1/deployments?dryRun=true`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+	CreateRollbackWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRollbackResponse, error)
+
+	// CreateRollbackWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	//
+	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// as a **new** deployment, through the same code path as
+	// `POST /v1/deployments`: the same validation, placement, lease at
+	// `epoch+1` and host fencing, and the same `409 lease_held`,
+	// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+	// is sticky as for any deploy (the workload stays on its host unless
+	// `replace` or `host` say otherwise), so Durable Object storage stays
+	// where it is. Container images the original deploy built and pushed
+	// to twd's registry are reused by digest.
+	//
+	// Without `deploymentID`, the target is the newest earlier deployment
+	// that ran (the host reported it `active` and it did not fail), whose
+	// bundle is retained and differs from the current one's;
+	// `409 no_rollback_target` if there is none. A target whose bundle was
+	// pruned is `409 bundle_pruned`. Naming the current deployment is
+	// `409 no_rollback_target`.
+	//
+	// A rollback changes code and configuration only. Durable Object
+	// storage, D1 databases (migrations are forward-only), KV, R2 and
+	// queues keep their current data, and the workload gets the secrets
+	// it has **now**: secrets are not versioned with bundles.
+	//
+	// Audited as `kind: rollback` (in place of `deploy`), with
+	// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+	// current policy, like `POST /v1/deployments?dryRun=true`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+	CreateRollbackWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, body CreateRollbackJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRollbackResponse, error)
 
 	// CreateWorkloadSecretGrantWithResponse Release a workload's secret values to the lease holder
 	//
@@ -24478,6 +25020,103 @@ func (r QueryD1Response) ContentType() string {
 	return ""
 }
 
+// ListWorkloadDeploymentsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadDeployments
+type ListWorkloadDeploymentsResponse400Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadDeploymentsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadDeployments
+type ListWorkloadDeploymentsResponse403Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadDeploymentsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadDeployments
+type ListWorkloadDeploymentsResponse404Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadDeploymentsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadDeployments
+type ListWorkloadDeploymentsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListWorkloadDeploymentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DeploymentHistoryPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListWorkloadDeploymentsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListWorkloadDeploymentsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListWorkloadDeploymentsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListWorkloadDeploymentsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWorkloadDeploymentsResponse) GetJSON200() *DeploymentHistoryPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListWorkloadDeploymentsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListWorkloadDeploymentsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListWorkloadDeploymentsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListWorkloadDeploymentsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWorkloadDeploymentsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkloadDeploymentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkloadDeploymentsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWorkloadDeploymentsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetWorkloadLogsResponse200Headers the declared response headers of an HTTP 200 response for GetWorkloadLogs
 type GetWorkloadLogsResponse200Headers struct {
 	CacheControl *string
@@ -24778,6 +25417,131 @@ func (r UpdateWorkloadPublicResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateWorkloadPublicResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateRollbackResponse202Headers the declared response headers of an HTTP 202 response for CreateRollback
+type CreateRollbackResponse202Headers struct {
+	Location *string
+}
+
+// CreateRollbackResponse400Headers the declared response headers of an HTTP 400 response for CreateRollback
+type CreateRollbackResponse400Headers struct {
+	TwdError *string
+}
+
+// CreateRollbackResponse403Headers the declared response headers of an HTTP 403 response for CreateRollback
+type CreateRollbackResponse403Headers struct {
+	TwdError *string
+}
+
+// CreateRollbackResponse404Headers the declared response headers of an HTTP 404 response for CreateRollback
+type CreateRollbackResponse404Headers struct {
+	TwdError *string
+}
+
+// CreateRollbackResponse409Headers the declared response headers of an HTTP 409 response for CreateRollback
+type CreateRollbackResponse409Headers struct {
+	TwdError *string
+}
+
+// CreateRollbackResponseDefaultHeaders the declared response headers of an HTTP default response for CreateRollback
+type CreateRollbackResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CreateRollbackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreflightResult
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Rollback
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers202 the parsed response headers for an HTTP 202 response
+	Headers202 *CreateRollbackResponse202Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *CreateRollbackResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CreateRollbackResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *CreateRollbackResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *CreateRollbackResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CreateRollbackResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateRollbackResponse) GetJSON200() *PreflightResult {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r CreateRollbackResponse) GetJSON202() *Rollback {
+	return r.JSON202
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateRollbackResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateRollbackResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateRollbackResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateRollbackResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateRollbackResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateRollbackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRollbackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRollbackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRollbackResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -28958,6 +29722,30 @@ func (c *ClientWithResponses) QueryD1WithResponse(ctx context.Context, id Tenant
 	return ParseQueryD1Response(rsp)
 }
 
+// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`twd deployments`)
+//
+// ADR-deploy-rollback. Every deployment of the workload, newest first:
+// who deployed it, when, the bundle's SHA-256, its status (the current
+// one is `assigned`, `starting`, `active` or `failed`; older ones are
+// `superseded` or `stopped`), the host's last report (`hostStatus`)
+// and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+// keeps the bundles of the newest `bundleRetention` deployments of
+// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+// their records stay, without the bundle, so they can't be rolled back
+// to. `rollbackOf` names the deployment a rollback redeployed. A
+// workload with no deployment is `404 unknown_workload`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/deployments (the `ListWorkloadDeployments` operationId).
+func (c *ClientWithResponses) ListWorkloadDeploymentsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams, reqEditors ...RequestEditorFn) (*ListWorkloadDeploymentsResponse, error) {
+	rsp, err := c.ListWorkloadDeployments(ctx, id, workload, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkloadDeploymentsResponse(rsp)
+}
+
 // GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 //
 // The app's log is a file on the host that runs it. mgmt finds the
@@ -29068,6 +29856,84 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithApplicationMergePatchPlusJ
 		return nil, err
 	}
 	return ParseUpdateWorkloadPublicResponse(rsp)
+}
+
+// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+//
+// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// as a **new** deployment, through the same code path as
+// `POST /v1/deployments`: the same validation, placement, lease at
+// `epoch+1` and host fencing, and the same `409 lease_held`,
+// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+// is sticky as for any deploy (the workload stays on its host unless
+// `replace` or `host` say otherwise), so Durable Object storage stays
+// where it is. Container images the original deploy built and pushed
+// to twd's registry are reused by digest.
+//
+// Without `deploymentID`, the target is the newest earlier deployment
+// that ran (the host reported it `active` and it did not fail), whose
+// bundle is retained and differs from the current one's;
+// `409 no_rollback_target` if there is none. A target whose bundle was
+// pruned is `409 bundle_pruned`. Naming the current deployment is
+// `409 no_rollback_target`.
+//
+// A rollback changes code and configuration only. Durable Object
+// storage, D1 databases (migrations are forward-only), KV, R2 and
+// queues keep their current data, and the workload gets the secrets
+// it has **now**: secrets are not versioned with bundles.
+//
+// Audited as `kind: rollback` (in place of `deploy`), with
+// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+// current policy, like `POST /v1/deployments?dryRun=true`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+func (c *ClientWithResponses) CreateRollbackWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRollbackResponse, error) {
+	rsp, err := c.CreateRollbackWithBody(ctx, id, workload, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRollbackResponse(rsp)
+}
+
+// CreateRollbackWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+//
+// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// as a **new** deployment, through the same code path as
+// `POST /v1/deployments`: the same validation, placement, lease at
+// `epoch+1` and host fencing, and the same `409 lease_held`,
+// `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+// is sticky as for any deploy (the workload stays on its host unless
+// `replace` or `host` say otherwise), so Durable Object storage stays
+// where it is. Container images the original deploy built and pushed
+// to twd's registry are reused by digest.
+//
+// Without `deploymentID`, the target is the newest earlier deployment
+// that ran (the host reported it `active` and it did not fail), whose
+// bundle is retained and differs from the current one's;
+// `409 no_rollback_target` if there is none. A target whose bundle was
+// pruned is `409 bundle_pruned`. Naming the current deployment is
+// `409 no_rollback_target`.
+//
+// A rollback changes code and configuration only. Durable Object
+// storage, D1 databases (migrations are forward-only), KV, R2 and
+// queues keep their current data, and the workload gets the secrets
+// it has **now**: secrets are not versioned with bundles.
+//
+// Audited as `kind: rollback` (in place of `deploy`), with
+// `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+// current policy, like `POST /v1/deployments?dryRun=true`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
+func (c *ClientWithResponses) CreateRollbackWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, body CreateRollbackJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRollbackResponse, error) {
+	rsp, err := c.CreateRollback(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRollbackResponse(rsp)
 }
 
 // CreateWorkloadSecretGrantWithResponse Release a workload's secret values to the lease holder
@@ -36352,6 +37218,103 @@ func ParseQueryD1Response(rsp *http.Response) (*QueryD1Response, error) {
 	return response, nil
 }
 
+// ParseListWorkloadDeploymentsResponse parses an HTTP response from a ListWorkloadDeploymentsWithResponse call
+func ParseListWorkloadDeploymentsResponse(rsp *http.Response) (*ListWorkloadDeploymentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkloadDeploymentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DeploymentHistoryPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListWorkloadDeploymentsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListWorkloadDeploymentsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListWorkloadDeploymentsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListWorkloadDeploymentsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetWorkloadLogsResponse parses an HTTP response from a GetWorkloadLogsWithResponse call
 func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -36660,6 +37623,137 @@ func ParseUpdateWorkloadPublicResponse(rsp *http.Response) (*UpdateWorkloadPubli
 		response.Headers412 = &headers
 	case true:
 		var headers UpdateWorkloadPublicResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreateRollbackResponse parses an HTTP response from a CreateRollbackWithResponse call
+func ParseCreateRollbackResponse(rsp *http.Response) (*CreateRollbackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRollbackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreflightResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Rollback
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 202:
+		var headers CreateRollbackResponse202Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uri-reference"}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers202 = &headers
+	case rsp.StatusCode == 400:
+		var headers CreateRollbackResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers CreateRollbackResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers CreateRollbackResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers CreateRollbackResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers CreateRollbackResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

@@ -34,13 +34,17 @@ var cliSurface = []struct {
 	{"up", []string{"up", "--yes"}},
 	{"down", []string{"down"}},
 	{"link", []string{"link", "--unlink"}},
+	{"whoami", []string{"whoami"}},
 	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--api-key-file", "/nonexistent/api.env"}},
 	{"tenant ls", []string{"tenant", "ls"}},
 	{"tenant set", []string{"tenant", "set", "other.example.ts.net", "--max-objects", "5"}},
 	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net"}},
 	{"init", []string{"init", "{work}/app", "--template", "hello"}},
 	{"dev", []string{"dev", "{work}/empty", "--once"}},
+	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
+	{"deployments", []string{"deployments", "app"}},
+	{"rollback", []string{"rollback", "app"}},
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},
 	{"expose", []string{"expose", "off", "app"}},
@@ -78,6 +82,7 @@ var cliSurface = []struct {
 	{"docs ls", []string{"docs", "ls"}},
 	{"docs show", []string{"docs", "show", "errors.md#bad_request"}},
 	{"docs search", []string{"docs", "search", "tagOwners"}},
+	{"completion", []string{"completion", "bash"}},
 	{"agent setup", []string{"agent", "setup", "--dry-run"}},
 	{"agent remove", []string{"agent", "remove", "--dry-run"}},
 	{"agent ls", []string{"agent", "ls"}},
@@ -120,7 +125,7 @@ func TestCLIJSONContract(t *testing.T) {
 		Env: []string{"HOME=" + home, "TWD_STATE_DIR=" + state}}
 
 	// Every command and subcommand in `twd help` is in cliSurface.
-	hb, err := exec.Command(filepath.Join(bin, "twd"), "help").Output()
+	hb, err := exec.Command(filepath.Join(bin, "twd"), "help", "--all").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
