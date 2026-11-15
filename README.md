@@ -234,6 +234,7 @@ prove every ✅ and ⚠️.
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
 | Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
 | Tooling | [Coding-agent skills (`twd agent`)](docs/COMPAT.md#agent-skills) | ✅ | Claude Code, Codex, Cursor, Gemini CLI, OpenCode |
+| Tooling | [Testing: `@cloudflare/vitest-plugin`](docs/COMPAT.md#vitest-plugin) | ⚠️ | Worker and DO logic as on Cloudflare; callers and `ctx.tailnet` via `@twd/tailnet/testing` |
 | Tooling | [twd's MCP server (`/mcp`, `twd mcp`)](docs/COMPAT.md#twd-mcp) | ✅ | tools gated per tool by a tailnet grant |
 | Tooling | [Docs for agents (`llms.txt`, `twd docs`)](docs/COMPAT.md#docs-for-agents) | ✅ | offline search |
 

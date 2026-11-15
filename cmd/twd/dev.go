@@ -54,6 +54,9 @@ type devResult struct {
 
 	// D1 databases and the migrations dev applied to them (dev_d1.go).
 	D1 []devD1 `json:"d1,omitempty"`
+
+	// Extra identities (--caller, dev_callers.go).
+	Callers []devCaller `json:"callers,omitempty"`
 }
 
 func cmdDev(args []string) error {
@@ -64,6 +67,8 @@ func cmdDev(args []string) error {
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
 	inspectorPort := f.Int("inspector-port", 0, "serve workerd's V8 inspector on 127.0.0.1:<port> for Chrome DevTools or VS Code (devinspector.go)")
+	var callers callerFlags
+	f.Var(&callers, "caller", "an extra identity: its own dev node (tagged with =tag:a,tag:b) and local URL, listed in the result (repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	pos, err := f.parse(args)
 	if err != nil {
@@ -224,6 +229,12 @@ func cmdDev(args []string) error {
 	go psrv.Serve(pl)
 	defer psrv.Close()
 	res.URL = "http://" + pl.Addr().String()
+	extra, stopCallers, err := startDevCallers(ctx, ctl.URL, tmp, callers, func() string { return cur.Load().(string) })
+	if err != nil {
+		return err
+	}
+	defer stopCallers()
+	res.Callers = extra
 	route := mcpRoute(a)
 	res.Serves = res.URL + route
 	if *once {
@@ -237,6 +248,9 @@ func cmdDev(args []string) error {
 		emit(f, res, func() { fmt.Printf("twd dev · %s → %v\n", res.Serves, res.Smoke) })
 		return nil
 	}
+	// Snapshot before ready is announced: an edit made right after it
+	// (a test's, an agent's) must still trigger a reload.
+	last := snapshot(a.Dir)
 	// --json: NDJSON events on stdout (agentjson.go) instead of the text.
 	var hout io.Writer = os.Stdout
 	ev := newEvents(*f.json, os.Stdout)
@@ -249,6 +263,7 @@ func cmdDev(args []string) error {
 		fmt.Fprintf(hout, "  twd.jsonc asks for \"tier\": \"microvm\"; twd dev runs it in the process tier (deployed hosts refuse it without a microVM backend)\n")
 	}
 	fmt.Fprintf(hout, "  node %-28s %s\n", wl.Hostname, strings.Join(a.Cfg.Tailnet.Tags, ","))
+	printDevCallers(hout, res.Callers)
 	if len(devVars) > 0 {
 		fmt.Fprintf(hout, "  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
 	}
@@ -285,7 +300,6 @@ func cmdDev(args []string) error {
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	last := snapshot(a.Dir)
 	// 150 ms: a reload shows within ~0.2 s (500 ms added 0.25 s on average).
 	// snapshot skips node_modules, dist and dot dirs, so a poll is cheap.
 	tick := time.NewTicker(150 * time.Millisecond)

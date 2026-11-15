@@ -543,6 +543,13 @@ gen-js: $(WORKERD)
 	node_modules/.bin/esbuild js/packages/tailnet/src/runtime.ts --bundle --format=esm --platform=neutral \
 		--target=es2022 --legal-comments=none --log-level=warning --external:node:async_hooks --outfile=hostd/gen/js/twd-rt.js
 
+## test-vitest: templates under @cloudflare/vitest-plugin with @twd/tailnet/testing (docs/testing.md;
+## npm ci of the pinned deps in e2e/vitest, which bring their own workerd via miniflare).
+.PHONY: test-vitest
+test-vitest: deps
+	cd e2e/vitest && npm ci --no-audit --no-fund --loglevel=error
+	cd e2e/vitest && npx vitest run
+
 ## test-node: the opt-in Node process tier + Vercel Workflow (hermetic; npm ci of the pinned deps in e2e/node).
 .PHONY: test-node
 test-node: deps
