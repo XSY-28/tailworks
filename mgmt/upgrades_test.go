@@ -112,25 +112,26 @@ func TestFeatureGatedPlacementAndCordon(t *testing.T) {
 }
 
 func TestUpgradeRun(t *testing.T) {
-	e := newVersionedEnv(t, "0.2.0")
+	e := newVersionedEnv(t, "0.3.0")
 	reg := func(id, v string) {
 		e.asHost(id).ok("PUT", "/v1/hosts/"+id, map[string]any{"capacityNodes": 10, "tiers": []string{"process"}, "version": v, "os": "linux"}, nil)
 	}
-	reg("h1", "0.1.5")
-	reg("h2", "0.1.5")
-	// The target isn't in the catalog yet.
-	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": "0.2.0", "dryRun": true}, 400, "bad_request")
+	reg("h1", "0.2.5")
+	reg("h2", "0.2.5")
+	// The target isn't in the catalog yet (the built-in entries end at this
+	// tree's releases).
+	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "dryRun": true}, 400, "bad_request")
 	var cat struct {
 		Current string
 		Items   []ReleaseEntry
 	}
-	e.c.ok("POST", "/v1/releases", map[string]any{"entries": []map[string]any{{"version": "0.2.0", "date": "2026-12-01", "workerd": "1.20261201.1",
+	e.c.ok("POST", "/v1/releases", map[string]any{"entries": []map[string]any{{"version": "0.3.0", "date": "2027-01-01", "workerd": "1.20261201.1",
 		"notes": []map[string]any{{"kind": "breaking", "source": "x.md", "text": "twd logs prints records"}}}}}, &cat)
-	if cat.Current != "0.2.0" || len(cat.Items) < 2 {
+	if cat.Current != "0.3.0" || len(cat.Items) < 2 {
 		t.Fatalf("catalog: %+v", cat)
 	}
 	var plan UpgradePlan
-	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": "0.2.0", "dryRun": true, "canary": "h2", "soakSeconds": 0}, &plan)
+	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "dryRun": true, "canary": "h2", "soakSeconds": 0}, &plan)
 	if len(plan.Blockers) != 0 || len(plan.Breaking) != 1 {
 		t.Fatalf("plan: %+v", plan)
 	}
@@ -149,8 +150,8 @@ func TestUpgradeRun(t *testing.T) {
 
 	var run UpgradeRun
 	soak := 0
-	e.c.okStatus("POST", "/v1/upgrades", map[string]any{"to": "0.2.0", "canary": "h2", "soakSeconds": soak, "settleSeconds": 60}, &run)
-	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": "0.2.0"}, 409, "exists")
+	e.c.okStatus("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "canary": "h2", "soakSeconds": soak, "settleSeconds": 60}, &run)
+	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": "0.3.0"}, 409, "exists")
 	ctx := context.Background()
 	drive := func(until func(UpgradeRun) bool) UpgradeRun {
 		t.Helper()
@@ -175,7 +176,7 @@ func TestUpgradeRun(t *testing.T) {
 	r := drive(func(r UpgradeRun) bool {
 		return r.Step < len(r.Steps) && r.Steps[r.Step].Host == "h2" && r.Steps[r.Step].Phase == "wait"
 	})
-	if !strings.Contains(r.Steps[r.Step].NeedsOperator, "install twd 0.2.0 on host h2") {
+	if !strings.Contains(r.Steps[r.Step].NeedsOperator, "install twd 0.3.0 on host h2") {
 		t.Fatalf("operator step: %+v", r.Steps[r.Step])
 	}
 	var h struct{ CordonedAt int64 }
@@ -192,7 +193,7 @@ func TestUpgradeRun(t *testing.T) {
 	e.c.ok("POST", "/v1/upgrades/"+run.ID+"/actions", map[string]any{"action": "resume"}, &r)
 	// The operator upgrades h2: it re-registers at 0.2.0, settles, is
 	// uncordoned; then h1.
-	reg("h2", "0.2.0")
+	reg("h2", "0.3.0")
 	drive(func(r UpgradeRun) bool {
 		return r.Step < len(r.Steps) && r.Steps[r.Step].Host == "h1" && r.Steps[r.Step].Phase == "wait"
 	})
@@ -201,7 +202,7 @@ func TestUpgradeRun(t *testing.T) {
 	if h.CordonedAt != 0 {
 		t.Fatal("canary still cordoned")
 	}
-	reg("h1", "0.2.0")
+	reg("h1", "0.3.0")
 	r = drive(func(r UpgradeRun) bool { return r.State == "done" })
 	for _, s := range r.Steps {
 		if s.Status != "done" && s.Status != "skipped" {
@@ -214,7 +215,7 @@ func TestUpgradeRun(t *testing.T) {
 		t.Fatalf("list: %+v", list)
 	}
 	// Everything is at the target now: a new plan has no host work.
-	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": "0.2.0", "dryRun": true}, &plan)
+	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "dryRun": true}, &plan)
 	for _, s := range plan.Steps {
 		if s.Kind == "host" && s.Status != "skipped" {
 			t.Fatalf("host step after upgrade: %+v", s)

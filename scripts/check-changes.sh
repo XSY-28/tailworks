@@ -80,7 +80,8 @@ need=$(printf '%s\n' $need | LC_ALL=C sort -u | tr '\n' ' ')
 [ -n "${need% }" ] || { echo "check-changes: ok (no upgrade-relevant paths changed)"; exit 0; }
 
 # Kinds named by fragments this diff adds or changes.
-mine=$(printf '%s\n' "$changed" | grep -E '^changes/[^/]+\.md$' | grep -v '^changes/README\.md$' || true)
+# A release commit moves the fragments to changes/released/<tag>/: they count too.
+mine=$(printf '%s\n' "$changed" | grep -E '^changes/([^/]+|released/[^/]+/[^/]+)\.md$' | grep -v '^changes/README\.md$' || true)
 have=""
 for f in $mine; do
 	[ -f "$f" ] && have="$have $(go run ./internal/catalog/changes kinds "$f" | tr '\n' ' ')"
