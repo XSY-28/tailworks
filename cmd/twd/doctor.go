@@ -32,8 +32,12 @@ const (
 
 func cmdVersion(args []string) error {
 	f := newFlags("version")
+	check := f.Bool("check", false, "compare with the latest release, print how to upgrade, and say whether the running twd up needs a restart")
 	if _, err := f.parse(args); err != nil {
 		return err
+	}
+	if *check {
+		return cmdVersionCheck(f) // updatecheck.go
 	}
 	v := map[string]string{"twd": version, "go": runtime.Version(), "os": runtime.GOOS + "/" + runtime.GOARCH,
 		"workerdPin": workerdPin, "esbuild": esbundle.Version}
@@ -123,7 +127,7 @@ func cmdDoctor(args []string) error {
 	run("bundler", func() (string, string, string) {
 		ct, err := createTwdDir()
 		if err != nil {
-			return "fail", "templates (create-twd) not found", "reinstall twd"
+			return "fail", "templates (create-twd) not found", reinstallFix("reinstall twd") // sourcehints.go
 		}
 		np := nodePaths(ct)
 		tmp, err := os.MkdirTemp("", "twd-doctor-")
@@ -140,7 +144,7 @@ func cmdDoctor(args []string) error {
 			}
 		}
 		if len(tms) == 0 {
-			return "fail", "no templates in " + ct, "reinstall twd"
+			return "fail", "no templates in " + ct, reinstallFix("reinstall twd")
 		}
 		var nodeTms []string
 		for _, tm := range tms {
@@ -153,7 +157,7 @@ func cmdDoctor(args []string) error {
 			}
 			wb, err := os.ReadFile(filepath.Join(dir, "wrangler.jsonc"))
 			if err != nil {
-				return "fail", "template " + tm + " missing in " + ct, "reinstall twd"
+				return "fail", "template " + tm + " missing in " + ct, reinstallFix("reinstall twd")
 			}
 			var w struct {
 				Main string `json:"main"`
@@ -161,7 +165,7 @@ func cmdDoctor(args []string) error {
 			bundle.UnmarshalJSONC(wb, &w)
 			n, err := esbundle.Build(esbundle.Options{Dir: dir, Main: w.Main, Outfile: filepath.Join(tmp, tm+".js"), NodePaths: np})
 			if err != nil {
-				return "fail", "bundling template " + tm + " failed: " + firstLine(err.Error()), "reinstall twd (the vendored node_modules may be incomplete)"
+				return "fail", "bundling template " + tm + " failed: " + firstLine(err.Error()) + noNodeModules(np, ct), reinstallFix("reinstall twd (the vendored node_modules may be incomplete)")
 			}
 			sizes = append(sizes, fmt.Sprintf("%s %.0f KB", tm, float64(n)/1024))
 		}

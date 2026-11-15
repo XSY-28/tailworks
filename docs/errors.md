@@ -59,7 +59,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `twd up`, mgmt's or the host's own node failed to join. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`twd doctor`), then `twd logs --component mgmt`.
 
 ### build_failed
-500 · cli. **When:** esbuild (workerd apps) or `create-twd build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run.
+500 · cli. **When:** esbuild (workerd apps) or `create-twd build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@twd/…"` means twd's own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall twd; `twd doctor` checks it.
 
 ### cancelled
 0 · cli. **When:** you answered no at a `twd up`, `twd agent setup` or `twd agent remove` confirmation prompt. **Fix:** nothing was started or written; re-run with the policy in place, or `--yes` to skip the prompt.
@@ -378,6 +378,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### unsupported
 1 · cli. **When:** `twd host setup` on an OS without the microVM tier (it needs Linux with KVM). **Fix:** nothing to set up; every workload runs in the process tier here.
+
+### update_check_failed
+1 · cli. **When:** `twd version --check` could not find the latest release: GitHub was unreachable, answered with an error (rate limit), or the repository has no published release. **Fix:** retry later, or look at the releases page; `TWD_REPO` names another repository, as for `get.sh`.
 
 ### upstream_unavailable
 503 · netd. **When:** the platform upstream (workerd or node behind netd) is not answering. **Fix:** it is restarting or crashed; `twd logs <workload>`.
