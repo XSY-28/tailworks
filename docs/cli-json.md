@@ -104,6 +104,7 @@ stream on **stdout**:
 |---|---|
 | `ready` | `url`, `serves` (with the MCP route), `workload`, `node`, `as`, `tags`, `timingsMs` |
 | `reload` | `workload`, `node`, `ms` (after a file change) |
+| `request` | `record`: one request record, as in `twd logs --json` (`$defs/logs.record`), with its console lines and exceptions |
 | `error` | `error` (a rebuild failed; the last good version keeps running) |
 | `stopping` | (Ctrl-C or SIGTERM) |
 
