@@ -68,11 +68,11 @@ New, hermetic:
 | `e2e/sdk:TestWorkflowApprovals` | real `agents` 0.33.0 `AgentWorkflow` + `waitForApproval` in both object modes on twd-hostd over testcontrol: retry from the failed step, no grant / outside limits refused and still waiting, `approveWorkflow()` refused, **hostd restart while waiting**, approve with a forged `approver` in the body and metadata (the Workflow sees the WireGuard identity), second decision 409, reject, the mgmt push path, audit records |
 | `e2e/sdk:TestRefundApprovalTemplate` | the template with two tailnet identities: approved by another node, over-limit refused, the requester's own approval refused by the Workflow |
 
-Commands and results (macOS arm64, after merging origin/master `08d8962`):
+Commands and results (macOS arm64, after merging origin/master `6591638`: D1, Queues, lease locks, mgmt MCP; ADR numbered 040):
 
 - `make lint`: PASS (api-check, compat-check, gofmt, vet of every tag set, check-secrets)
 - `make test`: PASS (`go test -race` of netd, internal, cmd, mgmt, hostd, security, guest; `npm test`)
-- `make test-sdk`: PASS: TestWorkflowApprovals, TestRefundApprovalTemplate, TestCloudflareAgents, TestAgentTemplate, TestVercelAI (34 s)
+- `make test-sdk`: PASS: TestWorkflowApprovals, TestRefundApprovalTemplate, TestCloudflareAgents, TestOAuthProviderKV, TestAgentTemplate, TestVercelAI
 
 ## Findings
 
