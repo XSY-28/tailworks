@@ -82,3 +82,30 @@ func TestInitNamesPackage(t *testing.T) {
 		}
 	}
 }
+
+// TestInitRenamesAppVar: the refund-approval template's approve hint names
+// the app (vars.APP_NAME), so twd init renames that var with the workload.
+func TestInitRenamesAppVar(t *testing.T) {
+	if _, err := createTwdDir(); err != nil {
+		t.Skip("create-twd not found:", err)
+	}
+	dir := filepath.Join(t.TempDir(), "payouts")
+	if err := cmdInit([]string{dir, "--template", "refund-approval"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "wrangler.jsonc"))
+	if !strings.Contains(string(b), `"APP_NAME": "payouts"`) {
+		t.Errorf("wrangler.jsonc:\n%s", b)
+	}
+}
+
+// TestWranglerQueuesNotWarned: wrangler's queues section works on twd
+// (producers and consumers), so it must not be warned as "no such binding".
+func TestWranglerQueuesNotWarned(t *testing.T) {
+	v := map[string]any{"producers": []any{map[string]any{"binding": "Q", "queue": "jobs"}}}
+	for _, b := range []string{"esbuild", "wrangler"} {
+		if n := wranglerKeyNote("queues", v, b); n != "" {
+			t.Errorf("queues (%s): %q", b, n)
+		}
+	}
+}
