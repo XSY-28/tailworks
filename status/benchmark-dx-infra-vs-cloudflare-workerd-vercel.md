@@ -1,6 +1,6 @@
 Last update: 2026-11-15 PT. DX benchmark against Cloudflare (wrangler/workerd), Vercel, Fly, Deno Deploy and self-hosted PaaS; quick fixes and a docs pass landed, larger gaps filed as #41–#48.
 
-# Developer-experience benchmark (branch `precious-meerkat`)
+# Developer-experience benchmark (branch `benchmark-dx-infra-vs-cloudflare-workerd-vercel`)
 
 Started from master at 7ca356d. The twd measurements are hands-on, on macOS arm64. The competitor baselines come from current docs: wrangler 4.162, vercel 65.x, flyctl, Kamal 2.12, Dokku 0.38, Coolify 4.7. Note that Deno Deploy announced a sunset in April 2027.
 
