@@ -725,6 +725,13 @@ Headscale rejects unknown policy fields. The profile therefore emits no `posture
 
 On Headscale the kill switch is Tier 1 plus Tier 2 (`headscale nodes delete`), and lineage lives only in twd's audit. CI gates the profile against a pinned Headscale release.
 
+Measured on Headscale v0.29.7 (ADR-015 has the details):
+- The profile needs v0.29+, the first release with `grants`.
+- Owners can't be `autogroup:admin`, so `tag:twd` owns twd's tags.
+- A tag must be in the policy before a node with it registers.
+- A pre-auth-key node must not also advertise tags, so its tags come from the key.
+- Workloads are reached at their own node's MagicDNS name.
+
 ## 8. Security model
 
 | Threat | Mitigation | Residual risk |

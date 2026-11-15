@@ -356,8 +356,12 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 			return Tenant{}, err
 		}
 		r.OAuthClientID = id
+	case MintHeadscale:
+		if err := checkHeadscaleTenant(r.APIKeyFile, r.ControlURL, r.PublicIngress); err != nil {
+			return Tenant{}, err
+		}
 	default:
-		return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey or wif")
+		return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey, wif or headscale")
 	}
 	t := Tenant{ID: r.ID, Tailnet: r.Tailnet, ControlURL: r.ControlURL, MintMode: r.MintMode, APIKeyFile: r.APIKeyFile,
 		WIFClientID: r.WIFClientID, WIFLifecycleClientID: r.WIFLifecycleClientID, OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
@@ -964,6 +968,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	host := dec.Host
 	var svcDef *ServiceEndpoint
+	if svcName != "" && t.Headscale() {
+		return resp, errHeadscaleNoService(svcName)
+	}
 	if svcName != "" {
 		// Before the lease and the record: a deploy whose Service can't
 		// exist (name taken, no API scope) fails without side effects.
@@ -3207,6 +3214,9 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	if err != nil {
 		return res, lookupErr(err, errf(404, "unknown_tenant", "tenant %q not found", tenantID))
 	}
+	if err := headscalePreflight(t, r); err != nil {
+		return res, err
+	}
 	pol, err := m.policies.Get(ctx, t)
 	if err != nil {
 		return res, errf(503, "policy_unavailable", "can't read the tenant policy: %v", err)
@@ -3219,7 +3229,7 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	for _, tag := range r.SrcTags {
 		if _, ok := pol.TagOwners[tag]; !ok && !slices.Contains(res.MissingTagOwners, tag) {
 			res.MissingTagOwners = append(res.MissingTagOwners, tag)
-			owners = append(owners, fmt.Sprintf("%q: [\"autogroup:admin\", \"tag:twd\"]", tag))
+			owners = append(owners, fmt.Sprintf("%q: %s", tag, tagOwnersFor(t)))
 		}
 	}
 	if len(owners) > 0 {

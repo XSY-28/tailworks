@@ -51,9 +51,9 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 	changed := map[string]any{}
 	if p.MintMode != nil {
 		switch *p.MintMode {
-		case MintAPIKey, MintWIF, MintOAuth:
+		case MintAPIKey, MintWIF, MintOAuth, MintHeadscale:
 		default:
-			return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey or wif")
+			return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey, wif or headscale")
 		}
 		t.MintMode = *p.MintMode
 		changed["mintMode"] = t.MintMode
@@ -137,6 +137,10 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 	case MintAPIKey:
 		if t.APIKeyFile == "" {
 			return Tenant{}, errf(400, "bad_request", "mintMode apikey needs apiKeyFile")
+		}
+	case MintHeadscale:
+		if err := checkHeadscaleTenant(t.APIKeyFile, t.ControlURL, t.PublicIngress); err != nil {
+			return Tenant{}, err
 		}
 	case MintWIF:
 		if t.WIFClientID == "" {

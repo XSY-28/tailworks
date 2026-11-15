@@ -57,6 +57,12 @@ type Config struct {
 	// host can never silently join Tailscale's default control plane:
 	// pass "https://controlplane.tailscale.com" explicitly for SaaS.
 	ControlURL string
+
+	// KeyTagsOnly: nodes take their tags from their auth key alone and
+	// advertise none. Headscale (ADR-015) refuses a pre-auth-key
+	// registration that also requests tags.
+	KeyTagsOnly bool
+
 	// StateRoot holds one 0700 directory per object (tsnet state, object.json).
 	StateRoot string
 	// Keys supplies auth keys for objects without saved state.
@@ -595,6 +601,9 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 		AdvertiseTags: o.tags,
 		Logf:          logf,
 		UserLogf:      logf,
+	}
+	if r.cfg.KeyTagsOnly {
+		srv.AdvertiseTags = nil
 	}
 	o.mu.Lock()
 	if o.state != StatePending {

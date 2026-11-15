@@ -131,7 +131,7 @@ func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSour
 
 // mintNodeKey mints a single-use, pre-authorized node key for twd's own
 // nodes with the OAuth client or API key, translating a tag refusal.
-func mintNodeKey(ctx context.Context, api *tsapi.Client, tag, desc string) (string, error) {
+func mintNodeKey(ctx context.Context, api controlAPI, tag, desc string) (string, error) {
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{tag}, Preauthorized: true, ExpirySeconds: 300, Description: desc})
 	if err != nil {
 		if tsapi.IsTagsNotPermitted(err) {

@@ -38,6 +38,8 @@ var ErrNoLifecycle = errors.New("tenant has no lifecycle credential (kill tier 2
 
 // Broker builds per-tenant API clients:
 //   - apikey: the tenant's API key file (homelab / tests) for every purpose;
+//   - headscale: the tenant's Headscale API key file, against the Headscale
+//     server at its controlURL, for every purpose (headscale.go);
 //   - wif: sign a 5-minute JWT with the platform issuer and exchange it at
 //     /api/v2/oauth/token-exchange for the purpose's trust credential
 //     (mint → wifClientID; lifecycle and policy reads → wifLifecycleClientID);
@@ -103,6 +105,8 @@ func (b *Broker) API(ctx context.Context, t Tenant, purpose string) (TailnetAPI,
 	case MintOAuth:
 		c.Tokens = b.oauthSource(t)
 		return c, nil
+	case MintHeadscale:
+		return b.headscaleAPI(t)
 	}
 	return nil, fmt.Errorf("unknown mint mode %q", t.MintMode)
 }

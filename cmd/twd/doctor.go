@@ -210,6 +210,9 @@ func cmdDoctor(args []string) error {
 			}
 			return "ok", d + ", lifecycle credential " + s.Cfg.WIFLifecycleClientID, ""
 		}
+		if s.Cfg.headscale() {
+			return "ok", "headscale (ADR-015): the Headscale API key in " + s.Cfg.APIKeyFile + " mints every node key at " + s.Cfg.ControlURL + " (a long-lived secret: rotate it; no Services, no Funnel, no posture)", ""
+		}
 		return "ok", "apikey: the API key file " + s.Cfg.APIKeyFile + " mints every node key (fallback mode; an OAuth client is recommended)", ""
 	})
 
@@ -257,6 +260,9 @@ func cmdDoctor(args []string) error {
 			return "skip", "no API key file configured (keyless mode needs none; apikey mode: twd up --api-key-file)", ""
 		}
 		kf, _ = filepath.Abs(kf)
+		if s != nil && s.Cfg.headscale() && *keyF == "" {
+			return doctorHeadscaleKey(s, kf)
+		}
 		key, err := tsapi.LoadSecretEnvFile(kf, "TS_API_KEY")
 		if err != nil {
 			var ins *tsapi.InsecureFileError

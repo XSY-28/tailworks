@@ -18,7 +18,8 @@ unmodified. What works and what doesn't, surface by surface:
 
 You need:
 - a Mac (Apple silicon) or a Linux machine (arm64 or amd64);
-- a Tailscale tailnet where you're an admin.
+- a Tailscale tailnet where you're an admin (or a self-hosted Headscale
+  server: see [docs/headscale.md](docs/headscale.md)).
 
 **1. Install** (no sudo; everything goes into `~/.twd`). Download the latest
 [release](https://github.com/rosskukulinski/twd/releases), verify its

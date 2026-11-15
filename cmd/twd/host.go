@@ -230,8 +230,12 @@ func cmdHostAdd(args []string) error {
 		fmt.Printf("✓ host     %s added (pending) · join key for %s (%s) written to %s (single use, expires %s)\n", pos[0], hj.Hostname,
 			strings.Join(hj.Tags, ","), path, time.UnixMilli(hj.ExpiresAt).Local().Format("15:04:05"))
 		fmt.Printf("  on %s:  install twd, copy the file there (scp, 0600), then\n", pos[0])
-		fmt.Printf("    twd-hostd join --host-id %s --token-file %s --control-url %s\n", pos[0], filepath.Base(path), hj.ControlURL)
-		fmt.Printf("    twd-hostd -host-id %s -mgmt http://%s -tsnet-control-url %s\n", pos[0], s.Cfg.MgmtDNSName, hj.ControlURL)
+		keyTags := ""
+		if s.Cfg.headscale() {
+			keyTags = " --key-tags-only" // Headscale refuses a key join that requests tags
+		}
+		fmt.Printf("    twd-hostd join --host-id %s --token-file %s --control-url %s%s\n", pos[0], filepath.Base(path), hj.ControlURL, keyTags)
+		fmt.Printf("    twd-hostd -host-id %s -mgmt http://%s -tsnet-control-url %s%s\n", pos[0], s.Cfg.MgmtDNSName, hj.ControlURL, strings.Replace(keyTags, "--key-tags-only", "-tsnet-key-tags-only", 1))
 		fmt.Printf("  the key is used once by the join and the file is deleted (its registration secret is kept beside the node state);\n  mgmt binds the node to host %s on its first PUT /v1/hosts/%s, which must present that secret\n", pos[0], pos[0])
 	})
 	return nil
