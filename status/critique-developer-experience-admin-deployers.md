@@ -1,4 +1,4 @@
-Last update: 2026-11-14 PT. Merged Worker secrets (status/worker-secrets.md); node-tier secrets moved out of the process environment (macOS leak). Per-flag help, quiet twd dev, early port check.
+Last update: 2026-11-14 PT. Full e2e pass: fixed the ABI-1 Landlock no-op (Ubuntu 22.04), twd down's device leaks (teardown gate), two stale e2e checks. Funnel suites blocked by slow certificate issuance (master fails the same way).
 
 Earlier: DX pass: strict twd.jsonc + schema, release workflow + get.sh, app-named tags, policy-doc fix.
 
@@ -64,6 +64,84 @@ secrets are separate workstreams, each with its own status file.
   entry is refused with `checksum mismatch`.
 - Not run: the release workflow itself (it needs a pushed tag on GitHub),
   and the e2e suites against a real tailnet.
+
+## E2E run (2026-11-14, this branch)
+
+Real-tailnet suites ran one at a time on tailnet 1; hermetic suites ran
+alongside them, and the Firecracker suites ran inside Lima twd-dev on a
+copy of this tree. `mbp` was unreachable, so `e2e-mbp` didn't run.
+
+| suite | result |
+|---|---|
+| e2e-placement, e2e-local, e2e-coldid, test-node, test-sdk, test-images, test-pg | PASS |
+| e2e-vz (microVM tier on macOS) | PASS |
+| e2e-vm (Firecracker, Lima) | PASS (46 tests) |
+| e2e-container (Firecracker, Lima) | PASS (22) after the stale-check fix below |
+| e2e-mac, e2e-oauth, e2e-svc, e2e-coldid-real (tailnet 1) | PASS |
+| e2e-multi (tailnets 1 + 2) | PASS after the teardown gate; failed on master too |
+| e2e-linux (4 fresh Lima VMs) | debian12, ubuntu22, ubuntu24-amd64 PASS; ubuntu24-arm64 FAIL (pool node not restored at reboot, below) |
+| e2e-linux-reboot | PASS |
+| e2e-linux-vm | FAIL: one pool device left after down (below) |
+| e2e-real (TestMgmtRealWIF), e2e-keyless, e2e-public | FAIL: the issuer/public URL waited 3 to 12 min for its HTTPS certificate (see below) |
+
+### Fixed here
+
+- **Landlock did nothing on ABI 1 (`internal/procsb`).** The own-dirs rule
+  asked for `refer`, which only exists from ABI 2. go-landlock's BestEffort
+  mode then dropped the whole ruleset ("ABI V0"), so on Ubuntu 22.04 (kernel
+  5.15) and any 5.13 to 5.18 kernel, workloads had no filesystem sandbox,
+  only seccomp. `twd doctor` failed `sandbox` there, and STATUS.md noted that
+  ABI 1 "has no measured row yet". Now `refer` is requested only on
+  ABI >= 2. Verified on a fresh Ubuntu 22.04 VM: doctor reports the sandbox
+  enforcing, and the e2e-linux ubuntu22 row passes.
+- **`twd down --purge` left devices behind.** down listed the objects, killed
+  them, then stopped the daemons. Two things created objects in between, and
+  their devices stayed on the tailnet:
+  - pool refills (killing a pool node topped the pool up again), seen in
+    e2e-multi, which leaked one pool device per tailnet on master as well;
+  - public creates over Funnel, seen in e2e-public as `-open-` devices.
+
+  `POST /v1/teardown` (`hostd/teardown.go`) refuses every new object in
+  `h.create`, the single entry point, and waits for creates already in
+  flight. down calls it before listing. Covered by `TestTeardownGate`;
+  e2e-multi now passes with 0 untracked devices on both tailnets.
+- **e2e/linux cleanup** never deleted mgmt's and the host's own nodes. Every
+  other suite deletes `InfraNodeIDs` by ID; this one left 2 devices per row.
+- **e2e/container `PortsAndAttribution`** still expected the forge attempt
+  to return `ok: false`. Since create admission, the platform binding isn't
+  in tenant env at all, so the answer is `noBinding`, which hostd's
+  `TestContainers` already expects. The e2e copy failed on master too.
+
+### Open (all older than this branch)
+
+- **Idle pool node not restored after a reboot.** In e2e-linux
+  ubuntu24-arm64, `pool-qide2dd5cb` was ready before the reboot and never
+  rejoined afterwards: no `object node ready` line at either restart.
+  mgmt still listed it as `ready` with its old node ID. ADR-031 says "a
+  host restart re-uses pool nodes from saved state". The test's rejoin
+  count (3 of 4) is right to flag it.
+- **e2e-linux-vm still leaves one pool device** after down, even with the
+  teardown gate. The node was created about 20 s before down and was
+  online until the daemons stopped, so it was in down's list. Either it
+  wasn't killed or its device wasn't deleted. The suite deletes its VM
+  state in cleanup, so the next step is a rerun that keeps the hostd/mgmt
+  logs. It's probably related to the redeploy or VM-kill steps that only
+  this suite has.
+- **The pool-node `object node ready` log** says `rejoined=false` for an
+  object assigned from the pool (`hostd/poolnodes.go`), which is misleading
+  next to the regular rejoin line.
+- **The Funnel suites (TestMgmtRealWIF, e2e-keyless, e2e-public) are blocked
+  by the environment, not this branch.** Each one waits for a brand-new
+  hostname's HTTPS certificate. Today tsnet's
+  `localapi/v0/cert/<name>` timed out (`context deadline exceeded`), or
+  the certificate took 9 to 12 minutes, which is past the tests' limits.
+  Unmodified `origin/master` fails `TestMgmtRealWIF` the same way: it
+  passed 1 of 2 runs this evening, with the identical TLS handshake error.
+  The branch doesn't touch tsnet, the certs, the issuer or go.mod. Rerun
+  all three when issuance is back to its usual 1 to 2 minutes.
+
+All 15 test devices leaked by today's runs (pool, `-open-`, the e2e-linux
+infra nodes) were deleted by ID on tailnets 1 and 2.
 
 ## CLI polish
 
