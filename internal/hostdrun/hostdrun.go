@@ -28,6 +28,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd"
 	"github.com/rosskukulinski/twd/hostd/image"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/twd/hostd/r2"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
 	"github.com/rosskukulinski/twd/internal/tsapi"
@@ -133,6 +134,10 @@ type Options struct {
 	ContainerVCPU             float64
 	ContainerInternet         string
 	Log                       *slog.Logger
+
+	// R2 holds R2 bucket bytes (hostd.Config.R2; nil: files under
+	// <DataDir>/r2).
+	R2 r2.Backend
 }
 
 // VMOptions configures the microVM tier (Firecracker on Linux + KVM,
@@ -328,7 +333,8 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		VM:            vmBackend(o.VM, log),
 		ContainerIdle: o.ContainerIdle, ContainerMaxLife: o.ContainerMaxLife, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: hostd.ContainerCapacity{Max: o.ContainerMax, MemMiB: o.ContainerMemMiB, VCPU: o.ContainerVCPU},
-		PushInProcess:     o.Client != nil, RegistrationSecret: regSecret}
+		PushInProcess:     o.Client != nil, RegistrationSecret: regSecret,
+		R2: o.R2}
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {

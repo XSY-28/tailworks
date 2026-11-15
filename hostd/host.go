@@ -35,6 +35,7 @@ import (
 
 	"github.com/rosskukulinski/twd/hostd/image"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/twd/hostd/r2"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/internal/procsb"
 	"github.com/rosskukulinski/twd/netd"
@@ -212,6 +213,10 @@ type Config struct {
 	// records and the OTLP export.
 	MetricsListener net.Listener
 	Telemetry       TelemetryOptions
+
+	// R2 holds the bytes of R2 buckets (ADR-036; nil: files under
+	// <DataDir>/r2). Only hostd talks to it.
+	R2 r2.Backend
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -332,6 +337,13 @@ func New(cfg Config) (*Host, error) {
 	}
 	if cfg.KillTombstone == 0 {
 		cfg.KillTombstone = 10 * time.Second
+	}
+	if cfg.R2 == nil {
+		cfg.R2 = &r2.FS{Root: filepath.Join(cfg.DataDir, "r2")}
+	}
+	if f, ok := cfg.R2.(*r2.FS); ok {
+		// No workload may read bucket bytes but through the binding.
+		cfg.SandboxDeny = append(cfg.SandboxDeny, f.Root)
 	}
 	if cfg.CapacityNodes == 0 {
 		cfg.CapacityNodes = 1000

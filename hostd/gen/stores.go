@@ -44,6 +44,13 @@ type StoreKindGen struct {
 	// JS is the kind's platform module (twd-store-<kind>.js). It imports
 	// from "twd-store.js" and exports Backend (and FacetProxy).
 	JS string
+
+	// FacetShim, if set, is a module for facets (it runs in the facet,
+	// with tenant code) exporting wrap(stub): a facet's env.<Binding>
+	// becomes wrap(<the RPC stub to FacetProxy>). For kinds whose API
+	// returns objects with methods, which can't cross RPC (R2's
+	// R2ObjectBody).
+	FacetShim string
 }
 
 var (
@@ -220,4 +227,92 @@ func storeTenantBindings(app *bundle.App) string {
 		s.WriteString(storeBinding(b.Binding, k, b))
 	}
 	return s.String()
+}
+
+// storeShimModule is the facet module name of kind's FacetShim.
+func storeShimModule(kind string) string { return "__twd_store_" + kind + ".js" }
+
+// storeFacetShims are the facet modules of app's kinds with a FacetShim
+// (module name → source).
+func storeFacetShims(app *bundle.App) map[string]string {
+	out := map[string]string{}
+	for _, k := range storeKinds(app) {
+		if k.FacetShim != "" {
+			out[storeShimModule(k.Kind)] = k.FacetShim
+		}
+	}
+	return out
+}
+
+// storeFacetPrelude is __twd_facet.js's code that gives facet classes'
+// env the shims (storeFacetClass); empty when no binding needs one. The
+// env stays the object the runtime built (a Proxy over it), so its other
+// bindings behave as before.
+func storeFacetPrelude(app *bundle.App) string {
+	shims := map[string]string{} // binding → import alias
+	var b strings.Builder
+	for _, k := range storeKinds(app) {
+		if k.FacetShim != "" {
+			fmt.Fprintf(&b, "import { wrap as __twd_wrap_%s } from %s;\n", k.Kind, jsq("./"+storeShimModule(k.Kind)))
+		}
+	}
+	for _, sb := range app.Stores {
+		if k, _ := storeGen(sb.Kind); k.FacetShim != "" {
+			shims[sb.Binding] = "__twd_wrap_" + k.Kind
+		}
+	}
+	if len(shims) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(shims))
+	for n := range shims {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	b.WriteString("const __twdShims = {\n")
+	for _, n := range names {
+		fmt.Fprintf(&b, "  %s: %s,\n", jsq(n), shims[n])
+	}
+	b.WriteString(`};
+const __twdEnvs = new WeakMap();
+function __twdStoreEnv(env) {
+  if (!env || typeof env !== "object") return env;
+  let e = __twdEnvs.get(env);
+  if (!e) {
+    const done = new Map();
+    e = new Proxy(env, {
+      get(t, k, r) {
+        if (typeof k === "string" && Object.hasOwn(__twdShims, k)) {
+          if (!done.has(k)) done.set(k, __twdShims[k](Reflect.get(t, k)));
+          return done.get(k);
+        }
+        return Reflect.get(t, k, r);
+      },
+    });
+    __twdEnvs.set(env, e);
+  }
+  return e;
+}
+function __twdStoreClass(C) {
+  if (typeof C !== "function") return C;
+  const W = class extends C {
+    constructor(ctx, env) {
+      super(ctx, __twdStoreEnv(env));
+    }
+  };
+  Object.defineProperty(W, "name", { value: C.name });
+  return W;
+}
+`)
+	return b.String()
+}
+
+// storeFacetClass wraps a facet class expression (expr) for the shims.
+func storeFacetClass(app *bundle.App, expr string) string {
+	for _, sb := range app.Stores {
+		if k, _ := storeGen(sb.Kind); k.FacetShim != "" {
+			return "__twdStoreClass(" + expr + ")"
+		}
+	}
+	return expr
 }
