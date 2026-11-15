@@ -180,7 +180,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	fmt.Fprintf(&fs, "import * as T from %s;\nimport { wrapFacetClass } from \"./__twd_rt.js\";\nconst B = %s;\n", jsq(mainImport), bjs)
 	fs.WriteString(storeFacetPrelude(app)) // facet shims of storage bindings (stores.go)
 	// Workflow bindings (workflows.go)
-	fmt.Fprintf(&fs, "const WF = %s;\n", workflowsFacetBindings(app))
+	fs.WriteString(workflowsFacetPrelude(app))
 	// ctx.container (ADR-032) for classes with a wrangler "containers" entry.
 	ctrOpt := func(c string) string {
 		cc, ok := app.Containers[c]
@@ -199,10 +199,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	for _, c := range facets {
 		if o := ctrOpt(c); o != "" {
-			fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B, { workflows: WF, container: %s });\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c), o)
+			fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B, { %scontainer: %s });\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c), workflowsFacetOpt(app, true), o)
 			continue
 		}
-		fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B, { workflows: WF });\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c))
+		fmt.Fprintf(&fs, "export const %s = wrapFacetClass(%s, %s, B%s);\n", c, storeFacetClass(app, "T["+jsq(c)+"]"), jsq(c), workflowsFacetOpt(app, false))
 	}
 	// Tenant service main module.
 	var ms strings.Builder

@@ -150,6 +150,28 @@ func workflowsFacetBindings(app *bundle.App) string {
 	return string(b)
 }
 
+// workflowsFacetPrelude declares WF in the facet main module ("" without
+// Workflows, so apps without them generate as before).
+func workflowsFacetPrelude(app *bundle.App) string {
+	if len(app.Workflows) == 0 {
+		return ""
+	}
+	return "const WF = " + workflowsFacetBindings(app) + ";\n"
+}
+
+// workflowsFacetOpt is wrapFacetClass's workflows option: inside an
+// options object ("workflows: WF, ") or as the whole argument (", {
+// workflows: WF }"); "" without Workflows.
+func workflowsFacetOpt(app *bundle.App, inObject bool) string {
+	if len(app.Workflows) == 0 {
+		return ""
+	}
+	if inObject {
+		return "workflows: WF, "
+	}
+	return ", { workflows: WF }"
+}
+
 // workflowsConfig is twd-config.json's "workflows".
 type workflowCfg struct {
 	Name    string `json:"name"`
