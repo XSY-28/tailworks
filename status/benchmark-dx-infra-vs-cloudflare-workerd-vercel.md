@@ -1,4 +1,43 @@
-Last update: 2026-11-15 PT. DX benchmark against Cloudflare (wrangler/workerd), Vercel, Fly, Deno Deploy and self-hosted PaaS; quick fixes and a docs pass landed, larger gaps filed as #41–#48.
+Last update: 2026-11-15 PT. Second pass: UX (admin console, approvals, what callers see) and docs as a product. Fixes landed, larger gaps filed as #50 and #51.
+
+# Second pass: user experience and docs (2026-11-15)
+
+## Admin console and approvals
+
+To review the current console, I ran it against the populated `mgmt/ui` test fixtures and drove it in a browser (Playwright). That covered the overview, the object page, the deployment page and the approvals page, at desktop and phone widths. I also looked at the live install's older console, read-only.
+
+Already good: confirmation before every mutation, light and dark mode, horizontal table scroll on a phone, typed errors with a docs link, and no cookies or tokens.
+
+Fixed:
+- **Audit text.** The console's copy of `twd audit`'s formatter had drifted: secret, KV, telemetry, public-ingress and approval records showed as raw JSON. Both now use `internal/auditfmt`. A kill without a reason printed `by - %!q(<nil>)`. Revoke and credential records now read as text. Tests: `TestDescribe`, `TestDecided`.
+- **Overview.** A failed deployment's repeated workerd line is folded to one line with a count (`errLines`/`errSummary`). The green "ready" next to a failed deployment now says the deployment failed. That wording holds for blue/green, where an older version may still serve. There's a favicon (it used to 404 on every load).
+- **Approvals page.** It has one comment box per row and Approve/Reject buttons, each with its own confirmation. A comment typed next to Approve used to be dropped by Reject. `app.js` now disables the buttons after the submit, so the clicked decision is still sent; I checked this in the browser. The copy is plainer, and "rejectd" is now "rejected", in both the flash message and the audit text.
+
+## Docs as a product
+
+Scorecard, 5 = best in class (details in #51):
+
+| | twd | Cloudflare | Vercel | Fly | Kamal |
+|---|---|---|---|---|---|
+| Getting started | 3 | 5 | 5 | 5 | 4 |
+| Information architecture | 2 → 3 | 5 | 5 | 4 | 4 |
+| Examples | 1 | 5 | 4 | 4 | 2 |
+| Reference | 3 | 5 | 5 | 4 | 4 |
+| Search | 3 → 4 | 4 | 5 | 3 | 1 |
+| Changelog | 2 | 5 | 5 | 3 | 3 |
+| Limits | 1 | 5 | 4 | 2 | n/a |
+
+Fixed:
+- **Docs map.** `docs/README.md` lists the docs by role (Workers developer, operator, security reviewer, coding agent) and by task (learn, do, look up, understand). README and llms.txt link to it, and README puts the `twd dev` no-tailnet path before the quick start.
+- **Upgrade docs.** INSTALL's Upgrade section now points to `upgrading.md`, which master added at the same time as my section.
+- **`twd docs search`.** A doc named after the query word gets a boost, and `contracts/` and `design/` count half. "secret" now finds secrets.md first (it was 8th); "kv", "logs", "upgrade" and "public webhook" find their guide first. Test: `TestSearchRanksGuides`.
+
+## Issues filed (second pass)
+
+- #50 UX: approvers have to know their tenant ID and get no notification; the console has no search or filter; `twd dev` has no console.
+- #51 Docs: recipes, a limits page, a generated CLI reference, a changelog, SECURITY.md, README missing from `twd docs search`.
+- A comment on #42: `twd dev`'s plain "Internal Server Error", where wrangler shows an HTML stack page.
+
 
 # Developer-experience benchmark (branch `benchmark-dx-infra-vs-cloudflare-workerd-vercel`)
 
