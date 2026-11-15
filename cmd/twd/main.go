@@ -95,6 +95,7 @@ func commandUsage(w io.Writer, c command, f *flags) {
 		return
 	}
 	fmt.Fprintln(w, "\nflags:")
+	plainUsages(f.FlagSet) // didyoumean.go
 	f.SetOutput(w)
 	f.PrintDefaults()
 	f.SetOutput(io.Discard)
@@ -204,7 +205,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	printErr(fail("bad_request", fmt.Sprintf("unknown command %q", name), "run `twd help` for the list"))
+	printErr(unknownCommand(name)) // didyoumean.go
 	return 2
 }
 
