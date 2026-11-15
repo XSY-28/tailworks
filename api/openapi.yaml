@@ -134,6 +134,8 @@ tags:
     description: Single-use auth keys and node certificates.
   - name: secrets
     description: Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
+  - name: telemetry
+    description: A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
   - name: audit
     description: Hash-chained, append-only audit log.
   - name: volumes
@@ -438,15 +440,50 @@ paths:
           in: query
           description: Only the replica on this host (a host ID).
           schema: { type: string }
+        - name: source
+          in: query
+          description: |
+            `console`: the app's raw output (workerd's stdout, the node
+            tier's `app.log`, the microVM console). `requests`: the
+            workload's structured request records (ADR-observability), as
+            JSON Lines (`application/x-ndjson`), one `RequestRecord` per
+            line; `n` and the filters below then count records, not lines.
+          schema: { type: string, enum: [console, requests], default: console }
+        - name: object
+          in: query
+          description: "`source=requests`: only records of this object (object ID, `Class/name`, `Class` or name)."
+          schema: { type: string, maxLength: 256 }
+        - name: status
+          in: query
+          description: "`source=requests`: only this HTTP status (`404`) or class (`5xx`)."
+          schema: { type: string, pattern: "^([1-5][0-9][0-9]|[1-5]xx)$" }
+        - name: outcome
+          in: query
+          description: "`source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …)."
+          schema: { type: string, maxLength: 64 }
+        - name: caller
+          in: query
+          description: "`source=requests`: only callers whose login or node name contains this (`public` for Funnel requests)."
+          schema: { type: string, maxLength: 256 }
+        - name: trace
+          in: query
+          description: "`source=requests`: only this W3C trace ID (or a prefix of it) or audit trace ID."
+          schema: { type: string, maxLength: 64 }
+        - name: errors
+          in: query
+          description: "`source=requests`: only errors (status ≥ 400, an outcome other than `ok`, or an exception)."
+          schema: { type: boolean, default: false }
       responses:
         "200":
-          description: The log lines (UTF-8 as the app wrote them; a stream with `follow`).
+          description: The log lines (UTF-8 as the app wrote them; a stream with `follow`), or request records with `source=requests`.
           headers:
             Cache-Control:
               schema: { type: string, const: no-store }
           content:
             text/plain:
               schema: { type: string }
+            application/x-ndjson:
+              schema: { $ref: "#/components/schemas/RequestRecord" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -639,6 +676,119 @@ paths:
         default: { $ref: "#/components/responses/Error" }
 
   # ------------------------------------------------------------------ hosts
+
+  /v1/tenants/{id}/workloads/{workload}/telemetry-grants:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [telemetry, credentials]
+      operationId: CreateTelemetryGrant
+      summary: Release the tenant's OTLP export config to a workload's lease holder
+      description: |
+        hostd calls this when it starts a workload, and every minute while
+        it runs it, to export the workload's logs, metrics and spans
+        (ADR-observability). As with secrets (ADR-034), the config, header
+        values included, is released only to the host holding the
+        workload's lease at `epoch` (`409 lease_lost`), with
+        `Cache-Control: no-store`, and is never logged. `otlp` is absent
+        when the tenant exports nothing. Audited (`kind:
+        telemetry_release`, endpoint and header names) the first time a
+        host gets each version of the config for a workload (hosts re-read
+        it every minute); a refusal always is.
+      x-twd-role: host
+      x-twd-audit: true
+      parameters:
+        - $ref: "#/components/parameters/epoch"
+      responses:
+        "201":
+          description: The grant.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/telemetry:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [telemetry]
+      operationId: GetTenantTelemetry
+      summary: Read the tenant's OTLP export (`twd telemetry`), without header values
+      description: |
+        ADR-observability. Header names only: no admin operation returns a
+        header value. A tenant that exports nothing has no `otlp`.
+        `404 unknown_tenant`.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The tenant's telemetry config.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryConfig" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [telemetry]
+      operationId: PutTenantTelemetry
+      summary: Set the tenant's OTLP export (`twd telemetry set`)
+      description: |
+        Every workload of the tenant exports its request records (as log
+        records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+        to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+        **from the workload's own tailnet node**, so it must be a tailnet
+        peer the tailnet policy lets that workload reach (a public
+        internet endpoint is refused like any other egress). The config
+        is stored encrypted in mgmt custody (custody name
+        `twd/<tenant>/telemetry`); header values (collector credentials)
+        are never logged, audited or returned. Hosts pick a change up
+        within a minute. Audited (`kind: telemetry_put`, endpoint and
+        header names).
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelemetryPut" }
+            examples:
+              collector:
+                value: { otlp: { endpoint: "http://otel-collector:4318", headers: { authorization: "Bearer …" } } }
+      responses:
+        "200":
+          description: The new config (header names only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [telemetry]
+      operationId: DeleteTenantTelemetry
+      summary: Stop the tenant's OTLP export (`twd telemetry rm`)
+      description: |
+        Hosts stop exporting within a minute. Records stay on the hosts
+        (`twd logs`) and in `/metrics`. Idempotent. Audited
+        (`kind: telemetry_delete`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted (or there was nothing to delete).
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/hosts:
     post:
       tags: [hosts, credentials]
@@ -3673,6 +3823,9 @@ components:
         `secret_put` (a workload secret set; name only),
         `secret_delete`,
         `secret_release` (a workload's secrets released to its lease holder; names only),
+        `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+        `telemetry_delete`,
+        `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -3719,6 +3872,9 @@ components:
         - secret_put
         - secret_delete
         - secret_release
+        - telemetry_put
+        - telemetry_delete
+        - telemetry_release
         - reap
         - preflight
         - host_add
@@ -3830,6 +3986,134 @@ components:
           additionalProperties: { type: string, format: password }
         grantedAt: { type: integer, format: int64 }
       x-twd-secret: true
+    TelemetrySignal:
+      type: string
+      description: An OTLP signal.
+      enum:
+        - logs
+        - metrics
+        - traces
+    OTLPExport:
+      type: object
+      description: A tenant's OTLP export, without header values.
+      required: [endpoint, headerNames, signals]
+      properties:
+        endpoint: { type: string, format: uri, description: "OTLP/HTTP base URL; signals go to `<endpoint>/v1/<signal>`." }
+        headerNames: { type: array, items: { type: string }, description: Names of the headers sent with every export (values are never returned). }
+        signals: { type: array, items: { $ref: "#/components/schemas/TelemetrySignal" } }
+    TelemetryConfig:
+      type: object
+      required: [tenantID]
+      properties:
+        tenantID: { type: string }
+        otlp: { $ref: "#/components/schemas/OTLPExport" }
+        updatedAt: { type: integer, format: int64 }
+        updatedBy: { type: string }
+    OTLPExportPut:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048, description: "http:// or https:// base URL of an OTLP/HTTP receiver on the tailnet (no user info, query or fragment)." }
+        headers:
+          type: object
+          description: "Headers sent with every export, typically the collector's credentials (at most 16; values at most 4 KiB). Never logged, audited or returned."
+          maxProperties: 16
+          additionalProperties: { type: string, maxLength: 4096, format: password, writeOnly: true }
+        signals:
+          type: array
+          description: What to export (default all three).
+          items: { $ref: "#/components/schemas/TelemetrySignal" }
+      additionalProperties: false
+    TelemetryPut:
+      type: object
+      required: [otlp]
+      properties:
+        otlp: { $ref: "#/components/schemas/OTLPExportPut" }
+      additionalProperties: false
+      x-twd-secret: true
+    OTLPGrant:
+      type: object
+      required: [endpoint, signals]
+      properties:
+        endpoint: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string, format: password }
+        signals: { type: array, items: { $ref: "#/components/schemas/TelemetrySignal" } }
+    TelemetryGrant:
+      type: object
+      description: A fenced release of the tenant's OTLP export config. Never logged.
+      required: [tenantID, workload, epoch]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        epoch: { type: integer, format: int64 }
+        otlp: { $ref: "#/components/schemas/OTLPGrant" }
+        grantedAt: { type: integer, format: int64 }
+      x-twd-secret: true
+    RequestRecord:
+      type: object
+      description: |
+        One line of a workload's request log (`twd logs --json`,
+        ADR-observability): a request through hostd's ingress (`kind:
+        request`), joined with its workerd invocation, or an invocation
+        with no ingress half (`kind: invocation`: a DO called from the
+        Worker, an alarm, a cron run), or a note that records were dropped
+        by the workload's rate limit (`kind: dropped`). Never holds bodies,
+        query strings, request headers or secret values.
+      required: [time, kind]
+      properties:
+        time: { type: string, format: date-time }
+        kind: { type: string, enum: [request, invocation, dropped] }
+        host: { type: string }
+        tenant: { type: string }
+        workload: { type: string }
+        deployment: { type: string }
+        object: { type: string, description: The twd object ID. }
+        class: { type: string }
+        name: { type: string }
+        durableObjectId: { type: string, description: "workerd's ID of a plain-DO object whose name the invocation does not carry." }
+        caller:
+          type: object
+          description: The verified caller (netd's WhoIs), never from tenant code.
+          properties:
+            node: { type: string }
+            nodeId: { type: string }
+            user: { type: string }
+            tags: { type: array, items: { type: string } }
+            object: { type: string }
+            public: { type: boolean }
+            ip: { type: string }
+        method: { type: string }
+        path: { type: string, description: The URL path (never the query string). }
+        status: { type: integer }
+        durationMs: { type: number }
+        event: { type: string, description: "fetch, alarm, rpc, scheduled, websocket." }
+        entrypoint: { type: string }
+        outcome: { type: string }
+        traceId: { type: string }
+        spanId: { type: string }
+        parentSpanId: { type: string }
+        auditTraceId: { type: string }
+        logs:
+          type: array
+          items:
+            type: object
+            properties:
+              time: { type: string, format: date-time }
+              level: { type: string }
+              message: { type: string }
+        exceptions:
+          type: array
+          items:
+            type: object
+            properties:
+              time: { type: string, format: date-time }
+              name: { type: string }
+              message: { type: string }
+              stack: { type: string }
+        truncated: { type: boolean }
+        dropped: { type: integer }
     VolumeKeyGrant:
       type: object
       description: A fenced release of a volume's data key. Never logged.

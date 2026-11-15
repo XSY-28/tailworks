@@ -41,6 +41,10 @@ type LogsQuery struct {
 	N      int
 	Follow bool
 	Host   string // only the replica on this host ("" = all)
+	// Source is "console" (default) or "requests" (ADR-observability), and
+	// Filter the record filters hostd applies (obs.Filter's parameters).
+	Source string
+	Filter url.Values
 }
 
 // logSources lists the running replicas of tenantID's workload (the
@@ -89,6 +93,12 @@ func (m *Mgmt) logSources(ctx context.Context, tenantID, workload, host string) 
 // long as ctx (no client timeout: follow streams).
 func (m *Mgmt) hostLogs(ctx context.Context, tenantID string, src logSource, q LogsQuery) (*http.Response, error) {
 	v := url.Values{"tenant": {tenantID}, "workload": {src.workload}, "n": {strconv.Itoa(q.N)}}
+	if q.Source != "" {
+		v.Set("source", q.Source)
+	}
+	for k, vs := range q.Filter {
+		v[k] = vs
+	}
 	if q.Follow {
 		v.Set("follow", "1")
 	}
@@ -190,7 +200,7 @@ func (m *Mgmt) streamLogs(ctx context.Context, w http.ResponseWriter, tenantID s
 	if ok == 0 {
 		return asHostUnavailable(srcs[0], errs[0])
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", logsContentType(q.Source))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(200)
@@ -276,6 +286,10 @@ func (a *v1api) GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id v1.Te
 	}
 	if q.N < 0 || q.N > MaxLogLines {
 		writeErr(w, r, errf(400, "bad_request", "n must be 0..%d", MaxLogLines))
+		return
+	}
+	if err := logsSource(&q, params); err != nil {
+		writeErr(w, r, err)
 		return
 	}
 	ctx := r.Context()

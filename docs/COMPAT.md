@@ -80,6 +80,25 @@ cron syntax with 1 = Sunday, `controller.cron` and
 `controller.scheduledTime`). See [cron-triggers.md](cron-triggers.md). The
 `node` runtime does not support them.
 
+## Logs, metrics and traces (ADR-observability)
+
+See [observability.md](observability.md). Measured by `TestTelemetry`
+(`hostd`, hermetic: real workerd, testcontrol, a tsnet caller, echo and
+OTLP collector nodes) and `e2e/observability` (twd-mgmt and twd-hostd as
+separate processes).
+
+| Cloudflare | twd | Test | Notes |
+|---|---|---|---|
+| `console.*` and uncaught exceptions in `wrangler tail` / Workers Logs | ✅ `twd logs <workload>` | `TestTelemetry/RecordsJoinIngressAndTail`, `ExceptionAndNoQueryString` | one record per request: twd's half (verified tailnet caller, status, duration) joined with workerd's tail (console lines with level, exceptions with stack, outcome). The Worker, plain-DO and facet classes alike; a DO called from the Worker is its own record |
+| `wrangler tail --format json` | ✅ `twd logs --json` | `TestTelemetry/LogsAPI` | JSON Lines, the `RequestRecord` schema |
+| `wrangler tail` filters (`--status`, `--method`, `--search`, `--ip`, `--header`, `--sampling-rate`) | ⚠ different | `TestTelemetry/LogsAPI`, `TestRecordFilterTextBound` (`internal/obs`) | `--status 5xx`, `--outcome`, `--errors`, `--object`, `--caller` (tailnet identity, not IP), `--trace`; applied on the host. No `--search`, `--header` or sampling |
+| Tail Workers (`tail_consumers`) and streaming tails for your code | ❌ | — | twd uses workerd's tails itself (the platform's `Tail` entrypoint); export with OTLP instead |
+| Workers Logs / Logpush export; Workers Observability OpenTelemetry export (logs and traces to an OTLP destination) | ✅ OTLP/HTTP (JSON) per tenant | `TestTelemetry/OTLPExportFromTheWorkloadNode`, `e2e/observability` | `twd telemetry set --otlp <url> --header NAME`. Logs, metrics and traces; headers in mgmt custody. The collector is a **tailnet peer** dialed from each workload's own node, so the tailnet policy decides; no public destinations |
+| Automatic tracing (Workers Traces): `traceparent` across requests | ⚠ partial | `TestTelemetry/TraceparentAcrossDOAndEgress`, `e2e/observability` | spans for twd's ingress (SERVER), DO stub `fetch()` (CLIENT, from the runtime) and egress (CLIENT); one trace across caller → Worker → DO → egress → the next hop. Not traced: DO RPC (`stub.method()`), alarms, cron runs, storage operations |
+| Workers metrics / Analytics (requests, errors, duration) | ✅ Prometheus + OTLP | `TestTelemetry/PrometheusScrape`, `e2e/observability` | `GET /metrics` on port 9464 of each host's and mgmt's own tailnet node (a policy grant decides who scrapes), OpenTelemetry semantic-convention names; per tenant via OTLP |
+| CPU time (`cpuTime` in tail events, the CPU time metric) | ❌ | `TestTelemetry` | workerd reports `cpuTime: 0` and `wallTime: 0`; twd reports wall time from its ingress |
+| Workers Analytics Engine binding | ❌ | — | not a binding on twd |
+
 ## Vercel AI SDK (`ai` 7.0.165) and `mcp-handler` 2.3.1
 
 | Feature | Status | Test | Notes |
@@ -92,7 +111,7 @@ cron syntax with 1 = Sunday, `controller.cron` and
 | `@ai-sdk/mcp` stdio transport | ❌ | — | `child_process` (Node process tier) |
 | `mcp-handler` `createMcpHandler` + `withTailnet` | ✅ | `McpHandlerWithTailnet` | Web-standard handler mounted at `/mcp`; per-request caller, allow/deny, `whoami` |
 | Typed egress refusals through the MCP client | ✅ | `EgressRefusalIsTyped` | `mcpFetch` throws `TailnetError`; the template renders it (`403 peer_not_visible`) instead of a 500 |
-| `traceparent` propagation | ✅ | `TraceparentPropagated` | `mcpFetch` sends `00-<caller traceId>-<span>-01`; hostd assigns each hop its own trace ID (the header is not trusted) |
+| `traceparent` propagation | ✅ | `TraceparentPropagated`, `TestTelemetry/TraceparentAcrossDOAndEgress` | `mcpFetch` sends `00-<caller traceId>-<span>-01`, and twd itself propagates the W3C trace across ingress, DO calls and egress (ADR-observability). The **audit** trace ID (`getCaller().traceId`) is still each hop's own: the header is never trusted for audit or identity |
 | On-behalf-of (`actingFor`) assertions on MCP calls | ❌ | — | RFC §4.6 not implemented: the server sees the agent's node, not the human it acts for |
 | `WorkflowAgent` / Workflow SDK | ❌ | — | `node:vm` (ADR-022: Node process tier, branch m9) |
 | `HarnessAgent`, Vercel Sandbox, hosted Vercel services | ❌ | — | client-only or process tier (Cloudflare's Sandbox SDK: see below) |

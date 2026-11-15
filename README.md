@@ -140,6 +140,11 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
   (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Logs, metrics and traces:** `twd logs <workload>` shows one structured
+  line per request (`--json`, `--errors`, …), hosts serve Prometheus
+  `/metrics` on their tailnet node, and `twd telemetry set --otlp …`
+  exports logs, metrics and traces to your OpenTelemetry collector. See
+  [docs/observability.md](docs/observability.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).

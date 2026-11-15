@@ -304,6 +304,7 @@ func (m *Mgmt) adoptWarmKey(ctx context.Context, t Tenant, o Object, sp *mintSpa
 	ws.DeleteWarmKey(ctx, wk.TenantID, wk.KeyID)
 	m.notify(o.ID)
 	m.log.Info("mint spans", append([]any{"object", o.ID, "tenant", t.ID, "keyID", wk.KeyID, "pooled", true}, sp.attrs()...)...)
+	sp.observe(t.ID, true)
 	return true, nil
 }
 
