@@ -1425,6 +1425,10 @@
             "type": "string"
           }
         },
+        "preview": {
+          "type": "string",
+          "description": "--preview: the preview's own workload name (<workload>--preview-<alias>); workload is the workload it previews"
+        },
         "bundleBytes": {
           "type": "integer"
         },
@@ -1651,6 +1655,122 @@
         "tenantID",
         "rollbackOf",
         "target",
+        "deploymentID",
+        "host",
+        "status",
+        "timingsMs"
+      ]
+    },
+    "previews": {
+      "type": "object",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "previews": {
+          "type": "array",
+          "description": "the running previews, newest first",
+          "items": {
+            "type": "object",
+            "properties": {
+              "workload": {
+                "type": "string",
+                "description": "the preview's own workload name"
+              },
+              "alias": {
+                "type": "string"
+              },
+              "previewOf": {
+                "type": "string"
+              },
+              "bundleSHA256": {
+                "type": "string"
+              },
+              "deployment": {
+                "$ref": "#/$defs/deployment"
+              }
+            },
+            "required": [
+              "workload",
+              "alias",
+              "previewOf",
+              "deployment"
+            ]
+          }
+        }
+      },
+      "required": [
+        "workload",
+        "tenant",
+        "tenantID",
+        "previews"
+      ]
+    },
+    "promote": {
+      "type": "object",
+      "description": "the result, on stdout; progress is deploy.event lines on stderr (start, preflight, placed, status, ready)",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string",
+          "description": "the preview's workload name"
+        },
+        "promotedFrom": {
+          "type": "string",
+          "description": "the preview deployment whose bundle was deployed"
+        },
+        "previewStopped": {
+          "type": "boolean",
+          "description": "the preview was undeployed (false with --keep-preview)"
+        },
+        "deploymentID": {
+          "type": "string",
+          "description": "the workload's new deployment"
+        },
+        "host": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "active, or assigned with --no-wait"
+        },
+        "preflight": {
+          "type": "object"
+        },
+        "endpoint": {
+          "type": "object"
+        },
+        "placement": {
+          "type": "object"
+        },
+        "public": {
+          "type": "object"
+        },
+        "timingsMs": {
+          "$ref": "#/$defs/timings"
+        }
+      },
+      "required": [
+        "workload",
+        "tenant",
+        "tenantID",
+        "preview",
+        "promotedFrom",
+        "previewStopped",
         "deploymentID",
         "host",
         "status",

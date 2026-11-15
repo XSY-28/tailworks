@@ -37,6 +37,8 @@ var helpGroups = []struct {
 	{"Deploy", []string{
 		"deploy",
 		"deployments",
+		"previews",
+		"promote",
 		"rollback",
 		"undeploy",
 		"expose",
@@ -92,6 +94,8 @@ var shortHelp = map[string]string{
 	"logs":        "request records and console lines; daemon logs",
 	"ls":          "list deployments and objects",
 	"mcp":         "twd's MCP server for coding agents (stdio)",
+	"previews":    "a workload's running preview deploys",
+	"promote":     "make a preview the workload's deployment",
 	"queues":      "the tenant's queues: create, peek, send",
 	"r2":          "a workload's R2 buckets and objects",
 	"release":     "twd-mgmt's release catalog",
