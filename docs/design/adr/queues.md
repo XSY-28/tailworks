@@ -1,7 +1,7 @@
 # ADR-queues: Queues are a sealed, fenced broker in mgmt; hostd runs push consumers
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/cruel-dog.md`).
+**Status:** Proposed (results in `status/implement-queues-issue-18.md`).
 
 **Context.**
 

@@ -256,6 +256,12 @@ printed anywhere.
 ### remote_unsupported
 400 · cli. **When:** a command that runs only on the host that runs `twd up` (`twd logs`, `twd tenant add`) was run on a linked developer machine. **Fix:** run it on the host.
 
+### queue_limit
+400 · mgmt, hostd. **When:** a queue send is too big: a message over 128 KB, a `sendBatch` over 100 messages or 256 KB, a `delaySeconds` over 43200, or a queue over 1 GiB of kept messages. In a Worker, `send()` throws `Error: [queue_limit] … (400)`. **Fix:** send smaller messages (store large payloads elsewhere and send a reference), or let consumers drain the queue.
+
+### queue_unavailable
+503 · hostd. **When:** a queue producer's send (or `metrics()`) couldn't reach mgmt through hostd. `send()` throws `Error: [queue_unavailable] … (503)`; nothing was enqueued. **Fix:** retry; check `twd status` for mgmt and the host.
+
 ### reserved_tag
 400 · mgmt. **When:** a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`). **Fix:** use your app's tags (`tag:twd-wl-<name>`, class tags) in `twd.jsonc`.
 
@@ -318,6 +324,9 @@ printed anywhere.
 
 ### unknown_store
 404 · mgmt. **When:** the workload has no platform store of that kind and name (`twd kv namespace`, `GET …/stores/{kind}/{name}`). A store exists from its first write. **Fix:** check the name, or create it.
+
+### unknown_queue
+404 · mgmt. **When:** `twd queues info|rm|purge|messages` (or the API) named a queue the tenant doesn't have. A send or a consumer's first claim creates the queue, so this only comes from operator calls. **Fix:** `twd queues ls` for the names.
 
 ### unknown_tenant
 404 · mgmt, cli. **When:** no tenant with that tailnet or ID. **Fix:** `twd tenant ls`.

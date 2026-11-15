@@ -18,7 +18,8 @@ on) provides, what **twd adds** on top, how it **differs** from Cloudflare,
 what's **missing**, and the **tests**. Unless a row says otherwise, the
 tests run under `make test`; `e2e/sdk` runs under `make test-sdk`,
 `e2e/container` under `make e2e-container`, `e2e/node` under
-`make test-node`, `e2e/placement` under `make e2e-placement`.
+`make test-node`, `e2e/placement` under `make e2e-placement`, `e2e/queues`
+under `make e2e-queues`.
 
 **Adding or changing a row.** One surface is one table row (one line), so
 parallel branches don't conflict. Its first cell starts with an anchor,
@@ -59,7 +60,7 @@ table, in logical position, not at the end. `make lint` runs
 | <a id="kv"></a>Workers KV | ❌ | KV bindings backed by a service you supply | — | — | no KV binding (`env.KV` is `undefined`). Durable Object storage works | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
 | <a id="r2"></a>R2 | ❌ | R2 bindings backed by a service you supply | — | — | no R2 binding | — |
 | <a id="d1"></a>D1 | ❌ | D1 bindings backed by a service you supply | — | — | no D1 binding. Durable Object SQLite works | — |
-| <a id="queues"></a>Queues (producer) | ❌ | queue bindings backed by a service you supply | — | — | no Queues binding or broker | — |
+| <a id="queues"></a>Queues (producer) | ✅ | the `queue` binding (`send`, `sendBatch`, `metrics`, `contentType` `json`/`text`/`bytes`/`v8`, `delaySeconds`) backed by a service you supply | the broker: queues live in mgmt's database (sealed per queue), so producer and consumer can be different workloads on different hosts; `delivery_delay` per binding; facets get a proxy to the same binding; `twd queues`. [Details](queues.md) | a queue is created on first use (also `twd queues create`); `send()` errors read `Error: [<code>] … (<status>)` with twd's codes | per-queue settings (`message_retention_period`, a queue-level `delivery_delay`) | `hostd:TestQueues/ContentTypes`, `hostd:TestQueues/DelaySeconds`, `hostd:TestQueues/FromFacet`, `hostd:TestQueues/MetricsAndLimits`, `mgmt:TestQueuesSendPullAck`, `cmd/twd:TestCLIQueues` |
 | <a id="workflows"></a>Workflows | ❌ | — | — | — | no Workflows binding or engine (`env.WORKFLOW` is `undefined`). The Vercel Workflow SDK runs on [Node apps](#node-runtime) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
 | <a id="workers-ai"></a>Workers AI (`env.AI`) | ❌ | — | — | — | no binding. Point an AI SDK provider at an LLM gateway on your tailnet (the `ai-agent` template) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
 | <a id="vectorize"></a>Vectorize | ❌ | — | — | — | no binding | — |
@@ -76,7 +77,8 @@ table, in logical position, not at the end. `make lint` runs
 | Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
 |---|---|---|---|---|---|---|
 | <a id="cron"></a>Cron triggers | ✅ | the `scheduled()` handler | hostd runs `triggers.crons` on the host serving the active deployment (Cloudflare's syntax, UTC, 1 = Sunday). A run has no caller; its egress leaves from the workload's node. [Details](cron-triggers.md) | no backfill of missed minutes; an overlapping run is skipped, not queued; no retries | crons on the Node runtime | `hostd:TestCronTriggers`, `hostd/gen:TestGeneratedCron`, `hostd/bundle:TestParseCrons` |
-| <a id="queue-consumers"></a>Queue consumers (`queue()`) | ❌ | the `queue()` handler | — | — | no Queues ([above](#queues)) | — |
+| <a id="queue-consumers"></a>Queue consumers (`queue()`) | ⚠️ | the `queue()` handler and `MessageBatch` (`ack`, `retry`, `ackAll`, `retryAll`) | hostd on the host holding the consumer's lease claims batches from mgmt (`max_batch_size`, `max_batch_timeout`), runs `queue()` and settles them; `max_retries`, `retry_delay`, `dead_letter_queue`; at-least-once across a workerd crash, a hostd restart and a lease move. [Details](queues.md#delivery) | several workloads may consume one queue (competing); `max_concurrency` is a fixed number of loops, not autoscaling | consumers on the Node runtime | `hostd:TestQueues/BatchBySize`, `hostd:TestQueues/BatchByTimeout`, `hostd:TestQueues/RetryWithDelay`, `hostd:TestQueues/MaxRetriesDeadLetter`, `hostd:TestQueues/ThrowRetriesBatch`, `hostd:TestQueues/ConsumerCrash`, `e2e/queues:TestQueuesMultiHost`, `cmd/twd:TestDevQueues` |
+| <a id="queue-pull"></a>Queue pull consumers (HTTP pull) | ⚠️ | — | `POST …/queues/{q}/messages/pull` and `…/ack` on mgmt's API: lease IDs, visibility timeout, per-message retry delays, `maxRetries` and a dead-letter queue | twd's API, not Cloudflare's REST API; the caller needs twd's admin capability (tailnet identity, no token) | a per-queue grant for non-admin pull clients | `mgmt:TestQueuesDelayRetriesDLQ`, `mgmt:TestQueuesLongPoll`, `mgmt:TestQueuesFence` |
 
 ## Platform
 
@@ -87,7 +89,7 @@ table, in logical position, not at the end. `make lint` runs
 | <a id="public-routes"></a>Public routes | ⚠️ | — | `public.routes` in `twd.jsonc` serves chosen paths over Tailscale Funnel; `getRequester(req)` returns `{kind: "public", ip}`; public requests can't create objects unless the class allows it. [Details](#public-routes-funnel-adr-029) | tailnet-only by default (Cloudflare Workers are public by default); `*.ts.net` names only | custom domains; `request.cf` geo fields | `hostd:TestPublicIngress`, `netd:TestPublicRoutes`, `netd:TestPublicHeadersAndBlob`, `hostd/gen:TestGeneratedWrapperPublic` |
 | <a id="containers"></a>Containers (`ctx.container`, Sandbox SDK) | ⚠️ | — | each container is its own microVM attached to one Durable Object; egress through the object's identity, `enableInternet` limited to `egress.internet`. [Details](#containers-ctxcontainer-and-the-cloudflare-sandbox-sdk-adr-032) | needs a microVM-capable host (Linux with KVM, or macOS); amd64 not verified | `getTcpPort().connect()`, snapshots, `exposePort` / preview URLs, backups, bucket mounts | `e2e/container:TestE2EContainer`, `e2e/container:TestE2EContainerRegistry`, `hostd:TestContainerEgress` |
 | <a id="logs"></a>Logs and tail | ⚠️ | `console.*` output | `twd logs <workload>` prints and follows a workload's log, also from a machine linked with `twd link`; replicas are prefixed by host | — | Tail Workers (`tail()`, `tail_consumers`), structured `wrangler tail` events, Workers Logs queries | `hostd:TestLogsHandlerTailAndRefusals`, `mgmt:TestWorkloadLogs`, `cmd/twd:TestRemoteLogs` |
-| <a id="wrangler-config"></a>`wrangler.jsonc` | ⚠️ | — | `twd deploy` reads `name`, `main`, `compatibility_date`, `compatibility_flags`, `vars`, `durable_objects.bindings`, `triggers.crons`, `placement` and `containers`; twd's own settings go in [`twd.jsonc`](twd-jsonc.md) | `wrangler.jsonc` or `wrangler.json` only | `wrangler.toml`; other keys (bindings above marked ❌, `routes`, `migrations`, `env.<name>`) are ignored without a warning | `hostd/bundle:TestParseCrons`, `hostd/bundle:TestParseContainers`, `mgmt:TestResolvePlacement` |
+| <a id="wrangler-config"></a>`wrangler.jsonc` | ⚠️ | — | `twd deploy` reads `name`, `main`, `compatibility_date`, `compatibility_flags`, `vars`, `durable_objects.bindings`, `triggers.crons`, `queues`, `placement` and `containers`; twd's own settings go in [`twd.jsonc`](twd-jsonc.md) | `wrangler.jsonc` or `wrangler.json` only | `wrangler.toml`; other keys (bindings above marked ❌, `routes`, `migrations`, `env.<name>`) are ignored without a warning | `hostd/bundle:TestParseCrons`, `hostd/bundle:TestParseQueues`, `hostd/bundle:TestParseContainers`, `mgmt:TestResolvePlacement` |
 
 ## SDKs
 
@@ -184,6 +186,19 @@ not supported.
 cron syntax with 1 = Sunday, `controller.cron` and
 `controller.scheduledTime`). See [cron-triggers.md](cron-triggers.md). The
 `node` runtime does not support them.
+
+## Queues
+
+`wrangler.jsonc` `queues.producers` and `queues.consumers`, workerd's
+`queue` binding and the default export's `queue(batch, env, ctx)` work as on
+Cloudflare: batching by size and timeout, `ack`/`retry` per message and per
+batch, retry delays, `max_retries` and a dead-letter queue, `delaySeconds`
+and all four content types. The broker is mgmt (queues belong to the
+tenant), so a consumer on another host, a hostd restart, a crash mid-batch
+or a lease move loses nothing (`make e2e-queues`). Differences: several
+workloads may consume one queue, `max_concurrency` doesn't autoscale, and
+HTTP pull is twd's admin API. See [queues.md](queues.md). The `node`
+runtime does not support queues.
 
 ## Vercel AI SDK (`ai` 7.0.165) and `mcp-handler` 2.3.1
 

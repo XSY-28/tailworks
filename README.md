@@ -144,7 +144,7 @@ prove every ✅ and ⚠️.
 | Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
 | Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
 | Bindings | [D1](docs/COMPAT.md#d1) | ❌ | DO SQLite works |
-| Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
+| Bindings | [Queues](docs/COMPAT.md#queues) | ✅ | queues live in mgmt; producer and consumer on any hosts |
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ❌ | Vercel Workflow SDK on Node apps |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
@@ -156,7 +156,8 @@ prove every ✅ and ⚠️.
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ❌ | |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
-| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ❌ | |
+| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
+| Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | twd's API, admin only |
 | Platform | [Caller identity and auth](docs/COMPAT.md#identity) | 🚫 | `getCaller` from WireGuard, not tokens or Access JWTs |
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
@@ -189,6 +190,9 @@ prove every ✅ and ⚠️.
   [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Queues** (`queues.producers` → `env.Q.send()`, `queues.consumers` →
+  `queue()`, retries, dead-letter queues, `twd queues`):
+  [docs/queues.md](docs/queues.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).
