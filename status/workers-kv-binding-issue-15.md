@@ -1,4 +1,4 @@
-Last update: 2026-11-15 PT. Merged master (#32, agent-first DX); ADR numbered ADR-037; kv subcommands in the --json contract. Ready to merge.
+Last update: 2026-11-15 PT. Merged master (#32 agent-first DX, #35 R2); design numbered ADR-037 (R2 took 036); full suite green. Merged to master.
 
 # Workers KV (`kv_namespaces`)
 
@@ -166,6 +166,25 @@ substrate's first real kind; nothing in the substrate had to change.
   `npm test`: 40/40. `make lint`: ok.
 - Not done: KV tools for twd's MCP server (ADR-035 picks its tools by
   hand).
+
+## Merge with #35 (R2), 2026-11-15
+
+- R2 took ADR-036 first, so Workers KV is **ADR-037**
+  (`docs/design/adr/037-workers-kv.md`), and only KV's references were
+  changed.
+- Semantic conflicts:
+  - each branch had used the other's binding as the wrangler config's
+    "unsupported" example. With both supported, the tests, the TOML fixture
+    and `docs/wrangler.md` use `d1_databases`, and assert that neither
+    `kv_namespaces` nor `r2_buckets` is warned about;
+  - `twd dev` store persistence exported every kind. R2's journal points
+    at blobs in the dev process's temporary directory, so it would come
+    back dangling. Persistence is now KV-only.
+- Tests after the merge (`TWD_WORKERD` = the native workerd):
+  `go test -race` over netd, internal, cmd, mgmt, hostd, security, guest,
+  schema and docs: 33 packages ok. `npm test`: 40/40. `e2e/sdk`
+  (`TestOAuthProviderKV`, `TestCloudflareAgents`): ok. `e2e/vm:TestE2EVMKV`
+  (vz): ok. `make lint`: ok.
 
 ## Gaps and next steps
 
