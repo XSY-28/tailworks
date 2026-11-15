@@ -94,7 +94,7 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-twd init support --template agent              # also: hello, mcp, ai-agent, node-workflow
+twd init support --template agent              # also: hello, mcp, ai-agent, lock, node-workflow
 cd support
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```
@@ -139,6 +139,7 @@ prove every ✅ and ⚠️.
 | Durable Objects | [Storage (KV API, SQLite)](docs/COMPAT.md#do-storage) | ✅ | one host, no replication |
 | Durable Objects | [Alarms](docs/COMPAT.md#alarms) | ✅ | |
 | Durable Objects | [Hibernation](docs/COMPAT.md#hibernation) | ✅ | |
+| Durable Objects | [Locks / leader election (pattern)](docs/COMPAT.md#locks) | ⚠️ | manual failover; [docs/locks.md](docs/locks.md) |
 | Durable Objects | [RPC](docs/COMPAT.md#do-rpc) | ⚠️ | no cross-Worker `script_name` |
 | Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
 | Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
@@ -189,6 +190,9 @@ prove every ✅ and ⚠️.
   [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Locks and leader election** ("only one worker runs this job"), with
+  leases, fencing tokens and what twd guarantees when a host fails:
+  [docs/locks.md](docs/locks.md) and `twd init --template lock`.
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).

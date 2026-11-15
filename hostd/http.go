@@ -240,7 +240,11 @@ type apiReq struct {
 	Ticket string `json:"ticket"`
 }
 
-func objView(o *object) map[string]any {
+// objView snapshots o for the platform; o's fields are guarded by h.mu
+// (awaitNode writes them while a request may be reading).
+func (h *Host) objView(o *object) map[string]any {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	return map[string]any{"objectID": o.ID, "objectId": o.ID, "status": o.Status, "hostname": o.Hostname, "magicDNS": o.MagicDNS,
 		"kind": map[bool]string{true: "workload", false: "object"}[o.Class == ""], "class": o.Class, "name": o.Name}
 }
@@ -304,7 +308,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "principal", ActingFor: req.ActingFor, Detail: mgmtapi.Note("acting for " + req.ActingFor), TraceID: newTraceID()})
 				h.saveObjects()
 			}
-			writeJSON(w, 200, objView(o))
+			writeJSON(w, 200, h.objView(o))
 		case "admit":
 			// May the caller reach, and so create, (class, name)? Creation is
 			// never implied by reaching a binding (RT3-06/07): an attested
@@ -330,7 +334,9 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				fail(err)
 				return
 			}
-			writeJSON(w, 200, objView(o))
+			v := h.objView(o)
+			v["epoch"] = wl.epochNow() // the lease epoch: fencing tokens (docs/locks.md)
+			writeJSON(w, 200, v)
 		case "spawn":
 			c := inst.app.Classes[req.Class]
 			if c == nil || req.Name == "" || !c.Node {
@@ -370,7 +376,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				fail(err)
 				return
 			}
-			writeJSON(w, 200, objView(o))
+			writeJSON(w, 200, h.objView(o))
 		case "ready":
 			c := inst.app.Classes[req.Class]
 			if c == nil || !c.Node {
@@ -393,7 +399,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				fail(err)
 				return
 			}
-			writeJSON(w, 200, objView(o))
+			writeJSON(w, 200, h.objView(o))
 		case "kill":
 			caller, err := self()
 			if err != nil {

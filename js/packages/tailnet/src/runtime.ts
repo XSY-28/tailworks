@@ -40,7 +40,13 @@ export interface TailnetContext {
   spawn<T = any>(ns: any, opts: SpawnOptions): Promise<Spawned<T>>;
   kill(opts?: { reason?: string; cascade?: boolean; target?: { class: string; name: string } }): Promise<{ killed: string[] }>;
   audit(records: Array<Record<string, unknown>>): Promise<void>;
-  self(): Promise<{ objectId: string; hostname: string; magicDNS?: string; status: string; kind: string }>;
+  /**
+   * This object's (or the workload's) node, and `epoch`: the workload's
+   * lease epoch on this host. mgmt raises it on every deploy and every move
+   * to another host, so it orders this incarnation after every earlier one
+   * (fencing tokens, docs/locks.md).
+   */
+  self(): Promise<{ objectId: string; hostname: string; magicDNS?: string; status: string; kind: string; epoch: number }>;
   connect(): never;
 }
 
