@@ -45,6 +45,7 @@ const (
 	AuditKindContainerStop       AuditKind = "container_stop"
 	AuditKindCreate              AuditKind = "create"
 	AuditKindCredential          AuditKind = "credential"
+	AuditKindD1Write             AuditKind = "d1_write"
 	AuditKindDeny                AuditKind = "deny"
 	AuditKindDeploy              AuditKind = "deploy"
 	AuditKindDeviceDelete        AuditKind = "device_delete"
@@ -58,6 +59,8 @@ const (
 	AuditKindImagePublic         AuditKind = "image_public"
 	AuditKindImagePush           AuditKind = "image_push"
 	AuditKindKill                AuditKind = "kill"
+	AuditKindKvDelete            AuditKind = "kv_delete"
+	AuditKindKvPut               AuditKind = "kv_put"
 	AuditKindMint                AuditKind = "mint"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
@@ -77,6 +80,9 @@ const (
 	AuditKindSpawn               AuditKind = "spawn"
 	AuditKindStoreCreate         AuditKind = "store_create"
 	AuditKindStoreDelete         AuditKind = "store_delete"
+	AuditKindTelemetryDelete     AuditKind = "telemetry_delete"
+	AuditKindTelemetryPut        AuditKind = "telemetry_put"
+	AuditKindTelemetryRelease    AuditKind = "telemetry_release"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
@@ -103,6 +109,8 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindCredential:
 		return true
+	case AuditKindD1Write:
+		return true
 	case AuditKindDeny:
 		return true
 	case AuditKindDeploy:
@@ -128,6 +136,10 @@ func (e AuditKind) Valid() bool {
 	case AuditKindImagePush:
 		return true
 	case AuditKindKill:
+		return true
+	case AuditKindKvDelete:
+		return true
+	case AuditKindKvPut:
 		return true
 	case AuditKindMint:
 		return true
@@ -166,6 +178,12 @@ func (e AuditKind) Valid() bool {
 	case AuditKindStoreCreate:
 		return true
 	case AuditKindStoreDelete:
+		return true
+	case AuditKindTelemetryDelete:
+		return true
+	case AuditKindTelemetryPut:
+		return true
+	case AuditKindTelemetryRelease:
 		return true
 	case AuditKindTenantCreate:
 		return true
@@ -287,6 +305,7 @@ const (
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
+	ErrorCodeD1Error                 ErrorCode = "d1_error"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
@@ -362,6 +381,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBootstrapFailed:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
+		return true
+	case ErrorCodeD1Error:
 		return true
 	case ErrorCodeDelegationExceedsParent:
 		return true
@@ -780,6 +801,27 @@ func (e PublicIngress) Valid() bool {
 	}
 }
 
+// Defines values for RequestRecordKind.
+const (
+	Dropped    RequestRecordKind = "dropped"
+	Invocation RequestRecordKind = "invocation"
+	Request    RequestRecordKind = "request"
+)
+
+// Valid indicates whether the value is a known member of the RequestRecordKind enum.
+func (e RequestRecordKind) Valid() bool {
+	switch e {
+	case Dropped:
+		return true
+	case Invocation:
+		return true
+	case Request:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StatusClockSource.
 const (
 	StatusClockSourceLocal    StatusClockSource = "local"
@@ -792,6 +834,27 @@ func (e StatusClockSource) Valid() bool {
 	case StatusClockSourceLocal:
 		return true
 	case StatusClockSourcePostgres:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelemetrySignal.
+const (
+	Logs    TelemetrySignal = "logs"
+	Metrics TelemetrySignal = "metrics"
+	Traces  TelemetrySignal = "traces"
+)
+
+// Valid indicates whether the value is a known member of the TelemetrySignal enum.
+func (e TelemetrySignal) Valid() bool {
+	switch e {
+	case Logs:
+		return true
+	case Metrics:
+		return true
+	case Traces:
 		return true
 	default:
 		return false
@@ -915,6 +978,24 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	}
 }
 
+// Defines values for GetWorkloadLogsParamsSource.
+const (
+	Console  GetWorkloadLogsParamsSource = "console"
+	Requests GetWorkloadLogsParamsSource = "requests"
+)
+
+// Valid indicates whether the value is a known member of the GetWorkloadLogsParamsSource enum.
+func (e GetWorkloadLogsParamsSource) Valid() bool {
+	switch e {
+	case Console:
+		return true
+	case Requests:
+		return true
+	default:
+		return false
+	}
+}
+
 // Arch A Go GOARCH. Container images must match their host's.
 type Arch string
 
@@ -1006,6 +1087,12 @@ type AuditBatch struct {
 // `secret_release` (a workload's secrets released to its lease holder; names only),
 // `store_create` (a platform store created, by its first write or an admin),
 // `store_delete` (a platform store and its data key deleted),
+// `d1_write` (an operator's SQL changed a D1 database; statement count only),
+// `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+// `kv_delete` (an admin deleted a Workers KV key; the namespace only),
+// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+// `telemetry_delete`,
+// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1090,6 +1177,12 @@ type AuditRecord struct {
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `store_create` (a platform store created, by its first write or an admin),
 	// `store_delete` (a platform store and its data key deleted),
+	// `d1_write` (an operator's SQL changed a D1 database; statement count only),
+	// `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+	// `kv_delete` (an admin deleted a Workers KV key; the namespace only),
+	// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+	// `telemetry_delete`,
+	// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1305,6 +1398,32 @@ type Credential struct {
 	Tags     []string `json:"tags"`
 }
 
+// D1Query defines model for D1Query.
+type D1Query struct {
+	Queries []struct {
+		// Params Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values.
+		Params *[]interface{} `json:"params,omitempty"`
+
+		// SQL One statement (or several separated by `;`; parameters bind to the last).
+		SQL string `json:"sql"`
+	} `json:"queries"`
+}
+
+// D1Result One statement's result, as D1's wire protocol has it.
+type D1Result struct {
+	Error *string `json:"error,omitempty"`
+
+	// Meta `changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`.
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Results *struct {
+		Columns *[]string `json:"columns,omitempty"`
+
+		// Rows Values: null, numbers, strings, and BLOBs as arrays of byte values.
+		Rows *[][]interface{} `json:"rows,omitempty"`
+	} `json:"results,omitempty"`
+	Success bool `json:"success"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
@@ -1439,6 +1558,7 @@ type Error struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1512,6 +1632,7 @@ type Error struct {
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
+// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1791,6 +1912,49 @@ type JWKS struct {
 	Keys []map[string]interface{} `json:"keys"`
 }
 
+// KVKey A Workers KV key as `list()` returns it (ADR-037).
+type KVKey struct {
+	// Expiration Unix seconds when the key expires (absent: never).
+	Expiration *int64 `json:"expiration,omitempty"`
+
+	// Metadata The key's metadata (any JSON; absent: none).
+	Metadata interface{} `json:"metadata,omitempty"`
+	Name     string      `json:"name"`
+}
+
+// KVKeyPage defines model for KVKeyPage.
+type KVKeyPage struct {
+	// Cursor Pass as `cursor` for the next page (absent when `listComplete`).
+	Cursor       *string `json:"cursor,omitempty"`
+	Keys         []KVKey `json:"keys"`
+	ListComplete bool    `json:"listComplete"`
+}
+
+// KVPut defines model for KVPut.
+type KVPut struct {
+	// Expiration Unix seconds; at least 60 s ahead.
+	Expiration *int64 `json:"expiration,omitempty"`
+
+	// ExpirationTTL Seconds from now (at least 60). Wins over `expiration`.
+	ExpirationTTL *int64 `json:"expirationTtl,omitempty"`
+
+	// Metadata Any JSON, at most 1024 bytes serialized.
+	Metadata interface{} `json:"metadata,omitempty"`
+
+	// Value The value's bytes (at most 2 MiB − 4 KiB).
+	Value []byte `json:"value"`
+}
+
+// KVValue defines model for KVValue.
+type KVValue struct {
+	Expiration *int64      `json:"expiration,omitempty"`
+	Metadata   interface{} `json:"metadata,omitempty"`
+	Name       string      `json:"name"`
+
+	// Value The value's bytes.
+	Value []byte `json:"value"`
+}
+
 // KillResult defines model for KillResult.
 type KillResult struct {
 	DevicesDeleted []string `json:"devicesDeleted"`
@@ -1886,6 +2050,35 @@ type OIDCConfiguration struct {
 	ResponseTypesSupported           []string               `json:"response_types_supported"`
 	SubjectTypesSupported            []string               `json:"subject_types_supported"`
 	AdditionalProperties             map[string]interface{} `json:"-"`
+}
+
+// OTLPExport A tenant's OTLP export, without header values.
+type OTLPExport struct {
+	// Endpoint OTLP/HTTP base URL; signals go to `<endpoint>/v1/<signal>`.
+	Endpoint string `json:"endpoint"`
+
+	// HeaderNames Names of the headers sent with every export (values are never returned).
+	HeaderNames []string          `json:"headerNames"`
+	Signals     []TelemetrySignal `json:"signals"`
+}
+
+// OTLPExportPut defines model for OTLPExportPut.
+type OTLPExportPut struct {
+	// Endpoint http:// or https:// base URL of an OTLP/HTTP receiver on the tailnet (no user info, query or fragment).
+	Endpoint string `json:"endpoint"`
+
+	// Headers Headers sent with every export, typically the collector's credentials (at most 16; values at most 4 KiB). Never logged, audited or returned.
+	Headers *map[string]string `json:"headers,omitempty"`
+
+	// Signals What to export (default all three).
+	Signals *[]TelemetrySignal `json:"signals,omitempty"`
+}
+
+// OTLPGrant defines model for OTLPGrant.
+type OTLPGrant struct {
+	Endpoint string             `json:"endpoint"`
+	Headers  *map[string]string `json:"headers,omitempty"`
+	Signals  []TelemetrySignal  `json:"signals"`
 }
 
 // Object defines model for Object.
@@ -2268,6 +2461,72 @@ type ReplicaRef struct {
 	Workload string `json:"workload"`
 }
 
+// RequestRecord One line of a workload's request log (`twd logs --json`,
+// ADR-observability): a request through hostd's ingress (`kind:
+// request`), joined with its workerd invocation, or an invocation
+// with no ingress half (`kind: invocation`: a DO called from the
+// Worker, an alarm, a cron run), or a note that records were dropped
+// by the workload's rate limit (`kind: dropped`). Never holds bodies,
+// query strings, request headers or secret values.
+type RequestRecord struct {
+	AuditTraceID *string `json:"auditTraceId,omitempty"`
+
+	// Caller The verified caller (netd's WhoIs), never from tenant code.
+	Caller *struct {
+		IP     *string   `json:"ip,omitempty"`
+		Node   *string   `json:"node,omitempty"`
+		NodeID *string   `json:"nodeId,omitempty"`
+		Object *string   `json:"object,omitempty"`
+		Public *bool     `json:"public,omitempty"`
+		Tags   *[]string `json:"tags,omitempty"`
+		User   *string   `json:"user,omitempty"`
+	} `json:"caller,omitempty"`
+	Class      *string `json:"class,omitempty"`
+	Deployment *string `json:"deployment,omitempty"`
+	Dropped    *int    `json:"dropped,omitempty"`
+
+	// DurableObjectID workerd's ID of a plain-DO object whose name the invocation does not carry.
+	DurableObjectID *string  `json:"durableObjectId,omitempty"`
+	DurationMs      *float32 `json:"durationMs,omitempty"`
+	Entrypoint      *string  `json:"entrypoint,omitempty"`
+
+	// Event fetch, alarm, rpc, scheduled, websocket.
+	Event      *string `json:"event,omitempty"`
+	Exceptions *[]struct {
+		Message *string    `json:"message,omitempty"`
+		Name    *string    `json:"name,omitempty"`
+		Stack   *string    `json:"stack,omitempty"`
+		Time    *time.Time `json:"time,omitempty"`
+	} `json:"exceptions,omitempty"`
+	Host *string           `json:"host,omitempty"`
+	Kind RequestRecordKind `json:"kind"`
+	Logs *[]struct {
+		Level   *string    `json:"level,omitempty"`
+		Message *string    `json:"message,omitempty"`
+		Time    *time.Time `json:"time,omitempty"`
+	} `json:"logs,omitempty"`
+	Method *string `json:"method,omitempty"`
+	Name   *string `json:"name,omitempty"`
+
+	// Object The twd object ID.
+	Object       *string `json:"object,omitempty"`
+	Outcome      *string `json:"outcome,omitempty"`
+	ParentSpanID *string `json:"parentSpanId,omitempty"`
+
+	// Path The URL path (never the query string).
+	Path      *string   `json:"path,omitempty"`
+	SpanID    *string   `json:"spanId,omitempty"`
+	Status    *int      `json:"status,omitempty"`
+	Tenant    *string   `json:"tenant,omitempty"`
+	Time      time.Time `json:"time"`
+	TraceID   *string   `json:"traceId,omitempty"`
+	Truncated *bool     `json:"truncated,omitempty"`
+	Workload  *string   `json:"workload,omitempty"`
+}
+
+// RequestRecordKind defines model for RequestRecord.Kind.
+type RequestRecordKind string
+
 // RunningContainer One running container in a heartbeat.
 type RunningContainer struct {
 	Class  string `json:"class"`
@@ -2413,7 +2672,7 @@ type Store struct {
 	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
 	Incarnation string `json:"incarnation"`
 
-	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	// Kind A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
 	Kind      StoreKind `json:"kind"`
 	Name      string    `json:"name"`
 	TenantID  string    `json:"tenantID"`
@@ -2465,7 +2724,7 @@ type StoreJournal struct {
 	More bool `json:"more"`
 }
 
-// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+// StoreKind A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
 type StoreKind = string
 
 // StorePage defines model for StorePage.
@@ -2475,6 +2734,32 @@ type StorePage struct {
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
+
+// TelemetryConfig defines model for TelemetryConfig.
+type TelemetryConfig struct {
+	// Otlp A tenant's OTLP export, without header values.
+	Otlp      *OTLPExport `json:"otlp,omitempty"`
+	TenantID  string      `json:"tenantID"`
+	UpdatedAt *int64      `json:"updatedAt,omitempty"`
+	UpdatedBy *string     `json:"updatedBy,omitempty"`
+}
+
+// TelemetryGrant A fenced release of the tenant's OTLP export config. Never logged.
+type TelemetryGrant struct {
+	Epoch     int64      `json:"epoch"`
+	GrantedAt *int64     `json:"grantedAt,omitempty"`
+	Otlp      *OTLPGrant `json:"otlp,omitempty"`
+	TenantID  string     `json:"tenantID"`
+	Workload  string     `json:"workload"`
+}
+
+// TelemetryPut defines model for TelemetryPut.
+type TelemetryPut struct {
+	Otlp OTLPExportPut `json:"otlp"`
+}
+
+// TelemetrySignal An OTLP signal.
+type TelemetrySignal string
 
 // Tenant defines model for Tenant.
 type Tenant struct {
@@ -2650,6 +2935,7 @@ type TombstoneError struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -3146,7 +3432,35 @@ type GetWorkloadLogsParams struct {
 
 	// Host Only the replica on this host (a host ID).
 	Host *string `form:"host,omitempty" json:"host,omitempty"`
+
+	// Source `console`: the app's raw output (workerd's stdout, the node
+	// tier's `app.log`, the microVM console). `requests`: the
+	// workload's structured request records (ADR-observability), as
+	// JSON Lines (`application/x-ndjson`), one `RequestRecord` per
+	// line; `n` and the filters below then count records, not lines.
+	Source *GetWorkloadLogsParamsSource `form:"source,omitempty" json:"source,omitempty"`
+
+	// Object `source=requests`: only records of this object (object ID, `Class/name`, `Class` or name).
+	Object *string `form:"object,omitempty" json:"object,omitempty"`
+
+	// Status `source=requests`: only this HTTP status (`404`) or class (`5xx`).
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// Outcome `source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …).
+	Outcome *string `form:"outcome,omitempty" json:"outcome,omitempty"`
+
+	// Caller `source=requests`: only callers whose login or node name contains this (`public` for Funnel requests).
+	Caller *string `form:"caller,omitempty" json:"caller,omitempty"`
+
+	// Trace `source=requests`: only this W3C trace ID (or a prefix of it) or audit trace ID.
+	Trace *string `form:"trace,omitempty" json:"trace,omitempty"`
+
+	// Errors `source=requests`: only errors (status ≥ 400, an outcome other than `ok`, or an exception).
+	Errors *bool `form:"errors,omitempty" json:"errors,omitempty"`
 }
+
+// GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
+type GetWorkloadLogsParamsSource string
 
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
@@ -3181,6 +3495,34 @@ type ListWorkloadStoresParams struct {
 	Kind *StoreKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
+// ListKVKeysParams defines parameters for ListKVKeys.
+type ListKVKeysParams struct {
+	// Prefix Only keys that start with this.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Cursor The `cursor` of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteKVValueParams defines parameters for DeleteKVValue.
+type DeleteKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
+// GetKVValueParams defines parameters for GetKVValue.
+type GetKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
+// PutKVValueParams defines parameters for PutKVValue.
+type PutKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
 // ReadStoreJournalParams defines parameters for ReadStoreJournal.
 type ReadStoreJournalParams struct {
 	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
@@ -3197,6 +3539,12 @@ type ReadStoreJournalParams struct {
 type AppendStoreJournalParams struct {
 	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
 	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
+// CreateTelemetryGrantParams defines parameters for CreateTelemetryGrant.
+type CreateTelemetryGrantParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
 }
 
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
@@ -3247,6 +3595,12 @@ type UpdateTenantJSONRequestBody = TenantPatch
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
 
+// PutTenantTelemetryJSONRequestBody defines body for PutTenantTelemetry for application/json ContentType.
+type PutTenantTelemetryJSONRequestBody = TelemetryPut
+
+// QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
+type QueryD1JSONRequestBody = D1Query
+
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
@@ -3255,6 +3609,9 @@ type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPubl
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
+
+// PutKVValueJSONRequestBody defines body for PutKVValue for application/json ContentType.
+type PutKVValueJSONRequestBody = KVPut
 
 // AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
 type AppendStoreJournalJSONRequestBody = StoreAppend
@@ -4495,6 +4852,62 @@ type ClientInterface interface {
 	// Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 	PurgeTenantObjects(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	//
+	// Hosts stop exporting within a minute. Records stay on the hosts
+	// (`twd logs`) and in `/metrics`. Idempotent. Audited
+	// (`kind: telemetry_delete`).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
+	DeleteTenantTelemetry(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	//
+	// ADR-observability. Header names only: no admin operation returns a
+	// header value. A tenant that exports nothing has no `otlp`.
+	// `404 unknown_tenant`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/telemetry (the `GetTenantTelemetry` operationId).
+	GetTenantTelemetry(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutTenantTelemetryWithBody Set the tenant's OTLP export (`twd telemetry set`)
+	//
+	// Every workload of the tenant exports its request records (as log
+	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+	// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+	// **from the workload's own tailnet node**, so it must be a tailnet
+	// peer the tailnet policy lets that workload reach (a public
+	// internet endpoint is refused like any other egress). The config
+	// is stored encrypted in mgmt custody (custody name
+	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// are never logged, audited or returned. Hosts pick a change up
+	// within a minute. Audited (`kind: telemetry_put`, endpoint and
+	// header names).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+	PutTenantTelemetryWithBody(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	//
+	// Every workload of the tenant exports its request records (as log
+	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+	// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+	// **from the workload's own tailnet node**, so it must be a tailnet
+	// peer the tailnet policy lets that workload reach (a public
+	// internet endpoint is refused like any other egress). The config
+	// is stored encrypted in mgmt custody (custody name
+	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// are never logged, audited or returned. Hosts pick a change up
+	// within a minute. Audited (`kind: telemetry_put`, endpoint and
+	// header names).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+	PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	//
 	// A live diagnostic, not a state change: one fresh token exchange per
@@ -4504,6 +4917,71 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	//
+	// The database's schema and rows as SQL text, in the shape of
+	// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+	// table and its `INSERT`s, then indexes, triggers and views), read
+	// from the store object of the running workload after it has caught
+	// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+	// Rows of virtual tables are not exported. A read: logged, not
+	// audited.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+	ExportD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-038) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1WithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-038) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
@@ -4660,6 +5138,68 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores (the `ListWorkloadStores` operationId).
 	ListWorkloadStores(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListKVKeys List a KV namespace's keys
+	//
+	// Workers KV's `list()` for operators (`twd kv key list`,
+	// ADR-037): live keys in UTF-8 byte order, with their
+	// expiration and metadata, `limit` at a time (default and maximum
+	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
+	// the namespace's journal (its own copy), so the answer includes
+	// every acknowledged write. `404 unknown_store` if the namespace
+	// does not exist.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys (the `ListKVKeys` operationId).
+	ListKVKeys(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListKVKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteKVValue Delete one KV value
+	//
+	// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
+	DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetKVValue Get one KV value
+	//
+	// `twd kv key get`. `404 not_found` if the key does not exist or has
+	// expired, `404 unknown_store` if the namespace does not.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `GetKVValue` operationId).
+	GetKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *GetKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutKVValueWithBody Write one KV value
+	//
+	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// running workloads see it on their next sync (within 60 s, or a
+	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+	// `400 store_limit`). The namespace must exist (`404
+	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// kv_put`) with the namespace and who wrote, not the key: key names
+	// can be sensitive, and mgmt keeps them only sealed and HMACed.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+	PutKVValueWithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutKVValue Write one KV value
+	//
+	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// running workloads see it on their next sync (within 60 s, or a
+	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+	// `400 store_limit`). The namespace must exist (`404
+	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// kv_put`) with the namespace and who wrote, not the key: key names
+	// can be sensitive, and mgmt keeps them only sealed and HMACed.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+	PutKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteWorkloadStore Delete a store and its data
 	//
 	// Deletes the journal and the store's data key (custody), so the
@@ -4756,6 +5296,22 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
 	AppendStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
+	//
+	// hostd calls this when it starts a workload, and every minute while
+	// it runs it, to export the workload's logs, metrics and spans
+	// (ADR-observability). As with secrets (ADR-034), the config, header
+	// values included, is released only to the host holding the
+	// workload's lease at `epoch` (`409 lease_lost`), with
+	// `Cache-Control: no-store`, and is never logged. `otlp` is absent
+	// when the tenant exports nothing. Audited (`kind:
+	// telemetry_release`, endpoint and header names) the first time a
+	// host gets each version of the config for a workload (hosts re-read
+	// it every minute); a refusal always is.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
+	CreateTelemetryGrant(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	//
@@ -6268,6 +6824,102 @@ func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *Pu
 	return c.Client.Do(req)
 }
 
+// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+//
+// Hosts stop exporting within a minute. Records stay on the hosts
+// (`twd logs`) and in `/metrics`. Idempotent. Audited
+// (`kind: telemetry_delete`).
+//
+// Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
+func (c *Client) DeleteTenantTelemetry(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTenantTelemetryRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+//
+// ADR-observability. Header names only: no admin operation returns a
+// header value. A tenant that exports nothing has no `otlp`.
+// `404 unknown_tenant`.
+//
+// Corresponds with GET /v1/tenants/{id}/telemetry (the `GetTenantTelemetry` operationId).
+func (c *Client) GetTenantTelemetry(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTenantTelemetryRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutTenantTelemetryWithBody Set the tenant's OTLP export (`twd telemetry set`)
+//
+// Every workload of the tenant exports its request records (as log
+// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+// **from the workload's own tailnet node**, so it must be a tailnet
+// peer the tailnet policy lets that workload reach (a public
+// internet endpoint is refused like any other egress). The config
+// is stored encrypted in mgmt custody (custody name
+// `twd/<tenant>/telemetry`); header values (collector credentials)
+// are never logged, audited or returned. Hosts pick a change up
+// within a minute. Audited (`kind: telemetry_put`, endpoint and
+// header names).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+func (c *Client) PutTenantTelemetryWithBody(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutTenantTelemetryRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+//
+// Every workload of the tenant exports its request records (as log
+// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+// **from the workload's own tailnet node**, so it must be a tailnet
+// peer the tailnet policy lets that workload reach (a public
+// internet endpoint is refused like any other egress). The config
+// is stored encrypted in mgmt custody (custody name
+// `twd/<tenant>/telemetry`); header values (collector credentials)
+// are never logged, audited or returned. Hosts pick a change up
+// within a minute. Audited (`kind: telemetry_put`, endpoint and
+// header names).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+func (c *Client) PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutTenantTelemetryRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 //
 // A live diagnostic, not a state change: one fresh token exchange per
@@ -6278,6 +6930,101 @@ func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *Pu
 // Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 func (c *Client) CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckTenantWIFRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+//
+// The database's schema and rows as SQL text, in the shape of
+// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+// table and its `INSERT`s, then indexes, triggers and views), read
+// from the store object of the running workload after it has caught
+// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+// Rows of virtual tables are not exported. A read: logged, not
+// audited.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+func (c *Client) ExportD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExportD1Request(c.Server, id, workload, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-038) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *Client) QueryD1WithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewQueryD1RequestWithBody(c.Server, id, workload, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-038) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *Client) QueryD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewQueryD1Request(c.Server, id, workload, name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6553,6 +7300,118 @@ func (c *Client) ListWorkloadStores(ctx context.Context, id TenantID, workload W
 	return c.Client.Do(req)
 }
 
+// ListKVKeys List a KV namespace's keys
+//
+// Workers KV's `list()` for operators (`twd kv key list`,
+// ADR-037): live keys in UTF-8 byte order, with their
+// expiration and metadata, `limit` at a time (default and maximum
+// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
+// the namespace's journal (its own copy), so the answer includes
+// every acknowledged write. `404 unknown_store` if the namespace
+// does not exist.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys (the `ListKVKeys` operationId).
+func (c *Client) ListKVKeys(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListKVKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListKVKeysRequest(c.Server, id, workload, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteKVValue Delete one KV value
+//
+// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+//
+// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
+func (c *Client) DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteKVValueRequest(c.Server, id, workload, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetKVValue Get one KV value
+//
+// `twd kv key get`. `404 not_found` if the key does not exist or has
+// expired, `404 unknown_store` if the namespace does not.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `GetKVValue` operationId).
+func (c *Client) GetKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *GetKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetKVValueRequest(c.Server, id, workload, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutKVValueWithBody Write one KV value
+//
+// `twd kv key put`: a journal append, like a binding's `put()`, so
+// running workloads see it on their next sync (within 60 s, or a
+// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+// `400 store_limit`). The namespace must exist (`404
+// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// kv_put`) with the namespace and who wrote, not the key: key names
+// can be sensitive, and mgmt keeps them only sealed and HMACed.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+func (c *Client) PutKVValueWithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutKVValueRequestWithBody(c.Server, id, workload, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutKVValue Write one KV value
+//
+// `twd kv key put`: a journal append, like a binding's `put()`, so
+// running workloads see it on their next sync (within 60 s, or a
+// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+// `400 store_limit`). The namespace must exist (`404
+// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// kv_put`) with the namespace and who wrote, not the key: key names
+// can be sensitive, and mgmt keeps them only sealed and HMACed.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+func (c *Client) PutKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutKVValueRequest(c.Server, id, workload, name, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // DeleteWorkloadStore Delete a store and its data
 //
 // Deletes the journal and the store's data key (custody), so the
@@ -6700,6 +7559,32 @@ func (c *Client) AppendStoreJournalWithBody(ctx context.Context, id TenantID, wo
 // Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
 func (c *Client) AppendStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAppendStoreJournalRequest(c.Server, id, workload, kind, name, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
+//
+// hostd calls this when it starts a workload, and every minute while
+// it runs it, to export the workload's logs, metrics and spans
+// (ADR-observability). As with secrets (ADR-034), the config, header
+// values included, is released only to the host holding the
+// workload's lease at `epoch` (`409 lease_lost`), with
+// `Cache-Control: no-store`, and is never logged. `otlp` is absent
+// when the tenant exports nothing. Audited (`kind:
+// telemetry_release`, endpoint and header names) the first time a
+// host gets each version of the config for a workload (hosts re-read
+// it every minute); a refusal always is.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
+func (c *Client) CreateTelemetryGrant(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTelemetryGrantRequest(c.Server, id, workload, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9268,6 +10153,121 @@ func NewPurgeTenantObjectsRequest(server string, id TenantID, params *PurgeTenan
 	return req, nil
 }
 
+// NewDeleteTenantTelemetryRequest constructs an http.Request for the DeleteTenantTelemetry method
+func NewDeleteTenantTelemetryRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/telemetry", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetTenantTelemetryRequest constructs an http.Request for the GetTenantTelemetry method
+func NewGetTenantTelemetryRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/telemetry", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutTenantTelemetryRequest calls the generic PutTenantTelemetry builder with application/json body
+func NewPutTenantTelemetryRequest(server string, id TenantID, body PutTenantTelemetryJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutTenantTelemetryRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewPutTenantTelemetryRequestWithBody constructs an http.Request for the PutTenantTelemetry method, with any body, and a specified content type
+func NewPutTenantTelemetryRequestWithBody(server string, id TenantID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/telemetry", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewCheckTenantWIFRequest constructs an http.Request for the CheckTenantWIF method
 func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error) {
 	var err error
@@ -9298,6 +10298,115 @@ func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error)
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewExportD1Request constructs an http.Request for the ExportD1 method
+func NewExportD1Request(server string, id TenantID, workload WorkloadName, name StoreName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/d1/%s/export", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewQueryD1Request calls the generic QueryD1 builder with application/json body
+func NewQueryD1Request(server string, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewQueryD1RequestWithBody(server, id, workload, name, "application/json", bodyReader)
+}
+
+// NewQueryD1RequestWithBody constructs an http.Request for the QueryD1 method, with any body, and a specified content type
+func NewQueryD1RequestWithBody(server string, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/d1/%s/query", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9371,6 +10480,90 @@ func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName
 		if params.Host != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "host", *params.Host, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Source != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "source", *params.Source, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Object != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "object", *params.Object, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Outcome != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "outcome", *params.Outcome, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Caller != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "caller", *params.Caller, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Trace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "trace", *params.Trace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Errors != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "errors", *params.Errors, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -9860,6 +11053,331 @@ func NewListWorkloadStoresRequest(server string, id TenantID, workload WorkloadN
 	return req, nil
 }
 
+// NewListKVKeysRequest constructs an http.Request for the ListKVKeys method
+func NewListKVKeysRequest(server string, id TenantID, workload WorkloadName, name StoreName, params *ListKVKeysParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/kv/%s/keys", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Prefix != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "prefix", *params.Prefix, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteKVValueRequest constructs an http.Request for the DeleteKVValue method
+func NewDeleteKVValueRequest(server string, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/kv/%s/value", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "key", params.Key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetKVValueRequest constructs an http.Request for the GetKVValue method
+func NewGetKVValueRequest(server string, id TenantID, workload WorkloadName, name StoreName, params *GetKVValueParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/kv/%s/value", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "key", params.Key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutKVValueRequest calls the generic PutKVValue builder with application/json body
+func NewPutKVValueRequest(server string, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutKVValueRequestWithBody(server, id, workload, name, params, "application/json", bodyReader)
+}
+
+// NewPutKVValueRequestWithBody constructs an http.Request for the PutKVValue method, with any body, and a specified content type
+func NewPutKVValueRequestWithBody(server string, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/kv/%s/value", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "key", params.Key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewDeleteWorkloadStoreRequest constructs an http.Request for the DeleteWorkloadStore method
 func NewDeleteWorkloadStoreRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) (*http.Request, error) {
 	var err error
@@ -10222,6 +11740,70 @@ func NewAppendStoreJournalRequestWithBody(server string, id TenantID, workload W
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateTelemetryGrantRequest constructs an http.Request for the CreateTelemetryGrant method
+func NewCreateTelemetryGrantRequest(server string, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/telemetry-grants", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "epoch", params.Epoch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -11319,6 +12901,66 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 	PurgeTenantObjectsWithResponse(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*PurgeTenantObjectsResponse, error)
 
+	// DeleteTenantTelemetryWithResponse Stop the tenant's OTLP export (`twd telemetry rm`)
+	//
+	// Hosts stop exporting within a minute. Records stay on the hosts
+	// (`twd logs`) and in `/metrics`. Idempotent. Audited
+	// (`kind: telemetry_delete`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
+	DeleteTenantTelemetryWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantTelemetryResponse, error)
+
+	// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`twd telemetry`), without header values
+	//
+	// ADR-observability. Header names only: no admin operation returns a
+	// header value. A tenant that exports nothing has no `otlp`.
+	// `404 unknown_tenant`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/telemetry (the `GetTenantTelemetry` operationId).
+	GetTenantTelemetryWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantTelemetryResponse, error)
+
+	// PutTenantTelemetryWithBodyWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+	//
+	// Every workload of the tenant exports its request records (as log
+	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+	// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+	// **from the workload's own tailnet node**, so it must be a tailnet
+	// peer the tailnet policy lets that workload reach (a public
+	// internet endpoint is refused like any other egress). The config
+	// is stored encrypted in mgmt custody (custody name
+	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// are never logged, audited or returned. Hosts pick a change up
+	// within a minute. Audited (`kind: telemetry_put`, endpoint and
+	// header names).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+	PutTenantTelemetryWithBodyWithResponse(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
+
+	// PutTenantTelemetryWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+	//
+	// Every workload of the tenant exports its request records (as log
+	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+	// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+	// **from the workload's own tailnet node**, so it must be a tailnet
+	// peer the tailnet policy lets that workload reach (a public
+	// internet endpoint is refused like any other egress). The config
+	// is stored encrypted in mgmt custody (custody name
+	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// are never logged, audited or returned. Hosts pick a change up
+	// within a minute. Audited (`kind: telemetry_put`, endpoint and
+	// header names).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+	PutTenantTelemetryWithResponse(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
+
 	// CheckTenantWIFWithResponse Verify a wif tenant's trust credentials (diagnostic)
 	//
 	// A live diagnostic, not a state change: one fresh token exchange per
@@ -11330,6 +12972,73 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error)
+
+	// ExportD1WithResponse Export a D1 database as SQL (`twd d1 export`)
+	//
+	// The database's schema and rows as SQL text, in the shape of
+	// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+	// table and its `INSERT`s, then indexes, triggers and views), read
+	// from the store object of the running workload after it has caught
+	// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+	// Rows of virtual tables are not exported. A read: logged, not
+	// audited.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+	ExportD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*ExportD1Response, error)
+
+	// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-038) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1WithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
+
+	// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	//
+	// A D1 database (ADR-038) is the workload's platform store of kind
+	// `d1` named after the binding's `database_name`. Its data is served
+	// by the store object in the workload's workerd, so mgmt sends the
+	// statements to the host holding the workload's lease (the mgmt →
+	// hostd channel, as for logs), which hands them to its platform
+	// worker. They run as one batch: atomic, after the store object has
+	// caught up with the journal, and a batch that writes is appended to
+	// the journal before it is applied, like every write through the
+	// binding.
+	//
+	// `200` with one result per statement (D1's shape, rows and
+	// columns). A failing statement fails the whole batch (`400
+	// d1_error`, with SQLite's message; nothing is applied). `404
+	// unknown_workload` when the workload isn't running (the database is
+	// only reachable through a running deployment that binds it); `404
+	// unknown_store` when its deployment binds no such database. A batch
+	// that changed the database is audited (`kind: d1_write`, with the
+	// statement count, never the SQL); a read is logged.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+	QueryD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
 
 	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
@@ -11498,6 +13207,74 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores (the `ListWorkloadStores` operationId).
 	ListWorkloadStoresWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams, reqEditors ...RequestEditorFn) (*ListWorkloadStoresResponse, error)
 
+	// ListKVKeysWithResponse List a KV namespace's keys
+	//
+	// Workers KV's `list()` for operators (`twd kv key list`,
+	// ADR-037): live keys in UTF-8 byte order, with their
+	// expiration and metadata, `limit` at a time (default and maximum
+	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
+	// the namespace's journal (its own copy), so the answer includes
+	// every acknowledged write. `404 unknown_store` if the namespace
+	// does not exist.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys (the `ListKVKeys` operationId).
+	ListKVKeysWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListKVKeysParams, reqEditors ...RequestEditorFn) (*ListKVKeysResponse, error)
+
+	// DeleteKVValueWithResponse Delete one KV value
+	//
+	// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
+	DeleteKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*DeleteKVValueResponse, error)
+
+	// GetKVValueWithResponse Get one KV value
+	//
+	// `twd kv key get`. `404 not_found` if the key does not exist or has
+	// expired, `404 unknown_store` if the namespace does not.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `GetKVValue` operationId).
+	GetKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *GetKVValueParams, reqEditors ...RequestEditorFn) (*GetKVValueResponse, error)
+
+	// PutKVValueWithBodyWithResponse Write one KV value
+	//
+	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// running workloads see it on their next sync (within 60 s, or a
+	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+	// `400 store_limit`). The namespace must exist (`404
+	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// kv_put`) with the namespace and who wrote, not the key: key names
+	// can be sensitive, and mgmt keeps them only sealed and HMACed.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+	PutKVValueWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutKVValueResponse, error)
+
+	// PutKVValueWithResponse Write one KV value
+	//
+	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// running workloads see it on their next sync (within 60 s, or a
+	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+	// `400 store_limit`). The namespace must exist (`404
+	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// kv_put`) with the namespace and who wrote, not the key: key names
+	// can be sensitive, and mgmt keeps them only sealed and HMACed.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+	PutKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*PutKVValueResponse, error)
+
 	// DeleteWorkloadStoreWithResponse Delete a store and its data
 	//
 	// Deletes the journal and the store's data key (custody), so the
@@ -11602,6 +13379,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
 	AppendStoreJournalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*AppendStoreJournalResponse, error)
+
+	// CreateTelemetryGrantWithResponse Release the tenant's OTLP export config to a workload's lease holder
+	//
+	// hostd calls this when it starts a workload, and every minute while
+	// it runs it, to export the workload's logs, metrics and spans
+	// (ADR-observability). As with secrets (ADR-034), the config, header
+	// values included, is released only to the host holding the
+	// workload's lease at `epoch` (`409 lease_lost`), with
+	// `Cache-Control: no-store`, and is never logged. `otlp` is absent
+	// when the tenant exports nothing. Audited (`kind:
+	// telemetry_release`, endpoint and header names) the first time a
+	// host gets each version of the config for a workload (hosts re-read
+	// it every minute); a refusal always is.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
+	CreateTelemetryGrantWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*CreateTelemetryGrantResponse, error)
 
 	// CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 	//
@@ -15821,6 +17616,262 @@ func (r PurgeTenantObjectsResponse) ContentType() string {
 	return ""
 }
 
+// DeleteTenantTelemetryResponse403Headers the declared response headers of an HTTP 403 response for DeleteTenantTelemetry
+type DeleteTenantTelemetryResponse403Headers struct {
+	TwdError *string
+}
+
+// DeleteTenantTelemetryResponse404Headers the declared response headers of an HTTP 404 response for DeleteTenantTelemetry
+type DeleteTenantTelemetryResponse404Headers struct {
+	TwdError *string
+}
+
+// DeleteTenantTelemetryResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteTenantTelemetry
+type DeleteTenantTelemetryResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DeleteTenantTelemetryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DeleteTenantTelemetryResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DeleteTenantTelemetryResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DeleteTenantTelemetryResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteTenantTelemetryResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteTenantTelemetryResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteTenantTelemetryResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteTenantTelemetryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTenantTelemetryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTenantTelemetryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteTenantTelemetryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetTenantTelemetryResponse403Headers the declared response headers of an HTTP 403 response for GetTenantTelemetry
+type GetTenantTelemetryResponse403Headers struct {
+	TwdError *string
+}
+
+// GetTenantTelemetryResponse404Headers the declared response headers of an HTTP 404 response for GetTenantTelemetry
+type GetTenantTelemetryResponse404Headers struct {
+	TwdError *string
+}
+
+// GetTenantTelemetryResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenantTelemetry
+type GetTenantTelemetryResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetTenantTelemetryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TelemetryConfig
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetTenantTelemetryResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetTenantTelemetryResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetTenantTelemetryResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTenantTelemetryResponse) GetJSON200() *TelemetryConfig {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetTenantTelemetryResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetTenantTelemetryResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetTenantTelemetryResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTenantTelemetryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTenantTelemetryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTenantTelemetryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTenantTelemetryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PutTenantTelemetryResponse400Headers the declared response headers of an HTTP 400 response for PutTenantTelemetry
+type PutTenantTelemetryResponse400Headers struct {
+	TwdError *string
+}
+
+// PutTenantTelemetryResponse403Headers the declared response headers of an HTTP 403 response for PutTenantTelemetry
+type PutTenantTelemetryResponse403Headers struct {
+	TwdError *string
+}
+
+// PutTenantTelemetryResponse404Headers the declared response headers of an HTTP 404 response for PutTenantTelemetry
+type PutTenantTelemetryResponse404Headers struct {
+	TwdError *string
+}
+
+// PutTenantTelemetryResponseDefaultHeaders the declared response headers of an HTTP default response for PutTenantTelemetry
+type PutTenantTelemetryResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type PutTenantTelemetryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TelemetryConfig
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *PutTenantTelemetryResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *PutTenantTelemetryResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *PutTenantTelemetryResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *PutTenantTelemetryResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutTenantTelemetryResponse) GetJSON200() *TelemetryConfig {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutTenantTelemetryResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutTenantTelemetryResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutTenantTelemetryResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PutTenantTelemetryResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutTenantTelemetryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutTenantTelemetryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutTenantTelemetryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutTenantTelemetryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // CheckTenantWIFResponse400Headers the declared response headers of an HTTP 400 response for CheckTenantWIF
 type CheckTenantWIFResponse400Headers struct {
 	TwdError *string
@@ -15912,6 +17963,200 @@ func (r CheckTenantWIFResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CheckTenantWIFResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ExportD1Response200Headers the declared response headers of an HTTP 200 response for ExportD1
+type ExportD1Response200Headers struct {
+	CacheControl *string
+}
+
+// ExportD1Response400Headers the declared response headers of an HTTP 400 response for ExportD1
+type ExportD1Response400Headers struct {
+	TwdError *string
+}
+
+// ExportD1Response403Headers the declared response headers of an HTTP 403 response for ExportD1
+type ExportD1Response403Headers struct {
+	TwdError *string
+}
+
+// ExportD1Response404Headers the declared response headers of an HTTP 404 response for ExportD1
+type ExportD1Response404Headers struct {
+	TwdError *string
+}
+
+// ExportD1ResponseDefaultHeaders the declared response headers of an HTTP default response for ExportD1
+type ExportD1ResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ExportD1Response struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ExportD1Response200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ExportD1Response400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ExportD1Response403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ExportD1Response404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ExportD1ResponseDefaultHeaders
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ExportD1Response) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ExportD1Response) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ExportD1Response) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ExportD1Response) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ExportD1Response) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExportD1Response) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExportD1Response) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExportD1Response) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// QueryD1Response400Headers the declared response headers of an HTTP 400 response for QueryD1
+type QueryD1Response400Headers struct {
+	TwdError *string
+}
+
+// QueryD1Response403Headers the declared response headers of an HTTP 403 response for QueryD1
+type QueryD1Response403Headers struct {
+	TwdError *string
+}
+
+// QueryD1Response404Headers the declared response headers of an HTTP 404 response for QueryD1
+type QueryD1Response404Headers struct {
+	TwdError *string
+}
+
+// QueryD1ResponseDefaultHeaders the declared response headers of an HTTP default response for QueryD1
+type QueryD1ResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type QueryD1Response struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]D1Result
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *QueryD1Response400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *QueryD1Response403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *QueryD1Response404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *QueryD1ResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r QueryD1Response) GetJSON200() *[]D1Result {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r QueryD1Response) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r QueryD1Response) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r QueryD1Response) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r QueryD1Response) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r QueryD1Response) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r QueryD1Response) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r QueryD1Response) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r QueryD1Response) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16716,6 +18961,429 @@ func (r ListWorkloadStoresResponse) ContentType() string {
 	return ""
 }
 
+// ListKVKeysResponse200Headers the declared response headers of an HTTP 200 response for ListKVKeys
+type ListKVKeysResponse200Headers struct {
+	CacheControl *string
+}
+
+// ListKVKeysResponse400Headers the declared response headers of an HTTP 400 response for ListKVKeys
+type ListKVKeysResponse400Headers struct {
+	TwdError *string
+}
+
+// ListKVKeysResponse403Headers the declared response headers of an HTTP 403 response for ListKVKeys
+type ListKVKeysResponse403Headers struct {
+	TwdError *string
+}
+
+// ListKVKeysResponse404Headers the declared response headers of an HTTP 404 response for ListKVKeys
+type ListKVKeysResponse404Headers struct {
+	TwdError *string
+}
+
+// ListKVKeysResponseDefaultHeaders the declared response headers of an HTTP default response for ListKVKeys
+type ListKVKeysResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListKVKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KVKeyPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListKVKeysResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListKVKeysResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListKVKeysResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListKVKeysResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListKVKeysResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListKVKeysResponse) GetJSON200() *KVKeyPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListKVKeysResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListKVKeysResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListKVKeysResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListKVKeysResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListKVKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListKVKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListKVKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListKVKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DeleteKVValueResponse400Headers the declared response headers of an HTTP 400 response for DeleteKVValue
+type DeleteKVValueResponse400Headers struct {
+	TwdError *string
+}
+
+// DeleteKVValueResponse403Headers the declared response headers of an HTTP 403 response for DeleteKVValue
+type DeleteKVValueResponse403Headers struct {
+	TwdError *string
+}
+
+// DeleteKVValueResponse404Headers the declared response headers of an HTTP 404 response for DeleteKVValue
+type DeleteKVValueResponse404Headers struct {
+	TwdError *string
+}
+
+// DeleteKVValueResponse409Headers the declared response headers of an HTTP 409 response for DeleteKVValue
+type DeleteKVValueResponse409Headers struct {
+	TwdError *string
+}
+
+// DeleteKVValueResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteKVValue
+type DeleteKVValueResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DeleteKVValueResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *StoreConflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *DeleteKVValueResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DeleteKVValueResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DeleteKVValueResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *DeleteKVValueResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DeleteKVValueResponseDefaultHeaders
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteKVValueResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteKVValueResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteKVValueResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteKVValueResponse) GetJSON409() *StoreConflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteKVValueResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteKVValueResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteKVValueResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteKVValueResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteKVValueResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetKVValueResponse200Headers the declared response headers of an HTTP 200 response for GetKVValue
+type GetKVValueResponse200Headers struct {
+	CacheControl *string
+}
+
+// GetKVValueResponse400Headers the declared response headers of an HTTP 400 response for GetKVValue
+type GetKVValueResponse400Headers struct {
+	TwdError *string
+}
+
+// GetKVValueResponse403Headers the declared response headers of an HTTP 403 response for GetKVValue
+type GetKVValueResponse403Headers struct {
+	TwdError *string
+}
+
+// GetKVValueResponse404Headers the declared response headers of an HTTP 404 response for GetKVValue
+type GetKVValueResponse404Headers struct {
+	TwdError *string
+}
+
+// GetKVValueResponseDefaultHeaders the declared response headers of an HTTP default response for GetKVValue
+type GetKVValueResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetKVValueResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KVValue
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetKVValueResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *GetKVValueResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetKVValueResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetKVValueResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetKVValueResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetKVValueResponse) GetJSON200() *KVValue {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetKVValueResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetKVValueResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetKVValueResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetKVValueResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetKVValueResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetKVValueResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetKVValueResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetKVValueResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PutKVValueResponse400Headers the declared response headers of an HTTP 400 response for PutKVValue
+type PutKVValueResponse400Headers struct {
+	TwdError *string
+}
+
+// PutKVValueResponse403Headers the declared response headers of an HTTP 403 response for PutKVValue
+type PutKVValueResponse403Headers struct {
+	TwdError *string
+}
+
+// PutKVValueResponse404Headers the declared response headers of an HTTP 404 response for PutKVValue
+type PutKVValueResponse404Headers struct {
+	TwdError *string
+}
+
+// PutKVValueResponse409Headers the declared response headers of an HTTP 409 response for PutKVValue
+type PutKVValueResponse409Headers struct {
+	TwdError *string
+}
+
+// PutKVValueResponseDefaultHeaders the declared response headers of an HTTP default response for PutKVValue
+type PutKVValueResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type PutKVValueResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KVKey
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *StoreConflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *PutKVValueResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *PutKVValueResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *PutKVValueResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *PutKVValueResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *PutKVValueResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutKVValueResponse) GetJSON200() *KVKey {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutKVValueResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutKVValueResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutKVValueResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PutKVValueResponse) GetJSON409() *StoreConflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PutKVValueResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutKVValueResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutKVValueResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutKVValueResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutKVValueResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // DeleteWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for DeleteWorkloadStore
 type DeleteWorkloadStoreResponse403Headers struct {
 	TwdError *string
@@ -17202,6 +19870,124 @@ func (r AppendStoreJournalResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AppendStoreJournalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateTelemetryGrantResponse201Headers the declared response headers of an HTTP 201 response for CreateTelemetryGrant
+type CreateTelemetryGrantResponse201Headers struct {
+	CacheControl *string
+}
+
+// CreateTelemetryGrantResponse400Headers the declared response headers of an HTTP 400 response for CreateTelemetryGrant
+type CreateTelemetryGrantResponse400Headers struct {
+	TwdError *string
+}
+
+// CreateTelemetryGrantResponse403Headers the declared response headers of an HTTP 403 response for CreateTelemetryGrant
+type CreateTelemetryGrantResponse403Headers struct {
+	TwdError *string
+}
+
+// CreateTelemetryGrantResponse404Headers the declared response headers of an HTTP 404 response for CreateTelemetryGrant
+type CreateTelemetryGrantResponse404Headers struct {
+	TwdError *string
+}
+
+// CreateTelemetryGrantResponse409Headers the declared response headers of an HTTP 409 response for CreateTelemetryGrant
+type CreateTelemetryGrantResponse409Headers struct {
+	TwdError *string
+}
+
+// CreateTelemetryGrantResponseDefaultHeaders the declared response headers of an HTTP default response for CreateTelemetryGrant
+type CreateTelemetryGrantResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CreateTelemetryGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *TelemetryGrant
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *LeaseLost
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateTelemetryGrantResponse201Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *CreateTelemetryGrantResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CreateTelemetryGrantResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *CreateTelemetryGrantResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *CreateTelemetryGrantResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CreateTelemetryGrantResponseDefaultHeaders
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateTelemetryGrantResponse) GetJSON201() *TelemetryGrant {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateTelemetryGrantResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateTelemetryGrantResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateTelemetryGrantResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateTelemetryGrantResponse) GetJSON409() *LeaseLost {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateTelemetryGrantResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateTelemetryGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateTelemetryGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateTelemetryGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateTelemetryGrantResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18716,6 +21502,90 @@ func (c *ClientWithResponses) PurgeTenantObjectsWithResponse(ctx context.Context
 	return ParsePurgeTenantObjectsResponse(rsp)
 }
 
+// DeleteTenantTelemetryWithResponse Stop the tenant's OTLP export (`twd telemetry rm`)
+//
+// Hosts stop exporting within a minute. Records stay on the hosts
+// (`twd logs`) and in `/metrics`. Idempotent. Audited
+// (`kind: telemetry_delete`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
+func (c *ClientWithResponses) DeleteTenantTelemetryWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantTelemetryResponse, error) {
+	rsp, err := c.DeleteTenantTelemetry(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTenantTelemetryResponse(rsp)
+}
+
+// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`twd telemetry`), without header values
+//
+// ADR-observability. Header names only: no admin operation returns a
+// header value. A tenant that exports nothing has no `otlp`.
+// `404 unknown_tenant`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/telemetry (the `GetTenantTelemetry` operationId).
+func (c *ClientWithResponses) GetTenantTelemetryWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantTelemetryResponse, error) {
+	rsp, err := c.GetTenantTelemetry(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTenantTelemetryResponse(rsp)
+}
+
+// PutTenantTelemetryWithBodyWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+//
+// Every workload of the tenant exports its request records (as log
+// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+// **from the workload's own tailnet node**, so it must be a tailnet
+// peer the tailnet policy lets that workload reach (a public
+// internet endpoint is refused like any other egress). The config
+// is stored encrypted in mgmt custody (custody name
+// `twd/<tenant>/telemetry`); header values (collector credentials)
+// are never logged, audited or returned. Hosts pick a change up
+// within a minute. Audited (`kind: telemetry_put`, endpoint and
+// header names).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+func (c *ClientWithResponses) PutTenantTelemetryWithBodyWithResponse(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error) {
+	rsp, err := c.PutTenantTelemetryWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutTenantTelemetryResponse(rsp)
+}
+
+// PutTenantTelemetryWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+//
+// Every workload of the tenant exports its request records (as log
+// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+// to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+// **from the workload's own tailnet node**, so it must be a tailnet
+// peer the tailnet policy lets that workload reach (a public
+// internet endpoint is refused like any other egress). The config
+// is stored encrypted in mgmt custody (custody name
+// `twd/<tenant>/telemetry`); header values (collector credentials)
+// are never logged, audited or returned. Hosts pick a change up
+// within a minute. Audited (`kind: telemetry_put`, endpoint and
+// header names).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
+func (c *ClientWithResponses) PutTenantTelemetryWithResponse(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error) {
+	rsp, err := c.PutTenantTelemetry(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutTenantTelemetryResponse(rsp)
+}
+
 // CheckTenantWIFWithResponse Verify a wif tenant's trust credentials (diagnostic)
 //
 // A live diagnostic, not a state change: one fresh token exchange per
@@ -18732,6 +21602,91 @@ func (c *ClientWithResponses) CheckTenantWIFWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseCheckTenantWIFResponse(rsp)
+}
+
+// ExportD1WithResponse Export a D1 database as SQL (`twd d1 export`)
+//
+// The database's schema and rows as SQL text, in the shape of
+// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+// table and its `INSERT`s, then indexes, triggers and views), read
+// from the store object of the running workload after it has caught
+// up with the journal. At most 16 MiB (`400 store_limit` beyond).
+// Rows of virtual tables are not exported. A read: logged, not
+// audited.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
+func (c *ClientWithResponses) ExportD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*ExportD1Response, error) {
+	rsp, err := c.ExportD1(ctx, id, workload, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExportD1Response(rsp)
+}
+
+// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-038) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *ClientWithResponses) QueryD1WithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*QueryD1Response, error) {
+	rsp, err := c.QueryD1WithBody(ctx, id, workload, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseQueryD1Response(rsp)
+}
+
+// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+//
+// A D1 database (ADR-038) is the workload's platform store of kind
+// `d1` named after the binding's `database_name`. Its data is served
+// by the store object in the workload's workerd, so mgmt sends the
+// statements to the host holding the workload's lease (the mgmt →
+// hostd channel, as for logs), which hands them to its platform
+// worker. They run as one batch: atomic, after the store object has
+// caught up with the journal, and a batch that writes is appended to
+// the journal before it is applied, like every write through the
+// binding.
+//
+// `200` with one result per statement (D1's shape, rows and
+// columns). A failing statement fails the whole batch (`400
+// d1_error`, with SQLite's message; nothing is applied). `404
+// unknown_workload` when the workload isn't running (the database is
+// only reachable through a running deployment that binds it); `404
+// unknown_store` when its deployment binds no such database. A batch
+// that changed the database is audited (`kind: d1_write`, with the
+// statement count, never the SQL); a read is logged.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
+func (c *ClientWithResponses) QueryD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*QueryD1Response, error) {
+	rsp, err := c.QueryD1(ctx, id, workload, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseQueryD1Response(rsp)
 }
 
 // GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
@@ -18967,6 +21922,104 @@ func (c *ClientWithResponses) ListWorkloadStoresWithResponse(ctx context.Context
 	return ParseListWorkloadStoresResponse(rsp)
 }
 
+// ListKVKeysWithResponse List a KV namespace's keys
+//
+// Workers KV's `list()` for operators (`twd kv key list`,
+// ADR-037): live keys in UTF-8 byte order, with their
+// expiration and metadata, `limit` at a time (default and maximum
+// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
+// the namespace's journal (its own copy), so the answer includes
+// every acknowledged write. `404 unknown_store` if the namespace
+// does not exist.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys (the `ListKVKeys` operationId).
+func (c *ClientWithResponses) ListKVKeysWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListKVKeysParams, reqEditors ...RequestEditorFn) (*ListKVKeysResponse, error) {
+	rsp, err := c.ListKVKeys(ctx, id, workload, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListKVKeysResponse(rsp)
+}
+
+// DeleteKVValueWithResponse Delete one KV value
+//
+// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
+func (c *ClientWithResponses) DeleteKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*DeleteKVValueResponse, error) {
+	rsp, err := c.DeleteKVValue(ctx, id, workload, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteKVValueResponse(rsp)
+}
+
+// GetKVValueWithResponse Get one KV value
+//
+// `twd kv key get`. `404 not_found` if the key does not exist or has
+// expired, `404 unknown_store` if the namespace does not.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `GetKVValue` operationId).
+func (c *ClientWithResponses) GetKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *GetKVValueParams, reqEditors ...RequestEditorFn) (*GetKVValueResponse, error) {
+	rsp, err := c.GetKVValue(ctx, id, workload, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetKVValueResponse(rsp)
+}
+
+// PutKVValueWithBodyWithResponse Write one KV value
+//
+// `twd kv key put`: a journal append, like a binding's `put()`, so
+// running workloads see it on their next sync (within 60 s, or a
+// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+// `400 store_limit`). The namespace must exist (`404
+// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// kv_put`) with the namespace and who wrote, not the key: key names
+// can be sensitive, and mgmt keeps them only sealed and HMACed.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+func (c *ClientWithResponses) PutKVValueWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutKVValueResponse, error) {
+	rsp, err := c.PutKVValueWithBody(ctx, id, workload, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutKVValueResponse(rsp)
+}
+
+// PutKVValueWithResponse Write one KV value
+//
+// `twd kv key put`: a journal append, like a binding's `put()`, so
+// running workloads see it on their next sync (within 60 s, or a
+// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+// `400 store_limit`). The namespace must exist (`404
+// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// kv_put`) with the namespace and who wrote, not the key: key names
+// can be sensitive, and mgmt keeps them only sealed and HMACed.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
+func (c *ClientWithResponses) PutKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*PutKVValueResponse, error) {
+	rsp, err := c.PutKVValue(ctx, id, workload, name, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutKVValueResponse(rsp)
+}
+
 // DeleteWorkloadStoreWithResponse Delete a store and its data
 //
 // Deletes the journal and the store's data key (custody), so the
@@ -19106,6 +22159,30 @@ func (c *ClientWithResponses) AppendStoreJournalWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseAppendStoreJournalResponse(rsp)
+}
+
+// CreateTelemetryGrantWithResponse Release the tenant's OTLP export config to a workload's lease holder
+//
+// hostd calls this when it starts a workload, and every minute while
+// it runs it, to export the workload's logs, metrics and spans
+// (ADR-observability). As with secrets (ADR-034), the config, header
+// values included, is released only to the host holding the
+// workload's lease at `epoch` (`409 lease_lost`), with
+// `Cache-Control: no-store`, and is never logged. `otlp` is absent
+// when the tenant exports nothing. Audited (`kind:
+// telemetry_release`, endpoint and header names) the first time a
+// host gets each version of the config for a workload (hosts re-read
+// it every minute); a refusal always is.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants (the `CreateTelemetryGrant` operationId).
+func (c *ClientWithResponses) CreateTelemetryGrantWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateTelemetryGrantParams, reqEditors ...RequestEditorFn) (*CreateTelemetryGrantResponse, error) {
+	rsp, err := c.CreateTelemetryGrant(ctx, id, workload, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTelemetryGrantResponse(rsp)
 }
 
 // CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
@@ -23362,6 +26439,259 @@ func ParsePurgeTenantObjectsResponse(rsp *http.Response) (*PurgeTenantObjectsRes
 	return response, nil
 }
 
+// ParseDeleteTenantTelemetryResponse parses an HTTP response from a DeleteTenantTelemetryWithResponse call
+func ParseDeleteTenantTelemetryResponse(rsp *http.Response) (*DeleteTenantTelemetryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTenantTelemetryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers DeleteTenantTelemetryResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DeleteTenantTelemetryResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers DeleteTenantTelemetryResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetTenantTelemetryResponse parses an HTTP response from a GetTenantTelemetryWithResponse call
+func ParseGetTenantTelemetryResponse(rsp *http.Response) (*GetTenantTelemetryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTenantTelemetryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TelemetryConfig
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetTenantTelemetryResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetTenantTelemetryResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetTenantTelemetryResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePutTenantTelemetryResponse parses an HTTP response from a PutTenantTelemetryWithResponse call
+func ParsePutTenantTelemetryResponse(rsp *http.Response) (*PutTenantTelemetryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutTenantTelemetryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TelemetryConfig
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers PutTenantTelemetryResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers PutTenantTelemetryResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers PutTenantTelemetryResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers PutTenantTelemetryResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseCheckTenantWIFResponse parses an HTTP response from a CheckTenantWIFWithResponse call
 func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23446,6 +26776,203 @@ func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, e
 		response.Headers404 = &headers
 	case true:
 		var headers CheckTenantWIFResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseExportD1Response parses an HTTP response from a ExportD1WithResponse call
+func ParseExportD1Response(rsp *http.Response) (*ExportD1Response, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExportD1Response{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ExportD1Response200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers ExportD1Response400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ExportD1Response403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ExportD1Response404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ExportD1ResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseQueryD1Response parses an HTTP response from a QueryD1WithResponse call
+func ParseQueryD1Response(rsp *http.Response) (*QueryD1Response, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &QueryD1Response{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []D1Result
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers QueryD1Response400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers QueryD1Response403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers QueryD1Response404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers QueryD1ResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -24278,6 +27805,444 @@ func ParseListWorkloadStoresResponse(rsp *http.Response) (*ListWorkloadStoresRes
 	return response, nil
 }
 
+// ParseListKVKeysResponse parses an HTTP response from a ListKVKeysWithResponse call
+func ParseListKVKeysResponse(rsp *http.Response) (*ListKVKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListKVKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KVKeyPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListKVKeysResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers ListKVKeysResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListKVKeysResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListKVKeysResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListKVKeysResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseDeleteKVValueResponse parses an HTTP response from a DeleteKVValueWithResponse call
+func ParseDeleteKVValueResponse(rsp *http.Response) (*DeleteKVValueResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteKVValueResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest StoreConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers DeleteKVValueResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers DeleteKVValueResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DeleteKVValueResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers DeleteKVValueResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers DeleteKVValueResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetKVValueResponse parses an HTTP response from a GetKVValueWithResponse call
+func ParseGetKVValueResponse(rsp *http.Response) (*GetKVValueResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetKVValueResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KVValue
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetKVValueResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers GetKVValueResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers GetKVValueResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetKVValueResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetKVValueResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePutKVValueResponse parses an HTTP response from a PutKVValueWithResponse call
+func ParsePutKVValueResponse(rsp *http.Response) (*PutKVValueResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutKVValueResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KVKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest StoreConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers PutKVValueResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers PutKVValueResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers PutKVValueResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers PutKVValueResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers PutKVValueResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseDeleteWorkloadStoreResponse parses an HTTP response from a DeleteWorkloadStoreWithResponse call
 func ParseDeleteWorkloadStoreResponse(rsp *http.Response) (*DeleteWorkloadStoreResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -24763,6 +28728,130 @@ func ParseAppendStoreJournalResponse(rsp *http.Response) (*AppendStoreJournalRes
 		response.Headers409 = &headers
 	case true:
 		var headers AppendStoreJournalResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreateTelemetryGrantResponse parses an HTTP response from a CreateTelemetryGrantWithResponse call
+func ParseCreateTelemetryGrantResponse(rsp *http.Response) (*CreateTelemetryGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateTelemetryGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest TelemetryGrant
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest LeaseLost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreateTelemetryGrantResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
+	case rsp.StatusCode == 400:
+		var headers CreateTelemetryGrantResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers CreateTelemetryGrantResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers CreateTelemetryGrantResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers CreateTelemetryGrantResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers CreateTelemetryGrantResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

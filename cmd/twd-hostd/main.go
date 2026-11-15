@@ -32,8 +32,10 @@ import (
 
 	"github.com/rosskukulinski/twd/hostd"
 	"github.com/rosskukulinski/twd/hostd/image"
+	"github.com/rosskukulinski/twd/hostd/r2"
 	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
 	"github.com/rosskukulinski/twd/internal/hostdrun"
+	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/netd"
 	"tailscale.com/tsnet"
@@ -58,6 +60,7 @@ func run() error {
 		tsControl  = flag.String("tsnet-control-url", "", "operator tailnet control URL for this host's node (required unless -local-dev)")
 		joinFile   = flag.String("join-token-file", "", "TS_AUTHKEY=… file with the single-use join key mgmt minted (twd host add / twd up); waited for when the node has no state yet. Deleted after use")
 		pushPort   = flag.Int("push-port", hostdrun.DefaultPushPort, "port on this host's node where mgmt pushes kills and assignment changes")
+		metricsPrt = flag.Int("metrics-port", obs.DefaultMetricsPort, "port on this host's node serving GET /metrics (Prometheus; who may scrape is a tailnet policy grant); 0 = off")
 		hostID     = flag.String("host-id", "", "this host's ID (default: hostname)")
 		dataDir    = flag.String("data-dir", filepath.Join(home, ".twd", "hostd"), "node state, DO storage, objects.json")
 		runDir     = flag.String("run-dir", "", "sockets and generated configs (short path; default a new /tmp dir)")
@@ -111,7 +114,13 @@ func run() error {
 		ctrVCPU    = flag.Float64("container-vcpu", 0, "containers: max total vCPU on this host (0 = unlimited)")
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
 	)
+	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
+	r2f.Register(flag.CommandLine)
 	flag.Parse()
+	r2b, err := r2f.Open(*dataDir, os.Getenv)
+	if err != nil {
+		return err
+	}
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(*logLevel)); err != nil {
 		return err
@@ -119,7 +128,8 @@ func run() error {
 	log := slog.New(netd.NewRedactingHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
 	o := hostdrun.Options{MgmtAddr: *mgmtAddr, LocalDev: *localDev, MgmtTokenFile: *tokenFile,
 		TSNetDir: *tsDir, TSNetControlURL: *tsControl, JoinTokenFile: *joinFile, PushPort: *pushPort, PortMapping: *portMap,
-		HostID: *hostID, DataDir: *dataDir, RunDir: *runDir, Workerd: *workerd,
+		MetricsPort: *metricsPrt,
+		HostID:      *hostID, DataDir: *dataDir, RunDir: *runDir, Workerd: *workerd,
 		Heartbeat: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL, CapacityNodes: *capacity,
 		KillTombstone: *tombstone, TSNetLogs: *tsnetLogs, PoolNodes: *poolNodes, PathEvery: *pathEvery, DefaultTier: *tier,
 		VM: hostdrun.VMOptions{Kernel: *vmKernel, Rootfs: *vmRootfs, Firecracker: *vmFC, Jailer: *vmJailer, Helper: *vmHelper,
@@ -130,7 +140,8 @@ func run() error {
 		NoContainers:       *ctrOff, ContainerImageCache: *ctrCache, ContainerImageDir: *ctrImages, ContainerPublicImages: hostdrun.SplitList(*ctrPublic),
 		ContainerImageMaxMiB: *ctrImgMB, ContainerImageCacheMaxMiB: *ctrCacheMB,
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
-		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log}
+		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log,
+		R2: r2b}
 	rt, err := hostdrun.New(context.Background(), o)
 	if err != nil {
 		return err

@@ -40,7 +40,7 @@ test: deps test-go test-js
 
 .PHONY: test-go
 test-go:
-	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/...
+	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:
@@ -60,7 +60,7 @@ CRANE ?= $(shell command -v crane)
 test-images:
 	TWD_TEST_DOCKER=1 TWD_CRANE="$(CRANE)" $(GO) test -count=1 -v -run 'TestBuildAndPush|TestCraneConformance|TestCLIImages' ./internal/imagebuild/ ./internal/registry/ ./cmd/twd/
 
-## e2e-placement: smart placement (ADR-033), hermetic: real twd-mgmt + two twd-hostd processes on
+## e2e-placement: smart placement (ADR-033) and D1 across a restart and a move (ADR-038), hermetic: real twd-mgmt + two twd-hostd processes on
 ## testcontrol + local DERP, a tag:db peer, one host forced onto DERP; placement, stickiness, --replace.
 .PHONY: e2e-placement
 e2e-placement: deps
@@ -71,6 +71,12 @@ e2e-placement: deps
 .PHONY: e2e-locks
 e2e-locks: deps
 	$(GO) test -tags e2elocks -count=1 -v -timeout 10m ./e2e/locks/...
+
+## e2e-observability: logs, metrics and traces (ADR-observability), hermetic: real twd-mgmt + twd-hostd processes
+## on testcontrol + local DERP, a caller, an echo and an OTLP collector node; traceparent, twd logs, /metrics, OTLP.
+.PHONY: e2e-observability
+e2e-observability: deps
+	$(GO) test -tags e2eobs -count=1 -v -timeout 10m ./e2e/observability/...
 
 ## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container).
 PG_CTX  ?= orbstack
@@ -471,6 +477,7 @@ lint: api-check compat-check
 	$(GO) vet -tags nodetier ./e2e/node/...
 	$(GO) vet -tags e2eplacement ./e2e/placement/...
 	$(GO) vet -tags e2elocks ./e2e/locks/...
+	$(GO) vet -tags e2eobs ./e2e/observability/...
 	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...
 	@sh scripts/check-secrets.sh
 
@@ -486,7 +493,7 @@ clean:
 .PHONY: gen-js
 gen-js: $(WORKERD)
 	node_modules/.bin/esbuild js/packages/tailnet/src/runtime.ts --bundle --format=esm --platform=neutral \
-		--target=es2022 --legal-comments=none --log-level=warning --outfile=hostd/gen/js/twd-rt.js
+		--target=es2022 --legal-comments=none --log-level=warning --external:node:async_hooks --outfile=hostd/gen/js/twd-rt.js
 
 ## test-node: the opt-in Node process tier + Vercel Workflow (hermetic; npm ci of the pinned deps in e2e/node).
 .PHONY: test-node

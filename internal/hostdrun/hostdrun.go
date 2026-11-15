@@ -28,6 +28,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd"
 	"github.com/rosskukulinski/twd/hostd/image"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/twd/hostd/r2"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
 	"github.com/rosskukulinski/twd/internal/tsapi"
@@ -75,6 +76,11 @@ type Options struct {
 	// PortMapping turns UPnP/NAT-PMP/PCP on for this host's tailnet nodes
 	// (off by default, process-wide: netd.DisablePortMapping).
 	PortMapping bool
+	// MetricsPort serves GET /metrics on the host's own node
+	// (ADR-observability; 0 = off; flag default obs.DefaultMetricsPort).
+	// Without a node of its own (Client, LocalDev) the host serves none:
+	// mgmt's process serves the embedded host's metrics.
+	MetricsPort int
 
 	HostID  string // default: hostname
 	DataDir string // node state, DO storage, objects.json
@@ -128,6 +134,10 @@ type Options struct {
 	ContainerVCPU             float64
 	ContainerInternet         string
 	Log                       *slog.Logger
+
+	// R2 holds R2 bucket bytes (hostd.Config.R2; nil: files under
+	// <DataDir>/r2).
+	R2 r2.Backend
 }
 
 // VMOptions configures the microVM tier (Firecracker on Linux + KVM,
@@ -323,7 +333,8 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		VM:            vmBackend(o.VM, log),
 		ContainerIdle: o.ContainerIdle, ContainerMaxLife: o.ContainerMaxLife, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: hostd.ContainerCapacity{Max: o.ContainerMax, MemMiB: o.ContainerMemMiB, VCPU: o.ContainerVCPU},
-		PushInProcess:     o.Client != nil, RegistrationSecret: regSecret}
+		PushInProcess:     o.Client != nil, RegistrationSecret: regSecret,
+		R2: o.R2}
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {
@@ -369,6 +380,11 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 			return nil, fmt.Errorf("node local client: %w", err)
 		}
 		hcfg.PushListener, hcfg.PushPort = pushLn, o.PushPort
+		if o.MetricsPort > 0 {
+			if hcfg.MetricsListener, err = rt.TS.Listen("tcp", fmt.Sprintf(":%d", o.MetricsPort)); err != nil {
+				return nil, fmt.Errorf("metrics listener: %w", err)
+			}
+		}
 		hcfg.WhoIs, hcfg.TailnetStatus = lc.WhoIs, lc.Status
 	}
 	if rt.Host, err = hostd.New(hcfg); err != nil {

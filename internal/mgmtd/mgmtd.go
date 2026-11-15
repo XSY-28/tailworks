@@ -23,8 +23,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/internal/tssvc"
 	"github.com/rosskukulinski/twd/mgmt"
@@ -115,6 +117,10 @@ type Options struct {
 	ImageAliasesFile string
 	// Log (default: discard).
 	Log *slog.Logger
+
+	// MetricsPort serves GET /metrics on mgmt's own tailnet node
+	// (ADR-observability; 0 = off; flag default obs.DefaultMetricsPort).
+	MetricsPort int
 }
 
 // Runtime is a running mgmt.
@@ -137,6 +143,10 @@ type Runtime struct {
 	servers  []*http.Server
 	gate     *mgmt.ServiceGate
 	cleanups []func()
+
+	// metrics.go: registries served with mgmt's on /metrics.
+	metricsMu    sync.Mutex
+	extraMetrics obs.Gatherers
 }
 
 // Start runs mgmt per o (twd-mgmt's run body up to its wait). Cancel
@@ -374,10 +384,24 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			if wi.UserProfile != nil {
 				info.Login = wi.UserProfile.LoginName
 			}
-			for c := range wi.CapMap {
+			for c, vals := range wi.CapMap {
 				info.Caps = append(info.Caps, string(c))
+				if c == mgmt.MCPCap {
+					info.CapValues = map[string][]json.RawMessage{}
+					for _, v := range vals {
+						info.CapValues[string(c)] = append(info.CapValues[string(c)], json.RawMessage(v))
+					}
+				}
 			}
 			return info, nil
+		}
+		if o.MetricsPort > 0 {
+			// Tailnet only: who may scrape is a grant to this port.
+			mln, err := ts.Listen("tcp", fmt.Sprintf(":%d", o.MetricsPort))
+			if err != nil {
+				return nil, fmt.Errorf("metrics listener: %w", err)
+			}
+			serve("tsnet-metrics", mln, rt.MetricsHandler())
 		}
 		ln, err := ts.Listen("tcp", ":80")
 		if err != nil {

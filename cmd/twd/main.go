@@ -51,10 +51,17 @@ func init() {
 		{name: "undeploy", usage: "undeploy <workload> [--tenant <tailnet>] [--reason <text>]", help: "stop a workload: kill its objects (cascade), release its lease", run: cmdUndeploy},
 		{name: "expose", usage: "expose on|off <workload> [--tenant <tailnet>]", help: "open or close a workload's public (Funnel) routes; survives redeploys (twd.jsonc \"public\", ADR-029)", run: cmdExpose},
 		{name: "secret", usage: "secret put <NAME> | secret ls | secret rm <NAME>   [--workload <workload>] [--tenant <tailnet>]", help: "a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), ls shows names only; changes apply on the next deploy", run: cmdSecret},
+		{name: "d1", usage: d1Usage, help: "a workload's D1 databases (like wrangler d1): create, list, delete, run SQL, export, and wrangler-layout migrations; execute/export/migrations reach the running workload", run: cmdD1},
+		{name: "kv", usage: "kv namespace create <NAME> | kv namespace list | kv namespace delete <NAME> | kv key put <KEY> [VALUE] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON] | kv key get <KEY> | kv key delete <KEY> | kv key list [--prefix P]   [--binding <BINDING> or --namespace <NAME>] [--workload <workload>] [--tenant <tailnet>]", help: "a workload's Workers KV namespaces (kv_namespaces, like wrangler kv): key commands name the namespace by --binding (from the wrangler config) or --namespace; writes reach running workloads within 60 s", run: cmdKV},
+		{name: "r2", usage: r2Usage, help: "a workload's R2 buckets (r2_buckets bindings): list, create or delete buckets, list a bucket's objects", run: cmdR2},
+		{name: "telemetry", usage: "telemetry [show] | telemetry set --otlp <url> [--header NAME[=VALUE]]... [--signals logs,metrics,traces] | telemetry rm   [--tenant <tailnet>]", help: "the tenant's OTLP export of request records, metrics and spans (each workload exports from its own node); --header NAME reads a credential from stdin, never shown again", run: cmdTelemetry},
 		{name: "kill", usage: "kill <object> [--tenant <tailnet>] [--cascade] [--reason <text>]", help: "kill an object (and with --cascade its sub-agents)", run: cmdKill},
 		{name: "audit", usage: "audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all", help: "show the hash-chained audit trail", run: cmdAudit},
-		{name: "logs", usage: "logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f]", help: "show logs (workerd for a workload, else the daemons)", run: cmdLogs},
+		{name: "logs", usage: "logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]", help: "show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs", run: cmdLogs},
 		{name: "doctor", usage: "doctor [--tailnet <tailnet> --api-key-file <file>]", help: "check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier", run: cmdDoctor},
+		{name: "docs", usage: "docs search <words…> [--limit 10] | docs show <doc>[#<anchor>] | docs ls", help: "twd's docs, offline: search them, print one doc or section (e.g. errors.md#acl_denied)", run: cmdDocs},
+		{name: "mcp", usage: "mcp [--allow deploy,kill,undeploy] | mcp --config", help: "twd's MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it", run: cmdMCP},
+		{name: "agent", usage: "agent setup [--scope user|project] [--dir <dir>] [--agent claude,codex,cursor,gemini,opencode] [--dry-run] [--yes] | agent remove [same flags] | agent ls | agent show <skill>", help: "teach coding agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) to drive twd: install or remove twd's skills, list or print them", run: cmdAgent},
 		{name: "host", usage: "host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--drain] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]", help: "add a remote host (mgmt mints its single-use tag:twd-host join key), list or remove hosts; install the microVM tier's helper; check a microVM", run: cmdHost},
 		{name: "image", usage: "image public add <ref> [--arch amd64,arm64] | image public ls | image public rm <id> | image push <oci-layout|docker-save.tar> twd.local/<name>:<tag>", help: "container images (ADR-032): mark public base images shared across tenants (mirrored now), push operator images (the arm64 alias targets) to twd's registry", run: cmdImage},
 		{name: "version", usage: "version", help: "print the twd version (and the pinned workerd / built-in esbuild)", run: cmdVersion},
@@ -175,6 +182,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	name, rest := args[0], append(pre, args[1:]...)
+	jsonOut = wantsJSON(rest) // agentjson.go: usage errors are JSON too
 	for _, c := range commands {
 		if c.name == name {
 			if wantsHelp(rest) && !c.hidden {
@@ -211,6 +219,11 @@ type cliErr struct {
 	Lines   []string `json:"detail,omitempty"`
 	Fix     []string `json:"fix,omitempty"`
 	TraceID string   `json:"trace_id,omitempty"`
+
+	// Hint and DocURL are filled in by printErr for --json (agentjson.go):
+	// every error object has code, message and hint.
+	Hint   string `json:"hint"`
+	DocURL string `json:"doc_url"`
 }
 
 func (e *cliErr) Error() string { return e.Code + ": " + e.Message }
@@ -247,7 +260,7 @@ func asCLIErr(err error) *cliErr {
 func printErr(err error) {
 	e := asCLIErr(err)
 	if jsonOut {
-		b, _ := json.Marshal(map[string]any{"error": e})
+		b, _ := json.Marshal(map[string]any{"error": jsonError(e)})
 		fmt.Fprintln(os.Stderr, netd.Redact(string(b)))
 		return
 	}

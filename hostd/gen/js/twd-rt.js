@@ -541,7 +541,307 @@ function defineContainer(ctx, c) {
   }
 }
 
+// js/packages/tailnet/src/d1.ts
+var SESSION_HEADER = "x-cf-d1-session-commit-token";
+var FIRST_UNCONSTRAINED = "first-unconstrained";
+var FIRST_PRIMARY = "first-primary";
+function d1Error(prefix, message) {
+  return new Error(`${prefix}: ${message}`, { cause: new Error(message) });
+}
+function first(r) {
+  return Array.isArray(r) ? r[0] : r;
+}
+function toObjects(r) {
+  const res = r.results;
+  if (res === void 0) return { ...r, results: [] };
+  if (Array.isArray(res)) return { ...r, results: res };
+  return { ...r, results: res.rows.map((row) => Object.fromEntries(row.map((c, i) => [res.columns[i], c]))) };
+}
+var D1Session = class {
+  #f;
+  #token;
+  constructor(f, token) {
+    this.#f = f;
+    this.#token = token;
+  }
+  get fetcher() {
+    return this.#f;
+  }
+  prepare(sql) {
+    return new D1Statement(this, sql, []);
+  }
+  async batch(stmts) {
+    const r = await this.sendOrThrow("/query", stmts.map((s) => ({ sql: s.statement, params: s.params })), "ROWS_AND_COLUMNS");
+    return (Array.isArray(r) ? r : [r]).map(toObjects);
+  }
+  getBookmark() {
+    return this.#token === FIRST_UNCONSTRAINED || this.#token === FIRST_PRIMARY ? null : this.#token;
+  }
+  update(b) {
+    b = b.trim();
+    const cur = this.getBookmark();
+    if (b && (cur === null || cur.localeCompare(b) < 0)) this.#token = b;
+  }
+  async send(path, body, format) {
+    const headers = { "content-type": "application/json" };
+    if (this.#token) headers[SESSION_HEADER] = this.#token;
+    const resp = await this.#f.fetch("http://d1" + path + "?resultsFormat=" + format, { method: "POST", headers, body: JSON.stringify(body) });
+    const bm = resp.headers.get(SESSION_HEADER);
+    if (bm) this.update(bm);
+    const text = await resp.text();
+    let j;
+    try {
+      j = JSON.parse(text);
+    } catch {
+      throw d1Error("D1_ERROR", `Failed to parse body as JSON, got: ${text}`);
+    }
+    const norm = (r) => r.error ? { success: false, error: r.error } : { success: true, meta: r.meta, ..."results" in r ? { results: r.results } : {} };
+    return Array.isArray(j) ? j.map(norm) : norm(j);
+  }
+  async sendOrThrow(path, body, format) {
+    const r = await this.send(path, body, format);
+    const f = first(r);
+    if (!f.success) throw d1Error("D1_ERROR", f.error ?? "Something went wrong");
+    return r;
+  }
+};
+var D1AlwaysPrimary = class extends D1Session {
+  constructor(f) {
+    super(f, null);
+  }
+  getBookmark() {
+    return null;
+  }
+  update() {
+  }
+};
+var D1Database = class extends D1AlwaysPrimary {
+  async exec(query) {
+    const lines = query.trim().split("\n");
+    const r = await this.send("/execute", lines.map((sql) => ({ sql })), "NONE");
+    const rs = Array.isArray(r) ? r : [r];
+    let duration = 0;
+    for (const [i, x] of rs.entries()) {
+      if (!x.success) throw d1Error("D1_EXEC_ERROR", `Error in line ${i + 1}: ${lines[i]}: ${x.error || "Something went wrong"}`);
+      duration += Number(x.meta?.duration ?? 0);
+    }
+    return { count: rs.length, duration };
+  }
+  withSession(constraintOrBookmark) {
+    const t = constraintOrBookmark?.trim();
+    return new D1Session(this.fetcher, t ? t : FIRST_UNCONSTRAINED);
+  }
+  async dump() {
+    throw d1Error("D1_DUMP_ERROR", "dump() is not supported on twd; use `twd d1 export`");
+  }
+};
+var D1Statement = class _D1Statement {
+  statement;
+  params;
+  #s;
+  constructor(s, statement, params) {
+    this.#s = s;
+    this.statement = statement;
+    this.params = params;
+  }
+  bind(...values) {
+    const out = values.map((v) => {
+      const t = typeof v;
+      if (t === "number" || t === "string") return v;
+      if (t === "boolean") return v ? 1 : 0;
+      if (t === "object") {
+        if (v == null) return v;
+        if (Array.isArray(v) && v.every((b) => typeof b === "number" && b >= 0 && b < 256)) return v;
+        if (v instanceof ArrayBuffer) return Array.from(new Uint8Array(v));
+        if (ArrayBuffer.isView(v)) return Array.from(v);
+      }
+      throw d1Error("D1_TYPE_ERROR", `Type '${t}' not supported for value '${String(v)}'`);
+    });
+    return new _D1Statement(this.#s, this.statement, out);
+  }
+  async #one(path, format) {
+    return first(await this.#s.sendOrThrow(path, { sql: this.statement, params: this.params }, format));
+  }
+  async first(col) {
+    const rows = toObjects(await this.#one("/query", "ROWS_AND_COLUMNS")).results;
+    if (!rows.length) return null;
+    if (col === void 0) return rows[0];
+    if (rows[0][col] === void 0) throw d1Error("D1_COLUMN_NOTFOUND", `Column not found (${col})`);
+    return rows[0][col];
+  }
+  async run() {
+    return this.#one("/execute", "NONE");
+  }
+  async all() {
+    return toObjects(await this.#one("/query", "ROWS_AND_COLUMNS"));
+  }
+  async raw(opts) {
+    const r = await this.#one("/query", "ROWS_AND_COLUMNS");
+    const res = r.results;
+    if (!res) return [];
+    if (Array.isArray(res)) {
+      const out = [];
+      for (const row of res) {
+        if (opts?.columnNames && out.length === 0) out.push(Object.keys(row));
+        out.push(Object.values(row));
+      }
+      return out;
+    }
+    return [...opts?.columnNames ? [res.columns] : [], ...res.rows];
+  }
+};
+function makeD1(fetcher) {
+  return new D1Database(fetcher);
+}
+var WRAPS = { d1: makeD1 };
+function wrapStores(env) {
+  const w = env.__TWD_WRAP;
+  if (!w || typeof w !== "object") return;
+  delete env.__TWD_WRAP;
+  for (const [k, kind] of Object.entries(w)) {
+    const f = WRAPS[kind];
+    if (f && env[k]) env[k] = f(env[k]);
+  }
+}
+
+// js/packages/tailnet/src/trace.ts
+import { AsyncLocalStorage } from "node:async_hooks";
+var MAX_SPANS = 64;
+var TP_RE = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})(-.*)?$/;
+function parseTraceparent(v) {
+  if (typeof v !== "string") return null;
+  const m = TP_RE.exec(v.trim());
+  if (!m || m[1] === "ff" || m[1] === "00" && m[5]) return null;
+  if (/^0+$/.test(m[2]) || /^0+$/.test(m[3])) return null;
+  return { traceId: m[2], spanId: m[3], flags: m[4] };
+}
+function randHex(bytes) {
+  const b = new Uint8Array(bytes);
+  for (; ; ) {
+    crypto.getRandomValues(b);
+    if (b.some((x) => x !== 0)) return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  }
+}
+function newSpanId() {
+  return randHex(8);
+}
+var als = null;
+try {
+  als = new AsyncLocalStorage();
+} catch {
+  als = null;
+}
+function headerOf(req) {
+  try {
+    return req?.headers?.get?.("traceparent");
+  } catch {
+    return null;
+  }
+}
+async function runTraced(req, fn, flush) {
+  if (!als) return fn();
+  const header = headerOf(req);
+  const tp = parseTraceparent(header);
+  if (!tp) return als.run(void 0, fn);
+  const st = { ...tp, incoming: String(header), spans: [] };
+  return als.run(st, async () => {
+    try {
+      return await fn();
+    } finally {
+      if (st.spans.length && flush) {
+        const spans = st.spans.splice(0);
+        try {
+          flush(spans);
+        } catch {
+        }
+      }
+    }
+  });
+}
+function withTraceparent(input, init, value, incoming) {
+  let base = init?.headers;
+  if (base === void 0 && typeof Request !== "undefined" && input instanceof Request) base = input.headers;
+  let h;
+  try {
+    h = new Headers(base);
+  } catch {
+    return null;
+  }
+  const cur = h.get("traceparent");
+  if (cur && cur !== incoming) return null;
+  h.set("traceparent", value);
+  return [input, { ...init ?? {}, headers: h }];
+}
+var installed = false;
+function installFetchPropagation() {
+  if (installed || !als || typeof globalThis.fetch !== "function") return;
+  installed = true;
+  const orig = globalThis.fetch;
+  const traced = function fetch2(input, init) {
+    const st = als?.getStore();
+    if (st) {
+      const a = withTraceparent(input, init, `00-${st.traceId}-${st.spanId}-${st.flags}`, st.incoming);
+      if (a) return orig.call(globalThis, a[0], a[1]);
+    }
+    return orig.call(globalThis, input, init);
+  };
+  try {
+    Object.defineProperty(globalThis, "fetch", { value: traced, writable: true, configurable: true });
+  } catch {
+  }
+}
+async function tracedStubFetch(cls, name, args, call) {
+  const st = als?.getStore();
+  if (!st) return call(...args);
+  const spanId = newSpanId();
+  const a = withTraceparent(args[0], args[1], `00-${st.traceId}-${spanId}-${st.flags}`, st.incoming);
+  if (!a) return call(...args);
+  let method = "GET";
+  try {
+    method = String(a[1]?.method ?? args[0]?.method ?? "GET").toUpperCase();
+  } catch {
+  }
+  const rec = {
+    traceId: st.traceId,
+    spanId,
+    parentSpanId: st.spanId,
+    name: `${cls} fetch`,
+    start: Date.now(),
+    end: 0,
+    error: false,
+    attrs: { "twd.do.class": cls, "twd.do.name": name, "http.request.method": method }
+  };
+  const done = () => {
+    rec.end = Date.now();
+    if (st.spans.length < MAX_SPANS) st.spans.push(rec);
+  };
+  try {
+    const r = await call(...a, ...args.slice(2));
+    rec.attrs["http.response.status_code"] = r?.status ?? 0;
+    rec.error = (r?.status ?? 0) >= 500;
+    done();
+    return r;
+  } catch (e) {
+    rec.error = true;
+    done();
+    throw e;
+  }
+}
+
 // js/packages/tailnet/src/runtime.ts
+installFetchPropagation();
+function spanFlusher(tw, ctx) {
+  return (spans) => {
+    if (!tw || typeof tw.call !== "function") return;
+    const p = Promise.resolve().then(() => tw.call("spans", { spans })).catch(() => {
+    });
+    try {
+      ctx?.waitUntil?.(p);
+    } catch {
+    }
+  };
+}
+var twOf = /* @__PURE__ */ new WeakMap();
 function createTailnetContext(tw, env, bindings, self, ticket) {
   if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "twd platform binding missing (not running on twd?)");
   const op = async (name, args = {}) => {
@@ -659,6 +959,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
         installAlarmShim(ctx, tw);
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
         super(ctx, e);
+        twOf.set(this, tw);
       }
       // Called by the Host DO when the delegated alarm fires.
       async __twd_alarm(info) {
@@ -672,6 +973,12 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
       }
     }
   }[name];
+  const ff = C.prototype?.fetch;
+  if (typeof ff === "function") {
+    W.prototype.fetch = function(req) {
+      return runTraced(req, () => ff.call(this, req), spanFlusher(twOf.get(this), this.ctx));
+    };
+  }
   if (opts.container) noPreviewURLs(W);
   return W;
 }
@@ -711,6 +1018,7 @@ function wrapPlainClass(C, name, bindings, opts) {
         if (tw && oname) define(ctx, createTailnetContext(tw, e, bindings, self));
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
+        twOf.set(this, tw);
         if (tw && oname && opts.node) {
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
@@ -744,7 +1052,7 @@ function wrapPlainClass(C, name, bindings, opts) {
       if (k) return killedResponse(k);
       if (this.__twd_ensure) await this.__twd_ensure;
       if (this.__twd_denied) return this.__twd_denied.toResponse();
-      return proto.fetch.call(this, req);
+      return runTraced(req, () => proto.fetch.call(this, req), spanFlusher(twOf.get(this), this.ctx));
     };
   }
   if (opts.container) noPreviewURLs(W);
@@ -763,8 +1071,8 @@ var ADMIT_CACHE_MAX = 1e4;
 var admitted = /* @__PURE__ */ new Map();
 function remember(key) {
   if (admitted.size >= ADMIT_CACHE_MAX) {
-    const first = admitted.keys().next().value;
-    if (first !== void 0) admitted.delete(first);
+    const first2 = admitted.keys().next().value;
+    if (first2 !== void 0) admitted.delete(first2);
   }
   admitted.set(key, true);
 }
@@ -789,6 +1097,7 @@ function guardStub(adm, cls, name, real) {
         return async (...args) => {
           await admit(adm, cls, name);
           const target = real && typeof real.then === "function" ? await real : real;
+          if (p === "fetch") return tracedStubFetch(cls, name, args, (...a) => target.fetch(...a));
           return target[p](...args);
         };
       }
@@ -828,6 +1137,7 @@ function guardEnv(env, bindings, mode, adm) {
   if (!env || typeof env !== "object") return env;
   const out = { ...env };
   delete out.__TWD;
+  wrapStores(out);
   for (const [k, cls] of Object.entries(bindings)) {
     if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
   }
@@ -884,6 +1194,12 @@ async function runScheduled(scheduledFn, req, extra) {
     return Response.json({ outcome: "exception", noRetry, error: String(e?.message ?? e).slice(0, 512) });
   }
 }
+var HANDLER_METHODS = ["fetch", "scheduled", "queue", "tail", "tailStream", "trace", "email", "test", "connect"];
+function handlerKeys(H) {
+  const keys = new Set(Object.keys(H));
+  for (const k of HANDLER_METHODS) if (typeof H[k] === "function") keys.add(k);
+  return [...keys];
+}
 function wrapHandler(H, bindings) {
   if (!H) {
     return {
@@ -917,7 +1233,7 @@ function wrapHandler(H, bindings) {
           }
         }
         try {
-          return await f.call(this, req);
+          return await runTraced(req, () => f.call(this, req), spanFlusher(tw, this.ctx));
         } catch (e) {
           const r = asResponse(e);
           if (r) return r;
@@ -928,7 +1244,7 @@ function wrapHandler(H, bindings) {
     return { [H.name || "Default"]: C }[H.name || "Default"];
   }
   const out = { ...H };
-  for (const k of Object.keys(H)) {
+  for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
     out[k] = function(a, env, ctx) {
       const tw = env?.__TWD;
@@ -944,7 +1260,7 @@ function wrapHandler(H, bindings) {
       }
       let r;
       try {
-        r = H[k].call(H, a, env, ctx);
+        r = k === "fetch" ? runTraced(a, () => H[k].call(H, a, env, ctx), spanFlusher(tw, ctx)) : H[k].call(H, a, env, ctx);
       } catch (e) {
         const resp = k === "fetch" ? asResponse(e) : null;
         if (resp) return resp;

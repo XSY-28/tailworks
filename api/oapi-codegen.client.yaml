@@ -8,4 +8,4 @@ generate:
 output-options:
   nullable-type: true
   name-normalizer: ToCamelCaseWithInitialisms
-  exclude-tags: [registry]
+  exclude-tags: [mcp, registry]

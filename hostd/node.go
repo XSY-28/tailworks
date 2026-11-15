@@ -47,6 +47,7 @@ import (
 
 	"github.com/rosskukulinski/twd/hostd/bundle"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/netd"
 )
 
@@ -185,7 +186,7 @@ func (h *Host) startNodeInstance(w *workload, depID string, app *bundle.App, n i
 // spawnNode starts (or restarts) the node process with fresh secrets.
 func (inst *instance) spawnNode() error {
 	np := inst.node
-	logf, err := os.OpenFile(np.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	logf, err := obs.OpenRotating(np.logPath, inst.h.tel.opt.AppLogMax) // size-capped (ADR-observability)
 	if err != nil {
 		return err
 	}

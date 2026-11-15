@@ -47,6 +47,7 @@ const (
 	AuditKindContainerStop       AuditKind = "container_stop"
 	AuditKindCreate              AuditKind = "create"
 	AuditKindCredential          AuditKind = "credential"
+	AuditKindD1Write             AuditKind = "d1_write"
 	AuditKindDeny                AuditKind = "deny"
 	AuditKindDeploy              AuditKind = "deploy"
 	AuditKindDeviceDelete        AuditKind = "device_delete"
@@ -60,6 +61,8 @@ const (
 	AuditKindImagePublic         AuditKind = "image_public"
 	AuditKindImagePush           AuditKind = "image_push"
 	AuditKindKill                AuditKind = "kill"
+	AuditKindKvDelete            AuditKind = "kv_delete"
+	AuditKindKvPut               AuditKind = "kv_put"
 	AuditKindMint                AuditKind = "mint"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
@@ -79,6 +82,9 @@ const (
 	AuditKindSpawn               AuditKind = "spawn"
 	AuditKindStoreCreate         AuditKind = "store_create"
 	AuditKindStoreDelete         AuditKind = "store_delete"
+	AuditKindTelemetryDelete     AuditKind = "telemetry_delete"
+	AuditKindTelemetryPut        AuditKind = "telemetry_put"
+	AuditKindTelemetryRelease    AuditKind = "telemetry_release"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
@@ -105,6 +111,8 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindCredential:
 		return true
+	case AuditKindD1Write:
+		return true
 	case AuditKindDeny:
 		return true
 	case AuditKindDeploy:
@@ -130,6 +138,10 @@ func (e AuditKind) Valid() bool {
 	case AuditKindImagePush:
 		return true
 	case AuditKindKill:
+		return true
+	case AuditKindKvDelete:
+		return true
+	case AuditKindKvPut:
 		return true
 	case AuditKindMint:
 		return true
@@ -168,6 +180,12 @@ func (e AuditKind) Valid() bool {
 	case AuditKindStoreCreate:
 		return true
 	case AuditKindStoreDelete:
+		return true
+	case AuditKindTelemetryDelete:
+		return true
+	case AuditKindTelemetryPut:
+		return true
+	case AuditKindTelemetryRelease:
 		return true
 	case AuditKindTenantCreate:
 		return true
@@ -289,6 +307,7 @@ const (
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
+	ErrorCodeD1Error                 ErrorCode = "d1_error"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
@@ -364,6 +383,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBootstrapFailed:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
+		return true
+	case ErrorCodeD1Error:
 		return true
 	case ErrorCodeDelegationExceedsParent:
 		return true
@@ -782,6 +803,27 @@ func (e PublicIngress) Valid() bool {
 	}
 }
 
+// Defines values for RequestRecordKind.
+const (
+	Dropped    RequestRecordKind = "dropped"
+	Invocation RequestRecordKind = "invocation"
+	Request    RequestRecordKind = "request"
+)
+
+// Valid indicates whether the value is a known member of the RequestRecordKind enum.
+func (e RequestRecordKind) Valid() bool {
+	switch e {
+	case Dropped:
+		return true
+	case Invocation:
+		return true
+	case Request:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StatusClockSource.
 const (
 	StatusClockSourceLocal    StatusClockSource = "local"
@@ -794,6 +836,27 @@ func (e StatusClockSource) Valid() bool {
 	case StatusClockSourceLocal:
 		return true
 	case StatusClockSourcePostgres:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelemetrySignal.
+const (
+	Logs    TelemetrySignal = "logs"
+	Metrics TelemetrySignal = "metrics"
+	Traces  TelemetrySignal = "traces"
+)
+
+// Valid indicates whether the value is a known member of the TelemetrySignal enum.
+func (e TelemetrySignal) Valid() bool {
+	switch e {
+	case Logs:
+		return true
+	case Metrics:
+		return true
+	case Traces:
 		return true
 	default:
 		return false
@@ -917,6 +980,24 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	}
 }
 
+// Defines values for GetWorkloadLogsParamsSource.
+const (
+	Console  GetWorkloadLogsParamsSource = "console"
+	Requests GetWorkloadLogsParamsSource = "requests"
+)
+
+// Valid indicates whether the value is a known member of the GetWorkloadLogsParamsSource enum.
+func (e GetWorkloadLogsParamsSource) Valid() bool {
+	switch e {
+	case Console:
+		return true
+	case Requests:
+		return true
+	default:
+		return false
+	}
+}
+
 // Arch A Go GOARCH. Container images must match their host's.
 type Arch string
 
@@ -1008,6 +1089,12 @@ type AuditBatch struct {
 // `secret_release` (a workload's secrets released to its lease holder; names only),
 // `store_create` (a platform store created, by its first write or an admin),
 // `store_delete` (a platform store and its data key deleted),
+// `d1_write` (an operator's SQL changed a D1 database; statement count only),
+// `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+// `kv_delete` (an admin deleted a Workers KV key; the namespace only),
+// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+// `telemetry_delete`,
+// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1092,6 +1179,12 @@ type AuditRecord struct {
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `store_create` (a platform store created, by its first write or an admin),
 	// `store_delete` (a platform store and its data key deleted),
+	// `d1_write` (an operator's SQL changed a D1 database; statement count only),
+	// `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+	// `kv_delete` (an admin deleted a Workers KV key; the namespace only),
+	// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+	// `telemetry_delete`,
+	// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1307,6 +1400,32 @@ type Credential struct {
 	Tags     []string `json:"tags"`
 }
 
+// D1Query defines model for D1Query.
+type D1Query struct {
+	Queries []struct {
+		// Params Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values.
+		Params *[]interface{} `json:"params,omitempty"`
+
+		// SQL One statement (or several separated by `;`; parameters bind to the last).
+		SQL string `json:"sql"`
+	} `json:"queries"`
+}
+
+// D1Result One statement's result, as D1's wire protocol has it.
+type D1Result struct {
+	Error *string `json:"error,omitempty"`
+
+	// Meta `changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`.
+	Meta    *map[string]interface{} `json:"meta,omitempty"`
+	Results *struct {
+		Columns *[]string `json:"columns,omitempty"`
+
+		// Rows Values: null, numbers, strings, and BLOBs as arrays of byte values.
+		Rows *[][]interface{} `json:"rows,omitempty"`
+	} `json:"results,omitempty"`
+	Success bool `json:"success"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
@@ -1441,6 +1560,7 @@ type Error struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1514,6 +1634,7 @@ type Error struct {
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
+// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -1793,6 +1914,49 @@ type JWKS struct {
 	Keys []map[string]interface{} `json:"keys"`
 }
 
+// KVKey A Workers KV key as `list()` returns it (ADR-037).
+type KVKey struct {
+	// Expiration Unix seconds when the key expires (absent: never).
+	Expiration *int64 `json:"expiration,omitempty"`
+
+	// Metadata The key's metadata (any JSON; absent: none).
+	Metadata interface{} `json:"metadata,omitempty"`
+	Name     string      `json:"name"`
+}
+
+// KVKeyPage defines model for KVKeyPage.
+type KVKeyPage struct {
+	// Cursor Pass as `cursor` for the next page (absent when `listComplete`).
+	Cursor       *string `json:"cursor,omitempty"`
+	Keys         []KVKey `json:"keys"`
+	ListComplete bool    `json:"listComplete"`
+}
+
+// KVPut defines model for KVPut.
+type KVPut struct {
+	// Expiration Unix seconds; at least 60 s ahead.
+	Expiration *int64 `json:"expiration,omitempty"`
+
+	// ExpirationTTL Seconds from now (at least 60). Wins over `expiration`.
+	ExpirationTTL *int64 `json:"expirationTtl,omitempty"`
+
+	// Metadata Any JSON, at most 1024 bytes serialized.
+	Metadata interface{} `json:"metadata,omitempty"`
+
+	// Value The value's bytes (at most 2 MiB − 4 KiB).
+	Value []byte `json:"value"`
+}
+
+// KVValue defines model for KVValue.
+type KVValue struct {
+	Expiration *int64      `json:"expiration,omitempty"`
+	Metadata   interface{} `json:"metadata,omitempty"`
+	Name       string      `json:"name"`
+
+	// Value The value's bytes.
+	Value []byte `json:"value"`
+}
+
 // KillResult defines model for KillResult.
 type KillResult struct {
 	DevicesDeleted []string `json:"devicesDeleted"`
@@ -1888,6 +2052,35 @@ type OIDCConfiguration struct {
 	ResponseTypesSupported           []string               `json:"response_types_supported"`
 	SubjectTypesSupported            []string               `json:"subject_types_supported"`
 	AdditionalProperties             map[string]interface{} `json:"-"`
+}
+
+// OTLPExport A tenant's OTLP export, without header values.
+type OTLPExport struct {
+	// Endpoint OTLP/HTTP base URL; signals go to `<endpoint>/v1/<signal>`.
+	Endpoint string `json:"endpoint"`
+
+	// HeaderNames Names of the headers sent with every export (values are never returned).
+	HeaderNames []string          `json:"headerNames"`
+	Signals     []TelemetrySignal `json:"signals"`
+}
+
+// OTLPExportPut defines model for OTLPExportPut.
+type OTLPExportPut struct {
+	// Endpoint http:// or https:// base URL of an OTLP/HTTP receiver on the tailnet (no user info, query or fragment).
+	Endpoint string `json:"endpoint"`
+
+	// Headers Headers sent with every export, typically the collector's credentials (at most 16; values at most 4 KiB). Never logged, audited or returned.
+	Headers *map[string]string `json:"headers,omitempty"`
+
+	// Signals What to export (default all three).
+	Signals *[]TelemetrySignal `json:"signals,omitempty"`
+}
+
+// OTLPGrant defines model for OTLPGrant.
+type OTLPGrant struct {
+	Endpoint string             `json:"endpoint"`
+	Headers  *map[string]string `json:"headers,omitempty"`
+	Signals  []TelemetrySignal  `json:"signals"`
 }
 
 // Object defines model for Object.
@@ -2270,6 +2463,72 @@ type ReplicaRef struct {
 	Workload string `json:"workload"`
 }
 
+// RequestRecord One line of a workload's request log (`twd logs --json`,
+// ADR-observability): a request through hostd's ingress (`kind:
+// request`), joined with its workerd invocation, or an invocation
+// with no ingress half (`kind: invocation`: a DO called from the
+// Worker, an alarm, a cron run), or a note that records were dropped
+// by the workload's rate limit (`kind: dropped`). Never holds bodies,
+// query strings, request headers or secret values.
+type RequestRecord struct {
+	AuditTraceID *string `json:"auditTraceId,omitempty"`
+
+	// Caller The verified caller (netd's WhoIs), never from tenant code.
+	Caller *struct {
+		IP     *string   `json:"ip,omitempty"`
+		Node   *string   `json:"node,omitempty"`
+		NodeID *string   `json:"nodeId,omitempty"`
+		Object *string   `json:"object,omitempty"`
+		Public *bool     `json:"public,omitempty"`
+		Tags   *[]string `json:"tags,omitempty"`
+		User   *string   `json:"user,omitempty"`
+	} `json:"caller,omitempty"`
+	Class      *string `json:"class,omitempty"`
+	Deployment *string `json:"deployment,omitempty"`
+	Dropped    *int    `json:"dropped,omitempty"`
+
+	// DurableObjectID workerd's ID of a plain-DO object whose name the invocation does not carry.
+	DurableObjectID *string  `json:"durableObjectId,omitempty"`
+	DurationMs      *float32 `json:"durationMs,omitempty"`
+	Entrypoint      *string  `json:"entrypoint,omitempty"`
+
+	// Event fetch, alarm, rpc, scheduled, websocket.
+	Event      *string `json:"event,omitempty"`
+	Exceptions *[]struct {
+		Message *string    `json:"message,omitempty"`
+		Name    *string    `json:"name,omitempty"`
+		Stack   *string    `json:"stack,omitempty"`
+		Time    *time.Time `json:"time,omitempty"`
+	} `json:"exceptions,omitempty"`
+	Host *string           `json:"host,omitempty"`
+	Kind RequestRecordKind `json:"kind"`
+	Logs *[]struct {
+		Level   *string    `json:"level,omitempty"`
+		Message *string    `json:"message,omitempty"`
+		Time    *time.Time `json:"time,omitempty"`
+	} `json:"logs,omitempty"`
+	Method *string `json:"method,omitempty"`
+	Name   *string `json:"name,omitempty"`
+
+	// Object The twd object ID.
+	Object       *string `json:"object,omitempty"`
+	Outcome      *string `json:"outcome,omitempty"`
+	ParentSpanID *string `json:"parentSpanId,omitempty"`
+
+	// Path The URL path (never the query string).
+	Path      *string   `json:"path,omitempty"`
+	SpanID    *string   `json:"spanId,omitempty"`
+	Status    *int      `json:"status,omitempty"`
+	Tenant    *string   `json:"tenant,omitempty"`
+	Time      time.Time `json:"time"`
+	TraceID   *string   `json:"traceId,omitempty"`
+	Truncated *bool     `json:"truncated,omitempty"`
+	Workload  *string   `json:"workload,omitempty"`
+}
+
+// RequestRecordKind defines model for RequestRecord.Kind.
+type RequestRecordKind string
+
 // RunningContainer One running container in a heartbeat.
 type RunningContainer struct {
 	Class  string `json:"class"`
@@ -2415,7 +2674,7 @@ type Store struct {
 	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
 	Incarnation string `json:"incarnation"`
 
-	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	// Kind A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
 	Kind      StoreKind `json:"kind"`
 	Name      string    `json:"name"`
 	TenantID  string    `json:"tenantID"`
@@ -2467,7 +2726,7 @@ type StoreJournal struct {
 	More bool `json:"more"`
 }
 
-// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+// StoreKind A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
 type StoreKind = string
 
 // StorePage defines model for StorePage.
@@ -2477,6 +2736,32 @@ type StorePage struct {
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
+
+// TelemetryConfig defines model for TelemetryConfig.
+type TelemetryConfig struct {
+	// Otlp A tenant's OTLP export, without header values.
+	Otlp      *OTLPExport `json:"otlp,omitempty"`
+	TenantID  string      `json:"tenantID"`
+	UpdatedAt *int64      `json:"updatedAt,omitempty"`
+	UpdatedBy *string     `json:"updatedBy,omitempty"`
+}
+
+// TelemetryGrant A fenced release of the tenant's OTLP export config. Never logged.
+type TelemetryGrant struct {
+	Epoch     int64      `json:"epoch"`
+	GrantedAt *int64     `json:"grantedAt,omitempty"`
+	Otlp      *OTLPGrant `json:"otlp,omitempty"`
+	TenantID  string     `json:"tenantID"`
+	Workload  string     `json:"workload"`
+}
+
+// TelemetryPut defines model for TelemetryPut.
+type TelemetryPut struct {
+	Otlp OTLPExportPut `json:"otlp"`
+}
+
+// TelemetrySignal An OTLP signal.
+type TelemetrySignal string
 
 // Tenant defines model for Tenant.
 type Tenant struct {
@@ -2652,6 +2937,7 @@ type TombstoneError struct {
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
+	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -3148,7 +3434,35 @@ type GetWorkloadLogsParams struct {
 
 	// Host Only the replica on this host (a host ID).
 	Host *string `form:"host,omitempty" json:"host,omitempty"`
+
+	// Source `console`: the app's raw output (workerd's stdout, the node
+	// tier's `app.log`, the microVM console). `requests`: the
+	// workload's structured request records (ADR-observability), as
+	// JSON Lines (`application/x-ndjson`), one `RequestRecord` per
+	// line; `n` and the filters below then count records, not lines.
+	Source *GetWorkloadLogsParamsSource `form:"source,omitempty" json:"source,omitempty"`
+
+	// Object `source=requests`: only records of this object (object ID, `Class/name`, `Class` or name).
+	Object *string `form:"object,omitempty" json:"object,omitempty"`
+
+	// Status `source=requests`: only this HTTP status (`404`) or class (`5xx`).
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// Outcome `source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …).
+	Outcome *string `form:"outcome,omitempty" json:"outcome,omitempty"`
+
+	// Caller `source=requests`: only callers whose login or node name contains this (`public` for Funnel requests).
+	Caller *string `form:"caller,omitempty" json:"caller,omitempty"`
+
+	// Trace `source=requests`: only this W3C trace ID (or a prefix of it) or audit trace ID.
+	Trace *string `form:"trace,omitempty" json:"trace,omitempty"`
+
+	// Errors `source=requests`: only errors (status ≥ 400, an outcome other than `ok`, or an exception).
+	Errors *bool `form:"errors,omitempty" json:"errors,omitempty"`
 }
+
+// GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
+type GetWorkloadLogsParamsSource string
 
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
@@ -3183,6 +3497,34 @@ type ListWorkloadStoresParams struct {
 	Kind *StoreKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
+// ListKVKeysParams defines parameters for ListKVKeys.
+type ListKVKeysParams struct {
+	// Prefix Only keys that start with this.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Cursor The `cursor` of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteKVValueParams defines parameters for DeleteKVValue.
+type DeleteKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
+// GetKVValueParams defines parameters for GetKVValue.
+type GetKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
+// PutKVValueParams defines parameters for PutKVValue.
+type PutKVValueParams struct {
+	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+	Key string `form:"key" json:"key"`
+}
+
 // ReadStoreJournalParams defines parameters for ReadStoreJournal.
 type ReadStoreJournalParams struct {
 	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
@@ -3199,6 +3541,12 @@ type ReadStoreJournalParams struct {
 type AppendStoreJournalParams struct {
 	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
 	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
+// CreateTelemetryGrantParams defines parameters for CreateTelemetryGrant.
+type CreateTelemetryGrantParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
 }
 
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
@@ -3249,6 +3597,12 @@ type UpdateTenantJSONRequestBody = TenantPatch
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
 
+// PutTenantTelemetryJSONRequestBody defines body for PutTenantTelemetry for application/json ContentType.
+type PutTenantTelemetryJSONRequestBody = TelemetryPut
+
+// QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
+type QueryD1JSONRequestBody = D1Query
+
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
 
@@ -3257,6 +3611,9 @@ type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPubl
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
+
+// PutKVValueJSONRequestBody defines body for PutKVValue for application/json ContentType.
+type PutKVValueJSONRequestBody = KVPut
 
 // AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
 type AppendStoreJournalJSONRequestBody = StoreAppend
@@ -3661,9 +4018,24 @@ type ServerInterface interface {
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(w http.ResponseWriter, r *http.Request, id TenantID, params PurgeTenantObjectsParams)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// (DELETE /v1/tenants/{id}/telemetry)
+	DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
+	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// (GET /v1/tenants/{id}/telemetry)
+	GetTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
+	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// (PUT /v1/tenants/{id}/telemetry)
+	PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID)
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
+	ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
+	QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
@@ -3688,6 +4060,18 @@ type ServerInterface interface {
 	// ListWorkloadStores List a workload's stores
 	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
 	ListWorkloadStores(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadStoresParams)
+	// ListKVKeys List a KV namespace's keys
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys)
+	ListKVKeys(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params ListKVKeysParams)
+	// DeleteKVValue Delete one KV value
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	DeleteKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params DeleteKVValueParams)
+	// GetKVValue Get one KV value
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	GetKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params GetKVValueParams)
+	// PutKVValue Write one KV value
+	// (PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	PutKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params PutKVValueParams)
 	// DeleteWorkloadStore Delete a store and its data
 	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
 	DeleteWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName)
@@ -3703,6 +4087,9 @@ type ServerInterface interface {
 	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
 	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
 	AppendStoreJournal(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params AppendStoreJournalParams)
+	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
+	// (POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants)
+	CreateTelemetryGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateTelemetryGrantParams)
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	// (POST /v1/volumes/{id}/keys)
 	CreateVolumeKeyGrant(w http.ResponseWriter, r *http.Request, id VolumeID, params CreateVolumeKeyGrantParams)
@@ -5562,6 +5949,84 @@ func (siw *ServerInterfaceWrapper) PurgeTenantObjects(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteTenantTelemetry operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTenantTelemetry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTenantTelemetry operation middleware
+func (siw *ServerInterfaceWrapper) GetTenantTelemetry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTenantTelemetry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutTenantTelemetry operation middleware
+func (siw *ServerInterfaceWrapper) PutTenantTelemetry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutTenantTelemetry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CheckTenantWIF operation middleware
 func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http.Request) {
 
@@ -5579,6 +6044,94 @@ func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckTenantWIF(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportD1 operation middleware
+func (siw *ServerInterfaceWrapper) ExportD1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportD1(w, r, id, workload, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// QueryD1 operation middleware
+func (siw *ServerInterfaceWrapper) QueryD1(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.QueryD1(w, r, id, workload, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5650,6 +6203,97 @@ func (siw *ServerInterfaceWrapper) GetWorkloadLogs(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "host"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "host", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "object" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "object", r.URL.Query(), &params.Object, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "object"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "object", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "outcome" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "outcome", r.URL.Query(), &params.Outcome, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "outcome"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outcome", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "caller" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "caller", r.URL.Query(), &params.Caller, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "caller"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "caller", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "trace" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "trace", r.URL.Query(), &params.Trace, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "trace"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trace", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "errors" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "errors", r.URL.Query(), &params.Errors, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "errors"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "errors", Err: err})
 		}
 		return
 	}
@@ -6039,6 +6683,272 @@ func (siw *ServerInterfaceWrapper) ListWorkloadStores(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListKVKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListKVKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListKVKeysParams
+
+	// ------------- Optional query parameter "prefix" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "prefix", r.URL.Query(), &params.Prefix, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "prefix"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "prefix", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListKVKeys(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteKVValue operation middleware
+func (siw *ServerInterfaceWrapper) DeleteKVValue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteKVValueParams
+
+	// ------------- Required query parameter "key" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "key", r.URL.Query(), &params.Key, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "key"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteKVValue(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetKVValue operation middleware
+func (siw *ServerInterfaceWrapper) GetKVValue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetKVValueParams
+
+	// ------------- Required query parameter "key" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "key", r.URL.Query(), &params.Key, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "key"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetKVValue(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutKVValue operation middleware
+func (siw *ServerInterfaceWrapper) PutKVValue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutKVValueParams
+
+	// ------------- Required query parameter "key" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "key", r.URL.Query(), &params.Key, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "key"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutKVValue(w, r, id, workload, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteWorkloadStore operation middleware
 func (siw *ServerInterfaceWrapper) DeleteWorkloadStore(w http.ResponseWriter, r *http.Request) {
 
@@ -6362,6 +7272,57 @@ func (siw *ServerInterfaceWrapper) AppendStoreJournal(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// CreateTelemetryGrant operation middleware
+func (siw *ServerInterfaceWrapper) CreateTelemetryGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateTelemetryGrantParams
+
+	// ------------- Required query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTelemetryGrant(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateVolumeKeyGrant operation middleware
 func (siw *ServerInterfaceWrapper) CreateVolumeKeyGrant(w http.ResponseWriter, r *http.Request) {
 
@@ -6558,6 +7519,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.PutWorkloadStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.ReadStoreJournal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.AppendStoreJournal)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys", wrapper.ListKVKeys)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.DeleteKVValue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.GetKVValue)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.PutKVValue)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/d1/{name}/query", wrapper.QueryD1)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/d1/{name}/export", wrapper.ExportD1)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/telemetry-grants", wrapper.CreateTelemetryGrant)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.DeleteTenantTelemetry)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.GetTenantTelemetry)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.PutTenantTelemetry)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts", wrapper.ListHosts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/hosts", wrapper.CreateHost)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/hosts/{id}", wrapper.DeleteHost)
@@ -10988,6 +11959,249 @@ func (response PurgeTenantObjectsdefaultJSONResponse) VisitPurgeTenantObjectsRes
 	return err
 }
 
+type DeleteTenantTelemetryRequestObject struct {
+	ID TenantID `json:"id"`
+}
+
+type DeleteTenantTelemetryResponseObject interface {
+	VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error
+}
+
+type DeleteTenantTelemetry204Response struct {
+}
+
+func (response DeleteTenantTelemetry204Response) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTenantTelemetry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTenantTelemetry403JSONResponse) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTenantTelemetry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteTenantTelemetry404JSONResponse) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTenantTelemetrydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteTenantTelemetrydefaultJSONResponse) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetryRequestObject struct {
+	ID TenantID `json:"id"`
+}
+
+type GetTenantTelemetryResponseObject interface {
+	VisitGetTenantTelemetryResponse(w http.ResponseWriter) error
+}
+
+type GetTenantTelemetry200JSONResponse TelemetryConfig
+
+func (response GetTenantTelemetry200JSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetTenantTelemetry403JSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTenantTelemetry404JSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetrydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetTenantTelemetrydefaultJSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetryRequestObject struct {
+	ID   TenantID `json:"id"`
+	Body *PutTenantTelemetryJSONRequestBody
+}
+
+type PutTenantTelemetryResponseObject interface {
+	VisitPutTenantTelemetryResponse(w http.ResponseWriter) error
+}
+
+type PutTenantTelemetry200JSONResponse TelemetryConfig
+
+func (response PutTenantTelemetry200JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetry400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutTenantTelemetry400JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutTenantTelemetry403JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutTenantTelemetry404JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetrydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutTenantTelemetrydefaultJSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CheckTenantWIFRequestObject struct {
 	ID TenantID `json:"id"`
 }
@@ -11082,6 +12296,206 @@ func (response CheckTenantWIFdefaultJSONResponse) VisitCheckTenantWIFResponse(w 
 	return err
 }
 
+type ExportD1RequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+}
+
+type ExportD1ResponseObject interface {
+	VisitExportD1Response(w http.ResponseWriter) error
+}
+
+type ExportD1200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type ExportD1200TextResponse struct {
+	Body    string
+	Headers ExportD1200ResponseHeaders
+}
+
+func (response ExportD1200TextResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/plain")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+
+	_, err := w.Write([]byte(fmt.Sprint(response.Body)))
+	return err
+}
+
+type ExportD1400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ExportD1400JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ExportD1403JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ExportD1404JSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportD1defaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ExportD1defaultJSONResponse) VisitExportD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1RequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Body     *QueryD1JSONRequestBody
+}
+
+type QueryD1ResponseObject interface {
+	VisitQueryD1Response(w http.ResponseWriter) error
+}
+
+type QueryD1200JSONResponse []D1Result
+
+func (response QueryD1200JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response QueryD1400JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response QueryD1403JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response QueryD1404JSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type QueryD1defaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response QueryD1defaultJSONResponse) VisitQueryD1Response(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetWorkloadLogsRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -11094,6 +12508,53 @@ type GetWorkloadLogsResponseObject interface {
 
 type GetWorkloadLogs200ResponseHeaders struct {
 	CacheControl *string
+}
+
+type GetWorkloadLogs200ApplicationXNdjsonResponse struct {
+	Body          io.Reader
+	Headers       GetWorkloadLogs200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetWorkloadLogs200ApplicationXNdjsonResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// If w doesn't support flushing, fall back to io.Copy.
+		_, err := io.Copy(w, response.Body)
+		return err
+	}
+	// text/event-stream messages are typically small; use a
+	// modest buffer and flush after each chunk so clients see
+	// events immediately instead of waiting on OS buffering.
+	buf := make([]byte, 4096)
+	for {
+		n, err := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 type GetWorkloadLogs200TextResponse struct {
@@ -11900,6 +13361,443 @@ func (response ListWorkloadStoresdefaultJSONResponse) VisitListWorkloadStoresRes
 	return err
 }
 
+type ListKVKeysRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   ListKVKeysParams
+}
+
+type ListKVKeysResponseObject interface {
+	VisitListKVKeysResponse(w http.ResponseWriter) error
+}
+
+type ListKVKeys200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type ListKVKeys200JSONResponse struct {
+	Body    KVKeyPage
+	Headers ListKVKeys200ResponseHeaders
+}
+
+func (response ListKVKeys200JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeys400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListKVKeys400JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeys403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListKVKeys403JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeys404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListKVKeys404JSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListKVKeysdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListKVKeysdefaultJSONResponse) VisitListKVKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValueRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   DeleteKVValueParams
+}
+
+type DeleteKVValueResponseObject interface {
+	VisitDeleteKVValueResponse(w http.ResponseWriter) error
+}
+
+type DeleteKVValue204Response struct {
+}
+
+func (response DeleteKVValue204Response) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteKVValue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteKVValue400JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteKVValue403JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteKVValue404JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValue409JSONResponse struct{ StoreConflictJSONResponse }
+
+func (response DeleteKVValue409JSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteKVValuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteKVValuedefaultJSONResponse) VisitDeleteKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValueRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   GetKVValueParams
+}
+
+type GetKVValueResponseObject interface {
+	VisitGetKVValueResponse(w http.ResponseWriter) error
+}
+
+type GetKVValue200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type GetKVValue200JSONResponse struct {
+	Body    KVValue
+	Headers GetKVValue200ResponseHeaders
+}
+
+func (response GetKVValue200JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetKVValue400JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetKVValue403JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetKVValue404JSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetKVValuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetKVValuedefaultJSONResponse) VisitGetKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValueRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Name     StoreName    `json:"name"`
+	Params   PutKVValueParams
+	Body     *PutKVValueJSONRequestBody
+}
+
+type PutKVValueResponseObject interface {
+	VisitPutKVValueResponse(w http.ResponseWriter) error
+}
+
+type PutKVValue200JSONResponse KVKey
+
+func (response PutKVValue200JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutKVValue400JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutKVValue403JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutKVValue404JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValue409JSONResponse struct{ StoreConflictJSONResponse }
+
+func (response PutKVValue409JSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutKVValuedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutKVValuedefaultJSONResponse) VisitPutKVValueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteWorkloadStoreRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -12406,6 +14304,129 @@ func (response AppendStoreJournaldefaultJSONResponse) VisitAppendStoreJournalRes
 	return err
 }
 
+type CreateTelemetryGrantRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   CreateTelemetryGrantParams
+}
+
+type CreateTelemetryGrantResponseObject interface {
+	VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error
+}
+
+type CreateTelemetryGrant201ResponseHeaders struct {
+	CacheControl *string
+}
+
+type CreateTelemetryGrant201JSONResponse struct {
+	Body    TelemetryGrant
+	Headers CreateTelemetryGrant201ResponseHeaders
+}
+
+func (response CreateTelemetryGrant201JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateTelemetryGrant400JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateTelemetryGrant403JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateTelemetryGrant404JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response CreateTelemetryGrant409JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrantdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response CreateTelemetryGrantdefaultJSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateVolumeKeyGrantRequestObject struct {
 	ID     VolumeID `json:"id"`
 	Params CreateVolumeKeyGrantParams
@@ -12724,9 +14745,24 @@ type StrictServerInterface interface {
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(ctx context.Context, request PurgeTenantObjectsRequestObject) (PurgeTenantObjectsResponseObject, error)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// (DELETE /v1/tenants/{id}/telemetry)
+	DeleteTenantTelemetry(ctx context.Context, request DeleteTenantTelemetryRequestObject) (DeleteTenantTelemetryResponseObject, error)
+	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// (GET /v1/tenants/{id}/telemetry)
+	GetTenantTelemetry(ctx context.Context, request GetTenantTelemetryRequestObject) (GetTenantTelemetryResponseObject, error)
+	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// (PUT /v1/tenants/{id}/telemetry)
+	PutTenantTelemetry(ctx context.Context, request PutTenantTelemetryRequestObject) (PutTenantTelemetryResponseObject, error)
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(ctx context.Context, request CheckTenantWIFRequestObject) (CheckTenantWIFResponseObject, error)
+	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
+	ExportD1(ctx context.Context, request ExportD1RequestObject) (ExportD1ResponseObject, error)
+	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
+	QueryD1(ctx context.Context, request QueryD1RequestObject) (QueryD1ResponseObject, error)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
@@ -12751,6 +14787,18 @@ type StrictServerInterface interface {
 	// ListWorkloadStores List a workload's stores
 	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
 	ListWorkloadStores(ctx context.Context, request ListWorkloadStoresRequestObject) (ListWorkloadStoresResponseObject, error)
+	// ListKVKeys List a KV namespace's keys
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys)
+	ListKVKeys(ctx context.Context, request ListKVKeysRequestObject) (ListKVKeysResponseObject, error)
+	// DeleteKVValue Delete one KV value
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	DeleteKVValue(ctx context.Context, request DeleteKVValueRequestObject) (DeleteKVValueResponseObject, error)
+	// GetKVValue Get one KV value
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	GetKVValue(ctx context.Context, request GetKVValueRequestObject) (GetKVValueResponseObject, error)
+	// PutKVValue Write one KV value
+	// (PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value)
+	PutKVValue(ctx context.Context, request PutKVValueRequestObject) (PutKVValueResponseObject, error)
 	// DeleteWorkloadStore Delete a store and its data
 	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
 	DeleteWorkloadStore(ctx context.Context, request DeleteWorkloadStoreRequestObject) (DeleteWorkloadStoreResponseObject, error)
@@ -12766,6 +14814,9 @@ type StrictServerInterface interface {
 	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
 	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
 	AppendStoreJournal(ctx context.Context, request AppendStoreJournalRequestObject) (AppendStoreJournalResponseObject, error)
+	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
+	// (POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants)
+	CreateTelemetryGrant(ctx context.Context, request CreateTelemetryGrantRequestObject) (CreateTelemetryGrantResponseObject, error)
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	// (POST /v1/volumes/{id}/keys)
 	CreateVolumeKeyGrant(ctx context.Context, request CreateVolumeKeyGrantRequestObject) (CreateVolumeKeyGrantResponseObject, error)
@@ -14081,6 +16132,91 @@ func (sh *strictHandler) PurgeTenantObjects(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// DeleteTenantTelemetry operation middleware
+func (sh *strictHandler) DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request DeleteTenantTelemetryRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTenantTelemetry(ctx, request.(DeleteTenantTelemetryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTenantTelemetry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTenantTelemetryResponseObject); ok {
+		if err := validResponse.VisitDeleteTenantTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTenantTelemetry operation middleware
+func (sh *strictHandler) GetTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request GetTenantTelemetryRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTenantTelemetry(ctx, request.(GetTenantTelemetryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTenantTelemetry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTenantTelemetryResponseObject); ok {
+		if err := validResponse.VisitGetTenantTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutTenantTelemetry operation middleware
+func (sh *strictHandler) PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request PutTenantTelemetryRequestObject
+
+	request.ID = id
+
+	var body PutTenantTelemetryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutTenantTelemetry(ctx, request.(PutTenantTelemetryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutTenantTelemetry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutTenantTelemetryResponseObject); ok {
+		if err := validResponse.VisitPutTenantTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CheckTenantWIF operation middleware
 func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID) {
 	var request CheckTenantWIFRequestObject
@@ -14100,6 +16236,69 @@ func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CheckTenantWIFResponseObject); ok {
 		if err := validResponse.VisitCheckTenantWIFResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportD1 operation middleware
+func (sh *strictHandler) ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName) {
+	var request ExportD1RequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportD1(ctx, request.(ExportD1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportD1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportD1ResponseObject); ok {
+		if err := validResponse.VisitExportD1Response(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// QueryD1 operation middleware
+func (sh *strictHandler) QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName) {
+	var request QueryD1RequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+
+	var body QueryD1JSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.QueryD1(ctx, request.(QueryD1RequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "QueryD1")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(QueryD1ResponseObject); ok {
+		if err := validResponse.VisitQueryD1Response(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -14357,6 +16556,129 @@ func (sh *strictHandler) ListWorkloadStores(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListKVKeys operation middleware
+func (sh *strictHandler) ListKVKeys(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params ListKVKeysParams) {
+	var request ListKVKeysRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListKVKeys(ctx, request.(ListKVKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListKVKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListKVKeysResponseObject); ok {
+		if err := validResponse.VisitListKVKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteKVValue operation middleware
+func (sh *strictHandler) DeleteKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params DeleteKVValueParams) {
+	var request DeleteKVValueRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteKVValue(ctx, request.(DeleteKVValueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteKVValue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteKVValueResponseObject); ok {
+		if err := validResponse.VisitDeleteKVValueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetKVValue operation middleware
+func (sh *strictHandler) GetKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params GetKVValueParams) {
+	var request GetKVValueRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetKVValue(ctx, request.(GetKVValueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetKVValue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetKVValueResponseObject); ok {
+		if err := validResponse.VisitGetKVValueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutKVValue operation middleware
+func (sh *strictHandler) PutKVValue(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName, params PutKVValueParams) {
+	var request PutKVValueRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Name = name
+	request.Params = params
+
+	var body PutKVValueJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutKVValue(ctx, request.(PutKVValueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutKVValue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutKVValueResponseObject); ok {
+		if err := validResponse.VisitPutKVValueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteWorkloadStore operation middleware
 func (sh *strictHandler) DeleteWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) {
 	var request DeleteWorkloadStoreRequestObject
@@ -14504,6 +16826,34 @@ func (sh *strictHandler) AppendStoreJournal(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AppendStoreJournalResponseObject); ok {
 		if err := validResponse.VisitAppendStoreJournalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTelemetryGrant operation middleware
+func (sh *strictHandler) CreateTelemetryGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateTelemetryGrantParams) {
+	var request CreateTelemetryGrantRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTelemetryGrant(ctx, request.(CreateTelemetryGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTelemetryGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTelemetryGrantResponseObject); ok {
+		if err := validResponse.VisitCreateTelemetryGrantResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
