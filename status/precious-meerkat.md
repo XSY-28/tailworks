@@ -1,4 +1,4 @@
-Last update: 2026-11-15 PT. DX benchmark against Cloudflare (wrangler/workerd), Vercel, Fly, Deno Deploy and self-hosted PaaS; quick fixes landed, larger gaps filed as #41–#47.
+Last update: 2026-11-15 PT. DX benchmark against Cloudflare (wrangler/workerd), Vercel, Fly, Deno Deploy and self-hosted PaaS; quick fixes and a docs pass landed, larger gaps filed as #41–#48.
 
 # Developer-experience benchmark (branch `precious-meerkat`)
 
@@ -30,7 +30,20 @@ twd's loop is as fast as wrangler's. It was missing console output and readable 
 - **`twd ls` shows why a deployment failed.** Before, it printed only `failed`; the reason was in `--json` alone. Test: `TestDeployErrorLine`.
 - **`twd init`.** `package.json` is named after the app (it stayed `twd-hello`). Templates get `npm run dev`, and the `build` script that called the uninstalled `create-twd` is gone (node-workflow keeps `build-node`). Test: `TestInitNamesPackage`.
 
-Docs pass: see "Docs" below.
+## Docs pass
+
+- The quick start and INSTALL showed a wrong workload URL
+  (`support-<host>…`). It is `twd-support-<id>.<tailnet>.ts.net`, which
+  matches a live install.
+- New INSTALL sections: Upgrade, Back up and restore, Uninstall. The
+  Uninstall section notes that `down --purge` leaves twd's own nodes in place.
+  README links to all three.
+- `docs/wrangler.md`: "What's different from Cloudflare, in short".
+- Fixed: INSTALL said microVM isolation needs Linux (macOS has the VZ tier
+  too); the `node_required` fix said Node 22+ while the docs and `twd init`
+  say 24; INSTALL's step numbering.
+- Link check (relative links and anchors in README, llms.txt, docs/*.md):
+  none broken. CLI drift: every command and flag the docs name exists.
 
 ## Issues filed
 
@@ -41,6 +54,7 @@ Docs pass: see "Docs" below.
 - #45 Deploy lifecycle: deployment history, `twd rollback`, preview deploys.
 - #46 CLI ergonomics: completion, `twd whoami`, grouped help, update check, the doctor hint in a source checkout.
 - #47 Testing: vitest-plugin compatibility, `getCaller` test helpers, a dev harness.
+- #48 Docs: caller grants missing from the quick start, first-deploy troubleshooting, a glossary, splitting INSTALL.md.
 
 ## Where twd is ahead
 
