@@ -9,7 +9,8 @@
 # @cloudflare/workerd-<os>-<arch>, integrity-checked against
 # package-lock.json), share/twd/create-twd (templates + build.mjs),
 # share/twd/node_modules (the templates' runtime deps, vendored: deploy works
-# offline, no npm/node), install.sh, VERSION, SHA256SUMS, INSTALL.md.
+# offline, no npm/node), share/twd/catalog.json (the release catalog,
+# internal/catalog), install.sh, VERSION, SHA256SUMS, INSTALL.md.
 # linux tarballs also hold bin/twd-vmhelper (the microVM tier's privileged
 # helper; `sudo twd host setup --microvm` installs a root-owned copy) and,
 # if TWD_VM_ASSETS_<arch> names a directory (make vm-assets, in Lima), the
@@ -38,6 +39,9 @@ VLDFLAGS="-X $VPKG.Version=$VERSION -X $VPKG.Commit=$COMMIT"
 # The newest mgmt schema migration this release applies (ADR-upgrades-and-releases §3).
 PROTOCOLS=$(go run ./internal/version/protocols)
 SCHEMA=$(ls mgmt/migrations/*.sql 2>/dev/null | sed 's|.*/||; s|\..*||' | LC_ALL=C sort -u | tail -n 1)
+# The release catalog (internal/catalog): every release's notes and upgrade facts, for offline plans.
+CATALOG=$CACHE/catalog.json
+go run ./internal/catalog/dump >"$CATALOG"
 
 # The JS packages must be built (dist/ is gitignored).
 for p in tailnet mcp; do
@@ -154,6 +158,7 @@ for t in $TARGETS; do
 	chmod 755 "$st/install.sh"
 	cp docs/INSTALL.md "$st/INSTALL.md"
 	printf '%s\n' "$VERSION" >"$st/VERSION"
+	cp "$CATALOG" "$st/share/twd/catalog.json"
 	cat >"$st/share/twd/release.json" <<EOF
 {"version":"$VERSION","os":"$os","arch":"$arch","workerd":"$WORKERD_VERSION","esbuild":"built into twd","sandbox":"$( [ "$os" = darwin ] && echo seatbelt || echo landlock )","microvm":$microvm,"commit":"$COMMIT","schema":"$SCHEMA","protocols":$PROTOCOLS,"built":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 EOF

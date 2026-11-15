@@ -5,9 +5,15 @@
 #   ./install.sh --prefix DIR    install into DIR instead
 #   ./install.sh --uninstall     remove bin/ and share/ (keeps twd state: twd.json, logs, …)
 #   ./install.sh --uninstall --purge   also remove the state in the prefix (run `twd down` first)
+#   ~/.twd/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
 #
 # No sudo, nothing outside the prefix is touched (your shell profile
-# included: it prints the PATH line to add). Re-running is safe.
+# included: it prints the PATH line to add). Re-running is safe. An upgrade
+# keeps the version it replaces as bin.prev/share.prev/VERSION.prev (a
+# re-install of the same version keeps the older .prev), and copies this
+# script to <prefix>/install.sh so --rollback works without the tarball.
+# --rollback refuses while twd runs from the prefix (twd down first, or
+# --force); rolling back twice returns to where you started.
 set -eu
 PREFIX=${TWD_HOME:-$HOME/.twd}
 MODE=install
@@ -20,7 +26,8 @@ while [ $# -gt 0 ]; do
 	--uninstall) MODE=uninstall ;;
 	--purge) PURGE=1 ;;
 	--force) FORCE=1 ;;
-	-h | --help) sed -n '2,10p' "$0"; exit 0 ;;
+	--rollback) MODE=rollback ;;
+	-h | --help) sed -n '2,16p' "$0"; exit 0 ;;
 	*) echo "install.sh: unknown argument $1" >&2; exit 2 ;;
 	esac
 	shift
@@ -40,7 +47,8 @@ if [ "$MODE" = uninstall ]; then
 	if running && [ "$FORCE" != 1 ]; then
 		die "twd is running from $PREFIX (twd down first, or pass --force)"
 	fi
-	rm -rf "$PREFIX/bin" "$PREFIX/share" "$PREFIX/VERSION" "$PREFIX/.install-"*
+	rm -rf "$PREFIX/bin" "$PREFIX/share" "$PREFIX/VERSION" "$PREFIX/.install-"* \
+		"$PREFIX/bin.prev" "$PREFIX/share.prev" "$PREFIX/VERSION.prev" "$PREFIX/install.sh"
 	if [ "$PURGE" = 1 ]; then
 		rm -rf "$PREFIX/twd.json" "$PREFIX/logs" "$PREFIX/run" "$PREFIX/mgmt" "$PREFIX/hostd" "$PREFIX/supervisor.pid"
 	fi
@@ -51,6 +59,25 @@ if [ "$MODE" = uninstall ]; then
 		say "✓ uninstalled twd ($PREFIX removed)"
 	fi
 	say "  remove the PATH line for $PREFIX/bin from your shell profile if you added one"
+	exit 0
+fi
+
+if [ "$MODE" = rollback ]; then
+	[ -d "$PREFIX/bin.prev" ] && [ -d "$PREFIX/share.prev" ] || die "no previous install in $PREFIX (bin.prev, share.prev) to roll back to"
+	if running && [ "$FORCE" != 1 ]; then
+		die "twd is running from $PREFIX (twd down first, or pass --force)"
+	fi
+	cur=$(cat "$PREFIX/VERSION" 2>/dev/null || echo unknown)
+	prev=$(cat "$PREFIX/VERSION.prev" 2>/dev/null || echo unknown)
+	# Swap current and previous, so a second --rollback undoes the first.
+	for d in bin share VERSION; do
+		rm -rf "$PREFIX/$d.swap"
+		[ -e "$PREFIX/$d" ] && mv "$PREFIX/$d" "$PREFIX/$d.swap"
+		[ -e "$PREFIX/$d.prev" ] && mv "$PREFIX/$d.prev" "$PREFIX/$d"
+		[ -e "$PREFIX/$d.swap" ] && mv "$PREFIX/$d.swap" "$PREFIX/$d.prev"
+	done
+	say "✓ rolled back twd $cur → $prev in $PREFIX ($cur is kept as bin.prev: --rollback again to return)"
+	say "  restore the mgmt store from the backup taken before the upgrade if a migration ran (twd upgrade prints the command)"
 	exit 0
 fi
 
@@ -113,15 +140,27 @@ fi
 # Smoke-test before swapping: the binaries must run on this machine.
 "$STAGE/bin/workerd" --version >/dev/null 2>&1 || die "workerd does not run on this machine ($STAGE/bin/workerd --version)"
 "$STAGE/bin/twd" version >/dev/null 2>&1 || die "twd does not run on this machine"
+# The install being replaced becomes .prev (install.sh --rollback), unless
+# it is this same version (a repair): then the older .prev is kept.
+old=$(cat "$PREFIX/VERSION" 2>/dev/null || true)
+keepprev=0
+{ [ -z "$old" ] || [ "$old" = "$VERSION" ]; } && keepprev=1
 for d in bin share; do
 	rm -rf "$PREFIX/$d.old"
 	[ -e "$PREFIX/$d" ] && mv "$PREFIX/$d" "$PREFIX/$d.old"
 	mv "$STAGE/$d" "$PREFIX/$d"
+	if [ $keepprev = 0 ] && [ -e "$PREFIX/$d.old" ]; then
+		rm -rf "$PREFIX/$d.prev"
+		mv "$PREFIX/$d.old" "$PREFIX/$d.prev"
+	fi
 	rm -rf "$PREFIX/$d.old"
 done
+[ $keepprev = 1 ] || printf '%s\n' "$old" >"$PREFIX/VERSION.prev"
 mv "$STAGE/VERSION" "$PREFIX/VERSION"
+cp "$SRC/install.sh" "$PREFIX/install.sh.tmp" && chmod 755 "$PREFIX/install.sh.tmp" && mv "$PREFIX/install.sh.tmp" "$PREFIX/install.sh"
 
 say "✓ installed twd $VERSION into $PREFIX ($(($(date +%s) - t0)) s)"
+[ $keepprev = 1 ] || say "  previous install ($old) kept as bin.prev/share.prev: $PREFIX/install.sh --rollback restores it"
 say "  $("$PREFIX/bin/twd" version)"
 say "  $("$PREFIX/bin/workerd" --version) · process tier ($( [ "$os" = darwin ] && echo "dev-grade isolation on macOS; microVM tier on Virtualization.framework when the release has share/twd/vm" || echo "see twd doctor for the sandbox and the microVM tier"))"
 case ":$PATH:" in
