@@ -26,8 +26,8 @@ var version = "dev"
 // workerdPin is the workerd npm version twd is built and tested against;
 // `workerd --version` prints its date.
 const (
-	workerdPin     = "1.20261108.1"
-	workerdPinDate = "2026-11-08"
+	workerdPin     = "1.20261114.1"
+	workerdPinDate = "2026-11-14"
 )
 
 func cmdVersion(args []string) error {

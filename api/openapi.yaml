@@ -142,6 +142,8 @@ tags:
     description: Cloudflare-style Queues (ADR-039). A queue belongs to the tenant; its messages are sealed rows here. Producers send through their host, push consumers' hosts claim batches with a visibility timeout and settle them, and admins can pull, peek, purge and delete.
   - name: audit
     description: Hash-chained, append-only audit log.
+  - name: approvals
+    description: Workflow approvals decided by tailnet identities (`twd.dev/cap/approve`), not links or tokens (ADR-040).
   - name: volumes
     description: dm-crypt data keys for DO volumes (microVM tier).
   - name: containers
@@ -509,6 +511,92 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/approvals:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [tenants, approvals]
+      operationId: ListApprovals
+      summary: The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+      description: |
+        A Workflow instance that waits for an event of type `approval` or
+        `approval-*` (the Agents SDK's `waitForApproval`) is listed here
+        (ADR-040, docs/approvals.md). mgmt asks every live
+        host over the mgmt → hostd channel and merges the answers, oldest
+        first; a host that does not answer is named in `unreachable`.
+        Admins see every approval; a tailnet caller holding only
+        `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+        grants let it decide. A read, so not audited.
+      x-twd-role: admin|approver
+      parameters:
+        - name: workload
+          in: query
+          description: Only this workload's approvals.
+          schema: { type: string }
+        - name: all
+          in: query
+          description: Include decided (and timed-out) approvals the hosts still keep.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: The approvals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApprovalList" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - name: workflow
+        in: path
+        required: true
+        description: The Workflow's name (wrangler `workflows[].name`).
+        schema: { type: string, pattern: "^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$" }
+      - name: instance
+        in: path
+        required: true
+        description: The Workflow instance ID.
+        schema: { type: string, minLength: 1, maxLength: 256 }
+    post:
+      tags: [tenants, approvals]
+      operationId: DecideApproval
+      summary: Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+      description: |
+        The decision is made by the caller's own tailnet identity: mgmt's
+        WhoIs of the connection (user, node, tags). mgmt sends it, with
+        the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+        the host holding the workload's lease; that host checks the grants
+        (`cap_missing` otherwise: the workload, Workflow, step, decision and
+        numeric limits a grant names), delivers the event (the Workflow
+        sees `approver`, never one from the request) and audits the
+        decision (`approval_decision`, or `approval_denied`). Being a twd
+        admin does not let anyone approve: the grant does. The operator
+        console and the local socket have no personal identity, so they
+        get `403 no_identity`; use `twd link` from your own machine.
+        `409 approval_not_pending` when nothing waits for this decision.
+      x-twd-role: admin|approver
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApprovalDecisionRequest" }
+      responses:
+        "200":
+          description: Delivered; the approval as decided.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApprovalDecisionResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/tenants/{id}/workloads/{workload}/public:
@@ -3571,6 +3659,7 @@ components:
         | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
         | `host_token_invalid` | 403 | local-dev socket, wrong token |
         | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+        | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
         | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
         | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
         | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -3615,11 +3704,12 @@ components:
         | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
         | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
         | `bootstrap_failed` | 502 | control plane refused the mint |
-        | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+        | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
         | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
         | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
         | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
         | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+        | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
         | `internal` | 500 | — |
       enum:
         - bad_request
@@ -3633,6 +3723,7 @@ components:
         - host_token_required
         - host_token_invalid
         - not_admin
+        - cap_missing
         - forbidden
         - host_not_registered
         - host_identity_mismatch
@@ -3649,6 +3740,7 @@ components:
         - exists
         - lease_lost
         - lease_held
+        - approval_not_pending
         - store_conflict
         - store_limit
         - queue_limit
@@ -3688,6 +3780,72 @@ components:
         - audit_object_foreign
         - bad_host_sig
         - internal
+    Approver:
+      type: object
+      description: The verified tailnet identity that decided an approval (WireGuard, never the request body).
+      required: [node, nodeId, tags, via]
+      properties:
+        user: { type: string, description: "Login (untagged nodes)." }
+        node: { type: string, description: MagicDNS name. }
+        nodeId: { type: string, description: Stable node ID. }
+        tags: { type: array, items: { type: string } }
+        via:
+          type: string
+          enum: [tailnet, mgmt]
+          description: "`tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI."
+    Approval:
+      type: object
+      description: One approval wait of one Workflow instance, as the host running it records it.
+      required: [tenantID, workload, workflow, instance, step, type, status, requestedAt]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        workflow: { type: string }
+        instance: { type: string }
+        step: { type: string, description: "The `waitForEvent` step name (`wait-for-approval` for `waitForApproval`)." }
+        type: { type: string, description: "The event type waited for: `approval` or `approval-*`." }
+        timeout: { type: string, description: The wait's timeout as the Workflow gave it. }
+        facts:
+          type: object
+          additionalProperties: { type: number, format: double }
+          description: The instance's numeric params, which grant `limits` are checked against.
+        status:
+          type: string
+          enum: [pending, approved, rejected, timeout]
+        requestedAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+        approver: { $ref: "#/components/schemas/Approver" }
+        comment: { type: string }
+        host: { type: string, description: The host that runs the instance (set by mgmt). }
+    ApprovalList:
+      type: object
+      required: [approvals]
+      properties:
+        approvals:
+          type: array
+          items: { $ref: "#/components/schemas/Approval" }
+        unreachable:
+          type: array
+          items: { type: string }
+          description: Hosts that did not answer (their approvals are missing).
+    ApprovalDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        comment: { type: string, maxLength: 1024, description: "Shown to the Workflow (`comment`; a rejection's `reason`) and audited." }
+        step: { type: string, description: "Which wait, when the instance waits for several." }
+        metadata:
+          type: object
+          additionalProperties: true
+          description: "Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by twd's."
+    ApprovalDecisionResponse:
+      type: object
+      required: [approval]
+      properties:
+        approval: { $ref: "#/components/schemas/Approval" }
     TombstoneError:
       description: "`410 Gone`: the error plus the kill record. `tombstone` is absent only when the 410 is `delegation_invalid` for a spawn whose parent is dead (the parent's record is then at `GET /v1/objects/{parent}`)."
       allOf:
@@ -4638,6 +4796,11 @@ components:
         `public_request` (one per public request),
         `public_rejected` (per-minute summary of requests the limits refused),
         `public_object_created` (a name admitted for a public create).
+        Workflow approvals (ADR-040), host chain:
+        `approval_requested` (a Workflow instance waits for an approval),
+        `approval_decision` (approved or rejected, with the approver's identity),
+        `approval_denied` (a decision refused, e.g. `cap_missing`),
+        `approval_timeout` (the wait timed out: rejected by default).
         Both chains:
         `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
       enum:
@@ -4694,6 +4857,10 @@ components:
         - public_request
         - public_rejected
         - public_object_created
+        - approval_requested
+        - approval_decision
+        - approval_denied
+        - approval_timeout
         - expose_on
         - expose_off
     AuditSource:

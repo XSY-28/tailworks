@@ -373,6 +373,9 @@ func describe(r mgmt.AuditRecord, names map[string]string) string {
 	if d == nil {
 		return text
 	}
+	if s, ok := describeApproval(r.Kind, d); ok { // approve.go
+		return s
+	}
 	switch r.Kind {
 	case "create":
 		return fmt.Sprintf("%s/%s tags %s for %s", d["namespace"], d["name"], compact(d["tags"]), orDash(r.ActingFor))

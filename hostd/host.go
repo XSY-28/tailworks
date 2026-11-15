@@ -299,6 +299,10 @@ type Host struct {
 	// telemetry.go (ADR-observability)
 	tel        *telemetry
 	metricsSrv *http.Server
+
+	// approvals.go: the Workflows' approval waits on this host.
+	apprOnce sync.Once
+	appr     *approvalStore
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;

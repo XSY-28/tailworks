@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/approvecap"
 	"github.com/rosskukulinski/twd/internal/obs"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/internal/tssvc"
@@ -386,8 +387,10 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			}
 			for c, vals := range wi.CapMap {
 				info.Caps = append(info.Caps, string(c))
-				if c == mgmt.MCPCap {
-					info.CapValues = map[string][]json.RawMessage{}
+				if c == mgmt.MCPCap || c == approvecap.Cap { // approvals.go needs the grants' values too
+					if info.CapValues == nil {
+						info.CapValues = map[string][]json.RawMessage{}
+					}
 					for _, v := range vals {
 						info.CapValues[string(c)] = append(info.CapValues[string(c)], json.RawMessage(v))
 					}

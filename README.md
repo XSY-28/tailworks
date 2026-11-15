@@ -95,7 +95,7 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-twd init support --template agent              # also: hello, mcp, ai-agent, lock, node-workflow
+twd init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
 cd support
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```
@@ -175,7 +175,7 @@ prove every ✅ and ⚠️.
 | Bindings | [D1 migrations](docs/COMPAT.md#d1-migrations) | ✅ | wrangler's layout |
 | Bindings | [`twd d1` commands](docs/COMPAT.md#d1-cli) | ⚠️ | reach the running workload |
 | Bindings | [Queues](docs/COMPAT.md#queues) | ✅ | queues live in mgmt; producer and consumer on any hosts |
-| Bindings | [Workflows](docs/COMPAT.md#workflows) | ❌ | Vercel Workflow SDK on Node apps |
+| Bindings | [Workflows](docs/COMPAT.md#workflows) | ✅ | workerd's built-in engine; approval events are twd's |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
 | Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
@@ -189,6 +189,7 @@ prove every ✅ and ⚠️.
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
 | Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | twd's API, admin only |
 | Platform | [Caller identity and auth](docs/COMPAT.md#identity) | 🚫 | `getCaller` from WireGuard, not tokens or Access JWTs |
+| Platform | [Workflow approvals by tailnet identity](docs/COMPAT.md#approvals) | ✅ | twd-only: `twd approve`, decided under `twd.dev/cap/approve` grants |
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
 | Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container |
@@ -200,7 +201,7 @@ prove every ✅ and ⚠️.
 | Platform | [Environments (`--env`)](docs/COMPAT.md#wrangler-env) | ✅ | one workload per environment |
 | Platform | [Bundling (`define`, `alias`, `rules`, `--wrangler`)](docs/COMPAT.md#wrangler-bundling) | ✅ | built-in esbuild, or wrangler's own |
 | Platform | [`wrangler deploy` / `secret` / `tail`](docs/COMPAT.md#wrangler-api) | 🚫 | use `twd deploy` / `secret` / `logs` |
-| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core runs unmodified; no `subAgent()` |
+| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core and `AgentWorkflow` run unmodified; no `subAgent()` |
 | SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
 | Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
@@ -238,6 +239,9 @@ prove every ✅ and ⚠️.
 - **Queues** (`queues.producers` → `env.Q.send()`, `queues.consumers` →
   `queue()`, retries, dead-letter queues, `twd queues`):
   [docs/queues.md](docs/queues.md).
+- **Durable Workflows that wait for a person's approval**, decided by a
+  tailnet identity under a `twd.dev/cap/approve` grant (`twd approve`):
+  [docs/approvals.md](docs/approvals.md).
 - **Logs, metrics and traces:** `twd logs <workload>` shows one structured
   line per request (`--json`, `--errors`, …), hosts serve Prometheus
   `/metrics` on their tailnet node, and `twd telemetry set --otlp …`

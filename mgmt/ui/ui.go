@@ -58,6 +58,9 @@ func Handler(api *http.Client, baseURL string) http.Handler {
 	mux.HandleFunc("GET /ui/tenants/{id}", u.tenant)
 	mux.HandleFunc("POST /ui/tenants/{id}/delete", u.deleteTenantForm)
 	mux.HandleFunc("GET /ui/audit", u.audit)
+	// approvals.go
+	mux.HandleFunc("GET /ui/approvals", u.approvals)
+	mux.HandleFunc("POST /ui/approvals/decide", u.decideForm)
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /ui/static/", http.StripPrefix("/ui/static/", http.FileServerFS(static)))
 	mux.HandleFunc("/ui/", u.notFound)
@@ -105,7 +108,7 @@ func (u *ui) admit(next http.Handler) http.Handler {
 			u.fail(w, r, err)
 			return
 		}
-		if who.Kind == "host" || !who.Admin {
+		if who.Kind == "host" || !who.Admin && !approvalsPage(r.URL.Path) { // approvals.go
 			u.fail(w, r, &apiError{Status: 403, Code: "forbidden", Message: fmt.Sprintf("caller (%s) may not use the admin UI", who.Kind)})
 			return
 		}
@@ -219,6 +222,7 @@ func parsePages() map[string]*template.Template {
 			b, _ := json.MarshalIndent(v, "", "  ")
 			return string(b)
 		},
+		"seqDecisions": func() []string { return []string{"approve", "reject"} },
 		"auditSet": func(recs []auditRecord, names map[string]string) any {
 			return struct {
 				Records []auditRecord
@@ -228,7 +232,7 @@ func parsePages() map[string]*template.Template {
 	}
 	layout := template.Must(template.New("layout").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"overview", "object", "deployment", "host", "tenant", "audit", "error"} {
+	for _, name := range []string{"overview", "object", "deployment", "host", "tenant", "audit", "approvals", "error"} {
 		t := template.Must(layout.Clone())
 		pages[name] = template.Must(t.ParseFS(templateFS, "templates/"+name+".html"))
 	}

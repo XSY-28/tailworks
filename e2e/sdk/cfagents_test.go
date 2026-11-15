@@ -189,7 +189,7 @@ func TestCloudflareAgents(t *testing.T) {
 		t.Logf("probe: %d %v", code, r)
 		// env.KV is absent because this app binds no kv_namespaces; Workers
 		// KV itself is supported (TestOAuthProviderKV, ADR-037).
-		for _, k := range []string{"AI", "WORKFLOW", "BROWSER", "LOADER"} {
+		for _, k := range []string{"AI", "BROWSER", "LOADER"} { // Workflows: TestWorkflowApprovals
 			if r[k] != "undefined" {
 				t.Fatalf("env.%s is %v; expected absent (update docs/COMPAT.md)", k, r[k])
 			}
