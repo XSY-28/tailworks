@@ -327,3 +327,6 @@ printed anywhere.
 
 ### wif_exchange_failed
 401 · cli. **When:** Tailscale did not accept a token from mgmt's issuer for the mint credential: the credential's issuer or subject does not match what `twd up` printed (trailing slash, wrong tenant ID). **Fix:** fix it in the console and `twd up --wif-client-id <id>`.
+
+### wrangler_required
+1 · cli. **When:** `twd deploy --wrangler` / `twd dev --wrangler` found no wrangler CLI (`$TWD_WRANGLER`, the project's `node_modules/.bin/wrangler`, or `wrangler` on PATH). **Fix:** `npm install --save-dev wrangler`, or drop `--wrangler` to bundle with twd's built-in esbuild ([wrangler.md](wrangler.md)).

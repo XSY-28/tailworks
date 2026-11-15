@@ -135,6 +135,8 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
 - **Run an app locally with no tailnet at all:** `twd dev`.
 - **`twd.jsonc`, every key:** [docs/twd-jsonc.md](docs/twd-jsonc.md)
   (with a JSON Schema for editor completion).
+- **An existing Workers project** (`wrangler.toml`, environments, bundling
+  with wrangler): [docs/wrangler.md](docs/wrangler.md).
 - **What runs and what doesn't:** [docs/COMPAT.md](docs/COMPAT.md)
   (Agents SDK, MCP, Vercel AI SDK) and [docs/node-tier.md](docs/node-tier.md)
   (Node.js apps).

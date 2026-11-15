@@ -71,6 +71,12 @@ type App struct {
 	// text bindings (workerd) or environment variables (runtime node) and
 	// override vars of the same name. Never logged or serialised.
 	Secrets map[string]string `json:"-"`
+
+	// ModuleTypes are module types the bundler set explicitly
+	// (twd-bundle.json "modules": path -> "js" | "json" | "text" | "data"
+	// | "wasm"), e.g. a wrangler "rules" Text module named *.md. Modules
+	// not listed are typed by extension.
+	ModuleTypes map[string]string
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -243,13 +249,17 @@ func Parse(files map[string][]byte) (*App, error) {
 	// twd-bundle.json (written by the bundler) points main at the built module.
 	if bb, ok := files["twd-bundle.json"]; ok {
 		var o struct {
-			Main string `json:"main"`
+			Main    string            `json:"main"`
+			Modules map[string]string `json:"modules"`
 		}
 		if err := json.Unmarshal(bb, &o); err != nil {
 			return nil, fmt.Errorf("bundle: twd-bundle.json: %w", err)
 		}
 		if o.Main != "" {
 			w.Main = o.Main
+		}
+		if err := a.setModuleTypes(files, o.Modules); err != nil {
+			return nil, err
 		}
 	}
 	if a.CompatDate == "" {
@@ -266,6 +276,10 @@ func Parse(files map[string][]byte) (*App, error) {
 				continue
 			}
 			a.Modules[p] = b
+		default:
+			if _, typed := a.ModuleTypes[p]; typed {
+				a.Modules[p] = b
+			}
 		}
 	}
 	if _, ok := a.Modules[a.Main]; !ok {
