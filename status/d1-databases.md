@@ -1,4 +1,4 @@
-Last update: 2026-11-15 PT. D1 (issue #17, ADR-d1): `d1_databases` binding on the platform-store substrate, wrangler migrations, `twd d1`, `twd dev`; survives a hostd restart and a lease move (multi-host e2e).
+Last update: 2026-11-15 PT (second master merge: KV #37, R2 #35, agent DX #32; `make lint test` ok; `TestD1SurvivesRestartAndMove` ok). Architecture review: issue #38. D1 (issue #17, ADR-d1): `d1_databases` binding on the platform-store substrate, wrangler migrations, `twd d1`, `twd dev`; survives a hostd restart and a lease move (multi-host e2e).
 
 # D1 databases (issue #17)
 
