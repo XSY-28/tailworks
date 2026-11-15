@@ -60,6 +60,12 @@ type Options struct {
 	JSXFactory  string
 	JSXFragment string
 	Tsconfig    string
+
+	// SourceMap writes Outfile+".map" (external: no sourceMappingURL
+	// comment); SourcesContent puts the sources in it too (for a debugger;
+	// stack mapping needs only the positions).
+	SourceMap      bool
+	SourcesContent bool
 }
 
 // Result is what BuildApp wrote.
@@ -141,6 +147,8 @@ func BuildApp(o Options) (*Result, error) {
 		JSXFactory:        o.JSXFactory,
 		JSXFragment:       o.JSXFragment,
 		Tsconfig:          o.Tsconfig,
+		Sourcemap:         sourceMapMode(o),
+		SourcesContent:    sourcesContentMode(o),
 	})
 	if len(r.Errors) > 0 {
 		msgs := api.FormatMessages(r.Errors, api.FormatMessagesOptions{Kind: api.ErrorMessage})
@@ -152,4 +160,18 @@ func BuildApp(o Options) (*Result, error) {
 	}
 	res.Size = int(st.Size())
 	return res, nil
+}
+
+func sourceMapMode(o Options) api.SourceMap {
+	if o.SourceMap {
+		return api.SourceMapExternal
+	}
+	return api.SourceMapNone
+}
+
+func sourcesContentMode(o Options) api.SourcesContent {
+	if o.SourcesContent {
+		return api.SourcesContentInclude
+	}
+	return api.SourcesContentExclude
 }

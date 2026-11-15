@@ -476,6 +476,11 @@ type instance struct {
 
 	node *nodeProc // Node process tier (runtime "node"); nil for workerd
 
+	// stackMaps: the bundle's parsed source maps (stackmap.go);
+	// inspector: workerd's inspector address, if on (inspector.go).
+	stackMaps stackMaps
+	inspector string
+
 	phases map[string]int64 // startInstance's phases (ms), for the deploy log
 
 	inflight atomic.Int64

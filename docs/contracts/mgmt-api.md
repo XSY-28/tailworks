@@ -168,9 +168,11 @@ hostd's API, not this document's.
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` | admin\|approver | yes | `DecideApproval` | Approve or reject a waiting Workflow instance (`twd approve`, the admin UI) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/export` | admin | no | `ExportD1` | Export a D1 database as SQL (`twd d1 export`) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/query` | admin | yes | `QueryD1` | Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/deployments` | admin | no | `ListWorkloadDeployments` | A workload's deployment history, newest first (`twd deployments`) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
 | `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin | yes | `CreateRollback` | Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/secret-grants` | host | yes | `CreateWorkloadSecretGrant` | Release a workload's secret values to the lease holder |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
@@ -975,6 +977,84 @@ Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (o
 | 200 | string (binary) | The bundle bytes (tar, optionally gzipped) exactly as uploaded. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/deployments` — A workload's deployment history, newest first (`twd deployments`)
+
+`ListWorkloadDeployments` · role **admin** · audited: no
+
+ADR-deploy-rollback. Every deployment of the workload, newest first:
+who deployed it, when, the bundle's SHA-256, its status (the current
+one is `assigned`, `starting`, `active` or `failed`; older ones are
+`superseded` or `stopped`), the host's last report (`hostStatus`)
+and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+keeps the bundles of the newest `bundleRetention` deployments of
+each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+their records stay, without the bundle, so they can't be rolled back
+to. `rollbackOf` names the deployment a rollback redeployed. A
+workload with no deployment is `404 unknown_workload`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `limit` | query | integer | no | Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`. |
+| `cursor` | query | string | no | Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged. |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `DeploymentHistoryPage` | One page of the workload's deployments, ordered by `(createdAt, deploymentID)` descending. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/workloads/{workload}/rollbacks` — Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+
+`CreateRollback` · role **admin** · audited: yes
+
+ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+as a **new** deployment, through the same code path as
+`POST /v1/deployments`: the same validation, placement, lease at
+`epoch+1` and host fencing, and the same `409 lease_held`,
+`move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+is sticky as for any deploy (the workload stays on its host unless
+`replace` or `host` say otherwise), so Durable Object storage stays
+where it is. Container images the original deploy built and pushed
+to twd's registry are reused by digest.
+
+Without `deploymentID`, the target is the newest earlier deployment
+that ran (the host reported it `active` and it did not fail), whose
+bundle is retained and differs from the current one's;
+`409 no_rollback_target` if there is none. A target whose bundle was
+pruned is `409 bundle_pruned`. Naming the current deployment is
+`409 no_rollback_target`.
+
+A rollback changes code and configuration only. Durable Object
+storage, D1 databases (migrations are forward-only), KV, R2 and
+queues keep their current data, and the workload gets the secrets
+it has **now**: secrets are not versioned with bundles.
+
+Audited as `kind: rollback` (in place of `deploy`), with
+`rollbackOf`. `dryRun=true` preflights the stored bundle against the
+current policy, like `POST /v1/deployments?dryRun=true`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `dryRun` | query | boolean | no | Preflight only (`200 PreflightResult`); nothing is deployed. |
+
+**Request** `application/json`: `RollbackCreate`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `PreflightResult` | `dryRun=true`: the preflight report of the target's bundle. Nothing was deployed. |
+| 202 | `Rollback` | Accepted; the host is starting the rolled-back deployment. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The request conflicts with the resource's current state. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
 ## Objects
@@ -2919,6 +2999,7 @@ mgmt chain:
 `upgrade_abort`,
 `deploy`,
 `undeploy`,
+`rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
 `create`,
 `mint`,
 `remint`,
@@ -2966,7 +3047,7 @@ Workflow approvals (ADR-040), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `approval_requested`, `approval_decision`, `approval_denied`, `approval_timeout`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `approval_requested`, `approval_decision`, `approval_denied`, `approval_timeout`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -2994,7 +3075,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -3195,6 +3276,15 @@ One statement's result, as D1's wire protocol has it.
 | `tenantID` | string | yes |  |
 | `workload` | string | yes |  |
 
+#### `DeploymentHistoryPage`
+
+Extends `Page`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bundleRetention` | integer | yes | How many of each workload's newest bundles mgmt keeps (0 = every bundle). |
+| `items` | array of `DeploymentRecord` | no |  |
+
 #### `DeploymentPage`
 
 Extends `Page`.
@@ -3213,6 +3303,27 @@ The deployment's public routes (ADR-029); absent when tailnet-only.
 | `exposed` | boolean | yes | `twd expose` setting. |
 | `routes` | array of string | yes |  |
 | `url` | string (uri) | yes |  |
+
+#### `DeploymentRecord`
+
+One entry of a workload's deployment history (ADR-deploy-rollback).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `activeAt` | integer (int64) | no | When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history. |
+| `bundleBytes` | integer (int64) | no | Size of the retained bundle (0 once pruned). |
+| `bundleRetained` | boolean | yes | mgmt still holds the bundle, so it can be rolled back to. |
+| `bundleSHA256` | string | yes | Hex SHA-256 of the bundle as uploaded (empty: deployed without a bundle). |
+| `createdAt` | integer (int64) | yes |  |
+| `deployedBy` | string | no | The actor who deployed (see Conventions). |
+| `deploymentID` | string | yes |  |
+| `epoch` | integer (int64) | yes |  |
+| `error` | string | no | The host's last error for this deployment. |
+| `host` | string | yes |  |
+| `hostStatus` | string | no | The last status the host reported (or mgmt set) for this deployment, kept after it is superseded: `active` means it was serving when it was replaced. |
+| `rollbackOf` | string | no | Set on a rollback: the deployment whose bundle it redeployed. |
+| `status` | `DeploymentStatus` | yes |  |
+| `workload` | string | yes |  |
 
 #### `DeploymentReport`
 
@@ -4171,6 +4282,25 @@ query strings, request headers or secret values.
 | `truncated` | boolean | no |  |
 | `workload` | string | no |  |
 
+#### `Rollback`
+
+A started rollback.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deployment` | `Deployment` | yes |  |
+| `rollbackOf` | string | yes | The deployment whose bundle was redeployed. |
+| `target` | `DeploymentRecord` | yes | One entry of a workload's deployment history (ADR-deploy-rollback). |
+
+#### `RollbackCreate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deploymentID` | string | no | The deployment to roll back to. Default the previous good one (see `CreateRollback`). |
+| `forceTakeover` | boolean | no | As `POST /v1/deployments` `forceTakeover`. |
+| `host` | string | no | Pin a host, as for a deploy. |
+| `replace` | boolean | no | Re-place the workload, as `POST /v1/deployments` `replace`. |
+
 #### `RunningContainer`
 
 One running container in a heartbeat.
@@ -4626,9 +4756,12 @@ Present in wif mode.
 |---|---|---|---|
 | `actor` | string | yes |  |
 | `admin` | boolean | yes |  |
+| `approver` | boolean | no | The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity. |
+| `caps` | array of string | no | The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts. |
 | `hostID` | string | no |  |
 | `kind` | string: `user` \| `node` \| `host` \| `local` | yes |  |
 | `login` | string | no |  |
+| `mcpTools` | array of string | no | The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order. |
 | `mgmt` | `SelfInfo` | yes |  |
 | `nodeID` | string | no |  |
 | `tags` | array of string | no |  |

@@ -37,13 +37,23 @@ js-build: $(WORKERD)
 	npm run -w @twd/mcp build
 	npm run --workspaces --if-present build
 
+## templates-typecheck: every template's `twd init && npm install && npx tsc --noEmit`, with
+## @twd/* from npm-pack tarballs of this checkout (issue #41; needs the network for the rest).
+.PHONY: templates-typecheck
+templates-typecheck: js-build
+	sh scripts/templates-typecheck.sh
+
 ## test: hermetic unit + integration tests (testcontrol + local DERP/STUN + stock workerd).
 .PHONY: test
 test: deps test-go test-js
 
 .PHONY: test-go
+# GO_TEST_SKIP: a go test -skip regexp (CI quarantines known failures with it; see ci.yml).
+# Read from the environment as-is, so a regexp's "$" survives make.
+GO_TEST_SKIP ?=
+export GO_TEST_SKIP
 test-go:
-	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
+	$(GO) test -race -count=1 $(if $(GO_TEST_SKIP),-skip "$$GO_TEST_SKIP") ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:
@@ -536,6 +546,13 @@ clean:
 gen-js: $(WORKERD)
 	node_modules/.bin/esbuild js/packages/tailnet/src/runtime.ts --bundle --format=esm --platform=neutral \
 		--target=es2022 --legal-comments=none --log-level=warning --external:node:async_hooks --outfile=hostd/gen/js/twd-rt.js
+
+## test-vitest: templates under @cloudflare/vitest-plugin with @twd/tailnet/testing (docs/testing.md;
+## npm ci of the pinned deps in e2e/vitest, which bring their own workerd via miniflare).
+.PHONY: test-vitest
+test-vitest: deps
+	cd e2e/vitest && npm ci --no-audit --no-fund --loglevel=error
+	cd e2e/vitest && npx vitest run
 
 ## test-node: the opt-in Node process tier + Vercel Workflow (hermetic; npm ci of the pinned deps in e2e/node).
 .PHONY: test-node

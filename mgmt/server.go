@@ -239,6 +239,13 @@ type WhoAmI struct {
 	Admin  bool     `json:"admin"`
 	Actor  string   `json:"actor"`
 	Mgmt   SelfInfo `json:"mgmt"`
+
+	// What the caller may do besides admin (`twd whoami`): the
+	// twd.dev/cap/* capabilities it holds toward mgmt, whether it may
+	// decide Workflow approvals, and the MCP tools /mcp lets it call.
+	Caps     []string `json:"caps"`
+	Approver bool     `json:"approver"`
+	MCPTools []string `json:"mcpTools"`
 }
 
 // ---- listeners ----

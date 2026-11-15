@@ -75,6 +75,10 @@ as for a changed var. A restart of twd-hostd also refetches secrets, since
 it redeploys from its assignments. A crash restart of the same instance
 (workerd or node exiting) reuses the same values.
 
+Secrets are not versioned with deployments. `twd rollback` redeploys an
+older bundle with the secrets the workload has **now**, so a secret you
+rotated stays rotated and a secret you deleted stays deleted.
+
 ## Local development: `.dev.vars`
 
 `twd dev` reads `.dev.vars` from the app directory, if there is one, the
