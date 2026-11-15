@@ -1587,6 +1587,220 @@
         "keys"
       ]
     },
+    "queueInfo": {
+      "type": "object",
+      "description": "a tenant queue and its counters (ADR-039)",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "incarnation": {
+          "type": "string"
+        },
+        "backlog": {
+          "type": "integer",
+          "description": "messages kept: in flight and delayed included"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "inFlight": {
+          "type": "integer"
+        },
+        "delayed": {
+          "type": "integer"
+        },
+        "oldestAt": {
+          "type": "integer",
+          "description": "unix ms of the oldest message"
+        },
+        "consumer": {
+          "type": "string"
+        },
+        "consumedAt": {
+          "type": "integer",
+          "description": "unix ms"
+        },
+        "createdAt": {
+          "type": "integer",
+          "description": "unix ms"
+        },
+        "updatedAt": {
+          "type": "integer",
+          "description": "unix ms"
+        }
+      },
+      "required": [
+        "tenantID",
+        "name",
+        "incarnation",
+        "backlog",
+        "bytes",
+        "inFlight",
+        "delayed",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "queueMessage": {
+      "type": "object",
+      "description": "a queue message as peeked (body base64)",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "description": "base64"
+        },
+        "contentType": {
+          "type": "string",
+          "enum": [
+            "json",
+            "text",
+            "bytes",
+            "v8"
+          ]
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "unix ms"
+        },
+        "visibleAt": {
+          "type": "integer",
+          "description": "unix ms"
+        }
+      },
+      "required": [
+        "id",
+        "body",
+        "contentType",
+        "attempts",
+        "timestamp"
+      ]
+    },
+    "queues create": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "queue": {
+          "$ref": "#/$defs/queueInfo"
+        }
+      },
+      "required": [
+        "tenantID",
+        "queue"
+      ]
+    },
+    "queues ls": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "queues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/queueInfo"
+          }
+        }
+      },
+      "required": [
+        "tenantID",
+        "queues"
+      ]
+    },
+    "queues info": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "queue": {
+          "$ref": "#/$defs/queueInfo"
+        }
+      },
+      "required": [
+        "tenantID",
+        "queue"
+      ]
+    },
+    "queues rm": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenantID",
+        "deleted"
+      ]
+    },
+    "queues purge": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "purged": {
+          "type": "integer",
+          "description": "messages deleted"
+        }
+      },
+      "required": [
+        "tenantID",
+        "purged"
+      ]
+    },
+    "queues messages": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/queueMessage"
+          }
+        }
+      },
+      "required": [
+        "tenantID",
+        "messages"
+      ]
+    },
+    "queues send": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "sent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the new messages' IDs"
+        }
+      },
+      "required": [
+        "tenantID",
+        "sent"
+      ]
+    },
     "kill": {
       "type": "object",
       "properties": {

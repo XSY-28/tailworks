@@ -886,6 +886,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		if _, err := BundleCrons(r.Bundle); err != nil {
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
+		if _, err := BundleQueues(r.Bundle); err != nil {
+			return resp, errf(400, "bad_bundle", "%v", err)
+		}
 		cfg, err := BundleConfig(r.Bundle)
 		svcCfg = cfg
 		if err != nil && len(classes) == 0 {

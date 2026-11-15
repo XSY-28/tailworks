@@ -942,6 +942,11 @@ func (inst *instance) onExit() {
 	if inst.stopping.Load() {
 		return
 	}
+	if inst.tier != bundle.TierMicroVM && inst.ingressLn == nil {
+		// workerd bound the ingress socket itself; a crash leaves the
+		// file behind, and the restart's bind would fail (EADDRINUSE).
+		os.Remove(inst.res.Sockets.Ingress)
+	}
 	if err := inst.spawn(); err != nil {
 		inst.w.fail(inst.depID, err)
 	}

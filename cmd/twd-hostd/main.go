@@ -98,6 +98,7 @@ func run() error {
 		poolNodes  = flag.Int("pool-nodes", hostdrun.DefaultPoolNodes, "pre-joined nodes to keep per hot class (one with a create here in the last hour): a create takes one and renames it (~0.2 s) instead of joining a new node; each is a device; 0 = off")
 		portMap    = flag.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's tailnet nodes (off by default: it adds ~250 ms to every new object node's join and has every node ask the router for a mapping; turn on for hosts behind hard NATs that need router-assisted direct paths)")
 		pathEvery  = flag.Duration("path-every", hostd.DefaultPathEvery, "smart placement: measure and report tailnet paths to assignments' placement targets this often (negative disables)")
+		queueVis   = flag.Duration("queue-visibility", hostd.DefaultQueueVisibility, "queues: how long a claimed batch stays hidden in mgmt (extended while queue() runs); bounds how soon a crashed consumer's batch is delivered again")
 		siblings   = flag.Bool("allow-sibling-egress", false, "let objects reach other objects hosted here over the tailnet (hairpin; single-host tests/demos)")
 		ctrOff     = flag.Bool("no-containers", false, "don't offer containers (ctx.container) even with a microVM backend")
 		ctrKernel  = flag.String("vm-container-kernel", "", "containers: guest kernel with erofs (guest/build-kernel.sh; default -vm-kernel)")
@@ -132,6 +133,7 @@ func run() error {
 		HostID:      *hostID, DataDir: *dataDir, RunDir: *runDir, Workerd: *workerd,
 		Heartbeat: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL, CapacityNodes: *capacity,
 		KillTombstone: *tombstone, TSNetLogs: *tsnetLogs, PoolNodes: *poolNodes, PathEvery: *pathEvery, DefaultTier: *tier,
+		QueueVisibility: *queueVis,
 		VM: hostdrun.VMOptions{Kernel: *vmKernel, Rootfs: *vmRootfs, Firecracker: *vmFC, Jailer: *vmJailer, Helper: *vmHelper,
 			MemMiB: *vmMem, VCPUs: *vmCPUs, VolumeMiB: *vmVolMiB, HugePages: *vmHuge, ContainerKernel: *ctrKernel, VzVMM: *vzVMM, Rosetta: *vmRosetta,
 			Pool: *vmPool, NoSnapshot: !*vmSnap, SnapRefill: *vmSnapFill, Rotate: *vmRotate},
