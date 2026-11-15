@@ -9,6 +9,9 @@
 
 import { TailnetError, fromResponse, isTailnetError } from "./errors.js";
 import { createContainer, defineContainer, dispatchIntercept, notSupportedPreview, type ContainerSpec } from "./container.js";
+import { workflowClient } from "./workflows.js";
+
+export { wrapWorkflowClass, isApprovalType } from "./workflows.js";
 import { wrapStores } from "./d1.js";
 import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
 
@@ -205,7 +208,7 @@ function installAlarmShim(ctx: any, tw: TailnetApiStub) {
 }
 
 /** wrapFacetClass wraps a tenant DO class run as a facet (per-object egress). */
-export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts: { container?: ContainerSpec } = {}) {
+export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts: { container?: ContainerSpec; workflows?: Record<string, string> } = {}) {
   if (typeof C !== "function") throw new Error(`twd: durable_objects class ${name} is not exported by the main module`);
   const W = {
     [name]: class extends C {
@@ -214,6 +217,8 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
         // Bindings admit before they reach an object (chained creation by
         // an attested object; hostd records it), and __TWD stays platform-only.
         const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
+        // Workflow bindings: the platform's WorkflowGate, as the Workflow API.
+        for (const k of Object.keys(opts.workflows ?? {})) if (e?.[k]) e[k] = workflowClient(e[k]);
         define(ctx, createTailnetContext(tw, e, bindings));
         installAlarmShim(ctx, tw);
         // ctx.container: the object is attested by the platform (props).
@@ -453,6 +458,11 @@ function guardEnv(env: any, bindings: BindingMap, mode: GuardMode, adm: Admitter
     if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
   }
   return out;
+}
+
+/** guardTailnetEnv guards env as for a tailnet caller without a create ticket (Workflows). */
+export function guardTailnetEnv(env: any, bindings: BindingMap): any {
+  return guardEnv(env, bindings, "tailnet", admitter(env?.__TWD, {}));
 }
 
 /** publicEnv returns env guarded for a public request (kept for callers of the old name). */

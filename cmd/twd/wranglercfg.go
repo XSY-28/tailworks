@@ -222,7 +222,7 @@ func wranglerKeyNote(k string, v any, builder string) string {
 	}
 	switch k {
 	case "name", "main", "compatibility_date", "compatibility_flags", "vars", "durable_objects",
-		"migrations", "triggers", "containers", "placement", "$schema", "env":
+		"migrations", "triggers", "containers", "placement", "workflows", "$schema", "env":
 		return ""
 	case "define", "alias", "rules", "minify", "keep_names", "jsx_factory", "jsx_fragment", "tsconfig":
 		return "" // both bundlers honour these
@@ -238,7 +238,7 @@ func wranglerKeyNote(k string, v any, builder string) string {
 	case "assets", "site":
 		return "not supported: twd does not serve static assets; import them as modules (rules) or serve them from the Worker"
 	case "kv_namespaces", "r2_buckets", "services", "queues", "ai", "browser", "vectorize",
-		"hyperdrive", "analytics_engine_datasets", "workflows", "send_email", "dispatch_namespaces",
+		"hyperdrive", "analytics_engine_datasets", "send_email", "dispatch_namespaces",
 		"mtls_certificates", "images", "pipelines", "ratelimits", "secrets_store_secrets", "version_metadata",
 		"worker_loaders", "vpc_services", "media", "unsafe", "unsafe_hello_world", "cloudchamber",
 		"tail_consumers", "streaming_tail_consumers", "logfwdr":

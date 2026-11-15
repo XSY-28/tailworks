@@ -183,6 +183,11 @@ func BundleStateful(bundle []byte) (stateful bool, reason string) {
 					ClassName string `json:"class_name"`
 				} `json:"bindings"`
 			} `json:"durable_objects"`
+			// Workflows (ADR-040) keep their instances in the workload's
+			// DO storage on its host: stateful like a DO class.
+			Workflows []struct {
+				Name string `json:"name"`
+			} `json:"workflows"`
 		}
 		if err != nil || json.Unmarshal(std, &w) != nil {
 			return true, f + " unreadable"
@@ -191,6 +196,9 @@ func BundleStateful(bundle []byte) (stateful bool, reason string) {
 			if b.ClassName != "" {
 				classes[b.ClassName] = true
 			}
+		}
+		for _, wf := range w.Workflows {
+			classes["workflow "+wf.Name] = true
 		}
 	}
 	if _, ok := files["wrangler.toml"]; ok {

@@ -313,6 +313,10 @@ type Host struct {
 	tel        *telemetry
 	metricsSrv *http.Server
 
+	// approvals.go: the Workflows' approval waits on this host.
+	apprOnce sync.Once
+	appr     *approvalStore
+
 	upg upgrader // upgrade.go
 }
 

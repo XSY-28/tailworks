@@ -24,6 +24,9 @@ const (
 	Queues = "queues"
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).
 	Telemetry = "telemetry"
+	// Workflows is wrangler "workflows" on workerd's engine, with approvals
+	// by tailnet identity (ADR-040).
+	Workflows = "workflows"
 )
 
 // Host is what this build's hostd offers: every registered platform store
@@ -32,6 +35,7 @@ func Host() []string {
 	out := []string{
 		Queues,
 		Telemetry,
+		Workflows,
 	}
 	out = append(out, bundle.StoreKindNames()...)
 	slices.Sort(out)
@@ -43,6 +47,9 @@ func Required(app *bundle.App) []string {
 	var out []string
 	for _, s := range app.Stores {
 		out = append(out, s.Kind)
+	}
+	if len(app.Workflows) > 0 {
+		out = append(out, Workflows)
 	}
 	if app.Queues != nil && (len(app.Queues.Producers) > 0 || len(app.Queues.Consumers) > 0) {
 		out = append(out, Queues)

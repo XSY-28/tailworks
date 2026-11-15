@@ -270,3 +270,16 @@ func TestReleaseArtifacts(t *testing.T) {
 		t.Fatalf("artifactSum %q", s)
 	}
 }
+
+// Workflow instances live in the workload's DO storage on its host: a
+// Workflows app is stateful (fenced, and a drain doesn't move it).
+func TestBundleStatefulWorkflows(t *testing.T) {
+	b := makeBundle(t, map[string]string{
+		"twd.jsonc":      `{"tailnet": {"tags": ["tag:w"]}}`,
+		"wrangler.jsonc": `{"name": "w", "main": "dist/index.js", "workflows": [{"name": "refunds", "binding": "R", "class_name": "Refund"}]}`,
+		"dist/index.js":  "export default {}",
+	})
+	if st, why := BundleStateful(b); !st || !strings.Contains(why, "workflow refunds") {
+		t.Fatalf("stateful %v %q", st, why)
+	}
+}

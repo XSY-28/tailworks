@@ -1,4 +1,10 @@
-Last update: 2026-11-15 PT. Built ADR-upgrades-and-releases: versions and skew, numbered migrations, feature-gated placement, cordon/drain, twd upgrade, release catalog, upgrade runs, release gates. make lint test and make e2e-upgrade pass.
+Last update: 2026-11-15 PT. Merged origin/master with Workflows (#34, ADR-040) and retrofitted it:
+- `internal/version.WorkerdPin` is now 1.20261114.1.
+- Feature `workflows`.
+- A Workflows app counts as stateful: fenced, and not moved by a drain.
+- `approvals.json` records carry a version.
+
+Earlier 2026-11-15: built ADR-upgrades-and-releases: versions and skew, numbered migrations, feature-gated placement, cordon/drain, twd upgrade, release catalog, upgrade runs, release gates. make lint test and make e2e-upgrade pass.
 
 ## Built (2026-11-15)
 

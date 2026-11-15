@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -75,5 +76,29 @@ func TestSelfUpgradeInstalls(t *testing.T) {
 	}
 	if slices.Contains((&Host{}).features(), FeatureSelfUpgrade) {
 		t.Fatal("self-upgrade offered without -self-upgrade")
+	}
+}
+
+// approvals.json: records from before versioning load; a newer version is
+// not loaded; saves stamp "v":1.
+func TestApprovalsFormat(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "approvals.json")
+	os.WriteFile(p, []byte(`[{"tenantID":"t","workload":"w","workflow":"f","instance":"i","step":"s","type":"x","status":"pending","requestedAt":"2026-11-15T00:00:00Z"}]`), 0o600)
+	h := &Host{cfg: Config{DataDir: dir}, log: slog.New(slog.DiscardHandler)}
+	s := h.approvals()
+	if len(s.m) != 1 {
+		t.Fatalf("v0 record not loaded: %v", s.m)
+	}
+	s.mu.Lock()
+	s.saveLocked()
+	s.mu.Unlock()
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"v": 1`) {
+		t.Fatalf("save without v: %s", b)
+	}
+	os.WriteFile(p, []byte(`[{"v":2,"tenantID":"t","workload":"w","workflow":"f","instance":"i","step":"s"}]`), 0o600)
+	h2 := &Host{cfg: Config{DataDir: dir}, log: slog.New(slog.DiscardHandler)}
+	if n := len(h2.approvals().m); n != 0 {
+		t.Fatalf("a newer record loaded (%d)", n)
 	}
 }

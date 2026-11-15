@@ -47,3 +47,4 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [037](037-workers-kv.md) | Workers KV: a platform store per workload behind workerd's own `kvNamespace` binding; read-your-writes per host, writes journaled in mgmt first | 2026-11-15 | Proposed |
 | [038](038-d1-databases.md) | D1 databases as platform-store Durable Objects behind workerd's own D1 API, with statement journals in mgmt | 2026-11-15 | Proposed |
 | [039](039-queues.md) | Queues: a sealed, lease-fenced broker in mgmt; hostd runs push consumers through workerd's own queue binding and `queue()` dispatch; the deploy is the grant | 2026-11-15 | Proposed |
+| [040](040-workflows-approvals.md) | Workflows on workerd's built-in engine; an approval is a decision by a tailnet identity holding `twd.dev/cap/approve`, checked and audited by twd | 2026-11-15 | Proposed |

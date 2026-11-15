@@ -541,6 +541,131 @@ function defineContainer(ctx, c) {
   }
 }
 
+// js/packages/tailnet/src/workflows.ts
+function isApprovalType(t) {
+  return t === "approval" || typeof t === "string" && t.startsWith("approval-");
+}
+var REPORT_STEP = { retries: { limit: 10, delay: "1 second", backoff: "exponential" }, timeout: "30 seconds" };
+function numericFacts(payload) {
+  const out = {};
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return out;
+  for (const [k, v] of Object.entries(payload)) {
+    if (typeof v === "number" && Number.isFinite(v) && !k.startsWith("__")) out[k] = v;
+  }
+  return out;
+}
+function isAborted(e) {
+  return e?.name === "WorkflowAbortedError" || String(e?.message ?? "").includes("WorkflowAbortedError");
+}
+function isTimeout(e) {
+  const m = String(e?.message ?? "");
+  return e?.name === "WorkflowTimeoutError" || m.includes("Execution timed out");
+}
+async function report(tw, args) {
+  if (!tw) return false;
+  const r = await tw.call("approval", args);
+  if (!r.ok) throw new Error(`[${r.error?.code ?? "hostd_unavailable"}] approval ${args.op}: ${r.error?.message ?? "refused"}`);
+  return true;
+}
+var wrapped = /* @__PURE__ */ new WeakSet();
+function installApprovalWaits(step, tw, workflow, event) {
+  if (!step || typeof step !== "object" && typeof step !== "function" || wrapped.has(step)) return;
+  const origWait = step.waitForEvent;
+  const origDo = step.do;
+  if (typeof origWait !== "function" || typeof origDo !== "function") return;
+  const wait = (...a) => Reflect.apply(origWait, step, a);
+  const doStep = (...a) => Reflect.apply(origDo, step, a);
+  const instance = String(event?.instanceId ?? "");
+  const facts = numericFacts(event?.payload);
+  step.waitForEvent = async (name, opts) => {
+    const type = opts?.type;
+    if (!isApprovalType(type) || !instance) return wait(name, opts);
+    const base = { workflow, instance, step: name, type, timeout: opts?.timeout ?? "24 hours", facts };
+    await doStep(`__twd_approval_requested:${name}`, REPORT_STEP, () => report(tw, { ...base, op: "requested" }));
+    try {
+      return await wait(name, opts);
+    } catch (e) {
+      if (isTimeout(e)) await doStep(`__twd_approval_timeout:${name}`, REPORT_STEP, () => report(tw, { ...base, op: "timeout" }));
+      throw e;
+    }
+  };
+  wrapped.add(step);
+}
+function wrapWorkflowClass(C, name, workflow, _binding, bindings) {
+  if (typeof C !== "function") throw new Error(`twd: workflows class ${name} (Workflow ${workflow}) is not exported by the main module`);
+  const W = {
+    [name]: class extends C {
+      constructor(ctx, env) {
+        const tw = env?.__TWD;
+        super(ctx, guardTailnetEnv(env, bindings));
+        Object.defineProperty(this, "__twd_tw", { value: tw });
+      }
+      async run(event, step) {
+        installApprovalWaits(step, this.__twd_tw, workflow, event);
+        try {
+          return await super.run(event, step);
+        } catch (e) {
+          if (isAborted(e) && "_errorReported" in this) this._errorReported = true;
+          throw e;
+        }
+      }
+    }
+  }[name];
+  return W;
+}
+var InstanceClient = class {
+  id;
+  #f;
+  constructor(id, f) {
+    this.id = id;
+    this.#f = f;
+  }
+  async pause() {
+    await this.#f.pause(this.id);
+  }
+  async resume() {
+    await this.#f.resume(this.id);
+  }
+  async terminate(options) {
+    await this.#f.terminate(this.id, options);
+  }
+  async restart(options) {
+    await this.#f.restart(this.id, options);
+  }
+  async delete() {
+    await this.#f.deleteInstance(this.id);
+  }
+  async status() {
+    return await this.#f.status(this.id);
+  }
+  async sendEvent({ type, payload }) {
+    await this.#f.sendEvent(this.id, { type, payload });
+  }
+  async subscribe(options) {
+    return await this.#f.subscribe(this.id, options);
+  }
+};
+function workflowClient(f) {
+  return {
+    async get(id) {
+      const r = await f.getInstance(id);
+      return new InstanceClient(r.id, f);
+    },
+    async create(options) {
+      const r = await f.create(options);
+      return new InstanceClient(r.id, f);
+    },
+    async createBatch(options) {
+      const r = await f.createBatch(options);
+      if (Array.isArray(options)) return r.map((x) => new InstanceClient(x.id, f));
+      return { created: r.created.map((x) => new InstanceClient(x.id, f)), errors: r.errors };
+    },
+    async deleteBatch(instanceIds) {
+      return await f.deleteBatch({ instances: instanceIds });
+    }
+  };
+}
+
 // js/packages/tailnet/src/d1.ts
 var SESSION_HEADER = "x-cf-d1-session-commit-token";
 var FIRST_UNCONSTRAINED = "first-unconstrained";
@@ -955,6 +1080,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
       constructor(ctx, env) {
         const tw = env?.__TWD;
         const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
+        for (const k of Object.keys(opts.workflows ?? {})) if (e?.[k]) e[k] = workflowClient(e[k]);
         define(ctx, createTailnetContext(tw, e, bindings));
         installAlarmShim(ctx, tw);
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
@@ -1143,6 +1269,9 @@ function guardEnv(env, bindings, mode, adm) {
   }
   return out;
 }
+function guardTailnetEnv(env, bindings) {
+  return guardEnv(env, bindings, "tailnet", admitter(env?.__TWD, {}));
+}
 function publicEnv(env, bindings) {
   return guardEnv(env, bindings, "public", admitter(env?.__TWD, {}));
 }
@@ -1304,8 +1433,11 @@ function wrapHandler(H, bindings) {
 }
 export {
   createTailnetContext,
+  guardTailnetEnv,
+  isApprovalType,
   publicEnv,
   wrapFacetClass,
   wrapHandler,
-  wrapPlainClass
+  wrapPlainClass,
+  wrapWorkflowClass
 };

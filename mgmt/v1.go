@@ -1448,6 +1448,8 @@ func (s *Server) roleAllowed(p Principal, role string) bool {
 			roles |= roleAdmin
 		case "host":
 			roles |= roleHost
+		case "approver":
+			roles |= roleApprover
 		}
 	}
 	return s.allowed(p, roles)
@@ -1559,7 +1561,9 @@ func (s *Server) mountUI(api, uiH http.Handler) http.Handler {
 				writeErr(w, r, errf(401, "no_identity", "unauthenticated"))
 				return
 			}
-			if p.Kind == "host" || !s.allowed(p, roleAdmin) {
+			// An approver who is not an admin gets the approvals page only.
+			approverPage := isApprover(p) && (r.URL.Path == "/ui/approvals" || r.URL.Path == "/ui/approvals/decide" || strings.HasPrefix(r.URL.Path, "/ui/static/"))
+			if p.Kind == "host" || !s.allowed(p, roleAdmin) && !approverPage {
 				writeErr(w, r, errf(403, "forbidden", "caller (%s) may not use the admin UI", p.Kind))
 				return
 			}

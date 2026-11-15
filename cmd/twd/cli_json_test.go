@@ -62,6 +62,8 @@ var cliSurface = []struct {
 	{"queues messages", []string{"queues", "messages", "jobs"}},
 	{"queues send", []string{"queues", "send", "jobs", `{"k":1}`}},
 	{"kill", []string{"kill", "app"}},
+	{"approvals", []string{"approvals"}},
+	{"approve", []string{"approve", "app", "wf_1"}},
 	{"audit", []string{"audit", "--all"}},
 	{"logs.line", []string{"logs", "app"}},
 	{"doctor", []string{"doctor"}},

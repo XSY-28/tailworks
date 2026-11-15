@@ -24,6 +24,7 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 - [D1 databases](https://github.com/rosskukulinski/twd/blob/master/docs/d1.md): `d1_databases`, wrangler migrations, `twd d1`, sessions and limits
 - [Queues](https://github.com/rosskukulinski/twd/blob/master/docs/queues.md): `queues.producers` / `queues.consumers`, `queue()`, retries, dead-letter queues, `twd queues`
 - [Cron triggers](https://github.com/rosskukulinski/twd/blob/master/docs/cron-triggers.md): `triggers.crons`, `scheduled()`
+- [Workflows and approvals](https://github.com/rosskukulinski/twd/blob/master/docs/approvals.md): Cloudflare Workflows, `AgentWorkflow`, `waitForApproval`; approvals decided by tailnet identities under `twd.dev/cap/approve`, `twd approve`
 - [Public ingress (Funnel)](https://github.com/rosskukulinski/twd/blob/master/docs/public-ingress.md): public routes, `twd expose`
 - [Tailscale Services](https://github.com/rosskukulinski/twd/blob/master/docs/services.md): stable names and replicas
 - [Locks and leader election](https://github.com/rosskukulinski/twd/blob/master/docs/locks.md): Durable Objects as locks, leases, fencing tokens, the `lock` template, failure guarantees

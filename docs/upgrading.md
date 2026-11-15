@@ -23,7 +23,7 @@ on, it is a major version.
   heartbeating, and its running workloads aren't disturbed, but placement
   skips it. `twd status --json` lists it under `versions.skewed`.
 - **Features gate new work.** Hosts report their features when they
-  register (`kv`, `r2`, `d1`, `telemetry`, `self-upgrade`, …). A deployment
+  register (`d1`, `kv`, `queues`, `r2`, `telemetry`, `workflows`, `self-upgrade`, …). A deployment
   that uses a KV namespace is placed only on hosts that offer `kv`. When none
   does, the deploy fails with `feature_unavailable`, which names the hosts to
   upgrade.
@@ -140,7 +140,7 @@ twd host drain h1 --dry-run
 twd host uncordon h1
 ```
 
-- **Workloads with Durable Objects keep their storage on the host's disk.**
+- **Workloads with Durable Objects or Workflows keep their storage on the host's disk.**
   A drain leaves them in place, so restart the host in place instead (about
   a minute until its objects rejoin).
 - **`--allow-local-state-loss`** moves them anyway, and their objects start

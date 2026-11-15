@@ -1839,6 +1839,134 @@
         "timingsMs"
       ]
     },
+    "approvalWait": {
+      "description": "One approval wait of one Workflow instance (docs/approvals.md; mgmt's Approval).",
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "workload": {
+          "type": "string"
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "facts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "timeout"
+          ]
+        },
+        "requestedAt": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "type": "string"
+        },
+        "approver": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "string"
+            },
+            "node": {
+              "type": "string"
+            },
+            "nodeId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "via": {
+              "enum": [
+                "tailnet",
+                "mgmt"
+              ]
+            }
+          },
+          "required": [
+            "node",
+            "nodeId",
+            "tags",
+            "via"
+          ]
+        },
+        "comment": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenantID",
+        "workload",
+        "workflow",
+        "instance",
+        "step",
+        "type",
+        "status",
+        "requestedAt"
+      ]
+    },
+    "approvals": {
+      "description": "twd approvals: what waits for a decision (with --all, decided ones too).",
+      "type": "object",
+      "properties": {
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/approvalWait"
+          }
+        },
+        "unreachable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "approvals"
+      ]
+    },
+    "approve": {
+      "description": "twd approve: the approval as decided, with the approver's verified identity.",
+      "type": "object",
+      "properties": {
+        "approval": {
+          "$ref": "#/$defs/approvalWait"
+        }
+      },
+      "required": [
+        "approval"
+      ]
+    },
     "audit": {
       "$ref": "#/$defs/auditRecords"
     },
