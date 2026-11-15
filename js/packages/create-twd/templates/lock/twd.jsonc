@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/rosskukulinski/twd/master/schema/twd.schema.json",
+  "name": "locks",
+  "tailnet": {
+    // the lock service's node: clients call http://locks/locks/<name>/acquire
+    "tags": ["tag:twd-wl-locks"],
+    "objects": {
+      // one object (and tailnet node) per lock name: `twd ls` lists them,
+      // `twd audit <lock>` shows who held it. `twd kill <lock>` is a kill
+      // switch: that name answers 410 for good (kill the holder to free it).
+      // Plain-DO mode: the lock's expiry alarm runs natively.
+      "Lock": { "tags": ["tag:twd-locks-lock"], "egress": "workload" }
+    }
+  }
+  // policy: let the lock's clients reach it, e.g.
+  //   { "src": ["tag:twd-wl-web"], "dst": ["tag:twd-wl-locks"], "ip": ["tcp:80"] }
+  // Don't mark Lock "fence": "never": a lock must never run on two hosts.
+}
