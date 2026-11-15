@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/twd/internal/devreap"
 	"github.com/rosskukulinski/twd/netd/nettest"
 )
 
@@ -93,12 +94,18 @@ func MustTar(files map[string][]byte) []byte {
 }
 
 // ShortDir makes a short 0700 temp dir under /tmp (unix socket path limits).
+// If the test binary dies without cleaning up (SIGKILL, a -timeout panic),
+// a watchdog kills the workerd and node processes started in it and removes
+// it (devreap; TWD_KEEP_INSTANCES keeps the dir).
 func ShortDir(prefix string) (string, error) {
 	d, err := os.MkdirTemp("/tmp", prefix)
 	if err != nil {
 		return "", err
 	}
-	return d, os.Chmod(d, 0o700)
+	if err := os.Chmod(d, 0o700); err != nil {
+		return d, err
+	}
+	return d, devreap.Guard(d, devreap.Options{Keep: os.Getenv("TWD_KEEP_INSTANCES") != ""})
 }
 
 // HasNode reports whether node is on PATH.

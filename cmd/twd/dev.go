@@ -96,6 +96,7 @@ func cmdDev(args []string) error {
 	}
 	defer os.RemoveAll(tmp)
 	os.Chmod(tmp, 0o700)
+	guardDevDir(tmp, wd) // devreap.go: a SIGKILL doesn't orphan workerd or leak tmp
 
 	quietStdLog() // devlog.go: no "STUN server listening" line
 	ctl, err := nettest.StartControl()
