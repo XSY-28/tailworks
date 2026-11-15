@@ -153,6 +153,9 @@ func (s *Server) deleteStore(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) readJournal(w http.ResponseWriter, r *http.Request) {
+	if s.journalDown(w) {
+		return
+	}
 	after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 || limit > mgmt.StoreReadMaxEntries {
@@ -185,6 +188,9 @@ func (s *Server) readJournal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) appendJournal(w http.ResponseWriter, r *http.Request) {
+	if s.journalDown(w) {
+		return
+	}
 	var body struct {
 		After       *int64                 `json:"after"`
 		Incarnation string                 `json:"incarnation"`

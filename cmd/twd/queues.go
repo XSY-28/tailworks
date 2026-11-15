@@ -1,6 +1,6 @@
 package main
 
-// Queues (ADR-queues), operator side: `twd queues create|ls|info|rm|purge`,
+// Queues (ADR-039), operator side: `twd queues create|ls|info|rm|purge`,
 // `twd queues messages` (peek, e.g. a dead-letter queue) and `twd queues
 // send`, like `wrangler queues`. Queues belong to the tenant; the commands
 // go to mgmt's /v1 API, on the host or from a `twd link`ed machine.
@@ -25,13 +25,13 @@ import (
 var queueInput = func() io.Reader { return os.Stdin }
 
 type queuesResult struct {
-	TenantID string              `json:"tenantID"`
-	Queue    *mgmt.QueueInfo     `json:"queue,omitempty"`
-	Queues   []mgmt.QueueInfo    `json:"queues,omitempty"`
-	Messages []mgmt.QueueMessage `json:"messages,omitempty"`
-	Sent     []string            `json:"sent,omitempty"`
-	Deleted  string              `json:"deleted,omitempty"`
-	Purged   *int64              `json:"purged,omitempty"`
+	TenantID string               `json:"tenantID"`
+	Queue    *mgmt.QueueInfo      `json:"queue,omitempty"`
+	Queues   *[]mgmt.QueueInfo    `json:"queues,omitempty"`   // ls: always present
+	Messages *[]mgmt.QueueMessage `json:"messages,omitempty"` // messages: always present
+	Sent     []string             `json:"sent,omitempty"`
+	Deleted  string               `json:"deleted,omitempty"`
+	Purged   *int64               `json:"purged,omitempty"`
 }
 
 const queuesSubs = "create | ls | info | rm | purge | messages | send"
@@ -133,10 +133,8 @@ func cmdQueuesSub(sub string, args []string) error {
 		if err != nil {
 			return err
 		}
-		res.Queues = items
-		if res.Queues == nil {
-			res.Queues = []mgmt.QueueInfo{}
-		}
+		qs := append([]mgmt.QueueInfo{}, items...)
+		res.Queues = &qs
 		emit(f, res, func() {
 			if len(items) == 0 {
 				fmt.Printf("no queues in tenant %s · a producer's first send creates one, or: twd queues create <name>\n", tn.Tailnet)
@@ -190,10 +188,8 @@ func cmdQueuesSub(sub string, args []string) error {
 		if err := c.DoHeaders(ctx, "GET", base+"/"+name+"/messages?limit="+strconv.Itoa(*limitF), nil, &out, hdr); err != nil {
 			return err
 		}
-		res.Messages = out.Messages
-		if res.Messages == nil {
-			res.Messages = []mgmt.QueueMessage{}
-		}
+		msgs := append([]mgmt.QueueMessage{}, out.Messages...)
+		res.Messages = &msgs
 		emit(f, res, func() {
 			if len(out.Messages) == 0 {
 				fmt.Printf("queue %s is empty\n", name)

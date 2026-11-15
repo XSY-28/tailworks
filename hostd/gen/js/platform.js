@@ -130,6 +130,19 @@ async function admin(req, env, ctx, t) {
       }
       return json(200, { ok: true });
     }
+    case "store": {
+      // An operator operation on a platform store (twd d1 execute, …):
+      // hostd sends it only for a store this deployment declares.
+      if (!(CFG.stores ?? []).some((s) => s.kind === t.storeKind && s.name === t.name)) return errResponse("bad_request", "no such store in this deployment");
+      try {
+        const r = await ctx.exports.Store.getByName(t.storeKind + ":" + t.name).adminOp(t.action, [await req.json()]);
+        return json(200, r);
+      } catch (e) {
+        const m = String(e?.message ?? e);
+        const c = /^\[([a-z_]+)\]/.exec(m)?.[1] ?? "store_unavailable";
+        return json(c === "bad_request" ? 400 : 503, errBody(c, m));
+      }
+    }
   }
   return errResponse("bad_request", "unknown admin op");
 }
@@ -153,7 +166,7 @@ export default {
       case "scheduled":
         return scheduled(env, t, req);
       case "queue":
-        return deliverQueue(env, t, req); // twd-queue.js (ADR-queues)
+        return deliverQueue(env, t, req); // twd-queue.js (ADR-039)
       case "object":
         return routeObject(env, ctx, t.class, t.name, req);
       case "intercept": {
@@ -255,6 +268,8 @@ function makeHost(cls) {
           env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
           for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
           for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
+          const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
+          if (Object.keys(wrap).length) env.__TWD_WRAP = wrap; // twd-rt.js puts the API around these stubs (D1)
           return {
             compatibilityDate: CFG.compatDate,
             compatibilityFlags: CFG.compatFlags,
@@ -348,7 +363,7 @@ function makeHost(cls) {
 // storage bindings.
 //@@STORES@@
 
-// Queue producer bindings and their facet proxies (twd-queue.js; ADR-queues).
+// Queue producer bindings and their facet proxies (twd-queue.js; ADR-039).
 export { QueueProducer, QueueFacetProxy } from "twd-queue.js";
 
 // NsProxy stands in for a DO namespace binding inside a facet's env:

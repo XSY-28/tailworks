@@ -7,7 +7,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/queuecfg"
 )
 
-// Queues (ADR-queues): wrangler.jsonc "queues". Producers become env
+// Queues (ADR-039): wrangler.jsonc "queues". Producers become env
 // bindings (workerd's queue binding, backed by the platform); push
 // consumers are run by hostd against the default export's queue()
 // handler. The queues themselves live in mgmt.

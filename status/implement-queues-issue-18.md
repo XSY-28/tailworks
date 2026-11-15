@@ -1,8 +1,8 @@
-Last update: 2026-11-15 09:40 PT. Queues (issue #18, ADR-queues): producers, push consumers, retries, DLQ, HTTP pull, `twd queues`; multi-host e2e green.
+Last update: 2026-11-15 09:40 PT. Queues (issue #18, ADR-039): producers, push consumers, retries, DLQ, HTTP pull, `twd queues`; multi-host e2e green.
 
 # Queues (issue #18)
 
-Design: [ADR-queues](../docs/design/adr/queues.md). User docs:
+Design: [ADR-039](../docs/design/adr/039-queues.md). User docs:
 [docs/queues.md](../docs/queues.md).
 
 ## Decision in one paragraph
@@ -117,6 +117,11 @@ workload's latest deployment declares, fenced by the workload's lease.
 - After merging origin/master (observability, wrangler CLI): `make lint`
   ok; `make test` ok (every Go package, `-race`, and `npm test` 25/25);
   `make e2e-queues` ok again.
+- Second master merge (KV #37, R2 #35, D1 #33, agent DX #32): `twd queues`
+  joined the `--json` contract (`schema/cli.schema.json` defs,
+  `cliSurface`), `llms.txt` and the skill's ask-first list; the ADR is
+  numbered ADR-039. `make lint` ok, `make test` ok (all Go packages with
+  `-race`, npm tests), `make e2e-queues` ok.
 
 ## Findings
 

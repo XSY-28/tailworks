@@ -1,7 +1,7 @@
 // Package queuecfg parses and validates a Worker's Cloudflare Queues
 // configuration (wrangler.jsonc "queues": {"producers": [...],
 // "consumers": [...]}) and holds the limits shared by hostd, mgmt and the
-// CLI (ADR-queues). Both hostd's bundle parser and mgmt's deploy check use
+// CLI (ADR-039). Both hostd's bundle parser and mgmt's deploy check use
 // it, so a bad config fails `twd deploy` with 400 bad_bundle.
 package queuecfg
 

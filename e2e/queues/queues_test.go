@@ -1,6 +1,6 @@
 //go:build e2equeues
 
-// Package queues is the hermetic multi-host Queues e2e (ADR-queues): real
+// Package queues is the hermetic multi-host Queues e2e (ADR-039): real
 // twd-mgmt and two real twd-hostd processes on testcontrol + a local DERP.
 // A producer workload on one host sends to a queue that a consumer
 // workload on the other host consumes; the consumer reports every

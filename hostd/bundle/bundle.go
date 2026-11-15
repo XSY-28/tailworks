@@ -83,7 +83,7 @@ type App struct {
 	// stores.go, ADR-platform-stores), in wrangler order.
 	Stores []StoreBinding
 
-	// Queues is wrangler.jsonc "queues" (queues.go, ADR-queues); nil: none.
+	// Queues is wrangler.jsonc "queues" (queues.go, ADR-039); nil: none.
 	Queues *queuecfg.Config
 }
 

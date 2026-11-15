@@ -136,10 +136,10 @@ tags:
     description: Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
   - name: stores
     description: Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
-  - name: queues
-    description: Cloudflare-style Queues (ADR-queues). A queue belongs to the tenant; its messages are sealed rows here. Producers send through their host, push consumers' hosts claim batches with a visibility timeout and settle them, and admins can pull, peek, purge and delete.
   - name: telemetry
     description: A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
+  - name: queues
+    description: Cloudflare-style Queues (ADR-039). A queue belongs to the tenant; its messages are sealed rows here. Producers send through their host, push consumers' hosts claim batches with a visibility timeout and settle them, and admins can pull, peek, purge and delete.
   - name: audit
     description: Hash-chained, append-only audit log.
   - name: volumes
@@ -148,6 +148,22 @@ tags:
     description: Container and code-sandbox reservations against tenant quotas (microVM tier, ADR-032).
   - name: images
     description: Container images (ADR-032 D3) — public base images shared across tenants, and the arm64 alias map.
+  - name: mcp
+    description: |
+      twd's own MCP server (ADR-035), served by twd-mgmt at `/mcp` on the same listeners and
+      behind the same WhoIs gate as `/v1`. Its wire protocol is the external Model Context Protocol
+      (Streamable HTTP, stateless: one JSON-RPC request per POST, answered with `application/json`);
+      this entry documents the route and who may call it, and is excluded from code generation (the
+      server is hand-written: `mgmt/mcp.go`). Tools run the `/v1` operations in process.
+
+      - **admins** (`twd.dev/cap/admin`) and holders of `twd.dev/cap/mcp` get the read tools:
+        `whoami`, `status`, `ls`, `logs`, `audit`. A caller with only `twd.dev/cap/mcp` reaches
+        `/mcp` and nothing else.
+      - `deploy`, `kill` and `undeploy` need a `twd.dev/cap/mcp` grant naming them
+        (`[{"tools": ["kill"]}]`, or `"*"`); being an admin is not enough.
+      - the local operator (the `twd mcp` bridge on the twd host) gets the read tools, or exactly
+        the tools it lists in `Twd-MCP-Tools`; for tailnet callers that header only narrows.
+      - hosts and browsers are refused.
   - name: registry
     description: |
       twd's OCI distribution registry (ADR-032 D3), served by twd-mgmt at `/v2/` on the same listeners
@@ -865,6 +881,209 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ListKVKeys
+      summary: List a KV namespace's keys
+      description: |
+        Workers KV's `list()` for operators (`twd kv key list`,
+        ADR-037): live keys in UTF-8 byte order, with their
+        expiration and metadata, `limit` at a time (default and maximum
+        1000). Pass the answer's `cursor` to get the next page. mgmt reads
+        the namespace's journal (its own copy), so the answer includes
+        every acknowledged write. `404 unknown_store` if the namespace
+        does not exist.
+      x-twd-role: admin
+      parameters:
+        - name: prefix
+          in: query
+          description: Only keys that start with this.
+          schema: { type: string, maxLength: 512 }
+        - name: cursor
+          in: query
+          description: The `cursor` of the previous page.
+          schema: { type: string, maxLength: 1024 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: One page of keys.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KVKeyPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+      - name: key
+        in: query
+        required: true
+        description: The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
+        schema: { type: string, minLength: 1, maxLength: 512 }
+    get:
+      tags: [stores]
+      operationId: GetKVValue
+      summary: Get one KV value
+      description: |
+        `twd kv key get`. `404 not_found` if the key does not exist or has
+        expired, `404 unknown_store` if the namespace does not.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The value.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KVValue" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [stores]
+      operationId: PutKVValue
+      summary: Write one KV value
+      description: |
+        `twd kv key put`: a journal append, like a binding's `put()`, so
+        running workloads see it on their next sync (within 60 s, or a
+        read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
+        `expiration` at least 60 s ahead, metadata at most 1024 bytes of
+        JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
+        `400 store_limit`). The namespace must exist (`404
+        unknown_store`; `twd kv namespace create`). Audited (`kind:
+        kv_put`) with the namespace and who wrote, not the key: key names
+        can be sensitive, and mgmt keeps them only sealed and HMACed.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KVPut" }
+      responses:
+        "200":
+          description: Written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KVKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [stores]
+      operationId: DeleteKVValue
+      summary: Delete one KV value
+      description: "`twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes."
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted (or there was nothing to delete).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/d1/{name}/query:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    post:
+      tags: [stores]
+      operationId: QueryD1
+      summary: Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+      description: |
+        A D1 database (ADR-038) is the workload's platform store of kind
+        `d1` named after the binding's `database_name`. Its data is served
+        by the store object in the workload's workerd, so mgmt sends the
+        statements to the host holding the workload's lease (the mgmt →
+        hostd channel, as for logs), which hands them to its platform
+        worker. They run as one batch: atomic, after the store object has
+        caught up with the journal, and a batch that writes is appended to
+        the journal before it is applied, like every write through the
+        binding.
+
+        `200` with one result per statement (D1's shape, rows and
+        columns). A failing statement fails the whole batch (`400
+        d1_error`, with SQLite's message; nothing is applied). `404
+        unknown_workload` when the workload isn't running (the database is
+        only reachable through a running deployment that binds it); `404
+        unknown_store` when its deployment binds no such database. A batch
+        that changed the database is audited (`kind: d1_write`, with the
+        statement count, never the SQL); a read is logged.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/D1Query" }
+      responses:
+        "200":
+          description: One result per statement.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/D1Result" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/d1/{name}/export:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ExportD1
+      summary: Export a D1 database as SQL (`twd d1 export`)
+      description: |
+        The database's schema and rows as SQL text, in the shape of
+        `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
+        table and its `INSERT`s, then indexes, triggers and views), read
+        from the store object of the running workload after it has caught
+        up with the journal. At most 16 MiB (`400 store_limit` beyond).
+        Rows of virtual tables are not exported. A read: logged, not
+        audited.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The SQL.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            text/plain:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
   # ----------------------------------------------------------------- queues
@@ -2638,6 +2857,47 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ mcp (Model Context Protocol, external spec)
+  /mcp:
+    post:
+      tags: [mcp]
+      operationId: MCPRequest
+      summary: One MCP JSON-RPC request (initialize, ping, tools/list, tools/call) or notification
+      description: |
+        The body is one JSON-RPC 2.0 message (no batches). A request is answered `200` with the
+        JSON-RPC response; a notification (no `id`) with `202` and no body. A tool the caller isn't
+        granted is a tool result with `isError: true` and the twd error `cap_missing`, whose
+        `snippet` is the grant (or the `twd mcp --allow` flag) that adds it. `kill`, `undeploy` and
+        `deploy` are audited like the `/v1` operations they run, with the caller as the actor.
+      x-twd-role: admin|mcp
+      x-twd-audit: true
+      parameters:
+        - name: Twd-MCP-Tools
+          in: header
+          description: Comma-separated tools this request may use (narrows; see the tag description).
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, description: "A JSON-RPC 2.0 request or notification." }
+      responses:
+        "200":
+          description: The JSON-RPC response.
+          content:
+            application/json:
+              schema: { type: object }
+        "202": { description: A notification was accepted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      tags: [mcp]
+      operationId: MCPStream
+      summary: Not supported (stateless server; no server-to-client stream)
+      x-twd-role: admin|mcp
+      responses:
+        "405": { description: Use POST. }
+
   # ------------------------------------------------------------ registry (OCI distribution, external spec)
   /v2/:
     get:
@@ -3304,6 +3564,7 @@ components:
         | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
         | `immutable_field` | 400 | PATCH touches a field the caller may not change |
         | `too_many_secrets` | 400 | a workload already has 128 secrets |
+        | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
         | `no_identity` | 401 | WhoIs failed for the connection |
         | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
         | `host_token_invalid` | 403 | local-dev socket, wrong token |
@@ -3364,6 +3625,7 @@ components:
         - reserved_tag
         - immutable_field
         - too_many_secrets
+        - d1_error
         - no_identity
         - host_token_required
         - host_token_invalid
@@ -4344,6 +4606,9 @@ components:
         `queue_create` (a queue created, by its first use or an admin),
         `queue_delete` (a queue, its messages and its data key deleted),
         `queue_purge` (every message of a queue deleted),
+        `d1_write` (an operator's SQL changed a D1 database; statement count only),
+        `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key),
+        `kv_delete` (an admin deleted a Workers KV key; the namespace only),
         `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
         `telemetry_delete`,
         `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
@@ -4398,6 +4663,9 @@ components:
         - queue_create
         - queue_delete
         - queue_purge
+        - d1_write
+        - kv_put
+        - kv_delete
         - telemetry_put
         - telemetry_delete
         - telemetry_release
@@ -4657,7 +4925,7 @@ components:
     StoreKind:
       type: string
       pattern: "^[a-z][a-z0-9]{0,15}$"
-      description: A storage binding type (`kv`; later `d1`, `queue`, …).
+      description: A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
     Store:
       type: object
       description: A platform storage object of a workload (ADR-platform-stores).
@@ -4718,6 +4986,76 @@ components:
         head: { type: integer, format: int64 }
         entries: { type: array, items: { $ref: "#/components/schemas/StoreEntry" } }
         more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
+    KVKey:
+      type: object
+      description: A Workers KV key as `list()` returns it (ADR-037).
+      required: [name]
+      properties:
+        name: { type: string }
+        expiration: { type: integer, format: int64, description: "Unix seconds when the key expires (absent: never)." }
+        metadata: { description: "The key's metadata (any JSON; absent: none)." }
+    KVKeyPage:
+      type: object
+      required: [keys, listComplete]
+      properties:
+        keys: { type: array, items: { $ref: "#/components/schemas/KVKey" } }
+        listComplete: { type: boolean }
+        cursor: { type: string, description: "Pass as `cursor` for the next page (absent when `listComplete`)." }
+    KVValue:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: string, format: byte, description: The value's bytes. }
+        expiration: { type: integer, format: int64 }
+        metadata: {}
+    KVPut:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, format: byte, description: "The value's bytes (at most 2 MiB − 4 KiB)." }
+        expiration: { type: integer, format: int64, description: "Unix seconds; at least 60 s ahead." }
+        expirationTtl: { type: integer, format: int64, description: "Seconds from now (at least 60). Wins over `expiration`." }
+        metadata: { description: "Any JSON, at most 1024 bytes serialized." }
+      additionalProperties: false
+
+    D1Query:
+      type: object
+      required: [queries]
+      properties:
+        queries:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [sql]
+            properties:
+              sql: { type: string, maxLength: 100000, description: "One statement (or several separated by `;`; parameters bind to the last)." }
+              params:
+                type: array
+                maxItems: 100
+                description: "Positional parameters: null, numbers, strings, booleans (bound as 1/0), or a BLOB as an array of byte values."
+                items: {}
+            additionalProperties: false
+      additionalProperties: false
+    D1Result:
+      type: object
+      description: One statement's result, as D1's wire protocol has it.
+      required: [success]
+      properties:
+        success: { type: boolean }
+        results:
+          type: object
+          properties:
+            columns: { type: array, items: { type: string } }
+            rows: { type: array, items: { type: array, items: {} }, description: "Values: null, numbers, strings, and BLOBs as arrays of byte values." }
+        meta:
+          type: object
+          description: "`changes`, `last_row_id`, `changed_db`, `rows_read`, `rows_written`, `size_after`, `duration` (ms), `served_by`."
+          additionalProperties: true
+        error: { type: string }
+
 
     # -------------------------------------------------------------- queues
     QueueContentType:
@@ -4726,7 +5064,7 @@ components:
       description: "How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer)."
     Queue:
       type: object
-      description: A tenant's queue (ADR-queues).
+      description: A tenant's queue (ADR-039).
       required: [tenantID, name, incarnation, backlog, bytes, inFlight, delayed, createdAt, updatedAt]
       properties:
         tenantID: { type: string }

@@ -114,6 +114,9 @@ type Server struct {
 	stores       map[string]*fakeStore
 	storeAppends int
 
+	// storesDown: the store journal answers 503 (storesdown.go).
+	storesDown bool
+
 	// Queues (queues.go): tenant|queue -> queue.
 	queues map[string]*fakeQueue
 	// OTLP export (telemetry.go): tenantID -> config.

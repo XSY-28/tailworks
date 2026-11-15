@@ -58,9 +58,13 @@ table, in logical position, not at the end. `make lint` runs
 
 | Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
 |---|---|---|---|---|---|---|
-| <a id="kv"></a>Workers KV | ❌ | KV bindings backed by a service you supply | — | — | no KV binding (`env.KV` is `undefined`). Durable Object storage works | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
-| <a id="r2"></a>R2 | ❌ | R2 bindings backed by a service you supply | — | — | no R2 binding | — |
-| <a id="d1"></a>D1 | ❌ | D1 bindings backed by a service you supply | — | — | no D1 binding. Durable Object SQLite works | — |
+| <a id="kv"></a>Workers KV | ⚠️ | the `kvNamespace` binding (the API, its argument checks and types), backed by a service you supply | each namespace is a platform-owned SQLite Durable Object on the workload's host, with every write journaled (sealed, lease-fenced) in mgmt first, so it survives restarts and moves to another host; works in facets and on the microVM tier; `twd kv namespace\|key …` and REST, like `wrangler kv`; `twd dev` keeps it between runs. [Details](#workers-kv-details) | a namespace belongs to one workload; read-your-writes on a host, other writers seen within 60 s (or `cacheTtl`); writes need mgmt reachable; values ≤ 2 MiB − 4 KiB | sharing a namespace between workloads, values over 2 MiB, `wrangler kv bulk`, `cacheStatus` (always `null`) | `hostd:TestWorkersKV`, `hostd:TestWorkersKVMove`, `e2e/vm:TestE2EVMKV`, `e2e/sdk:TestOAuthProviderKV`, `mgmt:TestKVAdmin`, `cmd/twd:TestCLIKV`, `cmd/twd:TestDevKVPersists` |
+| <a id="r2"></a>R2 | ⚠️ | R2 bindings backed by a service you supply | `r2_buckets` bindings: `get`, `put`, `head`, `delete` (one key or many), `list` (`prefix`, `delimiter`, `cursor`, `startAfter`, `include`), `httpMetadata` and `customMetadata`, MD5/SHA checksums, ranged reads (`range`, a `Range` header), `onlyIf` on get and put, in the Worker and in both object modes. The bucket's index is a platform store (journaled to mgmt, fenced to the lease holder, survives a move); the bytes are blobs in the host's R2 backend: files on the host (`-r2-backend fs`, the default) or any S3-compatible service (`s3`). Only hostd holds the backend's credentials; bodies stream through. `twd r2 bucket ls\|create\|rm`, `twd r2 object ls`. [Details](r2.md) | a bucket belongs to one workload; each write is a round trip to mgmt; with the `fs` backend the bytes stay on the host, so after a move to another host old objects fail with `r2_blob_missing` (use `s3` for more than one host) | public buckets, custom domains, presigned URLs and the S3 API to a bucket; lifecycle rules, event notifications, storage classes, `ssecKey`, jurisdictions; `twd r2 object get\|put`; sharing a bucket between workloads; [bucket mounts in containers](#containers) | `hostd:TestR2Binding/fs/worker/PutGetHeadMetadata`, `hostd:TestR2Binding/s3/facet/PutGetHeadMetadata`, `hostd:TestR2Binding/s3/worker/Ranges`, `hostd:TestR2Binding/fs/facet/OnlyIf`, `hostd:TestR2Binding/s3/worker/ListDelete`, `hostd:TestR2Streaming`, `hostd:TestR2IndexSurvivesMove`, `e2e/placement:TestR2MoveBetweenHosts`, `e2e/vm:TestE2EVMR2`, `hostd/r2:TestBackends`, `hostd/r2:TestSigV4AWSExample`, `hostd/bundle:TestParseR2Buckets`, `cmd/twd:TestCLIR2` |
+| <a id="r2-multipart"></a>R2 multipart upload | ⚠️ | `createMultipartUpload`, `resumeMultipartUpload`, `uploadPart`, `complete`, `abort` | each part is a blob; `complete` commits the object, listing its parts, in one journal append; a ranged read reads only the parts it overlaps. Part rules as R2: all parts but the last the same size, at least 5 MiB | a part's etag is its MD5 | uploads that are never completed or aborted are kept (R2 aborts them after 7 days) | `hostd:TestR2Binding/fs/worker/Multipart`, `hostd:TestR2Binding/s3/facet/Multipart`, `hostd:TestR2IndexSurvivesMove` |
+| <a id="d1"></a>D1 (`d1_databases`, `prepare`/`bind`/`first`/`all`/`run`/`raw`, `batch`, `exec`) | ⚠️ | the D1 API (`cloudflare-internal:d1-api`), which speaks HTTP to a backend you supply | each database is a platform-owned SQLite Durable Object (ADR-038); writes go to mgmt's fenced, sealed journal before they apply, so a database survives a host restart, a host loss and a lease move (`--replace`); reads are local. The same API in facet-mode objects. Limits checked before SQLite runs a statement and before a result leaves (100 KB statement, 100 parameters, 2 MB value, 16 MiB result). [Details](d1.md) | named by `database_name` within one workload (`database_id` is ignored); a bound JS number is a REAL in a column without INTEGER affinity (as under `wrangler dev`, also Durable Object SQLite); `exec()` is atomic; one write (statement or batch) is at most 2 MiB encoded; every write waits for mgmt; when a host rebuilds a database from the journal, `random()`, `CURRENT_TIMESTAMP` and other non-deterministic SQL run again; `dump()` throws (use `twd d1 export`) | sharing a database between workloads; read replicas; Time Travel; journal compaction (the journal keeps every write, up to 1 GiB per database); a query-duration limit; the `d1_binding_jsrpc` flag's `query()` | `hostd:TestD1`, `hostd/gen:TestGenerateD1`, `hostd/bundle:TestParseD1`, `e2e/placement:TestD1SurvivesRestartAndMove` |
+| <a id="d1-sessions"></a>D1 sessions (`withSession`, bookmarks) | ⚠️ | `withSession()`, `getBookmark()`, the `x-cf-d1-session-commit-token` header | a bookmark is the database's journal position: a read with a bookmark waits until the local copy has applied it; `first-primary` catches up with the journal first | there are no read replicas, so a session only matters across a workload's replicas. Without a session a read is served locally and catches up when its last sync is over 1 s old | — | `hostd:TestD1/Sessions` |
+| <a id="d1-migrations"></a>D1 migrations (`migrations_dir`, `twd d1 migrations`) | ✅ | — | `twd d1 migrations create\|list\|apply`, wrangler's file layout and `d1_migrations` table (or `migrations_table`), each migration applied with its record as one atomic batch; `twd dev` applies pending migrations at start | `twd dev` applies them on its own (`wrangler dev` doesn't); `twd deploy` doesn't, as with wrangler | — | `internal/d1mig:TestMigrations`, `internal/d1mig:TestSplit`, `hostd:TestD1/Migrations`, `cmd/twd:TestCLID1`, `cmd/twd:TestDevD1` |
+| <a id="d1-cli"></a>D1 operator commands (`twd d1`) | ⚠️ | — | `twd d1 create\|list\|delete\|execute --command\|--file\|export`, like `wrangler d1`, through mgmt's API (`POST …/d1/{name}/query`, `GET …/d1/{name}/export`); a write is audited (`d1_write`, never the SQL) | `execute`, `export` and `migrations` reach the database through the running workload that binds it, not on their own; there is no `--local`/`--remote` (dev databases live in `twd dev`) | `export` of more than 16 MiB; import of a file over 2 MiB in one go | `cmd/twd:TestCLID1`, `mgmt:TestD1Routes`, `hostd:TestD1/AdminQueryAndExport` |
 | <a id="queues"></a>Queues (producer) | ✅ | the `queue` binding (`send`, `sendBatch`, `metrics`, `contentType` `json`/`text`/`bytes`/`v8`, `delaySeconds`) backed by a service you supply | the broker: queues live in mgmt's database (sealed per queue), so producer and consumer can be different workloads on different hosts; `delivery_delay` per binding; facets get a proxy to the same binding; `twd queues`. [Details](queues.md) | a queue is created on first use (also `twd queues create`); `send()` errors read `Error: [<code>] … (<status>)` with twd's codes | per-queue settings (`message_retention_period`, a queue-level `delivery_delay`) | `hostd:TestQueues/ContentTypes`, `hostd:TestQueues/DelaySeconds`, `hostd:TestQueues/FromFacet`, `hostd:TestQueues/MetricsAndLimits`, `mgmt:TestQueuesSendPullAck`, `cmd/twd:TestCLIQueues` |
 | <a id="workflows"></a>Workflows | ❌ | — | — | — | no Workflows binding or engine (`env.WORKFLOW` is `undefined`). The Vercel Workflow SDK runs on [Node apps](#node-runtime) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
 | <a id="workers-ai"></a>Workers AI (`env.AI`) | ❌ | — | — | — | no binding. Point an AI SDK provider at an LLM gateway on your tailnet (the `ai-agent` template) | `e2e/sdk:TestCloudflareAgents/UnsupportedBindings` |
@@ -93,7 +97,7 @@ table, in logical position, not at the end. `make lint` runs
 | <a id="metrics"></a>Metrics (Workers metrics, Analytics) | ⚠️ | — | `GET /metrics` (Prometheus) on each host's and mgmt's own tailnet node, port 9464 (a grant in your tailnet policy decides who scrapes), and each workload's metrics over OTLP: requests, errors and latency (`http.server.request.duration`), egress per object, invocations by outcome, DO objects and wake-ups, host capacity and usage, mint stages. OpenTelemetry semantic-convention names. [Details](observability.md#metrics-get-metrics) | no dashboard or GraphQL Analytics API: bring Prometheus or a collector | CPU time (workerd reports 0); the Workers Analytics Engine binding | `hostd:TestTelemetry/PrometheusScrape`, `internal/obs:TestPrometheusExposition`, `internal/obs:TestSeriesLimitOverflow`, `e2e/observability:TestObservabilityHermetic` |
 | <a id="traces"></a>Tracing (`traceparent`, Workers Traces) | ⚠️ | — | W3C `traceparent` across caller → Worker → Durable Object (stub `fetch()`) → egress → the next tailnet hop, a span per hop carrying the object and the verified caller, exported over OTLP. [Details](observability.md#traces) | trace context never feeds authorization or audit: the audit trace ID stays twd's own per hop; a public (Funnel) request starts a new trace | spans for DO RPC (`stub.method()`), alarms, cron runs and storage operations | `hostd:TestTelemetry/TraceparentAcrossDOAndEgress`, `hostd:TestTelemetry/OTLPExportFromTheWorkloadNode`, `hostd:TestIngressTraceContext`, `js/packages/tailnet/test/trace.test.js:a DO stub fetch gets a child span, reported when the handler ends`, `e2e/observability:TestObservabilityHermetic` |
 | <a id="otlp-export"></a>Export to OpenTelemetry (Workers Observability destinations, Logpush) | ⚠️ | — | `twd telemetry set --otlp <url> [--header NAME]`: each workload's request records, metrics and spans over OTLP/HTTP (JSON); collector credentials kept in mgmt's custody like secrets. [Details](observability.md#export-to-a-collector-twd-telemetry-set) | by design the collector is a tailnet peer, dialed from each workload's own node, so your tailnet policy decides who may export where; no public destinations | per-workload config and sampling; Logpush to object storage | `hostd:TestTelemetry/OTLPExportFromTheWorkloadNode`, `mgmt:TestTelemetryRelease`, `mgmt:TestTelemetryRoles`, `cmd/twd:TestCLITelemetry`, `e2e/observability:TestObservabilityHermetic` |
-| <a id="wrangler-config"></a>Wrangler config (`wrangler.toml`, `wrangler.json`, `wrangler.jsonc`) | ⚠️ | — | `twd deploy` and `twd dev` read whichever file wrangler would (json, then jsonc, then toml) and use `name`, `main`, `compatibility_date`, `compatibility_flags`, `vars`, `durable_objects`, `migrations`, `triggers.crons`, `queues`, `placement`, `containers` and the build settings; a project without a `twd.jsonc` gets defaults ([wrangler.md](wrangler.md)) | only the app directory is searched (wrangler also searches parents) | the keys twd can't use (`routes`, `workers_dev`, binding sections it has no binding for, `assets`, …) are ignored with one warning line each. [Details](#wrangler-config-details) | `cmd/twd:TestFindWranglerConfigPrecedence`, `cmd/twd:TestReadWranglerTOML`, `cmd/twd:TestWranglerWarnings`, `cmd/twd:TestLoadAppWranglerTOMLOnly`, `cmd/twd:TestCLIDeployWranglerTOML`, `hostd/bundle:TestParseCrons`, `hostd/bundle:TestParseQueues`, `hostd/bundle:TestParseContainers`, `mgmt:TestResolvePlacement` |
+| <a id="wrangler-config"></a>Wrangler config (`wrangler.toml`, `wrangler.json`, `wrangler.jsonc`) | ⚠️ | — | `twd deploy` and `twd dev` read whichever file wrangler would (json, then jsonc, then toml) and use `name`, `main`, `compatibility_date`, `compatibility_flags`, `vars`, `durable_objects`, `kv_namespaces`, `r2_buckets`, `migrations`, `triggers.crons`, `queues`, `placement`, `containers` and the build settings; a project without a `twd.jsonc` gets defaults ([wrangler.md](wrangler.md)) | only the app directory is searched (wrangler also searches parents) | the keys twd can't use (`routes`, `workers_dev`, binding sections it has no binding for, `assets`, …) are ignored with one warning line each. [Details](#wrangler-config-details) | `cmd/twd:TestFindWranglerConfigPrecedence`, `cmd/twd:TestReadWranglerTOML`, `cmd/twd:TestWranglerWarnings`, `cmd/twd:TestLoadAppWranglerTOMLOnly`, `cmd/twd:TestCLIDeployWranglerTOML`, `hostd/bundle:TestParseCrons`, `hostd/bundle:TestParseQueues`, `hostd/bundle:TestParseContainers`, `hostd/bundle:TestParseKVNamespaces`, `mgmt:TestResolvePlacement` |
 | <a id="wrangler-env"></a>Environments (`env.<name>`, `--env`) | ✅ | — | `twd deploy --env <name>` / `twd dev --env <name>` resolve `env.<name>` with wrangler's inheritance (`vars`, `define` and bindings are not inherited, warned per key as wrangler does) | each environment is its own workload, `<name>-<env>` unless the env sets `name`; `twd.jsonc` has no environments | — | `cmd/twd:TestApplyWranglerEnv`, `cmd/twd:TestCLIDeployWranglerTOML` |
 | <a id="wrangler-bundling"></a>Bundling (`define`, `alias`, `rules`, custom builds) | ✅ | — | the built-in esbuild honours `define`, `alias`, `rules` (Text, Data, CompiledWasm, with wrangler's defaults), `minify`, `keep_names`, `jsx_*`, `tsconfig`; `--wrangler` bundles with `wrangler deploy --dry-run --outdir`, and `--from-wrangler-out <dir>` packs such a directory (needed for `build`, `no_bundle`, `find_additional_modules`) | — | CommonJS and Python modules | `internal/esbundle:TestBuildAppWranglerSettings`, `internal/esbundle:TestRuleGlobs`, `cmd/twd:TestBuildWranglerTOMLApp`, `e2e/wrangler:TestTwdDevWrangler/FromWranglerOut`, `e2e/wrangler:TestTwdDevWrangler/WranglerCLI` |
 | <a id="wrangler-api"></a>`wrangler deploy`, `wrangler secret`, `wrangler tail` against twd | 🚫 | — | `twd deploy`, `twd secret`, `twd logs -f` take the same project | twd serves no Cloudflare-compatible API: it would have to track about 50 wrangler endpoints across frequent wrangler releases and bring bearer tokens back, and preflight, placement and image pinning don't fit wrangler's flow ([why](wrangler.md#wrangler-commands-that-call-cloudflare)) | — | — |
@@ -105,6 +109,15 @@ table, in logical position, not at the end. `make lint` runs
 | <a id="agents-sdk"></a>Cloudflare Agents SDK (`agents`) | ⚠️ | — | runs unmodified: routing, state, SQL, schedules, WebSockets and hibernation, MCP client and server, in both object modes. `getCaller` in `onRequest` and `onConnect`. [Details](#cloudflare-agents-sdk-agents-0330) | an agent can't call an MCP server on the same host over the tailnet (`forbidden_destination`) | `subAgent()`, `env.AI`, Workflows, email, browser, codemode; `McpAgent`, `@callable` and `AIChatAgent` not tested | `e2e/sdk:TestCloudflareAgents/RouteAgentRequest`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/sdk:TestCloudflareAgents/AgentAsMCPClient`, `e2e/sdk:TestAgentTemplate` |
 | <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@twd/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`) | — | stdio transport | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet` |
 | <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70165-and-mcp-handler-231) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@twd/mcp` `mcpFetch` | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow` |
+
+## Tooling
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="cli-json"></a>CLI `--json` output | ✅ | — (twd-only) | every command's result is one JSON document matching [`schema/cli.schema.json`](../schema/cli.schema.json); every error is `{code, message, hint, doc_url}` with a code from [errors.md](errors.md); `twd deploy` streams progress events (stderr), `twd dev` and `twd logs` stream NDJSON (stdout). [Details](cli-json.md) | not a Cloudflare surface (wrangler's `--json` covers some commands) | `status`'s `workloads[]`, `image push` and `host vmcheck --container` use Go field names | `cmd/twd:TestCLIJSONContract`, `cmd/twd:TestAgentEval`, `cmd/twd:TestDevJSONEvents`, `cmd/twd:TestRemoteLogs` |
+| <a id="agent-skills"></a>Coding-agent skills (`twd agent`) | ✅ | — (twd-only) | ten skills built into the CLI (scaffold, dev, deploy, debug, policy, secrets, cron, public routes, teardown); `twd agent setup` installs them for Claude Code, Codex, Cursor, Gemini CLI and OpenCode, per user or per project, after showing what it writes; `twd agent remove` undoes it. [Details](agents.md) | not a Cloudflare surface | per-user Cursor rules (Cursor keeps them in its settings) | `cmd/twd:TestSkillCommandsExist`, `cmd/twd:TestSkillsWellFormed`, `cmd/twd:TestAgentEval`, `cmd/twd:TestAgentSetupSnapshot`, `agent:TestPlanBlock`, `agent:TestPlanStaleAndForeign` |
+| <a id="twd-mcp"></a>twd's MCP server (`/mcp`, `twd mcp`) | ✅ | — (twd-only) | mgmt serves `whoami`, `status`, `ls`, `logs`, `audit`, `deploy`, `kill` and `undeploy` as MCP tools next to `/v1`, authorized by the caller's tailnet identity; `deploy`, `kill` and `undeploy` only with a `twd.dev/cap/mcp` grant naming them; `twd mcp` is a stdio bridge for any agent. [Details](agents.md#twds-mcp-server), [ADR-035](design/adr/035-mgmt-mcp.md) | not a Cloudflare surface | tools for secrets, tenants, hosts, expose and telemetry; `deploy` takes a bundle (or redeploys the current one), it doesn't build | `mgmt:TestMCPServer`, `cmd/twd:TestAgentEval` |
+| <a id="docs-for-agents"></a>Docs for agents (`llms.txt`, `twd docs`) | ✅ | — (twd-only) | [`llms.txt`](../llms.txt) indexes the docs; `twd docs search` and `twd docs show <doc>#<anchor>` read the docs built into the CLI, offline | not a Cloudflare surface | — | `docs:TestLLMsTxt`, `docs:TestShowAndSearch` |
 
 ---
 
@@ -133,6 +146,7 @@ Pinned versions (root `package.json`, exact):
 | `@ai-sdk/mcp` | 2.0.93 | HTTP transport only |
 | `mcp-handler` (Vercel) | 2.3.1 | MCP SDK v2, 2026-07-28 spec |
 | `zod` | 4.6.7 | |
+| `@cloudflare/workers-oauth-provider` | 1.2.4 | `OAUTH_KV` on twd's KV binding (`TestOAuthProviderKV`) |
 
 Egress modes (ADR-019 #5, `docs/egress-modes.md`): **facet** (default; the
 object's `fetch()` leaves from its own node) and **plain-DO**
@@ -158,7 +172,7 @@ check below runs in both.
 | `addMcpServer` to an MCP server on the **same host** | ❌ | ❌ | `SameHostMCPRefused` | netd refuses sibling hairpins (`forbidden_destination`, RFC §4.5); the SDK surfaces it as "HTTP 403" (no fetch hook to type it). Same-host object→object calls over the tailnet are not built |
 | `subAgent()` / sub-agent facets | ❌ | ? | `UnsupportedBindings` | inside a facet the Dynamic Worker's `ctx.exports` has no tenant classes ("Sub-agent class … not found in worker exports"). Use `ctx.tailnet.spawn` (own node, narrower caps) |
 | `env.AI` (Workers AI) | ❌ | ❌ | `UnsupportedBindings` | no binding. Use an AI SDK provider pointed at a tailnet LLM gateway (`ai-agent` template, `src/model.ts`) |
-| Workers KV binding (incl. `OAUTH_KV` for workers-oauth-provider) | ❌ | ❌ | `UnsupportedBindings` | no KV binding (DO `ctx.storage.kv` works). For tailnet callers use `getCaller` instead of OAuth |
+| Workers KV binding (incl. `OAUTH_KV` for workers-oauth-provider) | ✅ | ✅ | `TestOAuthProviderKV` | `@cloudflare/workers-oauth-provider` 1.2.4 unmodified: registration, PKCE code flow, refresh, the protected API, `listClients`/`listUserGrants`, replay revocation. See [Workers KV](#workers-kv-details). For tailnet callers `getCaller` is still simpler than OAuth |
 | Workflows (`AgentWorkflow`, `runWorkflow`, `waitForApproval`) | ❌ | ❌ | `UnsupportedBindings` | no Workflows binding/engine (ADR-022: v1) |
 | Email (`cloudflare:email`, `routeAgentEmail`) | ❌ | ❌ | `UnsupportedBindings` | the bundler stubs `cloudflare:email`; constructing `EmailMessage` throws "not supported on twd" |
 | Browser Rendering (`env.BROWSER`, `agents/browser`) | ❌ | ❌ | `UnsupportedBindings` | |
@@ -185,6 +199,52 @@ There are three differences from Cloudflare:
 
 `wrangler secret bulk`, secret versions and the Secrets Store binding are
 not supported.
+
+## Workers KV: details
+
+`kv_namespaces` bindings work as on Cloudflare: workerd's own
+`kvNamespace` binding, so the API and its argument checks are upstream's.
+twd supplies the storage: one platform-owned SQLite Durable Object per
+namespace on the workload's host (local reads), with every write first
+appended to a sealed, lease-fenced journal in mgmt. See [kv.md](kv.md) and
+[ADR-037](design/adr/037-workers-kv.md).
+
+Measured (`hostd:TestWorkersKV`, `hostd:TestWorkersKVMove`,
+`e2e/vm:TestE2EVMKV`, `e2e/sdk:TestOAuthProviderKV`, macOS arm64):
+
+- every `get` type, `getWithMetadata`, bulk `get` (100 keys max, `text` or
+  `json`, with metadata), `put` with `expiration` / `expirationTtl` /
+  `metadata` / a stream, `delete`, and `list` with `prefix`, `limit` and
+  `cursor`, from the Worker and from a facet;
+- Cloudflare's errors and limits: 512-byte keys (`414`), 1024-byte
+  metadata, TTL at least 60 s, `limit` at most 1000;
+- expiry: a key is gone from `get` and `list` once it expires, and the
+  namespace's alarm journals its delete;
+- a hostd restart, and a lease move to a second host (whose workerd had no
+  DO storage), keep every key; moving back catches up on the writes made
+  meanwhile;
+- with mgmt's journal unreachable, a restarted host still serves reads
+  from its local copy, and writes fail with `503` without landing;
+- the microVM tier (Virtualization.framework): first `put` 83 to 222 ms
+  over two runs (the namespace object starting, plus a journal append from
+  the guest); 20 sequential `get`s took 13 to 14 ms end to end over the
+  tailnet.
+
+How it differs from Cloudflare:
+
+- **Scope.** A namespace belongs to one workload, named by its `id` (or the
+  binding). Another workload's namespace with the same `id` is a different
+  namespace. Cloudflare shares namespaces across an account.
+- **Consistency.** A workload reads its own writes. Writes by another
+  writer (a replica, `twd kv key put`) are seen within 60 s, or the read's
+  `cacheTtl`. Writes are linearizable (the journal orders them).
+- **Availability.** A write needs mgmt; reads keep working from the local
+  copy when mgmt is down.
+- **Values** are at most 2 MiB − 4 KiB (Cloudflare: 25 MiB).
+- `cacheStatus` is always `null`.
+
+Not supported: sharing a namespace between workloads, larger values,
+`wrangler kv bulk`, and `--remote` / `preview_id` (ignored).
 
 ## Cron triggers
 
@@ -333,6 +393,17 @@ unless `twd.jsonc` lists `public.routes` ([public-ingress.md](public-ingress.md)
   hostd keeps `namespace_conflict` as a defensive assertion only.
 - **Same-host MCP**: an agent and the MCP server it calls must be on
   different hosts (or the call must go through the platform, not built).
+- **Class-instance default exports** (fixed): `export default new
+  OAuthProvider(...)` keeps `fetch()` on the prototype, and twd's runtime
+  copied only own properties, so the Worker had no fetch handler. It now
+  finds the handler methods (`fetch`, `scheduled`, `queue`, …) along the
+  prototype chain (`@twd/tailnet` runtime `wrapHandler`).
+- **`request.url` is `http://`**: twd hands a Worker the URL it was
+  reached at, over plain HTTP inside the tailnet (public routes set
+  `X-Forwarded-Proto: https`). Code that compares `request.url`'s origin
+  with an HTTPS identifier, such as workers-oauth-provider's
+  `resourceMetadata.resource` (the token audience), must present the
+  canonical origin. `e2e/sdk/apps/oauthkv` shows how.
 
 ## Node process tier (M9)
 

@@ -1,6 +1,6 @@
 package hostd
 
-// Queues (ADR-queues), host side.
+// Queues (ADR-039), host side.
 //
 // Producers: the platform's QueueProducer (gen/js/queue.js) reaches mgmt's
 // queues only through hostd's local host API:

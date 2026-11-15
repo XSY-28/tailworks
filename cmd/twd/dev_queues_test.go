@@ -19,7 +19,7 @@ import (
 )
 
 // TestDevQueues: `twd dev` runs a Worker's queue producers and consumers
-// locally (ADR-queues): a send through env.JOBS on the dev port reaches
+// locally (ADR-039): a send through env.JOBS on the dev port reaches
 // the app's own queue() handler, through the dev's fake mgmt.
 func TestDevQueues(t *testing.T) {
 	if testing.Short() {

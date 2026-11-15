@@ -1,6 +1,6 @@
 package mgmt
 
-// Queues (ADR-queues): a tenant's Cloudflare-style queues, brokered here.
+// Queues (ADR-039): a tenant's Cloudflare-style queues, brokered here.
 // Producers' hosts send, push consumers' hosts claim batches with a
 // visibility timeout and settle them, and admins (operators and HTTP pull
 // consumers) do the same plus create, inspect, purge and delete.

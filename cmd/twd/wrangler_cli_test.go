@@ -90,7 +90,7 @@ func TestCLIDeployWranglerTOML(t *testing.T) {
 		t.Fatalf("deploy without tagOwners should fail preflight naming the default tag: %v\n%s\n%s", err, so, se)
 	}
 	for _, w := range []string{
-		"› wrangler.toml: kv_namespaces: no such binding on twd: env.CACHE will be undefined",
+		"› wrangler.toml: vectorize: no such binding on twd: env.CACHE will be undefined",
 		"› wrangler.toml: routes: ignored",
 		"› wrangler.toml: workers_dev: ignored",
 		"› no twd.jsonc: using defaults (workload node tag:twd-wl-wtoml-noowner;",

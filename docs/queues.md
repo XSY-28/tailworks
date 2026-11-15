@@ -4,7 +4,7 @@ twd runs Cloudflare-style Queues. A Worker sends messages with
 `env.QUEUE.send()`, and a Worker's `queue()` handler consumes them in
 batches, with retries and a dead-letter queue. The producer and the consumer
 can be different workloads on different hosts. The design is
-[ADR-queues](design/adr/queues.md).
+[ADR-039](design/adr/039-queues.md).
 
 ```jsonc
 // wrangler.jsonc

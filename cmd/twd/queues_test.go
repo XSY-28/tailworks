@@ -34,7 +34,7 @@ func TestCLIQueues(t *testing.T) {
 	}
 	out, err = e.call(t, cmdQueues, "ls", "--json")
 	var lr queuesResult
-	if err != nil || json.Unmarshal([]byte(out), &lr) != nil || len(lr.Queues) != 2 || lr.Queues[0].Name != "jobs" || lr.Queues[0].Backlog != 2 || lr.Queues[1].Delayed != 1 {
+	if err != nil || json.Unmarshal([]byte(out), &lr) != nil || lr.Queues == nil || len(*lr.Queues) != 2 || (*lr.Queues)[0].Name != "jobs" || (*lr.Queues)[0].Backlog != 2 || (*lr.Queues)[1].Delayed != 1 {
 		t.Fatalf("ls --json: %v\n%s", err, out)
 	}
 	out, err = e.call(t, cmdQueues, "messages", "jobs")

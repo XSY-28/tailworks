@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Queues (ADR-queues): one row per tenant queue, and its messages. Messages
+// Queues (ADR-039): one row per tenant queue, and its messages. Messages
 // are keyed by the queue's incarnation (random per creation), so deleting a
 // queue and creating it again never mixes their messages. Bodies are
 // sealed by the caller (queues.go); this file never sees plaintext.

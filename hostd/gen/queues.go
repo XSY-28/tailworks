@@ -10,7 +10,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/queuecfg"
 )
 
-// Queues (ADR-queues): every producer binding becomes workerd's own
+// Queues (ADR-039): every producer binding becomes workerd's own
 // `queue` binding in the tenant worker, targeting the platform's
 // QueueProducer entrypoint (js/queue.js) with props {queue}; facets get a
 // QueueFacetProxy that forwards to a platform-side native binding of the

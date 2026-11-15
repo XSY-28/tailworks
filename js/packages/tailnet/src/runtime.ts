@@ -9,6 +9,7 @@
 
 import { TailnetError, fromResponse, isTailnetError } from "./errors.js";
 import { createContainer, defineContainer, dispatchIntercept, notSupportedPreview, type ContainerSpec } from "./container.js";
+import { wrapStores } from "./d1.js";
 import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
 
 // Egress fetch() carries the running handler's trace context
@@ -441,6 +442,7 @@ function guardEnv(env: any, bindings: BindingMap, mode: GuardMode, adm: Admitter
   if (!env || typeof env !== "object") return env;
   const out: Record<string, unknown> = { ...env };
   delete out.__TWD;
+  wrapStores(out); // a facet's storage bindings (D1)
   for (const [k, cls] of Object.entries(bindings)) {
     if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
   }
@@ -537,6 +539,18 @@ function queueBatch(batch: any): { batch: any; ticket?: string } {
 }
 
 /** wrapHandler installs ctx.tailnet (workload identity) on the default export. */
+// HANDLER_METHODS are the Workers handler entry points. A default export
+// that is a class instance (`export default new OAuthProvider(...)`, as
+// @cloudflare/workers-oauth-provider documents) has them on its prototype,
+// not as own properties, so they are looked up along the prototype chain.
+const HANDLER_METHODS = ["fetch", "scheduled", "queue", "tail", "tailStream", "trace", "email", "test", "connect"];
+
+function handlerKeys(H: any): string[] {
+  const keys = new Set(Object.keys(H));
+  for (const k of HANDLER_METHODS) if (typeof H[k] === "function") keys.add(k);
+  return [...keys];
+}
+
 export function wrapHandler(H: any, bindings: BindingMap) {
   if (!H) {
     return {
@@ -592,7 +606,7 @@ export function wrapHandler(H: any, bindings: BindingMap) {
     return { [H.name || "Default"]: C }[H.name || "Default"];
   }
   const out: Record<string, unknown> = { ...H };
-  for (const k of Object.keys(H)) {
+  for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
     out[k] = function (this: unknown, a: unknown, env: any, ctx: any) {
       const tw: TailnetApiStub | undefined = env?.__TWD;

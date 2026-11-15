@@ -1,5 +1,5 @@
 // twd Queues (TRUSTED; runs in the platform worker, never in a tenant
-// isolate). ADR-queues.
+// isolate). ADR-039.
 //
 // Producer: a tenant's env.<Binding> is workerd's own `queue` binding,
 // targeting QueueProducer here with props {queue} that tenant code can't

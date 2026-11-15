@@ -29,7 +29,7 @@ type queueRec struct {
 }
 
 // TestQueues runs Queues end to end on real workerd with the fake mgmt as
-// the broker (ADR-queues): workerd's own queue binding (send, sendBatch,
+// the broker (ADR-039): workerd's own queue binding (send, sendBatch,
 // metrics, delaySeconds, delivery_delay, content types, from a facet too)
 // through hostd to mgmt, and hostd's push consumer running the default
 // export's queue() with workerd's MessageBatch: batching by size and by

@@ -17,7 +17,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// Queues (ADR-queues), in memory: the same claim / settle / dead-letter
+// Queues (ADR-039), in memory: the same claim / settle / dead-letter
 // semantics as twd-mgmt (mgmt/queues.go), fenced by the acting workload's
 // lease. Not sealed (nothing here is persisted), and the deployment's
 // declarations aren't checked (hostd checks them before it calls).

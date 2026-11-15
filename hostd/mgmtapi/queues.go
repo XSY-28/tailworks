@@ -6,7 +6,7 @@ import (
 	v1 "github.com/rosskukulinski/twd/hostd/mgmtapi/v1"
 )
 
-// Queues (ADR-queues): a workload's host sends for its producer bindings
+// Queues (ADR-039): a workload's host sends for its producer bindings
 // and claims and settles for its consumers, as the lease holder at epoch.
 
 // QueueMessageIn is one message to send.
