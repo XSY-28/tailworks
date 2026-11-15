@@ -478,14 +478,14 @@ node: `twd up … --mgmt-hostname twd-mgmt` (the join is interactive unless
 up` with no mode flag reuses it); switch with `twd down --purge` and a
 fresh `--state-dir`.
 
-### 5. Day 2, stop and uninstall
+### 4. Day 2, stop and uninstall
 
 `twd up` starts `twd-mgmt` (SQLite, local key custody) and `twd-hostd`
 (workerd supervisor) under a detached supervisor; state and logs are in
 `~/.twd` (`--state-dir` to use another directory). `twd deploy` preflights
 the grants your app declares (`tailnet.connects`), bundles it, and waits
-until the workload node is on your tailnet:
-`http://<prefix>wl-support.<tailnet>/`. Day 2: `twd ls`, `twd logs
+until the workload node is on your tailnet, then prints its address:
+`http://twd-support-<id>.<tailnet>.ts.net/`. Day 2: `twd ls`, `twd logs
 support`, `twd kill <object> --cascade`, `twd audit <object>`, `twd status`.
 
 #### A second tenant (another tailnet) on the same Mac
@@ -510,6 +510,8 @@ twd down --purge           # kill every object and delete its devices, then stop
 ```
 
 `--uninstall` without `--purge` keeps your state (`twd.json`, logs, data).
+Installed with `get.sh`? It doesn't keep the release directory; see
+[Uninstall](#uninstall) for the full list.
 
 ### Troubleshooting
 
@@ -564,6 +566,72 @@ twd down --purge           # kill every object and delete its devices, then stop
   From a linked machine, `host_unavailable` means mgmt could not reach the
   workload's host on its push port (the policy grant `tag:twd-mgmt` →
   `tag:twd-host` `tcp:7474`, or the host is down).
+
+## Upgrade
+
+`sh get.sh` (or `./install.sh` from a newer release directory) installs
+over the old version. It swaps `~/.twd/bin` and `~/.twd/share` and leaves
+your state alone: `twd.json`, `mgmt/`, `hostd/` and `logs/`. A running twd
+keeps the old binaries until it restarts:
+
+```sh
+twd down                     # without --purge: objects, nodes and data stay
+sh get.sh                    # or: sh get.sh v<version>
+twd up …                     # the same twd up command you used before
+twd version && twd doctor
+```
+
+With `--service` on Linux, `systemctl --user restart twd` does the restart.
+mgmt updates its database schema when it starts. Deployed workloads come
+back on their own, with the same nodes and storage, as after any restart.
+Take a [backup](#back-up-and-restore) first if you may want to go back to
+the old version.
+
+## Back up and restore
+
+Everything twd keeps is in its state dir (`~/.twd`, or `--state-dir`):
+
+- `mgmt/`: the control plane. `mgmt.db` (SQLite) holds tenants,
+  deployments, objects, the audit trail, queues and the journals of KV,
+  D1 and R2 metadata. `custody/` holds the sealing key and your
+  [secrets](secrets.md), and `tsnet/` holds mgmt's node state.
+- `hostd/`: each workload's Durable Object storage
+  (`hostd/tenants/<tenant>/workloads/<workload>/`) and, with the default
+  `fs` backend, R2 object bytes ([r2.md](r2.md)).
+- `twd.json`: how `twd up` was run (mint mode, credential file path).
+
+To back up, stop twd so SQLite is consistent, copy the directory, and
+start it again:
+
+```sh
+twd down
+tar -czf twd-state-$(date +%F).tgz -C ~ .twd
+twd up …
+```
+
+The copy contains node keys and the custody key: store it like a secret.
+To restore, `twd down`, put the directory back in the same place, and run
+`twd up`. Never run two copies of the same state at once: they share node
+identities. For one database, `twd d1 export <db> --output <file>` works
+while twd runs ([d1.md](d1.md)). Your OAuth client file
+(`~/.config/twd/oauth.env`) is not in the state dir.
+
+## Uninstall
+
+```sh
+twd agent remove                               # if you installed the coding-agent skills
+twd down --purge --service                     # kill every object, delete its device, stop, remove the service
+sudo ~/.twd/bin/twd host setup --undo          # Linux, only if you ran host setup --microvm
+rm -rf ~/.twd                                  # or: <release dir>/install.sh --uninstall --purge
+```
+
+`twd down --purge` deletes the objects' devices (and revokes unused warm
+keys), but not twd's own nodes: remove `twd-mgmt` (and `twd-issuer` or
+`twd-host-<id>` if you had them) in the admin console › Machines. Then, if
+you're done with twd on this tailnet, revoke the OAuth client (or delete
+the trust credentials), delete `~/.config/twd/oauth.env`, remove the twd
+tags and grants from your tailnet policy, and remove the `PATH` line from
+your shell profile.
 
 ## Tuning: how fast a new object's own node comes up
 

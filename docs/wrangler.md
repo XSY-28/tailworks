@@ -15,6 +15,28 @@ twd deploy --env staging
 What twd does not use is `wrangler deploy` itself, or the other wrangler
 commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cloudflare) for why.
 
+## What's different from Cloudflare, in short
+
+- **No Cloudflare account, no edge.** Your code runs on your own machines.
+  A workload's address is a MagicDNS name on your tailnet, not
+  `*.workers.dev` or a route on your zone.
+- **Private by default.** Only devices on your tailnet can call a workload,
+  and only if your tailnet policy lets them. Public paths are opt-in, over
+  Funnel ([public-ingress.md](public-ingress.md)).
+- **Callers are tailnet identities.** `getCaller` gives the caller's login
+  or tags from WireGuard. There are no API tokens or Access JWTs to check.
+- **Outbound `fetch()` reaches tailnet peers only.** Calls to the internet
+  are refused (`peer_not_visible`); put what the Worker needs on your
+  tailnet ([COMPAT.md](COMPAT.md#fetch)).
+- **Each Durable Object is a tailnet node** with its own name, tags and
+  grants. Its storage lives on one host's disk, with no replication.
+- **Same CLI shapes, different binary.** `twd dev`, `twd deploy`,
+  `twd secret`, `twd kv`, `twd d1`, `twd queues`, `twd r2` and `twd logs`
+  stand in for their wrangler commands. Secrets apply on the next deploy.
+- **Not there:** Workers AI, Vectorize, Hyperdrive, Browser Rendering,
+  Email, service bindings, static assets, TCP `connect()`. The full list,
+  with tests: [COMPAT.md](COMPAT.md).
+
 ## Config files
 
 twd reads the same files as wrangler 4, in the same order. The first one
