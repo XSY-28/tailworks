@@ -145,6 +145,7 @@ func cmdUp(args []string) error {
 	yes := f.Bool("yes", false, "non-interactive: don't ask for confirmation")
 	apply := f.Bool("policy-apply", false, "apikey mode: apply the policy snippet (validated first, written with If-Match); default: print it")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
+	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain)")
 	tsapiURL := f.String("tsapi-url", "", "Tailscale API base URL (testing)")
 	hostID := f.String("host-id", defaultHostID(), "this host's ID")
 	prefix := f.String("hostname-prefix", "twd-", "prefix for every object node hostname")
@@ -192,7 +193,11 @@ func cmdUp(args []string) error {
 		modes = append(modes, "oauth")
 	}
 	if *keyFile != "" {
-		modes = append(modes, "apikey")
+		modes = append(modes, mintModeFor(*profileF))
+	}
+	if *profileF == controlHeadscale && (*oauthFile != "" || *wifF || *wifID != "" || *wifLife != "") {
+		return fail("profile_unsupported", "the Headscale profile mints with a Headscale API key: OAuth clients and WIF are Tailscale features").
+			withFix("twd up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>")
 	}
 	if *wifF || *wifID != "" || *wifLife != "" {
 		modes = append(modes, "wif")
@@ -212,8 +217,11 @@ func cmdUp(args []string) error {
 				withFix("twd up   (keeps mode "+was+")", "or twd down --purge, remove "+s.Dir+", then twd up with the new mode")
 		}
 		mode = was
+		if mode == mgmt.MintHeadscale && *control == prodControl {
+			*control = s.Cfg.ControlURL // the Headscale server this state dir was set up with
+		}
 		switch mode {
-		case "apikey":
+		case "apikey", mgmt.MintHeadscale:
 			if *keyFile == "" {
 				*keyFile = s.Cfg.APIKeyFile
 			}
@@ -233,7 +241,16 @@ func cmdUp(args []string) error {
 	if mode == "" {
 		return mintModeRequired()
 	}
-	apikeyMode, oauthMode, wifMode := mode == "apikey", mode == "oauth", mode == "wif"
+	// The Headscale profile is apikey mode with another API (ADR-015).
+	hsMode := mode == mgmt.MintHeadscale
+	apikeyMode, oauthMode, wifMode := mode == "apikey" || hsMode, mode == "oauth", mode == "wif"
+	profile := controlTailscale
+	if hsMode {
+		profile = controlHeadscale
+		if err := checkControlProfile(profile, *control, "up"); err != nil {
+			return err
+		}
+	}
 	if apikeyMode && *tailnet == "" {
 		return fail("tailnet_required", "twd up --api-key-file (mint mode apikey) needs --tailnet",
 			"an API key does not name its tailnet, and twd never uses this machine's tailscaled or its identity.").
@@ -292,10 +309,26 @@ func cmdUp(args []string) error {
 	// apikey / oauth: the credential must work for this tailnet; read the
 	// policy (never written unless --policy-apply in apikey mode).
 	var api *tsapi.Client
+	var capi controlAPI // mints mgmt's node key; reads/applies the policy
+	hsApplied := false  // headscale: the policy snippet was applied up front
 	var pol []byte
 	policyReadable := false
 	absKey := ""
-	if apikeyMode {
+	if hsMode {
+		absKey, _ = filepath.Abs(*keyFile)
+		ps := time.Now()
+		hc, p, err := headscaleClient(ctx, absKey, *control, *tailnet)
+		if err != nil {
+			return err
+		}
+		capi, pol, policyReadable = hc, p, true
+		timings["api_check"] = ms(time.Since(ps))
+		// Headscale refuses to register a node whose tags its policy
+		// doesn't define, so the snippet goes in before mgmt's key is used.
+		if pol, hsApplied, err = headscaleUpPolicy(ctx, hc, pol, *apply); err != nil {
+			return err
+		}
+	} else if apikeyMode {
 		absKey, _ = filepath.Abs(*keyFile)
 		apiKey, err := tsapi.LoadSecretEnvFile(absKey, "TS_API_KEY")
 		if err != nil {
@@ -306,6 +339,7 @@ func cmdUp(args []string) error {
 			return fail("bad_request", "can't read TS_API_KEY from "+absKey, err.Error())
 		}
 		api = &tsapi.Client{Tailnet: *tailnet, APIKey: apiKey, BaseURL: *tsapiURL}
+		capi = api
 		ps := time.Now()
 		pol, _, err = api.GetPolicyHuJSON(ctx)
 		if err != nil {
@@ -330,6 +364,7 @@ func cmdUp(args []string) error {
 			tn = "-" // the token's own tailnet
 		}
 		api = &tsapi.Client{Tailnet: tn, Tokens: src, BaseURL: *tsapiURL}
+		capi = api
 		needed := tagOwnersNeeded()
 		if singleLayout {
 			needed = policy.Snippet{TagOwners: map[string][]string{mgmt.MgmtTag: {"tag:twd"}}}
@@ -406,8 +441,8 @@ func cmdUp(args []string) error {
 		if firstJoin && authKey == "" && (apikeyMode || oauthMode) {
 			// The credential mints mgmt's node key (tag:twd-mgmt): no
 			// browser login. The key is used in-process and never stored.
-			if authKey, err = mintNodeKey(ctx, api, mgmt.MgmtTag, "twd mgmt node "+mgmtHostname); err != nil {
-				if apikeyMode {
+			if authKey, err = mintNodeKey(ctx, capi, mgmt.MgmtTag, "twd mgmt node "+mgmtHostname); err != nil {
+				if apikeyMode && !hsMode {
 					if ce, ok := err.(*cliErr); ok && ce.Code == "bootstrap_failed" {
 						ce.Fix = append(ce.Fix, "the policy needs tagOwners \""+mgmt.MgmtTag+"\": [\"autogroup:admin\"] (twd up --policy-apply adds it), and the key's owner must be an admin")
 					}
@@ -438,7 +473,7 @@ func cmdUp(args []string) error {
 		if err := os.MkdirAll(s.mgmtTsnetDir(), 0o700); err != nil {
 			return err
 		}
-		node, err := joinMgmtNode(ctx, joinOpts{Dir: s.mgmtTsnetDir(), Hostname: mgmtHostname, ControlURL: *control, Tags: []string{mgmt.MgmtTag},
+		node, err := joinMgmtNode(ctx, joinOpts{Dir: s.mgmtTsnetDir(), Hostname: mgmtHostname, ControlURL: *control, Tags: advertisedTags(hsMode, mgmt.MgmtTag),
 			AuthKey: authKey, Timeout: *loginTO, Out: out})
 		if err != nil {
 			return err
@@ -532,7 +567,7 @@ func cmdUp(args []string) error {
 	}
 	switch {
 	case apikeyMode:
-		s.Cfg.MintMode, s.Cfg.APIKeyFile = "apikey", absKey
+		s.Cfg.MintMode, s.Cfg.APIKeyFile = mintModeFor(profile), absKey
 	case oauthMode:
 		s.Cfg.MintMode, s.Cfg.OAuthClientFile, s.Cfg.OAuthClientID = "oauth", absOAuth, oauthCreds.ClientID
 	default:
@@ -595,7 +630,7 @@ func cmdUp(args []string) error {
 	}
 	switch {
 	case apikeyMode || oauthMode:
-		want := map[string]any{"mintMode": "apikey", "apiKeyFile": absKey}
+		want := map[string]any{"mintMode": mintModeFor(profile), "apiKeyFile": absKey}
 		if oauthMode {
 			want = map[string]any{"mintMode": "oauth", "oauthClientID": oauthCreds.ClientID, "oauthClientFile": absOAuth}
 		}
@@ -613,6 +648,9 @@ func cmdUp(args []string) error {
 			// Single-tenant twd up: the operator is the tenant, so public
 			// ingress is allowed (ADR-029 D1); twd.jsonc "public" opts in.
 			body := map[string]any{"tenantID": tid, "tailnet": *tailnet, "controlURL": *control, "publicIngress": mgmt.PublicAllow}
+			if hsMode {
+				body["publicIngress"] = mgmt.PublicDeny // no Funnel on Headscale
+			}
 			maps.Copy(body, want)
 			if err := s.mgmt().Do(ctx, "POST", "/v1/tenants", body, &tr); err != nil {
 				return err
@@ -624,7 +662,7 @@ func cmdUp(args []string) error {
 				// A regenerated client (e.g. one with devices:core added).
 				maps.Copy(patch, want)
 			}
-			if cur.PublicIngress == "" {
+			if cur.PublicIngress == "" && !hsMode {
 				// A tenant from before ADR-029: allow public ingress like a
 				// fresh twd up (an explicit "deny" is kept).
 				patch["publicIngress"] = mgmt.PublicAllow
@@ -687,7 +725,8 @@ func cmdUp(args []string) error {
 	timings["host_ready"] = ms(time.Since(t0))
 
 	if apikeyMode {
-		miss, err := policy.Missing(pol, baseSnippet())
+		snip, popts := profileSnippet(profile)
+		miss, err := policy.Missing(pol, snip)
 		if err != nil {
 			return err
 		}
@@ -695,13 +734,14 @@ func cmdUp(args []string) error {
 		if !res.PolicyOK {
 			res.PolicyDiff = miss.HuJSON()
 			if *apply {
-				ar, err := policy.Apply(ctx, api, baseSnippet())
+				ar, err := policy.ApplyWith(ctx, capi, snip, popts)
 				if err != nil {
-					return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in the admin console:", res.PolicyDiff)
+					return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in "+policyHome(profile)+":", res.PolicyDiff)
 				}
 				res.Applied, res.PolicyOK = ar.Changed, true
 			}
 		}
+		res.Applied = res.Applied || hsApplied
 	} else if oauthMode {
 		// Tag ownership is proven (mgmt's and the host's keys minted); the
 		// grants are checked when the client can read the policy.
@@ -729,7 +769,9 @@ func cmdUp(args []string) error {
 	}
 	timings["total"] = ms(time.Since(t0))
 	emit(f, res, func() {
-		if apikeyMode {
+		if hsMode {
+			fmt.Printf("twd up · all-in-one on this machine (%s) · Headscale %s, base domain %s (API key, mint mode headscale)\n", layoutLabel(single), *control, *tailnet)
+		} else if apikeyMode {
 			fmt.Printf("twd up · all-in-one on this machine (%s) · tailnet: %s (API key, mint mode apikey)\n", layoutLabel(single), *tailnet)
 		} else if oauthMode {
 			fmt.Printf("twd up · all-in-one on this machine (%s) · tailnet: %s (OAuth client %s, mint mode oauth: no browser, no Funnel)\n", layoutLabel(single), *tailnet, oauthCreds.ClientID)
@@ -797,11 +839,14 @@ func cmdUp(args []string) error {
 			if oauthMode {
 				fmt.Printf("› policy   missing (add in the admin console › Access controls):\n")
 			} else {
-				fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in the admin console):\n")
+				fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in %s):\n", policyHome(profile))
 			}
 			for _, l := range strings.Split(strings.TrimSpace(res.PolicyDiff), "\n") {
 				fmt.Printf("    %s\n", l)
 			}
+		}
+		if hsMode {
+			fmt.Printf("› profile  %s\n", headscaleProfileNote)
 		}
 		if res.Service != "" {
 			fmt.Printf("✓ service  %s %s (starts at login; `twd down --service` removes it)\n", serviceKind(), res.Service)
@@ -995,7 +1040,10 @@ func cmdSupervise(args []string) error {
 	if s.Cfg.MgmtHostname != "" {
 		// mgmt's own tailnet node (joined by twd up): the API over WhoIs
 		// (never Funnel). In keyless mode the WIF issuer runs on its own node.
-		margs = append(margs, "-tsnet-hostname", s.Cfg.MgmtHostname, "-tsnet-control-url", s.Cfg.ControlURL, "-tsnet-tags", mgmt.MgmtTag)
+		margs = append(margs, "-tsnet-hostname", s.Cfg.MgmtHostname, "-tsnet-control-url", s.Cfg.ControlURL)
+		if !s.Cfg.headscale() {
+			margs = append(margs, "-tsnet-tags", mgmt.MgmtTag)
+		}
 		if s.Cfg.keyless() && s.Cfg.IssuerURL != "" && s.Cfg.IssuerHostname != "" {
 			// The issuer on its own node; mgmt's node never serves Funnel.
 			margs = append(margs, "-funnel", "-issuer-url", s.Cfg.IssuerURL,
@@ -1028,6 +1076,9 @@ func cmdSupervise(args []string) error {
 		}
 		hargs = append(hargs, "-mgmt", mgmtURL, "-tsnet-control-url", s.Cfg.ControlURL, "-tsnet-dir", s.hostTsnetDir(),
 			"-join-token-file", s.hostJoinFile(), "-push-port", strconv.Itoa(port))
+		if s.Cfg.headscale() {
+			hargs = append(hargs, "-tsnet-key-tags-only")
+		}
 	}
 	if s.Cfg.Ephemeral {
 		hargs = append(hargs, "-ephemeral")
@@ -1144,7 +1195,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	defer stop()
 	delDelay, _ := time.ParseDuration(s.Cfg.DeviceDeleteDelay)
 	mo := mgmtd.Options{StateDir: filepath.Join(s.Dir, "mgmt"), DeviceDeleteDelay: delDelay, Version: version, TSAPIURL: s.Cfg.TSAPIURL,
-		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: []string{mgmt.MgmtTag}, TSNetTLS: true,
+		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: advertisedTags(s.Cfg.headscale(), mgmt.MgmtTag), TSNetTLS: true,
 		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog,
 		MetricsPort: obs.DefaultMetricsPort}
 	if mo.TSAPIURL == "" {

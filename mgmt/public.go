@@ -64,6 +64,9 @@ func checkPublicDeploy(t Tenant, workload string, pub *DeploymentPublic) error {
 	if publicReservedName(workload) {
 		return errf(400, "bad_request", "workload name %q is reserved for twd's own nodes and cannot be public", workload)
 	}
+	if t.Headscale() {
+		return errHeadscaleNoPublic()
+	}
 	if !t.PublicAllowed() {
 		return errPublicNotAllowed(t, workload)
 	}
