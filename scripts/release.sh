@@ -31,6 +31,13 @@ cd "$ROOT"
 export GOTOOLCHAIN=local
 WORKERD_VERSION=$(node -p 'require("./package-lock.json").packages["node_modules/workerd"].version')
 mkdir -p "$DIST" "$CACHE"
+# Every binary carries the release version and commit (internal/version).
+COMMIT=$(git rev-parse HEAD)
+VPKG=github.com/rosskukulinski/twd/internal/version
+VLDFLAGS="-X $VPKG.Version=$VERSION -X $VPKG.Commit=$COMMIT"
+# The newest mgmt schema migration this release applies (ADR-upgrades-and-releases §3).
+PROTOCOLS=$(go run ./internal/version/protocols)
+SCHEMA=$(ls mgmt/migrations/*.sql 2>/dev/null | sed 's|.*/||; s|\..*||' | LC_ALL=C sort -u | tail -n 1)
 
 # The JS packages must be built (dist/ is gitignored).
 for p in tailnet mcp; do
@@ -66,13 +73,13 @@ for t in $TARGETS; do
 	# Go binaries
 	cmds="./cmd/twd ./cmd/twd-mgmt ./cmd/twd-hostd ./cmd/twd-netd"
 	[ "$os" = linux ] && cmds="$cmds ./cmd/twd-vmhelper"
-	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
+	CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w $VLDFLAGS" \
 		-o "$st/bin/" $cmds
 	# twd-vz (darwin): the microVM tier's per-VM VMM links Virtualization.framework,
 	# so it is the one cgo binary; built on (and for) this Mac's arch only.
 	if [ "$os" = darwin ]; then
 		if [ "$(uname -s)" = Darwin ] && [ "$(go env GOARCH)" = "$arch" ]; then
-			CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "$st/bin/twd-vz" ./cmd/twd-vz
+			CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags "-s -w $VLDFLAGS" -o "$st/bin/twd-vz" ./cmd/twd-vz
 		else
 			echo "release: $os-$arch: NO twd-vz (needs cgo on a $arch Mac): no microVM tier"
 		fi
@@ -148,7 +155,7 @@ for t in $TARGETS; do
 	cp docs/INSTALL.md "$st/INSTALL.md"
 	printf '%s\n' "$VERSION" >"$st/VERSION"
 	cat >"$st/share/twd/release.json" <<EOF
-{"version":"$VERSION","os":"$os","arch":"$arch","workerd":"$WORKERD_VERSION","esbuild":"built into twd","sandbox":"$( [ "$os" = darwin ] && echo seatbelt || echo landlock )","microvm":$microvm,"commit":"$(git rev-parse HEAD)","built":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+{"version":"$VERSION","os":"$os","arch":"$arch","workerd":"$WORKERD_VERSION","esbuild":"built into twd","sandbox":"$( [ "$os" = darwin ] && echo seatbelt || echo landlock )","microvm":$microvm,"commit":"$COMMIT","schema":"$SCHEMA","protocols":$PROTOCOLS,"built":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 EOF
 
 	if [ "$os" = darwin ]; then

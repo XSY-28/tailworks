@@ -18,6 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/rosskukulinski/twd/internal/version"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -34,6 +35,10 @@ import (
 )
 
 func main() {
+	if version.Asked(os.Args) {
+		fmt.Println(version.String("twd-mgmt"))
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "twd-mgmt:", err)
 		os.Exit(1)
@@ -59,7 +64,7 @@ func run() error {
 		issAuthFile  = flag.String("issuer-tsnet-authkey-file", "", "WIF: TS_AUTHKEY=… for the issuer node's first join (default: the state must already be logged in)")
 		tsHostname   = flag.String("tsnet-hostname", "", "serve the API on the operator tailnet as this tsnet node (e.g. twd-mgmt); required unless -local-dev")
 		noLoopback   = flag.Bool("no-loopback", false, "don't publish the node's loopback proxy for the local twd CLI (<state-dir>/loopback.json)")
-		version      = flag.String("version", "", "reported by GET /v1/status")
+		versionFlag  = flag.String("version", "", "deprecated: the version is built in (internal/version); a non-empty value overrides it for GET /v1/status")
 		tsControl    = flag.String("tsnet-control-url", "", "operator tailnet control URL (required with -tsnet-hostname)")
 		tsAuthFile   = flag.String("tsnet-authkey-file", "", "file with the operator-tailnet auth key for the first join (TS_AUTHKEY=…); without it the node state must already be logged in (twd up does the interactive login)")
 		tsTags       = flag.String("tsnet-tags", mgmt.MgmtTag, "comma-separated tags the mgmt node advertises")
@@ -102,7 +107,7 @@ func run() error {
 		IssuerURL: *issuerURL, IssuerListen: *issuerListen, Funnel: *funnel,
 		IssuerTSNetHostname: *issHostname, IssuerTSNetDir: *issDir, IssuerTSNetAuthKeyFile: *issAuthFile,
 		TSNetHostname: *tsHostname, TSNetControlURL: *tsControl, TSNetAuthKeyFile: *tsAuthFile, TSNetService: *tsService, TSNetTLS: *tsTLS,
-		NoLoopback: *noLoopback, Version: *version, Custody: *custodyKind, SetecURL: *setecURL,
+		NoLoopback: *noLoopback, Version: mgmtVersion(*versionFlag), Custody: *custodyKind, SetecURL: *setecURL,
 		ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL,
 		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log,
 		MetricsPort: *metricsPort}
@@ -127,4 +132,13 @@ func run() error {
 		log.Error("listener failed", "err", err)
 	}
 	return rt.Close()
+}
+
+// mgmtVersion is the version mgmt reports: the built-in one, unless the
+// deprecated -version flag overrides it (older `twd up` passes it).
+func mgmtVersion(flagV string) string {
+	if flagV != "" && version.IsDev(version.Version) {
+		return flagV
+	}
+	return version.Version
 }

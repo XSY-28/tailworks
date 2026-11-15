@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rosskukulinski/twd/internal/version"
 	"io"
 	"net"
 	"os"
@@ -34,6 +35,10 @@ func logf(format string, args ...any) {
 }
 
 func main() {
+	if version.Asked(os.Args) {
+		fmt.Println(version.String("twd-vz"))
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "-check" {
 		// hostd's availability probe: can this (signed) binary configure
 		// a VM with this kernel? Exit 0 and print the Rosetta state.

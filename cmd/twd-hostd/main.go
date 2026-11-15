@@ -22,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/rosskukulinski/twd/internal/version"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -42,6 +43,10 @@ import (
 )
 
 func main() {
+	if version.Asked(os.Args) {
+		fmt.Println(version.String("twd-hostd"))
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "twd-hostd:", netd.Redact(err.Error()))
 		os.Exit(1)

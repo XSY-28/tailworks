@@ -14,9 +14,12 @@ all: build
 ## build: every binary into bin/. On macOS, twd-vz (the microVM tier's per-VM VMM, cgo on
 ## Virtualization.framework) is ad-hoc signed with the virtualization entitlement it needs.
 VZ_ENTITLEMENTS := cmd/twd-vz/twd-vz.entitlements
+# Dev builds are stamped <VERSION>-dev (internal/version); releases set the
+# exact version (scripts/release.sh).
+VERSION_LDFLAGS := -X github.com/rosskukulinski/twd/internal/version.Version=$(shell cat VERSION)-dev -X github.com/rosskukulinski/twd/internal/version.Commit=$(shell git rev-parse HEAD 2>/dev/null)
 .PHONY: build
 build:
-	$(GO) build -o bin/ ./cmd/...
+	$(GO) build -ldflags "$(VERSION_LDFLAGS)" -o bin/ ./cmd/...
 	@if [ "$$(uname -s)" = Darwin ]; then codesign --force --sign - --entitlements $(VZ_ENTITLEMENTS) bin/twd-vz; fi
 
 $(WORKERD): package.json package-lock.json
