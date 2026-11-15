@@ -82,6 +82,10 @@ upgrading twd to update the skills; when nothing changed it does nothing.
 - **Policy stays with you.** When a deploy needs a `tagOwners` line or a
   grant, twd prints it; the agent shows it to you and you add it in the
   Tailscale admin console. twd never edits the policy during a deploy.
+- **The MCP server enforces it.** Over MCP, `kill`, `undeploy` and
+  `deploy` exist for an agent only if a `twd.dev/cap/mcp` grant (or the
+  operator's `twd mcp --allow`) names them. See
+  [twd's MCP server](#twds-mcp-server).
 - **Destructive commands need your go-ahead.** `twd kill`, `twd undeploy`,
   `twd down`, `twd tenant rm`, `twd host rm` and `twd secret rm` act
   immediately and have no undo. The skills tell agents to run them only after
@@ -117,8 +121,48 @@ the schema: [cli-json.md](cli-json.md).
   a home directory with five agents' config dirs, and checks that setup is
   idempotent and remove restores your files byte for byte.
 
-## Not built yet
+## twd's MCP server
 
-An MCP server for twd itself (deploy, ls, logs, audit and kill as MCP
-tools over the tailnet, authorized by tailnet identity, destructive tools
-behind a grant) isn't built. Today agents drive twd through the CLI.
+As well as the CLI, an agent can operate twd through **MCP**. mgmt serves
+an MCP server at `/mcp`, next to its `/v1` API, behind the same tailnet
+identity check. The design is in
+[ADR-mgmt-mcp](design/adr/mgmt-mcp.md).
+
+| Tool | What it does | Who gets it |
+|---|---|---|
+| `whoami` | who twd thinks you are, your tools, the grant for the rest | everyone admitted |
+| `status`, `ls`, `logs`, `audit` | like the CLI commands (`logs` gives request records, `console: true` the raw output) | twd admins and any `twd.dev/cap/mcp` holder |
+| `deploy` | deploy a bundle, or redeploy (`replace: true`: re-place) the current one | a `twd.dev/cap/mcp` grant naming it |
+| `kill`, `undeploy` | no undo; a `reason` is required and audited | a `twd.dev/cap/mcp` grant naming it |
+
+Register it with your agent through the CLI's stdio bridge. It works on
+the twd host and on any `twd link`ed machine, and needs no credentials:
+
+```sh
+twd mcp --config                       # the commands for your agents, and your tools
+claude mcp add twd -- twd mcp          # Claude Code; other agents: command "twd", args ["mcp"]
+```
+
+An agent on a tailnet machine without the twd CLI can use the URL
+`twd mcp --config` prints (`http://twd-mgmt.<tailnet>.ts.net/mcp`).
+
+**Who may do what is your tailnet policy.** A grant to `tag:twd-mgmt` with
+the app capability `twd.dev/cap/mcp` admits a user, group or tagged machine
+to `/mcp` (and only `/mcp`: it isn't a twd admin) with the read tools.
+Destructive tools need the grant to name them, even for admins:
+
+```jsonc
+// a coding agent's machine: read-only
+{"src": ["tag:agent"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"twd.dev/cap/mcp": [{}]}},
+// this user's agents may also kill and undeploy
+{"src": ["alice@example.com"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"twd.dev/cap/mcp": [{"tools": ["kill", "undeploy"]}]}},
+```
+
+A tool you don't have answers `cap_missing`, with the grant to add as its
+`snippet`. On the twd host itself the bridge runs as the operator: it is
+read-only unless you enable more when you register it, for example
+`claude mcp add twd -- twd mcp --allow kill,undeploy`.
+
+`deploy` over MCP needs a bundle, which only `twd deploy` builds, so in
+practice an MCP agent redeploys or re-places what's running; new code
+still goes through the CLI.

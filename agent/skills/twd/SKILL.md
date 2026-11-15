@@ -47,6 +47,16 @@ twd status --json                # is a twd control plane up (or linked)?
 If your agent can't load skills by name, run `twd agent show <skill>` to
 print one, and `twd agent ls` to list them.
 
+## twd's MCP server
+
+twd also serves its operations as MCP tools (`whoami`, `status`, `ls`,
+`logs`, `audit`, and when granted `deploy`, `kill`, `undeploy`). If you
+have them, prefer them for inspecting and operating: they are typed,
+authorized per tool by the user's tailnet policy, and audited. A
+`cap_missing` error means the user hasn't granted that tool; show them its
+`snippet` instead of working around it with the CLI. To set it up, the
+user runs `twd mcp --config`.
+
 ## Rules for agents
 
 1. **Use `--json` and parse it.** Every command takes `--json`. A result is

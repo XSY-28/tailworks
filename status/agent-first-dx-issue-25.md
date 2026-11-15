@@ -1,4 +1,6 @@
-Last update: 2026-11-15 PT. Agent-first developer experience (issue #25): skills, `twd agent`, stable `--json`, `twd docs`, `llms.txt`.
+Last update: 2026-11-15 PT. Added twd's own MCP server (`/mcp` on mgmt, `twd mcp` stdio bridge), ADR-mgmt-mcp.
+
+Earlier: agent-first developer experience (issue #25): skills, `twd agent`, stable `--json`, `twd docs`, `llms.txt`.
 
 # Agent-first developer experience (issue #25)
 
@@ -48,6 +50,47 @@ Branch `agent-first-dx-issue-25` (worktree `ancient-alpacka`).
 - **Docs**: README "Using twd with a coding agent", `docs/agents.md`,
   `docs/cli-json.md`, three COMPAT.md rows (new "Tooling" area: `cli-json`,
   `agent-skills`, `docs-for-agents`) with README rows.
+
+## twd's MCP server (issue item 4)
+
+Design: `docs/design/adr/mgmt-mcp.md` (ADR-mgmt-mcp, Proposed).
+
+- `mgmt/mcp.go`: `POST /mcp` on mgmt's listeners, through the same WhoIs
+  gate as `/v1`; MCP Streamable HTTP, stateless (one JSON-RPC message per
+  POST, `application/json`; notifications `202`; `GET` `405`). Tools run the
+  `/v1` handlers in process, so errors, validation and audit are the
+  API's: `whoami`, `status`, `ls`, `logs` (request records, or `console`),
+  `audit`, `deploy` (a bundle, or redeploy/re-place the current one),
+  `kill`, `undeploy` (`reason` required).
+- Authorization: new app capability `twd.dev/cap/mcp` with
+  `[{"tools": [...]}]`. Holding it (or `twd.dev/cap/admin`) gives the read
+  tools; `deploy`, `kill`, `undeploy` need a value naming them, **admins
+  included**. A caller with only the MCP cap is principal kind `mcp`,
+  admitted to `/mcp` and nothing else (`/v1`, `/ui`, `/v2` refused). Not
+  granted → tool error `cap_missing` with the grant as `snippet`. Local
+  operator (loopback, unix socket): read tools, or exactly the
+  `Twd-MCP-Tools` header's list (the bridge's `--allow`); for tailnet
+  callers the header only narrows. Hosts and browsers refused.
+- `WhoIsInfo` / `Principal` carry `CapValues` (filled for the MCP cap in
+  `internal/mgmtd`).
+- `api/openapi.yaml`: `/mcp` documented under tag `mcp`, excluded from
+  codegen like the registry (`exclude-tags`, `excludedTags`); `make api`
+  regenerated only `docs/contracts/mgmt-api.md`.
+- CLI `twd mcp [--allow deploy,kill,undeploy]`: stdio MCP server relaying
+  to `/mcp` over the CLI's transport (no credentials); doesn't probe
+  `/v1/whoami` on linked machines (an MCP-only user can't). `twd mcp
+  --config [--json]`: registration commands, URL, your tools and the grant
+  for the rest (`$defs/mcp`).
+- Tests: `mgmt:TestMCPServer` (the tool matrix for admin, MCP-only,
+  granted, `*`, header narrowing, local with and without the header, host,
+  no cap; MCP-only refused on `/v1`, `/ui`, `/v2`; tools reach the `/v1`
+  handlers' answers; JSON-RPC edges; browsers refused).
+  `cmd/twd:TestAgentEval` now also runs the bridge as the operator (read
+  tools, `kill` refused without `--allow`, `--allow deploy` redeploys
+  `hello-mcp` and the deployment is attributed `… (mcp)`), and a separate
+  tsnet node holding only a read-only MCP grant calls `/mcp` over the
+  tailnet (read tools, `kill` → `cap_missing` with the grant, `/v1/status`
+  → 403).
 
 ## After merging observability (#30)
 
@@ -128,9 +171,8 @@ Timings on the dev Mac (arm64): `TestAgentEval` ~25 s, `TestCLIJSONContract`
 
 ## Gaps and next steps
 
-- **MCP server for twd itself** (issue item 4): not built. It needs a
-  tailnet listener with WhoIs auth and a grant for the destructive tools;
-  the mgmt `/v1` API and its admin-cap gate are the natural base.
+- MCP server: no tools for secrets, tenants, hosts, expose or telemetry;
+  `deploy` can't build a bundle; no per-tool limits like `@twd/mcp`'s.
 - Success-path output of `link`, `tenant add/rm`, `host setup/vmcheck`,
   `image public add/rm` and `image push` is schema-documented from the code
   but only their error path runs hermetically (`TestCLIJSONContract`); the

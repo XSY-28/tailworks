@@ -62,7 +62,7 @@ printed anywhere.
 403 · netd (SDK `@twd/mcp`). **When:** the caller holds the tool but a numeric limit or budget in its grant is exceeded (e.g. `maxUsd`, `perDayUsd`). **Fix:** raise the limit in the `app` capability of the grant, or wait for the daily budget to reset.
 
 ### cap_missing
-403 · netd (SDK `@twd/mcp`). **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it).
+403 · netd (SDK `@twd/mcp`), mgmt (`/mcp`). **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. From twd's own MCP server: a `deploy`, `kill` or `undeploy` call without a `twd.dev/cap/mcp` grant naming the tool, or, on the twd host, a `twd mcp` bridge started without `--allow <tool>`. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it); for twd's MCP server, ask the tailnet admin, don't work around it.
 
 ### confirmation_required
 1 · cli. **When:** `twd agent setup` or `twd agent remove` would write or delete files, and there is no terminal to ask on (a coding agent, a script, or `--json`). Nothing was written. **Fix:** review the change list with `--dry-run`, then run it in a terminal to answer the prompt, or add `--yes`. An agent should show the user the dry run and let them decide.
@@ -221,7 +221,7 @@ printed anywhere.
 1 · cli. **When:** building a `"runtime": "node"` app needs Node.js on this machine. **Fix:** install Node.js ≥ 24 (and run `npm install` in the app), or deploy from a machine that has it.
 
 ### not_admin
-403 · mgmt, cli. **When:** a tailnet caller without the `twd.dev/cap/admin` capability called an admin endpoint (`twd link`). **Fix:** add the printed grant (`snippet`) from your user/group/tag to `tag:twd-mgmt`.
+403 · mgmt, cli. **When:** a tailnet caller without the `twd.dev/cap/admin` capability called an admin endpoint (`twd link`), or `/mcp` without `twd.dev/cap/admin` or `twd.dev/cap/mcp`. **Fix:** add the printed grant (`snippet`) from your user/group/tag to `tag:twd-mgmt`.
 
 ### not_found
 404 · mgmt. **When:** no such record (deployment, host, object, volume). **Fix:** check the ID (`twd ls --all`, `twd host ls`).

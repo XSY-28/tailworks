@@ -136,8 +136,12 @@ Then ask your agent something like "build me an MCP server and run it on
 twd". The skills are built into the CLI (`twd agent show <skill>` prints
 one), every command takes `--json` with a documented schema, and errors carry
 a code and a hint. The skills tell agents to leave credentials and tailnet
-policy changes to you, and to ask before anything destructive. Details:
-[docs/agents.md](docs/agents.md).
+policy changes to you, and to ask before anything destructive.
+
+Agents can also operate twd over MCP: `claude mcp add twd -- twd mcp`
+(`twd mcp --config` prints the setup for others). Read tools work for
+anyone you grant; `kill`, `undeploy` and `deploy` only for callers whose
+tailnet grant names them. Details: [docs/agents.md](docs/agents.md).
 
 ## Compatibility at a glance
 
@@ -194,6 +198,7 @@ prove every ✅ and ⚠️.
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
 | Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
 | Tooling | [Coding-agent skills (`twd agent`)](docs/COMPAT.md#agent-skills) | ✅ | Claude Code, Codex, Cursor, Gemini CLI, OpenCode |
+| Tooling | [twd's MCP server (`/mcp`, `twd mcp`)](docs/COMPAT.md#twd-mcp) | ✅ | tools gated per tool by a tailnet grant |
 | Tooling | [Docs for agents (`llms.txt`, `twd docs`)](docs/COMPAT.md#docs-for-agents) | ✅ | offline search |
 
 ## More

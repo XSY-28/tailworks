@@ -1,7 +1,10 @@
 package main_test
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -13,6 +16,7 @@ import (
 	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/hostd/hostdtest"
 	"github.com/rosskukulinski/twd/internal/policy"
+	"github.com/rosskukulinski/twd/mgmt"
 	"github.com/rosskukulinski/twd/netd/nettest"
 	"tailscale.com/tailcfg"
 )
@@ -42,7 +46,9 @@ func TestAgentEval(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ctl.Close()
-	ctl.Server.SetGlobalAppCaps(tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}})
+	// Every peer holds a read-only MCP grant toward mgmt (testcontrol's caps
+	// are global): the tailnet MCP client below has it and nothing else.
+	ctl.Server.SetGlobalAppCaps(tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}, mgmt.MCPCap: []tailcfg.RawMessage{`{}`}})
 	fts := newFakeTS(t)
 	api := httptest.NewServer(fts)
 	defer api.Close()
@@ -184,6 +190,8 @@ func TestAgentEval(t *testing.T) {
 		}
 	}
 
+	testMCP(t, ag, doc(up), ctl.URL, work)
+
 	// Every other command once, with --json, against this twd.
 	if _, err := agenteval.CheckLogs(ag.Exec("logs", "hello-mcp", "--console", "-n", "20", "--json").Stdout); err != nil {
 		t.Fatal(err)
@@ -246,4 +254,153 @@ func TestAgentEval(t *testing.T) {
 	}
 	ok("down", ag.Exec("down", "--json"))
 
+}
+
+// testMCP is twd's MCP server (ADR-mgmt-mcp) across processes: (a) the
+// stdio bridge (`twd mcp`) on the twd host, as the operator: read tools by
+// default, kill refused without --allow, a redeploy with --allow deploy
+// audited as the operator via MCP; (b) a separate tailnet node holding
+// only a read-only twd.dev/cap/mcp grant, straight to mgmt's /mcp: read
+// tools work, kill is cap_missing with the grant to add, /v1 is refused.
+func testMCP(t *testing.T, ag *agenteval.Agent, up map[string]any, controlURL, work string) {
+	t.Helper()
+	rpc := func(id int, method string, params any) string {
+		b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+		return string(b)
+	}
+	call := func(id int, tool string, args map[string]any) string {
+		return rpc(id, "tools/call", map[string]any{"name": tool, "arguments": args})
+	}
+	bridge := func(args []string, msgs ...string) map[float64]map[string]any {
+		t.Helper()
+		ag.Stdin = strings.Join(msgs, "\n") + "\n"
+		r := ag.Exec(append([]string{"mcp"}, args...)...)
+		if !r.OK() {
+			t.Fatalf("twd mcp: %s", r.Stderr)
+		}
+		out := map[float64]map[string]any{}
+		ls, err := agenteval.Lines(r.Stdout)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range ls {
+			out[l["id"].(float64)] = l
+		}
+		return out
+	}
+	result := func(m map[string]any) (map[string]any, map[string]any) {
+		res, _ := m["result"].(map[string]any)
+		sc, _ := res["structuredContent"].(map[string]any)
+		if res["isError"] == true {
+			return nil, sc["error"].(map[string]any)
+		}
+		return sc, nil
+	}
+	names := func(m map[string]any) []string {
+		var out []string
+		for _, x := range m["result"].(map[string]any)["tools"].([]any) {
+			out = append(out, x.(map[string]any)["name"].(string))
+		}
+		return out
+	}
+	read := "whoami,status,ls,logs,audit"
+
+	// (a) the bridge on the twd host.
+	got := bridge(nil,
+		rpc(1, "initialize", map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "eval", "version": "0"}}),
+		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
+		rpc(2, "tools/list", map[string]any{}),
+		call(3, "ls", map[string]any{"workload": "hello-mcp"}),
+		call(4, "kill", map[string]any{"object": "x", "reason": "eval"}))
+	if len(got) != 4 || got[1]["result"].(map[string]any)["serverInfo"].(map[string]any)["name"] != "twd" {
+		t.Fatalf("twd mcp: %v", got)
+	}
+	if n := strings.Join(names(got[2]), ","); n != read {
+		t.Fatalf("twd mcp tools: %s, want %s", n, read)
+	}
+	if ls, errv := result(got[3]); errv != nil || len(ls["deployments"].([]any)) != 1 {
+		t.Fatalf("twd mcp ls: %v %v", ls, errv)
+	}
+	if _, errv := result(got[4]); errv == nil || errv["code"] != "cap_missing" || errv["snippet"] != "twd mcp --allow kill" {
+		t.Fatalf("twd mcp kill without --allow: %v", errv)
+	}
+	got = bridge([]string{"--allow", "deploy"}, rpc(1, "tools/list", map[string]any{}), call(2, "deploy", map[string]any{"workload": "hello-mcp"}))
+	if n := strings.Join(names(got[1]), ","); n != read+",deploy" {
+		t.Fatalf("twd mcp --allow deploy tools: %s", n)
+	}
+	dep, errv := result(got[2])
+	if errv != nil || dep["deploymentID"] == nil {
+		t.Fatalf("twd mcp deploy (redeploy of the current bundle): %v %v", dep, errv)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		v, _ := agenteval.Doc(ag.Exec("ls", "--json"))
+		var d map[string]any
+		for _, x := range v.(map[string]any)["deployments"].([]any) {
+			if m := x.(map[string]any); m["deploymentID"] == dep["deploymentID"] {
+				d = m
+			}
+		}
+		if d != nil && d["status"] == "active" {
+			if !strings.Contains(fmt.Sprint(d["deployedBy"]), "(mcp)") {
+				t.Fatalf("a deploy through MCP must be attributed to the caller via mcp: deployedBy %v", d["deployedBy"])
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("MCP redeploy never became active: %v", d)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	r := ag.Exec("mcp", "--config", "--json")
+	if err := agenteval.CheckResult("mcp", r); err != nil {
+		t.Fatal(err)
+	}
+
+	// (b) a tailnet agent with only the read-only MCP grant.
+	n, err := nettest.NewNode(context.Background(), controlURL, nettest.DummyKey, "ttest-mcp-agent", filepath.Join(work, "mcp-agent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+	hc := n.HTTPClient(30 * time.Second)
+	base := "http://" + fmt.Sprint(up["mgmtIP"])
+	post := func(body string) (int, map[string]any) {
+		t.Helper()
+		var resp *http.Response
+		for deadline := time.Now().Add(45 * time.Second); ; time.Sleep(time.Second) {
+			resp, err = hc.Post(base+"/mcp", "application/json", strings.NewReader(body))
+			if err == nil || time.Now().After(deadline) {
+				break
+			}
+		}
+		if err != nil {
+			t.Fatalf("POST /mcp from a tailnet node: %v", err)
+		}
+		defer resp.Body.Close()
+		var m map[string]any
+		json.NewDecoder(resp.Body).Decode(&m)
+		return resp.StatusCode, m
+	}
+	if st, m := post(rpc(1, "tools/list", map[string]any{})); st != 200 || strings.Join(names(m), ",") != read {
+		t.Fatalf("tailnet MCP tools/list: %d %v", st, m)
+	}
+	if _, m := post(call(2, "ls", map[string]any{})); true {
+		if ls, errv := result(m); errv != nil || ls["tenantID"] != up["tenantID"] {
+			t.Fatalf("tailnet MCP ls: %v %v", ls, errv)
+		}
+	}
+	if _, m := post(call(3, "kill", map[string]any{"object": "x", "reason": "eval"})); true {
+		if _, errv := result(m); errv == nil || errv["code"] != "cap_missing" || !strings.Contains(fmt.Sprint(errv["snippet"]), `"tools":["kill"]`) {
+			t.Fatalf("tailnet MCP kill without the grant: %v", errv)
+		}
+	}
+	resp, err := hc.Get(base + "/v1/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("an MCP-only caller reached /v1/status: %d", resp.StatusCode)
+	}
 }

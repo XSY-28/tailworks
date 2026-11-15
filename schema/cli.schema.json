@@ -473,6 +473,49 @@
         "digest"
       ]
     },
+    "mcp": {
+      "type": "object",
+      "description": "twd mcp --config: how to register twd's MCP server (twd mcp without --config is the MCP stdio protocol itself)",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "mgmt's /mcp, for an agent on a tailnet machine"
+        },
+        "stdio": {
+          "type": "array",
+          "description": "the command an agent runs (the stdio bridge)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "description": "the tools this caller may call",
+          "items": {
+            "type": "string"
+          }
+        },
+        "commands": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "grant": {
+          "type": "string",
+          "description": "the twd.dev/cap/mcp grant that adds the missing tools"
+        },
+        "grantNote": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "stdio",
+        "tools",
+        "commands"
+      ]
+    },
     "telemetry": {
       "type": "object",
       "description": "twd telemetry [show], set and rm: the tenant's OTLP export (header values are never shown; rm prints only tenantID)",

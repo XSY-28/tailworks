@@ -54,6 +54,7 @@ var cliSurface = []struct {
 	{"telemetry", []string{"telemetry"}},
 	{"telemetry", []string{"telemetry", "set", "--otlp", "http://otel-collector:4318"}},
 	{"telemetry", []string{"telemetry", "rm"}},
+	{"mcp", []string{"mcp", "--config"}},
 	{"docs ls", []string{"docs", "ls"}},
 	{"docs show", []string{"docs", "show", "errors.md#bad_request"}},
 	{"docs search", []string{"docs", "search", "tagOwners"}},
