@@ -75,6 +75,8 @@ const (
 	AuditKindSecretPut           AuditKind = "secret_put"
 	AuditKindSecretRelease       AuditKind = "secret_release"
 	AuditKindSpawn               AuditKind = "spawn"
+	AuditKindStoreCreate         AuditKind = "store_create"
+	AuditKindStoreDelete         AuditKind = "store_delete"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
@@ -160,6 +162,10 @@ func (e AuditKind) Valid() bool {
 	case AuditKindSecretRelease:
 		return true
 	case AuditKindSpawn:
+		return true
+	case AuditKindStoreCreate:
+		return true
+	case AuditKindStoreDelete:
 		return true
 	case AuditKindTenantCreate:
 		return true
@@ -321,6 +327,8 @@ const (
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
+	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
+	ErrorCodeStoreLimit              ErrorCode = "store_limit"
 	ErrorCodeStoreUnavailable        ErrorCode = "store_unavailable"
 	ErrorCodeSuperseded              ErrorCode = "superseded"
 	ErrorCodeTakeoverUnconfirmed     ErrorCode = "takeover_unconfirmed"
@@ -329,6 +337,7 @@ const (
 	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
 	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
+	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
 	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
 )
@@ -434,6 +443,10 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeSpawnBudgetExceeded:
 		return true
+	case ErrorCodeStoreConflict:
+		return true
+	case ErrorCodeStoreLimit:
+		return true
 	case ErrorCodeStoreUnavailable:
 		return true
 	case ErrorCodeSuperseded:
@@ -449,6 +462,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeUnknownNamespace:
 		return true
 	case ErrorCodeUnknownSecret:
+		return true
+	case ErrorCodeUnknownStore:
 		return true
 	case ErrorCodeUnknownTenant:
 		return true
@@ -989,6 +1004,8 @@ type AuditBatch struct {
 // `secret_put` (a workload secret set; name only),
 // `secret_delete`,
 // `secret_release` (a workload's secrets released to its lease holder; names only),
+// `store_create` (a platform store created, by its first write or an admin),
+// `store_delete` (a platform store and its data key deleted),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1071,6 +1088,8 @@ type AuditRecord struct {
 	// `secret_put` (a workload secret set; name only),
 	// `secret_delete`,
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
+	// `store_create` (a platform store created, by its first write or an admin),
+	// `store_delete` (a platform store and its data key deleted),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1435,9 +1454,12 @@ type Error struct {
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
+	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
+	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -1505,9 +1527,12 @@ type Error struct {
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
 // | `no_logs` | 404 | the workload's host has no log file for it yet |
 // | `unknown_secret` | 404 | the workload has no secret of that name |
+// | `unknown_store` | 404 | the workload has no store of that kind and name |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
+// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 // | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2373,6 +2398,84 @@ type StatusReplicas struct {
 	Ok      bool    `json:"ok"`
 }
 
+// Store A platform storage object of a workload (ADR-platform-stores).
+type Store struct {
+	// Bytes Plaintext bytes of the kept entries.
+	Bytes     int64 `json:"bytes"`
+	CreatedAt int64 `json:"createdAt"`
+
+	// Entries Journal entries kept (after compaction).
+	Entries int64 `json:"entries"`
+
+	// Head The last sequence number appended.
+	Head int64 `json:"head"`
+
+	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
+	Incarnation string `json:"incarnation"`
+
+	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	Kind      StoreKind `json:"kind"`
+	Name      string    `json:"name"`
+	TenantID  string    `json:"tenantID"`
+	UpdatedAt int64     `json:"updatedAt"`
+	Workload  string    `json:"workload"`
+}
+
+// StoreAppend defines model for StoreAppend.
+type StoreAppend struct {
+	// After The journal head the writer has applied; the append fails with `store_conflict` unless it is still the head.
+	After   int64          `json:"after"`
+	Entries []StoreEntryIn `json:"entries"`
+
+	// Incarnation The incarnation the writer has applied (empty for a new store). A mismatch is a `store_conflict`.
+	Incarnation *string `json:"incarnation,omitempty"`
+}
+
+// StoreAppendResult defines model for StoreAppendResult.
+type StoreAppendResult struct {
+	// Head The new head: the entries got `after+1 … head`, in order.
+	Head        int64  `json:"head"`
+	Incarnation string `json:"incarnation"`
+}
+
+// StoreEntry defines model for StoreEntry.
+type StoreEntry struct {
+	Data []byte `json:"data"`
+	Seq  int64  `json:"seq"`
+}
+
+// StoreEntryIn defines model for StoreEntryIn.
+type StoreEntryIn struct {
+	// Ckey Compaction key: this entry supersedes every earlier entry with the same `ckey` (for KV, the key). Empty: never compacted.
+	Ckey *string `json:"ckey,omitempty"`
+
+	// Data The entry, opaque to mgmt (its kind's encoding), at most 2 MiB.
+	Data []byte `json:"data"`
+}
+
+// StoreJournal defines model for StoreJournal.
+type StoreJournal struct {
+	Entries []StoreEntry `json:"entries"`
+	Head    int64        `json:"head"`
+
+	// Incarnation Empty when the store does not exist.
+	Incarnation *string `json:"incarnation,omitempty"`
+
+	// More True if entries after the last one returned remain: read again with `after` = its `seq`.
+	More bool `json:"more"`
+}
+
+// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+type StoreKind = string
+
+// StorePage defines model for StorePage.
+type StorePage struct {
+	Items []Store `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
 // Tenant defines model for Tenant.
 type Tenant struct {
 	// APIKeyFile `apikey` mode: absolute path, read at use; the key is never stored or returned.
@@ -2562,9 +2665,12 @@ type TombstoneError struct {
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
+	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
+	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2725,6 +2831,12 @@ type ReservationID = string
 // SecretName defines model for secretName.
 type SecretName = string
 
+// StoreEpoch defines model for storeEpoch.
+type StoreEpoch = int64
+
+// StoreName defines model for storeName.
+type StoreName = string
+
 // TenantID defines model for tenantID.
 type TenantID = string
 
@@ -2788,6 +2900,13 @@ type PreconditionFailed = Error
 // `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type ReadyConflict = Error
+
+// StoreConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
+// `missing` names what is absent (grant, cap, field, quota); `snippet`
+// is policy HuJSON to paste when a grant is missing; `doc_url` is
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
+type StoreConflict = Error
 
 // Unauthorized The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
@@ -3050,6 +3169,36 @@ type ListWorkloadSecretsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ListWorkloadStoresParams defines parameters for ListWorkloadStores.
+type ListWorkloadStoresParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Kind Only stores of this kind.
+	Kind *StoreKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ReadStoreJournalParams defines parameters for ReadStoreJournal.
+type ReadStoreJournalParams struct {
+	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
+	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+
+	// After Return entries with a larger `seq` (default 0).
+	After *int64 `form:"after,omitempty" json:"after,omitempty"`
+
+	// Limit At most this many entries (default and maximum 1000; a page also stops at about 4 MiB of data).
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// AppendStoreJournalParams defines parameters for AppendStoreJournal.
+type AppendStoreJournalParams struct {
+	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
+	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
 type CreateVolumeKeyGrantParams struct {
 	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
@@ -3106,6 +3255,9 @@ type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPubl
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
+
+// AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
+type AppendStoreJournalJSONRequestBody = StoreAppend
 
 // Getter for additional properties for OIDCConfiguration. Returns the specified
 // element and whether it was found
@@ -4497,6 +4649,113 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 	PutWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkloadStores List a workload's stores
+	//
+	// Every store of the workload (all kinds), ordered by `(kind, name)`.
+	// A store exists once something was written to it (a binding's first
+	// write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+	// mgmt keeps, after compaction.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores (the `ListWorkloadStores` operationId).
+	ListWorkloadStores(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteWorkloadStore Delete a store and its data
+	//
+	// Deletes the journal and the store's data key (custody), so the
+	// sealed entries can't be read again even from a backup of the
+	// database. A running workload's store object notices on its next
+	// sync (a new incarnation) and empties itself; a later write starts
+	// a new, empty store. `404 unknown_store` if there is none. Audited
+	// (`kind: store_delete`).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `DeleteWorkloadStore` operationId).
+	DeleteWorkloadStore(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetWorkloadStore Get one store
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `GetWorkloadStore` operationId).
+	GetWorkloadStore(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutWorkloadStore Create a store (idempotent)
+	//
+	// Creates an empty store (`201`), or answers the existing one
+	// (`200`). A binding's first write creates its store too, so this is
+	// only needed to create one before the first deploy. Audited
+	// (`kind: store_create`) when it creates.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `PutWorkloadStore` operationId).
+	PutWorkloadStore(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReadStoreJournal Read a store's journal after a sequence number
+	//
+	// The entries with `seq > after`, in order, for a store object
+	// catching up (after a restart, on a new host, or when another
+	// writer appended). Entries superseded by a later entry with the same
+	// `ckey` are gone (compaction), so `seq` has gaps; the page is still
+	// a complete catch-up from `after`. An unknown store is an empty page
+	// with `head` 0 and no `incarnation`.
+	//
+	// A host must give `epoch`: the data is released only to the holder
+	// of the workload's lease at that epoch (`409 lease_lost`, as for
+	// secrets). An admin reads without it (`twd kv key get`).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `ReadStoreJournal` operationId).
+	ReadStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AppendStoreJournalWithBody Append entries to a store's journal (conditional on its head)
+	//
+	// The write path of a store object: it appends here **before** it
+	// applies the change locally, so an acknowledged write is never only
+	// on one host's disk. The append succeeds only if the journal's head
+	// is still `after` (and `incarnation` matches when given); otherwise
+	// `409 store_conflict`, and the writer catches up
+	// (`GET …/journal?after=`) and retries. That makes the journal
+	// linearizable across writers (a workload's replicas, an admin's
+	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// entry with the same `ckey`, which mgmt deletes in the same
+	// transaction. The first append creates the store.
+	//
+	// Entries are sealed at rest with the store's data key (AES-256-GCM,
+	// custody); `ckey` is stored as an HMAC under a key derived from it.
+	//
+	// A host must give `epoch` (lease holder at that epoch, `409
+	// lease_lost`): a host that lost the workload can't write. Not
+	// audited per append (stores are high volume); creation is
+	// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+	// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+	AppendStoreJournalWithBody(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
+	//
+	// The write path of a store object: it appends here **before** it
+	// applies the change locally, so an acknowledged write is never only
+	// on one host's disk. The append succeeds only if the journal's head
+	// is still `after` (and `incarnation` matches when given); otherwise
+	// `409 store_conflict`, and the writer catches up
+	// (`GET …/journal?after=`) and retries. That makes the journal
+	// linearizable across writers (a workload's replicas, an admin's
+	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// entry with the same `ckey`, which mgmt deletes in the same
+	// transaction. The first append creates the store.
+	//
+	// Entries are sealed at rest with the store's data key (AES-256-GCM,
+	// custody); `ckey` is stored as an HMAC under a key derived from it.
+	//
+	// A host must give `epoch` (lease holder at that epoch, `409
+	// lease_lost`): a host that lost the workload can't write. Not
+	// audited per append (stores are high volume); creation is
+	// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+	// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+	AppendStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	//
@@ -6264,6 +6523,183 @@ func (c *Client) PutWorkloadSecretWithBody(ctx context.Context, id TenantID, wor
 // Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 func (c *Client) PutWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutWorkloadSecretRequest(c.Server, id, workload, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkloadStores List a workload's stores
+//
+// Every store of the workload (all kinds), ordered by `(kind, name)`.
+// A store exists once something was written to it (a binding's first
+// write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+// mgmt keeps, after compaction.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores (the `ListWorkloadStores` operationId).
+func (c *Client) ListWorkloadStores(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkloadStoresRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteWorkloadStore Delete a store and its data
+//
+// Deletes the journal and the store's data key (custody), so the
+// sealed entries can't be read again even from a backup of the
+// database. A running workload's store object notices on its next
+// sync (a new incarnation) and empties itself; a later write starts
+// a new, empty store. `404 unknown_store` if there is none. Audited
+// (`kind: store_delete`).
+//
+// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `DeleteWorkloadStore` operationId).
+func (c *Client) DeleteWorkloadStore(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteWorkloadStoreRequest(c.Server, id, workload, kind, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetWorkloadStore Get one store
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `GetWorkloadStore` operationId).
+func (c *Client) GetWorkloadStore(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetWorkloadStoreRequest(c.Server, id, workload, kind, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutWorkloadStore Create a store (idempotent)
+//
+// Creates an empty store (`201`), or answers the existing one
+// (`200`). A binding's first write creates its store too, so this is
+// only needed to create one before the first deploy. Audited
+// (`kind: store_create`) when it creates.
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `PutWorkloadStore` operationId).
+func (c *Client) PutWorkloadStore(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutWorkloadStoreRequest(c.Server, id, workload, kind, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReadStoreJournal Read a store's journal after a sequence number
+//
+// The entries with `seq > after`, in order, for a store object
+// catching up (after a restart, on a new host, or when another
+// writer appended). Entries superseded by a later entry with the same
+// `ckey` are gone (compaction), so `seq` has gaps; the page is still
+// a complete catch-up from `after`. An unknown store is an empty page
+// with `head` 0 and no `incarnation`.
+//
+// A host must give `epoch`: the data is released only to the holder
+// of the workload's lease at that epoch (`409 lease_lost`, as for
+// secrets). An admin reads without it (`twd kv key get`).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `ReadStoreJournal` operationId).
+func (c *Client) ReadStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReadStoreJournalRequest(c.Server, id, workload, kind, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AppendStoreJournalWithBody Append entries to a store's journal (conditional on its head)
+//
+// The write path of a store object: it appends here **before** it
+// applies the change locally, so an acknowledged write is never only
+// on one host's disk. The append succeeds only if the journal's head
+// is still `after` (and `incarnation` matches when given); otherwise
+// `409 store_conflict`, and the writer catches up
+// (`GET …/journal?after=`) and retries. That makes the journal
+// linearizable across writers (a workload's replicas, an admin's
+// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// entry with the same `ckey`, which mgmt deletes in the same
+// transaction. The first append creates the store.
+//
+// Entries are sealed at rest with the store's data key (AES-256-GCM,
+// custody); `ckey` is stored as an HMAC under a key derived from it.
+//
+// A host must give `epoch` (lease holder at that epoch, `409
+// lease_lost`): a host that lost the workload can't write. Not
+// audited per append (stores are high volume); creation is
+// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+func (c *Client) AppendStoreJournalWithBody(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAppendStoreJournalRequestWithBody(c.Server, id, workload, kind, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AppendStoreJournal Append entries to a store's journal (conditional on its head)
+//
+// The write path of a store object: it appends here **before** it
+// applies the change locally, so an acknowledged write is never only
+// on one host's disk. The append succeeds only if the journal's head
+// is still `after` (and `incarnation` matches when given); otherwise
+// `409 store_conflict`, and the writer catches up
+// (`GET …/journal?after=`) and retries. That makes the journal
+// linearizable across writers (a workload's replicas, an admin's
+// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// entry with the same `ckey`, which mgmt deletes in the same
+// transaction. The first append creates the store.
+//
+// Entries are sealed at rest with the store's data key (AES-256-GCM,
+// custody); `ckey` is stored as an HMAC under a key derived from it.
+//
+// A host must give `epoch` (lease holder at that epoch, `409
+// lease_lost`): a host that lost the workload can't write. Not
+// audited per append (stores are high volume); creation is
+// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+func (c *Client) AppendStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAppendStoreJournalRequest(c.Server, id, workload, kind, name, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9332,6 +9768,464 @@ func NewPutWorkloadSecretRequestWithBody(server string, id TenantID, workload Wo
 	return req, nil
 }
 
+// NewListWorkloadStoresRequest constructs an http.Request for the ListWorkloadStores method
+func NewListWorkloadStoresRequest(server string, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteWorkloadStoreRequest constructs an http.Request for the DeleteWorkloadStore method
+func NewDeleteWorkloadStoreRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/%s/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetWorkloadStoreRequest constructs an http.Request for the GetWorkloadStore method
+func NewGetWorkloadStoreRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/%s/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutWorkloadStoreRequest constructs an http.Request for the PutWorkloadStore method
+func NewPutWorkloadStoreRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/%s/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReadStoreJournalRequest constructs an http.Request for the ReadStoreJournal method
+func NewReadStoreJournalRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/%s/%s/journal", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Epoch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "epoch", *params.Epoch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.After != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", *params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAppendStoreJournalRequest calls the generic AppendStoreJournal builder with application/json body
+func NewAppendStoreJournalRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAppendStoreJournalRequestWithBody(server, id, workload, kind, name, params, "application/json", bodyReader)
+}
+
+// NewAppendStoreJournalRequestWithBody constructs an http.Request for the AppendStoreJournal method, with any body, and a specified content type
+func NewAppendStoreJournalRequestWithBody(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/%s/%s/journal", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Epoch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "epoch", *params.Epoch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewCreateVolumeKeyGrantRequest constructs an http.Request for the CreateVolumeKeyGrant method
 func NewCreateVolumeKeyGrantRequest(server string, id VolumeID, params *CreateVolumeKeyGrantParams) (*http.Request, error) {
 	var err error
@@ -10591,6 +11485,123 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 	PutWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error)
+
+	// ListWorkloadStoresWithResponse List a workload's stores
+	//
+	// Every store of the workload (all kinds), ordered by `(kind, name)`.
+	// A store exists once something was written to it (a binding's first
+	// write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+	// mgmt keeps, after compaction.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores (the `ListWorkloadStores` operationId).
+	ListWorkloadStoresWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams, reqEditors ...RequestEditorFn) (*ListWorkloadStoresResponse, error)
+
+	// DeleteWorkloadStoreWithResponse Delete a store and its data
+	//
+	// Deletes the journal and the store's data key (custody), so the
+	// sealed entries can't be read again even from a backup of the
+	// database. A running workload's store object notices on its next
+	// sync (a new incarnation) and empties itself; a later write starts
+	// a new, empty store. `404 unknown_store` if there is none. Audited
+	// (`kind: store_delete`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `DeleteWorkloadStore` operationId).
+	DeleteWorkloadStoreWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*DeleteWorkloadStoreResponse, error)
+
+	// GetWorkloadStoreWithResponse Get one store
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `GetWorkloadStore` operationId).
+	GetWorkloadStoreWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*GetWorkloadStoreResponse, error)
+
+	// PutWorkloadStoreWithResponse Create a store (idempotent)
+	//
+	// Creates an empty store (`201`), or answers the existing one
+	// (`200`). A binding's first write creates its store too, so this is
+	// only needed to create one before the first deploy. Audited
+	// (`kind: store_create`) when it creates.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `PutWorkloadStore` operationId).
+	PutWorkloadStoreWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*PutWorkloadStoreResponse, error)
+
+	// ReadStoreJournalWithResponse Read a store's journal after a sequence number
+	//
+	// The entries with `seq > after`, in order, for a store object
+	// catching up (after a restart, on a new host, or when another
+	// writer appended). Entries superseded by a later entry with the same
+	// `ckey` are gone (compaction), so `seq` has gaps; the page is still
+	// a complete catch-up from `after`. An unknown store is an empty page
+	// with `head` 0 and no `incarnation`.
+	//
+	// A host must give `epoch`: the data is released only to the holder
+	// of the workload's lease at that epoch (`409 lease_lost`, as for
+	// secrets). An admin reads without it (`twd kv key get`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `ReadStoreJournal` operationId).
+	ReadStoreJournalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams, reqEditors ...RequestEditorFn) (*ReadStoreJournalResponse, error)
+
+	// AppendStoreJournalWithBodyWithResponse Append entries to a store's journal (conditional on its head)
+	//
+	// The write path of a store object: it appends here **before** it
+	// applies the change locally, so an acknowledged write is never only
+	// on one host's disk. The append succeeds only if the journal's head
+	// is still `after` (and `incarnation` matches when given); otherwise
+	// `409 store_conflict`, and the writer catches up
+	// (`GET …/journal?after=`) and retries. That makes the journal
+	// linearizable across writers (a workload's replicas, an admin's
+	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// entry with the same `ckey`, which mgmt deletes in the same
+	// transaction. The first append creates the store.
+	//
+	// Entries are sealed at rest with the store's data key (AES-256-GCM,
+	// custody); `ckey` is stored as an HMAC under a key derived from it.
+	//
+	// A host must give `epoch` (lease holder at that epoch, `409
+	// lease_lost`): a host that lost the workload can't write. Not
+	// audited per append (stores are high volume); creation is
+	// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+	// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+	AppendStoreJournalWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AppendStoreJournalResponse, error)
+
+	// AppendStoreJournalWithResponse Append entries to a store's journal (conditional on its head)
+	//
+	// The write path of a store object: it appends here **before** it
+	// applies the change locally, so an acknowledged write is never only
+	// on one host's disk. The append succeeds only if the journal's head
+	// is still `after` (and `incarnation` matches when given); otherwise
+	// `409 store_conflict`, and the writer catches up
+	// (`GET …/journal?after=`) and retries. That makes the journal
+	// linearizable across writers (a workload's replicas, an admin's
+	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// entry with the same `ckey`, which mgmt deletes in the same
+	// transaction. The first append creates the store.
+	//
+	// Entries are sealed at rest with the store's data key (AES-256-GCM,
+	// custody); `ckey` is stored as an HMAC under a key derived from it.
+	//
+	// A host must give `epoch` (lease holder at that epoch, `409
+	// lease_lost`): a host that lost the workload can't write. Not
+	// audited per append (stores are high volume); creation is
+	// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+	// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+	AppendStoreJournalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*AppendStoreJournalResponse, error)
 
 	// CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 	//
@@ -15608,6 +16619,595 @@ func (r PutWorkloadSecretResponse) ContentType() string {
 	return ""
 }
 
+// ListWorkloadStoresResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadStores
+type ListWorkloadStoresResponse400Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadStoresResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadStores
+type ListWorkloadStoresResponse403Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadStoresResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadStores
+type ListWorkloadStoresResponse404Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadStoresResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadStores
+type ListWorkloadStoresResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListWorkloadStoresResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StorePage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListWorkloadStoresResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListWorkloadStoresResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListWorkloadStoresResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListWorkloadStoresResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWorkloadStoresResponse) GetJSON200() *StorePage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListWorkloadStoresResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListWorkloadStoresResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListWorkloadStoresResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListWorkloadStoresResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWorkloadStoresResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkloadStoresResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkloadStoresResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWorkloadStoresResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DeleteWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for DeleteWorkloadStore
+type DeleteWorkloadStoreResponse403Headers struct {
+	TwdError *string
+}
+
+// DeleteWorkloadStoreResponse404Headers the declared response headers of an HTTP 404 response for DeleteWorkloadStore
+type DeleteWorkloadStoreResponse404Headers struct {
+	TwdError *string
+}
+
+// DeleteWorkloadStoreResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteWorkloadStore
+type DeleteWorkloadStoreResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DeleteWorkloadStoreResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DeleteWorkloadStoreResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DeleteWorkloadStoreResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DeleteWorkloadStoreResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteWorkloadStoreResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteWorkloadStoreResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteWorkloadStoreResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteWorkloadStoreResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteWorkloadStoreResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteWorkloadStoreResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteWorkloadStoreResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for GetWorkloadStore
+type GetWorkloadStoreResponse403Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadStoreResponse404Headers the declared response headers of an HTTP 404 response for GetWorkloadStore
+type GetWorkloadStoreResponse404Headers struct {
+	TwdError *string
+}
+
+// GetWorkloadStoreResponseDefaultHeaders the declared response headers of an HTTP default response for GetWorkloadStore
+type GetWorkloadStoreResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetWorkloadStoreResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Store
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetWorkloadStoreResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetWorkloadStoreResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetWorkloadStoreResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetWorkloadStoreResponse) GetJSON200() *Store {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetWorkloadStoreResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetWorkloadStoreResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetWorkloadStoreResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetWorkloadStoreResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetWorkloadStoreResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetWorkloadStoreResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetWorkloadStoreResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PutWorkloadStoreResponse400Headers the declared response headers of an HTTP 400 response for PutWorkloadStore
+type PutWorkloadStoreResponse400Headers struct {
+	TwdError *string
+}
+
+// PutWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for PutWorkloadStore
+type PutWorkloadStoreResponse403Headers struct {
+	TwdError *string
+}
+
+// PutWorkloadStoreResponse404Headers the declared response headers of an HTTP 404 response for PutWorkloadStore
+type PutWorkloadStoreResponse404Headers struct {
+	TwdError *string
+}
+
+// PutWorkloadStoreResponseDefaultHeaders the declared response headers of an HTTP default response for PutWorkloadStore
+type PutWorkloadStoreResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type PutWorkloadStoreResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Store
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Store
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *PutWorkloadStoreResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *PutWorkloadStoreResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *PutWorkloadStoreResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *PutWorkloadStoreResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutWorkloadStoreResponse) GetJSON200() *Store {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PutWorkloadStoreResponse) GetJSON201() *Store {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutWorkloadStoreResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutWorkloadStoreResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutWorkloadStoreResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PutWorkloadStoreResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutWorkloadStoreResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutWorkloadStoreResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutWorkloadStoreResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutWorkloadStoreResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ReadStoreJournalResponse200Headers the declared response headers of an HTTP 200 response for ReadStoreJournal
+type ReadStoreJournalResponse200Headers struct {
+	CacheControl *string
+}
+
+// ReadStoreJournalResponse400Headers the declared response headers of an HTTP 400 response for ReadStoreJournal
+type ReadStoreJournalResponse400Headers struct {
+	TwdError *string
+}
+
+// ReadStoreJournalResponse403Headers the declared response headers of an HTTP 403 response for ReadStoreJournal
+type ReadStoreJournalResponse403Headers struct {
+	TwdError *string
+}
+
+// ReadStoreJournalResponse404Headers the declared response headers of an HTTP 404 response for ReadStoreJournal
+type ReadStoreJournalResponse404Headers struct {
+	TwdError *string
+}
+
+// ReadStoreJournalResponse409Headers the declared response headers of an HTTP 409 response for ReadStoreJournal
+type ReadStoreJournalResponse409Headers struct {
+	TwdError *string
+}
+
+// ReadStoreJournalResponseDefaultHeaders the declared response headers of an HTTP default response for ReadStoreJournal
+type ReadStoreJournalResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ReadStoreJournalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StoreJournal
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *LeaseLost
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ReadStoreJournalResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ReadStoreJournalResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ReadStoreJournalResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ReadStoreJournalResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ReadStoreJournalResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ReadStoreJournalResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ReadStoreJournalResponse) GetJSON200() *StoreJournal {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ReadStoreJournalResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReadStoreJournalResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReadStoreJournalResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ReadStoreJournalResponse) GetJSON409() *LeaseLost {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ReadStoreJournalResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReadStoreJournalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReadStoreJournalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReadStoreJournalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReadStoreJournalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// AppendStoreJournalResponse400Headers the declared response headers of an HTTP 400 response for AppendStoreJournal
+type AppendStoreJournalResponse400Headers struct {
+	TwdError *string
+}
+
+// AppendStoreJournalResponse403Headers the declared response headers of an HTTP 403 response for AppendStoreJournal
+type AppendStoreJournalResponse403Headers struct {
+	TwdError *string
+}
+
+// AppendStoreJournalResponse404Headers the declared response headers of an HTTP 404 response for AppendStoreJournal
+type AppendStoreJournalResponse404Headers struct {
+	TwdError *string
+}
+
+// AppendStoreJournalResponse409Headers the declared response headers of an HTTP 409 response for AppendStoreJournal
+type AppendStoreJournalResponse409Headers struct {
+	TwdError *string
+}
+
+// AppendStoreJournalResponseDefaultHeaders the declared response headers of an HTTP default response for AppendStoreJournal
+type AppendStoreJournalResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type AppendStoreJournalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *StoreAppendResult
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *StoreConflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *AppendStoreJournalResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *AppendStoreJournalResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *AppendStoreJournalResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *AppendStoreJournalResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *AppendStoreJournalResponseDefaultHeaders
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AppendStoreJournalResponse) GetJSON201() *StoreAppendResult {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r AppendStoreJournalResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r AppendStoreJournalResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r AppendStoreJournalResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r AppendStoreJournalResponse) GetJSON409() *StoreConflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r AppendStoreJournalResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AppendStoreJournalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AppendStoreJournalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AppendStoreJournalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AppendStoreJournalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // CreateVolumeKeyGrantResponse201Headers the declared response headers of an HTTP 201 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse201Headers struct {
 	CacheControl *string
@@ -17347,6 +18947,165 @@ func (c *ClientWithResponses) PutWorkloadSecretWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParsePutWorkloadSecretResponse(rsp)
+}
+
+// ListWorkloadStoresWithResponse List a workload's stores
+//
+// Every store of the workload (all kinds), ordered by `(kind, name)`.
+// A store exists once something was written to it (a binding's first
+// write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+// mgmt keeps, after compaction.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores (the `ListWorkloadStores` operationId).
+func (c *ClientWithResponses) ListWorkloadStoresWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams, reqEditors ...RequestEditorFn) (*ListWorkloadStoresResponse, error) {
+	rsp, err := c.ListWorkloadStores(ctx, id, workload, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkloadStoresResponse(rsp)
+}
+
+// DeleteWorkloadStoreWithResponse Delete a store and its data
+//
+// Deletes the journal and the store's data key (custody), so the
+// sealed entries can't be read again even from a backup of the
+// database. A running workload's store object notices on its next
+// sync (a new incarnation) and empties itself; a later write starts
+// a new, empty store. `404 unknown_store` if there is none. Audited
+// (`kind: store_delete`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `DeleteWorkloadStore` operationId).
+func (c *ClientWithResponses) DeleteWorkloadStoreWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*DeleteWorkloadStoreResponse, error) {
+	rsp, err := c.DeleteWorkloadStore(ctx, id, workload, kind, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteWorkloadStoreResponse(rsp)
+}
+
+// GetWorkloadStoreWithResponse Get one store
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `GetWorkloadStore` operationId).
+func (c *ClientWithResponses) GetWorkloadStoreWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*GetWorkloadStoreResponse, error) {
+	rsp, err := c.GetWorkloadStore(ctx, id, workload, kind, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetWorkloadStoreResponse(rsp)
+}
+
+// PutWorkloadStoreWithResponse Create a store (idempotent)
+//
+// Creates an empty store (`201`), or answers the existing one
+// (`200`). A binding's first write creates its store too, so this is
+// only needed to create one before the first deploy. Audited
+// (`kind: store_create`) when it creates.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name} (the `PutWorkloadStore` operationId).
+func (c *ClientWithResponses) PutWorkloadStoreWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, reqEditors ...RequestEditorFn) (*PutWorkloadStoreResponse, error) {
+	rsp, err := c.PutWorkloadStore(ctx, id, workload, kind, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutWorkloadStoreResponse(rsp)
+}
+
+// ReadStoreJournalWithResponse Read a store's journal after a sequence number
+//
+// The entries with `seq > after`, in order, for a store object
+// catching up (after a restart, on a new host, or when another
+// writer appended). Entries superseded by a later entry with the same
+// `ckey` are gone (compaction), so `seq` has gaps; the page is still
+// a complete catch-up from `after`. An unknown store is an empty page
+// with `head` 0 and no `incarnation`.
+//
+// A host must give `epoch`: the data is released only to the holder
+// of the workload's lease at that epoch (`409 lease_lost`, as for
+// secrets). An admin reads without it (`twd kv key get`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `ReadStoreJournal` operationId).
+func (c *ClientWithResponses) ReadStoreJournalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams, reqEditors ...RequestEditorFn) (*ReadStoreJournalResponse, error) {
+	rsp, err := c.ReadStoreJournal(ctx, id, workload, kind, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReadStoreJournalResponse(rsp)
+}
+
+// AppendStoreJournalWithBodyWithResponse Append entries to a store's journal (conditional on its head)
+//
+// The write path of a store object: it appends here **before** it
+// applies the change locally, so an acknowledged write is never only
+// on one host's disk. The append succeeds only if the journal's head
+// is still `after` (and `incarnation` matches when given); otherwise
+// `409 store_conflict`, and the writer catches up
+// (`GET …/journal?after=`) and retries. That makes the journal
+// linearizable across writers (a workload's replicas, an admin's
+// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// entry with the same `ckey`, which mgmt deletes in the same
+// transaction. The first append creates the store.
+//
+// Entries are sealed at rest with the store's data key (AES-256-GCM,
+// custody); `ckey` is stored as an HMAC under a key derived from it.
+//
+// A host must give `epoch` (lease holder at that epoch, `409
+// lease_lost`): a host that lost the workload can't write. Not
+// audited per append (stores are high volume); creation is
+// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+func (c *ClientWithResponses) AppendStoreJournalWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AppendStoreJournalResponse, error) {
+	rsp, err := c.AppendStoreJournalWithBody(ctx, id, workload, kind, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAppendStoreJournalResponse(rsp)
+}
+
+// AppendStoreJournalWithResponse Append entries to a store's journal (conditional on its head)
+//
+// The write path of a store object: it appends here **before** it
+// applies the change locally, so an acknowledged write is never only
+// on one host's disk. The append succeeds only if the journal's head
+// is still `after` (and `incarnation` matches when given); otherwise
+// `409 store_conflict`, and the writer catches up
+// (`GET …/journal?after=`) and retries. That makes the journal
+// linearizable across writers (a workload's replicas, an admin's
+// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// entry with the same `ckey`, which mgmt deletes in the same
+// transaction. The first append creates the store.
+//
+// Entries are sealed at rest with the store's data key (AES-256-GCM,
+// custody); `ckey` is stored as an HMAC under a key derived from it.
+//
+// A host must give `epoch` (lease holder at that epoch, `409
+// lease_lost`): a host that lost the workload can't write. Not
+// audited per append (stores are high volume); creation is
+// (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+// append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `AppendStoreJournal` operationId).
+func (c *ClientWithResponses) AppendStoreJournalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *AppendStoreJournalParams, body AppendStoreJournalJSONRequestBody, reqEditors ...RequestEditorFn) (*AppendStoreJournalResponse, error) {
+	rsp, err := c.AppendStoreJournal(ctx, id, workload, kind, name, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAppendStoreJournalResponse(rsp)
 }
 
 // CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
@@ -22409,6 +24168,601 @@ func ParsePutWorkloadSecretResponse(rsp *http.Response) (*PutWorkloadSecretRespo
 		response.Headers404 = &headers
 	case true:
 		var headers PutWorkloadSecretResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListWorkloadStoresResponse parses an HTTP response from a ListWorkloadStoresWithResponse call
+func ParseListWorkloadStoresResponse(rsp *http.Response) (*ListWorkloadStoresResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkloadStoresResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StorePage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListWorkloadStoresResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListWorkloadStoresResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListWorkloadStoresResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListWorkloadStoresResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseDeleteWorkloadStoreResponse parses an HTTP response from a DeleteWorkloadStoreWithResponse call
+func ParseDeleteWorkloadStoreResponse(rsp *http.Response) (*DeleteWorkloadStoreResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteWorkloadStoreResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers DeleteWorkloadStoreResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DeleteWorkloadStoreResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers DeleteWorkloadStoreResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetWorkloadStoreResponse parses an HTTP response from a GetWorkloadStoreWithResponse call
+func ParseGetWorkloadStoreResponse(rsp *http.Response) (*GetWorkloadStoreResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetWorkloadStoreResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Store
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetWorkloadStoreResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetWorkloadStoreResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetWorkloadStoreResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePutWorkloadStoreResponse parses an HTTP response from a PutWorkloadStoreWithResponse call
+func ParsePutWorkloadStoreResponse(rsp *http.Response) (*PutWorkloadStoreResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutWorkloadStoreResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Store
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Store
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers PutWorkloadStoreResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers PutWorkloadStoreResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers PutWorkloadStoreResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers PutWorkloadStoreResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseReadStoreJournalResponse parses an HTTP response from a ReadStoreJournalWithResponse call
+func ParseReadStoreJournalResponse(rsp *http.Response) (*ReadStoreJournalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReadStoreJournalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StoreJournal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest LeaseLost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ReadStoreJournalResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers ReadStoreJournalResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ReadStoreJournalResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ReadStoreJournalResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ReadStoreJournalResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ReadStoreJournalResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseAppendStoreJournalResponse parses an HTTP response from a AppendStoreJournalWithResponse call
+func ParseAppendStoreJournalResponse(rsp *http.Response) (*AppendStoreJournalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AppendStoreJournalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest StoreAppendResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest StoreConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers AppendStoreJournalResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers AppendStoreJournalResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers AppendStoreJournalResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers AppendStoreJournalResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers AppendStoreJournalResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

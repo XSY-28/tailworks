@@ -1477,8 +1477,13 @@ func (s *Server) roleGate(roles map[string]string, mux *http.ServeMux) http.Hand
 		}
 		if p.Kind == "host" && r.Body != nil && pattern != "POST /v1/audit" {
 			// L4: host-role bodies are small (registration, heartbeat, object
-			// create, ready) except audit batches, which keep readJSON's limit.
-			r.Body = http.MaxBytesReader(w, r.Body, hostBodyLimit)
+			// create, ready) except audit batches, which keep readJSON's limit,
+			// and store journal appends (stores.go), which have their own.
+			limit := int64(hostBodyLimit)
+			if pattern == storeAppendPattern {
+				limit = storeAppendBodyLimit
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		if p.Kind == "host" && p.HostID != "" && strings.HasPrefix(pattern[strings.Index(pattern, " ")+1:], "/v1/hosts/{id}") {
 			// /v1/hosts/{id}[/...]: the id is the third path element.
