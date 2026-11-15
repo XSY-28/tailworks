@@ -598,25 +598,9 @@ Don't run code you don't trust on the process tier.
 
 ## Upgrade
 
-`twd upgrade` does it in one step: it downloads and checks the release,
-backs up mgmt's store and custody, installs, restarts twd, and rolls back
-on its own if twd doesn't come back healthy. `twd upgrade --plan` shows
-what would change first. Details, fleets and rolling back by hand:
-[upgrading.md](upgrading.md).
-
-```sh
-twd upgrade --plan
-twd upgrade
-twd version && twd doctor
-```
-
-Deployed workloads come back on their own, with the same nodes and
-storage, as after any restart. To upgrade by hand instead, `twd down`
-(without `--purge`: objects, nodes and data stay), then `sh get.sh` (or
-`./install.sh` from the newer release directory), then the same `twd up`
-you used before. The installer swaps `~/.twd/bin` and `~/.twd/share` and
-leaves your state alone (`twd.json`, `mgmt/`, `hostd/`, `logs/`); take a
-[backup](#back-up-and-restore) first.
+See [upgrading.md](upgrading.md): what may run together, upgrading a
+`twd up` machine, and upgrading a fleet. Take a
+[backup](#back-up-and-restore) first if you may want to go back.
 
 ## Back up and restore
 

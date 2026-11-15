@@ -1,4 +1,6 @@
-Last update: 2026-11-15 PT. Issue #48 (first-deploy docs), stacked on PR #49.
+Last update: 2026-11-15 PT. Merged origin/master after PR #49 landed; PR #53 now carries only #48's work.
+
+Earlier: 2026-11-15 PT. Issue #48 (first-deploy docs), stacked on PR #49.
 
 # docs-first-deploy-issue-48
 
@@ -37,11 +39,9 @@ with `origin/master` merged in (ADR-041 `twd upgrade`, `changes/`).
 
 ## Findings and decisions
 
-- **Semantic merge fix.** PR #49's new INSTALL "Upgrade" section described
-  only the manual path (`twd down`, `sh get.sh`, `twd up`). Master now has
-  `twd upgrade` (ADR-041, docs/upgrading.md). The section now leads with
-  `twd upgrade` and keeps the manual path as the alternative; "Back up and
-  restore" mentions the backups `twd upgrade` takes.
+- **Upgrade section.** Before #49 landed, this branch rewrote INSTALL's
+  "Upgrade" to lead with `twd upgrade`. #49's final version made it a
+  pointer to upgrading.md ("one upgrade page"); the merge keeps #49's.
 - **Dangling STATUS.md references.** INSTALL cited STATUS.md "Fast identity"
   and "FV", but those sections are no longer in STATUS.md (dropped in
   `5b9e955`). install-testing.md points at ADR-031 and ADR-030 instead,
@@ -53,7 +53,28 @@ with `origin/master` merged in (ADR-041 `twd upgrade`, `changes/`).
   KVM; macOS has the tier too (PR #49 fixed INSTALL). Left for a follow-up,
   outside this issue.
 
+## Merge with master after #49 (2026-11-15)
+
+Conflicts: `README.md` ("More" list: kept #49's docs map, CLI reference and
+`upgrading.md` link, plus this branch's concepts, troubleshooting and
+install-testing entries) and `docs/INSTALL.md` ("Upgrade": took #49's
+pointer to upgrading.md). Also: #49's new `docs/README.md` docs map now
+lists concepts.md, troubleshooting.md and install-testing.md, and its
+"Isolation, honestly" pointer (and ADR-034's) now names the "Isolation"
+section.
+
 ## Tests
+
+After the merge with master (#49 landed):
+
+- `make lint`: ok, including `changes-check` (the `cli-json` need is now
+  met by #49's own fragment).
+- `go test -count=1 ./cmd/twd/... ./docs/... ./schema/... ./agent/... ./internal/... ./mgmt/ui/...`: ok
+  (including #49's `TestSearchRanksGuides` and `TestLLMsTxt`).
+- Links and anchors in README, docs/README, INSTALL and the three new docs: ok.
+
+Before the merge:
+
 
 - `go test ./cmd/twd -run TestCallerGrant`: ok (new test).
 - Link check of README, INSTALL, concepts, troubleshooting and
