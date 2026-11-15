@@ -446,8 +446,19 @@ api-check: api
 compat-check:
 	$(GO) run ./internal/compatdoc/compatcheck
 
+## changes-check: release-note fragments (changes/*.md) are valid, and a branch that touches an
+## upgrade-relevant path (migrations, the API spec, the workerd pin, …) names it in one (changes/README.md).
+.PHONY: changes-check
+changes-check:
+	sh scripts/check-changes.sh
+
+## install-test: install.sh upgrade keeps .prev, --rollback swaps it back (hermetic, fake releases).
+.PHONY: install-test
+install-test:
+	sh scripts/install_test.sh
+
 .PHONY: lint
-lint: api-check compat-check
+lint: api-check compat-check changes-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
 	$(GO) vet -tags e2e ./e2e/local/...
