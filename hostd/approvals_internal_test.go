@@ -98,7 +98,7 @@ func TestAuthorizeApproval(t *testing.T) {
 		{g(`{"decisions":["reject"]}`), "reject", true},
 		{g(`{"limits":{"amount":500}}`), "approve", false},
 		{g(`{"limits":{"amount":500}}`, `{"limits":{"amount":1000}}`), "approve", true}, // union
-		{g(`{"limits":{"usd":1000}}`), "approve", false},                                  // no such param: fail closed
+		{g(`{"limits":{"usd":1000}}`), "approve", false},                                // no such param: fail closed
 		{g(`not json`, `{}`), "approve", true},
 	} {
 		e := authorizeApproval(tc.grants, a, tc.decision, "bob@example.com")

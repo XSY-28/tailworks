@@ -10,19 +10,12 @@
 <header class="top">
   <a class="brand" href="/ui/">twd</a>
   <nav>
-    <a href="/ui/"{{if eq .Path "/ui/"}} class="cur"{{end}}>overview</a>
-    <a href="/ui/audit"{{if eq .Path "/ui/audit"}} class="cur"{{end}}>audit</a>
-    <a href="/ui/approvals"{{if eq .Path "/ui/approvals"}} class="cur"{{end}}>approvals</a>
+    <a href="/ui/"{{if eq .Path "/ui/"}} class="cur"{{end}}>Overview</a>
+    <a href="/ui/audit"{{if eq .Path "/ui/audit"}} class="cur"{{end}}>Audit log</a>
+    <a href="/ui/approvals"{{if eq .Path "/ui/approvals"}} class="cur"{{end}}>Approvals</a>
   </nav>
-  <div class="stats" data-live="stats">
-    <span title="hosts live / total"><b data-stat="hosts.live">{{.Status.Hosts.Live}}</b>/<span data-stat="hosts.total">{{.Status.Hosts.Total}}</span> hosts live</span>
-    <span><b data-stat="tenants">{{.Status.Tenants}}</b> tenants</span>
-    <span><b data-stat="objects">{{.Status.Objects}}</b> objects</span>
-    <span title="device deletes scheduled after the tombstone window"><b data-stat="pendingDeviceDeletes">{{.Status.PendingDeviceDeletes}}</b> pending device deletes</span>
-  </div>
-  <div class="who" title="WhoIs principal of this connection">
-    <span class="mono">{{.Who.Actor}}</span> · {{.Who.Kind}}{{if .Who.Admin}} · admin{{end}}
-    {{if .Who.Mgmt.DNSName}} · <span class="mono">{{.Who.Mgmt.DNSName}}</span>{{end}}
+  <div class="who" title="The tailnet identity of this connection (WhoIs)">
+    Signed in as <span class="mono">{{.Who.Actor}}</span>{{if .Who.Admin}} · admin{{end}}
   </div>
 </header>
 {{if .Flash}}<div class="flash ok" role="status">{{.Flash}}</div>{{end}}
@@ -31,12 +24,14 @@
 {{template "content" .}}
 </main>
 <footer>
-  twd-mgmt {{if .Status.Version}}<span class="mono">{{.Status.Version}}</span>{{else}}(version unknown){{end}}
-  · rendered <span class="mono" data-live="rendered">{{.Now}}</span>
-  · <span id="live-state">live refresh needs JavaScript</span>
-  · nothing is stored in this browser
+  <span id="live-state" class="live">Updates need JavaScript; reload to refresh</span>
+  <span>·</span>
+  <span>twd-mgmt {{if .Status.Version}}<span class="mono">{{.Status.Version}}</span>{{else}}(version unknown){{end}}</span>
+  <span>·</span>
+  <span>Page rendered {{.Now}}</span>
+  <span>·</span>
+  <span>Nothing is stored in this browser</span>
 </footer>
-<div id="toasts" aria-live="polite"></div>
 <script src="/ui/static/app.js"></script>
 </body>
 </html>{{end}}
@@ -48,30 +43,30 @@
   <td class="tree mono">{{range seq .Level}}<span class="ind"></span>{{end}}{{if .Level}}<span class="elbow">└</span>{{end}}<a href="/ui/objects/{{.ObjectID}}" title="{{.ObjectID}}">{{if .NodeName}}{{.NodeName}}{{else}}{{short .ObjectID}}{{end}}</a></td>
   <td>{{.DisplayNS}}</td>
   <td>{{template "status" .Status}}</td>
-  <td class="mono small">{{if .MagicDNS}}<a href="http://{{.MagicDNS}}/" rel="noreferrer">{{.MagicDNS}}</a>{{else}}<span class="muted">-</span>{{end}}</td>
-  <td class="small">{{join .Tags}}</td>
-  <td class="small">{{if .TTL}}{{ttl .TTL}}{{else}}<span class="muted">-</span>{{end}}</td>
-  <td class="mono small" title="{{.StableNodeID}}">{{if .StableNodeID}}{{short .StableNodeID}}{{else}}<span class="muted">-</span>{{end}}</td>
-  <td class="small">{{if .ActingFor}}{{.ActingFor}}{{else}}<span class="muted">-</span>{{end}}</td>
-  <td class="small mono">{{ago .CreatedAt}}</td>
+  <td class="mono">{{if .MagicDNS}}<a href="http://{{.MagicDNS}}/" rel="noreferrer">{{.MagicDNS}}</a>{{else}}<span class="muted">—</span>{{end}}</td>
+  <td class="small">{{if .Tags}}{{join .Tags}}{{else}}<span class="muted">—</span>{{end}}</td>
+  <td class="small">{{if .TTL}}{{ttl .TTL}}{{else}}<span class="muted">—</span>{{end}}</td>
+  <td class="mono" title="{{.StableNodeID}}">{{if .StableNodeID}}{{short .StableNodeID}}{{else}}<span class="muted">—</span>{{end}}</td>
+  <td class="small">{{if .ActingFor}}{{.ActingFor}}{{else}}<span class="muted">—</span>{{end}}</td>
+  <td class="small">{{since .CreatedAt}}</td>
 </tr>{{end}}
 {{end}}
 
-{{define "objhead"}}<tr><th>node</th><th>class/name</th><th>status</th><th>MagicDNS</th><th>tags</th><th>ttl</th><th>node id</th><th>acting for</th><th>age</th></tr>{{end}}
+{{define "objhead"}}<tr><th>Node</th><th>Kind / name</th><th>Status</th><th>Address</th><th>Tags</th><th>Time to live</th><th>Node ID</th><th>Acting for</th><th>Created</th></tr>{{end}}
 
 {{define "auditrows"}}{{/* . is {Records, Names} */}}
 {{range .Records}}<tr>
-  <td class="mono small nowrap">{{stampStr .TS}}</td>
+  <td class="mono nowrap">{{stampStr .TS}}</td>
   <td class="mono">{{if eq .Source "tenant"}}~{{end}}{{.Kind}}</td>
-  <td class="mono small">{{if .ObjectID}}<a href="/ui/objects/{{.ObjectID}}" title="{{.ObjectID}}">{{with index $.Names .ObjectID}}{{.}}{{else}}{{short .ObjectID}}{{end}}</a>{{else}}<span class="muted">-</span>{{end}}</td>
-  <td class="small">{{describe . $.Names}}</td>
-  <td class="mono small">{{.Chain}}</td>
-  <td class="mono small">{{if .TraceID}}<a href="/ui/audit?trace={{.TraceID}}">{{short .TraceID}}</a>{{end}}</td>
+  <td class="mono">{{if .ObjectID}}<a href="/ui/objects/{{.ObjectID}}" title="{{.ObjectID}}">{{with index $.Names .ObjectID}}{{.}}{{else}}{{short .ObjectID}}{{end}}</a>{{else}}<span class="muted">—</span>{{end}}</td>
+  <td>{{describe . $.Names}}</td>
+  <td class="mono muted">{{.Chain}}</td>
+  <td class="mono">{{if .TraceID}}<a href="/ui/audit?trace={{.TraceID}}" title="Show every record of this trace">{{short .TraceID}}</a>{{end}}</td>
 </tr>{{end}}
 {{end}}
 
-{{define "audithead"}}<tr><th>ts (UTC)</th><th>kind</th><th>node</th><th>detail</th><th>chain</th><th>trace</th></tr>{{end}}
+{{define "audithead"}}<tr><th>Time (UTC)</th><th>Event</th><th>Node</th><th>What happened</th><th>Chain</th><th>Trace</th></tr>{{end}}
 
 {{define "chains"}}{{/* . is []chainStatus */}}
-{{range .}}<span class="chain"><span class="mono">{{.Chain}}</span> <span class="badge {{if .OK}}ok{{else}}bad{{end}}">{{.Summary}}</span> <span class="muted small">{{.Records}} records</span></span>{{else}}<span class="muted">no chains yet</span>{{end}}
+{{range .}}<span class="chain"><span class="mono">{{.Chain}}</span> <span class="badge {{if .OK}}ok{{else}}bad{{end}}">{{.Summary}}</span> <span class="muted small">{{.Records}} records</span></span>{{else}}<span class="muted">No audit chains yet.</span>{{end}}
 {{end}}

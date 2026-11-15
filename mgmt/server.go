@@ -190,8 +190,11 @@ func readJSON(r *http.Request, v any) error {
 const (
 	roleHost  = 1 << iota // hostd endpoints
 	roleAdmin             // CLI endpoints
-	roleApprover          // approvals: a tailnet identity holding twd.dev/cap/approve (approvals.go)
 )
+
+// roleApprover: the approvals routes, for a tailnet identity holding
+// twd.dev/cap/approve (approvals.go).
+const roleApprover = roleAdmin << 1
 
 func (s *Server) allowed(p Principal, roles int) bool {
 	switch p.Kind {
@@ -381,9 +384,11 @@ type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIsInfo, error)
 // or OPTIONS:
 //   - Sec-Fetch-Site, if present, must be same-origin or none;
 //   - Origin, if present, must name the request's own Host;
-//   - a /v1 mutation must carry X-Twd-UI: 1 (set by the UI's app.js; the
-//     custom header forces a CORS preflight, which mgmt never answers, so
-//     cross-origin JavaScript cannot reach the handler at all).
+//   - a /v1 mutation must carry X-Twd-UI: 1 (the custom header forces a
+//     CORS preflight, which mgmt never answers, so cross-origin JavaScript
+//     cannot reach the handler at all). The admin UI itself no longer
+//     sends it: its browser side only POSTs forms to /ui/..., and the UI
+//     makes the /v1 call server-side.
 //
 // Refusals are 403 forbidden "cross-site request refused": the spec's
 // ErrorCode enum is closed, so no cross_site_request code is minted.

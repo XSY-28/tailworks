@@ -253,12 +253,16 @@ function makeHost(cls) {
           for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
           for (const w of CFG.workflows ?? []) env[w.binding] = exp.WorkflowGate({ props: { workflow: w.name } });
           env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
+          for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
           return {
             compatibilityDate: CFG.compatDate,
             compatibilityFlags: CFG.compatFlags,
             mainModule: "__twd_facet.js",
             modules: FACET_MODULES,
             globalOutbound: exp.Egress({ props: { class: cls, name } }),
+            // The facet's console.*, exceptions and outcomes, attested as
+            // this object (ADR-observability).
+            tails: [exp.Tail({ props: { kind: "object", class: cls, name } })],
             env,
           };
         });
@@ -338,6 +342,10 @@ function makeHost(cls) {
 }
 
 //@@HOST_CLASSES@@
+
+// Platform stores (twd-store.js; ADR-platform-stores), when the app has
+// storage bindings.
+//@@STORES@@
 
 // NsProxy stands in for a DO namespace binding inside a facet's env:
 // env.X.getByName(name) returns the real stub (RPC promise pipelining makes
@@ -518,6 +526,16 @@ export class TailnetApi extends WorkerEntrypoint {
         return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
       }
     }
+    if (op === "spans") {
+      // The runtime's DO-call spans (ADR-observability): observability
+      // data only, attributed to the attested caller.
+      if (!Array.isArray(args.spans)) return { ok: false, error: errBody("bad_request", "spans must be an array") };
+      try {
+        return { ok: true, value: await hostd(this.env, "spans", { spans: args.spans.slice(0, 64), as }) };
+      } catch (e) {
+        return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
+      }
+    }
     if (!["ensure", "spawn", "ready", "kill", "audit", "self"].includes(op)) return { ok: false, error: errBody("bad_request", "unknown op " + op) };
     if (op === "ensure" && !as) return { ok: false, error: errBody("bad_request", "ensure needs an object") };
     // Tenant code never names a principal: actingFor comes from the
@@ -527,6 +545,107 @@ export class TailnetApi extends WorkerEntrypoint {
       return { ok: true, value: await hostd(this.env, op, { ...rest, as }) };
     } catch (e) {
       return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
+    }
+  }
+}
+
+// ---- observability (ADR-observability) ----
+
+const TAIL_MAX_LOGS = 100;
+const TAIL_MAX_LINE = 4096;
+const TAIL_MAX_EXC = 8;
+
+// logText renders one console call's arguments as a line.
+function logText(args) {
+  const parts = Array.isArray(args) ? args : [args];
+  return parts
+    .map((a) => {
+      if (typeof a === "string") return a;
+      try {
+        return JSON.stringify(a) ?? String(a);
+      } catch {
+        return String(a);
+      }
+    })
+    .join(" ")
+    .slice(0, TAIL_MAX_LINE);
+}
+
+function pathOf(u) {
+  try {
+    return new URL(u).pathname; // never the query string
+  } catch {
+    return "";
+  }
+}
+
+// slimEvent keeps what a request record needs from a workerd TraceItem:
+// no request header but traceparent, no query string, no cf beyond the
+// route, never the create ticket.
+function slimEvent(e) {
+  const ev = e?.event ?? {};
+  const out = {
+    time: e?.eventTimestamp ?? 0,
+    outcome: String(e?.outcome ?? ""),
+    entrypoint: String(e?.entrypoint ?? ""),
+    model: String(e?.executionModel ?? ""),
+    doId: String(e?.durableObjectId ?? ""),
+    truncated: !!e?.truncated,
+    event: "",
+  };
+  if (ev.request) {
+    out.event = "fetch";
+    out.method = String(ev.request.method ?? "");
+    out.path = pathOf(ev.request.url);
+    const tp = ev.request.headers?.traceparent;
+    if (typeof tp === "string") out.traceparent = tp;
+    const t = ev.request.cf?.twd;
+    if (t && typeof t === "object") {
+      out.route = { kind: String(t.kind ?? ""), class: String(t.class ?? ""), name: String(t.name ?? "") };
+      if (t.kind === "scheduled") out.event = "scheduled";
+    }
+    out.status = ev.response?.status ?? 0;
+  } else if (typeof ev.rpcMethod === "string") {
+    out.event = ev.rpcMethod === "__twd_alarm" ? "alarm" : "rpc";
+    out.method = ev.rpcMethod;
+  } else if (typeof ev.cron === "string") {
+    out.event = "scheduled";
+  } else if (ev.scheduledTime !== undefined) {
+    out.event = "alarm";
+  } else if (ev.getWebSocketEvent || ev.webSocketEventType || ev.type === "message" || ev.type === "close" || ev.type === "error") {
+    out.event = "websocket";
+  }
+  out.logs = (Array.isArray(e?.logs) ? e.logs : []).slice(0, TAIL_MAX_LOGS).map((l) => ({ t: Number(l?.timestamp ?? 0), level: String(l?.level ?? "log"), msg: logText(l?.message) }));
+  out.exceptions = (Array.isArray(e?.exceptions) ? e.exceptions : []).slice(0, TAIL_MAX_EXC).map((x) => ({
+    t: Number(x?.timestamp ?? 0),
+    name: String(x?.name ?? "").slice(0, 256),
+    message: String(x?.message ?? "").slice(0, TAIL_MAX_LINE),
+    stack: String(x?.stack ?? "").slice(0, TAIL_MAX_LINE),
+  }));
+  if ((e?.logs?.length ?? 0) > TAIL_MAX_LOGS || (e?.exceptions?.length ?? 0) > TAIL_MAX_EXC) out.truncated = true;
+  return out;
+}
+
+// Tail is the tail worker of the tenant service (props {kind: "workload"},
+// config.capnp) and of every facet object (props {kind: "object", class,
+// name}, minted by Host_<Class>, so a facet's records are attested). It
+// hands the slimmed events to hostd, which joins them with its ingress
+// records. The platform worker itself has no tails: it would trace this.
+export class Tail extends WorkerEntrypoint {
+  async tail(events) {
+    const p = this.ctx.props ?? {};
+    const evs = (Array.isArray(events) ? events : []).filter((e) => !e?.event?.consumedEvents).map(slimEvent);
+    if (!evs.length) return;
+    const as = p.kind === "object" && typeof p.class === "string" && typeof p.name === "string" ? { class: p.class, name: p.name } : null;
+    try {
+      const r = await this.env.HOSTD.fetch("http://hostd/v1/tail", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ as, events: evs }),
+      });
+      await r.body?.cancel();
+    } catch {
+      /* hostd restarting: these records are lost */
     }
   }
 }

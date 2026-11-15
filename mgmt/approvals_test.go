@@ -179,7 +179,7 @@ func TestApprovals(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w.Code, w.Body.String(), w.Header()
 	}
-	if c, body, _ := page("100.64.0.5:1", "GET", "/ui/approvals?tenant="+tn, ""); c != 200 || !strings.Contains(body, ">small<") || strings.Contains(body, ">big<") || !strings.Contains(body, `data-api="`+decide+`"`) {
+	if c, body, _ := page("100.64.0.5:1", "GET", "/ui/approvals?tenant="+tn, ""); c != 200 || !strings.Contains(body, ">small<") || strings.Contains(body, ">big<") || !strings.Contains(body, `action="/ui/approvals/decide"`) {
 		t.Fatalf("approver UI: %d %s", c, body)
 	}
 	if c, body, _ := page("100.64.0.6:1", "GET", "/ui/approvals", ""); c != 200 || !strings.Contains(body, ">small<") || !strings.Contains(body, ">big<") {

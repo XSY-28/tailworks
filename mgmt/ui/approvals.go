@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -145,24 +146,34 @@ func (u *ui) decideForm(w http.ResponseWriter, r *http.Request) {
 
 // callBody is call with a JSON request body.
 func (u *ui) callBody(r *http.Request, method, p string, body []byte, out any) error {
-	req, err := http.NewRequestWithContext(r.Context(), method, p, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(r.Context(), method, u.apiURL+p, bytes.NewReader(body))
 	if err != nil {
 		return &apiError{Status: 500, Code: "internal", Message: err.Error()}
 	}
-	req.Host, req.RemoteAddr = r.Host, r.RemoteAddr
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
-	w := &memResponse{hdr: http.Header{}}
-	u.api.ServeHTTP(w, req)
-	if w.status/100 != 2 {
-		e := &apiError{Status: w.status, Raw: w.body.Bytes()}
-		if json.Unmarshal(w.body.Bytes(), e) != nil || e.Code == "" {
-			e.Code, e.Message = "internal", fmt.Sprintf("%s %s answered %d", method, p, w.status)
+	res, err := u.api.Do(req)
+	if err != nil {
+		return &apiError{Status: 502, Code: "internal", Message: fmt.Sprintf("%s %s: %v", method, p, err)}
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(res.Body, maxBody))
+	if res.StatusCode/100 != 2 {
+		e := &apiError{Status: res.StatusCode, Raw: b}
+		if json.Unmarshal(b, e) != nil || e.Code == "" {
+			e.Code, e.Message = "internal", fmt.Sprintf("%s %s answered %d", method, p, res.StatusCode)
 		}
 		return e
 	}
-	if out != nil && w.body.Len() > 0 {
-		return json.Unmarshal(w.body.Bytes(), out)
+	if out != nil && len(b) > 0 {
+		return json.Unmarshal(b, out)
 	}
 	return nil
+}
+
+// approvalsPage: the approvals pages are open to approvers who are not
+// admins (mgmt's own gate lets them reach these paths only; the /v1 role
+// gate decides what each call may do).
+func approvalsPage(path string) bool {
+	return path == "/ui/approvals" || path == "/ui/approvals/decide"
 }

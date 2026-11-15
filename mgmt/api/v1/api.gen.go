@@ -141,6 +141,11 @@ const (
 	AuditKindSecretPut           AuditKind = "secret_put"
 	AuditKindSecretRelease       AuditKind = "secret_release"
 	AuditKindSpawn               AuditKind = "spawn"
+	AuditKindStoreCreate         AuditKind = "store_create"
+	AuditKindStoreDelete         AuditKind = "store_delete"
+	AuditKindTelemetryDelete     AuditKind = "telemetry_delete"
+	AuditKindTelemetryPut        AuditKind = "telemetry_put"
+	AuditKindTelemetryRelease    AuditKind = "telemetry_release"
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
@@ -234,6 +239,16 @@ func (e AuditKind) Valid() bool {
 	case AuditKindSecretRelease:
 		return true
 	case AuditKindSpawn:
+		return true
+	case AuditKindStoreCreate:
+		return true
+	case AuditKindStoreDelete:
+		return true
+	case AuditKindTelemetryDelete:
+		return true
+	case AuditKindTelemetryPut:
+		return true
+	case AuditKindTelemetryRelease:
 		return true
 	case AuditKindTenantCreate:
 		return true
@@ -397,6 +412,8 @@ const (
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
+	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
+	ErrorCodeStoreLimit              ErrorCode = "store_limit"
 	ErrorCodeStoreUnavailable        ErrorCode = "store_unavailable"
 	ErrorCodeSuperseded              ErrorCode = "superseded"
 	ErrorCodeTakeoverUnconfirmed     ErrorCode = "takeover_unconfirmed"
@@ -405,6 +422,7 @@ const (
 	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
 	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
+	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
 	ErrorCodeUnknownTenant           ErrorCode = "unknown_tenant"
 	ErrorCodeUnknownWorkload         ErrorCode = "unknown_workload"
 )
@@ -514,6 +532,10 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeSpawnBudgetExceeded:
 		return true
+	case ErrorCodeStoreConflict:
+		return true
+	case ErrorCodeStoreLimit:
+		return true
 	case ErrorCodeStoreUnavailable:
 		return true
 	case ErrorCodeSuperseded:
@@ -529,6 +551,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeUnknownNamespace:
 		return true
 	case ErrorCodeUnknownSecret:
+		return true
+	case ErrorCodeUnknownStore:
 		return true
 	case ErrorCodeUnknownTenant:
 		return true
@@ -845,6 +869,27 @@ func (e PublicIngress) Valid() bool {
 	}
 }
 
+// Defines values for RequestRecordKind.
+const (
+	Dropped    RequestRecordKind = "dropped"
+	Invocation RequestRecordKind = "invocation"
+	Request    RequestRecordKind = "request"
+)
+
+// Valid indicates whether the value is a known member of the RequestRecordKind enum.
+func (e RequestRecordKind) Valid() bool {
+	switch e {
+	case Dropped:
+		return true
+	case Invocation:
+		return true
+	case Request:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StatusClockSource.
 const (
 	StatusClockSourceLocal    StatusClockSource = "local"
@@ -857,6 +902,27 @@ func (e StatusClockSource) Valid() bool {
 	case StatusClockSourceLocal:
 		return true
 	case StatusClockSourcePostgres:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelemetrySignal.
+const (
+	Logs    TelemetrySignal = "logs"
+	Metrics TelemetrySignal = "metrics"
+	Traces  TelemetrySignal = "traces"
+)
+
+// Valid indicates whether the value is a known member of the TelemetrySignal enum.
+func (e TelemetrySignal) Valid() bool {
+	switch e {
+	case Logs:
+		return true
+	case Metrics:
+		return true
+	case Traces:
 		return true
 	default:
 		return false
@@ -974,6 +1040,24 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	case PurgeTenantObjectsParamsStateKilled:
 		return true
 	case PurgeTenantObjectsParamsStateTransferred:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetWorkloadLogsParamsSource.
+const (
+	Console  GetWorkloadLogsParamsSource = "console"
+	Requests GetWorkloadLogsParamsSource = "requests"
+)
+
+// Valid indicates whether the value is a known member of the GetWorkloadLogsParamsSource enum.
+func (e GetWorkloadLogsParamsSource) Valid() bool {
+	switch e {
+	case Console:
+		return true
+	case Requests:
 		return true
 	default:
 		return false
@@ -1150,6 +1234,11 @@ type AuditBatch struct {
 // `secret_put` (a workload secret set; name only),
 // `secret_delete`,
 // `secret_release` (a workload's secrets released to its lease holder; names only),
+// `store_create` (a platform store created, by its first write or an admin),
+// `store_delete` (a platform store and its data key deleted),
+// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+// `telemetry_delete`,
+// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1237,6 +1326,11 @@ type AuditRecord struct {
 	// `secret_put` (a workload secret set; name only),
 	// `secret_delete`,
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
+	// `store_create` (a platform store created, by its first write or an admin),
+	// `store_delete` (a platform store and its data key deleted),
+	// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+	// `telemetry_delete`,
+	// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1607,9 +1701,12 @@ type Error struct {
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
+	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
+	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -1679,9 +1776,12 @@ type Error struct {
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
 // | `no_logs` | 404 | the workload's host has no log file for it yet |
 // | `unknown_secret` | 404 | the workload has no secret of that name |
+// | `unknown_store` | 404 | the workload has no store of that kind and name |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
+// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 // | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2036,6 +2136,35 @@ type OIDCConfiguration struct {
 	ResponseTypesSupported           []string               `json:"response_types_supported"`
 	SubjectTypesSupported            []string               `json:"subject_types_supported"`
 	AdditionalProperties             map[string]interface{} `json:"-"`
+}
+
+// OTLPExport A tenant's OTLP export, without header values.
+type OTLPExport struct {
+	// Endpoint OTLP/HTTP base URL; signals go to `<endpoint>/v1/<signal>`.
+	Endpoint string `json:"endpoint"`
+
+	// HeaderNames Names of the headers sent with every export (values are never returned).
+	HeaderNames []string          `json:"headerNames"`
+	Signals     []TelemetrySignal `json:"signals"`
+}
+
+// OTLPExportPut defines model for OTLPExportPut.
+type OTLPExportPut struct {
+	// Endpoint http:// or https:// base URL of an OTLP/HTTP receiver on the tailnet (no user info, query or fragment).
+	Endpoint string `json:"endpoint"`
+
+	// Headers Headers sent with every export, typically the collector's credentials (at most 16; values at most 4 KiB). Never logged, audited or returned.
+	Headers *map[string]string `json:"headers,omitempty"`
+
+	// Signals What to export (default all three).
+	Signals *[]TelemetrySignal `json:"signals,omitempty"`
+}
+
+// OTLPGrant defines model for OTLPGrant.
+type OTLPGrant struct {
+	Endpoint string             `json:"endpoint"`
+	Headers  *map[string]string `json:"headers,omitempty"`
+	Signals  []TelemetrySignal  `json:"signals"`
 }
 
 // Object defines model for Object.
@@ -2418,6 +2547,72 @@ type ReplicaRef struct {
 	Workload string `json:"workload"`
 }
 
+// RequestRecord One line of a workload's request log (`twd logs --json`,
+// ADR-observability): a request through hostd's ingress (`kind:
+// request`), joined with its workerd invocation, or an invocation
+// with no ingress half (`kind: invocation`: a DO called from the
+// Worker, an alarm, a cron run), or a note that records were dropped
+// by the workload's rate limit (`kind: dropped`). Never holds bodies,
+// query strings, request headers or secret values.
+type RequestRecord struct {
+	AuditTraceID *string `json:"auditTraceId,omitempty"`
+
+	// Caller The verified caller (netd's WhoIs), never from tenant code.
+	Caller *struct {
+		IP     *string   `json:"ip,omitempty"`
+		Node   *string   `json:"node,omitempty"`
+		NodeID *string   `json:"nodeId,omitempty"`
+		Object *string   `json:"object,omitempty"`
+		Public *bool     `json:"public,omitempty"`
+		Tags   *[]string `json:"tags,omitempty"`
+		User   *string   `json:"user,omitempty"`
+	} `json:"caller,omitempty"`
+	Class      *string `json:"class,omitempty"`
+	Deployment *string `json:"deployment,omitempty"`
+	Dropped    *int    `json:"dropped,omitempty"`
+
+	// DurableObjectID workerd's ID of a plain-DO object whose name the invocation does not carry.
+	DurableObjectID *string  `json:"durableObjectId,omitempty"`
+	DurationMs      *float32 `json:"durationMs,omitempty"`
+	Entrypoint      *string  `json:"entrypoint,omitempty"`
+
+	// Event fetch, alarm, rpc, scheduled, websocket.
+	Event      *string `json:"event,omitempty"`
+	Exceptions *[]struct {
+		Message *string    `json:"message,omitempty"`
+		Name    *string    `json:"name,omitempty"`
+		Stack   *string    `json:"stack,omitempty"`
+		Time    *time.Time `json:"time,omitempty"`
+	} `json:"exceptions,omitempty"`
+	Host *string           `json:"host,omitempty"`
+	Kind RequestRecordKind `json:"kind"`
+	Logs *[]struct {
+		Level   *string    `json:"level,omitempty"`
+		Message *string    `json:"message,omitempty"`
+		Time    *time.Time `json:"time,omitempty"`
+	} `json:"logs,omitempty"`
+	Method *string `json:"method,omitempty"`
+	Name   *string `json:"name,omitempty"`
+
+	// Object The twd object ID.
+	Object       *string `json:"object,omitempty"`
+	Outcome      *string `json:"outcome,omitempty"`
+	ParentSpanID *string `json:"parentSpanId,omitempty"`
+
+	// Path The URL path (never the query string).
+	Path      *string   `json:"path,omitempty"`
+	SpanID    *string   `json:"spanId,omitempty"`
+	Status    *int      `json:"status,omitempty"`
+	Tenant    *string   `json:"tenant,omitempty"`
+	Time      time.Time `json:"time"`
+	TraceID   *string   `json:"traceId,omitempty"`
+	Truncated *bool     `json:"truncated,omitempty"`
+	Workload  *string   `json:"workload,omitempty"`
+}
+
+// RequestRecordKind defines model for RequestRecord.Kind.
+type RequestRecordKind string
+
 // RunningContainer One running container in a heartbeat.
 type RunningContainer struct {
 	Class  string `json:"class"`
@@ -2547,6 +2742,110 @@ type StatusReplicas struct {
 	Message *string `json:"message,omitempty"`
 	Ok      bool    `json:"ok"`
 }
+
+// Store A platform storage object of a workload (ADR-platform-stores).
+type Store struct {
+	// Bytes Plaintext bytes of the kept entries.
+	Bytes     int64 `json:"bytes"`
+	CreatedAt int64 `json:"createdAt"`
+
+	// Entries Journal entries kept (after compaction).
+	Entries int64 `json:"entries"`
+
+	// Head The last sequence number appended.
+	Head int64 `json:"head"`
+
+	// Incarnation Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself.
+	Incarnation string `json:"incarnation"`
+
+	// Kind A storage binding type (`kv`; later `d1`, `queue`, …).
+	Kind      StoreKind `json:"kind"`
+	Name      string    `json:"name"`
+	TenantID  string    `json:"tenantID"`
+	UpdatedAt int64     `json:"updatedAt"`
+	Workload  string    `json:"workload"`
+}
+
+// StoreAppend defines model for StoreAppend.
+type StoreAppend struct {
+	// After The journal head the writer has applied; the append fails with `store_conflict` unless it is still the head.
+	After   int64          `json:"after"`
+	Entries []StoreEntryIn `json:"entries"`
+
+	// Incarnation The incarnation the writer has applied (empty for a new store). A mismatch is a `store_conflict`.
+	Incarnation *string `json:"incarnation,omitempty"`
+}
+
+// StoreAppendResult defines model for StoreAppendResult.
+type StoreAppendResult struct {
+	// Head The new head: the entries got `after+1 … head`, in order.
+	Head        int64  `json:"head"`
+	Incarnation string `json:"incarnation"`
+}
+
+// StoreEntry defines model for StoreEntry.
+type StoreEntry struct {
+	Data []byte `json:"data"`
+	Seq  int64  `json:"seq"`
+}
+
+// StoreEntryIn defines model for StoreEntryIn.
+type StoreEntryIn struct {
+	// Ckey Compaction key: this entry supersedes every earlier entry with the same `ckey` (for KV, the key). Empty: never compacted.
+	Ckey *string `json:"ckey,omitempty"`
+
+	// Data The entry, opaque to mgmt (its kind's encoding), at most 2 MiB.
+	Data []byte `json:"data"`
+}
+
+// StoreJournal defines model for StoreJournal.
+type StoreJournal struct {
+	Entries []StoreEntry `json:"entries"`
+	Head    int64        `json:"head"`
+
+	// Incarnation Empty when the store does not exist.
+	Incarnation *string `json:"incarnation,omitempty"`
+
+	// More True if entries after the last one returned remain: read again with `after` = its `seq`.
+	More bool `json:"more"`
+}
+
+// StoreKind A storage binding type (`kv`; later `d1`, `queue`, …).
+type StoreKind = string
+
+// StorePage defines model for StorePage.
+type StorePage struct {
+	Items []Store `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// TelemetryConfig defines model for TelemetryConfig.
+type TelemetryConfig struct {
+	// Otlp A tenant's OTLP export, without header values.
+	Otlp      *OTLPExport `json:"otlp,omitempty"`
+	TenantID  string      `json:"tenantID"`
+	UpdatedAt *int64      `json:"updatedAt,omitempty"`
+	UpdatedBy *string     `json:"updatedBy,omitempty"`
+}
+
+// TelemetryGrant A fenced release of the tenant's OTLP export config. Never logged.
+type TelemetryGrant struct {
+	Epoch     int64      `json:"epoch"`
+	GrantedAt *int64     `json:"grantedAt,omitempty"`
+	Otlp      *OTLPGrant `json:"otlp,omitempty"`
+	TenantID  string     `json:"tenantID"`
+	Workload  string     `json:"workload"`
+}
+
+// TelemetryPut defines model for TelemetryPut.
+type TelemetryPut struct {
+	Otlp OTLPExportPut `json:"otlp"`
+}
+
+// TelemetrySignal An OTLP signal.
+type TelemetrySignal string
 
 // Tenant defines model for Tenant.
 type Tenant struct {
@@ -2738,9 +3037,12 @@ type TombstoneError struct {
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
 	// | `no_logs` | 404 | the workload's host has no log file for it yet |
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
+	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
+	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2902,6 +3204,12 @@ type ReservationID = string
 // SecretName defines model for secretName.
 type SecretName = string
 
+// StoreEpoch defines model for storeEpoch.
+type StoreEpoch = int64
+
+// StoreName defines model for storeName.
+type StoreName = string
+
 // TenantID defines model for tenantID.
 type TenantID = string
 
@@ -2965,6 +3273,13 @@ type PreconditionFailed = Error
 // `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type ReadyConflict = Error
+
+// StoreConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
+// `missing` names what is absent (grant, cap, field, quota); `snippet`
+// is policy HuJSON to paste when a grant is missing; `doc_url` is
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
+type StoreConflict = Error
 
 // Unauthorized The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
@@ -3213,7 +3528,35 @@ type GetWorkloadLogsParams struct {
 
 	// Host Only the replica on this host (a host ID).
 	Host *string `form:"host,omitempty" json:"host,omitempty"`
+
+	// Source `console`: the app's raw output (workerd's stdout, the node
+	// tier's `app.log`, the microVM console). `requests`: the
+	// workload's structured request records (ADR-observability), as
+	// JSON Lines (`application/x-ndjson`), one `RequestRecord` per
+	// line; `n` and the filters below then count records, not lines.
+	Source *GetWorkloadLogsParamsSource `form:"source,omitempty" json:"source,omitempty"`
+
+	// Object `source=requests`: only records of this object (object ID, `Class/name`, `Class` or name).
+	Object *string `form:"object,omitempty" json:"object,omitempty"`
+
+	// Status `source=requests`: only this HTTP status (`404`) or class (`5xx`).
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// Outcome `source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …).
+	Outcome *string `form:"outcome,omitempty" json:"outcome,omitempty"`
+
+	// Caller `source=requests`: only callers whose login or node name contains this (`public` for Funnel requests).
+	Caller *string `form:"caller,omitempty" json:"caller,omitempty"`
+
+	// Trace `source=requests`: only this W3C trace ID (or a prefix of it) or audit trace ID.
+	Trace *string `form:"trace,omitempty" json:"trace,omitempty"`
+
+	// Errors `source=requests`: only errors (status ≥ 400, an outcome other than `ok`, or an exception).
+	Errors *bool `form:"errors,omitempty" json:"errors,omitempty"`
 }
+
+// GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
+type GetWorkloadLogsParamsSource string
 
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
@@ -3234,6 +3577,42 @@ type ListWorkloadSecretsParams struct {
 
 	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListWorkloadStoresParams defines parameters for ListWorkloadStores.
+type ListWorkloadStoresParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Kind Only stores of this kind.
+	Kind *StoreKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ReadStoreJournalParams defines parameters for ReadStoreJournal.
+type ReadStoreJournalParams struct {
+	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
+	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+
+	// After Return entries with a larger `seq` (default 0).
+	After *int64 `form:"after,omitempty" json:"after,omitempty"`
+
+	// Limit At most this many entries (default and maximum 1000; a page also stops at about 4 MiB of data).
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// AppendStoreJournalParams defines parameters for AppendStoreJournal.
+type AppendStoreJournalParams struct {
+	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
+	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
+// CreateTelemetryGrantParams defines parameters for CreateTelemetryGrant.
+type CreateTelemetryGrantParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
 }
 
 // CreateVolumeKeyGrantParams defines parameters for CreateVolumeKeyGrant.
@@ -3284,6 +3663,9 @@ type UpdateTenantJSONRequestBody = TenantPatch
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
 
+// PutTenantTelemetryJSONRequestBody defines body for PutTenantTelemetry for application/json ContentType.
+type PutTenantTelemetryJSONRequestBody = TelemetryPut
+
 // DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
 type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
@@ -3295,6 +3677,9 @@ type UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody = WorkloadPubl
 
 // PutWorkloadSecretJSONRequestBody defines body for PutWorkloadSecret for application/json ContentType.
 type PutWorkloadSecretJSONRequestBody = SecretPut
+
+// AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
+type AppendStoreJournalJSONRequestBody = StoreAppend
 
 // Getter for additional properties for OIDCConfiguration. Returns the specified
 // element and whether it was found
@@ -3699,6 +4084,15 @@ type ServerInterface interface {
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(w http.ResponseWriter, r *http.Request, id TenantID, params PurgeTenantObjectsParams)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// (DELETE /v1/tenants/{id}/telemetry)
+	DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
+	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// (GET /v1/tenants/{id}/telemetry)
+	GetTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
+	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// (PUT /v1/tenants/{id}/telemetry)
+	PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID)
@@ -3726,6 +4120,27 @@ type ServerInterface interface {
 	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
 	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	PutWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName)
+	// ListWorkloadStores List a workload's stores
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
+	ListWorkloadStores(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadStoresParams)
+	// DeleteWorkloadStore Delete a store and its data
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
+	DeleteWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName)
+	// GetWorkloadStore Get one store
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
+	GetWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName)
+	// PutWorkloadStore Create a store (idempotent)
+	// (PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
+	PutWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName)
+	// ReadStoreJournal Read a store's journal after a sequence number
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
+	ReadStoreJournal(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params ReadStoreJournalParams)
+	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
+	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
+	AppendStoreJournal(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params AppendStoreJournalParams)
+	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
+	// (POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants)
+	CreateTelemetryGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateTelemetryGrantParams)
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	// (POST /v1/volumes/{id}/keys)
 	CreateVolumeKeyGrant(w http.ResponseWriter, r *http.Request, id VolumeID, params CreateVolumeKeyGrantParams)
@@ -5640,6 +6055,84 @@ func (siw *ServerInterfaceWrapper) PurgeTenantObjects(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteTenantTelemetry operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTenantTelemetry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTenantTelemetry operation middleware
+func (siw *ServerInterfaceWrapper) GetTenantTelemetry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTenantTelemetry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutTenantTelemetry operation middleware
+func (siw *ServerInterfaceWrapper) PutTenantTelemetry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutTenantTelemetry(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CheckTenantWIF operation middleware
 func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http.Request) {
 
@@ -5781,6 +6274,97 @@ func (siw *ServerInterfaceWrapper) GetWorkloadLogs(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "host"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "host", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "object" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "object", r.URL.Query(), &params.Object, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "object"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "object", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "outcome" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "outcome", r.URL.Query(), &params.Outcome, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "outcome"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outcome", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "caller" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "caller", r.URL.Query(), &params.Caller, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "caller"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "caller", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "trace" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "trace", r.URL.Query(), &params.Trace, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "trace"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trace", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "errors" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "errors", r.URL.Query(), &params.Errors, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "errors"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "errors", Err: err})
 		}
 		return
 	}
@@ -6093,6 +6677,457 @@ func (siw *ServerInterfaceWrapper) PutWorkloadSecret(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkloadStores operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkloadStores(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkloadStoresParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkloadStores(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWorkloadStore operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWorkloadStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWorkloadStore(w, r, id, workload, kind, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkloadStore operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkloadStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkloadStore(w, r, id, workload, kind, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutWorkloadStore operation middleware
+func (siw *ServerInterfaceWrapper) PutWorkloadStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutWorkloadStore(w, r, id, workload, kind, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReadStoreJournal operation middleware
+func (siw *ServerInterfaceWrapper) ReadStoreJournal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReadStoreJournalParams
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReadStoreJournal(w, r, id, workload, kind, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AppendStoreJournal operation middleware
+func (siw *ServerInterfaceWrapper) AppendStoreJournal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AppendStoreJournalParams
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AppendStoreJournal(w, r, id, workload, kind, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTelemetryGrant operation middleware
+func (siw *ServerInterfaceWrapper) CreateTelemetryGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateTelemetryGrantParams
+
+	// ------------- Required query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTelemetryGrant(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateVolumeKeyGrant operation middleware
 func (siw *ServerInterfaceWrapper) CreateVolumeKeyGrant(w http.ResponseWriter, r *http.Request) {
 
@@ -6285,6 +7320,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets/{name}", wrapper.DeleteWorkloadSecret)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets/{name}", wrapper.PutWorkloadSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secret-grants", wrapper.CreateWorkloadSecretGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores", wrapper.ListWorkloadStores)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.DeleteWorkloadStore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.GetWorkloadStore)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.PutWorkloadStore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.ReadStoreJournal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.AppendStoreJournal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/telemetry-grants", wrapper.CreateTelemetryGrant)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.DeleteTenantTelemetry)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.GetTenantTelemetry)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.PutTenantTelemetry)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts", wrapper.ListHosts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/hosts", wrapper.CreateHost)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/hosts/{id}", wrapper.DeleteHost)
@@ -6417,6 +7462,15 @@ type ReadyConflictJSONResponse struct {
 	Body Error
 
 	Headers ReadyConflictResponseHeaders
+}
+
+type StoreConflictResponseHeaders struct {
+	TwdError *string
+}
+type StoreConflictJSONResponse struct {
+	Body Error
+
+	Headers StoreConflictResponseHeaders
 }
 
 type UnauthorizedResponseHeaders struct {
@@ -10784,6 +11838,249 @@ func (response PurgeTenantObjectsdefaultJSONResponse) VisitPurgeTenantObjectsRes
 	return err
 }
 
+type DeleteTenantTelemetryRequestObject struct {
+	ID TenantID `json:"id"`
+}
+
+type DeleteTenantTelemetryResponseObject interface {
+	VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error
+}
+
+type DeleteTenantTelemetry204Response struct {
+}
+
+func (response DeleteTenantTelemetry204Response) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTenantTelemetry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTenantTelemetry403JSONResponse) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTenantTelemetry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteTenantTelemetry404JSONResponse) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTenantTelemetrydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteTenantTelemetrydefaultJSONResponse) VisitDeleteTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetryRequestObject struct {
+	ID TenantID `json:"id"`
+}
+
+type GetTenantTelemetryResponseObject interface {
+	VisitGetTenantTelemetryResponse(w http.ResponseWriter) error
+}
+
+type GetTenantTelemetry200JSONResponse TelemetryConfig
+
+func (response GetTenantTelemetry200JSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetTenantTelemetry403JSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTenantTelemetry404JSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantTelemetrydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetTenantTelemetrydefaultJSONResponse) VisitGetTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetryRequestObject struct {
+	ID   TenantID `json:"id"`
+	Body *PutTenantTelemetryJSONRequestBody
+}
+
+type PutTenantTelemetryResponseObject interface {
+	VisitPutTenantTelemetryResponse(w http.ResponseWriter) error
+}
+
+type PutTenantTelemetry200JSONResponse TelemetryConfig
+
+func (response PutTenantTelemetry200JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetry400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutTenantTelemetry400JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetry403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutTenantTelemetry403JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetry404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutTenantTelemetry404JSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutTenantTelemetrydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutTenantTelemetrydefaultJSONResponse) VisitPutTenantTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CheckTenantWIFRequestObject struct {
 	ID TenantID `json:"id"`
 }
@@ -11005,6 +12302,53 @@ type GetWorkloadLogsResponseObject interface {
 
 type GetWorkloadLogs200ResponseHeaders struct {
 	CacheControl *string
+}
+
+type GetWorkloadLogs200ApplicationXNdjsonResponse struct {
+	Body          io.Reader
+	Headers       GetWorkloadLogs200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetWorkloadLogs200ApplicationXNdjsonResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// If w doesn't support flushing, fall back to io.Copy.
+		_, err := io.Copy(w, response.Body)
+		return err
+	}
+	// text/event-stream messages are typically small; use a
+	// modest buffer and flush after each chunk so clients see
+	// events immediately instead of waiting on OS buffering.
+	buf := make([]byte, 4096)
+	for {
+		n, err := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 type GetWorkloadLogs200TextResponse struct {
@@ -11715,6 +13059,731 @@ func (response PutWorkloadSecretdefaultJSONResponse) VisitPutWorkloadSecretRespo
 	return err
 }
 
+type ListWorkloadStoresRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   ListWorkloadStoresParams
+}
+
+type ListWorkloadStoresResponseObject interface {
+	VisitListWorkloadStoresResponse(w http.ResponseWriter) error
+}
+
+type ListWorkloadStores200JSONResponse StorePage
+
+func (response ListWorkloadStores200JSONResponse) VisitListWorkloadStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadStores400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWorkloadStores400JSONResponse) VisitListWorkloadStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadStores403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWorkloadStores403JSONResponse) VisitListWorkloadStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadStores404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWorkloadStores404JSONResponse) VisitListWorkloadStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListWorkloadStoresdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListWorkloadStoresdefaultJSONResponse) VisitListWorkloadStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteWorkloadStoreRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+}
+
+type DeleteWorkloadStoreResponseObject interface {
+	VisitDeleteWorkloadStoreResponse(w http.ResponseWriter) error
+}
+
+type DeleteWorkloadStore204Response struct {
+}
+
+func (response DeleteWorkloadStore204Response) VisitDeleteWorkloadStoreResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWorkloadStore403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWorkloadStore403JSONResponse) VisitDeleteWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteWorkloadStore404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWorkloadStore404JSONResponse) VisitDeleteWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteWorkloadStoredefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DeleteWorkloadStoredefaultJSONResponse) VisitDeleteWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadStoreRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+}
+
+type GetWorkloadStoreResponseObject interface {
+	VisitGetWorkloadStoreResponse(w http.ResponseWriter) error
+}
+
+type GetWorkloadStore200JSONResponse Store
+
+func (response GetWorkloadStore200JSONResponse) VisitGetWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadStore403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWorkloadStore403JSONResponse) VisitGetWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadStore404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWorkloadStore404JSONResponse) VisitGetWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetWorkloadStoredefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetWorkloadStoredefaultJSONResponse) VisitGetWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadStoreRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+}
+
+type PutWorkloadStoreResponseObject interface {
+	VisitPutWorkloadStoreResponse(w http.ResponseWriter) error
+}
+
+type PutWorkloadStore200JSONResponse Store
+
+func (response PutWorkloadStore200JSONResponse) VisitPutWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadStore201JSONResponse Store
+
+func (response PutWorkloadStore201JSONResponse) VisitPutWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadStore400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutWorkloadStore400JSONResponse) VisitPutWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadStore403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutWorkloadStore403JSONResponse) VisitPutWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadStore404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutWorkloadStore404JSONResponse) VisitPutWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutWorkloadStoredefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response PutWorkloadStoredefaultJSONResponse) VisitPutWorkloadStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadStoreJournalRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+	Params   ReadStoreJournalParams
+}
+
+type ReadStoreJournalResponseObject interface {
+	VisitReadStoreJournalResponse(w http.ResponseWriter) error
+}
+
+type ReadStoreJournal200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type ReadStoreJournal200JSONResponse struct {
+	Body    StoreJournal
+	Headers ReadStoreJournal200ResponseHeaders
+}
+
+func (response ReadStoreJournal200JSONResponse) VisitReadStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadStoreJournal400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReadStoreJournal400JSONResponse) VisitReadStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadStoreJournal403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReadStoreJournal403JSONResponse) VisitReadStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadStoreJournal404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReadStoreJournal404JSONResponse) VisitReadStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadStoreJournal409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response ReadStoreJournal409JSONResponse) VisitReadStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadStoreJournaldefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ReadStoreJournaldefaultJSONResponse) VisitReadStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendStoreJournalRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+	Params   AppendStoreJournalParams
+	Body     *AppendStoreJournalJSONRequestBody
+}
+
+type AppendStoreJournalResponseObject interface {
+	VisitAppendStoreJournalResponse(w http.ResponseWriter) error
+}
+
+type AppendStoreJournal201JSONResponse StoreAppendResult
+
+func (response AppendStoreJournal201JSONResponse) VisitAppendStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendStoreJournal400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response AppendStoreJournal400JSONResponse) VisitAppendStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendStoreJournal403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AppendStoreJournal403JSONResponse) VisitAppendStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendStoreJournal404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AppendStoreJournal404JSONResponse) VisitAppendStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendStoreJournal409JSONResponse struct{ StoreConflictJSONResponse }
+
+func (response AppendStoreJournal409JSONResponse) VisitAppendStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendStoreJournaldefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response AppendStoreJournaldefaultJSONResponse) VisitAppendStoreJournalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrantRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   CreateTelemetryGrantParams
+}
+
+type CreateTelemetryGrantResponseObject interface {
+	VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error
+}
+
+type CreateTelemetryGrant201ResponseHeaders struct {
+	CacheControl *string
+}
+
+type CreateTelemetryGrant201JSONResponse struct {
+	Body    TelemetryGrant
+	Headers CreateTelemetryGrant201ResponseHeaders
+}
+
+func (response CreateTelemetryGrant201JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateTelemetryGrant400JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateTelemetryGrant403JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateTelemetryGrant404JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrant409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response CreateTelemetryGrant409JSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTelemetryGrantdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response CreateTelemetryGrantdefaultJSONResponse) VisitCreateTelemetryGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateVolumeKeyGrantRequestObject struct {
 	ID     VolumeID `json:"id"`
 	Params CreateVolumeKeyGrantParams
@@ -12036,6 +14105,15 @@ type StrictServerInterface interface {
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(ctx context.Context, request PurgeTenantObjectsRequestObject) (PurgeTenantObjectsResponseObject, error)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// (DELETE /v1/tenants/{id}/telemetry)
+	DeleteTenantTelemetry(ctx context.Context, request DeleteTenantTelemetryRequestObject) (DeleteTenantTelemetryResponseObject, error)
+	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// (GET /v1/tenants/{id}/telemetry)
+	GetTenantTelemetry(ctx context.Context, request GetTenantTelemetryRequestObject) (GetTenantTelemetryResponseObject, error)
+	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// (PUT /v1/tenants/{id}/telemetry)
+	PutTenantTelemetry(ctx context.Context, request PutTenantTelemetryRequestObject) (PutTenantTelemetryResponseObject, error)
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(ctx context.Context, request CheckTenantWIFRequestObject) (CheckTenantWIFResponseObject, error)
@@ -12063,6 +14141,27 @@ type StrictServerInterface interface {
 	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
 	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	PutWorkloadSecret(ctx context.Context, request PutWorkloadSecretRequestObject) (PutWorkloadSecretResponseObject, error)
+	// ListWorkloadStores List a workload's stores
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
+	ListWorkloadStores(ctx context.Context, request ListWorkloadStoresRequestObject) (ListWorkloadStoresResponseObject, error)
+	// DeleteWorkloadStore Delete a store and its data
+	// (DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
+	DeleteWorkloadStore(ctx context.Context, request DeleteWorkloadStoreRequestObject) (DeleteWorkloadStoreResponseObject, error)
+	// GetWorkloadStore Get one store
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
+	GetWorkloadStore(ctx context.Context, request GetWorkloadStoreRequestObject) (GetWorkloadStoreResponseObject, error)
+	// PutWorkloadStore Create a store (idempotent)
+	// (PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name})
+	PutWorkloadStore(ctx context.Context, request PutWorkloadStoreRequestObject) (PutWorkloadStoreResponseObject, error)
+	// ReadStoreJournal Read a store's journal after a sequence number
+	// (GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
+	ReadStoreJournal(ctx context.Context, request ReadStoreJournalRequestObject) (ReadStoreJournalResponseObject, error)
+	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
+	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
+	AppendStoreJournal(ctx context.Context, request AppendStoreJournalRequestObject) (AppendStoreJournalResponseObject, error)
+	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
+	// (POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants)
+	CreateTelemetryGrant(ctx context.Context, request CreateTelemetryGrantRequestObject) (CreateTelemetryGrantResponseObject, error)
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	// (POST /v1/volumes/{id}/keys)
 	CreateVolumeKeyGrant(ctx context.Context, request CreateVolumeKeyGrantRequestObject) (CreateVolumeKeyGrantResponseObject, error)
@@ -13405,6 +15504,91 @@ func (sh *strictHandler) PurgeTenantObjects(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// DeleteTenantTelemetry operation middleware
+func (sh *strictHandler) DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request DeleteTenantTelemetryRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTenantTelemetry(ctx, request.(DeleteTenantTelemetryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTenantTelemetry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTenantTelemetryResponseObject); ok {
+		if err := validResponse.VisitDeleteTenantTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTenantTelemetry operation middleware
+func (sh *strictHandler) GetTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request GetTenantTelemetryRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTenantTelemetry(ctx, request.(GetTenantTelemetryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTenantTelemetry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTenantTelemetryResponseObject); ok {
+		if err := validResponse.VisitGetTenantTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutTenantTelemetry operation middleware
+func (sh *strictHandler) PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request PutTenantTelemetryRequestObject
+
+	request.ID = id
+
+	var body PutTenantTelemetryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutTenantTelemetry(ctx, request.(PutTenantTelemetryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutTenantTelemetry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutTenantTelemetryResponseObject); ok {
+		if err := validResponse.VisitPutTenantTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CheckTenantWIF operation middleware
 func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID) {
 	var request CheckTenantWIFRequestObject
@@ -13682,6 +15866,216 @@ func (sh *strictHandler) PutWorkloadSecret(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutWorkloadSecretResponseObject); ok {
 		if err := validResponse.VisitPutWorkloadSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWorkloadStores operation middleware
+func (sh *strictHandler) ListWorkloadStores(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadStoresParams) {
+	var request ListWorkloadStoresRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWorkloadStores(ctx, request.(ListWorkloadStoresRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWorkloadStores")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWorkloadStoresResponseObject); ok {
+		if err := validResponse.VisitListWorkloadStoresResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWorkloadStore operation middleware
+func (sh *strictHandler) DeleteWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) {
+	var request DeleteWorkloadStoreRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWorkloadStore(ctx, request.(DeleteWorkloadStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWorkloadStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWorkloadStoreResponseObject); ok {
+		if err := validResponse.VisitDeleteWorkloadStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWorkloadStore operation middleware
+func (sh *strictHandler) GetWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) {
+	var request GetWorkloadStoreRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWorkloadStore(ctx, request.(GetWorkloadStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWorkloadStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWorkloadStoreResponseObject); ok {
+		if err := validResponse.VisitGetWorkloadStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutWorkloadStore operation middleware
+func (sh *strictHandler) PutWorkloadStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) {
+	var request PutWorkloadStoreRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutWorkloadStore(ctx, request.(PutWorkloadStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutWorkloadStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutWorkloadStoreResponseObject); ok {
+		if err := validResponse.VisitPutWorkloadStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReadStoreJournal operation middleware
+func (sh *strictHandler) ReadStoreJournal(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params ReadStoreJournalParams) {
+	var request ReadStoreJournalRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReadStoreJournal(ctx, request.(ReadStoreJournalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReadStoreJournal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReadStoreJournalResponseObject); ok {
+		if err := validResponse.VisitReadStoreJournalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AppendStoreJournal operation middleware
+func (sh *strictHandler) AppendStoreJournal(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params AppendStoreJournalParams) {
+	var request AppendStoreJournalRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+	request.Params = params
+
+	var body AppendStoreJournalJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AppendStoreJournal(ctx, request.(AppendStoreJournalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AppendStoreJournal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AppendStoreJournalResponseObject); ok {
+		if err := validResponse.VisitAppendStoreJournalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTelemetryGrant operation middleware
+func (sh *strictHandler) CreateTelemetryGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateTelemetryGrantParams) {
+	var request CreateTelemetryGrantRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTelemetryGrant(ctx, request.(CreateTelemetryGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTelemetryGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTelemetryGrantResponseObject); ok {
+		if err := validResponse.VisitCreateTelemetryGrantResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

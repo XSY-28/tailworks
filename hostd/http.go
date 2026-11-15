@@ -100,7 +100,9 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 		}
 		b, _ := json.Marshal(blob)
 		r.Header.Set(netd.HeaderCF, string(b))
-		inst.ingress.ServeHTTP(w, r)
+		sp, ow := h.tel.startIngress(wl, inst, o, r, blob, trace, w) // telemetry.go
+		inst.ingress.ServeHTTP(ow, r)
+		sp.end()
 	})
 }
 
@@ -178,7 +180,9 @@ func (h *Host) serveEgress(w http.ResponseWriter, r *http.Request, inst *instanc
 	r.Header.Set(netd.HeaderObject, o.NetdID)
 	t := inst.w.tenant
 	rec := &statusRecorder{ResponseWriter: w, code: 200}
+	sp := h.tel.startEgress(inst, o, r) // telemetry.go
 	t.egress.ServeHTTP(rec, r)
+	sp.end(rec.code, rec.Header().Get(netd.HeaderError))
 	if code := rec.Header().Get(netd.HeaderError); code != "" {
 		h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "deny", Dst: r.URL.Host, Code: code, TraceID: newTraceID()})
 	}
@@ -262,6 +266,14 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			h.containerAPI(inst, w, r) // ctx.container (containers.go)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v1/store/") {
+			h.storeAPI(inst, w, r) // platform stores (stores.go)
+			return
+		}
+		if p := r.URL.Path; p == "/v1/tail" || p == "/v1/spans" {
+			h.tel.hostAPI(inst, w, r) // telemetry.go
+			return
+		}
 		var req apiReq
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 			writeAPIError(w, &apiError{Code: "bad_request", Detail: err.Error()})
@@ -294,6 +306,9 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			if err != nil {
 				fail(err)
 				return
+			}
+			if req.Wake {
+				h.tel.wake(o)
 			}
 			h.mu.Lock()
 			if req.Wake {
@@ -530,6 +545,8 @@ func (h *Host) pushAPI() http.Handler {
 	m.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, h.Status())
 	})
+	// The operator's local scrape (the tailnet one is MetricsListener).
+	m.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) { h.MetricsHandler().ServeHTTP(w, r) })
 	// teardown.go: no new objects before twd down --purge lists them.
 	m.HandleFunc("POST /v1/teardown", h.teardownHandler)
 
@@ -604,6 +621,9 @@ type WorkloadStatus struct {
 	Egress string `json:",omitempty"`
 	// LogFile is the app's log (workerd.log, or app.log for runtime node).
 	LogFile string `json:",omitempty"`
+	// RequestLog is the workload's structured request records
+	// (ADR-observability; JSON Lines), whether or not it exists yet.
+	RequestLog string `json:",omitempty"`
 	// Public is the workload's public ingress (ADR-029), if any.
 	Public *PublicStatus `json:",omitempty"`
 }
@@ -694,6 +714,7 @@ func (h *Host) Status() StatusView {
 				ws.Crons = w.active.app.Crons
 			}
 			ws.LogFile = filepath.Join(w.active.dir, "workerd.log")
+			ws.RequestLog = h.RequestLogPath(w.tenantID, w.name)
 			if w.active.node != nil {
 				ws.Runtime, ws.Node, ws.LogFile = bundle.RuntimeNode, w.active.nodeInfo(), w.active.node.logPath
 			}

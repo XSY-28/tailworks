@@ -60,6 +60,9 @@ func parseWorkflows(wb []byte, a *App) error {
 	for _, b := range a.Bindings {
 		bindings[b.Name] = true
 	}
+	for _, b := range a.Stores {
+		bindings[b.Binding] = true
+	}
 	for _, x := range w.Workflows {
 		where := fmt.Sprintf("bundle: workflows %q", x.Name)
 		if !workflowNameRE.MatchString(x.Name) {

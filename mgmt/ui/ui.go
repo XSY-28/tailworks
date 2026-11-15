@@ -2,24 +2,30 @@
 // plus one CSS file and one vanilla-JS file, served under /ui/ by mgmt
 // itself (no build step, no external assets, nothing stored client-side).
 //
-// Every page is rendered from the /v1 API: the handler runs in-process
-// requests through the API handler it was mounted with, carrying the
-// browser request's context (and so its authenticated principal), and
-// decodes the JSON. There is one source of truth and the UI automatically
-// sees exactly what the caller's role may see. app.js re-fetches the page
-// every 3 s to refresh the live regions and performs the mutations with
-// fetch against /v1 (header X-Twd-UI: 1; see mgmt's browser guard). With
-// JavaScript off, the same forms POST to /ui/... fallbacks that perform the
-// identical /v1 call in-process and redirect back.
+// The UI is an ordinary client of the public /v1 API. It uses only what
+// api/openapi.yaml documents: its operations, query parameters, headers
+// and JSON (TestUsesOnlyPublicAPI enforces this). It never imports mgmt,
+// and it has no back door: it decides who may use it from GET /v1/whoami,
+// like the CLI. That keeps it extractable into its own process. Whose
+// identity a call carries is the transport's business: mgmt's embedded
+// mount serves the calls in-process as the browser's principal
+// (mgmt/uiclient.go), so the role gate applies exactly as to any caller.
+//
+// The browser only ever talks to the UI. app.js re-fetches the page every
+// 5 s to refresh the live regions and asks for confirmation before a
+// mutation; the mutation itself is a plain form POST to /ui/..., which
+// makes the /v1 call server-side and redirects back with the outcome.
 package ui
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -35,12 +41,12 @@ var templateFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-// Handler serves the admin UI under /ui/. api is the /v1 handler (role
-// gate included): the UI calls it in-process with the caller's context.
-// Admission to /ui/ (local operator or admin user only) is the caller's
-// job: mgmt's Server.Handler gates it before dispatching here.
-func Handler(api http.Handler) http.Handler {
-	u := &ui{api: api, pages: parsePages(), now: time.Now}
+// Handler serves the admin UI under /ui/. It sends its /v1 requests with
+// api to baseURL (for example "https://twd-mgmt.example.ts.net"), each with
+// the browser request's context. Only admins that are not hosts may use
+// it, as GET /v1/whoami reports them.
+func Handler(api *http.Client, baseURL string) http.Handler {
+	u := &ui{api: api, apiURL: strings.TrimSuffix(baseURL, "/"), pages: parsePages(), now: time.Now}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ui/{$}", u.overview)
 	mux.HandleFunc("GET /ui/objects/{id}", u.object)
@@ -52,12 +58,13 @@ func Handler(api http.Handler) http.Handler {
 	mux.HandleFunc("GET /ui/tenants/{id}", u.tenant)
 	mux.HandleFunc("POST /ui/tenants/{id}/delete", u.deleteTenantForm)
 	mux.HandleFunc("GET /ui/audit", u.audit)
-	mux.HandleFunc("GET /ui/approvals", u.approvals)           // approvals.go
-	mux.HandleFunc("POST /ui/approvals/decide", u.decideForm) // approvals.go
+	// approvals.go
+	mux.HandleFunc("GET /ui/approvals", u.approvals)
+	mux.HandleFunc("POST /ui/approvals/decide", u.decideForm)
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /ui/static/", http.StripPrefix("/ui/static/", http.FileServerFS(static)))
 	mux.HandleFunc("/ui/", u.notFound)
-	return secureHeaders(mux)
+	return secureHeaders(u.admit(mux))
 }
 
 // secureHeaders sets the response headers every UI response carries.
@@ -78,12 +85,42 @@ func secureHeaders(h http.Handler) http.Handler {
 }
 
 type ui struct {
-	api   http.Handler
-	pages map[string]*template.Template
-	now   func() time.Time
+	api    *http.Client
+	apiURL string // the API base URL, no trailing slash
+	pages  map[string]*template.Template
+	now    func() time.Time
 }
 
-// ---- in-process API client ----
+type whoKey struct{}
+
+// admit lets a request through only when GET /v1/whoami says the caller is
+// an admin and not a host. The answer rides on the request context so the
+// page header doesn't ask again. Static assets hold no data and skip the
+// check.
+func (u *ui) admit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/ui/static/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		var who whoAmI
+		if err := u.call(r, "GET", "/v1/whoami", &who); err != nil {
+			u.fail(w, r, err)
+			return
+		}
+		if who.Kind == "host" || !who.Admin && !approvalsPage(r.URL.Path) { // approvals.go
+			u.fail(w, r, &apiError{Status: 403, Code: "forbidden", Message: fmt.Sprintf("caller (%s) may not use the admin UI", who.Kind)})
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), whoKey{}, who)))
+	})
+}
+
+// ---- /v1 client ----
+
+// maxBody bounds an API answer the UI will read (a 500-item page of
+// objects is well under it).
+const maxBody = 32 << 20
 
 // apiError is the /v1 typed error (docs/errors.md) as the UI sees it.
 type apiError struct {
@@ -99,53 +136,36 @@ type apiError struct {
 
 func (e *apiError) Error() string { return fmt.Sprintf("%s: %s", e.Code, e.Message) }
 
-type memResponse struct {
-	hdr    http.Header
-	status int
-	body   bytes.Buffer
-}
-
-func (m *memResponse) Header() http.Header { return m.hdr }
-func (m *memResponse) WriteHeader(code int) {
-	if m.status == 0 {
-		m.status = code
-	}
-}
-func (m *memResponse) Write(p []byte) (int, error) {
-	if m.status == 0 {
-		m.status = 200
-	}
-	return m.body.Write(p)
-}
-
-// call runs method path through the API handler with the browser request's
-// context and decodes a 2xx body into out. Non-2xx answers are *apiError.
+// call sends method path to the API with the browser request's context and
+// decodes a 2xx body into out. Non-2xx answers are *apiError.
 func (u *ui) call(r *http.Request, method, p string, out any) error {
-	req, err := http.NewRequestWithContext(r.Context(), method, p, nil)
+	req, err := http.NewRequestWithContext(r.Context(), method, u.apiURL+p, nil)
 	if err != nil {
 		return &apiError{Status: 500, Code: "internal", Message: err.Error()}
 	}
-	req.Host = r.Host
-	req.RemoteAddr = r.RemoteAddr
 	req.Header.Set("Accept", "application/json")
-	if t := r.Header.Get("Twd-Trace-ID"); t != "" {
-		req.Header.Set("Twd-Trace-ID", t)
-	}
-	// Mutations from the UI name the browser user as the actor the way the
-	// CLI does (Twd-Actor): over the tailnet the principal's login wins.
+	// Twd-Actor names the actor on the local-dev socket, as the CLI does;
+	// over the tailnet the caller's WhoIs login wins.
 	req.Header.Set("Twd-Actor", "operator (admin ui)")
-	w := &memResponse{hdr: http.Header{}}
-	u.api.ServeHTTP(w, req)
-	if w.status/100 != 2 {
-		e := &apiError{Status: w.status, Raw: w.body.Bytes()}
-		if json.Unmarshal(w.body.Bytes(), e) != nil || e.Code == "" {
+	res, err := u.api.Do(req)
+	if err != nil {
+		return &apiError{Status: 502, Code: "internal", Message: fmt.Sprintf("%s %s: %v", method, p, err)}
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBody))
+	if err != nil {
+		return &apiError{Status: 502, Code: "internal", Message: fmt.Sprintf("%s %s: reading the answer: %v", method, p, err)}
+	}
+	if res.StatusCode/100 != 2 {
+		e := &apiError{Status: res.StatusCode, Raw: body}
+		if json.Unmarshal(body, e) != nil || e.Code == "" {
 			e.Code = "internal"
-			e.Message = fmt.Sprintf("%s %s answered %d", method, p, w.status)
+			e.Message = fmt.Sprintf("%s %s answered %d", method, p, res.StatusCode)
 		}
 		return e
 	}
-	if out != nil && w.body.Len() > 0 {
-		if err := json.Unmarshal(w.body.Bytes(), out); err != nil {
+	if out != nil && len(body) > 0 {
+		if err := json.Unmarshal(body, out); err != nil {
 			return &apiError{Status: 500, Code: "internal", Message: fmt.Sprintf("%s %s: %v", method, p, err)}
 		}
 	}
@@ -182,6 +202,7 @@ func listAll[T any](u *ui, r *http.Request, p string, maxItems int) ([]T, error)
 func parsePages() map[string]*template.Template {
 	funcs := template.FuncMap{
 		"ago":      func(ms int64) string { return ago(ms, time.Now()) },
+		"since":    func(ms int64) template.HTML { return since(ms, time.Now()) },
 		"stamp":    stamp,
 		"stampStr": stampStr,
 		"short":    short,
@@ -231,7 +252,11 @@ type base struct {
 
 func (u *ui) base(r *http.Request, title string) base {
 	b := base{Title: title, Path: r.URL.Path, Now: stamp(u.now().UnixMilli())}
-	u.call(r, "GET", "/v1/whoami", &b.Who)
+	if who, ok := r.Context().Value(whoKey{}).(whoAmI); ok {
+		b.Who = who
+	} else {
+		u.call(r, "GET", "/v1/whoami", &b.Who)
+	}
 	u.call(r, "GET", "/v1/status", &b.Status)
 	b.Flash = r.URL.Query().Get("ok")
 	b.FlashErr = r.URL.Query().Get("err")
@@ -581,7 +606,7 @@ func (u *ui) audit(w http.ResponseWriter, r *http.Request) {
 
 // ---- no-JS form fallbacks: the same /v1 call, then a redirect back ----
 
-// mutate performs method path in-process and redirects to back with the
+// mutate performs method path against the API and redirects to back with the
 // outcome in ?ok= / ?err= (rendered by the layout as a flash). Browser
 // origin checks already ran in mgmt's browser guard before this handler.
 func (u *ui) mutate(w http.ResponseWriter, r *http.Request, method, p, back, okMsg string) {

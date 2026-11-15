@@ -134,6 +134,10 @@ tags:
     description: Single-use auth keys and node certificates.
   - name: secrets
     description: Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
+  - name: stores
+    description: Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
+  - name: telemetry
+    description: A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
   - name: audit
     description: Hash-chained, append-only audit log.
   - name: approvals
@@ -440,15 +444,50 @@ paths:
           in: query
           description: Only the replica on this host (a host ID).
           schema: { type: string }
+        - name: source
+          in: query
+          description: |
+            `console`: the app's raw output (workerd's stdout, the node
+            tier's `app.log`, the microVM console). `requests`: the
+            workload's structured request records (ADR-observability), as
+            JSON Lines (`application/x-ndjson`), one `RequestRecord` per
+            line; `n` and the filters below then count records, not lines.
+          schema: { type: string, enum: [console, requests], default: console }
+        - name: object
+          in: query
+          description: "`source=requests`: only records of this object (object ID, `Class/name`, `Class` or name)."
+          schema: { type: string, maxLength: 256 }
+        - name: status
+          in: query
+          description: "`source=requests`: only this HTTP status (`404`) or class (`5xx`)."
+          schema: { type: string, pattern: "^([1-5][0-9][0-9]|[1-5]xx)$" }
+        - name: outcome
+          in: query
+          description: "`source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …)."
+          schema: { type: string, maxLength: 64 }
+        - name: caller
+          in: query
+          description: "`source=requests`: only callers whose login or node name contains this (`public` for Funnel requests)."
+          schema: { type: string, maxLength: 256 }
+        - name: trace
+          in: query
+          description: "`source=requests`: only this W3C trace ID (or a prefix of it) or audit trace ID."
+          schema: { type: string, maxLength: 64 }
+        - name: errors
+          in: query
+          description: "`source=requests`: only errors (status ≥ 400, an outcome other than `ok`, or an exception)."
+          schema: { type: boolean, default: false }
       responses:
         "200":
-          description: The log lines (UTF-8 as the app wrote them; a stream with `follow`).
+          description: The log lines (UTF-8 as the app wrote them; a stream with `follow`), or request records with `source=requests`.
           headers:
             Cache-Control:
               schema: { type: string, const: no-store }
           content:
             text/plain:
               schema: { type: string }
+            application/x-ndjson:
+              schema: { $ref: "#/components/schemas/RequestRecord" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -726,7 +765,308 @@ paths:
         "409": { $ref: "#/components/responses/LeaseLost" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/stores:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [stores]
+      operationId: ListWorkloadStores
+      summary: List a workload's stores
+      description: |
+        Every store of the workload (all kinds), ordered by `(kind, name)`.
+        A store exists once something was written to it (a binding's first
+        write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+        mgmt keeps, after compaction.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: kind
+          in: query
+          description: Only stores of this kind.
+          schema: { $ref: "#/components/schemas/StoreKind" }
+      responses:
+        "200":
+          description: One page of stores.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeKind"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: GetWorkloadStore
+      summary: Get one store
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The store.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [stores]
+      operationId: PutWorkloadStore
+      summary: Create a store (idempotent)
+      description: |
+        Creates an empty store (`201`), or answers the existing one
+        (`200`). A binding's first write creates its store too, so this is
+        only needed to create one before the first deploy. Audited
+        (`kind: store_create`) when it creates.
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: The store already existed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [stores]
+      operationId: DeleteWorkloadStore
+      summary: Delete a store and its data
+      description: |
+        Deletes the journal and the store's data key (custody), so the
+        sealed entries can't be read again even from a backup of the
+        database. A running workload's store object notices on its next
+        sync (a new incarnation) and empties itself; a later write starts
+        a new, empty store. `404 unknown_store` if there is none. Audited
+        (`kind: store_delete`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeKind"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ReadStoreJournal
+      summary: Read a store's journal after a sequence number
+      description: |
+        The entries with `seq > after`, in order, for a store object
+        catching up (after a restart, on a new host, or when another
+        writer appended). Entries superseded by a later entry with the same
+        `ckey` are gone (compaction), so `seq` has gaps; the page is still
+        a complete catch-up from `after`. An unknown store is an empty page
+        with `head` 0 and no `incarnation`.
+
+        A host must give `epoch`: the data is released only to the holder
+        of the workload's lease at that epoch (`409 lease_lost`, as for
+        secrets). An admin reads without it (`twd kv key get`).
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/storeEpoch"
+        - name: after
+          in: query
+          description: Return entries with a larger `seq` (default 0).
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: limit
+          in: query
+          description: At most this many entries (default and maximum 1000; a page also stops at about 4 MiB of data).
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: A page of entries.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreJournal" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [stores]
+      operationId: AppendStoreJournal
+      summary: Append entries to a store's journal (conditional on its head)
+      description: |
+        The write path of a store object: it appends here **before** it
+        applies the change locally, so an acknowledged write is never only
+        on one host's disk. The append succeeds only if the journal's head
+        is still `after` (and `incarnation` matches when given); otherwise
+        `409 store_conflict`, and the writer catches up
+        (`GET …/journal?after=`) and retries. That makes the journal
+        linearizable across writers (a workload's replicas, an admin's
+        `twd kv key put`). An entry with a `ckey` supersedes every earlier
+        entry with the same `ckey`, which mgmt deletes in the same
+        transaction. The first append creates the store.
+
+        Entries are sealed at rest with the store's data key (AES-256-GCM,
+        custody); `ckey` is stored as an HMAC under a key derived from it.
+
+        A host must give `epoch` (lease holder at that epoch, `409
+        lease_lost`): a host that lost the workload can't write. Not
+        audited per append (stores are high volume); creation is
+        (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+        append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/storeEpoch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreAppend" }
+      responses:
+        "201":
+          description: Appended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreAppendResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+
   # ------------------------------------------------------------------ hosts
+
+  /v1/tenants/{id}/workloads/{workload}/telemetry-grants:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [telemetry, credentials]
+      operationId: CreateTelemetryGrant
+      summary: Release the tenant's OTLP export config to a workload's lease holder
+      description: |
+        hostd calls this when it starts a workload, and every minute while
+        it runs it, to export the workload's logs, metrics and spans
+        (ADR-observability). As with secrets (ADR-034), the config, header
+        values included, is released only to the host holding the
+        workload's lease at `epoch` (`409 lease_lost`), with
+        `Cache-Control: no-store`, and is never logged. `otlp` is absent
+        when the tenant exports nothing. Audited (`kind:
+        telemetry_release`, endpoint and header names) the first time a
+        host gets each version of the config for a workload (hosts re-read
+        it every minute); a refusal always is.
+      x-twd-role: host
+      x-twd-audit: true
+      parameters:
+        - $ref: "#/components/parameters/epoch"
+      responses:
+        "201":
+          description: The grant.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/telemetry:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [telemetry]
+      operationId: GetTenantTelemetry
+      summary: Read the tenant's OTLP export (`twd telemetry`), without header values
+      description: |
+        ADR-observability. Header names only: no admin operation returns a
+        header value. A tenant that exports nothing has no `otlp`.
+        `404 unknown_tenant`.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The tenant's telemetry config.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryConfig" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [telemetry]
+      operationId: PutTenantTelemetry
+      summary: Set the tenant's OTLP export (`twd telemetry set`)
+      description: |
+        Every workload of the tenant exports its request records (as log
+        records), its metrics and its spans with OTLP/HTTP (JSON encoding)
+        to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
+        **from the workload's own tailnet node**, so it must be a tailnet
+        peer the tailnet policy lets that workload reach (a public
+        internet endpoint is refused like any other egress). The config
+        is stored encrypted in mgmt custody (custody name
+        `twd/<tenant>/telemetry`); header values (collector credentials)
+        are never logged, audited or returned. Hosts pick a change up
+        within a minute. Audited (`kind: telemetry_put`, endpoint and
+        header names).
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelemetryPut" }
+            examples:
+              collector:
+                value: { otlp: { endpoint: "http://otel-collector:4318", headers: { authorization: "Bearer …" } } }
+      responses:
+        "200":
+          description: The new config (header names only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelemetryConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [telemetry]
+      operationId: DeleteTenantTelemetry
+      summary: Stop the tenant's OTLP export (`twd telemetry rm`)
+      description: |
+        Hosts stop exporting within a minute. Records stay on the hosts
+        (`twd logs`) and in `/metrics`. Idempotent. Audited
+        (`kind: telemetry_delete`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted (or there was nothing to delete).
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/hosts:
     post:
       tags: [hosts, credentials]
@@ -2461,6 +2801,23 @@ components:
       required: true
       description: "Secret name: a JS identifier that is also an environment variable name; `TWD_…` and `__TWD…` are reserved."
       schema: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
+    storeKind:
+      name: kind
+      in: path
+      required: true
+      description: The store kind (the binding type, e.g. `kv`).
+      schema: { $ref: "#/components/schemas/StoreKind" }
+    storeName:
+      name: name
+      in: path
+      required: true
+      description: "The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none)."
+      schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" }
+    storeEpoch:
+      name: epoch
+      in: query
+      description: "Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out."
+      schema: { type: integer, format: int64, minimum: 1 }
     tenantID:
       name: id
       in: path
@@ -2662,6 +3019,13 @@ components:
             message: "the caller does not hold the namespace lease at this epoch (want 4, have 3)"
             doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#lease_lost
             trace_id: 7f3a…
+    StoreConflict:
+      description: "`lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry."
+      headers:
+        Twd-Error: { schema: { type: string, enum: [lease_lost, store_conflict] } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     Gone:
       description: The object was killed. The body is the typed error plus the kill record; it stays until purged.
       headers:
@@ -2752,9 +3116,12 @@ components:
         | `unknown_namespace` | 404 | `(workload, class)` not declared |
         | `no_logs` | 404 | the workload's host has no log file for it yet |
         | `unknown_secret` | 404 | the workload has no secret of that name |
+        | `unknown_store` | 404 | the workload has no store of that kind and name |
         | `exists` | 409 | create of an existing ID |
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
+        | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+        | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
         | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
         | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2809,10 +3176,13 @@ components:
         - unknown_namespace
         - no_logs
         - unknown_secret
+        - unknown_store
         - exists
         - lease_lost
         - lease_held
         - approval_not_pending
+        - store_conflict
+        - store_limit
         - takeover_unconfirmed
         - service_conflict
         - service_api_failed
@@ -3831,6 +4201,11 @@ components:
         `secret_put` (a workload secret set; name only),
         `secret_delete`,
         `secret_release` (a workload's secrets released to its lease holder; names only),
+        `store_create` (a platform store created, by its first write or an admin),
+        `store_delete` (a platform store and its data key deleted),
+        `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
+        `telemetry_delete`,
+        `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -3882,6 +4257,11 @@ components:
         - secret_put
         - secret_delete
         - secret_release
+        - store_create
+        - store_delete
+        - telemetry_put
+        - telemetry_delete
+        - telemetry_release
         - reap
         - preflight
         - host_add
@@ -3997,6 +4377,134 @@ components:
           additionalProperties: { type: string, format: password }
         grantedAt: { type: integer, format: int64 }
       x-twd-secret: true
+    TelemetrySignal:
+      type: string
+      description: An OTLP signal.
+      enum:
+        - logs
+        - metrics
+        - traces
+    OTLPExport:
+      type: object
+      description: A tenant's OTLP export, without header values.
+      required: [endpoint, headerNames, signals]
+      properties:
+        endpoint: { type: string, format: uri, description: "OTLP/HTTP base URL; signals go to `<endpoint>/v1/<signal>`." }
+        headerNames: { type: array, items: { type: string }, description: Names of the headers sent with every export (values are never returned). }
+        signals: { type: array, items: { $ref: "#/components/schemas/TelemetrySignal" } }
+    TelemetryConfig:
+      type: object
+      required: [tenantID]
+      properties:
+        tenantID: { type: string }
+        otlp: { $ref: "#/components/schemas/OTLPExport" }
+        updatedAt: { type: integer, format: int64 }
+        updatedBy: { type: string }
+    OTLPExportPut:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048, description: "http:// or https:// base URL of an OTLP/HTTP receiver on the tailnet (no user info, query or fragment)." }
+        headers:
+          type: object
+          description: "Headers sent with every export, typically the collector's credentials (at most 16; values at most 4 KiB). Never logged, audited or returned."
+          maxProperties: 16
+          additionalProperties: { type: string, maxLength: 4096, format: password, writeOnly: true }
+        signals:
+          type: array
+          description: What to export (default all three).
+          items: { $ref: "#/components/schemas/TelemetrySignal" }
+      additionalProperties: false
+    TelemetryPut:
+      type: object
+      required: [otlp]
+      properties:
+        otlp: { $ref: "#/components/schemas/OTLPExportPut" }
+      additionalProperties: false
+      x-twd-secret: true
+    OTLPGrant:
+      type: object
+      required: [endpoint, signals]
+      properties:
+        endpoint: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string, format: password }
+        signals: { type: array, items: { $ref: "#/components/schemas/TelemetrySignal" } }
+    TelemetryGrant:
+      type: object
+      description: A fenced release of the tenant's OTLP export config. Never logged.
+      required: [tenantID, workload, epoch]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        epoch: { type: integer, format: int64 }
+        otlp: { $ref: "#/components/schemas/OTLPGrant" }
+        grantedAt: { type: integer, format: int64 }
+      x-twd-secret: true
+    RequestRecord:
+      type: object
+      description: |
+        One line of a workload's request log (`twd logs --json`,
+        ADR-observability): a request through hostd's ingress (`kind:
+        request`), joined with its workerd invocation, or an invocation
+        with no ingress half (`kind: invocation`: a DO called from the
+        Worker, an alarm, a cron run), or a note that records were dropped
+        by the workload's rate limit (`kind: dropped`). Never holds bodies,
+        query strings, request headers or secret values.
+      required: [time, kind]
+      properties:
+        time: { type: string, format: date-time }
+        kind: { type: string, enum: [request, invocation, dropped] }
+        host: { type: string }
+        tenant: { type: string }
+        workload: { type: string }
+        deployment: { type: string }
+        object: { type: string, description: The twd object ID. }
+        class: { type: string }
+        name: { type: string }
+        durableObjectId: { type: string, description: "workerd's ID of a plain-DO object whose name the invocation does not carry." }
+        caller:
+          type: object
+          description: The verified caller (netd's WhoIs), never from tenant code.
+          properties:
+            node: { type: string }
+            nodeId: { type: string }
+            user: { type: string }
+            tags: { type: array, items: { type: string } }
+            object: { type: string }
+            public: { type: boolean }
+            ip: { type: string }
+        method: { type: string }
+        path: { type: string, description: The URL path (never the query string). }
+        status: { type: integer }
+        durationMs: { type: number }
+        event: { type: string, description: "fetch, alarm, rpc, scheduled, websocket." }
+        entrypoint: { type: string }
+        outcome: { type: string }
+        traceId: { type: string }
+        spanId: { type: string }
+        parentSpanId: { type: string }
+        auditTraceId: { type: string }
+        logs:
+          type: array
+          items:
+            type: object
+            properties:
+              time: { type: string, format: date-time }
+              level: { type: string }
+              message: { type: string }
+        exceptions:
+          type: array
+          items:
+            type: object
+            properties:
+              time: { type: string, format: date-time }
+              name: { type: string }
+              message: { type: string }
+              stack: { type: string }
+        truncated: { type: boolean }
+        dropped: { type: integer }
     VolumeKeyGrant:
       type: object
       description: A fenced release of a volume's data key. Never logged.
@@ -4009,6 +4517,72 @@ components:
         key: { type: string, contentEncoding: base64, format: password, description: 32 bytes. }
         grantedAt: { type: integer, format: int64 }
       x-twd-secret: true
+
+    # -------------------------------------------------------------- stores
+    StoreKind:
+      type: string
+      pattern: "^[a-z][a-z0-9]{0,15}$"
+      description: A storage binding type (`kv`; later `d1`, `queue`, …).
+    Store:
+      type: object
+      description: A platform storage object of a workload (ADR-platform-stores).
+      required: [tenantID, workload, kind, name, incarnation, head, entries, bytes, createdAt, updatedAt]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        kind: { $ref: "#/components/schemas/StoreKind" }
+        name: { type: string }
+        incarnation: { type: string, description: "Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself." }
+        head: { type: integer, format: int64, description: The last sequence number appended. }
+        entries: { type: integer, format: int64, description: Journal entries kept (after compaction). }
+        bytes: { type: integer, format: int64, description: Plaintext bytes of the kept entries. }
+        createdAt: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
+    StorePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Store" } }
+    StoreEntryIn:
+      type: object
+      required: [data]
+      properties:
+        ckey: { type: string, maxLength: 1024, description: "Compaction key: this entry supersedes every earlier entry with the same `ckey` (for KV, the key). Empty: never compacted." }
+        data: { type: string, format: byte, description: "The entry, opaque to mgmt (its kind's encoding), at most 2 MiB." }
+      additionalProperties: false
+    StoreAppend:
+      type: object
+      required: [after, entries]
+      properties:
+        after: { type: integer, format: int64, minimum: 0, description: The journal head the writer has applied; the append fails with `store_conflict` unless it is still the head. }
+        incarnation: { type: string, description: "The incarnation the writer has applied (empty for a new store). A mismatch is a `store_conflict`." }
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items: { $ref: "#/components/schemas/StoreEntryIn" }
+      additionalProperties: false
+    StoreAppendResult:
+      type: object
+      required: [incarnation, head]
+      properties:
+        incarnation: { type: string }
+        head: { type: integer, format: int64, description: "The new head: the entries got `after+1 … head`, in order." }
+    StoreEntry:
+      type: object
+      required: [seq, data]
+      properties:
+        seq: { type: integer, format: int64 }
+        data: { type: string, format: byte }
+    StoreJournal:
+      type: object
+      required: [head, entries, more]
+      properties:
+        incarnation: { type: string, description: Empty when the store does not exist. }
+        head: { type: integer, format: int64 }
+        entries: { type: array, items: { $ref: "#/components/schemas/StoreEntry" } }
+        more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
 
     # ---------------------------------------------------------- containers
     ContainerResources:
