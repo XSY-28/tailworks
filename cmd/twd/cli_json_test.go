@@ -41,6 +41,7 @@ var cliSurface = []struct {
 	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net"}},
 	{"init", []string{"init", "{work}/app", "--template", "hello"}},
 	{"dev", []string{"dev", "{work}/empty", "--once"}},
+	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},

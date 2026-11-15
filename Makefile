@@ -37,6 +37,12 @@ js-build: $(WORKERD)
 	npm run -w @twd/mcp build
 	npm run --workspaces --if-present build
 
+## templates-typecheck: every template's `twd init && npm install && npx tsc --noEmit`, with
+## @twd/* from npm-pack tarballs of this checkout (issue #41; needs the network for the rest).
+.PHONY: templates-typecheck
+templates-typecheck: js-build
+	sh scripts/templates-typecheck.sh
+
 ## test: hermetic unit + integration tests (testcontrol + local DERP/STUN + stock workerd).
 .PHONY: test
 test: deps test-go test-js

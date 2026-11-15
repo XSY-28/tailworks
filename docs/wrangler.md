@@ -179,7 +179,38 @@ before anything else. Nothing is ignored silently:
 These keys are used without a warning: `name`, `main`, `compatibility_date`,
 `compatibility_flags`, `vars`, `durable_objects`, `kv_namespaces` ([kv.md](kv.md)), `r2_buckets` ([r2.md](r2.md)), `migrations`, `triggers`
 ([cron-triggers.md](cron-triggers.md)), `containers`
-([containers.md](containers.md)), `placement`, and the build settings above.
+([containers.md](containers.md)), `placement`, `secrets` (its `required`
+names, for `twd types`), and the build settings above.
+
+## Types: `twd types`
+
+`twd types` is twd's `wrangler types`. It writes `worker-configuration.d.ts`
+in the app directory: a global `Env` interface built from the wrangler
+config and `twd.jsonc`.
+
+| source | in `Env` as |
+|---|---|
+| `vars` | `string`, `number`, `boolean` or an object type (widened, not the literal value) |
+| `durable_objects` bindings | `DurableObjectNamespace<import("./src/index").Class>` (plain `DurableObjectNamespace` for a `script_name` binding) |
+| `kv_namespaces`, `r2_buckets`, `d1_databases` | `KVNamespace`, `R2Bucket`, `D1Database` |
+| `queues.producers` | `Queue` |
+| `workflows` | `Workflow` |
+| secret names: `.dev.vars`, `.dev.vars.example`, `secrets.required`, and with `--remote` the workload's secrets in mgmt (`twd secret ls`) | `string` |
+
+Bindings twd doesn't support are left out, because on twd they are
+undefined. `--env <name>` types that environment. A `"runtime": "node"` app
+gets `NodeJS.ProcessEnv` instead: the variables twd sets, `node.env` and the
+secret names.
+
+Every `twd init` template ships the file along with a `tsconfig.json`
+(`@cloudflare/workers-types` plus `@twd/tailnet`, which declares
+`ctx.tailnet`), so `npm install && npx tsc --noEmit` passes. Run
+`twd types` again after you change the config. In CI, run
+`twd types --check`: it writes nothing and fails with
+[`types_stale`](errors.md#types_stale) if the file is missing or out of date.
+`.dev.vars` isn't committed, so for `--check` to see the same secrets on
+every machine, list their names in `.dev.vars.example` or
+`secrets.required`.
 
 ## `wrangler dev` and Miniflare
 

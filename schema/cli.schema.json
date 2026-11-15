@@ -1122,6 +1122,40 @@
         "workload"
       ]
     },
+    "types": {
+      "type": "object",
+      "description": "twd types: the declaration file written (or with --check, compared)",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "absolute path of the .d.ts"
+        },
+        "runtime": {
+          "type": "string",
+          "description": "workerd (an Env interface) or node (NodeJS.ProcessEnv)"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "every declared name, sorted"
+        },
+        "changed": {
+          "type": "boolean",
+          "description": "the file was written (or, with --check, would be: then the command fails with types_stale)"
+        },
+        "checked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file",
+        "runtime",
+        "names",
+        "changed"
+      ]
+    },
     "dev": {
       "type": "object",
       "description": "twd dev --once (the smoke test); without --once, see dev.event",

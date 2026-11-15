@@ -5,5 +5,9 @@
   "scripts": { "dev": "twd dev", "deploy": "twd deploy" },
   "dependencies": {
     "@twd/tailnet": "^0.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261114.1",
+    "typescript": "7.0.2"
   }
 }
