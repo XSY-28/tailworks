@@ -1,4 +1,4 @@
-Last update: 2026-11-14 PT. Full e2e pass: fixed the ABI-1 Landlock no-op (Ubuntu 22.04), twd down's device leaks (teardown gate), two stale e2e checks. Funnel suites blocked by slow certificate issuance (master fails the same way).
+Last update: 2026-11-14 PT. Merged master (#13); fixed a cross-tenant sandbox regression from it; release workflow now builds the microVM guests on Linux runners.
 
 Earlier: DX pass: strict twd.jsonc + schema, release workflow + get.sh, app-named tags, policy-doc fix.
 
@@ -44,8 +44,8 @@ secrets are separate workstreams, each with its own status file.
     `VERSION`), runs `make release` on macOS, smoke-tests the darwin
     tarball, and uploads the tarballs plus `SHA256SUMS` to a **draft**
     release.
-  - The linux tarballs are built with `RELEASE_VM_ASSETS=0`, so they have
-    no microVM guest. INSTALL.md says so.
+  - Superseded (below): the workflow now builds every microVM guest on
+    Linux runners.
   - `scripts/get.sh` downloads a release, verifies its hash and runs
     `install.sh`.
   - README step 1 now downloads a release; building from source is the
@@ -64,6 +64,43 @@ secrets are separate workstreams, each with its own status file.
   entry is refused with `checksum mismatch`.
 - Not run: the release workflow itself (it needs a pushed tag on GitHub),
   and the e2e suites against a real tailnet.
+
+## Release workflow: every component in CI
+
+`.github/workflows/release.yml` now has four jobs:
+- `vm-assets` runs `make vm-assets` on `ubuntu-24.04` (amd64) and
+  `ubuntu-24.04-arm` (arm64), natively.
+- `vz-assets` runs `make vz-assets` on arm64 Linux.
+- `release` runs on macOS with all three asset dirs and
+  `RELEASE_VM_ASSETS=1`.
+- Before uploading, it checks that every tarball's `release.json` says
+  `"microvm": true`.
+
+Guest kernels and downloads are cached by their inputs. None of the guest
+builds need root or a VM.
+
+v0.1.0's first tag push started no run: GitHub hadn't registered the
+workflow, because it wasn't on the default branch yet. That draft release
+was built by hand (`make release RELEASE_VERSION=0.1.0`, Mac + Lima, with
+all guests) and checked with `get.sh` from the downloaded draft assets.
+
+## Merge of master (#13): fixes the merge needed
+
+- **Cross-tenant read on master.** M3 limited a host's `GET /v1/tenants`
+  to the tenants it runs, but hostd's `sandboxDeny()` used that list to
+  deny every tenant's credential files. So a workload started before
+  another tenant's first deploy could read that tenant's API key file;
+  `TestCLIMultiTenant` (d) failed on master. New `GET
+  /v1/hosts/{id}/sandbox-deny` returns paths only (no tenant IDs), and
+  hostd uses it. Covered by `TestHostSandboxDeny`; `TestCLIMultiTenant`
+  passes.
+- `GET /v1/logs` now sits in `pushHandlers`, behind master's `pushAuth`.
+  The merge had left it on the local socket, which would have broken
+  remote `twd logs`. In-process hosts (`inproc://`) are served through a
+  streaming handler transport (`mgmt/logs_inproc.go`). The branch's own
+  WhoIs check is gone, because pushAuth covers it.
+- Master's `commandHelp` replaces `helpflags.go`.
+- The worker-secrets ADR is numbered ADR-034.
 
 ## E2E run (2026-11-14, this branch)
 

@@ -819,10 +819,10 @@ arch on either. A guest of the wrong arch is refused (`twd doctor`:
 > microVM tier**: `share/twd/release.json` says `"microvm": false`,
 > `share/twd/vm/` is absent, and `twd doctor` reports `firecracker: skip …
 > install a linux release built with the microVM assets`. The process tier
-> (Landlock + seccomp) is unaffected. The GitHub release workflow builds on macOS
-> with `RELEASE_VM_ASSETS=0`, so its linux tarballs have no microVM tier
-> unless a maintainer replaced them with Linux-built ones: check
-> `release.json` before you run `twd host setup --microvm`. The red team's second pass found a
+> (Landlock + seccomp) is unaffected. The GitHub release workflow builds every guest
+> on Linux runners and refuses to publish a tarball without one
+> (`RELEASE_VM_ASSETS=1`), so a GitHub release always has the tier;
+> `release.json` says `"microvm": true`. The red team's second pass found a
 > Mac-built tarball without the guest; the `make release` change above is
 > the fix, and the e2e-linux-vm row in STATUS.md says which tarball it ran.
 
