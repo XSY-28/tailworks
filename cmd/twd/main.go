@@ -42,6 +42,7 @@ func init() {
 		{name: "up", usage: "up --oauth-client-file <file> [--service] [--yes]  |  up --wif [--wif-client-id <id>]  |  up --tailnet <tailnet> --api-key-file <file> [--policy-apply]", help: "start twd on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); recommended: an OAuth client (no browser, no Funnel); --wif for the keyless browser flow, --api-key-file as the fallback", run: cmdUp},
 		{name: "down", usage: "down [--purge] [--service]", help: "stop everything twd up started (--purge: kill every object and delete its device first)", run: cmdDown},
 		{name: "link", usage: "link [twd-mgmt.<tailnet>.ts.net] [--unlink]", help: "developer machine: use a remote twd-mgmt over your own Tailscale connection (WhoIs identity; no key or token)", run: cmdLink},
+		{name: "whoami", usage: "whoami", help: "who this CLI acts as (WhoIs through twd link, or the local operator), its tenant, the mgmt it talks to, and its twd.dev/cap/* capabilities: admin, approve, MCP tools", run: cmdWhoami},
 		{name: "status", usage: "status", help: "health of mgmt, the host, the tenant and deployments", run: cmdStatus},
 		{name: "tenant", usage: "tenant add <tailnet> --api-key-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--wif-client-id ID] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]", help: "serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants", run: cmdTenant},
 		{name: "init", usage: "init <dir> [--template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow] [--name <workload>]", help: "create an app from a template (node-workflow needs Node.js on the deploying machine)", run: cmdInit},
@@ -63,6 +64,7 @@ func init() {
 		{name: "logs", usage: "logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]", help: "show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs", run: cmdLogs},
 		{name: "doctor", usage: "doctor [--tailnet <tailnet> --api-key-file <file>]", help: "check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier", run: cmdDoctor},
 		{name: "docs", usage: "docs search <words…> [--limit 10] | docs show <doc>[#<anchor>] | docs ls", help: "twd's docs, offline: search them, print one doc or section (e.g. errors.md#acl_denied)", run: cmdDocs},
+		{name: "completion", usage: "completion bash|zsh|fish", help: "print a shell completion script for every command, subcommand and flag (bash: eval \"$(twd completion bash)\"; zsh: twd completion zsh > \"${fpath[1]}/_twd\"; fish: twd completion fish > ~/.config/fish/completions/twd.fish)", run: cmdCompletion},
 		{name: "mcp", usage: "mcp [--allow deploy,kill,undeploy] | mcp --config", help: "twd's MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it", run: cmdMCP},
 		{name: "agent", usage: "agent setup [--scope user|project] [--dir <dir>] [--agent claude,codex,cursor,gemini,opencode] [--dry-run] [--yes] | agent remove [same flags] | agent ls | agent show <skill>", help: "teach coding agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) to drive twd: install or remove twd's skills, list or print them", run: cmdAgent},
 		{name: "host", usage: "host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--drain] | host cordon <host-id> | host uncordon <host-id> | host drain <host-id> [--allow-local-state-loss] [--dry-run] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]", help: "add a remote host (mgmt mints its single-use tag:twd-host join key), list or remove hosts; cordon (no new placements), uncordon, or drain one (move its workloads elsewhere); install the microVM tier's helper; check a microVM", run: cmdHost},
@@ -74,7 +76,9 @@ func init() {
 	}
 }
 
-func usage(w io.Writer) {
+// usageAll is `twd help --all`: every command with its full usage line
+// (`twd help` is usageGrouped, helpgroups.go).
+func usageAll(w io.Writer) {
 	fmt.Fprintln(w, "twd: Workers and Durable Objects with their own tailnet identities")
 	fmt.Fprintln(w, "\nusage: twd <command> [flags]   (every command takes --state-dir, default ~/.twd, and --json)")
 	fmt.Fprintln(w, "       twd <command> --help     usage of one command")
@@ -165,6 +169,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 					return 0
 				}
 			}
+			if args[1] == "--all" {
+				usageAll(stdout)
+				return 0
+			}
 		}
 		usage(stdout)
 		return 0
@@ -204,6 +212,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 				printErr(err)
 				return 1
 			}
+			updateNotice(name, stderr) // updatecheck.go
 			return 0
 		}
 	}

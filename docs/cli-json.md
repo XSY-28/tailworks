@@ -55,6 +55,29 @@ becomes a JSON-RPC error whose `data` is the error object above.
 `twd doctor` is the one command that prints a result *and* fails: its report
 is on stdout, then `doctor_failed` is on stderr if a check failed.
 
+## Identity and versions
+
+Run `twd whoami --json` first. It says who twd acts as and what that
+identity may do (`$defs/whoami`): `kind` and `actor` (your tailnet login
+through `twd link`, or `local` for the operator on the twd host), `mgmt`
+(where the CLI sends requests), `tenant`, the `twd.dev/cap/*` capabilities
+in `caps`, and `can`: `admin` (deploy, ls, logs and the rest), `approve`
+(`twd approve`) and `mcpTools` (what `/mcp` allows). `approve` and
+`mcpTools` are `null` when mgmt is older than the CLI and doesn't report
+them. `tenant` is `null` for an identity that isn't an admin, because it
+can't list tenants.
+
+`twd version --check --json` adds `latest`, `url`, `updateAvailable`,
+`upgrade` (the command that installs the newer release) and `daemons` to
+`twd version`'s fields. `daemons` is what the running `twd up` on this
+machine reports: `version` and `restartNeeded` (it runs an older binary than
+this CLI), or `null` when no `twd up` runs here. A failed lookup is
+`update_check_failed`. `--json` never prints the once-a-day update notice
+that an interactive twd prints on stderr.
+
+`twd completion <shell> --json` is `{"shell", "script"}`; without `--json`
+it prints the script.
+
 ## Event streams (NDJSON)
 
 Commands that take a while, or don't end on their own, print one compact JSON

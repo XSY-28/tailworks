@@ -4613,9 +4613,12 @@ Present in wif mode.
 |---|---|---|---|
 | `actor` | string | yes |  |
 | `admin` | boolean | yes |  |
+| `approver` | boolean | no | The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity. |
+| `caps` | array of string | no | The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts. |
 | `hostID` | string | no |  |
 | `kind` | string: `user` \| `node` \| `host` \| `local` | yes |  |
 | `login` | string | no |  |
+| `mcpTools` | array of string | no | The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order. |
 | `mgmt` | `SelfInfo` | yes |  |
 | `nodeID` | string | no |  |
 | `tags` | array of string | no |  |

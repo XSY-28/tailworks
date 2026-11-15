@@ -276,8 +276,8 @@ func (a *app) buildNode(node, ct, out string, vars map[string]string) ([]byte, i
 	cmd.Dir = a.Dir
 	cmd.Env = append(os.Environ(), "TWD_NODE_PATH="+strings.Join(nodePaths(ct), ":"))
 	if b, err := cmd.CombinedOutput(); err != nil {
-		return nil, 0, fail("build_failed", "build-node failed for "+a.Dir, strings.Split(strings.TrimSpace(string(b)), "\n")...).
-			withFix("cd " + a.Dir + " && npm install")
+		return nil, 0, withBundleFix(fail("build_failed", "build-node failed for "+a.Dir, strings.Split(strings.TrimSpace(string(b)), "\n")...).
+			withFix("cd "+a.Dir+" && npm install"), string(b)) // sourcehints.go
 	}
 	files, err := bundle.ReadDir(filepath.Join(out, "app"), ".")
 	if err != nil {

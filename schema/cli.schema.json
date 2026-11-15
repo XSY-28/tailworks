@@ -575,6 +575,44 @@
         },
         "esbuild": {
           "type": "string"
+        },
+        "latest": {
+          "type": "string",
+          "description": "--check: the latest published release"
+        },
+        "url": {
+          "type": "string",
+          "description": "--check: its release page"
+        },
+        "updateAvailable": {
+          "type": "boolean",
+          "description": "--check: latest is newer than this twd (false for a development build)"
+        },
+        "upgrade": {
+          "type": "string",
+          "description": "--check, when updateAvailable: the command that installs it"
+        },
+        "daemons": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "--check: what the running twd up on this machine reports; null when none runs here",
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "restartNeeded": {
+              "type": "boolean"
+            },
+            "restartCommand": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "restartNeeded"
+          ]
         }
       },
       "required": [
@@ -583,6 +621,159 @@
         "os",
         "workerdPin",
         "esbuild"
+      ]
+    },
+    "whoami": {
+      "type": "object",
+      "description": "who this CLI acts as and what that identity may do (GET /v1/whoami)",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "user",
+            "node",
+            "host",
+            "local"
+          ]
+        },
+        "actor": {
+          "type": "string"
+        },
+        "login": {
+          "type": "string"
+        },
+        "nodeID": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linked": {
+          "type": "boolean",
+          "description": "through twd link (WhoIs); false: this machine's twd up"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "mgmt": {
+          "type": "object",
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            },
+            "dnsName": {
+              "type": "string"
+            },
+            "tailnet": {
+              "type": "string"
+            },
+            "https": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "endpoint",
+            "https"
+          ]
+        },
+        "tenant": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "the default tenant; null when this identity can't list tenants (not an admin) or there is none",
+          "properties": {
+            "tailnet": {
+              "type": "string"
+            },
+            "tenantID": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tailnet",
+            "tenantID"
+          ]
+        },
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "caps": {
+          "type": "array",
+          "description": "the twd.dev/cap/* capabilities held toward mgmt",
+          "items": {
+            "type": "string"
+          }
+        },
+        "can": {
+          "type": "object",
+          "properties": {
+            "admin": {
+              "type": "boolean"
+            },
+            "approve": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "may decide Workflow approvals (twd.dev/cap/approve); null when mgmt is too old to say"
+            },
+            "mcpTools": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "the MCP tools mgmt's /mcp allows; null when mgmt is too old to say",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "admin",
+            "approve",
+            "mcpTools"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "actor",
+        "tags",
+        "linked",
+        "transport",
+        "mgmt",
+        "tenant",
+        "tenants",
+        "caps",
+        "can"
+      ]
+    },
+    "completion": {
+      "type": "object",
+      "description": "twd completion <shell>: the script (without --json it is printed as is)",
+      "properties": {
+        "shell": {
+          "type": "string",
+          "enum": [
+            "bash",
+            "zsh",
+            "fish"
+          ]
+        },
+        "script": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "script"
       ]
     },
     "status": {

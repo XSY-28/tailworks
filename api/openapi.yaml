@@ -6037,6 +6037,17 @@ components:
         admin: { type: boolean }
         actor: { type: string }
         mgmt: { $ref: "#/components/schemas/SelfInfo" }
+        caps:
+          type: array
+          items: { type: string }
+          description: The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+        approver:
+          type: boolean
+          description: The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+        mcpTools:
+          type: array
+          items: { type: string }
+          description: The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
     DeviceDeleteRun:
       type: object
       required: [deleted]

@@ -19,7 +19,14 @@ You drive twd only through the `twd` CLI.
 ```sh
 twd version --json               # is twd installed? which version?
 twd status --json                # is a twd control plane up (or linked)?
+twd whoami --json                # who am I to it, and may I deploy, approve, use MCP tools?
 ```
+
+- `twd whoami` shows the identity twd acts as (your tailnet login through
+  `twd link`, or the local operator on the twd host), the tenant, and the
+  `can` flags: `admin` (needed for deploy, ls, logs and the rest),
+  `approve` and `mcpTools`. Don't try a command the identity can't run;
+  tell the user which grant it needs.
 
 - If `twd` is not found, point the user at the install steps in the twd
   README; don't install it yourself.
@@ -88,7 +95,8 @@ user runs `twd mcp --config`.
 
 ## More
 
-- `twd help` lists every command; `twd <command> --help` shows its flags.
+- `twd help` lists every command by group; `twd help --all` prints every
+  usage line; `twd <command> --help` shows a command's flags.
 - `twd docs search <words>` searches twd's docs offline;
   `twd docs show <doc>[#<anchor>]` prints a doc or one section.
 - What works and what doesn't, compared with Cloudflare Workers:

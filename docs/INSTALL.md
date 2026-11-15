@@ -155,6 +155,19 @@ is active (`oauth`, `wif (keyless)` or `apikey`; it warns if the OAuth
 client file is readable by anyone but you) and `api_key` is `skip` unless
 you chose the API-key fallback.
 
+Optional: tab completion for every command, subcommand and flag.
+
+```sh
+echo 'eval "$(twd completion bash)"' >> ~/.bashrc                  # bash
+twd completion zsh > "${fpath[1]}/_twd"                            # zsh (then restart it)
+twd completion fish > ~/.config/fish/completions/twd.fish          # fish
+```
+
+`twd version --check` says whether a newer release is out and whether the
+running `twd up` needs a restart. An interactive twd also prints a one-line
+notice when a newer release is out, at most once a day. `CI=1`, `--json` or
+`TWD_NO_UPDATE_CHECK=1` turns it off.
+
 twd mints a Tailscale auth key for every node it runs (mgmt's own node,
 this host's node, every object), so it needs **one** credential. Three
 choices, in order of preference; `twd up` with none of them prints the

@@ -4015,14 +4015,23 @@ type WIFInfo struct {
 
 // WhoAmI defines model for WhoAmI.
 type WhoAmI struct {
-	Actor  string     `json:"actor"`
-	Admin  bool       `json:"admin"`
+	Actor string `json:"actor"`
+	Admin bool   `json:"admin"`
+
+	// Approver The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+	Approver *bool `json:"approver,omitempty"`
+
+	// Caps The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+	Caps   *[]string  `json:"caps,omitempty"`
 	HostID *string    `json:"hostID,omitempty"`
 	Kind   WhoAmIKind `json:"kind"`
 	Login  *string    `json:"login,omitempty"`
-	Mgmt   SelfInfo   `json:"mgmt"`
-	NodeID *string    `json:"nodeID,omitempty"`
-	Tags   *[]string  `json:"tags,omitempty"`
+
+	// McpTools The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
+	McpTools *[]string `json:"mcpTools,omitempty"`
+	Mgmt     SelfInfo  `json:"mgmt"`
+	NodeID   *string   `json:"nodeID,omitempty"`
+	Tags     *[]string `json:"tags,omitempty"`
 }
 
 // WhoAmIKind defines model for WhoAmI.Kind.

@@ -105,7 +105,7 @@ func (a *app) buildEsbuild(out string, np []string) (files map[string][]byte, ty
 	}
 	r, err := esbundle.BuildApp(o)
 	if err != nil {
-		return nil, nil, 0, fail("build_failed", "esbuild failed for "+a.Dir, strings.Split(strings.TrimSpace(err.Error()), "\n")...)
+		return nil, nil, 0, withBundleFix(fail("build_failed", "esbuild failed for "+a.Dir, strings.Split(strings.TrimSpace(err.Error()), "\n")...), err.Error()) // sourcehints.go
 	}
 	b, err := os.ReadFile(o.Outfile)
 	if err != nil {
