@@ -86,7 +86,11 @@ guide: [docs/d1.md](../docs/d1.md). COMPAT rows: `d1`, `d1-sessions`,
 - `go test ./cmd/twd/ -run 'TestCLID1|TestDevD1|TestHelp'`: ok
   (`TestDevD1` runs `twd dev --once` with a custom migrations dir/table).
 - `go test ./internal/d1mig/ ./hostd/bundle/ ./hostd/gen/`: ok.
-- `make lint test`: see the last section below.
+- After merging `origin/master` (08d8962: wrangler-config loading,
+  observability): `make lint test`: ok, every package and `npm test`
+  (2026-11-15). `twd d1` and `twd dev` read the app's parsed wrangler
+  config (so `wrangler.toml` and `--env` apps work); `bundle.IsStoreKey`
+  already keeps the CLI from warning about `d1_databases`.
 
 ## Findings
 
