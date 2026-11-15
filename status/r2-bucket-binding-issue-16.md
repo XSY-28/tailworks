@@ -1,8 +1,8 @@
-Last update: 2026-11-15 09:40 PT. R2 bucket binding (issue #16, ADR-r2-buckets): built and tested on the process and microVM (vz) tiers, fs and S3 backends.
+Last update: 2026-11-15 09:40 PT. R2 bucket binding (issue #16, ADR-036): built and tested on the process and microVM (vz) tiers, fs and S3 backends.
 
 # R2 buckets (`r2_buckets`)
 
-Design: [ADR-r2-buckets](../docs/design/adr/r2-buckets.md). User docs:
+Design: [ADR-036](../docs/design/adr/036-r2-buckets.md). User docs:
 [docs/r2.md](../docs/r2.md). Builds on the platform-store substrate
 ([ADR-platform-stores](../docs/design/adr/platform-stores.md),
 `status/platform-stores.md`).

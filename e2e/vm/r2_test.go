@@ -21,7 +21,7 @@ import (
 	"github.com/rosskukulinski/twd/netd/nettest"
 )
 
-// TestE2EVMR2 runs the R2 binding (ADR-r2-buckets) on the microVM tier:
+// TestE2EVMR2 runs the R2 binding (ADR-036) on the microVM tier:
 // the platform worker (R2Backend, the bucket's Store object) runs in the
 // guest, and the bytes and the index cross the guest NIC to hostd, which
 // holds the S3 backend (a hermetic, signature-checking S3 server). No

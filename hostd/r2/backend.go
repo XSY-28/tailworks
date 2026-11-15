@@ -1,4 +1,4 @@
-// Package r2 is the blob backend of R2 buckets (ADR-r2-buckets).
+// Package r2 is the blob backend of R2 buckets (ADR-036).
 //
 // An R2 bucket is a platform store of kind "r2": its index (key → version,
 // size, etag, metadata, blob IDs) is a platform store, journaled to mgmt

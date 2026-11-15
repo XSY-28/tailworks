@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// R2 buckets (ADR-r2-buckets): wrangler.jsonc "r2_buckets" entries are
+// R2 buckets (ADR-036): wrangler.jsonc "r2_buckets" entries are
 // platform stores of kind "r2", named by their bucket_name (the binding
 // name when absent). preview_bucket_name and jurisdiction are accepted and
 // ignored: a bucket is the workload's, on the host's R2 backend.

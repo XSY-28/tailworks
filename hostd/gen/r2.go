@@ -2,7 +2,7 @@ package gen
 
 import _ "embed"
 
-// R2 buckets (ADR-r2-buckets): a platform store kind whose tenant binding
+// R2 buckets (ADR-036): a platform store kind whose tenant binding
 // is workerd's native r2Bucket, served by the platform's R2Backend
 // (js/store-r2.js); facets get R2FacetProxy through a shim that rebuilds
 // R2Object / R2ObjectBody (js/store-r2-facet.js).

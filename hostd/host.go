@@ -214,7 +214,7 @@ type Config struct {
 	MetricsListener net.Listener
 	Telemetry       TelemetryOptions
 
-	// R2 holds the bytes of R2 buckets (ADR-r2-buckets; nil: files under
+	// R2 holds the bytes of R2 buckets (ADR-036; nil: files under
 	// <DataDir>/r2). Only hostd talks to it.
 	R2 r2.Backend
 }

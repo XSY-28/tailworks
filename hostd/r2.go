@@ -1,6 +1,6 @@
 package hostd
 
-// R2 buckets (ADR-r2-buckets), host side. A bucket's index is a platform
+// R2 buckets (ADR-036), host side. A bucket's index is a platform
 // store of kind "r2" (stores.go); its bytes are immutable blobs in the
 // host's R2 backend (Config.R2: a directory or an S3-compatible service).
 // The platform's R2Backend (hostd/gen/js/store-r2.js) streams them through

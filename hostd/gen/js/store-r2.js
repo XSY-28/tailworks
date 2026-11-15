@@ -1,4 +1,4 @@
-// twd R2 buckets (TRUSTED; platform worker). ADR-r2-buckets.
+// twd R2 buckets (TRUSTED; platform worker). ADR-036.
 //
 // A bucket is a platform store of kind "r2" (twd-store.js): its Store
 // object holds the INDEX (key → version, size, etag, upload time, HTTP and

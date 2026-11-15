@@ -25,7 +25,7 @@ import (
 	"tailscale.com/tailcfg"
 )
 
-// TestR2Binding runs the R2 binding (ADR-r2-buckets) on real workerd, from
+// TestR2Binding runs the R2 binding (ADR-036) on real workerd, from
 // the worker and from a facet-mode object, against both blob backends:
 // the fs backend and an S3 backend on a hermetic, signature-checking S3
 // server. It covers put/get/head/list/delete, httpMetadata and

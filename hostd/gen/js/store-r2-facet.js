@@ -1,5 +1,5 @@
 // twd R2 binding inside a facet-mode object (a Dynamic Worker; runs with
-// the tenant's code). ADR-r2-buckets.
+// the tenant's code). ADR-036.
 //
 // A facet can't be handed workerd's native r2Bucket binding, so its
 // env.<Binding> is an RPC stub to the platform's R2FacetProxy, which calls

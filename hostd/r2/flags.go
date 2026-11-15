@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Flags are twd-hostd's R2 backend flags (ADR-r2-buckets: the backend is
+// Flags are twd-hostd's R2 backend flags (ADR-036: the backend is
 // per host, set by the operator).
 type Flags struct {
 	Backend     string

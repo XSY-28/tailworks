@@ -1,6 +1,6 @@
 package main
 
-// R2 buckets (ADR-r2-buckets), CLI side: `twd r2 bucket ls|create|rm` and
+// R2 buckets (ADR-036), CLI side: `twd r2 bucket ls|create|rm` and
 // `twd r2 object ls`. A bucket is a platform store of kind "r2", so these
 // use mgmt's stores API (ADR-platform-stores); object ls reads the
 // bucket's journal (its index) and folds it into the live keys. Object

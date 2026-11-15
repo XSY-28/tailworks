@@ -1,4 +1,4 @@
-# ADR-r2-buckets: R2 buckets as a platform store: the index in the journal, the bytes in an operator-configured blob backend that hostd talks to
+# ADR-036: R2 buckets as a platform store: the index in the journal, the bytes in an operator-configured blob backend that hostd talks to
 
 **Date:** 2026-11-15
 **Status:** Proposed (results in `status/r2-bucket-binding-issue-16.md`).

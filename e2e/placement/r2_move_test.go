@@ -24,7 +24,7 @@ import (
 	"tailscale.com/tsnet"
 )
 
-// TestR2MoveBetweenHosts is the R2 binding (ADR-r2-buckets) across real
+// TestR2MoveBetweenHosts is the R2 binding (ADR-036) across real
 // processes: twd-mgmt and two twd-hostd processes, both started with
 // -r2-backend s3 pointing at one hermetic S3 server (credentials in their
 // environment only). An app writes objects on h1, is re-placed onto h2

@@ -114,7 +114,7 @@ func run() error {
 		ctrVCPU    = flag.Float64("container-vcpu", 0, "containers: max total vCPU on this host (0 = unlimited)")
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
 	)
-	var r2f r2.Flags // R2 bucket blob backend (ADR-r2-buckets)
+	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
 	r2f.Register(flag.CommandLine)
 	flag.Parse()
 	r2b, err := r2f.Open(*dataDir, os.Getenv)
