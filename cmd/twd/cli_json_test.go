@@ -336,6 +336,9 @@ func TestDevJSONEvents(t *testing.T) {
 	if u, _ := ready["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") || ready["workload"] != "hello" {
 		t.Fatalf("ready event: %v", ready)
 	}
+	if u, _ := next("console")["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") { // devconsole.go
+		t.Fatalf("console event url %q", u)
+	}
 	src := filepath.Join(app, "src", "index.ts")
 	b, _ := os.ReadFile(src)
 	os.WriteFile(src, append(b, []byte("\n// edited\n")...), 0o644)
