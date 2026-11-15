@@ -1,4 +1,27 @@
-Last update: 2026-11-15 08:40 PT. Issue #19: wrangler.toml/.json, `--env`, no-twd.jsonc defaults, `--wrangler` / `--from-wrangler-out`, warnings for ignored keys. Spike findings below.
+Last update: 2026-11-15 09:30 PT. Merged origin/master (#23 compat matrix, #27 platform stores); `make lint test` and `make e2e-wrangler` pass on the merged tree.
+
+Earlier: 2026-11-15 08:40 PT. Issue #19: wrangler.toml/.json, `--env`, no-twd.jsonc defaults, `--wrangler` / `--from-wrangler-out`, warnings for ignored keys. Spike findings below.
+
+## Merge with master (2026-11-15)
+
+- `hostd/bundle/bundle.go` conflicted: two new `App` fields (`ModuleTypes` here,
+  `Stores` from #27). Both are kept, each in its own comment group.
+- Platform stores (#27) register wrangler keys through
+  `bundle.RegisterStoreKind`. A new `bundle.IsStoreKey` (`hostd/bundle/storekeys.go`)
+  lets the CLI skip the "no such binding" warning for any registered key,
+  so KV, D1 and the rest stop being warned about as soon as they
+  land. Only the test probe kind is registered today, so `kv_namespaces`
+  is still warned. Test: `TestWranglerWarningsStoreKinds`.
+- COMPAT.md now follows #23's checked format:
+  - The `wasm` row is now ✅: `twd deploy`'s bundlers ship `.wasm` modules,
+    which fixes the gap that row named.
+  - The `wrangler-config` row is rewritten.
+  - New rows: `wrangler-env` ✅, `wrangler-bundling` ✅, `wrangler-api` 🚫.
+  - The per-key details are in "Wrangler config: details".
+  - The README table has matching rows; `compatcheck` passes.
+- A race in the first version of `TestCLIDeployWranglerTOML` was fixed:
+  it edited the fake API's policy without its lock. It passes under
+  `-race`.
 
 # wrangler CLI integration (issue #19)
 
@@ -95,7 +118,8 @@ Commands run on this Mac (arm64, Go 1.27.3, wrangler 4.60.0, Node 25.1):
 - `go test -count=1 -run TestCLIDeployWranglerTOML ./cmd/twd`: ok (8.4 s).
 - `make e2e-wrangler`: ok, all 3 subtests ran, `WranglerCLI` included
   (7.1 s).
-- `make test`: see the newest line at the top of this file.
+- `make lint test` on the merged tree: exit 0 (27 packages ok).
+- `make e2e-wrangler` on the merged tree: 3/3 subtests pass.
 
 ## Spike findings
 
