@@ -14,6 +14,7 @@
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import CFG from "twd-config.json";
 import MODULES from "twd-modules.js";
+import { deliverQueue } from "twd-queue.js";
 
 const FACET_MODULES = MODULES;
 
@@ -151,6 +152,8 @@ export default {
         return admin(req, env, ctx, t);
       case "scheduled":
         return scheduled(env, t, req);
+      case "queue":
+        return deliverQueue(env, t, req); // twd-queue.js (ADR-queues)
       case "object":
         return routeObject(env, ctx, t.class, t.name, req);
       case "intercept": {
@@ -251,6 +254,7 @@ function makeHost(cls) {
           for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
           env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
           for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
+          for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
           return {
             compatibilityDate: CFG.compatDate,
             compatibilityFlags: CFG.compatFlags,
@@ -340,6 +344,9 @@ function makeHost(cls) {
 // Platform stores (twd-store.js; ADR-platform-stores), when the app has
 // storage bindings.
 //@@STORES@@
+
+// Queue producer bindings and their facet proxies (twd-queue.js; ADR-queues).
+export { QueueProducer, QueueFacetProxy } from "twd-queue.js";
 
 // NsProxy stands in for a DO namespace binding inside a facet's env:
 // env.X.getByName(name) returns the real stub (RPC promise pipelining makes

@@ -20,6 +20,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/container"
 	"github.com/rosskukulinski/twd/internal/cron"
 	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/twd/internal/queuecfg"
 )
 
 // MaxBundle bounds an unpacked bundle.
@@ -75,6 +76,9 @@ type App struct {
 	// Stores are the platform storage bindings (kv_namespaces, …;
 	// stores.go, ADR-platform-stores), in wrangler order.
 	Stores []StoreBinding
+
+	// Queues is wrangler.jsonc "queues" (queues.go, ADR-queues); nil: none.
+	Queues *queuecfg.Config
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -200,6 +204,9 @@ func Parse(files map[string][]byte) (*App, error) {
 				}
 				return nil, errors.New("bundle: triggers.crons: cron triggers need the workerd runtime (a scheduled() handler); runtime \"node\" does not support them")
 			}
+			if err := refuseNodeQueues(files); err != nil {
+				return nil, err
+			}
 			return parseNode(files, &t)
 		default:
 			return nil, fmt.Errorf("bundle: twd.jsonc runtime %q: want \"workerd\" (default) or \"node\"", t.Runtime)
@@ -321,6 +328,9 @@ func Parse(files map[string][]byte) (*App, error) {
 		return nil, err
 	}
 	a.Stores = stores
+	if a.Queues, err = parseQueues(StripJSONC(wb), a); err != nil {
+		return nil, err
+	}
 	var twdJSON []byte
 	if tb, ok := files["twd.jsonc"]; ok {
 		twdJSON = StripJSONC(tb)

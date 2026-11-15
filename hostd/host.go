@@ -205,6 +205,11 @@ type Config struct {
 	// CronClock replaces the wall clock of the cron scheduler's own loop
 	// (tests that drive the scheduler's ticks themselves; nil = real time).
 	CronClock func() time.Time
+
+	// QueueVisibility is how long a claimed queue batch stays hidden in
+	// mgmt (default DefaultQueueVisibility, 60 s; extended while queue()
+	// runs). It bounds how soon a crashed consumer's batch comes back.
+	QueueVisibility time.Duration
 }
 
 // ContainerInternet dials allowlisted internet hosts for containers. The
@@ -453,6 +458,8 @@ func (h *Host) Start(ctx context.Context) error {
 		go h.pathLoop()
 	}
 	go h.cronLoop()
+	h.wg.Add(1)
+	go h.queueLoop() // queue consumers (queues.go)
 	return nil
 }
 

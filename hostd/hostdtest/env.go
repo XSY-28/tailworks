@@ -66,6 +66,10 @@ type Options struct {
 	// CronClock is passed to hostd (the cron loop's clock; tests that tick
 	// the scheduler themselves).
 	CronClock func() time.Time
+
+	// QueueVisibility is passed to hostd (how long a claimed queue batch
+	// stays hidden; short in tests of crash recovery).
+	QueueVisibility time.Duration
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -146,6 +150,7 @@ func Start(t testing.TB, o Options) *Env {
 		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter,
 		PublicListen: o.PublicListen,
 		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
+		QueueVisibility: o.QueueVisibility,
 	})
 	if err != nil {
 		t.Fatal(err)

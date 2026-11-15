@@ -144,6 +144,15 @@ hostd's API, not this document's.
 | `PATCH` | `/v1/tenants/{id}` | admin | yes | `UpdateTenant` | Update a tenant (JSON Merge Patch) |
 | `DELETE` | `/v1/tenants/{id}` | admin | yes | `DeleteTenant` | Delete a tenant |
 | `DELETE` | `/v1/tenants/{id}/objects` | admin | yes | `PurgeTenantObjects` | Purge terminal objects of a tenant |
+| `GET` | `/v1/tenants/{id}/queues` | admin | no | `ListQueues` | List a tenant's queues |
+| `GET` | `/v1/tenants/{id}/queues/{queue}` | admin\|host | no | `GetQueue` | Get one queue and its backlog |
+| `PUT` | `/v1/tenants/{id}/queues/{queue}` | admin | yes | `PutQueue` | Create a queue (idempotent) |
+| `DELETE` | `/v1/tenants/{id}/queues/{queue}` | admin | yes | `DeleteQueue` | Delete a queue and its messages |
+| `GET` | `/v1/tenants/{id}/queues/{queue}/messages` | admin | no | `PeekQueueMessages` | Read messages without claiming them |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/messages` | admin\|host | no | `SendQueueMessages` | Send messages to a queue |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/messages/ack` | admin\|host | no | `AckQueueMessages` | Settle claimed messages (ack, retry, extend) |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/messages/pull` | admin\|host | no | `PullQueueMessages` | Claim a batch of messages (push consumers and HTTP pull) |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/purge` | admin | yes | `PurgeQueue` | Delete every message of a queue, keeping the queue |
 | `POST` | `/v1/tenants/{id}/wif-check` | admin | no | `CheckTenantWIF` | Verify a wif tenant's trust credentials (diagnostic) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
@@ -1349,6 +1358,243 @@ append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
 | 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+## Queues
+
+Cloudflare-style Queues (ADR-queues). A queue belongs to the tenant; its messages are sealed rows here. Producers send through their host, push consumers' hosts claim batches with a visibility timeout and settle them, and admins can pull, peek, purge and delete.
+
+### `GET /v1/tenants/{id}/queues` — List a tenant's queues
+
+`ListQueues` · role **admin** · audited: no
+
+Every queue of the tenant, by name, with its backlog. A queue
+exists once something sent to or pulled from it, or after
+`PUT /v1/tenants/{id}/queues/{queue}`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `limit` | query | integer | no | Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`. |
+| `cursor` | query | string | no | Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged. |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `QueuePage` | One page of queues. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/queues/{queue}` — Get one queue and its backlog
+
+`GetQueue` · role **admin\|host** · audited: no
+
+The queue's counters: messages kept (`backlog`), of which claimed by
+a consumer and not settled (`inFlight`) and not yet visible
+(`delayed`), their bytes, and the oldest message's send time. A
+host reads it for a producer binding's `metrics()` (with
+`workload` and `epoch`, as for a send).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+| `workload` | query | string | no | Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out. |
+| `epoch` | query | integer (int64) | no | Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `Queue` | The queue. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/tenants/{id}/queues/{queue}` — Create a queue (idempotent)
+
+`PutQueue` · role **admin** · audited: yes
+
+Creates an empty queue (`201`) or answers the existing one (`200`).
+A queue is also created by its first send or pull, and a
+dead-letter queue by the first message moved to it. Audited
+(`kind: queue_create`) when it creates.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `Queue` | The queue already existed. |
+| 201 | `Queue` | Created. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/tenants/{id}/queues/{queue}` — Delete a queue and its messages
+
+`DeleteQueue` · role **admin** · audited: yes
+
+Deletes every message and the queue's data key (custody), so the
+sealed bodies can't be read again even from a database backup.
+Consumers holding claimed messages find their lease IDs stale. A
+later send creates a new, empty queue. `404 unknown_queue` if there
+is none. Audited (`kind: queue_delete`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+
+| Status | Body | Description |
+|---|---|---|
+| 204 | — | Deleted. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/queues/{queue}/messages` — Read messages without claiming them
+
+`PeekQueueMessages` · role **admin** · audited: no
+
+The oldest messages, bodies included, without changing them (no
+lease, no attempt counted). This is how an operator inspects a
+dead-letter queue (`twd queues messages <queue>`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+| `limit` | query | integer | no | At most this many messages (default 20, maximum 100). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `QueueMessageList` | The messages, oldest first. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/queues/{queue}/messages` — Send messages to a queue
+
+`SendQueueMessages` · role **admin\|host** · audited: no
+
+A producer's `send()` / `sendBatch()` (through its host), or an
+operator's `twd queues send`. The messages are durable in mgmt's
+database when this answers. Each gets a random ID. A host must give
+`workload` and `epoch` (the lease it holds, `409 lease_lost`), and
+the workload's latest deployment must bind the queue as a producer
+(`403 forbidden` otherwise). Not audited (volume). Limits: 100
+messages and 256 KB per call, 128 KB per message, `delaySeconds` ≤
+43200 (`400 queue_limit`); 1 GiB kept per queue.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+| `workload` | query | string | no | Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out. |
+| `epoch` | query | integer (int64) | no | Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`). |
+
+**Request** `application/json`: `QueueSend`
+
+| Status | Body | Description |
+|---|---|---|
+| 201 | `QueueSendResult` | Sent. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/queues/{queue}/messages/ack` — Settle claimed messages (ack, retry, extend)
+
+`AckQueueMessages` · role **admin\|host** · audited: no
+
+`acks` deletes messages; `release` hands them back uncounted (the
+consumer never ran them); `retries` makes them visible again after
+`delaySeconds` (default: the consumer's `retry_delay`), or moves
+them to the dead-letter queue (or drops them) once they have been
+delivered more than `maxRetries` times; `extend` keeps them hidden
+for another `visibilityTimeoutMs` (a long handler). A lease ID that
+is no longer current (its timeout passed and the message was
+claimed again, or settled) changes nothing and is counted in
+`stale`. Host rules as for `…/pull`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+| `workload` | query | string | no | Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out. |
+| `epoch` | query | integer (int64) | no | Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`). |
+
+**Request** `application/json`: `QueueAck`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `QueueAckResult` | Settled. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/queues/{queue}/messages/pull` — Claim a batch of messages (push consumers and HTTP pull)
+
+`PullQueueMessages` · role **admin\|host** · audited: no
+
+Claims up to `batchSize` visible messages, oldest first: each is
+hidden for `visibilityTimeoutMs`, gets a new `leaseId` and counts an
+attempt. Settle them with `…/messages/ack` before the timeout, or
+they become visible again (at-least-once). If none is visible, waits
+up to `waitMs` for one. A message that already failed more than
+`maxRetries` times and whose last lease expired is moved to the
+dead-letter queue (or dropped) instead of being delivered again.
+
+A host (a push consumer's hostd) must give `workload` and `epoch`;
+the workload's latest deployment must declare a consumer of the
+queue, and its `max_retries` and `dead_letter_queue` apply (the
+body's are ignored). An admin is an HTTP pull consumer and gives
+them in the body.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+| `workload` | query | string | no | Hosts: the workload the call acts for (its producer binding or consumer). Admins leave it out. |
+| `epoch` | query | integer (int64) | no | Hosts: the workload's lease epoch the caller holds (required with `workload`; `409 lease_lost`). |
+
+**Request** `application/json`: `QueuePull`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `QueuePullResult` | The claimed messages (possibly none). |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/queues/{queue}/purge` — Delete every message of a queue, keeping the queue
+
+`PurgeQueue` · role **admin** · audited: yes
+
+Deletes all messages, in flight or not. Audited
+(`kind: queue_purge`, with the count).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `queue` | path | string | yes | The queue's name: lowercase letters, digits and dashes, at most 63 (Cloudflare's rule). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `QueuePurgeResult` | Purged. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ## Audit
 
 Hash-chained, append-only audit log.
@@ -1996,6 +2242,9 @@ mgmt chain:
 `secret_release` (a workload's secrets released to its lease holder; names only),
 `store_create` (a platform store created, by its first write or an admin),
 `store_delete` (a platform store and its data key deleted),
+`queue_create` (a queue created, by its first use or an admin),
+`queue_delete` (a queue, its messages and its data key deleted),
+`queue_purge` (every message of a queue deleted),
 `reap`,
 `preflight` (optional; dryRun deploys),
 `host_add`,
@@ -2016,7 +2265,7 @@ Public ingress (ADR-029), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -2044,7 +2293,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -2288,7 +2537,7 @@ code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -2323,11 +2572,13 @@ The catalog. Status in parentheses.
 | `no_logs` | 404 | the workload's host has no log file for it yet |
 | `unknown_secret` | 404 | the workload has no secret of that name |
 | `unknown_store` | 404 | the workload has no store of that kind and name |
+| `unknown_queue` | 404 | the tenant has no queue of that name |
 | `exists` | 409 | create of an existing ID |
 | `lease_lost` | 409 | epoch/holder fence failed |
 | `lease_held` | 409 | another host holds the lease |
 | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
 | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
+| `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2359,7 +2610,7 @@ The catalog. Status in parentheses.
 | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `exists`, `lease_lost`, `lease_held`, `store_conflict`, `store_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `unknown_queue`, `exists`, `lease_lost`, `lease_held`, `store_conflict`, `store_limit`, `queue_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
 
 #### `Health`
 
@@ -2861,6 +3112,135 @@ netd's limits on a public listener (ADR-029 D5); defaults filled in.
 |---|---|---|---|
 | `purged` | array of string | yes | Object IDs forgotten. |
 | `warmKeysRevoked` | integer | no | The tenant's unused pooled keys revoked with the purge. |
+
+#### `Queue`
+
+A tenant's queue (ADR-queues).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `backlog` | integer (int64) | yes | Messages kept: not yet acked, in flight or delayed included. |
+| `bytes` | integer (int64) | yes | Body bytes of the kept messages. |
+| `consumedAt` | integer (int64) | no | unix ms of the last claim. |
+| `consumer` | string | no | The workload (or `admin`) that last claimed messages. |
+| `createdAt` | integer (int64) | yes |  |
+| `delayed` | integer (int64) | yes | Not yet visible (a delay or a retry delay). |
+| `inFlight` | integer (int64) | yes | Claimed by a consumer and not settled (lease not expired). |
+| `incarnation` | string | yes | Random per creation. |
+| `name` | string | yes |  |
+| `oldestAt` | integer (int64) | no | Send time (unix ms) of the oldest message; absent when empty. |
+| `tenantID` | string | yes |  |
+| `updatedAt` | integer (int64) | yes |  |
+
+#### `QueueAck`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `acks` | array of string | no | Lease IDs to delete. |
+| `deadLetterQueue` | string | no |  |
+| `extend` | array of string | no | Lease IDs to keep hidden for `visibilityTimeoutMs` more. |
+| `maxRetries` | integer | no | Admin pull consumers, as for pull. |
+| `release` | array of string | no | Lease IDs to hand back, visible again at once, without counting the attempt (the consumer never ran them: its instance was restarting or went away). |
+| `retries` | array of `QueueRetry` | no |  |
+| `retryDelaySeconds` | integer | no | Admin pull consumers: the default retry delay. |
+| `visibilityTimeoutMs` | integer | no | For `extend` (default 30000). |
+
+#### `QueueAckResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `acked` | integer | yes |  |
+| `deadLettered` | integer | yes | Retries that went to the dead-letter queue (or were dropped) instead. |
+| `extended` | integer | yes |  |
+| `released` | integer | yes |  |
+| `retried` | integer | yes |  |
+| `stale` | integer | yes | Lease IDs that were no longer current. |
+
+#### `QueueContentType`
+
+How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer).
+
+Enum: `json`, `text`, `bytes`, `v8`
+
+#### `QueueMessage`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `attempts` | integer | yes | Deliveries so far, this one included (pull); 0 for a message never delivered. |
+| `body` | string (byte) | yes |  |
+| `contentType` | `QueueContentType` | yes | How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer). |
+| `id` | string | yes |  |
+| `leaseId` | string | no | Settle the message with this (pull only). |
+| `timestamp` | integer (int64) | yes | Send time (unix ms). |
+| `visibleAt` | integer (int64) | no | When the message is (or was) visible (unix ms). |
+
+#### `QueueMessageIn`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `body` | string (byte) | yes | The encoded body (see `contentType`), at most 128 KB. |
+| `contentType` | `QueueContentType` | no | How the body is encoded: `json` (UTF-8 JSON), `text` (UTF-8), `bytes` (raw), `v8` (V8 structured clone, decoded by workerd in the consumer). |
+| `delaySeconds` | integer | no | Hide the message this long (default: the call's `delaySeconds`). |
+
+#### `QueueMessageList`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `messages` | array of `QueueMessage` | yes |  |
+
+#### `QueuePage`
+
+Extends `Page`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array of `Queue` | no |  |
+
+#### `QueuePull`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `batchSize` | integer | no | At most this many messages (default 10). |
+| `deadLetterQueue` | string | no | Admin pull consumers: where messages go after `maxRetries` (absent: dropped). |
+| `maxRetries` | integer | no | Admin pull consumers: deliveries beyond the first before a message is dead-lettered (default 3). |
+| `visibilityTimeoutMs` | integer | no | How long claimed messages stay hidden (default 30000). |
+| `waitMs` | integer | no | If nothing is visible, wait this long for a message (default 0). |
+
+#### `QueuePullResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deadLettered` | integer | no | Expired messages moved to the dead-letter queue (or dropped) by this claim. |
+| `messages` | array of `QueueMessage` | yes |  |
+
+#### `QueuePurgeResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `purged` | integer (int64) | yes |  |
+
+#### `QueueRetry`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `delaySeconds` | integer | no |  |
+| `leaseId` | string | yes |  |
+
+#### `QueueSend`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `delaySeconds` | integer | no | The default delay of the messages. |
+| `messages` | array of `QueueMessageIn` | yes |  |
+
+#### `QueueSendResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `backlog` | integer (int64) | yes |  |
+| `bytes` | integer (int64) | yes |  |
+| `ids` | array of string | yes | The new messages' IDs, in order. |
+| `oldestAt` | integer (int64) | no |  |
 
 #### `ReplicaRef`
 

@@ -113,6 +113,9 @@ type Server struct {
 	// Platform stores (stores.go): tenant/workload|kind|name -> store.
 	stores       map[string]*fakeStore
 	storeAppends int
+
+	// Queues (queues.go): tenant|queue -> queue.
+	queues map[string]*fakeQueue
 }
 
 // SetHeartbeatsDown makes host heartbeats fail with 503 (tests: a host
@@ -229,6 +232,15 @@ func New(cfg Config) *Server {
 	m.HandleFunc("DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", s.deleteStore)
 	m.HandleFunc("GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", s.readJournal)
 	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", s.appendJournal)
+	m.HandleFunc("GET /v1/tenants/{id}/queues", s.listQueues)
+	m.HandleFunc("GET /v1/tenants/{id}/queues/{queue}", s.getQueue)
+	m.HandleFunc("PUT /v1/tenants/{id}/queues/{queue}", s.putQueue)
+	m.HandleFunc("DELETE /v1/tenants/{id}/queues/{queue}", s.deleteQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/purge", s.purgeQueue)
+	m.HandleFunc("GET /v1/tenants/{id}/queues/{queue}/messages", s.peekQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages", s.sendQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/pull", s.pullQueue)
+	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/ack", s.ackQueue)
 	m.HandleFunc("PUT /v1/hosts/{id}", s.register)
 	m.HandleFunc("PUT /v1/hosts/{id}/status", s.heartbeat)
 	m.HandleFunc("GET /v1/hosts/{id}/assignments", s.assignments)

@@ -111,6 +111,11 @@ var unauditedOK = map[string]bool{
 	// Platform store writes are high volume (one per KV put); creating a
 	// store and deleting one are audited.
 	"AppendStoreJournal": true,
+	// Queue traffic is high volume (one per send, claim and settle);
+	// creating, purging and deleting a queue are audited.
+	"SendQueueMessages": true,
+	"PullQueueMessages": true,
+	"AckQueueMessages":  true,
 }
 
 func assertPaged(t *testing.T, name string, op *openapi3.Operation) {

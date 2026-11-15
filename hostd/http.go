@@ -258,6 +258,10 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			h.storeAPI(inst, w, r) // platform stores (stores.go)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v1/queue/") {
+			h.queueAPI(inst, w, r) // queue producers (queues.go)
+			return
+		}
 		var req apiReq
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 			writeAPIError(w, &apiError{Code: "bad_request", Detail: err.Error()})
