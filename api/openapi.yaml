@@ -3780,7 +3780,7 @@ components:
       required: [tenantID, tailnet, mintMode, registrationsPerMinute, maxObjects, createdAt, updatedAt]
       properties:
         tenantID: { type: string, examples: [tn_tail7906d5] }
-        tailnet: { type: string, description: MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net] }
+        tailnet: { type: string, description: "MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net]" }
         controlURL: { type: string, format: uri, description: "Non-default control plane (testcontrol, headscale)." }
         mintMode: { $ref: "#/components/schemas/MintMode" }
         apiKeyFile:
@@ -4203,7 +4203,7 @@ components:
         id: { type: string }
         to: { type: string }
         state: { type: string, enum: [running, paused, done, aborted, failed] }
-        reason: { type: string, description: Why the run is paused, failed or aborted. }
+        reason: { type: string, description: "Why the run is paused, failed or aborted." }
         step: { type: integer, description: Index of the current step. }
         steps: { type: array, items: { $ref: "#/components/schemas/UpgradeStep" } }
         plan: { $ref: "#/components/schemas/UpgradePlan" }
@@ -5364,7 +5364,7 @@ components:
       description: What runs where (ADR-upgrades-and-releases §7).
       required: [mgmt, hosts]
       properties:
-        mgmt: { type: object, additionalProperties: { type: string }, description: Each live replica's version, by replica ID. }
+        mgmt: { type: object, additionalProperties: { type: string }, description: "Each live replica's version, by replica ID." }
         hosts: { type: object, additionalProperties: { type: integer }, description: 'Host count by reported version ("" = none reported).' }
         skewed: { type: array, items: { type: string }, description: Hosts outside the version window. }
         schema: { $ref: "#/components/schemas/SchemaStatus" }

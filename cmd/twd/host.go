@@ -45,6 +45,12 @@ func cmdHost(args []string) error {
 		return cmdHostLs(rest)
 	case "rm", "remove", "delete":
 		return cmdHostRm(rest)
+	case "cordon":
+		return cmdHostCordon(rest, true) // host_cordon.go
+	case "uncordon":
+		return cmdHostCordon(rest, false)
+	case "drain":
+		return cmdHostDrain(rest)
 	}
 	return fail("bad_request", fmt.Sprintf("unknown host subcommand %q", args[sub]), "usage: twd "+usageOf("host"))
 }

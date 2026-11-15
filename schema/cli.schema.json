@@ -1918,6 +1918,191 @@
         "hostID"
       ]
     },
+    "host cordon": {
+      "type": "object",
+      "properties": {
+        "hostID": {
+          "type": "string"
+        },
+        "cordonedAt": {
+          "type": "integer"
+        },
+        "cordonedBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hostID"
+      ]
+    },
+    "host uncordon": {
+      "type": "object",
+      "properties": {
+        "hostID": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hostID"
+      ]
+    },
+    "host drain": {
+      "type": "object",
+      "properties": {
+        "hostID": {
+          "type": "string"
+        },
+        "cordoned": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "moved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tenantID": {
+                "type": "string"
+              },
+              "workload": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tenantID",
+              "workload",
+              "to"
+            ]
+          }
+        },
+        "refused": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tenantID": {
+                "type": "string"
+              },
+              "workload": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tenantID",
+              "workload",
+              "code",
+              "message"
+            ]
+          }
+        }
+      },
+      "required": [
+        "hostID",
+        "cordoned",
+        "moved",
+        "refused"
+      ]
+    },
+    "release ls": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version"
+            ]
+          }
+        }
+      },
+      "required": [
+        "current",
+        "items"
+      ]
+    },
+    "release import": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "versions",
+        "artifacts"
+      ]
+    },
+    "upgrade": {
+      "type": "object",
+      "description": "twd upgrade: on a twd up machine {plan, upgraded, backup?, rolledBack?, health?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; twd upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
+      "properties": {
+        "plan": {
+          "type": "object"
+        },
+        "upgraded": {
+          "type": "boolean"
+        },
+        "backup": {
+          "type": "string"
+        },
+        "rolledBack": {
+          "type": "boolean"
+        },
+        "health": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array"
+        },
+        "blockers": {
+          "type": "array"
+        },
+        "runs": {
+          "type": "array"
+        }
+      }
+    },
     "host setup": {
       "type": "object",
       "description": "Linux, with sudo",

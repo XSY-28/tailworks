@@ -3112,7 +3112,7 @@ type StatusVersions struct {
 	// Hosts Host count by reported version ("" = none reported).
 	Hosts map[string]int `json:"hosts"`
 
-	// Mgmt Each live replica's version
+	// Mgmt Each live replica's version, by replica ID.
 	Mgmt   map[string]string `json:"mgmt"`
 	Schema *SchemaStatus     `json:"schema,omitempty"`
 
@@ -3266,9 +3266,7 @@ type Tenant struct {
 	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute int            `json:"registrationsPerMinute"`
 
-	// Tailnet MagicDNS suffix of the customer tailnet.
-	//
-	// Examples: tail7906d5.ts.net
+	// Tailnet MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net]
 	Tailnet string `json:"tailnet"`
 
 	// TenantID Examples: tn_tail7906d5
@@ -3519,7 +3517,7 @@ type UpgradeRun struct {
 	ID        string       `json:"id"`
 	Plan      *UpgradePlan `json:"plan,omitempty"`
 
-	// Reason Why the run is paused
+	// Reason Why the run is paused, failed or aborted.
 	Reason *string         `json:"reason,omitempty"`
 	State  UpgradeRunState `json:"state"`
 

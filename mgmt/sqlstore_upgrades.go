@@ -176,3 +176,18 @@ func (s *SQLStore) RestoreFence(ctx context.Context) (int64, error) {
 	})
 	return gen, err
 }
+
+// RestoreFenceDSN is RestoreFence on a store that is not opened for
+// serving: it doesn't migrate, so a restored store from an older twd-mgmt
+// stays at its schema (only the bookkeeping tables are created).
+func RestoreFenceDSN(ctx context.Context, dsn string) (int64, error) {
+	s, err := openSQL(ctx, dsn)
+	if err != nil {
+		return 0, err
+	}
+	defer s.db.Close()
+	if err := s.ensureSchemaTables(ctx); err != nil {
+		return 0, err
+	}
+	return s.RestoreFence(ctx)
+}

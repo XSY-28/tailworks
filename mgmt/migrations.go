@@ -396,3 +396,19 @@ func (s *SQLStore) olderReplicaLive(ctx context.Context, self string) bool {
 	}
 	return false
 }
+
+// BackupSQLite writes a consistent copy of the SQLite store at dbPath to
+// dst (VACUUM INTO; safe while twd-mgmt runs). twd upgrade calls it before
+// it swaps binaries.
+func BackupSQLite(ctx context.Context, dbPath, dst string) error {
+	s, err := openSQL(ctx, dbPath)
+	if err != nil {
+		return err
+	}
+	defer s.db.Close()
+	if s.d != dialectSQLite {
+		return fmt.Errorf("BackupSQLite: %s is not a SQLite store", dbPath)
+	}
+	_, err = s.db.ExecContext(ctx, "VACUUM INTO ?", dst)
+	return err
+}

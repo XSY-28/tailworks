@@ -3782,7 +3782,7 @@ What runs where (ADR-upgrades-and-releases §7).
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `hosts` | object | yes | Host count by reported version ("" = none reported). |
-| `mgmt` | object | yes | Each live replica's version |
+| `mgmt` | object | yes | Each live replica's version, by replica ID. |
 | `schema` | `SchemaStatus` | no |  |
 | `skewed` | array of string | no | Hosts outside the version window. |
 
@@ -3904,7 +3904,7 @@ Enum: `logs`, `metrics`, `traces`
 | `pool` | string | no | Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host). |
 | `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | yes |  |
-| `tailnet` | string | yes | MagicDNS suffix of the customer tailnet. |
+| `tailnet` | string | yes | MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net] |
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
 | `updatedAt` | integer (int64) | yes |  |
@@ -4044,7 +4044,7 @@ Enum: `tsnet`, `local-dev`
 | `createdBy` | string | no |  |
 | `id` | string | yes |  |
 | `plan` | `UpgradePlan` | no |  |
-| `reason` | string | no | Why the run is paused |
+| `reason` | string | no | Why the run is paused, failed or aborted. |
 | `state` | string: `running` \| `paused` \| `done` \| `aborted` \| `failed` | yes |  |
 | `step` | integer | no | Index of the current step. |
 | `steps` | array of `UpgradeStep` | yes |  |

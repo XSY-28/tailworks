@@ -374,6 +374,10 @@ func (s *state) transport() string {
 // the node's SOCKS5 loopback proxy, so the request carries mgmt's identity
 // and WhoIs makes it the operator.
 func (s *state) mgmt() *mgmtapi.Client {
+	return withVersionCheck(s.mgmtRaw()) // versioncheck.go
+}
+
+func (s *state) mgmtRaw() *mgmtapi.Client {
 	if s.remote() {
 		return s.Link.client()
 	}

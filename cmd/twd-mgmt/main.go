@@ -39,6 +39,13 @@ func main() {
 		fmt.Println(version.String("twd-mgmt"))
 		return
 	}
+	if handled, err := runMaintenance(os.Args[1:]); handled { // maintenance.go
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "twd-mgmt:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "twd-mgmt:", err)
 		os.Exit(1)
