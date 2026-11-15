@@ -95,6 +95,16 @@ Lines). `twd telemetry [show|set|rm]` got `$defs/telemetry`;
 Timings on the dev Mac (arm64): `TestAgentEval` ~25 s, `TestCLIJSONContract`
 ~8 s, `TestDevJSONEvents` ~6 s, `TestAgentSetupSnapshot` ~5 s.
 
+## Test runs
+
+- `make lint test` after the first master merge: PASS (`cmd/twd` 184 s).
+- `make lint test` after merging observability (#30): `cmd/twd`, `agent`,
+  `docs`, `schema` and all other packages pass; `hostd:TestContainerPolyfill/SurvivesRedeploy`
+  failed once under the full parallel run (exec output correct, the
+  container's generation changed), then passed 3/3 alone
+  (`go test -race -count=1 -run TestContainerPolyfill ./hostd/`). This branch
+  doesn't touch that path; recorded as a load-dependent flake.
+
 ## Decisions
 
 - **deploy's events go to stderr, not stdout.** The issue asks for NDJSON
