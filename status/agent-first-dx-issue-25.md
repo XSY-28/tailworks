@@ -140,6 +140,9 @@ Timings on the dev Mac (arm64): `TestAgentEval` ~25 s, `TestCLIJSONContract`
 
 ## Test runs
 
+- `make lint test` with the MCP server: PASS, no failures (`cmd/twd`
+  168 s, `mgmt` 136 s).
+
 - `make lint test` after the first master merge: PASS (`cmd/twd` 184 s).
 - `make lint test` after merging observability (#30): `cmd/twd`, `agent`,
   `docs`, `schema` and all other packages pass; `hostd:TestContainerPolyfill/SurvivesRedeploy`
