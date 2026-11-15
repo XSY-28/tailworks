@@ -1,8 +1,8 @@
-Last update: 2026-11-15 PT. Workers KV binding (issue #15, ADR-workers-kv) on the platform-store substrate: API, facets, TTL, operator CLI/REST, twd dev, process and microVM tiers, workers-oauth-provider.
+Last update: 2026-11-15 PT. Workers KV binding (issue #15, ADR-036) on the platform-store substrate: API, facets, TTL, operator CLI/REST, twd dev, process and microVM tiers, workers-oauth-provider.
 
 # Workers KV (`kv_namespaces`)
 
-Design: [ADR-workers-kv](../docs/design/adr/workers-kv.md) (draft; answers the
+Design: [ADR-036](../docs/design/adr/036-workers-kv.md) (draft; answers the
 issue's five questions). User doc: [docs/kv.md](../docs/kv.md). Built on
 [ADR-platform-stores](../docs/design/adr/platform-stores.md)
 (`status/platform-stores.md`, landed first as its own PR, #27). KV is that

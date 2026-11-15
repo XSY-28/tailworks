@@ -1226,7 +1226,7 @@ mgmt keeps, after compaction.
 `ListKVKeys` · role **admin** · audited: no
 
 Workers KV's `list()` for operators (`twd kv key list`,
-ADR-workers-kv): live keys in UTF-8 byte order, with their
+ADR-036): live keys in UTF-8 byte order, with their
 expiration and metadata, `limit` at a time (default and maximum
 1000). Pass the answer's `cursor` to get the next page. mgmt reads
 the namespace's journal (its own copy), so the answer includes
@@ -2825,7 +2825,7 @@ Live usage against `HostCapacity`, reported with every heartbeat. `containers` i
 
 #### `KVKey`
 
-A Workers KV key as `list()` returns it (ADR-workers-kv).
+A Workers KV key as `list()` returns it (ADR-036).
 
 | Field | Type | Required | Description |
 |---|---|---|---|

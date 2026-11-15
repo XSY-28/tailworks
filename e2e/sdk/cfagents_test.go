@@ -188,7 +188,7 @@ func TestCloudflareAgents(t *testing.T) {
 		code, r := s.getJSON(base + "/agents/state-agent/pr1/probe")
 		t.Logf("probe: %d %v", code, r)
 		// env.KV is absent because this app binds no kv_namespaces; Workers
-		// KV itself is supported (TestOAuthProviderKV, ADR-workers-kv).
+		// KV itself is supported (TestOAuthProviderKV, ADR-036).
 		for _, k := range []string{"AI", "WORKFLOW", "BROWSER", "LOADER"} {
 			if r[k] != "undefined" {
 				t.Fatalf("env.%s is %v; expected absent (update docs/COMPAT.md)", k, r[k])

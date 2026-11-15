@@ -1,4 +1,4 @@
-# ADR-workers-kv: Workers KV is a platform store per workload, behind workerd's own kvNamespace binding
+# ADR-036: Workers KV is a platform store per workload, behind workerd's own kvNamespace binding
 
 **Date:** 2026-11-15
 **Status:** Proposed (results in `status/workers-kv-binding-issue-15.md`).

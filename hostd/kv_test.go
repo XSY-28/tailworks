@@ -83,7 +83,7 @@ func kvJournal(e *hostdtest.Env, workload, name string) mgmtapi.StoreJournalPage
 	return p
 }
 
-// TestWorkersKV runs the Workers KV binding (ADR-workers-kv) on real
+// TestWorkersKV runs the Workers KV binding (ADR-036) on real
 // workerd: Cloudflare's API through workerd's own kvNamespace binding, in
 // the worker and in a facet, on the platform-store substrate. It covers
 // get types, metadata, TTL validation and expiry (with the alarm that

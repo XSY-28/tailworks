@@ -2,7 +2,7 @@ package gen
 
 import _ "embed"
 
-// Workers KV (ADR-workers-kv): a kv_namespaces binding is workerd's own
+// Workers KV (ADR-036): a kv_namespaces binding is workerd's own
 // kvNamespace binding targeting the platform's KVBackend (js/kv.js), on the
 // platform-store substrate; facets get KVFacet.
 

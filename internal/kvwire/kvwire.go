@@ -1,5 +1,5 @@
 // Package kvwire is the Workers KV store kind's journal entry format and
-// limits (ADR-workers-kv). The platform's KV module (hostd/gen/js/kv.js)
+// limits (ADR-036). The platform's KV module (hostd/gen/js/kv.js)
 // writes these entries to a platform store's journal
 // (ADR-platform-stores); mgmt's admin KV view and `twd kv` read and write
 // the same entries. The two encoders must agree byte for byte: a change

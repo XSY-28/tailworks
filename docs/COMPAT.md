@@ -201,7 +201,7 @@ not supported.
 twd supplies the storage: one platform-owned SQLite Durable Object per
 namespace on the workload's host (local reads), with every write first
 appended to a sealed, lease-fenced journal in mgmt. See [kv.md](kv.md) and
-[ADR-workers-kv](design/adr/workers-kv.md).
+[ADR-036](design/adr/036-workers-kv.md).
 
 Measured (`hostd:TestWorkersKV`, `hostd:TestWorkersKVMove`,
 `e2e/vm:TestE2EVMKV`, `e2e/sdk:TestOAuthProviderKV`, macOS arm64):
