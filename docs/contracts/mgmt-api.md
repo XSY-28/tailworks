@@ -64,9 +64,13 @@ hostd's API, not this document's.
 - **Async creates** answer `202 Accepted` with a `Location` header to poll.
 - **Tombstones.** A killed object stays readable as `410 Gone` whose body
   is the typed error plus the kill record (`TombstoneError`).
-- **Errors** are the DX.md catalog shape
+- **Errors** are the typed error catalog (docs/errors.md) shape
   `{code, message, missing?, snippet?, doc_url, trace_id}` and also set
   `Twd-Error: <code>`; `identity_pending` sets `Retry-After: 1`.
+- **Body limits.** Requests from the `host` role are capped at **1 MiB**
+  except `POST /v1/audit` (batches; 64 MiB). Admin uploads (`POST
+  /v1/deployments` bundles) keep the 64 MiB limit. Over the cap is
+  `400 bad_request`.
 - **Audit.** Every mutating operation is marked `x-twd-audit: true` and
   writes to mgmt's hash chain with the caller's actor (`deployedBy`,
   `by`): the WhoIs login for users, `<tag> (<stableNodeID>)` for tagged
@@ -120,6 +124,7 @@ hostd's API, not this document's.
 | `DELETE` | `/v1/hosts/{id}` | admin | yes | `DeleteHost` | Drain and remove a host |
 | `GET` | `/v1/hosts/{id}/assignments` | host\|admin | no | `ListHostAssignments` | List the deployments assigned to a host |
 | `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
+| `GET` | `/v1/hosts/{id}/sandbox-deny` | host\|admin | no | `GetHostSandboxDeny` | Every tenant's credential file paths, for the host's sandbox deny list |
 | `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
 | `GET` | `/v1/images/aliases` | admin\|host | no | `ListImageAliases` | The image alias map |
 | `GET` | `/v1/images/public` | admin\|host | no | `ListPublicImages` | List public base images |
@@ -172,7 +177,10 @@ Customer tailnets. Admin only.
 
 `ListTenants` · role **admin\|host** · audited: no
 
-Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClientFile` path to their workload sandboxes).
+Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
+`oauthClientFile` path to their workload sandboxes), but a host sees
+**only the tenants with a deployment assigned to it** (a namespace
+lease it holds); admins see every tenant.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -204,7 +212,9 @@ Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClie
 
 `GetTenant` · role **admin\|host** · audited: no
 
-Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer and subjects).
+Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
+and subjects). A host may read only tenants with a deployment assigned
+to it (any other tenant is `404 not_found` for it).
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -432,8 +442,11 @@ twd-hostd instances. A host writes its own record; admins read.
 
 `CreateHost` · role **admin** · audited: yes
 
-`twd host add`: creates the host record (status `pending`) and mints a
+`twd host add`: creates the host record (status `pending`), mints a
 **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+and a one-time `registrationSecret` (32 random bytes, base64url; only
+its SHA-256 is stored) that the host must present on its first
+`PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 through the operator tenant's trust credential (wif) or API key
 (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -477,10 +490,18 @@ node yet mints a fresh key (`200`); a bound host is `409 exists`
 `RegisterHost` · role **host** · audited: yes
 
 The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-is bound to this `hostID` on first registration; a different node using
-the same ID is `403 host_identity_mismatch`. Re-registering with the
-same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-re-register on every restart.
+is bound to this `hostID` on first registration, which must carry the
+`registrationSecret` from `POST /v1/hosts` (missing or wrong:
+`403 host_identity_mismatch`; the secret is cleared once the node is
+bound). A `PUT` for a host ID the admin never created is
+`403 host_not_registered` (no implicit creation over the tailnet;
+only the `--local-dev` socket keeps it). A different node using the
+same ID is `403 host_identity_mismatch`. Re-registering with the same
+node needs no secret and replaces capacity, tiers and `push`;
+`auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+it or omit it; a different key is `403 host_identity_mismatch` and
+rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+every restart.
 
 A host that was created through `twd host add` exists before its first
 `PUT` (status `pending`); the `PUT` activates it.
@@ -575,6 +596,30 @@ recorded with the deploy.
 | 404 | `Error` | The host never registered (`host_not_registered`). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+### `GET /v1/hosts/{id}/sandbox-deny` — Every tenant's credential file paths, for the host's sandbox deny list
+
+`GetHostSandboxDeny` · role **host\|admin** · audited: no
+
+The paths of every tenant's `apiKeyFile` and `oauthClientFile`
+(sorted, deduplicated), and nothing else: no tenant ID, tailnet or
+name. A process-tier host denies them all to every workload sandbox
+it starts, including the files of tenants that have no deployment
+on it yet. `GET /v1/tenants` shows a host only its own tenants, which
+is not enough: a workload started before another tenant's first
+deploy would otherwise be able to read that tenant's key file. A
+host may read only its own `{id}`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Host ID (one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | object | The paths. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ### `PUT /v1/hosts/{id}/status` — Heartbeat (replace the host's reported status)
 
 `ReportHostStatus` · role **host** · audited: no
@@ -639,6 +684,10 @@ wrangler's `placement`). A bundle with neither `tailnet.tags` nor
 `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 duplicates, each a valid five-field UTC expression that can fire); an
 invalid one is `400 bad_bundle`.
+Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+(`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+`tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+both deploy and preflight enforce this.
 
 **Deploy** (`dryRun` absent or false): picks a host, acquires the
 `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -776,7 +825,7 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 
 | Status | Body | Description |
 |---|---|---|
-| 200 | `ObjectPage` | One page of objects, ordered by `(createdAt, objectID)`. Hosts see only the namespaces they hold. |
+| 200 | `ObjectPage` | One page of objects, ordered by `(createdAt, objectID)`. Hosts see only objects whose `(tenant, workload)` lease they hold; other objects are filtered out, never listed. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
@@ -813,6 +862,8 @@ hostd calls this on first `create()`/`spawn()`. The identity is
   names it in `poolObjectID`. Then that create answers
   `status: assigned` and mints nothing.
 Spawn checks are unchanged from v0.
+- A host may create objects only in workloads whose `(tenant,
+  workload)` lease it holds (`403 forbidden`).
 
 **Request** `application/json`: `ObjectCreate`
 
@@ -831,6 +882,8 @@ Spawn checks are unchanged from v0.
 ### `GET /v1/objects/{id}` — Read an object (lineage, children, kill record)
 
 `GetObject` · role **admin\|host** · audited: no
+
+A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -853,13 +906,18 @@ Spawn checks are unchanged from v0.
 Two callers, two subsets:
 
 - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-  magicDNS, epoch}` reports the node joined. `epoch` fences the
-  commit (`409 lease_lost`). mgmt then signs the **node certificate**
+  magicDNS, epoch}` reports the node joined. `epoch` is **required**
+  for the ready group (`400 bad_request` without it) and the commit is
+  always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+  a host that does not hold the object's lease is `403 forbidden`.
+  mgmt then signs the **node certificate**
   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
   `ready` audit detail adds `cert: true` and `lim`. If the object was
   killed during the join the answer is `410 killed` and mgmt deletes
-  the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+  the device that just appeared (only when the fence held: a caller
+  without the lease cannot make mgmt delete devices). Replaces
+  `POST /v0/objects/{id}/ready`.
 - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
   applies it.
 
@@ -2040,14 +2098,15 @@ The workload entry node (`_workload` object).
 
 #### `Error`
 
-The DX.md error catalog shape. `code` is stable and machine-readable;
+The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 `missing` names what is absent (grant, cap, field, quota); `snippet`
 is policy HuJSON to paste when a grant is missing; `doc_url` is
-`https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+`https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}` \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -2063,6 +2122,7 @@ The catalog. Status in parentheses.
 | `bad_request` | 400 | malformed body, parameter or filter |
 | `bad_cursor` | 400 | `cursor` does not decode |
 | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+| `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 | `too_many_secrets` | 400 | a workload already has 128 secrets |
 | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2070,8 +2130,8 @@ The catalog. Status in parentheses.
 | `host_token_invalid` | 403 | local-dev socket, wrong token |
 | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-| `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-| `host_identity_mismatch` | 403 | host ID bound to another node |
+| `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+| `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -2114,7 +2174,7 @@ The catalog. Status in parentheses.
 | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `immutable_field`, `too_many_secrets`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `exists`, `lease_lost`, `lease_held`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
 
 #### `Health`
 
@@ -2192,6 +2252,7 @@ A single-use join key for a host's `tag:twd-host` node. Never logged.
 | `expiresAt` | integer (int64) | yes | unix ms |
 | `host` | `Host` | yes |  |
 | `hostname` | string | yes | `twd-host-<hostID>` |
+| `registrationSecret` | string (password) | yes | One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound. |
 | `tags` | array of string | yes |  |
 | `tailnet` | string | no |  |
 
@@ -2219,18 +2280,19 @@ on the local-dev socket and only as `unix:///…`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `port` | integer | no |  |
-| `url` | string | no | `unix:///path/hostd.sock`; local-dev only. |
+| `url` | string | no | `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport). |
 
 #### `HostRegistration`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `arch` | `Arch` | no | A Go GOARCH. Container images must match their host's. |
-| `auditPubKey` | string | no |  |
+| `auditPubKey` | string | no | Pinned on first bind; a later registration may only repeat it. |
 | `capacity` | `HostCapacity` | no | The capacity vector a host registers (ADR-032 D9). `nodes` is tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO instances and containers alike): their count, guest memory (all, and the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit` for scheduling) and scratch disk. A host without a microVM backend reports 0 for every VM dimension. |
 | `capacityNodes` | integer | yes |  |
 | `pool` | string | no |  |
 | `push` | `HostPush` | no | Where mgmt pushes kills and assignment changes. Over the tailnet, `port` names hostd's push listener on **its own tsnet node** (the WhoIs node; mgmt never pushes anywhere else). `url` is accepted only on the local-dev socket and only as `unix:///…`. |
+| `registrationSecret` | string (password) | no | Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound. |
 | `tiers` | array of `HostTier` | yes |  |
 
 #### `HostStatus`

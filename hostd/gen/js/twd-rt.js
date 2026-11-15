@@ -1,5 +1,5 @@
 // js/packages/tailnet/src/errors.ts
-var DOC_BASE = "https://github.com/rosskukulinski/twd/blob/main/docs/errors.md#";
+var DOC_BASE = "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#";
 var CATALOG = Object.freeze({
   peer_not_visible: { status: 403, title: "the destination is not in this node's netmap (a grant is missing, or the name does not exist)" },
   forbidden_destination: { status: 403, title: "the destination class is refused by netd (loopback, self, sibling, host, non-tailnet)" },

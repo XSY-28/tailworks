@@ -9,17 +9,16 @@
 // Only with -local-dev (twd dev, hermetic tests) does it also serve a unix
 // socket guarded by the per-host token. In WIF mode it is also an OIDC
 // issuer, served via Funnel (and/or a local listener).
+//
+// The daemon itself is internal/mgmtd; this binary parses the flags. The
+// single-process `twd up` runs the same runtime embedded with the host agent.
 package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -27,13 +26,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/mgmtd"
 	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/internal/tssvc"
 	"github.com/rosskukulinski/twd/mgmt"
 	"github.com/rosskukulinski/twd/netd"
-	"tailscale.com/ipn"
-	"tailscale.com/ipn/ipnstate"
-	"tailscale.com/tsnet"
 )
 
 func main() {
@@ -71,9 +67,9 @@ func run() error {
 		admins       = flag.String("admins", "", "comma-separated tailnet logins admitted as admins even without the "+mgmt.AdminCap+" capability (override; the normal path is the cap, granted to "+mgmt.MgmtTag+")")
 		custodyKind  = flag.String("custody", "file", "custody backend: file (AES-GCM in <state-dir>/custody) or setec")
 		setecURL     = flag.String("setec-url", "", "setec server URL (with -custody setec)")
-		reapEvery    = flag.Duration("reap-interval", 10*time.Second, "reaper interval")
+		reapEvery    = flag.Duration("reap-interval", mgmtd.DefaultReapInterval, "reaper interval")
 		delDelay     = flag.Duration("device-delete-delay", 0, "defer kill tier 2 (device delete) this long after the tier-1 push, so the host's tombstone answers new connections with object_killed (keep < hostd -kill-tombstone)")
-		warmKeys     = flag.Int("warm-keys", 5, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
+		warmKeys     = flag.Int("warm-keys", mgmtd.DefaultWarmKeys, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
 		warmKeyTTL   = flag.Duration("warm-key-ttl", mgmt.DefaultWarmKeyTTL, "-warm-keys: a pooled key's expiry; unused keys are revoked shortly before it")
 		verbose      = flag.Bool("v", false, "debug logging")
 		registryDir  = flag.String("registry-dir", "", "OCI registry blob store (ADR-032 D3; default <state-dir>/registry; \"off\" disables the registry). Replicas serving the registry must share it")
@@ -87,11 +83,6 @@ func run() error {
 		lvl = slog.LevelDebug
 	}
 	log := slog.New(netd.NewRedactingHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
-
-	if err := os.MkdirAll(*stateDir, 0o700); err != nil {
-		return err
-	}
-	os.Chmod(*stateDir, 0o700)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -104,414 +95,33 @@ func run() error {
 		mgmt.SetTestWallClockOffset(d)
 		log.Warn("TEST HOOK: wall clock offset", "offset", d)
 	}
-	dsn := *dbDSN
-	if *dbDSNFile != "" {
-		b, err := os.ReadFile(*dbDSNFile)
-		if err != nil {
-			return err
-		}
-		dsn = strings.TrimSpace(string(b))
+	o := mgmtd.Options{StateDir: *stateDir, LocalDev: *localDev, Socket: *socket, HostTokenFile: *tokenFile, RotateHostToken: *rotateToken,
+		DB: *dbDSN, DBFile: *dbDSNFile, TSAPIURL: *tsapiURL,
+		IssuerURL: *issuerURL, IssuerListen: *issuerListen, Funnel: *funnel,
+		IssuerTSNetHostname: *issHostname, IssuerTSNetDir: *issDir, IssuerTSNetAuthKeyFile: *issAuthFile,
+		TSNetHostname: *tsHostname, TSNetControlURL: *tsControl, TSNetAuthKeyFile: *tsAuthFile, TSNetService: *tsService, TSNetTLS: *tsTLS,
+		NoLoopback: *noLoopback, Version: *version, Custody: *custodyKind, SetecURL: *setecURL,
+		ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL,
+		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log}
+	// Like the flags: "" means no tags at all (Options nil means the default).
+	o.TSNetTags = []string{}
+	if *tsTags != "" {
+		o.TSNetTags = strings.Split(*tsTags, ",")
 	}
-	if dsn == "" {
-		dsn = filepath.Join(*stateDir, "mgmt.db")
-	}
-	store, err := mgmt.OpenStore(ctx, dsn)
-	if err != nil {
-		return fmt.Errorf("store: %w", err)
-	}
-	defer store.Close()
-
-	var custody mgmt.Custody
-	switch *custodyKind {
-	case "file":
-		if custody, err = mgmt.OpenFileCustody(filepath.Join(*stateDir, "custody")); err != nil {
-			return err
-		}
-	case "setec":
-		if *setecURL == "" {
-			return errors.New("-custody setec needs -setec-url")
-		}
-		custody = &mgmt.SetecCustody{BaseURL: *setecURL}
-	default:
-		return fmt.Errorf("unknown -custody %q", *custodyKind)
-	}
-	replicaID, err := mgmt.LoadOrCreateReplicaID(filepath.Join(*stateDir, "replica.id"))
-	if err != nil {
-		return err
-	}
-	// Refuse a custody mismatch with other replicas before touching any
-	// shared secret (F6 check, run early: F12).
-	if err := mgmt.PreflightReplica(ctx, store, custody, replicaID); err != nil {
-		return err
-	}
-	// Shared by every replica via the store and custody (mm-loop F12).
-	secret, err := mgmt.LoadSharedIDSecret(ctx, filepath.Join(*stateDir, "id.secret"), store, custody)
-	if err != nil {
-		return err
-	}
-
-	// Operator-tailnet node (optional).
-	var ts *tsnet.Server
-	self := mgmt.SelfInfo{}
-	if *tsService != "" {
-		if *tsHostname == "" {
-			return errors.New("-tsnet-service needs -tsnet-hostname")
-		}
-		if err := tssvc.Validate(*tsService); err != nil {
-			return fmt.Errorf("-tsnet-service: %w", err)
-		}
-		if strings.EqualFold(tssvc.Label(*tsService), *tsHostname) {
-			return fmt.Errorf("-tsnet-service %s has the same MagicDNS name as this replica's node (-tsnet-hostname %s); MagicDNS answers the node first, so name each replica differently (e.g. %s-1)", *tsService, *tsHostname, *tsHostname)
-		}
-	}
-	if *tsHostname != "" {
-		if *tsControl == "" {
-			return errors.New("-tsnet-hostname needs an explicit -tsnet-control-url")
-		}
-		ts = &tsnet.Server{Hostname: *tsHostname, Dir: filepath.Join(*stateDir, "tsnet"), ControlURL: *tsControl,
-			Logf: func(string, ...any) {}}
-		if *tsTags != "" {
-			ts.AdvertiseTags = strings.Split(*tsTags, ",")
-		}
-		if *tsAuthFile != "" {
-			k, err := tsapi.LoadEnvFile(*tsAuthFile, "TS_AUTHKEY")
-			if err != nil {
-				return err
-			}
-			ts.AuthKey = k
-		}
-		upCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		st, err := tsnetUp(upCtx, ts, ts.AuthKey == "")
-		cancel()
-		if err != nil {
-			return fmt.Errorf("tsnet up: %w", err)
-		}
-		defer ts.Close()
-		self.DNSName = strings.TrimSuffix(st.Self.DNSName, ".")
-		self.NodeID = string(st.Self.ID)
-		if len(st.TailscaleIPs) > 0 {
-			self.IP = st.TailscaleIPs[0].String()
-		}
-		if st.CurrentTailnet != nil {
-			self.Tailnet = st.CurrentTailnet.MagicDNSSuffix
-		}
-		self.HTTPS = *tsTLS && len(ts.CertDomains()) > 0
-		if *funnel && *issuerURL == "" {
-			if doms := ts.CertDomains(); len(doms) > 0 {
-				*issuerURL = "https://" + doms[0]
-			}
-		}
-		tags := []string{}
-		if st.Self.Tags != nil {
-			tags = st.Self.Tags.AsSlice()
-		}
-		log.Info("tailnet node", "name", self.DNSName, "tailnet", self.Tailnet, "tags", tags, "https", self.HTTPS, "ips", st.TailscaleIPs)
-	}
-
-	var issuer *mgmt.Issuer
-	if *issuerURL != "" {
-		// Shared by every replica through the store and custody (mm-loop F11b).
-		if issuer, err = mgmt.LoadSharedIssuer(ctx, *issuerURL, filepath.Join(*stateDir, "issuer.key"), store, custody); err != nil {
-			return err
-		}
-		log.Info("OIDC issuer", "base", issuer.BaseURL)
-	}
-
-	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: *tsapiURL, Issuer: issuer},
-		IDSecret: secret, ReplicaID: replicaID, ReapInterval: *reapEvery, DeviceDeleteDelay: *delDelay, Log: log,
-		OperatorTailnet: self.Tailnet, OperatorControlURL: *tsControl, NoMirror: *noMirror, WarmKeys: *warmKeys, WarmKeyTTL: *warmKeyTTL}
-	switch *registryDir {
-	case "off":
-	case "":
-		mcfg.RegistryDir = filepath.Join(*stateDir, "registry")
-	default:
-		mcfg.RegistryDir = *registryDir
+	if *admins != "" {
+		o.Admins = strings.Split(*admins, ",")
 	}
 	if *regInsecure != "" {
-		mcfg.RegistryInsecure = strings.Split(*regInsecure, ",")
+		o.RegistryInsecure = strings.Split(*regInsecure, ",")
 	}
-	if *aliasFile != "" {
-		b, err := os.ReadFile(*aliasFile)
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal(b, &mcfg.ImageAliases); err != nil {
-			return fmt.Errorf("-image-aliases %s: %w", *aliasFile, err)
-		}
-	}
-	if ts != nil {
-		mcfg.TailnetDial = ts.Dial // kill/assignment pushes to hosts' own nodes
-	}
-	m, err := mgmt.New(mcfg)
+	rt, err := mgmtd.Start(ctx, o)
 	if err != nil {
 		return err
-	}
-	if err := m.Start(); err != nil {
-		return err
-	}
-	defer m.Close()
-	if issuer != nil {
-		self.Issuer = issuer.BaseURL
-	}
-	api := &mgmt.Server{M: m, Self: self, Version: *version}
-	if *admins != "" {
-		api.Admins = strings.Split(*admins, ",")
-	}
-	if ts == nil && !*localDev {
-		return errors.New("no listeners: normal operation is tsnet only (-tsnet-hostname); -local-dev serves the unix socket for twd dev and tests")
-	}
-	errc := make(chan error, 4)
-	serve := func(name string, ln net.Listener, h http.Handler) *http.Server {
-		srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
-		go func() {
-			if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				errc <- fmt.Errorf("%s: %w", name, err)
-			}
-		}()
-		log.Info("serving", "listener", name, "addr", ln.Addr().String())
-		return srv
-	}
-	var servers []*http.Server
-	var gate *mgmt.ServiceGate
-	loopbackPath := filepath.Join(*stateDir, "loopback.json")
-	os.Remove(loopbackPath)
-	if *localDev && *socket != "" {
-		// RT-03: same-uid peercred is not authorization. Every request on
-		// the socket must carry the per-host token (minted here into a 0600
-		// file under hostd's state dir; hostd and the CLI read it).
-		token, err := mgmt.LoadOrCreateHostToken(*tokenFile, *rotateToken)
-		if err != nil {
-			return fmt.Errorf("host token: %w", err)
-		}
-		ln, err := mgmt.ListenUnix(*socket)
-		if err != nil {
-			return err
-		}
-		defer os.Remove(*socket)
-		log.Info("host token", "file", *tokenFile, "rotated", *rotateToken)
-		api.Listeners = append(api.Listeners, "unix:"+*socket)
-		servers = append(servers, serve("unix", ln, mgmt.LocalHandler(api.Handler(), token)))
-	}
-	if ts != nil {
-		lc, err := ts.LocalClient()
-		if err != nil {
-			return err
-		}
-		whois := func(ctx context.Context, addr string) (mgmt.WhoIsInfo, error) {
-			wi, err := lc.WhoIs(ctx, addr)
-			if err != nil {
-				return mgmt.WhoIsInfo{}, err
-			}
-			info := mgmt.WhoIsInfo{NodeID: string(wi.Node.StableID), Name: wi.Node.Name, Tags: wi.Node.Tags}
-			if wi.UserProfile != nil {
-				info.Login = wi.UserProfile.LoginName
-			}
-			for c := range wi.CapMap {
-				info.Caps = append(info.Caps, string(c))
-			}
-			return info, nil
-		}
-		ln, err := ts.Listen("tcp", ":80")
-		if err != nil {
-			return err
-		}
-		th := api.TailnetHandler(whois, api.Handler())
-		api.Listeners = append(api.Listeners, "tsnet:80")
-		servers = append(servers, serve("tsnet", ln, th))
-		if *tsService != "" {
-			// The replica VIP (H12): flows to the Service reach the same
-			// WhoIs-authenticated handler (tssvc delivers them in-process,
-			// so WhoIs sees the real caller).
-			sh := tssvc.NewHost(ts, lc)
-			sl := tssvc.NewConnListener(tssvc.Addr{Name: *tsService})
-			sh.Route(80, sl.Deliver)
-			api.Listeners = append(api.Listeners, "service:"+*tsService)
-			ssrv := serve("service", sl, th)
-			ssrv.SetKeepAlivesEnabled(false) // until advertised
-			servers = append(servers, ssrv)
-			gate = &mgmt.ServiceGate{Adv: sh, Name: *tsService, Ports: []uint16{80}, Log: log,
-				Check:    func(ctx context.Context) error { _, err := m.Status(ctx); return err },
-				OnChange: ssrv.SetKeepAlivesEnabled}
-			go gate.Run(ctx)
-		}
-		if !*noLoopback {
-			// The operator console: the twd CLI on this machine dials mgmt's
-			// own tailnet IP through the node's SOCKS5 loopback proxy, so
-			// its requests carry mgmt's identity (WhoIs → operator). The
-			// credential lives in a 0600 file next to the state; nothing
-			// listens on a unix socket.
-			addr, cred, _, err := ts.Loopback()
-			if err != nil {
-				return fmt.Errorf("tsnet loopback: %w", err)
-			}
-			lb := mgmt.Loopback{Addr: addr, ProxyCred: cred, MgmtIP: self.IP, DNSName: self.DNSName, HTTPS: self.HTTPS, PID: os.Getpid()}
-			b, _ := json.Marshal(lb)
-			if err := os.WriteFile(loopbackPath+".tmp", b, 0o600); err != nil {
-				return err
-			}
-			if err := os.Rename(loopbackPath+".tmp", loopbackPath); err != nil {
-				return err
-			}
-			defer os.Remove(loopbackPath)
-			api.Listeners = append(api.Listeners, "loopback:"+addr)
-			log.Info("operator console", "loopback", addr, "file", loopbackPath)
-		}
-		if self.HTTPS {
-			// The API over the node's own HTTPS certificate: what `twd
-			// link` uses from a developer machine. tailnet-only (ListenTLS
-			// never serves Funnel traffic).
-			tln, err := ts.ListenTLS("tcp", ":443")
-			if err != nil {
-				return fmt.Errorf("tsnet tls: %w", err)
-			}
-			api.Listeners = append(api.Listeners, "tsnet:443")
-			servers = append(servers, serve("tsnet-tls", tln, th))
-			// Fetch the node's certificate now, in the background: a new
-			// node name's first certificate takes 30–100 s, and without
-			// Funnel (oauth mode) nothing else would request it before the
-			// first `twd link`, whose TLS handshake would time out.
-			go func() {
-				lc, err := ts.LocalClient()
-				if err != nil || self.DNSName == "" {
-					return
-				}
-				st := time.Now()
-				for attempt := 1; ; attempt++ {
-					cctx, ccancel := context.WithTimeout(context.Background(), 3*time.Minute)
-					_, _, err := lc.CertPair(cctx, self.DNSName)
-					ccancel()
-					if err == nil {
-						log.Info("HTTPS certificate ready", "name", self.DNSName, "ms", time.Since(st).Milliseconds(), "attempts", attempt)
-						return
-					}
-					// ACME orders fail transiently (seen: CreateOrder 404); a
-					// TLS handshake retries on its own later, this only warms.
-					log.Warn("HTTPS certificate prefetch failed (twd link falls back to http on :80 meanwhile)", "name", self.DNSName, "attempt", attempt, "err", err)
-					if attempt == 4 {
-						return
-					}
-					time.Sleep(time.Duration(attempt) * 20 * time.Second)
-				}
-			}()
-		} else if *tsTLS {
-			log.Warn("HTTPS is not enabled on this tailnet: the API is served on :80 only; `twd link` uses plain HTTP (WireGuard-encrypted, WhoIs-authenticated)")
-		}
-	}
-	if *funnel {
-		// The WIF issuer is public, so it runs on its OWN node: mgmt's node
-		// (the API, WhoIs admins, the signing key's process identity) is
-		// never Funnel-capable and never listens on Funnel.
-		if issuer == nil {
-			return errors.New("-funnel needs an issuer URL")
-		}
-		if *issHostname == "" || *tsControl == "" {
-			return errors.New("-funnel needs -issuer-tsnet-hostname and -tsnet-control-url (the issuer runs on its own node, never on mgmt's)")
-		}
-		if *issHostname == *tsHostname {
-			return errors.New("-issuer-tsnet-hostname must differ from -tsnet-hostname: mgmt's node never serves Funnel")
-		}
-		dir := *issDir
-		if dir == "" {
-			dir = filepath.Join(*stateDir, "issuer-tsnet")
-		}
-		if filepath.Clean(dir) == filepath.Clean(filepath.Join(*stateDir, "tsnet")) {
-			return errors.New("-issuer-tsnet-dir must not be mgmt's own node state")
-		}
-		its := &tsnet.Server{Hostname: *issHostname, Dir: dir, ControlURL: *tsControl, AdvertiseTags: []string{mgmt.IssuerTag},
-			Logf: func(string, ...any) {}}
-		if *issAuthFile != "" {
-			k, err := tsapi.LoadEnvFile(*issAuthFile, "TS_AUTHKEY")
-			if err != nil {
-				return err
-			}
-			its.AuthKey = k
-		}
-		defer its.Close()
-		uctx, ucancel := context.WithTimeout(ctx, 2*time.Minute)
-		_, err := its.Up(uctx)
-		ucancel()
-		if err != nil {
-			return fmt.Errorf("issuer node %s: %w (twd up --wif joins it)", *issHostname, err)
-		}
-		fl, err := its.ListenFunnel("tcp", ":443", tsnet.FunnelOnly())
-		if err != nil {
-			return fmt.Errorf("funnel on the issuer node %s: %w", *issHostname, err)
-		}
-		if ilc, err := its.LocalClient(); err == nil {
-			if st, err := ilc.StatusWithoutPeers(ctx); err == nil && st.Self != nil {
-				// A new name's first certificate takes longer than a Funnel
-				// client's TLS handshake: warm it now, or every early
-				// handshake (Tailscale's token-exchange verifier fetching the
-				// JWKS) fails until issuance finishes.
-				netd.PrefetchCert(ilc, st.Self.DNSName, log.With("node", *issHostname))
-			}
-		}
-		api.Listeners = append(api.Listeners, "issuer-funnel:443")
-		log.Info("WIF issuer served over Funnel on its own node", "node", *issHostname, "tag", mgmt.IssuerTag)
-		servers = append(servers, serve("issuer-funnel", fl, issuer.Handler()))
-	}
-	if *issuerListen != "" {
-		if issuer == nil {
-			return errors.New("-issuer-listen needs -issuer-url")
-		}
-		ln, err := net.Listen("tcp", *issuerListen)
-		if err != nil {
-			return err
-		}
-		servers = append(servers, serve("issuer", ln, issuer.Handler()))
-	}
-	if len(servers) == 0 {
-		return errors.New("no listeners: set -tsnet-hostname (normal operation) or -local-dev")
 	}
 	select {
 	case <-ctx.Done():
-	case err := <-errc:
+	case err := <-rt.Errs():
 		log.Error("listener failed", "err", err)
 	}
-	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if gate != nil {
-		// Withdraw before closing listeners: control stops routing callers
-		// to this replica while its in-flight requests finish.
-		if err := gate.Close(sctx); err != nil {
-			log.Warn("service withdraw on shutdown failed", "service", gate.Name, "err", err)
-		}
-	}
-	for _, s := range servers {
-		s.Shutdown(sctx)
-	}
-	return nil
-}
-
-// tsnetUp brings the node up. If it needs an interactive login and no auth
-// key was given, it fails fast with the login URL instead of waiting for
-// someone to click it: `twd up` owns the interactive flow.
-func tsnetUp(ctx context.Context, ts *tsnet.Server, failOnLogin bool) (*ipnstate.Status, error) {
-	if !failOnLogin {
-		return ts.Up(ctx)
-	}
-	lc, err := ts.LocalClient()
-	if err != nil {
-		return nil, err
-	}
-	w, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState)
-	if err != nil {
-		return nil, err
-	}
-	defer w.Close()
-	for {
-		n, err := w.Next()
-		if err != nil {
-			return nil, err
-		}
-		if n.ErrMessage != nil {
-			return nil, errors.New(*n.ErrMessage)
-		}
-		if n.BrowseToURL != nil {
-			return nil, fmt.Errorf("the mgmt node needs an interactive login (run `twd up` on this host to log in): %s", *n.BrowseToURL)
-		}
-		if n.State != nil && *n.State == ipn.Running {
-			return ts.Up(ctx)
-		}
-	}
+	return rt.Close()
 }

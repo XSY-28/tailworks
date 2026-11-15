@@ -64,9 +64,13 @@ info:
     - **Async creates** answer `202 Accepted` with a `Location` header to poll.
     - **Tombstones.** A killed object stays readable as `410 Gone` whose body
       is the typed error plus the kill record (`TombstoneError`).
-    - **Errors** are the DX.md catalog shape
+    - **Errors** are the typed error catalog (docs/errors.md) shape
       `{code, message, missing?, snippet?, doc_url, trace_id}` and also set
       `Twd-Error: <code>`; `identity_pending` sets `Retry-After: 1`.
+    - **Body limits.** Requests from the `host` role are capped at **1 MiB**
+      except `POST /v1/audit` (batches; 64 MiB). Admin uploads (`POST
+      /v1/deployments` bundles) keep the 64 MiB limit. Over the cap is
+      `400 bad_request`.
     - **Audit.** Every mutating operation is marked `x-twd-audit: true` and
       writes to mgmt's hash chain with the caller's actor (`deployedBy`,
       `by`): the WhoIs login for users, `<tag> (<stableNodeID>)` for tagged
@@ -202,7 +206,11 @@ paths:
       tags: [tenants]
       operationId: ListTenants
       summary: List tenants
-      description: Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClientFile` path to their workload sandboxes).
+      description: |
+        Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
+        `oauthClientFile` path to their workload sandboxes), but a host sees
+        **only the tenants with a deployment assigned to it** (a namespace
+        lease it holds); admins see every tenant.
       x-twd-role: admin|host
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -224,7 +232,10 @@ paths:
       tags: [tenants]
       operationId: GetTenant
       summary: Read a tenant
-      description: Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer and subjects).
+      description: |
+        Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
+        and subjects). A host may read only tenants with a deployment assigned
+        to it (any other tenant is `404 not_found` for it).
       x-twd-role: admin|host
       parameters:
         - $ref: "#/components/parameters/ifNoneMatch"
@@ -319,7 +330,7 @@ paths:
                 code: tenant_has_live_objects
                 message: "tenant tn_tail7906d5 has 3 live objects; pass ?force=true to kill and purge them"
                 missing: { liveObjects: 3 }
-                doc_url: https://twd.dev/errors/tenant_has_live_objects
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#tenant_has_live_objects
                 trace_id: 7f3a…
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         default: { $ref: "#/components/responses/Error" }
@@ -634,8 +645,11 @@ paths:
       operationId: CreateHost
       summary: Add a host and mint its single-use join key
       description: |
-        `twd host add`: creates the host record (status `pending`) and mints a
+        `twd host add`: creates the host record (status `pending`), mints a
         **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+        and a one-time `registrationSecret` (32 random bytes, base64url; only
+        its SHA-256 is stored) that the host must present on its first
+        `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
         through the operator tenant's trust credential (wif) or API key
         (apikey). `twd-hostd join --token <key>` joins the operator tailnet
         with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -714,10 +728,18 @@ paths:
       summary: Register or re-register a host (idempotent)
       description: |
         The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-        is bound to this `hostID` on first registration; a different node using
-        the same ID is `403 host_identity_mismatch`. Re-registering with the
-        same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-        re-register on every restart.
+        is bound to this `hostID` on first registration, which must carry the
+        `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+        `403 host_identity_mismatch`; the secret is cleared once the node is
+        bound). A `PUT` for a host ID the admin never created is
+        `403 host_not_registered` (no implicit creation over the tailnet;
+        only the `--local-dev` socket keeps it). A different node using the
+        same ID is `403 host_identity_mismatch`. Re-registering with the same
+        node needs no secret and replaces capacity, tiers and `push`;
+        `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+        it or omit it; a different key is `403 host_identity_mismatch` and
+        rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+        every restart.
 
         A host that was created through `twd host add` exists before its first
         `PUT` (status `pending`); the `PUT` activates it.
@@ -757,7 +779,7 @@ paths:
               example:
                 code: host_identity_mismatch
                 message: host h-7f2a is registered to another node
-                doc_url: https://twd.dev/errors/host_identity_mismatch
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#host_identity_mismatch
                 trace_id: 7f3a…
         default: { $ref: "#/components/responses/Error" }
     get:
@@ -817,7 +839,7 @@ paths:
                 code: host_holds_leases
                 message: "host h-7f2a holds 2 leases; pass ?drain=true"
                 missing: { leases: ["tn_tail7906d5/agent", "tn_tail7906d5/mcp"] }
-                doc_url: https://twd.dev/errors/host_holds_leases
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#host_holds_leases
                 trace_id: 7f3a…
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         default: { $ref: "#/components/responses/Error" }
@@ -903,6 +925,39 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/hosts/{id}/sandbox-deny:
+    parameters:
+      - $ref: "#/components/parameters/hostID"
+    get:
+      tags: [hosts]
+      operationId: GetHostSandboxDeny
+      summary: Every tenant's credential file paths, for the host's sandbox deny list
+      description: |
+        The paths of every tenant's `apiKeyFile` and `oauthClientFile`
+        (sorted, deduplicated), and nothing else: no tenant ID, tailnet or
+        name. A process-tier host denies them all to every workload sandbox
+        it starts, including the files of tenants that have no deployment
+        on it yet. `GET /v1/tenants` shows a host only its own tenants, which
+        is not enough: a workload started before another tenant's first
+        deploy would otherwise be able to read that tenant's key file. A
+        host may read only its own `{id}`.
+      x-twd-role: host|admin
+      responses:
+        "200":
+          description: The paths.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [paths]
+                properties:
+                  paths:
+                    type: array
+                    items: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/hosts/{id}/assignments:
     parameters:
       - $ref: "#/components/parameters/hostID"
@@ -942,6 +997,10 @@ paths:
         `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
         duplicates, each a valid five-field UTC expression that can fire); an
         invalid one is `400 bad_bundle`.
+        Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+        (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+        `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+        both deploy and preflight enforce this.
 
         **Deploy** (`dryRun` absent or false): picks a host, acquires the
         `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -1016,7 +1075,7 @@ paths:
                   value:
                     code: bad_bundle
                     message: "twd.jsonc declares neither tailnet.tags nor tailnet.objects"
-                    doc_url: https://twd.dev/errors/bad_bundle
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bad_bundle
                     trace_id: 7f3a…
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
@@ -1027,7 +1086,7 @@ paths:
               example:
                 code: unknown_tenant
                 message: tenant tn_nope not found
-                doc_url: https://twd.dev/errors/unknown_tenant
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#unknown_tenant
                 trace_id: 7f3a…
         "503":
           description: No live host can take the workload, or the policy cannot be read (dryRun).
@@ -1039,13 +1098,13 @@ paths:
                   value:
                     code: no_host
                     message: no live host with tier process
-                    doc_url: https://twd.dev/errors/no_host
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#no_host
                     trace_id: 7f3a…
                 policyUnavailable:
                   value:
                     code: policy_unavailable
                     message: "tenant tn_tail7906d5 has no lifecycle credential; the policy cannot be read"
-                    doc_url: https://twd.dev/errors/policy_unavailable
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#policy_unavailable
                     trace_id: 7f3a…
         default: { $ref: "#/components/responses/Error" }
     get:
@@ -1189,6 +1248,8 @@ paths:
           names it in `poolObjectID`. Then that create answers
           `status: assigned` and mints nothing.
         Spawn checks are unchanged from v0.
+        - A host may create objects only in workloads whose `(tenant,
+          workload)` lease it holds (`403 forbidden`).
       x-twd-role: host
       x-twd-audit: true
       requestBody:
@@ -1233,7 +1294,7 @@ paths:
                 code: delegation_invalid
                 message: "caps[\"acme.com/cap/mcp\"].tools[1] is not granted to the parent"
                 missing: { src: "tag:twd-wl-agent", dst: "tag:mcp", cap: "acme.com/cap/mcp", field: "caps[\"acme.com/cap/mcp\"].tools[1]" }
-                doc_url: https://twd.dev/errors/delegation_invalid
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#delegation_invalid
                 trace_id: 7f3a…
         "404":
           description: Unknown tenant or namespace.
@@ -1243,7 +1304,7 @@ paths:
               example:
                 code: unknown_namespace
                 message: "workload agent declares no class Widget"
-                doc_url: https://twd.dev/errors/unknown_namespace
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#unknown_namespace
                 trace_id: 7f3a…
         "409":
           description: "`identity_conflict` or `namespace_ambiguous`."
@@ -1253,7 +1314,7 @@ paths:
               example:
                 code: namespace_ambiguous
                 message: "class Agent is declared by workloads agent and agent2; pass workload"
-                doc_url: https://twd.dev/errors/namespace_ambiguous
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#namespace_ambiguous
                 trace_id: 7f3a…
         "410": { $ref: "#/components/responses/Gone" }
         "429":
@@ -1266,13 +1327,13 @@ paths:
                   value:
                     code: spawn_budget_exceeded
                     message: "root agent-k3j5m7p9qa already has 64 live descendants"
-                    doc_url: https://twd.dev/errors/spawn_budget_exceeded
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#spawn_budget_exceeded
                     trace_id: 7f3a…
                 quota:
                   value:
                     code: object_quota_exceeded
                     message: "tenant tn_tail7906d5 has 1000 objects (maxObjects)"
-                    doc_url: https://twd.dev/errors/object_quota_exceeded
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#object_quota_exceeded
                     trace_id: 7f3a…
         default: { $ref: "#/components/responses/Error" }
     get:
@@ -1311,7 +1372,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: One page of objects, ordered by `(createdAt, objectID)`. Hosts see only the namespaces they hold.
+          description: One page of objects, ordered by `(createdAt, objectID)`. Hosts see only objects whose `(tenant, workload)` lease they hold; other objects are filtered out, never listed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ObjectPage" }
@@ -1326,6 +1387,7 @@ paths:
       tags: [objects]
       operationId: GetObject
       summary: Read an object (lineage, children, kill record)
+      description: A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
       x-twd-role: admin|host
       parameters:
         - $ref: "#/components/parameters/ifNoneMatch"
@@ -1350,13 +1412,18 @@ paths:
         Two callers, two subsets:
 
         - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-          magicDNS, epoch}` reports the node joined. `epoch` fences the
-          commit (`409 lease_lost`). mgmt then signs the **node certificate**
+          magicDNS, epoch}` reports the node joined. `epoch` is **required**
+          for the ready group (`400 bad_request` without it) and the commit is
+          always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+          a host that does not hold the object's lease is `403 forbidden`.
+          mgmt then signs the **node certificate**
           (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
           iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
           `ready` audit detail adds `cert: true` and `lim`. If the object was
           killed during the join the answer is `410 killed` and mgmt deletes
-          the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+          the device that just appeared (only when the fence held: a caller
+          without the lease cannot make mgmt delete devices). Replaces
+          `POST /v0/objects/{id}/ready`.
         - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
           applies it.
 
@@ -1486,13 +1553,13 @@ paths:
                   value:
                     code: lease_lost
                     message: "the caller does not hold the namespace lease at this epoch (want 4, have 3)"
-                    doc_url: https://twd.dev/errors/lease_lost
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#lease_lost
                     trace_id: 7f3a…
                 alreadyJoined:
                   value:
                     code: already_joined
                     message: "agent-k3j5m7p9qa already has node nQ1k…; rejoin from saved state or pass ?reason=rejoin_rejected"
-                    doc_url: https://twd.dev/errors/already_joined
+                    doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#already_joined
                     trace_id: 7f3a…
         "410": { $ref: "#/components/responses/Gone" }
         "502":
@@ -1503,7 +1570,7 @@ paths:
               example:
                 code: bootstrap_failed
                 message: "mint via trust credential failed: 403 tag:twd-wl-agent not owned by tag:twd"
-                doc_url: https://twd.dev/errors/bootstrap_failed
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bootstrap_failed
                 trace_id: 7f3a…
         "503":
           description: Still minting (`identity_pending`).
@@ -1516,7 +1583,7 @@ paths:
               example:
                 code: identity_pending
                 message: "agent-k3j5m7p9qa is queued behind the tenant throttle"
-                doc_url: https://twd.dev/errors/identity_pending
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#identity_pending
                 trace_id: 7f3a…
         default: { $ref: "#/components/responses/Error" }
 
@@ -1626,7 +1693,7 @@ paths:
               example:
                 code: bad_request
                 message: "record 3: source \"tenant\" requires kind tenant_note"
-                doc_url: https://twd.dev/errors/bad_request
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bad_request
                 trace_id: 7f3a…
         "403": { $ref: "#/components/responses/Forbidden" }
         default: { $ref: "#/components/responses/Error" }
@@ -2374,7 +2441,7 @@ components:
           example:
             code: internal
             message: "store: database is locked"
-            doc_url: https://twd.dev/errors/internal
+            doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#internal
             trace_id: 7f3a…
     BadRequest:
       description: Malformed request, body, filter or cursor.
@@ -2388,20 +2455,20 @@ components:
               value:
                 code: bad_request
                 message: "mintMode apikey needs apiKeyFile"
-                doc_url: https://twd.dev/errors/bad_request
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bad_request
                 trace_id: 7f3a…
             badCursor:
               value:
                 code: bad_cursor
                 message: "cursor does not decode; start again without it"
-                doc_url: https://twd.dev/errors/bad_cursor
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bad_cursor
                 trace_id: 7f3a…
             immutableField:
               value:
                 code: immutable_field
                 message: "tailnet cannot be changed; create a new tenant"
                 missing: { field: tailnet }
-                doc_url: https://twd.dev/errors/immutable_field
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#immutable_field
                 trace_id: 7f3a…
     Forbidden:
       description: The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces.
@@ -2418,19 +2485,19 @@ components:
                 message: "ross@example.com is not a twd admin on this tailnet"
                 missing: { src: "ross@example.com", dst: "tag:twd-mgmt", cap: "twd.dev/cap/admin" }
                 snippet: "{\"src\": [\"ross@example.com\"], \"dst\": [\"tag:twd-mgmt\"], \"ip\": [\"tcp:443\",\"tcp:80\"], \"app\": {\"twd.dev/cap/admin\": [{}]}}"
-                doc_url: https://twd.dev/errors/not_admin
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#not_admin
                 trace_id: 7f3a…
             forbidden:
               value:
                 code: forbidden
                 message: "host h-7f2a does not hold tn_tail7906d5/agent"
-                doc_url: https://twd.dev/errors/forbidden
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#forbidden
                 trace_id: 7f3a…
             hostNotRegistered:
               value:
                 code: host_not_registered
                 message: "node nQ1k… (tag:twd-host) has not registered; PUT /v1/hosts/{id} first"
-                doc_url: https://twd.dev/errors/host_not_registered
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#host_not_registered
                 trace_id: 7f3a…
     Unauthorized:
       description: No identity on the connection (WhoIs failed), or the local-dev socket was used without `Twd-Host-Token`.
@@ -2444,13 +2511,13 @@ components:
               value:
                 code: no_identity
                 message: "WhoIs failed for 100.64.0.9: no such peer"
-                doc_url: https://twd.dev/errors/no_identity
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#no_identity
                 trace_id: 7f3a…
             hostTokenRequired:
               value:
                 code: host_token_required
                 message: "Twd-Host-Token header required on the local-dev socket"
-                doc_url: https://twd.dev/errors/host_token_required
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#host_token_required
                 trace_id: 7f3a…
     NotFound:
       description: No such resource (or none the caller may see).
@@ -2462,7 +2529,7 @@ components:
           example:
             code: not_found
             message: "object agent-k3j5m7p9qa not found"
-            doc_url: https://twd.dev/errors/not_found
+            doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#not_found
             trace_id: 7f3a…
     NotModified:
       description: The `If-None-Match` validator still matches. No body.
@@ -2480,13 +2547,13 @@ components:
               value:
                 code: exists
                 message: "tenant tn_tail7906d5 already exists"
-                doc_url: https://twd.dev/errors/exists
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#exists
                 trace_id: 7f3a…
             superseded:
               value:
                 code: superseded
                 message: "dep_01j… was superseded by dep_01k…; undeploy the latest deployment"
-                doc_url: https://twd.dev/errors/superseded
+                doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#superseded
                 trace_id: 7f3a…
     ReadyConflict:
       description: "`lease_lost` (the caller does not hold the namespace lease at this epoch) or `identity_conflict` (an `assigned` object reported ready on another node than the pool node it was given)."
@@ -2505,7 +2572,7 @@ components:
           example:
             code: lease_lost
             message: "the caller does not hold the namespace lease at this epoch (want 4, have 3)"
-            doc_url: https://twd.dev/errors/lease_lost
+            doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#lease_lost
             trace_id: 7f3a…
     Gone:
       description: The object was killed. The body is the typed error plus the kill record; it stays until purged.
@@ -2517,7 +2584,7 @@ components:
           example:
             code: killed
             message: "agent-k3j5m7p9qa was killed (cascade from agent-root1234ab)"
-            doc_url: https://twd.dev/errors/killed
+            doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#killed
             trace_id: 7f3a…
             tombstone:
               objectID: agent-k3j5m7p9qa
@@ -2542,7 +2609,7 @@ components:
           example:
             code: precondition_failed
             message: "If-Match \"3f9a…\" does not match the current ETag \"8c21…\""
-            doc_url: https://twd.dev/errors/precondition_failed
+            doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#precondition_failed
             trace_id: 7f3a…
 
   schemas:
@@ -2550,10 +2617,11 @@ components:
     Error:
       type: object
       description: |
-        The DX.md error catalog shape. `code` is stable and machine-readable;
+        The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
         `missing` names what is absent (grant, cap, field, quota); `snippet`
         is policy HuJSON to paste when a grant is missing; `doc_url` is
-        `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+        `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+        code's heading in the typed error catalog); `trace_id` correlates with audit.
       required: [code, message, doc_url, trace_id]
       properties:
         code: { $ref: "#/components/schemas/ErrorCode" }
@@ -2577,6 +2645,7 @@ components:
         | `bad_request` | 400 | malformed body, parameter or filter |
         | `bad_cursor` | 400 | `cursor` does not decode |
         | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+        | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
         | `immutable_field` | 400 | PATCH touches a field the caller may not change |
         | `too_many_secrets` | 400 | a workload already has 128 secrets |
         | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2584,8 +2653,8 @@ components:
         | `host_token_invalid` | 403 | local-dev socket, wrong token |
         | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
         | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-        | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-        | `host_identity_mismatch` | 403 | host ID bound to another node |
+        | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+        | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
         | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
         | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
         | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -2631,6 +2700,7 @@ components:
         - bad_request
         - bad_cursor
         - bad_bundle
+        - reserved_tag
         - immutable_field
         - too_many_secrets
         - no_identity
@@ -2975,7 +3045,7 @@ components:
         on the local-dev socket and only as `unix:///…`.
       properties:
         port: { type: integer, minimum: 1, maximum: 65535 }
-        url: { type: string, description: "`unix:///path/hostd.sock`; local-dev only." }
+        url: { type: string, description: "`unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport)." }
     HostTier:
       type: string
       description: "What a host offers: the isolation tiers (`process`, `microvm`) and `containers` (ADR-032: it can run containers and code sandboxes, one microVM each, for images of its `arch`)."
@@ -3051,10 +3121,14 @@ components:
     HostJoin:
       type: object
       description: A single-use join key for a host's `tag:twd-host` node. Never logged.
-      required: [host, authKey, expiresAt, tags, hostname]
+      required: [host, authKey, registrationSecret, expiresAt, tags, hostname]
       properties:
         host: { $ref: "#/components/schemas/Host" }
         authKey: { type: string, format: password }
+        registrationSecret:
+          type: string
+          format: password
+          description: One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound.
         expiresAt: { type: integer, format: int64, description: unix ms }
         tags: { type: array, items: { type: string } }
         hostname: { type: string, description: "`twd-host-<hostID>`" }
@@ -3070,8 +3144,12 @@ components:
         arch: { $ref: "#/components/schemas/Arch" }
         capacity: { $ref: "#/components/schemas/HostCapacity" }
         pool: { type: string }
-        auditPubKey: { type: string }
+        auditPubKey: { type: string, description: Pinned on first bind; a later registration may only repeat it. }
         push: { $ref: "#/components/schemas/HostPush" }
+        registrationSecret:
+          type: string
+          format: password
+          description: Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound.
       additionalProperties: false
     Lease:
       type: object

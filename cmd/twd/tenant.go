@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"fmt"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"net/url"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -200,12 +200,13 @@ func cmdTenantAdd(args []string) error {
 	t0 := time.Now()
 	res := tenantAddResult{Tailnet: tailnet, ControlURL: *control, Timings: map[string]float64{}}
 	absKey, _ := filepath.Abs(*keyFile)
-	apiKey, err := tsapi.LoadEnvFile(absKey, "TS_API_KEY")
+	apiKey, err := tsapi.LoadSecretEnvFile(absKey, "TS_API_KEY")
 	if err != nil {
+		var ins *tsapi.InsecureFileError
+		if errors.As(err, &ins) {
+			return fail("credential_file_insecure", absKey+" is readable by other users", err.Error()).withFix("chmod 600 " + absKey + "   then twd tenant add again")
+		}
 		return fail("bad_request", "can't read TS_API_KEY from "+absKey, err.Error())
-	}
-	if st, err := os.Stat(absKey); err == nil && st.Mode().Perm()&0o077 != 0 {
-		fmt.Fprintf(os.Stderr, "warning: %s is readable by other users (mode %v); chmod 600 it\n", absKey, st.Mode().Perm())
 	}
 	for _, t := range s.tenants() {
 		if t.APIKeyFile == absKey && t.Tailnet != tailnet {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -99,11 +100,30 @@ func cmdInit(args []string) error {
 		}
 		os.WriteFile(p, b, 0o644)
 	}
+	// The template's workload tag (tailnet.tags, e.g. tag:twd-wl-hello)
+	// follows the workload name too, so the policy snippet `twd deploy`
+	// prints names this app, not the template it came from.
+	if p := filepath.Join(dir, "twd.jsonc"); true {
+		if b, err := os.ReadFile(p); err == nil {
+			if m := regexp.MustCompile(`"tags"\s*:\s*\[\s*"(tag:twd-wl-[A-Za-z0-9._-]+)"`).FindSubmatch(b); m != nil {
+				if from, to := string(m[1]), "tag:twd-wl-"+wl; from != to {
+					os.WriteFile(p, bytes.ReplaceAll(b, []byte(from), []byte(to)), 0o644)
+				}
+			}
+		}
+	}
 	res := map[string]string{"dir": dir, "template": *tmpl, "workload": wl}
 	emit(f, res, func() {
 		fmt.Printf("✓ created %s from template %s (workload %q)\n", dir, *tmpl, wl)
 		if tags := initTags(dir); len(tags) > 0 {
 			fmt.Printf("  tags: %s (twd deploy prints the tagOwners to add)\n", strings.Join(tags, ", "))
+		}
+		if *tmpl == "node-workflow" {
+			// The Node tier bundles the app's own dependencies with the
+			// machine's Node.js; nothing is vendored for it.
+			fmt.Printf("  cd %s && npm install && twd dev    # or twd deploy\n", pos[0])
+			fmt.Printf("  needs Node.js ≥ 24 and npm on this machine; `npm install` fetches the template's dependencies, so this one can't be built or deployed offline\n")
+			return
 		}
 		fmt.Printf("  cd %s && twd deploy        # or `twd dev` for a local run with no tailnet\n", pos[0])
 	})

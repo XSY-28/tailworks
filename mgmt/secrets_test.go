@@ -196,8 +196,12 @@ func TestSecretsRoles(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &out)
 		return w.Code, out.Code
 	}
-	if c, _ := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", `{"capacityNodes":1,"tiers":["process"]}`); c != 201 {
-		t.Fatalf("register: %d", c)
+	// twd host add (admin), then the host's first registration with its
+	// secret (hosts are bound to a join since the review fixes).
+	var hj struct{ RegistrationSecret string }
+	e.c.ok("POST", "/v1/hosts", map[string]any{"hostID": "h1", "tenantID": tn.TenantID}, &hj)
+	if c, code := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", `{"capacityNodes":1,"tiers":["process"],"registrationSecret":"`+hj.RegistrationSecret+`"}`); c != 201 {
+		t.Fatalf("register: %d %s", c, code)
 	}
 	base := "/v1/tenants/" + tn.TenantID + "/workloads/support/secrets"
 	put := `{"value":"` + secretValue + `"}`

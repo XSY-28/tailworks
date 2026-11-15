@@ -39,7 +39,7 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{name: "up", usage: "up --oauth-client-file <file> [--service] [--yes]  |  up --wif [--wif-client-id <id>]  |  up --tailnet <tailnet> --api-key-file <file> [--policy-apply]", help: "start twd-mgmt + twd-hostd on this machine; recommended: an OAuth client (no browser, no Funnel); --wif for the keyless browser flow, --api-key-file as the fallback", run: cmdUp},
+		{name: "up", usage: "up --oauth-client-file <file> [--service] [--yes]  |  up --wif [--wif-client-id <id>]  |  up --tailnet <tailnet> --api-key-file <file> [--policy-apply]", help: "start twd on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); recommended: an OAuth client (no browser, no Funnel); --wif for the keyless browser flow, --api-key-file as the fallback", run: cmdUp},
 		{name: "down", usage: "down [--purge] [--service]", help: "stop everything twd up started (--purge: kill every object and delete its device first)", run: cmdDown},
 		{name: "link", usage: "link [twd-mgmt.<tailnet>.ts.net] [--unlink]", help: "developer machine: use a remote twd-mgmt over your own Tailscale connection (WhoIs identity; no key or token)", run: cmdLink},
 		{name: "status", usage: "status", help: "health of mgmt, the host, the tenant and deployments", run: cmdStatus},
@@ -75,15 +75,46 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "\ntemplates (twd init --template): hello | agent | mcp | ai-agent | node-workflow (node-workflow needs Node.js on the deploying machine)")
 }
 
-// commandUsage prints one command's help (`twd <cmd> --help`).
-func commandUsage(w io.Writer, c command) {
+// commandUsage prints one command's help (`twd <cmd> --help`): the usage
+// line and, when the command's flag set is known (f != nil), every flag
+// with its default.
+func commandUsage(w io.Writer, c command, f *flags) {
 	fmt.Fprintf(w, "twd %s: %s\n\nusage: twd %s\n", c.name, c.help, c.usage)
-	fmt.Fprintln(w, "  (every command takes --state-dir, default ~/.twd, and --json)")
+	if f == nil {
+		fmt.Fprintln(w, "  (every command takes --state-dir, default ~/.twd, and --json)")
+		return
+	}
+	fmt.Fprintln(w, "\nflags:")
+	f.SetOutput(w)
+	f.PrintDefaults()
+	f.SetOutput(io.Discard)
 }
 
-// errHelp is returned by flags.parse when -h/--help was given; main prints
-// the command's usage to stdout and exits 0.
+// commandHelp runs c with args that ask for help: every command builds its
+// flag set and parses before doing anything else, so it stops at -h/--help
+// and hands the flag set back (helpRequest), which commandUsage lists.
+// Commands that dispatch on a subcommand first (host, tenant) return a
+// usage error for a bare --help; then only the usage line is printed.
+func commandHelp(w io.Writer, c command, args []string) {
+	var hr *helpRequest
+	if err := c.run(args); errors.As(err, &hr) {
+		commandUsage(w, c, hr.f)
+		return
+	}
+	commandUsage(w, c, nil)
+}
+
+// errHelp is returned (wrapped in a helpRequest) by flags.parse when
+// -h/--help was given; main prints the command's usage to stdout and
+// exits 0.
 var errHelp = errors.New("help requested")
+
+// helpRequest carries the flag set that saw -h/--help, so the usage can
+// list the command's flags. errors.Is(err, errHelp) holds for it.
+type helpRequest struct{ f *flags }
+
+func (h *helpRequest) Error() string        { return errHelp.Error() }
+func (h *helpRequest) Is(target error) bool { return target == errHelp }
 
 // isHelpFlag reports whether a is -h, -help or --help.
 func isHelpFlag(a string) bool { return a == "-h" || a == "-help" || a == "--help" }
@@ -117,7 +148,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if len(args) == 2 && args[0] == "help" {
 			for _, c := range commands {
 				if c.name == args[1] && !c.hidden {
-					commandUsage(stdout, c)
+					commandHelp(stdout, c, []string{"--help"})
 					return 0
 				}
 			}
@@ -147,15 +178,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	for _, c := range commands {
 		if c.name == name {
 			if wantsHelp(rest) && !c.hidden {
-				commandUsage(stdout, c)
-				if fs := captureFlags(c, rest); fs != nil {
-					printFlags(stdout, fs) // helpflags.go
-				}
+				commandHelp(stdout, c, rest)
 				return 0
 			}
 			if err := c.run(rest); err != nil {
-				if errors.Is(err, errHelp) {
-					commandUsage(stdout, c)
+				var hr *helpRequest
+				if errors.As(err, &hr) {
+					commandUsage(stdout, c, hr.f)
 					return 0
 				}
 				printErr(err)
@@ -168,14 +197,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return 2
 }
 
-// ---- errors (DX.md catalog format) ----
+// ---- errors (the typed error catalog, docs/errors.md) ----
 
-// cliErr is a typed error printed in the DX.md catalog shape:
+// cliErr is a typed error printed in the catalog shape (docs/errors.md):
 //
 //	error [code]: message
 //	  detail…
 //	  fix: …
-//	  https://twd.dev/e/<code>
+//	  https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>
 type cliErr struct {
 	Code    string   `json:"code"`
 	Message string   `json:"message"`
@@ -237,7 +266,7 @@ func printErr(err error) {
 	if e.TraceID != "" {
 		tr = "trace " + e.TraceID + " · "
 	}
-	fmt.Fprintf(os.Stderr, "  %shttps://twd.dev/e/%s\n", tr, e.Code)
+	fmt.Fprintf(os.Stderr, "  %s%s%s\n", tr, netd.DocBase, e.Code)
 }
 
 // ---- flags ----
@@ -260,14 +289,10 @@ func newFlags(name string) *flags {
 // parse parses flags interleaved with positional args (twd kill X --cascade).
 func (f *flags) parse(args []string) ([]string, error) {
 	var pos []string
-	if helpMode {
-		helpFlagSet = f.FlagSet
-		return nil, errHelp
-	}
 	for {
 		if err := f.FlagSet.Parse(args); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
-				return nil, errHelp
+				return nil, &helpRequest{f: f}
 			}
 			return nil, fail("bad_request", err.Error(), "usage: twd "+usageOf(f.Name()))
 		}

@@ -74,6 +74,10 @@ type Config struct {
 	// 0 disables the pool.
 	PoolNodes     int
 	CapacityNodes int
+	// RegistrationSecret is the one-time secret from the join file
+	// (TWD_REGISTRATION_SECRET); mgmt needs it on this host ID's first
+	// tailnet registration. Empty for local-dev hosts. Never logged.
+	RegistrationSecret string
 	// ReadyTimeout bounds how long requests wait for an object's node
 	// (identity_pending after; default 30 s).
 	ReadyTimeout time.Duration
@@ -150,14 +154,19 @@ type Config struct {
 	// kills, assignment changes) on it: the host's own tsnet node in
 	// normal operation. PushPort is the port it listens on; it is sent
 	// to mgmt at registration so pushes go to the WhoIs node's address.
-	// The unix push socket (local-dev) is always served too.
-	PushListener net.Listener
-
-	// PushCallerTags, when set, returns the tailnet tags of a push-API
-	// caller by its remote address (WhoIs on the host's node). GET /v1/logs
-	// serves tenant data and answers TCP callers only if they carry
-	// tag:twd-mgmt (logs.go); the unix socket is local and unchanged.
-	PushCallerTags func(ctx context.Context, remoteAddr string) ([]string, error)
+	// The unix push socket (local-dev) is always served too. The tsnet
+	// listener serves only the pushes, and only to mgmt's node: WhoIs is
+	// required with it (the node must carry MgmtTag; hostd pins the node
+	// the -mgmt address resolves to). TailnetStatus (optional) resolves a
+	// -mgmt MagicDNS name to that node through the netmap.
+	PushListener  net.Listener
+	WhoIs         WhoIsFunc
+	TailnetStatus StatusFunc
+	// PushInProcess: this host agent runs inside mgmt's own process
+	// (single-process twd up). It registers with the push URL
+	// EmbeddedPushURL and mgmt serves its pushes through PushHandler
+	// directly; no push listener is opened besides the local socket.
+	PushInProcess bool
 	// ServiceCheckEvery is how often a workload with a Tailscale Service is
 	// health-probed (advertised only while healthy). 0 = 2 s.
 	ServiceCheckEvery time.Duration
@@ -217,6 +226,10 @@ func DirectInternet() *ContainerInternet {
 	}}
 }
 
+// EmbeddedPushURL is the push URL an in-process host registers with
+// (mgmt.EmbeddedPushURL; hostd does not import mgmt).
+const EmbeddedPushURL = "inproc://"
+
 // Host is a running twd-hostd.
 type Host struct {
 	cfg    Config
@@ -251,7 +264,9 @@ type Host struct {
 
 	syncMu     sync.Mutex
 	syncNow    chan struct{}
-	pushSrv    *http.Server
+	pushSrv    *http.Server // local socket: pushes + operator routes
+	tsPushSrv  *http.Server // Config.PushListener: WhoIs-authenticated pushes
+	pushAuth   *pushAuth
 	pushSock   string
 	audit      *auditLog
 	public     map[string]*publicState // tenantID/workload (ADR-029)
@@ -279,6 +294,12 @@ const (
 func New(cfg Config) (*Host, error) {
 	if cfg.HostID == "" || cfg.Mgmt == nil || cfg.DataDir == "" || cfg.WorkerdBin == "" {
 		return nil, errors.New("hostd: HostID, Mgmt, DataDir and WorkerdBin are required")
+	}
+	if cfg.PushListener != nil && cfg.WhoIs == nil {
+		return nil, errors.New("hostd: PushListener requires WhoIs (pushes over the tailnet are authenticated)")
+	}
+	if cfg.PushInProcess && (cfg.PushListener != nil || cfg.PushPort > 0) {
+		return nil, errors.New("hostd: PushInProcess excludes a tailnet push listener")
 	}
 	if cfg.HeartbeatEvery == 0 {
 		cfg.HeartbeatEvery = 3 * time.Second
@@ -380,6 +401,15 @@ func New(cfg Config) (*Host, error) {
 // PushSocket is the push API socket ("unix://" + path is registered as pushURL).
 func (h *Host) PushSocket() string { return h.pushSock }
 
+func (h *Host) closePushServers() {
+	if h.pushSrv != nil {
+		h.pushSrv.Close()
+	}
+	if h.tsPushSrv != nil {
+		h.tsPushSrv.Close()
+	}
+}
+
 // Start registers with mgmt and starts the heartbeat/assignment loop.
 func (h *Host) Start(ctx context.Context) error {
 	h.ctx, h.cancel = context.WithCancel(context.Background())
@@ -396,10 +426,20 @@ func (h *Host) Start(ctx context.Context) error {
 	h.pushSrv = &http.Server{Handler: h.pushAPI(), ReadHeaderTimeout: 10 * time.Second}
 	go h.pushSrv.Serve(ln)
 	if h.cfg.PushListener != nil {
-		go h.pushSrv.Serve(h.cfg.PushListener)
+		// Pushes over the tailnet come from mgmt's node only (H1). Pin it
+		// now from the -mgmt address; if that is a MagicDNS name not yet
+		// in the netmap, the first tag:twd-mgmt pusher pins it instead.
+		h.pushAuth = newPushAuth(h.mgmt.Base, h.cfg.WhoIs, h.cfg.TailnetStatus, h.log)
+		if err := h.pushAuth.pin(ctx); err != nil {
+			h.log.Warn("push API: mgmt's node not resolved yet; pinning to the first tagged pusher", "err", err)
+		} else {
+			h.log.Info("push API pinned to mgmt's node", "node", h.pushAuth.Pinned())
+		}
+		h.tsPushSrv = &http.Server{Handler: h.tsnetPushAPI(), ReadHeaderTimeout: 10 * time.Second}
+		go h.tsPushSrv.Serve(h.cfg.PushListener)
 	}
 	if err := h.register(ctx); err != nil {
-		h.pushSrv.Close()
+		h.closePushServers()
 		return fmt.Errorf("hostd: register: %w", err)
 	}
 	h.mu.Lock()
@@ -420,11 +460,16 @@ func (h *Host) register(ctx context.Context) error {
 	capVec := h.capacity()
 	req := mgmtapi.RegisterRequest{HostID: h.cfg.HostID, CapacityNodes: h.cfg.CapacityNodes, Tiers: h.tiers(),
 		Arch: runtime.GOARCH, Capacity: &capVec,
-		AuditPubKey: base64.StdEncoding.EncodeToString(h.audit.key.Public().(ed25519.PublicKey))}
-	if h.cfg.PushPort > 0 {
+		AuditPubKey:        base64.StdEncoding.EncodeToString(h.audit.key.Public().(ed25519.PublicKey)),
+		RegistrationSecret: h.cfg.RegistrationSecret}
+	switch {
+	case h.cfg.PushInProcess:
+		// embedded in mgmt's process: pushes are served through PushHandler.
+		req.PushURL = EmbeddedPushURL
+	case h.cfg.PushPort > 0:
 		// tsnet transport: mgmt pushes to this host's node at PushPort.
 		req.PushPort = h.cfg.PushPort
-	} else {
+	default:
 		// local-dev: the unix push socket.
 		req.PushURL = "unix://" + h.pushSock
 	}
@@ -451,9 +496,7 @@ func (h *Host) Close() error {
 		h.cancel()
 	}
 	h.wg.Wait()
-	if h.pushSrv != nil {
-		h.pushSrv.Close()
-	}
+	h.closePushServers()
 	h.mu.Lock()
 	wls := make([]*workload, 0, len(h.workloads))
 	for _, w := range h.workloads {

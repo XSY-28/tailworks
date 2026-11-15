@@ -60,15 +60,24 @@ type hostJoin struct {
 		HostID string `json:"hostID"`
 		Status string `json:"status"`
 	} `json:"host"`
-	AuthKey    string   `json:"authKey"`
-	ExpiresAt  int64    `json:"expiresAt"`
-	Tags       []string `json:"tags"`
-	Hostname   string   `json:"hostname"`
-	ControlURL string   `json:"controlURL"`
-	Tailnet    string   `json:"tailnet"`
+	AuthKey string `json:"authKey"`
+	// RegistrationSecret is the one-time secret hostd presents on its first
+	// PUT /v1/hosts/{id}; it travels in the join file next to the key.
+	RegistrationSecret string   `json:"registrationSecret"`
+	ExpiresAt          int64    `json:"expiresAt"`
+	Tags               []string `json:"tags"`
+	Hostname           string   `json:"hostname"`
+	ControlURL         string   `json:"controlURL"`
+	Tailnet            string   `json:"tailnet"`
 }
 
 func (hostJoin) String() string { return "hostJoin{[REDACTED]}" }
+
+// joinFileContent is the join file twd-hostd reads: the single-use join
+// key and the one-time registration secret (both 0600, never logged).
+func (hj hostJoin) joinFileContent() []byte {
+	return []byte("TS_AUTHKEY=" + hj.AuthKey + "\nTWD_REGISTRATION_SECRET=" + hj.RegistrationSecret + "\n")
+}
 
 // mintHostJoin asks mgmt for this host's single-use join key and writes it
 // to the join file twd-hostd waits for (0600 in hostd's 0700 state dir;
@@ -86,14 +95,14 @@ func (s *state) mintHostJoin(ctx context.Context, hostID, tenantID string) error
 		}
 		return err
 	}
-	if hj.AuthKey == "" {
-		return fail("bootstrap_failed", "mgmt returned no join key for host "+hostID)
+	if hj.AuthKey == "" || hj.RegistrationSecret == "" {
+		return fail("bootstrap_failed", "mgmt returned no join key or registration secret for host "+hostID)
 	}
 	if err := os.MkdirAll(filepath.Dir(s.hostJoinFile()), 0o700); err != nil {
 		return err
 	}
 	tmp := s.hostJoinFile() + ".tmp"
-	if err := os.WriteFile(tmp, []byte("TS_AUTHKEY="+hj.AuthKey+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(tmp, hj.joinFileContent(), 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.hostJoinFile())

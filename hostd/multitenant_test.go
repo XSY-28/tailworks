@@ -45,9 +45,26 @@ func TestMultiTenant(t *testing.T) {
 		c.Server.SetGlobalAppCaps(tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}})
 		ctl[k] = c
 	}
-	ea := hostdtest.Start(t, hostdtest.Options{Fake: fakemgmt.Config{StaticKey: nettest.DummyKey}, Ephemeral: true,
+	// hostd refuses a second tenant's process-tier workloads when this user
+	// can reach a container engine, is in its group, or can reach the system
+	// tailscaled (procsb.ScanHostSockets; the sandbox_unavailable control,
+	// tested by TestSharedHost* below). On such a dev box this test lifts
+	// the refusal, as `twd up --insecure-shared-host` would; every isolation
+	// assertion below (distinct identities, 0700 dirs, netmap, sandbox
+	// probes, kill) is unchanged by that flag.
+	opts := hostdtest.Options{Fake: fakemgmt.Config{StaticKey: nettest.DummyKey}, Ephemeral: true,
 		KillTombstone: 3 * time.Second, Sandbox: hostd.SandboxAuto,
-		Tenant: mgmtapi.Tenant{Tailnet: "a.ts.net", ControlURL: ctl["a"].URL, MintMode: "static"}})
+		Tenant: mgmtapi.Tenant{Tailnet: "a.ts.net", ControlURL: ctl["a"].URL, MintMode: "static"}}
+	if hs := procsb.ScanHostSockets(); !hs.Empty() {
+		opts.InsecureSharedHost = true
+		reach := append([]string{}, hs.Hard...)
+		if hs.Tailscaled != "" {
+			reach = append(reach, hs.Tailscaled)
+		}
+		t.Logf("this user can reach %s: hostd would refuse the second tenant (sandbox_unavailable), so running with InsecureSharedHost; to exercise the refusal here, run the tests as a user outside the docker/podman/lxd/incus groups without access to those sockets",
+			strings.Join(reach, ", "))
+	}
+	ea := hostdtest.Start(t, opts)
 	eb := ea.AddTenant(mgmtapi.Tenant{Tailnet: "b.ts.net", ControlURL: ctl["b"].URL, MintMode: "static"})
 	if ea.TenantID == eb.TenantID {
 		t.Fatal("tenant IDs collide")

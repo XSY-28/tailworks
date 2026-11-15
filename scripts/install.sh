@@ -87,12 +87,15 @@ if [ "$os" = linux ]; then
 	fi
 fi
 
-# Integrity.
+# Integrity (hashing ~300 MB takes a few seconds; say so).
+nfiles=$(grep -c . "$SRC/SHA256SUMS" 2>/dev/null || echo "?")
+say "verifying $nfiles files (SHA256SUMS)…"
 if command -v sha256sum >/dev/null 2>&1; then
 	(cd "$SRC" && sha256sum -c --quiet SHA256SUMS) || die "SHA256SUMS check failed: the release is corrupt"
 else
 	(cd "$SRC" && shasum -a 256 -c --quiet SHA256SUMS) || die "SHA256SUMS check failed: the release is corrupt"
 fi
+say "✓ verified"
 
 # Copy into a staging dir in the prefix, then swap (re-runs and upgrades).
 mkdir -p "$PREFIX"

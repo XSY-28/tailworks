@@ -1,0 +1,58 @@
+{{define "content"}}
+<h1 class="mono">{{.Dep.Workload}} <span class="muted">{{.Dep.DeploymentID}}</span> {{template "status" .Dep.Status}}</h1>
+<p class="crumbs mono small"><a href="/ui/tenants/{{.Dep.TenantID}}">{{.Dep.TenantID}}</a>{{if .Tenant.Tailnet}} ({{.Tenant.Tailnet}}){{end}} › host <a href="/ui/hosts/{{.Dep.Host}}">{{.Dep.Host}}</a></p>
+{{if .Dep.Error}}<div class="flash bad">{{.Dep.Error}}</div>{{end}}
+
+<section class="grid">
+  <div class="card">
+    <h2>deployment</h2>
+    <dl class="kv">
+      <dt>workload</dt><dd class="mono">{{.Dep.Workload}}</dd>
+      <dt>epoch</dt><dd class="mono">{{.Dep.Epoch}}</dd>
+      <dt>deployed by</dt><dd>{{or .Dep.DeployedBy "-"}}</dd>
+      <dt>created</dt><dd class="mono">{{stamp .Dep.CreatedAt}} ({{ago .Dep.CreatedAt}})</dd>
+      <dt>status</dt><dd>{{template "status" .Dep.Status}}</dd>
+    </dl>
+  </div>
+  <div class="card">
+    <h2>endpoint</h2>
+    <dl class="kv">
+      <dt>node</dt><dd class="mono">{{or .Dep.Endpoint.Node "-"}}</dd>
+      <dt>MagicDNS</dt><dd class="mono">{{if .Dep.Endpoint.MagicDNS}}<a href="http://{{.Dep.Endpoint.MagicDNS}}/" rel="noreferrer">{{.Dep.Endpoint.MagicDNS}}</a>{{else}}-{{end}}</dd>
+      <dt>status</dt><dd>{{template "status" .Dep.Endpoint.Status}}</dd>
+      {{if .Dep.Endpoint.ObjectID}}<dt>object</dt><dd class="mono"><a href="/ui/objects/{{.Dep.Endpoint.ObjectID}}">{{.Dep.Endpoint.ObjectID}}</a></dd>{{end}}
+    </dl>
+  </div>
+</section>
+
+<section>
+  <h2>namespaces <span class="count">{{len .Dep.Namespaces}}</span></h2>
+  <table>
+    <thead><tr><th>class</th><th>tags</th><th>agent</th><th>ttl</th></tr></thead>
+    <tbody>{{range .Dep.Namespaces}}<tr><td class="mono">{{.Class}}</td><td class="mono small">{{join .Tags}}</td><td>{{if .Agent}}yes{{else}}-{{end}}</td><td class="mono">{{or .TTL "-"}}</td></tr>{{else}}<tr><td colspan="4" class="muted">none</td></tr>{{end}}</tbody>
+  </table>
+</section>
+
+{{if ne .Dep.Status "stopped"}}{{if ne .Dep.Status "superseded"}}
+<section class="card act">
+  <h2>undeploy</h2>
+  <form method="post" action="/ui/deployments/{{.Dep.DeploymentID}}/undeploy"
+        data-api="/v1/deployments/{{.Dep.DeploymentID}}" data-method="DELETE"
+        data-confirm="Undeploy {{.Dep.Workload}} ({{.Dep.DeploymentID}})? Every object of the workload is killed and the lease released."
+        data-after="/ui/deployments/{{.Dep.DeploymentID}}">
+    <input type="text" name="reason" placeholder="reason (recorded in audit)" maxlength="200">
+    <button type="submit" class="danger">Undeploy</button>
+  </form>
+</section>
+{{end}}{{end}}
+
+<section>
+  <h2>objects <span class="count">{{len .Objects}}</span> <span class="muted small">of this workload</span></h2>
+  <div data-live="objects">
+  <table class="objects">
+    <thead>{{template "objhead"}}</thead>
+    <tbody>{{template "objrows" .Objects}}{{if not .Objects}}<tr><td colspan="9" class="muted">no objects</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+</section>
+{{end}}

@@ -4,9 +4,17 @@
 //
 //	twd-hostd -mgmt unix:///Users/me/.twd/run/mgmt.sock -host-id h1 -data-dir ~/.twd/hostd
 //
-// The push API (mgmt → hostd) and status live on <run-dir>/hostd.sock:
+// The push API (mgmt → hostd) and the operator's status live on
+// <run-dir>/hostd.sock:
 //
 //	POST /v1/push/kill {objectID, reason}   POST /v1/push/assignments   GET /v1/status
+//
+// This host's own tailnet node serves the two pushes only, on -push-port,
+// and only to mgmt's node (WhoIs: tag:twd-mgmt, pinned to the node -mgmt
+// resolves to).
+//
+// The agent itself is internal/hostdrun; this binary parses the flags. The
+// single-process `twd up` runs the same runtime embedded in mgmt's process.
 package main
 
 import (
@@ -15,10 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -27,16 +32,12 @@ import (
 
 	"github.com/rosskukulinski/twd/hostd"
 	"github.com/rosskukulinski/twd/hostd/image"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
+	"github.com/rosskukulinski/twd/internal/hostdrun"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/netd"
 	"tailscale.com/tsnet"
 )
-
-// hostNodeName is the tsnet hostname of a host's own node (mgmt.HostNodeName).
-func hostNodeName(hostID string) string { return "twd-host-" + hostID }
 
 func main() {
 	if err := run(); err != nil {
@@ -56,7 +57,7 @@ func run() error {
 		tsDir      = flag.String("tsnet-dir", "", "state of this host's own tailnet node (default <data-dir>/tsnet)")
 		tsControl  = flag.String("tsnet-control-url", "", "operator tailnet control URL for this host's node (required unless -local-dev)")
 		joinFile   = flag.String("join-token-file", "", "TS_AUTHKEY=… file with the single-use join key mgmt minted (twd host add / twd up); waited for when the node has no state yet. Deleted after use")
-		pushPort   = flag.Int("push-port", 7474, "port on this host's node where mgmt pushes kills and assignment changes")
+		pushPort   = flag.Int("push-port", hostdrun.DefaultPushPort, "port on this host's node where mgmt pushes kills and assignment changes")
 		hostID     = flag.String("host-id", "", "this host's ID (default: hostname)")
 		dataDir    = flag.String("data-dir", filepath.Join(home, ".twd", "hostd"), "node state, DO storage, objects.json")
 		runDir     = flag.String("run-dir", "", "sockets and generated configs (short path; default a new /tmp dir)")
@@ -71,8 +72,8 @@ func run() error {
 		logLevel   = flag.String("log-level", "info", "debug|info|warn|error")
 		tsnetLogs  = flag.Bool("tsnet-logs", false, "forward tsnet logs at debug level")
 		tier       = flag.String("default-tier", "process", "tier for deployments and tenants that name none: process | microvm")
-		vmKernel   = flag.String("vm-kernel", vmAsset(home, "vmlinux"), "microVM tier: guest kernel (Firecracker on Linux, Virtualization.framework on macOS)")
-		vmRootfs   = flag.String("vm-rootfs", vmAsset(home, "rootfs.ext4"), "microVM tier: guest image from guest/build-image.sh")
+		vmKernel   = flag.String("vm-kernel", hostdrun.VMAsset(home, "vmlinux"), "microVM tier: guest kernel (Firecracker on Linux, Virtualization.framework on macOS)")
+		vmRootfs   = flag.String("vm-rootfs", hostdrun.VMAsset(home, "rootfs.ext4"), "microVM tier: guest image from guest/build-image.sh")
 		vmHelper   = flag.String("vm-helper", helperapi.DefaultSocket, "microVM tier: twd-vmhelper socket (sudo twd host setup --microvm)")
 		vmFC       = flag.String("firecracker", "/usr/local/bin/firecracker", "microVM tier, as root without the helper service: firecracker binary")
 		vmJailer   = flag.String("jailer", "/usr/local/bin/jailer", "microVM tier, as root without the helper service: jailer binary")
@@ -91,7 +92,7 @@ func run() error {
 		sbDeny     = flag.String("sandbox-deny", "", "comma-separated extra paths no workerd may read, write or connect to (twd up: its state and run dirs)")
 		nodeBin    = flag.String("node", "", "Node process tier (runtime \"node\"): node binary (default: $TWD_NODE, or node on PATH)")
 		tokenFile  = flag.String("mgmt-token-file", filepath.Join(home, ".twd", "hostd", "mgmt.token"), "per-host token file minted by twd-mgmt (sent as Twd-Host-Token on the unix socket; \"\" = none)")
-		poolNodes  = flag.Int("pool-nodes", 1, "pre-joined nodes to keep per hot class (one with a create here in the last hour): a create takes one and renames it (~0.2 s) instead of joining a new node; each is a device; 0 = off")
+		poolNodes  = flag.Int("pool-nodes", hostdrun.DefaultPoolNodes, "pre-joined nodes to keep per hot class (one with a create here in the last hour): a create takes one and renames it (~0.2 s) instead of joining a new node; each is a device; 0 = off")
 		portMap    = flag.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's tailnet nodes (off by default: it adds ~250 ms to every new object node's join and has every node ask the router for a mapping; turn on for hosts behind hard NATs that need router-assisted direct paths)")
 		pathEvery  = flag.Duration("path-every", hostd.DefaultPathEvery, "smart placement: measure and report tailnet paths to assignments' placement targets this often (negative disables)")
 		siblings   = flag.Bool("allow-sibling-egress", false, "let objects reach other objects hosted here over the tailnet (hairpin; single-host tests/demos)")
@@ -111,198 +112,38 @@ func run() error {
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
 	)
 	flag.Parse()
-	if !*portMap {
-		// Process-wide, so before any tsnet node (this host's own included).
-		netd.DisablePortMapping()
-	}
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(*logLevel)); err != nil {
 		return err
 	}
 	log := slog.New(netd.NewRedactingHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
-	if *hostID == "" {
-		h, _ := os.Hostname()
-		*hostID = h
-	}
-	wd, err := findWorkerd(*workerd, home)
-	if err != nil {
-		return err
-	}
-	if *nodeBin == "" {
-		*nodeBin = os.Getenv("TWD_NODE")
-	}
-	var mc *mgmtapi.Client
-	var ts *tsnet.Server
-	var pushLn net.Listener
-	if *localDev {
-		if *mgmtAddr == "" {
-			*mgmtAddr = "unix://" + filepath.Join(home, ".twd", "run", "mgmt.sock")
-		}
-		if mc, err = mgmtapi.NewClient(*mgmtAddr); err != nil {
-			return err
-		}
-		if strings.HasPrefix(*mgmtAddr, "unix://") || strings.HasPrefix(*mgmtAddr, "/") {
-			mc.TokenFile = *tokenFile
-		}
-	} else {
-		if *tsControl == "" {
-			return errors.New("-tsnet-control-url is required (normal operation is tsnet only; -local-dev for the unix socket)")
-		}
-		if *mgmtAddr == "" {
-			return errors.New("-mgmt is required: http(s)://twd-mgmt.<tailnet>")
-		}
-		if *tsDir == "" {
-			*tsDir = filepath.Join(*dataDir, "tsnet")
-		}
-		ts, err = joinHostNode(context.Background(), *tsDir, hostNodeName(*hostID), *tsControl, *joinFile, log)
-		if err != nil {
-			return err
-		}
-		defer ts.Close()
-		if mc, err = mgmtapi.NewClient(*mgmtAddr); err != nil {
-			return err
-		}
-		mc.HTTP = &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{DialContext: ts.Dial, MaxIdleConnsPerHost: 16}}
-		if pushLn, err = ts.Listen("tcp", fmt.Sprintf(":%d", *pushPort)); err != nil {
-			return fmt.Errorf("push listener on the node: %w", err)
-		}
-		// mgmt's node must be in our netmap before the first request.
-		wctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		for {
-			err := mc.Do(wctx, "GET", "/v1/healthz", nil, nil)
-			if _, typed := mgmtapi.AsError(err); err == nil || typed {
-				break // any answer from mgmt means the path is open
-			} else if wctx.Err() != nil {
-				cancel()
-				return fmt.Errorf("mgmt %s unreachable over the tailnet: %w (does the policy grant tag:twd-host → tag:twd-mgmt?)", *mgmtAddr, err)
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-		cancel()
-	}
-	hcfg := hostd.Config{HostID: *hostID, Mgmt: mc, DataDir: *dataDir, RunDir: *runDir, WorkerdBin: wd,
-		HeartbeatEvery: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL,
-		PathEvery: *pathEvery, CapacityNodes: *capacity, KillTombstone: *tombstone, Logger: log, TSNetLogs: *tsnetLogs,
-		Sandbox: *sandboxF, SandboxDeny: splitList(*sbDeny), InsecureSharedHost: *insecureSH, AllowSiblingEgress: *siblings, PoolNodes: *poolNodes,
-		DefaultTier: *tier, NodeBin: *nodeBin, VMVolumeMiB: *vmVolMiB, VMMemMiB: *vmMem, VMVCPUs: *vmCPUs,
-		VM: vmBackend(vmOptions{kernel: *vmKernel, rootfs: *vmRootfs, firecracker: *vmFC, jailer: *vmJailer, helper: *vmHelper,
-			memMiB: *vmMem, vcpus: *vmCPUs, hugePages: *vmHuge, containerKernel: *ctrKernel, vzVMM: *vzVMM, rosetta: *vmRosetta,
-			pool: *vmPool, snapshot: *vmSnap, snapRefill: *vmSnapFill, rotate: *vmRotate}, log),
+	o := hostdrun.Options{MgmtAddr: *mgmtAddr, LocalDev: *localDev, MgmtTokenFile: *tokenFile,
+		TSNetDir: *tsDir, TSNetControlURL: *tsControl, JoinTokenFile: *joinFile, PushPort: *pushPort, PortMapping: *portMap,
+		HostID: *hostID, DataDir: *dataDir, RunDir: *runDir, Workerd: *workerd,
+		Heartbeat: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL, CapacityNodes: *capacity,
+		KillTombstone: *tombstone, TSNetLogs: *tsnetLogs, PoolNodes: *poolNodes, PathEvery: *pathEvery, DefaultTier: *tier,
+		VM: hostdrun.VMOptions{Kernel: *vmKernel, Rootfs: *vmRootfs, Firecracker: *vmFC, Jailer: *vmJailer, Helper: *vmHelper,
+			MemMiB: *vmMem, VCPUs: *vmCPUs, VolumeMiB: *vmVolMiB, HugePages: *vmHuge, ContainerKernel: *ctrKernel, VzVMM: *vzVMM, Rosetta: *vmRosetta,
+			Pool: *vmPool, NoSnapshot: !*vmSnap, SnapRefill: *vmSnapFill, Rotate: *vmRotate},
+		Sandbox: *sandboxF, InsecureSharedHost: *insecureSH, SandboxDeny: hostdrun.SplitList(*sbDeny), NodeBin: *nodeBin,
+		AllowSiblingEgress: *siblings,
+		NoContainers:       *ctrOff, ContainerImageCache: *ctrCache, ContainerImageDir: *ctrImages, ContainerPublicImages: hostdrun.SplitList(*ctrPublic),
+		ContainerImageMaxMiB: *ctrImgMB, ContainerImageCacheMaxMiB: *ctrCacheMB,
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
-		ContainerCapacity: hostd.ContainerCapacity{Max: *ctrMax, MemMiB: *ctrMemMiB, VCPU: *ctrVCPU}}
-	// Containers (ADR-032) run on the microVM backend; without it this host
-	// offers none (start() fails with tier_unavailable, no fallback).
-	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !*ctrOff {
-		// Images pinned at deploy are pulled from mgmt's registry over the
-		// same connection as the API (ADR-032 D3: never from Docker Hub).
-		st := &image.Store{Dir: *ctrCache, Aliases: image.DefaultAliases, Public: map[string]bool{},
-			Puller: image.RegistryPuller{Client: mc.OCI()}, MaxBytes: *ctrCacheMB << 20, Limits: image.Limits{MaxBytes: *ctrImgMB << 20}}
-		if *ctrCache == "" {
-			st.Dir = filepath.Join(*dataDir, "images")
-		}
-		if *ctrImages != "" {
-			st.Sources = append(st.Sources, image.DirSource{Dir: *ctrImages})
-		}
-		for _, r := range splitList(*ctrPublic) {
-			st.Public[image.NormalizeRef(r)] = true
-		}
-		// vz with Rosetta for Linux runs linux/amd64 images as they are
-		// (ADR-032 D7): the stock cloudflare/sandbox images, so no arm64
-		// alias substitution.
-		if em, ok := cb.(interface{ EmulatedArches() []string }); ok && len(em.EmulatedArches()) > 0 {
-			st.Emulated, st.Aliases = em.EmulatedArches(), nil
-			log.Info("containers: emulated image arches (no alias map)", "arches", st.Emulated)
-		}
-		// Offer containers only when they can actually run here (the host
-		// advertises the "containers" tier from this; ADR-032 D5).
-		if err := containersUsable(cb, st); err != nil {
-			log.Info("containers unavailable on this host; not offered", "reason", err)
-		} else {
-			hcfg.Containers, hcfg.Images = cb, st
-			log.Info("containers available", "image_cache", st.Dir, "image_dir", *ctrImages, "idle", *ctrIdle, "max_life", *ctrMaxLife, "internet", *ctrInet)
-		}
-	}
-	switch *ctrInet {
-	case "direct":
-		hcfg.ContainerInternet = hostd.DirectInternet()
-	case "off":
-	default:
-		return fmt.Errorf("-container-internet %q: want direct or off", *ctrInet)
-	}
-	if pushLn != nil {
-		hcfg.PushListener, hcfg.PushPort = pushLn, *pushPort
-		hcfg.PushCallerTags = pushCallerTags(ts)
-	}
-	h, err := hostd.New(hcfg)
+		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log}
+	rt, err := hostdrun.New(context.Background(), o)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err = h.Start(ctx)
-	cancel()
-	if err != nil {
+	if err := rt.Start(context.Background()); err != nil {
+		rt.Close()
 		return err
 	}
-	transport := "tsnet"
-	if *localDev {
-		transport = "local-dev"
-	}
-	log.Info("twd-hostd running", "host", *hostID, "mgmt", *mgmtAddr, "transport", transport, "push", h.PushSocket(), "workerd", wd, "sandbox", h.SandboxInfo())
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	log.Info("shutting down (node state kept for rejoin)")
-	return h.Close()
-}
-
-// joinHostNode opens (or joins) this host's own tailnet node. A node with
-// saved state re-opens without a key. Otherwise it needs the single-use
-// join key: from joinFile, which is waited for (twd up writes it after
-// mgmt minted it) and deleted once the node is up. The key never reaches
-// the log.
-func joinHostNode(ctx context.Context, dir, hostname, control, joinFile string, log *slog.Logger) (*tsnet.Server, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
-	}
-	ts := &tsnet.Server{Hostname: hostname, Dir: dir, ControlURL: control, AdvertiseTags: []string{"tag:twd-host"},
-		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
-	hasState := false
-	if _, err := os.Stat(filepath.Join(dir, "tailscaled.state")); err == nil {
-		hasState = true
-	}
-	if !hasState {
-		if joinFile == "" {
-			return nil, errors.New("this host's node has no state yet: run `twd-hostd join --token-file <file>` (twd host add mints the key) or pass -join-token-file")
-		}
-		log.Info("waiting for the join key", "file", joinFile, "node", hostname)
-		for {
-			if k, err := tsapi.LoadEnvFile(joinFile, "TS_AUTHKEY"); err == nil && k != "" {
-				ts.AuthKey = k
-				break
-			}
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(500 * time.Millisecond):
-			}
-		}
-	}
-	uctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-	st, err := ts.Up(uctx)
-	if err != nil {
-		ts.Close()
-		return nil, fmt.Errorf("join the operator tailnet as %s: %w", hostname, err)
-	}
-	if !hasState && joinFile != "" {
-		os.Remove(joinFile) // single use
-	}
-	tags := []string{}
-	if st.Self != nil && st.Self.Tags != nil {
-		tags = st.Self.Tags.AsSlice()
-	}
-	log.Info("tailnet node", "name", strings.TrimSuffix(st.Self.DNSName, "."), "tags", tags, "ips", st.TailscaleIPs)
-	return ts, nil
+	return rt.Close()
 }
 
 // runJoin is `twd-hostd join --token-file <file> [--token <key>] --control-url … --tsnet-dir …`:
@@ -341,7 +182,7 @@ func runJoin(args []string) error {
 	if err := os.MkdirAll(*tsDir, 0o700); err != nil {
 		return err
 	}
-	ts := &tsnet.Server{Hostname: hostNodeName(*hostID), Dir: *tsDir, ControlURL: *control, AdvertiseTags: []string{"tag:twd-host"}, AuthKey: key,
+	ts := &tsnet.Server{Hostname: hostdrun.HostNodeName(*hostID), Dir: *tsDir, ControlURL: *control, AdvertiseTags: []string{hostdrun.HostTag}, AuthKey: key,
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -351,56 +192,11 @@ func runJoin(args []string) error {
 	}
 	ts.Close()
 	if *tokenFile != "" {
+		// M1: keep the registration secret for the first registration;
+		// the join key itself is single use.
+		hostdrun.PersistRegistrationSecret(*tokenFile, *tsDir)
 		os.Remove(*tokenFile)
 	}
 	fmt.Printf("joined as %s (%s); node state in %s. Start twd-hostd without a key now.\n", strings.TrimSuffix(st.Self.DNSName, "."), st.TailscaleIPs, *tsDir)
 	return nil
-}
-
-// vmAsset finds a microVM asset: next to the installed release
-// (<prefix>/share/twd/vm, e.g. ~/.twd), else ~/.twd/vm.
-func vmAsset(home, name string) string {
-	if exe, err := os.Executable(); err == nil {
-		p := filepath.Join(filepath.Dir(filepath.Dir(exe)), "share", "twd", "vm", name)
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return filepath.Join(home, ".twd", "vm", name)
-}
-
-func findWorkerd(flagVal, home string) (string, error) {
-	for _, c := range []string{flagVal, os.Getenv("TWD_WORKERD"), filepath.Join(home, ".twd", "bin", "workerd")} {
-		if c == "" {
-			continue
-		}
-		if _, err := os.Stat(c); err == nil {
-			return c, nil
-		}
-	}
-	if p, err := exec.LookPath("workerd"); err == nil {
-		return p, nil
-	}
-	return "", errors.New("workerd not found (use -workerd or $TWD_WORKERD)")
-}
-
-func splitList(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// containersUsable: the container backend can boot guests here (helper,
-// kernel with erofs) and the image store can convert images (mkfs.erofs).
-func containersUsable(cb sandbox.ContainerBackend, st *image.Store) error {
-	if u, ok := cb.(interface{ ContainersUsable() error }); ok {
-		if err := u.ContainersUsable(); err != nil {
-			return err
-		}
-	}
-	return st.Check()
 }

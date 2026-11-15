@@ -317,6 +317,7 @@ const (
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
+	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
@@ -424,6 +425,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeRegistryUnavailable:
 		return true
 	case ErrorCodeReplicaConflict:
+		return true
+	case ErrorCodeReservedTag:
 		return true
 	case ErrorCodeServiceAPIFailed:
 		return true
@@ -1401,10 +1404,11 @@ type Endpoint struct {
 	Status ObjectStatus `json:"status"`
 }
 
-// Error The DX.md error catalog shape. `code` is stable and machine-readable;
+// Error The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Error struct {
 	// Code The catalog. Status in parentheses.
 	//
@@ -1413,6 +1417,7 @@ type Error struct {
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -1420,8 +1425,8 @@ type Error struct {
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-	// | `host_identity_mismatch` | 403 | host ID bound to another node |
+	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -1482,6 +1487,7 @@ type Error struct {
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
 // | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `no_identity` | 401 | WhoIs failed for the connection |
@@ -1489,8 +1495,8 @@ type Error struct {
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
 // | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-// | `host_identity_mismatch` | 403 | host ID bound to another node |
+// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 // | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 // | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 // | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -1635,9 +1641,12 @@ type HostJoin struct {
 	Host      Host  `json:"host"`
 
 	// Hostname `twd-host-<hostID>`
-	Hostname string   `json:"hostname"`
-	Tags     []string `json:"tags"`
-	Tailnet  *string  `json:"tailnet,omitempty"`
+	Hostname string `json:"hostname"`
+
+	// RegistrationSecret One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound.
+	RegistrationSecret string   `json:"registrationSecret"`
+	Tags               []string `json:"tags"`
+	Tailnet            *string  `json:"tailnet,omitempty"`
 }
 
 // HostPage defines model for HostPage.
@@ -1660,14 +1669,16 @@ type HostPathReport struct {
 type HostPush struct {
 	Port *int `json:"port,omitempty"`
 
-	// URL `unix:///path/hostd.sock`; local-dev only.
+	// URL `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport).
 	URL *string `json:"url,omitempty"`
 }
 
 // HostRegistration defines model for HostRegistration.
 type HostRegistration struct {
 	// Arch A Go GOARCH. Container images must match their host's.
-	Arch        *Arch   `json:"arch,omitempty"`
+	Arch *Arch `json:"arch,omitempty"`
+
+	// AuditPubKey Pinned on first bind; a later registration may only repeat it.
 	AuditPubKey *string `json:"auditPubKey,omitempty"`
 
 	// Capacity The capacity vector a host registers (ADR-032 D9). `nodes` is
@@ -1684,8 +1695,11 @@ type HostRegistration struct {
 	// `port` names hostd's push listener on **its own tsnet node** (the
 	// WhoIs node; mgmt never pushes anywhere else). `url` is accepted only
 	// on the local-dev socket and only as `unix:///…`.
-	Push  *HostPush  `json:"push,omitempty"`
-	Tiers []HostTier `json:"tiers"`
+	Push *HostPush `json:"push,omitempty"`
+
+	// RegistrationSecret Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound.
+	RegistrationSecret *string    `json:"registrationSecret,omitempty"`
+	Tiers              []HostTier `json:"tiers"`
 }
 
 // HostStatus The heartbeat body.
@@ -2530,6 +2544,7 @@ type TombstoneError struct {
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2537,8 +2552,8 @@ type TombstoneError struct {
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}` |
-	// | `host_identity_mismatch` | 403 | host ID bound to another node |
+	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
 	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
@@ -2722,55 +2737,63 @@ type VolumeID = string
 // WorkloadName defines model for workloadName.
 type WorkloadName = string
 
-// BadRequest The DX.md error catalog shape. `code` is stable and machine-readable;
+// BadRequest The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type BadRequest = Error
 
-// Conflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// Conflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Conflict = Error
 
-// Forbidden The DX.md error catalog shape. `code` is stable and machine-readable;
+// Forbidden The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Forbidden = Error
 
 // Gone `410 Gone`: the error plus the kill record. `tombstone` is absent only when the 410 is `delegation_invalid` for a spawn whose parent is dead (the parent's record is then at `GET /v1/objects/{parent}`).
 type Gone = TombstoneError
 
-// LeaseLost The DX.md error catalog shape. `code` is stable and machine-readable;
+// LeaseLost The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type LeaseLost = Error
 
-// NotFound The DX.md error catalog shape. `code` is stable and machine-readable;
+// NotFound The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type NotFound = Error
 
-// PreconditionFailed The DX.md error catalog shape. `code` is stable and machine-readable;
+// PreconditionFailed The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type PreconditionFailed = Error
 
-// ReadyConflict The DX.md error catalog shape. `code` is stable and machine-readable;
+// ReadyConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type ReadyConflict = Error
 
-// Unauthorized The DX.md error catalog shape. `code` is stable and machine-readable;
+// Unauthorized The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://twd.dev/errors/<code>`; `trace_id` correlates with audit.
+// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Unauthorized = Error
 
 // ListAuditParams defines parameters for ListAudit.
@@ -3596,6 +3619,10 @@ type ClientInterface interface {
 	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
+	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -3653,6 +3680,10 @@ type ClientInterface interface {
 	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
+	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -3746,8 +3777,11 @@ type ClientInterface interface {
 
 	// CreateHostWithBody Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`) and mints a
+	// `twd host add`: creates the host record (status `pending`), mints a
 	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// and a one-time `registrationSecret` (32 random bytes, base64url; only
+	// its SHA-256 is stored) that the host must present on its first
+	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's trust credential (wif) or API key
 	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -3763,8 +3797,11 @@ type ClientInterface interface {
 
 	// CreateHost Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`) and mints a
+	// `twd host add`: creates the host record (status `pending`), mints a
 	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// and a one-time `registrationSecret` (32 random bytes, base64url; only
+	// its SHA-256 is stored) that the host must present on its first
+	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's trust credential (wif) or API key
 	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -3798,10 +3835,18 @@ type ClientInterface interface {
 	// RegisterHostWithBody Register or re-register a host (idempotent)
 	//
 	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-	// is bound to this `hostID` on first registration; a different node using
-	// the same ID is `403 host_identity_mismatch`. Re-registering with the
-	// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-	// re-register on every restart.
+	// is bound to this `hostID` on first registration, which must carry the
+	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+	// `403 host_identity_mismatch`; the secret is cleared once the node is
+	// bound). A `PUT` for a host ID the admin never created is
+	// `403 host_not_registered` (no implicit creation over the tailnet;
+	// only the `--local-dev` socket keeps it). A different node using the
+	// same ID is `403 host_identity_mismatch`. Re-registering with the same
+	// node needs no secret and replaces capacity, tiers and `push`;
+	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+	// it or omit it; a different key is `403 host_identity_mismatch` and
+	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// every restart.
 	//
 	// A host that was created through `twd host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
@@ -3814,10 +3859,18 @@ type ClientInterface interface {
 	// RegisterHost Register or re-register a host (idempotent)
 	//
 	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-	// is bound to this `hostID` on first registration; a different node using
-	// the same ID is `403 host_identity_mismatch`. Re-registering with the
-	// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-	// re-register on every restart.
+	// is bound to this `hostID` on first registration, which must carry the
+	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+	// `403 host_identity_mismatch`; the secret is cleared once the node is
+	// bound). A `PUT` for a host ID the admin never created is
+	// `403 host_not_registered` (no implicit creation over the tailnet;
+	// only the `--local-dev` socket keeps it). A different node using the
+	// same ID is `403 host_identity_mismatch`. Re-registering with the same
+	// node needs no secret and replaces capacity, tiers and `push`;
+	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+	// it or omit it; a different key is `403 host_identity_mismatch` and
+	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// every restart.
 	//
 	// A host that was created through `twd host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
@@ -3871,6 +3924,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
 	ReportHostPaths(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetHostSandboxDeny Every tenant's credential file paths, for the host's sandbox deny list
+	//
+	// The paths of every tenant's `apiKeyFile` and `oauthClientFile`
+	// (sorted, deduplicated), and nothing else: no tenant ID, tailnet or
+	// name. A process-tier host denies them all to every workload sandbox
+	// it starts, including the files of tenants that have no deployment
+	// on it yet. `GET /v1/tenants` shows a host only its own tenants, which
+	// is not enough: a workload started before another tenant's first
+	// deploy would otherwise be able to read that tenant's key file. A
+	// host may read only its own `{id}`.
+	//
+	// Corresponds with GET /v1/hosts/{id}/sandbox-deny (the `GetHostSandboxDeny` operationId).
+	GetHostSandboxDeny(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReportHostStatusWithBody Heartbeat (replace the host's reported status)
 	//
@@ -3990,6 +4057,8 @@ type ClientInterface interface {
 	//   names it in `poolObjectID`. Then that create answers
 	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
+	// - A host may create objects only in workloads whose `(tenant,
+	//   workload)` lease it holds (`403 forbidden`).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4026,6 +4095,8 @@ type ClientInterface interface {
 	//   names it in `poolObjectID`. Then that create answers
 	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
+	// - A host may create objects only in workloads whose `(tenant,
+	//   workload)` lease it holds (`403 forbidden`).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4051,6 +4122,8 @@ type ClientInterface interface {
 
 	// GetObject Read an object (lineage, children, kill record)
 	//
+	// A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
+	//
 	// Corresponds with GET /v1/objects/{id} (the `GetObject` operationId).
 	GetObject(ctx context.Context, id ObjectID, params *GetObjectParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4059,13 +4132,18 @@ type ClientInterface interface {
 	// Two callers, two subsets:
 	//
 	// - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-	//   magicDNS, epoch}` reports the node joined. `epoch` fences the
-	//   commit (`409 lease_lost`). mgmt then signs the **node certificate**
+	//   magicDNS, epoch}` reports the node joined. `epoch` is **required**
+	//   for the ready group (`400 bad_request` without it) and the commit is
+	//   always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+	//   a host that does not hold the object's lease is `403 forbidden`.
+	//   mgmt then signs the **node certificate**
 	//   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 	//   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 	//   `ready` audit detail adds `cert: true` and `lim`. If the object was
 	//   killed during the join the answer is `410 killed` and mgmt deletes
-	//   the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+	//   the device that just appeared (only when the fence held: a caller
+	//   without the lease cannot make mgmt delete devices). Replaces
+	//   `POST /v0/objects/{id}/ready`.
 	// - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 	//   applies it.
 	//
@@ -4082,13 +4160,18 @@ type ClientInterface interface {
 	// Two callers, two subsets:
 	//
 	// - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-	//   magicDNS, epoch}` reports the node joined. `epoch` fences the
-	//   commit (`409 lease_lost`). mgmt then signs the **node certificate**
+	//   magicDNS, epoch}` reports the node joined. `epoch` is **required**
+	//   for the ready group (`400 bad_request` without it) and the commit is
+	//   always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+	//   a host that does not hold the object's lease is `403 forbidden`.
+	//   mgmt then signs the **node certificate**
 	//   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 	//   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 	//   `ready` audit detail adds `cert: true` and `lim`. If the object was
 	//   killed during the join the answer is `410 killed` and mgmt deletes
-	//   the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+	//   the device that just appeared (only when the fence held: a caller
+	//   without the lease cannot make mgmt delete devices). Replaces
+	//   `POST /v0/objects/{id}/ready`.
 	// - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 	//   applies it.
 	//
@@ -4105,13 +4188,18 @@ type ClientInterface interface {
 	// Two callers, two subsets:
 	//
 	// - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-	//   magicDNS, epoch}` reports the node joined. `epoch` fences the
-	//   commit (`409 lease_lost`). mgmt then signs the **node certificate**
+	//   magicDNS, epoch}` reports the node joined. `epoch` is **required**
+	//   for the ready group (`400 bad_request` without it) and the commit is
+	//   always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+	//   a host that does not hold the object's lease is `403 forbidden`.
+	//   mgmt then signs the **node certificate**
 	//   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 	//   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 	//   `ready` audit detail adds `cert: true` and `lim`. If the object was
 	//   killed during the join the answer is `410 killed` and mgmt deletes
-	//   the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+	//   the device that just appeared (only when the fence held: a caller
+	//   without the lease cannot make mgmt delete devices). Replaces
+	//   `POST /v0/objects/{id}/ready`.
 	// - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 	//   applies it.
 	//
@@ -4161,7 +4249,10 @@ type ClientInterface interface {
 
 	// ListTenants List tenants
 	//
-	// Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClientFile` path to their workload sandboxes).
+	// Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
+	// `oauthClientFile` path to their workload sandboxes), but a host sees
+	// **only the tenants with a deployment assigned to it** (a namespace
+	// lease it holds); admins see every tenant.
 	//
 	// Corresponds with GET /v1/tenants (the `ListTenants` operationId).
 	ListTenants(ctx context.Context, params *ListTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4194,7 +4285,9 @@ type ClientInterface interface {
 
 	// GetTenant Read a tenant
 	//
-	// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer and subjects).
+	// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
+	// and subjects). A host may read only tenants with a deployment assigned
+	// to it (any other tenant is `404 not_found` for it).
 	//
 	// Corresponds with GET /v1/tenants/{id} (the `GetTenant` operationId).
 	GetTenant(ctx context.Context, id TenantID, params *GetTenantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4740,6 +4833,10 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
+// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -4807,6 +4904,10 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
+// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -4970,8 +5071,11 @@ func (c *Client) ListHosts(ctx context.Context, params *ListHostsParams, reqEdit
 
 // CreateHostWithBody Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`) and mints a
+// `twd host add`: creates the host record (status `pending`), mints a
 // **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// and a one-time `registrationSecret` (32 random bytes, base64url; only
+// its SHA-256 is stored) that the host must present on its first
+// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's trust credential (wif) or API key
 // (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -4997,8 +5101,11 @@ func (c *Client) CreateHostWithBody(ctx context.Context, contentType string, bod
 
 // CreateHost Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`) and mints a
+// `twd host add`: creates the host record (status `pending`), mints a
 // **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// and a one-time `registrationSecret` (32 random bytes, base64url; only
+// its SHA-256 is stored) that the host must present on its first
+// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's trust credential (wif) or API key
 // (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -5062,10 +5169,18 @@ func (c *Client) GetHost(ctx context.Context, id HostID, params *GetHostParams, 
 // RegisterHostWithBody Register or re-register a host (idempotent)
 //
 // The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-// is bound to this `hostID` on first registration; a different node using
-// the same ID is `403 host_identity_mismatch`. Re-registering with the
-// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-// re-register on every restart.
+// is bound to this `hostID` on first registration, which must carry the
+// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+// `403 host_identity_mismatch`; the secret is cleared once the node is
+// bound). A `PUT` for a host ID the admin never created is
+// `403 host_not_registered` (no implicit creation over the tailnet;
+// only the `--local-dev` socket keeps it). A different node using the
+// same ID is `403 host_identity_mismatch`. Re-registering with the same
+// node needs no secret and replaces capacity, tiers and `push`;
+// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+// it or omit it; a different key is `403 host_identity_mismatch` and
+// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// every restart.
 //
 // A host that was created through `twd host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
@@ -5088,10 +5203,18 @@ func (c *Client) RegisterHostWithBody(ctx context.Context, id HostID, contentTyp
 // RegisterHost Register or re-register a host (idempotent)
 //
 // The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-// is bound to this `hostID` on first registration; a different node using
-// the same ID is `403 host_identity_mismatch`. Re-registering with the
-// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-// re-register on every restart.
+// is bound to this `hostID` on first registration, which must carry the
+// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+// `403 host_identity_mismatch`; the secret is cleared once the node is
+// bound). A `PUT` for a host ID the admin never created is
+// `403 host_not_registered` (no implicit creation over the tailnet;
+// only the `--local-dev` socket keeps it). A different node using the
+// same ID is `403 host_identity_mismatch`. Re-registering with the same
+// node needs no secret and replaces capacity, tiers and `push`;
+// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+// it or omit it; a different key is `403 host_identity_mismatch` and
+// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// every restart.
 //
 // A host that was created through `twd host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
@@ -5176,6 +5299,30 @@ func (c *Client) ReportHostPathsWithBody(ctx context.Context, id HostID, content
 // Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
 func (c *Client) ReportHostPaths(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReportHostPathsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetHostSandboxDeny Every tenant's credential file paths, for the host's sandbox deny list
+//
+// The paths of every tenant's `apiKeyFile` and `oauthClientFile`
+// (sorted, deduplicated), and nothing else: no tenant ID, tailnet or
+// name. A process-tier host denies them all to every workload sandbox
+// it starts, including the files of tenants that have no deployment
+// on it yet. `GET /v1/tenants` shows a host only its own tenants, which
+// is not enough: a workload started before another tenant's first
+// deploy would otherwise be able to read that tenant's key file. A
+// host may read only its own `{id}`.
+//
+// Corresponds with GET /v1/hosts/{id}/sandbox-deny (the `GetHostSandboxDeny` operationId).
+func (c *Client) GetHostSandboxDeny(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHostSandboxDenyRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -5385,6 +5532,8 @@ func (c *Client) ListObjects(ctx context.Context, params *ListObjectsParams, req
 //     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
+//   - A host may create objects only in workloads whose `(tenant,
+//     workload)` lease it holds (`403 forbidden`).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5432,6 +5581,8 @@ func (c *Client) CreateObjectWithBody(ctx context.Context, contentType string, b
 //     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
+//   - A host may create objects only in workloads whose `(tenant,
+//     workload)` lease it holds (`403 forbidden`).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5477,6 +5628,8 @@ func (c *Client) DeleteObject(ctx context.Context, id ObjectID, params *DeleteOb
 
 // GetObject Read an object (lineage, children, kill record)
 //
+// A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
+//
 // Corresponds with GET /v1/objects/{id} (the `GetObject` operationId).
 func (c *Client) GetObject(ctx context.Context, id ObjectID, params *GetObjectParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetObjectRequest(c.Server, id, params)
@@ -5495,13 +5648,18 @@ func (c *Client) GetObject(ctx context.Context, id ObjectID, params *GetObjectPa
 // Two callers, two subsets:
 //
 //   - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-//     magicDNS, epoch}` reports the node joined. `epoch` fences the
-//     commit (`409 lease_lost`). mgmt then signs the **node certificate**
+//     magicDNS, epoch}` reports the node joined. `epoch` is **required**
+//     for the ready group (`400 bad_request` without it) and the commit is
+//     always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+//     a host that does not hold the object's lease is `403 forbidden`.
+//     mgmt then signs the **node certificate**
 //     (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 //     iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 //     `ready` audit detail adds `cert: true` and `lim`. If the object was
 //     killed during the join the answer is `410 killed` and mgmt deletes
-//     the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+//     the device that just appeared (only when the fence held: a caller
+//     without the lease cannot make mgmt delete devices). Replaces
+//     `POST /v0/objects/{id}/ready`.
 //   - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 //     applies it.
 //
@@ -5528,13 +5686,18 @@ func (c *Client) UpdateObjectWithBody(ctx context.Context, id ObjectID, params *
 // Two callers, two subsets:
 //
 //   - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-//     magicDNS, epoch}` reports the node joined. `epoch` fences the
-//     commit (`409 lease_lost`). mgmt then signs the **node certificate**
+//     magicDNS, epoch}` reports the node joined. `epoch` is **required**
+//     for the ready group (`400 bad_request` without it) and the commit is
+//     always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+//     a host that does not hold the object's lease is `403 forbidden`.
+//     mgmt then signs the **node certificate**
 //     (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 //     iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 //     `ready` audit detail adds `cert: true` and `lim`. If the object was
 //     killed during the join the answer is `410 killed` and mgmt deletes
-//     the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+//     the device that just appeared (only when the fence held: a caller
+//     without the lease cannot make mgmt delete devices). Replaces
+//     `POST /v0/objects/{id}/ready`.
 //   - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 //     applies it.
 //
@@ -5561,13 +5724,18 @@ func (c *Client) UpdateObject(ctx context.Context, id ObjectID, params *UpdateOb
 // Two callers, two subsets:
 //
 //   - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-//     magicDNS, epoch}` reports the node joined. `epoch` fences the
-//     commit (`409 lease_lost`). mgmt then signs the **node certificate**
+//     magicDNS, epoch}` reports the node joined. `epoch` is **required**
+//     for the ready group (`400 bad_request` without it) and the commit is
+//     always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+//     a host that does not hold the object's lease is `403 forbidden`.
+//     mgmt then signs the **node certificate**
 //     (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 //     iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 //     `ready` audit detail adds `cert: true` and `lim`. If the object was
 //     killed during the join the answer is `410 killed` and mgmt deletes
-//     the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+//     the device that just appeared (only when the fence held: a caller
+//     without the lease cannot make mgmt delete devices). Replaces
+//     `POST /v0/objects/{id}/ready`.
 //   - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 //     applies it.
 //
@@ -5657,7 +5825,10 @@ func (c *Client) GetStatus(ctx context.Context, reqEditors ...RequestEditorFn) (
 
 // ListTenants List tenants
 //
-// Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClientFile` path to their workload sandboxes).
+// Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
+// `oauthClientFile` path to their workload sandboxes), but a host sees
+// **only the tenants with a deployment assigned to it** (a namespace
+// lease it holds); admins see every tenant.
 //
 // Corresponds with GET /v1/tenants (the `ListTenants` operationId).
 func (c *Client) ListTenants(ctx context.Context, params *ListTenantsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5730,7 +5901,9 @@ func (c *Client) DeleteTenant(ctx context.Context, id TenantID, params *DeleteTe
 
 // GetTenant Read a tenant
 //
-// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer and subjects).
+// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
+// and subjects). A host may read only tenants with a deployment assigned
+// to it (any other tenant is `404 not_found` for it).
 //
 // Corresponds with GET /v1/tenants/{id} (the `GetTenant` operationId).
 func (c *Client) GetTenant(ctx context.Context, id TenantID, params *GetTenantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7512,6 +7685,40 @@ func NewReportHostPathsRequestWithBody(server string, id HostID, contentType str
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetHostSandboxDenyRequest constructs an http.Request for the GetHostSandboxDeny method
+func NewGetHostSandboxDenyRequest(server string, id HostID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s/sandbox-deny", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -9448,6 +9655,10 @@ type ClientWithResponsesInterface interface {
 	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
+	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -9505,6 +9716,10 @@ type ClientWithResponsesInterface interface {
 	// `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
+	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
 	// `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -9610,8 +9825,11 @@ type ClientWithResponsesInterface interface {
 
 	// CreateHostWithBodyWithResponse Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`) and mints a
+	// `twd host add`: creates the host record (status `pending`), mints a
 	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// and a one-time `registrationSecret` (32 random bytes, base64url; only
+	// its SHA-256 is stored) that the host must present on its first
+	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's trust credential (wif) or API key
 	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -9627,8 +9845,11 @@ type ClientWithResponsesInterface interface {
 
 	// CreateHostWithResponse Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`) and mints a
+	// `twd host add`: creates the host record (status `pending`), mints a
 	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// and a one-time `registrationSecret` (32 random bytes, base64url; only
+	// its SHA-256 is stored) that the host must present on its first
+	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's trust credential (wif) or API key
 	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -9666,10 +9887,18 @@ type ClientWithResponsesInterface interface {
 	// RegisterHostWithBodyWithResponse Register or re-register a host (idempotent)
 	//
 	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-	// is bound to this `hostID` on first registration; a different node using
-	// the same ID is `403 host_identity_mismatch`. Re-registering with the
-	// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-	// re-register on every restart.
+	// is bound to this `hostID` on first registration, which must carry the
+	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+	// `403 host_identity_mismatch`; the secret is cleared once the node is
+	// bound). A `PUT` for a host ID the admin never created is
+	// `403 host_not_registered` (no implicit creation over the tailnet;
+	// only the `--local-dev` socket keeps it). A different node using the
+	// same ID is `403 host_identity_mismatch`. Re-registering with the same
+	// node needs no secret and replaces capacity, tiers and `push`;
+	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+	// it or omit it; a different key is `403 host_identity_mismatch` and
+	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// every restart.
 	//
 	// A host that was created through `twd host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
@@ -9682,10 +9911,18 @@ type ClientWithResponsesInterface interface {
 	// RegisterHostWithResponse Register or re-register a host (idempotent)
 	//
 	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-	// is bound to this `hostID` on first registration; a different node using
-	// the same ID is `403 host_identity_mismatch`. Re-registering with the
-	// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-	// re-register on every restart.
+	// is bound to this `hostID` on first registration, which must carry the
+	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+	// `403 host_identity_mismatch`; the secret is cleared once the node is
+	// bound). A `PUT` for a host ID the admin never created is
+	// `403 host_not_registered` (no implicit creation over the tailnet;
+	// only the `--local-dev` socket keeps it). A different node using the
+	// same ID is `403 host_identity_mismatch`. Re-registering with the same
+	// node needs no secret and replaces capacity, tiers and `push`;
+	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+	// it or omit it; a different key is `403 host_identity_mismatch` and
+	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// every restart.
 	//
 	// A host that was created through `twd host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
@@ -9741,6 +9978,22 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/hosts/{id}/paths (the `ReportHostPaths` operationId).
 	ReportHostPathsWithResponse(ctx context.Context, id HostID, body ReportHostPathsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportHostPathsResponse, error)
+
+	// GetHostSandboxDenyWithResponse Every tenant's credential file paths, for the host's sandbox deny list
+	//
+	// The paths of every tenant's `apiKeyFile` and `oauthClientFile`
+	// (sorted, deduplicated), and nothing else: no tenant ID, tailnet or
+	// name. A process-tier host denies them all to every workload sandbox
+	// it starts, including the files of tenants that have no deployment
+	// on it yet. `GET /v1/tenants` shows a host only its own tenants, which
+	// is not enough: a workload started before another tenant's first
+	// deploy would otherwise be able to read that tenant's key file. A
+	// host may read only its own `{id}`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/hosts/{id}/sandbox-deny (the `GetHostSandboxDeny` operationId).
+	GetHostSandboxDenyWithResponse(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*GetHostSandboxDenyResponse, error)
 
 	// ReportHostStatusWithBodyWithResponse Heartbeat (replace the host's reported status)
 	//
@@ -9868,6 +10121,8 @@ type ClientWithResponsesInterface interface {
 	//   names it in `poolObjectID`. Then that create answers
 	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
+	// - A host may create objects only in workloads whose `(tenant,
+	//   workload)` lease it holds (`403 forbidden`).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9904,6 +10159,8 @@ type ClientWithResponsesInterface interface {
 	//   names it in `poolObjectID`. Then that create answers
 	//   `status: assigned` and mints nothing.
 	// Spawn checks are unchanged from v0.
+	// - A host may create objects only in workloads whose `(tenant,
+	//   workload)` lease it holds (`403 forbidden`).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9931,6 +10188,8 @@ type ClientWithResponsesInterface interface {
 
 	// GetObjectWithResponse Read an object (lineage, children, kill record)
 	//
+	// A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/objects/{id} (the `GetObject` operationId).
@@ -9941,13 +10200,18 @@ type ClientWithResponsesInterface interface {
 	// Two callers, two subsets:
 	//
 	// - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-	//   magicDNS, epoch}` reports the node joined. `epoch` fences the
-	//   commit (`409 lease_lost`). mgmt then signs the **node certificate**
+	//   magicDNS, epoch}` reports the node joined. `epoch` is **required**
+	//   for the ready group (`400 bad_request` without it) and the commit is
+	//   always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+	//   a host that does not hold the object's lease is `403 forbidden`.
+	//   mgmt then signs the **node certificate**
 	//   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 	//   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 	//   `ready` audit detail adds `cert: true` and `lim`. If the object was
 	//   killed during the join the answer is `410 killed` and mgmt deletes
-	//   the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+	//   the device that just appeared (only when the fence held: a caller
+	//   without the lease cannot make mgmt delete devices). Replaces
+	//   `POST /v0/objects/{id}/ready`.
 	// - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 	//   applies it.
 	//
@@ -9964,13 +10228,18 @@ type ClientWithResponsesInterface interface {
 	// Two callers, two subsets:
 	//
 	// - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-	//   magicDNS, epoch}` reports the node joined. `epoch` fences the
-	//   commit (`409 lease_lost`). mgmt then signs the **node certificate**
+	//   magicDNS, epoch}` reports the node joined. `epoch` is **required**
+	//   for the ready group (`400 bad_request` without it) and the commit is
+	//   always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+	//   a host that does not hold the object's lease is `403 forbidden`.
+	//   mgmt then signs the **node certificate**
 	//   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 	//   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 	//   `ready` audit detail adds `cert: true` and `lim`. If the object was
 	//   killed during the join the answer is `410 killed` and mgmt deletes
-	//   the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+	//   the device that just appeared (only when the fence held: a caller
+	//   without the lease cannot make mgmt delete devices). Replaces
+	//   `POST /v0/objects/{id}/ready`.
 	// - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 	//   applies it.
 	//
@@ -9987,13 +10256,18 @@ type ClientWithResponsesInterface interface {
 	// Two callers, two subsets:
 	//
 	// - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-	//   magicDNS, epoch}` reports the node joined. `epoch` fences the
-	//   commit (`409 lease_lost`). mgmt then signs the **node certificate**
+	//   magicDNS, epoch}` reports the node joined. `epoch` is **required**
+	//   for the ready group (`400 bad_request` without it) and the commit is
+	//   always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+	//   a host that does not hold the object's lease is `403 forbidden`.
+	//   mgmt then signs the **node certificate**
 	//   (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 	//   iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 	//   `ready` audit detail adds `cert: true` and `lim`. If the object was
 	//   killed during the join the answer is `410 killed` and mgmt deletes
-	//   the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+	//   the device that just appeared (only when the fence held: a caller
+	//   without the lease cannot make mgmt delete devices). Replaces
+	//   `POST /v0/objects/{id}/ready`.
 	// - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 	//   applies it.
 	//
@@ -10049,7 +10323,10 @@ type ClientWithResponsesInterface interface {
 
 	// ListTenantsWithResponse List tenants
 	//
-	// Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClientFile` path to their workload sandboxes).
+	// Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
+	// `oauthClientFile` path to their workload sandboxes), but a host sees
+	// **only the tenants with a deployment assigned to it** (a namespace
+	// lease it holds); admins see every tenant.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10086,7 +10363,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetTenantWithResponse Read a tenant
 	//
-	// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer and subjects).
+	// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
+	// and subjects). A host may read only tenants with a deployment assigned
+	// to it (any other tenant is `404 not_found` for it).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12506,6 +12785,93 @@ func (r ReportHostPathsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ReportHostPathsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetHostSandboxDenyResponse403Headers the declared response headers of an HTTP 403 response for GetHostSandboxDeny
+type GetHostSandboxDenyResponse403Headers struct {
+	TwdError *string
+}
+
+// GetHostSandboxDenyResponse404Headers the declared response headers of an HTTP 404 response for GetHostSandboxDeny
+type GetHostSandboxDenyResponse404Headers struct {
+	TwdError *string
+}
+
+// GetHostSandboxDenyResponseDefaultHeaders the declared response headers of an HTTP default response for GetHostSandboxDeny
+type GetHostSandboxDenyResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetHostSandboxDenyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Paths []string `json:"paths"`
+	}
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetHostSandboxDenyResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetHostSandboxDenyResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetHostSandboxDenyResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetHostSandboxDenyResponse) GetJSON200() *struct {
+	Paths []string `json:"paths"`
+} {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetHostSandboxDenyResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetHostSandboxDenyResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetHostSandboxDenyResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetHostSandboxDenyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHostSandboxDenyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHostSandboxDenyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetHostSandboxDenyResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15708,6 +16074,10 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
+// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -15771,6 +16141,10 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // `wrangler.jsonc` `triggers.crons` (cron triggers: at most 10, no
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
+// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
+// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
+// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
 // `(tenant, workload)` lease at `epoch+1`, stores the bundle, pushes
@@ -15918,8 +16292,11 @@ func (c *ClientWithResponses) ListHostsWithResponse(ctx context.Context, params 
 
 // CreateHostWithBodyWithResponse Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`) and mints a
+// `twd host add`: creates the host record (status `pending`), mints a
 // **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// and a one-time `registrationSecret` (32 random bytes, base64url; only
+// its SHA-256 is stored) that the host must present on its first
+// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's trust credential (wif) or API key
 // (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -15941,8 +16318,11 @@ func (c *ClientWithResponses) CreateHostWithBodyWithResponse(ctx context.Context
 
 // CreateHostWithResponse Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`) and mints a
+// `twd host add`: creates the host record (status `pending`), mints a
 // **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// and a one-time `registrationSecret` (32 random bytes, base64url; only
+// its SHA-256 is stored) that the host must present on its first
+// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's trust credential (wif) or API key
 // (apikey). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
@@ -15998,10 +16378,18 @@ func (c *ClientWithResponses) GetHostWithResponse(ctx context.Context, id HostID
 // RegisterHostWithBodyWithResponse Register or re-register a host (idempotent)
 //
 // The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-// is bound to this `hostID` on first registration; a different node using
-// the same ID is `403 host_identity_mismatch`. Re-registering with the
-// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-// re-register on every restart.
+// is bound to this `hostID` on first registration, which must carry the
+// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+// `403 host_identity_mismatch`; the secret is cleared once the node is
+// bound). A `PUT` for a host ID the admin never created is
+// `403 host_not_registered` (no implicit creation over the tailnet;
+// only the `--local-dev` socket keeps it). A different node using the
+// same ID is `403 host_identity_mismatch`. Re-registering with the same
+// node needs no secret and replaces capacity, tiers and `push`;
+// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+// it or omit it; a different key is `403 host_identity_mismatch` and
+// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// every restart.
 //
 // A host that was created through `twd host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
@@ -16020,10 +16408,18 @@ func (c *ClientWithResponses) RegisterHostWithBodyWithResponse(ctx context.Conte
 // RegisterHostWithResponse Register or re-register a host (idempotent)
 //
 // The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
-// is bound to this `hostID` on first registration; a different node using
-// the same ID is `403 host_identity_mismatch`. Re-registering with the
-// same node replaces capacity, tiers, `auditPubKey` and `push`. Hosts
-// re-register on every restart.
+// is bound to this `hostID` on first registration, which must carry the
+// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
+// `403 host_identity_mismatch`; the secret is cleared once the node is
+// bound). A `PUT` for a host ID the admin never created is
+// `403 host_not_registered` (no implicit creation over the tailnet;
+// only the `--local-dev` socket keeps it). A different node using the
+// same ID is `403 host_identity_mismatch`. Re-registering with the same
+// node needs no secret and replaces capacity, tiers and `push`;
+// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
+// it or omit it; a different key is `403 host_identity_mismatch` and
+// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// every restart.
 //
 // A host that was created through `twd host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
@@ -16102,6 +16498,28 @@ func (c *ClientWithResponses) ReportHostPathsWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseReportHostPathsResponse(rsp)
+}
+
+// GetHostSandboxDenyWithResponse Every tenant's credential file paths, for the host's sandbox deny list
+//
+// The paths of every tenant's `apiKeyFile` and `oauthClientFile`
+// (sorted, deduplicated), and nothing else: no tenant ID, tailnet or
+// name. A process-tier host denies them all to every workload sandbox
+// it starts, including the files of tenants that have no deployment
+// on it yet. `GET /v1/tenants` shows a host only its own tenants, which
+// is not enough: a workload started before another tenant's first
+// deploy would otherwise be able to read that tenant's key file. A
+// host may read only its own `{id}`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/hosts/{id}/sandbox-deny (the `GetHostSandboxDeny` operationId).
+func (c *ClientWithResponses) GetHostSandboxDenyWithResponse(ctx context.Context, id HostID, reqEditors ...RequestEditorFn) (*GetHostSandboxDenyResponse, error) {
+	rsp, err := c.GetHostSandboxDeny(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHostSandboxDenyResponse(rsp)
 }
 
 // ReportHostStatusWithBodyWithResponse Heartbeat (replace the host's reported status)
@@ -16279,6 +16697,8 @@ func (c *ClientWithResponses) ListObjectsWithResponse(ctx context.Context, param
 //     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
+//   - A host may create objects only in workloads whose `(tenant,
+//     workload)` lease it holds (`403 forbidden`).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16322,6 +16742,8 @@ func (c *ClientWithResponses) CreateObjectWithBodyWithResponse(ctx context.Conte
 //     `status: assigned` and mints nothing.
 //
 // Spawn checks are unchanged from v0.
+//   - A host may create objects only in workloads whose `(tenant,
+//     workload)` lease it holds (`403 forbidden`).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16361,6 +16783,8 @@ func (c *ClientWithResponses) DeleteObjectWithResponse(ctx context.Context, id O
 
 // GetObjectWithResponse Read an object (lineage, children, kill record)
 //
+// A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/objects/{id} (the `GetObject` operationId).
@@ -16377,13 +16801,18 @@ func (c *ClientWithResponses) GetObjectWithResponse(ctx context.Context, id Obje
 // Two callers, two subsets:
 //
 //   - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-//     magicDNS, epoch}` reports the node joined. `epoch` fences the
-//     commit (`409 lease_lost`). mgmt then signs the **node certificate**
+//     magicDNS, epoch}` reports the node joined. `epoch` is **required**
+//     for the ready group (`400 bad_request` without it) and the commit is
+//     always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+//     a host that does not hold the object's lease is `403 forbidden`.
+//     mgmt then signs the **node certificate**
 //     (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 //     iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 //     `ready` audit detail adds `cert: true` and `lim`. If the object was
 //     killed during the join the answer is `410 killed` and mgmt deletes
-//     the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+//     the device that just appeared (only when the fence held: a caller
+//     without the lease cannot make mgmt delete devices). Replaces
+//     `POST /v0/objects/{id}/ready`.
 //   - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 //     applies it.
 //
@@ -16406,13 +16835,18 @@ func (c *ClientWithResponses) UpdateObjectWithBodyWithResponse(ctx context.Conte
 // Two callers, two subsets:
 //
 //   - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-//     magicDNS, epoch}` reports the node joined. `epoch` fences the
-//     commit (`409 lease_lost`). mgmt then signs the **node certificate**
+//     magicDNS, epoch}` reports the node joined. `epoch` is **required**
+//     for the ready group (`400 bad_request` without it) and the commit is
+//     always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+//     a host that does not hold the object's lease is `403 forbidden`.
+//     mgmt then signs the **node certificate**
 //     (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 //     iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 //     `ready` audit detail adds `cert: true` and `lim`. If the object was
 //     killed during the join the answer is `410 killed` and mgmt deletes
-//     the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+//     the device that just appeared (only when the fence held: a caller
+//     without the lease cannot make mgmt delete devices). Replaces
+//     `POST /v0/objects/{id}/ready`.
 //   - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 //     applies it.
 //
@@ -16435,13 +16869,18 @@ func (c *ClientWithResponses) UpdateObjectWithResponse(ctx context.Context, id O
 // Two callers, two subsets:
 //
 //   - **host** (lease holder): `{status: "ready", nodeID, stableNodeID,
-//     magicDNS, epoch}` reports the node joined. `epoch` fences the
-//     commit (`409 lease_lost`). mgmt then signs the **node certificate**
+//     magicDNS, epoch}` reports the node joined. `epoch` is **required**
+//     for the ready group (`400 bad_request` without it) and the commit is
+//     always fenced on `(lease, caller host, epoch)` (`409 lease_lost`);
+//     a host that does not hold the object's lease is `403 forbidden`.
+//     mgmt then signs the **node certificate**
 //     (`{v, tenant, objectID, stableNodeID, tags, lim?, parent?, root,
 //     iat, exp}`, 24 h, the tenant's OBO root key) and stores it; the
 //     `ready` audit detail adds `cert: true` and `lim`. If the object was
 //     killed during the join the answer is `410 killed` and mgmt deletes
-//     the device that just appeared. Replaces `POST /v0/objects/{id}/ready`.
+//     the device that just appeared (only when the fence held: a caller
+//     without the lease cannot make mgmt delete devices). Replaces
+//     `POST /v0/objects/{id}/ready`.
 //   - **admin**: `{ttl}` sets or clears (`null`) the TTL; the reaper
 //     applies it.
 //
@@ -16521,7 +16960,10 @@ func (c *ClientWithResponses) GetStatusWithResponse(ctx context.Context, reqEdit
 
 // ListTenantsWithResponse List tenants
 //
-// Hosts may list tenants too (they deny every tenant's `apiKeyFile` and `oauthClientFile` path to their workload sandboxes).
+// Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
+// `oauthClientFile` path to their workload sandboxes), but a host sees
+// **only the tenants with a deployment assigned to it** (a namespace
+// lease it holds); admins see every tenant.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16582,7 +17024,9 @@ func (c *ClientWithResponses) DeleteTenantWithResponse(ctx context.Context, id T
 
 // GetTenantWithResponse Read a tenant
 //
-// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer and subjects).
+// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
+// and subjects). A host may read only tenants with a deployment assigned
+// to it (any other tenant is `404 not_found` for it).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19072,6 +19516,88 @@ func ParseReportHostPathsResponse(rsp *http.Response) (*ReportHostPathsResponse,
 		response.Headers403 = &headers
 	case true:
 		var headers ReportHostPathsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetHostSandboxDenyResponse parses an HTTP response from a GetHostSandboxDenyWithResponse call
+func ParseGetHostSandboxDenyResponse(rsp *http.Response) (*GetHostSandboxDenyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHostSandboxDenyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Paths []string `json:"paths"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetHostSandboxDenyResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetHostSandboxDenyResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetHostSandboxDenyResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

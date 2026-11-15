@@ -48,8 +48,7 @@ func TestRT06_UnicodeHomoglyphTagRefused(t *testing.T) {
 // boundary after the prefix (exact "tag:twd" or "tag:twd-"...) and reject
 // tags containing whitespace/control characters. Skip-marked until fixed.
 func TestRT2L1_CheckAcceptsWhitespacePaddedTag(t *testing.T) {
-	t.Skip("RT2-L1: known Low finding — Check accepts trailing-whitespace twd tags; see security/RED-TEAM.md Pass 2")
-	for _, bad := range []string{"tag:twd-wl-x ", "tag:twd-wl-x\t", "tag:twd-wl-x\n"} {
+	for _, bad := range []string{"tag:twd-wl-x ", "tag:twd-wl-x\t", "tag:twd-wl-x\n", "tag:twdx", "tag:twd-", "tag:twd-a\x00b"} {
 		bs := policy.Snippet{Grants: []map[string]any{{"src": []string{bad}, "dst": []string{"tag:twd-wl-x"}, "ip": []string{"tcp:80"}}}}
 		if err := policy.Check(bs, policy.Options{}); err == nil {
 			t.Fatalf("RT2-L1: Check accepted a whitespace-padded src %q", bad)

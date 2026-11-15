@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -169,41 +168,4 @@ func TestLogsHandlerFollow(t *testing.T) {
 	w.active = &instance{w: w, dir: nd}
 	w.mu.Unlock()
 	next("redeployed")
-}
-
-// Over the tailnet listener only twd-mgmt may read logs: a broad policy
-// grant to tag:twd-host must not let any node bypass mgmt's admin check.
-func TestLogsHandlerCallerMustBeMgmt(t *testing.T) {
-	h, path := logsHost(t)
-	os.WriteFile(path, []byte("secret-ish line\n"), 0o600)
-	tags := map[string][]string{
-		"100.64.0.1:4000": {"tag:twd-mgmt"},
-		"100.64.0.2:4000": {"tag:twd-host"},
-		"100.64.0.3:4000": nil, // a user's device
-	}
-	h.cfg.PushCallerTags = func(_ context.Context, addr string) ([]string, error) {
-		if t, ok := tags[addr]; ok {
-			return t, nil
-		}
-		return nil, errors.New("whois failed")
-	}
-	for addr, want := range map[string]int{
-		"100.64.0.1:4000": 200,
-		"100.64.0.2:4000": 403,
-		"100.64.0.3:4000": 403,
-		"100.64.0.9:4000": 403, // WhoIs error: fail closed
-		"@":               200, // unix push socket
-		"":                200,
-	} {
-		r := httptest.NewRequest("GET", "/v1/logs?tenant=tnA&workload=web", nil)
-		r.RemoteAddr = addr
-		w := httptest.NewRecorder()
-		h.logsHandler(w, r)
-		if w.Code != want {
-			t.Errorf("caller %q: %d %s, want %d", addr, w.Code, w.Body.String(), want)
-		}
-		if want == 403 && strings.Contains(w.Body.String(), "secret-ish") {
-			t.Errorf("caller %q got log content", addr)
-		}
-	}
 }

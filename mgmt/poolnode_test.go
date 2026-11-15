@@ -95,8 +95,10 @@ func TestPoolNodeAssignment(t *testing.T) {
 		}
 		return k
 	}
-	if k := kinds(a.ObjectID); strings.Join(k, ",") != "create,ready" {
-		t.Errorf("object audit %v, want create,ready", k)
+	// The wrong host's fenced ready attempt above is audited as a deny
+	// (lease_lost): a cross-host ready is a security event, not noise.
+	if k := kinds(a.ObjectID); strings.Join(k, ",") != "create,deny,ready" {
+		t.Errorf("object audit %v, want create,deny,ready", k)
 	}
 	if k := kinds(pool); strings.Join(k, ",") != "create,mint,credential,ready,transfer" {
 		t.Errorf("pool node audit %v", k)

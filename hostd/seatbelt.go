@@ -167,7 +167,12 @@ func (h *Host) sandboxDeny() []string {
 	// yet (best effort: the local socket allows it, a remote mgmt may not).
 	ctx, cancel := context.WithTimeout(h.ctx, 3*time.Second)
 	defer cancel()
-	if ts, err := h.mgmt.Tenants(ctx); err == nil {
+	// Every tenant's credential files, including tenants with nothing on
+	// this host yet (paths only; GET /v1/tenants shows a host only its own
+	// tenants). An older mgmt without the route: the tenant list, as before.
+	if paths, err := h.mgmt.SandboxDenyPaths(ctx, h.cfg.HostID); err == nil {
+		deny = append(deny, paths...)
+	} else if ts, err := h.mgmt.Tenants(ctx); err == nil {
 		for _, t := range ts {
 			if t.APIKeyFile != "" {
 				deny = append(deny, t.APIKeyFile)

@@ -105,12 +105,19 @@ func (m *Mgmt) hostLogs(ctx context.Context, tenantID string, src logSource, q L
 				dial = (&net.Dialer{}).DialContext
 			}
 		}
+		var tr http.RoundTripper = &http.Transport{DialContext: dial, DisableKeepAlives: true}
+		if target == EmbeddedPushURL {
+			// A host agent in this process (single-process twd up): its push
+			// handler, no dial (logs_inproc.go).
+			m.mu.Lock()
+			tr, base = handlerTransport{m.inprocPush[src.host]}, "http://hostd"
+			m.mu.Unlock()
+		}
 		req, err := http.NewRequestWithContext(ctx, "GET", base+"/v1/logs?"+v.Encode(), nil)
 		if err != nil {
 			return nil, err
 		}
-		hc := &http.Client{Transport: &http.Transport{DialContext: dial, DisableKeepAlives: true}}
-		return hc.Do(req)
+		return (&http.Client{Transport: tr}).Do(req)
 	}
 	u := m.pushTarget(src.host)
 	if u == "" {

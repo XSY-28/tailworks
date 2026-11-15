@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -76,6 +77,12 @@ func cmdDoctor(args []string) error {
 			}
 		}
 		if len(miss) > 0 {
+			if serr == nil && s.configured() && s.Cfg.single() {
+				// Single-process twd up runs both daemons inside twd itself;
+				// the binaries matter only for --separate-host (and
+				// twd-hostd on a machine added with twd host add).
+				return "warn", "not found next to twd (" + exeDir() + ") or on PATH: " + strings.Join(miss, ", ") + "; not needed in single-process mode (the daemons run inside twd), only for twd up --separate-host", "reinstall twd (install.sh) if you want the two-process layout"
+			}
 			return "fail", "not found next to twd (" + exeDir() + ") or on PATH: " + strings.Join(miss, ", "), "reinstall twd (install.sh)"
 		}
 		return "ok", "twd " + version + ", twd-mgmt and twd-hostd in " + exeDir(), ""
@@ -218,6 +225,9 @@ func cmdDoctor(args []string) error {
 			return "warn", "local-dev: mgmt serves a unix socket with the per-host token and hostd uses it (twd up --local-dev; development only, not the product transport)", "twd down --purge, remove " + s.Dir + ", twd up (without --local-dev)"
 		}
 		d := "tsnet: mgmt API on its own node " + s.Cfg.MgmtDNSName + " (WhoIs); hostd on its own tag:twd-host node " + mgmt.HostNodeName(s.Cfg.HostID) + "; this CLI dials through mgmt's loopback proxy"
+		if s.Cfg.single() {
+			d = "tsnet: mgmt API on its own node " + s.Cfg.MgmtDNSName + " (WhoIs); host embedded in the mgmt process (single process, one infrastructure device; in-process transport and pushes); this CLI dials through mgmt's loopback proxy"
+		}
 		if isFile(s.mgmtSock()) {
 			return "fail", d + "; but a mgmt unix socket exists at " + s.mgmtSock(), "a stale or foreign twd-mgmt -local-dev is running; stop it"
 		}
@@ -247,9 +257,13 @@ func cmdDoctor(args []string) error {
 			return "skip", "no API key file configured (keyless mode needs none; apikey mode: twd up --api-key-file)", ""
 		}
 		kf, _ = filepath.Abs(kf)
-		key, err := tsapi.LoadEnvFile(kf, "TS_API_KEY")
+		key, err := tsapi.LoadSecretEnvFile(kf, "TS_API_KEY")
 		if err != nil {
-			return "fail", "can't read TS_API_KEY from " + kf, "the file needs a TS_API_KEY=… line"
+			var ins *tsapi.InsecureFileError
+			if errors.As(err, &ins) {
+				return "fail", kf + " is readable by other users (" + ins.Mode.Perm().String() + ")", "chmod 600 " + kf
+			}
+			return "fail", "can't read TS_API_KEY from " + kf, "the file needs a TS_API_KEY=… line (0600)"
 		}
 		api := &tsapi.Client{Tailnet: tn, APIKey: key}
 		if s != nil && s.Cfg.TSAPIURL != "" && *tailnetF == "" {
