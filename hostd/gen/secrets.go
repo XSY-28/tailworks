@@ -10,7 +10,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/bundle"
 )
 
-// Worker secrets (ADR-worker-secrets): app.Secrets become text bindings of
+// Worker secrets (ADR-034): app.Secrets become text bindings of
 // the tenant worker, so `env.NAME` is a string exactly as with Cloudflare
 // secrets, and enter the facets' env (twd-config.json "vars") the same
 // way. A secret overrides a var of the same name. Both files live only in

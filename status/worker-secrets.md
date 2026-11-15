@@ -1,8 +1,8 @@
-Last update: 2026-11-14 16:00 PT. Worker secrets (ADR-worker-secrets): `twd secret put|ls|rm`, lease-fenced release, workerd text bindings, node env, `.dev.vars`.
+Last update: 2026-11-14 16:00 PT. Worker secrets (ADR-034): `twd secret put|ls|rm`, lease-fenced release, workerd text bindings, node env, `.dev.vars`.
 
 # Worker secrets
 
-Design: [ADR-worker-secrets](../docs/design/adr/worker-secrets.md). User
+Design: [ADR-034](../docs/design/adr/034-worker-secrets.md). User
 docs: [docs/secrets.md](../docs/secrets.md).
 
 ## Built

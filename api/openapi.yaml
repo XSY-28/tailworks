@@ -555,7 +555,7 @@ paths:
       operationId: PutWorkloadSecret
       summary: Create or replace a workload secret (`twd secret put`)
       description: |
-        ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+        ADR-034. Stores the value encrypted at rest in mgmt's
         custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
         The workload need not be deployed yet. The value reaches the
         workload as the text binding `env.<name>` (runtime `node`: the

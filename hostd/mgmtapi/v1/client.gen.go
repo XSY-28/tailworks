@@ -4464,7 +4464,7 @@ type ClientInterface interface {
 
 	// PutWorkloadSecretWithBody Create or replace a workload secret (`twd secret put`)
 	//
-	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// ADR-034. Stores the value encrypted at rest in mgmt's
 	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
@@ -4482,7 +4482,7 @@ type ClientInterface interface {
 
 	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
 	//
-	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// ADR-034. Stores the value encrypted at rest in mgmt's
 	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
@@ -6220,7 +6220,7 @@ func (c *Client) DeleteWorkloadSecret(ctx context.Context, id TenantID, workload
 
 // PutWorkloadSecretWithBody Create or replace a workload secret (`twd secret put`)
 //
-// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// ADR-034. Stores the value encrypted at rest in mgmt's
 // custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
@@ -6248,7 +6248,7 @@ func (c *Client) PutWorkloadSecretWithBody(ctx context.Context, id TenantID, wor
 
 // PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
 //
-// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// ADR-034. Stores the value encrypted at rest in mgmt's
 // custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
@@ -10558,7 +10558,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`twd secret put`)
 	//
-	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// ADR-034. Stores the value encrypted at rest in mgmt's
 	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
@@ -10576,7 +10576,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutWorkloadSecretWithResponse Create or replace a workload secret (`twd secret put`)
 	//
-	// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+	// ADR-034. Stores the value encrypted at rest in mgmt's
 	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
@@ -17303,7 +17303,7 @@ func (c *ClientWithResponses) DeleteWorkloadSecretWithResponse(ctx context.Conte
 
 // PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`twd secret put`)
 //
-// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// ADR-034. Stores the value encrypted at rest in mgmt's
 // custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
@@ -17327,7 +17327,7 @@ func (c *ClientWithResponses) PutWorkloadSecretWithBodyWithResponse(ctx context.
 
 // PutWorkloadSecretWithResponse Create or replace a workload secret (`twd secret put`)
 //
-// ADR-worker-secrets. Stores the value encrypted at rest in mgmt's
+// ADR-034. Stores the value encrypted at rest in mgmt's
 // custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the

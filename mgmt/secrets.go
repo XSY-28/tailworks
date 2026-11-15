@@ -1,6 +1,6 @@
 package mgmt
 
-// Worker secrets (ADR-worker-secrets): Cloudflare-compatible `env.NAME`
+// Worker secrets (ADR-034): Cloudflare-compatible `env.NAME`
 // values a tenant admin sets with `twd secret put`. Values live only in
 // custody (encrypted at rest: FileCustody seals with AES-256-GCM, setec
 // with its own keys), one entry per workload; the store holds nothing. No

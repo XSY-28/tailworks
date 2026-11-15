@@ -66,7 +66,7 @@ type App struct {
 	Crons []string
 
 	// Secrets are the workload's secret values (`twd secret put`,
-	// ADR-worker-secrets), never in the bundle: hostd fills them in from
+	// ADR-034), never in the bundle: hostd fills them in from
 	// mgmt's lease-fenced grant when it starts a deployment. They become
 	// text bindings (workerd) or environment variables (runtime node) and
 	// override vars of the same name. Never logged or serialised.

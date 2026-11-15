@@ -12,7 +12,7 @@ secrets:
 - A secret overrides a var of the same name.
 
 The design and the threat model are in
-[ADR-worker-secrets](design/adr/worker-secrets.md).
+[ADR-034](design/adr/034-worker-secrets.md).
 
 ```sh
 cd my-agent                         # the app: the workload is its name, as for twd deploy

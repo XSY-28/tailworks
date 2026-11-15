@@ -1,9 +1,7 @@
-# ADR-worker-secrets: Worker secrets in mgmt custody, released only to the workload's lease holder
+# ADR-034: Worker secrets in mgmt custody, released only to the workload's lease holder
 
 **Date:** 2026-11-14
-**Status:** Proposed (on a branch; see
-`status/worktree-agent-a1e2857ad39e60452.md`). It gets its number when it
-merges to master.
+**Status:** Proposed (results in `status/worker-secrets.md`).
 
 **Context.**
 

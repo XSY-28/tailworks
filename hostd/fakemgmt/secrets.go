@@ -13,7 +13,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// Worker secrets (ADR-worker-secrets), in memory: put/list/delete as an
+// Worker secrets (ADR-034), in memory: put/list/delete as an
 // admin, and the lease-fenced grant hostd fetches when it starts a
 // deployment. `twd dev` loads .dev.vars through these.
 

@@ -1,6 +1,6 @@
 package hostd
 
-// Worker secrets (ADR-worker-secrets), host side. When hostd starts a
+// Worker secrets (ADR-034), host side. When hostd starts a
 // deployment it asks mgmt for the workload's secrets at the lease epoch of
 // the assignment (mgmt releases them only to the lease holder). They go
 // into the instance only:

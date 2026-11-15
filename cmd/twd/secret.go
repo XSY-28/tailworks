@@ -1,6 +1,6 @@
 package main
 
-// Worker secrets (ADR-worker-secrets), CLI side: `twd secret put|ls|rm`,
+// Worker secrets (ADR-034), CLI side: `twd secret put|ls|rm`,
 // like `wrangler secret`. The value is read from stdin (a hidden prompt
 // on a terminal), never from the command line, and is never printed. Both
 // on the host and from a `twd link`ed machine the commands go to mgmt's
