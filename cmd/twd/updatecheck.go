@@ -9,13 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/term"
 
 	"github.com/rosskukulinski/twd/internal/esbundle"
+	twdversion "github.com/rosskukulinski/twd/internal/version"
 )
 
 // The update check (issue #46): `twd version --check` compares this twd
@@ -85,45 +85,30 @@ func fetchLatestRelease(ctx context.Context) (latestRelease, error) {
 	return r, nil
 }
 
-// semver is a parsed MAJOR.MINOR.PATCH[-pre]; ok is false for anything
-// else ("dev").
+// semver is a version parsed the way ADR-041 does (internal/version):
+// MAJOR.MINOR.PATCH, with any -suffix (a commit, "-dev", "-dirty") kept in
+// pre and ignored by comparisons; ok is false for "dev" and anything else
+// unparseable.
 type semver struct {
-	n   [3]int
+	v   twdversion.Semver
 	pre string
 	ok  bool
 }
 
 func parseSemver(s string) semver {
-	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
-	core, pre, _ := strings.Cut(s, "-")
-	core, _, _ = strings.Cut(core, "+")
-	parts := strings.Split(core, ".")
-	if len(parts) != 3 {
+	if twdversion.IsDev(s) {
 		return semver{}
 	}
-	var v semver
-	for i, p := range parts {
-		n, err := strconv.Atoi(p)
-		if err != nil || n < 0 {
-			return semver{}
-		}
-		v.n[i] = n
+	v, err := twdversion.Parse(s)
+	if err != nil {
+		return semver{}
 	}
-	v.pre, v.ok = pre, true
-	return v
+	return semver{v: v, pre: v.Suffix, ok: true}
 }
 
-// newerThan reports whether a is a later version than b. A pre-release
-// (0.2.0-dev, a build from the tree between releases) is older than its
-// release.
-func (a semver) newerThan(b semver) bool {
-	for i := range a.n {
-		if a.n[i] != b.n[i] {
-			return a.n[i] > b.n[i]
-		}
-	}
-	return a.pre == "" && b.pre != ""
-}
+// newerThan reports whether a is a later release than b (suffixes ignored,
+// as in internal/version).
+func (a semver) newerThan(b semver) bool { return a.v.Compare(b.v) > 0 }
 
 // upgradeCommand is how to install a newer release: `twd upgrade` where
 // this twd has it, else get.sh (docs/INSTALL.md).

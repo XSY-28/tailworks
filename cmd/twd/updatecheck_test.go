@@ -17,7 +17,8 @@ func TestSemver(t *testing.T) {
 		newer bool
 	}{
 		{"0.2.0", "0.1.0", true},
-		{"v0.2.0", "0.2.0-dev", true},
+		{"v0.3.0", "0.2.0-dev", true},
+		{"0.2.0", "0.2.0-1a2b3c4d-dirty", false}, // suffixes are ignored (internal/version)
 		{"0.2.0-dev", "0.2.0", false},
 		{"0.2.0", "0.2.0", false},
 		{"0.10.0", "0.9.9", true},

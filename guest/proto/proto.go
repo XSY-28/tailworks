@@ -307,6 +307,14 @@ type Msg struct {
 	// loaded); exec / ExecStreamHello: the exec's
 	// stream token (random per exec, issued by the host)
 	Token string `json:"token,omitempty"`
+	// hello: the guest's protocol (internal/version.GuestProtocol; 0 = a
+	// guest from before protocol reporting, which speaks 1) and its twd
+	// release version (ADR-041 §2). hostd and its guest
+	// image ship in one tarball, so a mismatch means a mixed install:
+	// hostd logs it, and treats an "unknown op" reply to an op newer than
+	// the guest's protocol as "feature absent" (UnknownOp), not a failure.
+	Proto        int    `json:"proto,omitempty"`
+	GuestVersion string `json:"guestVersion,omitempty"`
 
 	// container guests
 	Exec     string    `json:"exec,omitempty"`
@@ -387,3 +395,20 @@ type Stats struct {
 	DOFS     string `json:"doFS,omitempty"`
 	DOUsedKB int64  `json:"doUsedKB,omitempty"`
 }
+
+// HelloProto is the protocol a hello speaks (0, from older guests, is 1).
+func (m Msg) HelloProto() int {
+	if m.Proto <= 0 {
+		return 1
+	}
+	return m.Proto
+}
+
+// UnknownOp reports whether a guest reply refused its op as unknown (an
+// older guest). A caller of an op newer than GuestProtocol 1 treats that
+// as the feature being absent; every op hostd sends today is protocol 1.
+func UnknownOp(m Msg) bool {
+	return len(m.Error) > len(unknownOpPrefix) && m.Error[:len(unknownOpPrefix)] == unknownOpPrefix
+}
+
+const unknownOpPrefix = "unknown op "

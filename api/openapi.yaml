@@ -144,6 +144,11 @@ tags:
     description: Hash-chained, append-only audit log.
   - name: approvals
     description: Workflow approvals decided by tailnet identities (`twd.dev/cap/approve`), not links or tokens (ADR-040).
+  - name: upgrades
+    description: |
+      Releases and upgrades (ADR-041). twd-mgmt keeps a release catalog (the
+      releases it was built with, plus imported ones), plans upgrades from it and the fleet's
+      reported versions and features, and runs fleet upgrades as durable upgrade runs.
   - name: volumes
     description: dm-crypt data keys for DO volumes (microVM tier).
   - name: containers
@@ -1805,6 +1810,80 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/hosts/{id}/cordon:
+    parameters:
+      - $ref: "#/components/parameters/hostID"
+    put:
+      tags: [hosts]
+      operationId: CordonHost
+      summary: Cordon a host (no new placements)
+      description: |
+        The host keeps running what it runs, keeps heartbeating and keeps its leases; placement
+        skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: Cordoned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Host" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [hosts]
+      operationId: UncordonHost
+      summary: Uncordon a host
+      description: Placement may choose the host again. Idempotent; audited `host_uncordon`.
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: Uncordoned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Host" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/hosts/{id}/drain:
+    parameters:
+      - $ref: "#/components/parameters/hostID"
+    post:
+      tags: [hosts]
+      operationId: DrainHost
+      summary: Cordon a host and move its workloads to other hosts
+      description: |
+        Cordons the host, then re-places each workload assigned to it on another eligible host
+        (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+
+        - a stateless workload (no Durable Objects) moves;
+        - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
+          (`refused`, `move_unconfirmed`) unless `allowLocalStateLoss` is set; then it moves
+          and its objects start empty on the new host;
+        - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
+
+        `dryRun` reports what would happen and changes nothing (the host is not cordoned).
+        Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+        `DELETE /v1/hosts/{id}` removes it.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostDrainRequest" }
+      responses:
+        "200":
+          description: The drain's outcome per workload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HostDrainResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/hosts/{id}/paths:
     parameters:
       - $ref: "#/components/parameters/hostID"
@@ -3159,6 +3238,100 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/releases:
+    get:
+      tags: [upgrades]
+      operationId: ListReleases
+      summary: The release catalog
+      description: |
+        Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+        release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
+        notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The catalog.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReleaseCatalog" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [upgrades]
+      operationId: ImportReleases
+      summary: Import catalog entries (from a release's share/twd/catalog.json)
+      description: |
+        Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
+        `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+        then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
+        `release_import`.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseImport" }
+      responses:
+        "200":
+          description: The catalog after the import.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReleaseCatalog" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/releases/{version}/artifacts/{name}:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      - name: name
+        in: path
+        required: true
+        description: "`twd-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`."
+        schema: { type: string, pattern: "^(SHA256SUMS|twd-[0-9]+\\.[0-9]+\\.[0-9]+-(darwin|linux)-(amd64|arm64)\\.tar\\.gz)$" }
+    put:
+      tags: [upgrades]
+      operationId: PutReleaseArtifact
+      summary: Upload a release tarball (or its SHA256SUMS)
+      description: |
+        Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
+        Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+        replicas that don't share that directory each need the upload. Audited `release_artifact`.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReleaseArtifact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [upgrades]
+      operationId: GetReleaseArtifact
+      summary: Download a release tarball (hosts upgrading themselves)
+      x-twd-role: admin|host
+      responses:
+        "200":
+          description: The file.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/status:
     get:
       tags: [operational]
@@ -3172,6 +3345,118 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Status" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/upgrades:
+    get:
+      tags: [upgrades]
+      operationId: ListUpgrades
+      summary: Upgrade runs, newest first
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/UpgradeRun" } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [upgrades]
+      operationId: CreateUpgrade
+      summary: Plan an upgrade, or start an upgrade run
+      description: |
+        Plans the upgrade to `to` from the release catalog and the fleet's reported versions and
+        features. With `dryRun` the plan is returned and nothing is stored. Otherwise a durable
+        upgrade run is created (`201`) and driven by whichever replica holds its lease: wait for
+        every mgmt replica to report `to`, apply deferred contract migrations, then each host in
+        turn (canary first, then a soak): cordon, drain what can move, push the upgrade to the host
+        (it downloads its tarball from `GET /v1/releases/{version}/artifacts/{name}`, installs it
+        and restarts), wait for it to re-register at `to` and settle, uncordon. A failed gate
+        pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_start`.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpgradeRequest" }
+      responses:
+        "200":
+          description: The plan (`dryRun`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpgradePlan" }
+        "201":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpgradeRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/upgrades/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [upgrades]
+      operationId: GetUpgrade
+      summary: One upgrade run
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpgradeRun" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/upgrades/{id}/actions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [upgrades]
+      operationId: ActOnUpgrade
+      summary: Pause, resume or abort an upgrade run
+      description: |
+        `pause` stops before the next step; `resume` continues a paused run (after the operator
+        fixed what paused it); `abort` ends it (hosts already upgraded stay upgraded; a cordoned
+        host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upgrade_abort`.
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [pause, resume, abort] }
+              additionalProperties: false
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpgradeRun" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/whoami:
@@ -3695,6 +3980,10 @@ components:
         | `superseded` | 409 | undeploy of a non-latest deployment |
         | `tenant_has_live_objects` | 409 | tenant delete without `force` |
         | `host_holds_leases` | 409 | host delete without `drain` |
+        | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+        | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
+        | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
+        | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
         | `killed` | 410 | tombstone (`TombstoneError`) |
         | `precondition_failed` | 412 | `If-Match` mismatch |
         | `object_quota_exceeded` | 429 | tenant `maxObjects` |
@@ -3760,6 +4049,10 @@ components:
         - superseded
         - tenant_has_live_objects
         - host_holds_leases
+        - version_skew
+        - feature_unavailable
+        - upgrade_blocked
+        - upgrade_state
         - killed
         - precondition_failed
         - object_quota_exceeded
@@ -3957,7 +4250,7 @@ components:
       required: [tenantID, tailnet, mintMode, registrationsPerMinute, maxObjects, createdAt, updatedAt]
       properties:
         tenantID: { type: string, examples: [tn_tail7906d5] }
-        tailnet: { type: string, description: MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net] }
+        tailnet: { type: string, description: "MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net]" }
         controlURL: { type: string, format: uri, description: "Non-default control plane (testcontrol, headscale)." }
         mintMode: { $ref: "#/components/schemas/MintMode" }
         apiKeyFile:
@@ -4202,6 +4495,13 @@ components:
         lastSeen: { type: integer, format: int64, description: unix ms of the last heartbeat }
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
+        version: { type: string, description: "The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x)." }
+        os: { type: string }
+        protocols: { $ref: "#/components/schemas/Protocols" }
+        features: { type: array, items: { type: string }, description: "Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses." }
+        skew: { type: string, description: Why the host is outside the version window (placement skips it); absent when it is within. }
+        cordonedAt: { type: integer, format: int64, description: unix ms; absent when not cordoned. }
+        cordonedBy: { type: string }
     HostCreate:
       type: object
       required: [hostID]
@@ -4245,7 +4545,141 @@ components:
           type: string
           format: password
           description: Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound.
+        version: { type: string, description: "The host's twd version. A host outside the version window is refused: `409 version_skew`." }
+        os: { type: string, enum: [darwin, linux], description: GOOS (which release tarball the host runs). }
+        protocols: { $ref: "#/components/schemas/Protocols" }
+        features: { type: array, items: { type: string }, maxItems: 64 }
       additionalProperties: false
+    HostDrainRequest:
+      type: object
+      properties:
+        allowLocalStateLoss: { type: boolean, description: "Move workloads with Durable Objects too; their storage stays behind on this host." }
+        dryRun: { type: boolean }
+      additionalProperties: false
+    HostDrainResult:
+      type: object
+      required: [hostID, cordoned, moved, refused]
+      properties:
+        hostID: { type: string }
+        cordoned: { type: boolean }
+        dryRun: { type: boolean }
+        moved:
+          type: array
+          items:
+            type: object
+            required: [tenantID, workload, to]
+            properties:
+              tenantID: { type: string }
+              workload: { type: string }
+              to: { type: string, description: The host it moved (or would move) to. }
+              deploymentID: { type: string }
+        refused:
+          type: array
+          items:
+            type: object
+            required: [tenantID, workload, code, message]
+            properties:
+              tenantID: { type: string }
+              workload: { type: string }
+              code: { $ref: "#/components/schemas/ErrorCode" }
+              message: { type: string }
+    ReleaseNote:
+      type: object
+      required: [kind, text]
+      properties:
+        kind: { type: string, enum: [feature, fix, breaking, security] }
+        upgrade: { type: array, items: { type: string } }
+        source: { type: string }
+        text: { type: string }
+    ReleaseEntry:
+      type: object
+      required: [version, notes]
+      properties:
+        version: { type: string }
+        date: { type: string }
+        workerd: { type: string }
+        schema: { type: string }
+        contractMigrations: { type: array, items: { type: string } }
+        protocols: { $ref: "#/components/schemas/Protocols" }
+        upgrade: { type: array, items: { type: string } }
+        notes: { type: array, items: { $ref: "#/components/schemas/ReleaseNote" } }
+        source: { type: string, enum: [builtin, imported] }
+        artifacts: { type: array, items: { type: string }, description: Artifacts stored on this replica. }
+    ReleaseCatalog:
+      type: object
+      required: [current, items]
+      properties:
+        current: { type: string }
+        items: { type: array, items: { $ref: "#/components/schemas/ReleaseEntry" } }
+    ReleaseImport:
+      type: object
+      required: [entries]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/ReleaseEntry" }, maxItems: 1000 }
+      additionalProperties: false
+    ReleaseArtifact:
+      type: object
+      required: [version, name, sha256, size]
+      properties:
+        version: { type: string }
+        name: { type: string }
+        sha256: { type: string }
+        size: { type: integer, format: int64 }
+    UpgradeRequest:
+      type: object
+      required: [to]
+      properties:
+        to: { type: string, description: The target release version (it must be in the catalog). }
+        dryRun: { type: boolean }
+        hosts: { type: array, items: { type: string }, description: "Upgrade only these hosts (default: every host below `to`)." }
+        canary: { type: string, description: "The canary host (default: the first host in order)." }
+        soakSeconds: { type: integer, minimum: 0, maximum: 86400, description: How long to watch the canary before the rest (default 300). }
+        settleSeconds: { type: integer, minimum: 10, maximum: 3600, description: How long a host may take to re-register and settle (default 300). }
+      additionalProperties: false
+    UpgradePlan:
+      type: object
+      required: [from, to, steps, breaking, blockers, warnings]
+      properties:
+        from:
+          type: object
+          required: [mgmt, hosts]
+          properties:
+            mgmt: { type: array, items: { type: string } }
+            hosts: { type: object, additionalProperties: { type: string }, description: Host ID to version. }
+        to: { type: string }
+        path: { type: array, items: { type: string }, description: Every release between the oldest running version and `to` that has a contract migration (each must be passed through). }
+        steps: { type: array, items: { $ref: "#/components/schemas/UpgradeStep" } }
+        breaking: { type: array, items: { $ref: "#/components/schemas/ReleaseNote" } }
+        actions: { type: array, items: { $ref: "#/components/schemas/ReleaseNote" }, description: Notes that need an operator action. }
+        blockers: { type: array, items: { type: string }, description: Why the run can't start; empty when it can. }
+        warnings: { type: array, items: { type: string } }
+    UpgradeStep:
+      type: object
+      required: [kind, status]
+      properties:
+        kind: { type: string, enum: [backup, mgmt, contract, host] }
+        host: { type: string }
+        canary: { type: boolean }
+        method: { type: string, enum: [drain, bounce], description: "Hosts: `drain` moves its workloads off first; `bounce` restarts in place (workloads with host-local state, or nowhere to move)." }
+        status: { type: string, enum: [pending, running, waiting, done, skipped, failed] }
+        detail: { type: string }
+        needsOperator: { type: string, description: A command the operator must run before this step can finish. }
+        startedAt: { type: integer, format: int64 }
+        finishedAt: { type: integer, format: int64 }
+    UpgradeRun:
+      type: object
+      required: [id, to, state, steps, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        to: { type: string }
+        state: { type: string, enum: [running, paused, done, aborted, failed] }
+        reason: { type: string, description: "Why the run is paused, failed or aborted." }
+        step: { type: integer, description: Index of the current step. }
+        steps: { type: array, items: { $ref: "#/components/schemas/UpgradeStep" } }
+        plan: { $ref: "#/components/schemas/UpgradePlan" }
+        createdBy: { type: string }
+        createdAt: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
     Lease:
       type: object
       required: [namespace, epoch]
@@ -4755,6 +5189,16 @@ components:
         `tenant_delete`,
         `host_register`,
         `host_delete`,
+        `host_cordon`,
+        `host_uncordon`,
+        `host_drain`,
+        `release_import`,
+        `release_artifact`,
+        `upgrade_start`,
+        `upgrade_step`,
+        `upgrade_pause`,
+        `upgrade_resume`,
+        `upgrade_abort`,
         `deploy`,
         `undeploy`,
         `create`,
@@ -4818,6 +5262,16 @@ components:
         - tenant_delete
         - host_register
         - host_delete
+        - host_cordon
+        - host_uncordon
+        - host_drain
+        - release_import
+        - release_artifact
+        - upgrade_start
+        - upgrade_step
+        - upgrade_pause
+        - upgrade_resume
+        - upgrade_abort
         - deploy
         - undeploy
         - create
@@ -5510,6 +5964,31 @@ components:
         version: { type: string }
         clock: { $ref: "#/components/schemas/StatusClock" }
         replicas: { $ref: "#/components/schemas/StatusReplicas" }
+        versions: { $ref: "#/components/schemas/StatusVersions" }
+    StatusVersions:
+      type: object
+      description: What runs where (ADR-041 §7).
+      required: [mgmt, hosts]
+      properties:
+        mgmt: { type: object, additionalProperties: { type: string }, description: "Each live replica's version, by replica ID." }
+        hosts: { type: object, additionalProperties: { type: integer }, description: 'Host count by reported version ("" = none reported).' }
+        skewed: { type: array, items: { type: string }, description: Hosts outside the version window. }
+        schema: { $ref: "#/components/schemas/SchemaStatus" }
+    SchemaStatus:
+      type: object
+      required: [latest, applied]
+      properties:
+        latest: { type: string, description: The newest migration this replica knows. }
+        applied: { type: string, description: The newest migration applied to the store. }
+        pending: { type: array, items: { type: string } }
+        pendingContract: { type: array, items: { type: string }, description: Contract migrations deferred until every replica runs this version. }
+        ahead: { type: array, items: { type: string }, description: Applied migrations this replica doesn't know (a newer replica ran them). }
+        minBinary: { type: string, description: The oldest twd-mgmt that may open the store. }
+        restoreGeneration: { type: integer, format: int64 }
+    Protocols:
+      type: object
+      description: "Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`."
+      additionalProperties: { type: integer }
     StatusReplicas:
       type: object
       description: >-

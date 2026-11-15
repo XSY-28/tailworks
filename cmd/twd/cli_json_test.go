@@ -83,6 +83,12 @@ var cliSurface = []struct {
 	{"host add", []string{"host", "add", "h1"}},
 	{"host ls", []string{"host", "ls"}},
 	{"host rm", []string{"host", "rm", "h1"}},
+	{"host cordon", []string{"host", "cordon", "h1"}},
+	{"host uncordon", []string{"host", "uncordon", "h1"}},
+	{"host drain", []string{"host", "drain", "h1", "--dry-run"}},
+	{"release ls", []string{"release", "ls"}},
+	{"release import", []string{"release", "import", "/nonexistent/twd-0.0.0-linux-amd64.tar.gz"}},
+	{"upgrade", []string{"upgrade", "--plan", "--from", "/nonexistent"}},
 	{"host setup", []string{"host", "setup"}},
 	{"host vmcheck", []string{"host", "vmcheck", "app"}},
 	{"image public add", []string{"image", "public", "add", "docker.io/library/alpine:3"}},
@@ -220,7 +226,7 @@ func subDepth(args []string) int {
 			return 3
 		}
 		return 2
-	case "tenant", "host", "secret", "docs", "agent", "queues":
+	case "tenant", "host", "secret", "docs", "agent", "queues", "release":
 		return 2
 	case "kv":
 		return 3 // kv namespace create, kv key put, …

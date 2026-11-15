@@ -27,6 +27,9 @@ const (
 // object is one tailnet identity hosted here: a workload entry node
 // (Class == "") or a Durable Object instance.
 type object struct {
+	// V is the objects.json record version (ADR-041 §4):
+	// 0 = written before versioning (the same layout as 1).
+	V        int      `json:"v"`
 	ID       string   `json:"id"` // mgmt object ID
 	NetdID   string   `json:"netdID"`
 	TenantID string   `json:"tenantID"`
@@ -601,6 +604,24 @@ func (h *Host) Purge() []string {
 	return ids
 }
 
+// objectsVersion is the objects.json record version this hostd writes.
+const objectsVersion = 1
+
+// decodeObjects parses objects.json, refusing records newer than this
+// hostd knows.
+func decodeObjects(b []byte) ([]*object, error) {
+	var list []*object
+	if err := json.Unmarshal(b, &list); err != nil {
+		return nil, fmt.Errorf("hostd: objects.json: %w", err)
+	}
+	for _, o := range list {
+		if o.V > objectsVersion {
+			return nil, fmt.Errorf("hostd: objects.json record v%d was written by a newer twd (this one reads up to v%d); upgrade twd-hostd", o.V, objectsVersion)
+		}
+	}
+	return list, nil
+}
+
 func (h *Host) objectsPath() string { return filepath.Join(h.cfg.DataDir, "objects.json") }
 
 func (h *Host) loadObjects() error {
@@ -611,9 +632,9 @@ func (h *Host) loadObjects() error {
 	if err != nil {
 		return err
 	}
-	var list []*object
-	if err := json.Unmarshal(b, &list); err != nil {
-		return fmt.Errorf("hostd: objects.json: %w", err)
+	list, err := decodeObjects(b)
+	if err != nil {
+		return err
 	}
 	for _, o := range list {
 		o.readyCh = make(chan struct{})
@@ -634,6 +655,7 @@ func (h *Host) saveObjects() {
 	list := make([]*object, 0, len(h.objects))
 	for _, o := range h.objects {
 		c := *o
+		c.V = objectsVersion
 		list = append(list, &c)
 	}
 	h.mu.Unlock()

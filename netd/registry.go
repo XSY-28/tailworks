@@ -288,6 +288,9 @@ type ObjectInfo struct {
 
 // objectMeta is persisted next to the tsnet state so Rejoin can restore it.
 type objectMeta struct {
+	// V is the format version (ADR-041 §4): 0 = written
+	// before versioning (the same layout as 1). readMeta refuses newer.
+	V         int      `json:"v"`
 	ID        string   `json:"id"`
 	Hostname  string   `json:"hostname"`
 	Tags      []string `json:"tags,omitempty"`
@@ -396,8 +399,23 @@ func readMeta(dir string) (*objectMeta, error) {
 	if err != nil {
 		return nil, err
 	}
+	return decodeMeta(b)
+}
+
+// ObjectMetaVersion is the object.json format version this netd writes.
+const ObjectMetaVersion = 1
+
+// decodeMeta parses an object.json, refusing a version newer than this
+// netd knows (a newer twd wrote it: rolling back past a format change).
+func decodeMeta(b []byte) (*objectMeta, error) {
 	var m objectMeta
-	return &m, json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		return &m, err
+	}
+	if m.V > ObjectMetaVersion {
+		return &m, fmt.Errorf("object.json format v%d was written by a newer twd (this one reads up to v%d); upgrade twd", m.V, ObjectMetaVersion)
+	}
+	return &m, nil
 }
 
 func (r *Registry) join(o *Object) {
@@ -455,7 +473,7 @@ func (o *Object) start(ctx context.Context) error {
 		key = k
 		o.spans.at(func(s *JoinSpans) *float64 { return &s.Key })
 	}
-	meta := objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral}
+	meta := objectMeta{V: ObjectMetaVersion, ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral}
 	if o.pub != nil {
 		o.pub.mu.Lock()
 		po := o.pub.opts
@@ -972,7 +990,7 @@ func (o *Object) SetHostname(ctx context.Context, hostname string) (string, erro
 	}
 	o.mu.Lock()
 	o.hostname = hostname
-	mb, _ := json.Marshal(objectMeta{ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
+	mb, _ := json.Marshal(objectMeta{V: ObjectMetaVersion, ID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
 	o.mu.Unlock()
 	if err := os.WriteFile(filepath.Join(o.dir, "object.json"), mb, 0o600); err != nil {
 		return "", err

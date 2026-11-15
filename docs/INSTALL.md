@@ -131,7 +131,7 @@ attribute from its own copy.
 
 ```sh
 cd twd-*-darwin-arm64
-./install.sh                  # installs into ~/.twd; safe to re-run (upgrade/repair)
+./install.sh                  # installs into ~/.twd; safe to re-run (repair); to upgrade, use `twd upgrade` (docs/upgrading.md)
 export PATH="$HOME/.twd/bin:$PATH"
 echo 'export PATH="$HOME/.twd/bin:$PATH"' >> ~/.zprofile   # the installer prints this; it doesn't edit your profile
 ```
@@ -591,23 +591,9 @@ Installed with `get.sh`? It doesn't keep the release directory; see
 
 ## Upgrade
 
-`sh get.sh` (or `./install.sh` from a newer release directory) installs
-over the old version. It swaps `~/.twd/bin` and `~/.twd/share` and leaves
-your state alone: `twd.json`, `mgmt/`, `hostd/` and `logs/`. A running twd
-keeps the old binaries until it restarts:
-
-```sh
-twd down                     # without --purge: objects, nodes and data stay
-sh get.sh                    # or: sh get.sh v<version>
-twd up …                     # the same twd up command you used before
-twd version && twd doctor
-```
-
-With `--service` on Linux, `systemctl --user restart twd` does the restart.
-mgmt updates its database schema when it starts. Deployed workloads come
-back on their own, with the same nodes and storage, as after any restart.
-Take a [backup](#back-up-and-restore) first if you may want to go back to
-the old version.
+See [upgrading.md](upgrading.md): what may run together, upgrading a
+`twd up` machine, and upgrading a fleet. Take a
+[backup](#back-up-and-restore) first if you may want to go back.
 
 ## Back up and restore
 

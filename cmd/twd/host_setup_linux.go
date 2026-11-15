@@ -224,7 +224,7 @@ func hostSetupMicroVM(userName string, huge int, fcSrc, jlSrc string) (*setupRes
 	var perr error
 	for i := 0; i < 50; i++ {
 		var r helperapi.Response
-		if r, perr = helperapi.Ping(helperapi.DefaultSocket); perr == nil && r.Version == helperapi.Version {
+		if r, perr = helperapi.Ping(helperapi.DefaultSocket); perr == nil && helperapi.Check(r) == nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -12,9 +12,14 @@ Tailscale tailnet, with its own MagicDNS name, tags and grants:
 
 It runs Cloudflare Agents SDK agents, MCP servers and Vercel AI SDK agents
 unmodified. What works and what doesn't, surface by surface:
-[Compatibility at a glance](#compatibility-at-a-glance).
+[Compatibility at a glance](#compatibility-at-a-glance). All the docs, by
+role and by task: [docs/README.md](docs/README.md).
 
 ## Quick start: deploy your first Durable Object
+
+Only want to run the code first? After step 1, `twd init hello && cd hello
+&& twd dev` serves the app on `127.0.0.1:8787` with no tailnet and no
+credentials ([Try it without a tailnet](docs/INSTALL.md#try-it-without-a-tailnet)).
 
 You need:
 - a Mac (Apple silicon) or a Linux machine (arm64 or amd64);
@@ -212,9 +217,12 @@ prove every ✅ and ⚠️.
 
 ## More
 
+- **Docs map** (every doc by role and by task): [docs/README.md](docs/README.md).
+- **CLI reference:** `twd help` lists every command and its flags;
+  `twd <command> --help` shows one.
 - **Install details, other modes and troubleshooting:**
   [docs/INSTALL.md](docs/INSTALL.md).
-  - [Upgrade](docs/INSTALL.md#upgrade),
+  - [Upgrade](docs/upgrading.md),
     [back up and restore](docs/INSTALL.md#back-up-and-restore) and
     [uninstall](docs/INSTALL.md#uninstall).
   - Other ways to mint keys: workload identity federation (`twd up --wif`)

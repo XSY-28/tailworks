@@ -203,6 +203,7 @@ func r2ListObjects(ctx context.Context, c *mgmtapi.Client, journal, prefix strin
 		}
 		for _, e := range p.Entries {
 			var en struct {
+				V   int    `json:"v"` // index entry format (0 = v1 written before versioning)
 				O   string `json:"o"`
 				K   string `json:"k"`
 				Row struct {
@@ -214,6 +215,9 @@ func r2ListObjects(ctx context.Context, c *mgmtapi.Client, journal, prefix strin
 			}
 			if json.Unmarshal(e.Data, &en) != nil {
 				continue
+			}
+			if en.V > 1 {
+				return nil, fail("version_skew", fmt.Sprintf("this bucket's index has entries written by a newer twd (format v%d); upgrade this twd", en.V))
 			}
 			switch en.O {
 			case "put":

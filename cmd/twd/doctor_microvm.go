@@ -43,8 +43,8 @@ func doctorMicroVM(s *state) (string, string, string) {
 		}
 		return "warn", why + ": microvm deployments are refused here (tier_unavailable)", setup
 	}
-	if r.Version != helperapi.Version {
-		return "warn", fmt.Sprintf("twd-vmhelper speaks protocol %d, this twd %d", r.Version, helperapi.Version), setup
+	if err := helperapi.Check(r); err != nil {
+		return "warn", err.Error(), setup
 	}
 	detail := fmt.Sprintf("KVM ok; guest kernel + image in %s; twd-vmhelper answers uid %d (jailer %s, %s)", share, r.UID, r.Jailer, r.Crypt)
 	if s != nil {

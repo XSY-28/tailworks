@@ -248,6 +248,18 @@ func (c *Client) Register(ctx context.Context, r RegisterRequest) error {
 	if r.RegistrationSecret != "" {
 		reg["registrationSecret"] = r.RegistrationSecret
 	}
+	if r.Version != "" {
+		reg["version"] = r.Version
+	}
+	if r.OS != "" {
+		reg["os"] = r.OS
+	}
+	if len(r.Protocols) > 0 {
+		reg["protocols"] = r.Protocols
+	}
+	if len(r.Features) > 0 {
+		reg["features"] = r.Features
+	}
 	switch {
 	case r.PushPort > 0:
 		reg["push"] = map[string]any{"port": r.PushPort}
@@ -597,4 +609,16 @@ func VerifyChain(recs []AuditRecord) (bool, []string) {
 		prev = r.Hash
 	}
 	return len(problems) == 0, problems
+}
+
+// Raw sends req with the client's headers (Twd-Host-ID, the local-dev
+// token) and returns the response as is: for streaming bodies the JSON
+// helpers don't fit (release artifact uploads).
+func (c *Client) Raw(req *http.Request) (*http.Response, error) {
+	c.setHeaders(req)
+	hc := c.HTTP
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	return hc.Do(req)
 }
