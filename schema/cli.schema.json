@@ -55,7 +55,7 @@
     },
     "error": {
       "type": "object",
-      "description": "one line on stderr when a command fails (exit 1, or 2 for a usage error); stdout is then empty",
+      "description": "one line on stderr when a command fails (exit 1, or 2 for an unknown command); stdout is then empty",
       "properties": {
         "error": {
           "$ref": "#/$defs/errorObject"

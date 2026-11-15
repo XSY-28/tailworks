@@ -44,9 +44,9 @@ On failure, stdout is empty and stderr's **last line** is one JSON object:
 | `fix` | no | `hint` as a list of lines |
 | `trace_id` | no | correlates with `twd audit --trace <id>` |
 
-The exit code is 1 for a failed command and 2 for a usage error (unknown
-command or flag, missing argument). With `--json`, usage errors are JSON
-too. Key material is redacted from everything twd prints.
+The exit code is 1 when a command fails (including a bad flag or a missing
+argument, code `bad_request`) and 2 for an unknown command. With `--json`,
+both are JSON. Key material is redacted from everything twd prints.
 
 `twd doctor` is the one command that prints a result *and* fails: its report
 is on stdout, then `doctor_failed` is on stderr if a check failed.
