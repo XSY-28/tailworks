@@ -136,7 +136,7 @@ func TestCLIImages(t *testing.T) {
 	// An app with a Dockerfile container class (FROM the alias source,
 	// through an ARG default as Sandbox SDK 1.0's example writes it).
 	app := filepath.Join(work, "box")
-	dev.MustJSON(nil, "init", app, "--template", "hello")
+	dev.MustJSON(nil, "init", app, "--template", "hello", "--keep-tags")
 	os.WriteFile(filepath.Join(app, "Dockerfile"), []byte("ARG TOOLS=docker.io/cloudflare/sandbox:1.0.0\nFROM ${TOOLS}\nCOPY hello.txt /hello.txt\n"), 0o644)
 	os.WriteFile(filepath.Join(app, "hello.txt"), []byte("hello\n"), 0o644)
 	wr, _ := os.ReadFile(filepath.Join(app, "wrangler.jsonc"))

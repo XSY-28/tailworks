@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/rosskukulinski/twd/master/schema/twd.schema.json",
   // node-workflow: a durable Vercel Workflow ("use workflow") on twd's opt-in
   // Node process tier. One supervised node process, one tailnet node.
   "name": "node-workflow",

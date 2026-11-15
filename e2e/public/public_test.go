@@ -320,7 +320,7 @@ func TestE2EPublic(t *testing.T) {
 
 	// 4. The app: the hostd fixture with tags this tailnet already owns.
 	app := filepath.Join(work, "pubprobe")
-	e.MustJSON(nil, "init", app, "--template", "hello")
+	e.MustJSON(nil, "init", app, "--template", "hello", "--keep-tags")
 	fx := filepath.Join(root, "hostd", "testdata", "apps", "pubprobe")
 	src, _ := os.ReadFile(filepath.Join(fx, "src", "index.js"))
 	os.WriteFile(filepath.Join(app, "src", "index.js"), src, 0o644)

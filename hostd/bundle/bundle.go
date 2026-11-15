@@ -64,6 +64,13 @@ type App struct {
 	// valid internal/cron expression, run against the default export's
 	// scheduled() handler.
 	Crons []string
+
+	// Secrets are the workload's secret values (`twd secret put`,
+	// ADR-034), never in the bundle: hostd fills them in from
+	// mgmt's lease-fenced grant when it starts a deployment. They become
+	// text bindings (workerd) or environment variables (runtime node) and
+	// override vars of the same name. Never logged or serialised.
+	Secrets map[string]string `json:"-"`
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").

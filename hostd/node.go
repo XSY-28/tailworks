@@ -221,12 +221,17 @@ func (inst *instance) spawnNode() error {
 	if wl := inst.w.currentWL(); wl != nil {
 		env["TWD_NODE_NAME"] = wl.MagicDNS
 	}
-	for k, v := range inst.app.Node.Env {
+	for k, v := range nodeEnv(inst.app) { // node.env, deploy vars
 		if _, reserved := env[k]; !reserved {
 			env[k] = v
 		}
 	}
-	args := append(append([]string{}, inst.app.Node.Args...), inst.app.Node.Main)
+	pre, err := writeNodeSecrets(inst.dir, inst.app.Secrets) // secrets.go: a preload, not env
+	if err != nil {
+		logf.Close()
+		return err
+	}
+	args := append(append(pre, inst.app.Node.Args...), inst.app.Node.Main)
 	cmd, err := inst.nodeCommand(args)
 	if err != nil {
 		logf.Close()

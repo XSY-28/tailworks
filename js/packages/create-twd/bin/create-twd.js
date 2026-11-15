@@ -3,7 +3,7 @@
 //   npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent
 //   create-twd build [dir]        (bundles wrangler.jsonc main → dist/index.js)
 //   create-twd build-node [dir] [outdir]  (runtime "node" apps: dist/server.mjs + Workflow bundles)
-import { cpSync, existsSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, renameSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,4 +39,6 @@ if (existsSync(dir) && readdirSync(dir).length) {
   process.exit(2);
 }
 cpSync(path.join(templates, template), dir, { recursive: true });
+// npm drops .gitignore from published packages: templates ship "gitignore".
+if (existsSync(path.join(dir, "gitignore"))) renameSync(path.join(dir, "gitignore"), path.join(dir, ".gitignore"));
 console.log(`created ${dir} from template ${template}\n  cd ${dir} && npm install && npx twd deploy`);

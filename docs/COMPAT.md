@@ -53,6 +53,25 @@ check below runs in both.
 | `McpAgent` | not tested | | — | deprecated upstream; use `createMcpHandler` (ADR-022) |
 | `@callable` RPC, `useAgent`, `AIChatAgent` | not tested | | — | same DO/WebSocket primitives as above (assumption) |
 
+## Secrets
+
+`twd secret put|ls|rm` and `.dev.vars` work like `wrangler secret` and
+`wrangler dev`. Your code reads a secret as `env.NAME`, a text binding,
+in the Worker and in Durable Objects. For the `node` runtime it is
+`process.env.NAME` (loaded by a preload, not passed in the process
+environment). See [secrets.md](secrets.md).
+
+There are three differences from Cloudflare:
+
+- A secret **overrides** a var of the same name; Cloudflare doesn't allow
+  both.
+- A change takes effect on the next `twd deploy`.
+- The microVM tier refuses workloads that have secrets
+  (`secrets_unsupported_tier`).
+
+`wrangler secret bulk`, secret versions and the Secrets Store binding are
+not supported.
+
 ## Cron triggers
 
 `wrangler.jsonc` `triggers.crons` and the default export's

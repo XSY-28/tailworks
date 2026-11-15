@@ -89,6 +89,10 @@ func (h *Host) maintainPools() {
 	}
 	var todo []want
 	h.mu.Lock()
+	if h.tearingDown { // teardown.go: twd down --purge
+		h.mu.Unlock()
+		return
+	}
 	for key, at := range h.poolDemand {
 		if time.Since(at) > poolDemandWindow {
 			delete(h.poolDemand, key)

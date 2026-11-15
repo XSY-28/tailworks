@@ -359,7 +359,11 @@ func TestE2EContainer(t *testing.T) {
 		if r := call("/f/other/exec", "argv", `["true"]`); r["error"] == nil {
 			t.Fatalf("another object's exec ran: %v", r)
 		}
-		if r := call("/p/z/forge", "target", "srv", "op", "destroy"); r["ok"] != false {
+		// No tenant env keeps the platform binding (create admission), so a
+		// plain-DO object can't even reach for a facet object's container
+		// (noBinding), as hostd's TestContainers checks; a binding that
+		// refuses (ok: false) would be acceptable too.
+		if r := call("/p/z/forge", "target", "srv", "op", "destroy"); r["noBinding"] != true && r["ok"] != false {
 			t.Fatalf("plain object destroyed a facet object's container: %v", r)
 		}
 		if c := ctrOf("Box", "srv"); c.State != "running" {

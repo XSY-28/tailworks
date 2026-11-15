@@ -472,6 +472,10 @@ func (h *Host) pushHandlers(m *http.ServeMux) {
 	})
 	// Smart placement (ADR-033): measure a tenant's targets now (mgmt, at deploy).
 	m.HandleFunc("POST /v1/push/probe", h.probeHandler)
+	// logs.go: one workload's app log, for `twd logs` from a linked machine
+	// (mgmt asks the lease holder; on the tsnet surface pushAuth admits
+	// mgmt's node only).
+	m.HandleFunc("GET /v1/logs", h.logsHandler)
 }
 
 // tsnetPushAPI is what the host's own tailnet node serves (Config.
@@ -508,6 +512,9 @@ func (h *Host) pushAPI() http.Handler {
 	m.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, h.Status())
 	})
+	// teardown.go: no new objects before twd down --purge lists them.
+	m.HandleFunc("POST /v1/teardown", h.teardownHandler)
+
 	// Operator checks of a workload's microVM (twd host vmcheck): guest
 	// stats, DO volume fsync latency, and the no-keys-in-guest scan. The
 	// socket is the user's (0700 dir); answers carry no key material.

@@ -37,6 +37,7 @@ func cmdInit(args []string) error {
 	f := newFlags("init")
 	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | node-workflow")
 	name := f.String("name", "", "workload name (default: the directory name)")
+	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:twd-wl-<workload>, tag:twd-<workload>-<class>)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -92,6 +93,11 @@ func cmdInit(args []string) error {
 			done = true
 			return re.ReplaceAll(m, []byte(`${1}"`+wl+`"`))
 		})
+		if fn == "twd.jsonc" && !*keepTags {
+			if nb, _, err := appTags(b, wl); err == nil {
+				b = nb
+			}
+		}
 		os.WriteFile(p, b, 0o644)
 	}
 	// The template's workload tag (tailnet.tags, e.g. tag:twd-wl-hello)
@@ -109,6 +115,9 @@ func cmdInit(args []string) error {
 	res := map[string]string{"dir": dir, "template": *tmpl, "workload": wl}
 	emit(f, res, func() {
 		fmt.Printf("✓ created %s from template %s (workload %q)\n", dir, *tmpl, wl)
+		if tags := initTags(dir); len(tags) > 0 {
+			fmt.Printf("  tags: %s (twd deploy prints the tagOwners to add)\n", strings.Join(tags, ", "))
+		}
 		if *tmpl == "node-workflow" {
 			// The Node tier bundles the app's own dependencies with the
 			// machine's Node.js; nothing is vendored for it.
@@ -141,6 +150,9 @@ func loadApp(dir, name string) (*app, error) {
 		return nil, fail("bad_request", "no twd.jsonc in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|node-workflow")
 	}
 	a.TwdRaw = raw
+	if err := checkTwdSchema(raw); err != nil {
+		return nil, err
+	}
 	if a.Cfg, err = mgmt.ParseTwdConfig(raw); err != nil {
 		return nil, fail("bad_request", err.Error())
 	}

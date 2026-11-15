@@ -196,7 +196,7 @@ func (m *MultiEnv) Run() {
 	// The same agent app (same directory, workload, classes and object
 	// names) deployed to both tenants.
 	agentDir := filepath.Join(m.WorkDir, "agent")
-	m.MustJSON(nil, "init", agentDir, "--template", "agent")
+	m.MustJSON(nil, "init", agentDir, "--template", "agent", "--keep-tags")
 	tj := filepath.Join(agentDir, "twd.jsonc")
 	b, _ := os.ReadFile(tj)
 	b = bytes.Replace(b, []byte(`"tags": ["tag:twd-wl-agent"],`), []byte(`"tags": ["tag:twd-wl-agent"],
@@ -224,7 +224,7 @@ func (m *MultiEnv) Run() {
 	res.pass("deploy_same_app", fmt.Sprintf("agent → A %s · B %s", m.A.wlMagic, m.B.wlMagic))
 	// … and the MCP server, for check (d): per-spawn cap limits.
 	mcpDir := filepath.Join(m.WorkDir, "mcp")
-	m.MustJSON(nil, "init", mcpDir, "--template", "mcp")
+	m.MustJSON(nil, "init", mcpDir, "--template", "mcp", "--keep-tags")
 	for _, tn := range m.tenants() {
 		var dr struct {
 			Endpoint struct {

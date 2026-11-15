@@ -253,6 +253,10 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
+	// teardown gate (teardown.go): POST /v1/teardown, twd down --purge.
+	tearingDown     bool
+	createsInFlight int
+
 	capOnce    sync.Once
 	capVec     mgmtapi.HostCapacity // capacity(): measured once
 	containers containerLedger      // admitted containers and held reservations

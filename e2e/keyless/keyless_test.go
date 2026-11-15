@@ -361,7 +361,7 @@ func TestE2EKeyless(t *testing.T) {
 
 	// 6. A local deploy on the host (mcp), nodes minted through WIF.
 	mcpDir, agentDir := filepath.Join(work, "mcp"), filepath.Join(work, "agent")
-	host.MustJSON(nil, "init", mcpDir, "--template", "mcp")
+	host.MustJSON(nil, "init", mcpDir, "--template", "mcp", "--keep-tags")
 	type depRes struct {
 		DeploymentID string
 		Endpoint     struct{ Node, MagicDNS string }
@@ -389,7 +389,7 @@ func TestE2EKeyless(t *testing.T) {
 		fmt.Sprintf("%+v", lk))
 
 	// 8. Remote deploy (bundled on the dev box, uploaded over HTTPS) + ls.
-	dev.MustJSON(nil, "init", agentDir, "--template", "agent")
+	dev.MustJSON(nil, "init", agentDir, "--template", "agent", "--keep-tags")
 	tj := filepath.Join(agentDir, "twd.jsonc")
 	ab, _ := os.ReadFile(tj)
 	os.WriteFile(tj, bytes.Replace(ab, []byte(`"tags": ["tag:twd-wl-agent"],`), []byte(`"tags": ["tag:twd-wl-agent"],

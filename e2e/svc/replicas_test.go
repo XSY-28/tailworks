@@ -205,7 +205,7 @@ func TestE2EReplicas(t *testing.T) {
 	clientID := string(cst.Self.ID)
 
 	dir := filepath.Join(work, "rephello")
-	e.MustJSON(nil, "init", dir, "--template", "hello")
+	e.MustJSON(nil, "init", dir, "--template", "hello", "--keep-tags")
 	writeCfg := func(n int) {
 		cfg := fmt.Sprintf(`{
   "name": "rephello",

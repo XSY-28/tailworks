@@ -307,8 +307,13 @@ func TestE2ELinux(t *testing.T) {
 		for _, id := range res.NodeIDs {
 			tracker.Track(id, "twd")
 		}
+		for _, id := range res.InfraNodeIDs {
+			tracker.Track(id, "twd-infra") // mgmt's and the host's own nodes: kept by twd down, deleted here by ID (as e2e/linuxvm)
+		}
 		crep := tracker.Cleanup(cctx, testPrefix)
 		trep := tracker.Cleanup(cctx, twdPrefix)
+		hrep := tracker.Cleanup(cctx, "twd-host-"+twdPrefix) // the host's node is named twd-host-<host id>
+		trep.Untracked = append(trep.Untracked, hrep.Untracked...)
 		for _, k := range keys {
 			api.DeleteKey(cctx, k)
 		}
@@ -405,7 +410,7 @@ func TestE2ELinux(t *testing.T) {
 	res.Checks["microvm_tier"] = "INFO " + mv
 	res.Pass("doctor", fmt.Sprintf("%d checks in %.0f ms, none failed: %s", len(doc.Checks), msOf(d), strings.Join(summary, " ")))
 
-	if _, se, _, err := e.Twd("init", rWork+"/ai", "--template", "ai-agent", "--json"); err != nil {
+	if _, se, _, err := e.Twd("init", rWork+"/ai", "--template", "ai-agent", "--keep-tags", "--json"); err != nil {
 		t.Fatalf("twd init --template ai-agent in the VM: %v %s", err, se)
 	}
 	res.Pass("init_ai_agent_offline", "twd init --template ai-agent in the VM (no npm); bundled offline by doctor")

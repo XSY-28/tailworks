@@ -1,0 +1,106 @@
+package schema
+
+import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Every twd.jsonc in the repo (templates, examples, e2e fixtures) must pass:
+// the schema is the list of keys twd reads, so a failure here means the
+// schema is missing a key, not that the fixture is wrong.
+func TestRepoConfigsPass(t *testing.T) {
+	n := 0
+	err := filepath.WalkDir("..", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && (d.Name() == "node_modules" || d.Name() == ".git" || d.Name() == "dist") {
+			return filepath.SkipDir
+		}
+		if d.Name() != "twd.jsonc" {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		n++
+		probs, err := CheckTwd(b)
+		if err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+		for _, pr := range probs {
+			t.Errorf("%s: %s", p, pr)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 5 {
+		t.Fatalf("found only %d twd.jsonc files", n)
+	}
+}
+
+func TestCheckTwd(t *testing.T) {
+	for _, tc := range []struct {
+		name, cfg string
+		want      []string // substrings, one per problem, in path order
+	}{
+		{"ok", `{
+			"$schema": "../schema/twd.schema.json",
+			"name": "x", "tier": "microvm", "replicas": 2,
+			"placement": {"mode": "smart", "targets": ["pg"], "aggregate": "sum"},
+			"public": {"routes": ["/hook"], "limits": {"rps": 1.5}},
+			"containers": [{"class_name": "C", "image": "./Dockerfile"}],
+			"tailnet": {
+				"tags": ["tag:a"], "service": true, "connects": ["tag:db"],
+				"egress": {"internet": ["api.example.com"]},
+				"spawn": {"maxLive": 4, "maxDepth": 2},
+				"objects": {"A": {"tags": ["tag:b"], "agent": true, "ttl": "10m", "egress": "workload", "fence": "never", "public": {"create": true, "maxObjects": 9}}},
+			},
+		}`, nil},
+		{"service name", `{"tailnet": {"service": "svc:api"}}`, nil},
+		{"misspelt objects", `{"tailnet": {"tags": ["tag:a"], "objcts": {}}}`,
+			[]string{`tailnet.objcts: unknown key (did you mean "objects"?)`}},
+		{"unknown top level", `{"tailnett": {}}`,
+			[]string{`tailnett: unknown key (did you mean "tailnet"?)`}},
+		{"class key typo", `{"tailnet": {"objects": {"A": {"tag": ["tag:x"]}}}}`,
+			[]string{`tailnet.objects.A.tag: unknown key (did you mean "tags"?)`}},
+		{"enum", `{"tier": "mircovm"}`,
+			[]string{`tier: "mircovm" is not one of "process", "microvm" (did you mean "microvm"?)`}},
+		{"type", `{"replicas": "3"}`, []string{`replicas: is string, want an integer`}},
+		{"integer", `{"replicas": 1.5}`, []string{`replicas: is number, want an integer`}},
+		{"minimum", `{"replicas": 0}`, []string{`below the minimum 1`}},
+		{"tag pattern", `{"tailnet": {"tags": ["twd-wl-x"]}}`, []string{`tailnet.tags[0]: "twd-wl-x" must match ^tag:`}},
+		{"required", `{"public": {"upgrade": []}}`, []string{`public: missing required "routes"`}},
+		{"no suggestion when far", `{"zzzzzzzz": 1}`, []string{"zzzzzzzz: unknown key"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probs, err := CheckTwd([]byte(tc.cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(probs) != len(tc.want) {
+				t.Fatalf("got %d problems %v, want %d", len(probs), probs, len(tc.want))
+			}
+			for i, w := range tc.want {
+				if got := probs[i].String(); !strings.Contains(got, w) {
+					t.Errorf("problem %d = %q, want it to contain %q", i, got, w)
+				}
+			}
+			if tc.name == "no suggestion when far" && probs[0].Suggest != "" {
+				t.Errorf("suggested %q for a far key", probs[0].Suggest)
+			}
+		})
+	}
+}
+
+func TestSyntaxError(t *testing.T) {
+	if _, err := CheckTwd([]byte(`{"tailnet": `)); err == nil {
+		t.Fatal("want a syntax error")
+	}
+}

@@ -107,9 +107,15 @@ npm `@cloudflare/workerd-darwin-arm64`), the app templates and the
 `node_modules` they need (vendored, so `twd init` and `twd deploy` work
 offline).
 
+The quickest way is [`scripts/get.sh`](../scripts/get.sh). It downloads
+the latest [GitHub release](https://github.com/rosskukulinski/twd/releases)
+for this machine, checks it against `SHA256SUMS` and runs its `install.sh`
+(step 2): `curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/twd/master/scripts/get.sh && sh get.sh`.
+To do it by hand, or from a tarball you built (`make release`):
+
 ```sh
 mkdir -p ~/Downloads/twd && cd ~/Downloads/twd
-# copy twd-<version>-darwin-arm64.tar.gz and SHA256SUMS here (scp, AirDrop, …)
+# download (or copy) twd-<version>-darwin-arm64.tar.gz and SHA256SUMS here
 shasum -a 256 -c SHA256SUMS --ignore-missing
 tar -xzf twd-*-darwin-arm64.tar.gz
 ```
@@ -171,7 +177,6 @@ Funnel, no HTTPS requirement, no public issuer.**
      "tag:twd":      ["autogroup:admin"],
      "tag:twd-mgmt": ["autogroup:admin", "tag:twd"],
      "tag:twd-host": ["autogroup:admin", "tag:twd"],
-     "tag:twd-issuer": ["autogroup:admin", "tag:twd"],
    },
    "grants": [
      // hosts call mgmt's API; mgmt pushes kills to the hosts
@@ -260,6 +265,7 @@ What happens, in order (each line is a step you'll see):
      "tag:twd":      ["autogroup:admin"],
      "tag:twd-mgmt": ["autogroup:admin", "tag:twd"],
      "tag:twd-host": ["autogroup:admin", "tag:twd"],
+     "tag:twd-issuer": ["autogroup:admin", "tag:twd"],
    },
    "grants": [
      {"src": ["tag:twd-host"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"]},
@@ -344,8 +350,13 @@ node's tags) and admits admins by the `twd.dev/cap/admin` capability; it
 stores only the endpoint in `~/.twd/link.json`. No key, no token, nothing
 to rotate. If you are not an admin, `twd link` fails with `not_admin` and
 prints the grant to add. `twd ls` shows `by <login>` on each deployment
-and `twd audit` carries your login on the deploy record. Logs stay on the
-host (`twd logs` there). `twd link --unlink` forgets the endpoint.
+and `twd audit` carries your login on the deploy record. `twd logs
+<workload> [-n N] [-f]` works from here too: mgmt reads the workerd (or
+node) log from the host that holds the workload, over the same mgmt → host
+channel it uses for kills. A workload with `replicas` prints every
+replica's lines prefixed `[<host>]`; `--host <id>` picks one. The daemons'
+own logs (`twd logs --component mgmt|hostd|supervisor`) stay on the host.
+`twd link --unlink` forgets the endpoint.
 
 #### Transport: tsnet only
 
@@ -548,7 +559,11 @@ twd down --purge           # kill every object and delete its devices, then stop
 - A Node app on Linux gets `EACCES` from `net.connect` or its own
   dispatcher: that's the sandbox; send egress through `HTTP(S)_PROXY` /
   `@twd/node`'s `fetch`.
-- Logs: `twd logs --component mgmt|hostd|supervisor` (on the host).
+- Logs: `twd logs <workload>` (on the host or a linked machine; `-f` to
+  follow), `twd logs --component mgmt|hostd|supervisor` (on the host only).
+  From a linked machine, `host_unavailable` means mgmt could not reach the
+  workload's host on its push port (the policy grant `tag:twd-mgmt` →
+  `tag:twd-host` `tcp:7474`, or the host is down).
 
 ## Tuning: how fast a new object's own node comes up
 
@@ -615,7 +630,8 @@ socket or state. It reads `/proc/<pid>/fd` and matches unix-socket peers with
 
 ```sh
 mkdir -p ~/twd-release && cd ~/twd-release
-# copy twd-<version>-linux-arm64.tar.gz (or -linux-amd64) and SHA256SUMS here
+# download (or copy) twd-<version>-linux-arm64.tar.gz (or -linux-amd64) and SHA256SUMS here
+# (or skip this block: `sh get.sh` does all of it, as on macOS)
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf twd-*-linux-*.tar.gz
 cd twd-*-linux-*/ && ./install.sh          # no sudo; refuses to run as root
@@ -803,7 +819,10 @@ arch on either. A guest of the wrong arch is refused (`twd doctor`:
 > microVM tier**: `share/twd/release.json` says `"microvm": false`,
 > `share/twd/vm/` is absent, and `twd doctor` reports `firecracker: skip …
 > install a linux release built with the microVM assets`. The process tier
-> (Landlock + seccomp) is unaffected. The red team's second pass found a
+> (Landlock + seccomp) is unaffected. The GitHub release workflow builds every guest
+> on Linux runners and refuses to publish a tarball without one
+> (`RELEASE_VM_ASSETS=1`), so a GitHub release always has the tier;
+> `release.json` says `"microvm": true`. The red team's second pass found a
 > Mac-built tarball without the guest; the `make release` change above is
 > the fix, and the e2e-linux-vm row in STATUS.md says which tarball it ran.
 

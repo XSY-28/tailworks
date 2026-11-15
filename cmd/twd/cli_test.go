@@ -206,7 +206,8 @@ func TestCLIEndToEnd(t *testing.T) {
 // tsnet node on testcontrol (unattended join), then a second state dir on
 // the same machine acts as a developer box: `twd link` through its own
 // tsnet node (the test transport), remote deploy / ls / kill / audit with
-// deployedBy = the WhoIs principal, `logs` refused, a non-admin refused
+// deployedBy = the WhoIs principal, the workload's `logs` (the daemons'
+// `logs --component` refused), a non-admin refused
 // with the grant snippet, and --unlink.
 func TestCLILink(t *testing.T) {
 	if testing.Short() {
@@ -298,7 +299,7 @@ func TestCLILink(t *testing.T) {
 	}
 	// Remote deploy (bundled locally, uploaded), ls with deployedBy, kill, audit.
 	agentDir := filepath.Join(work, "agent")
-	dev.MustJSON(nil, "init", agentDir, "--template", "agent")
+	dev.MustJSON(nil, "init", agentDir, "--template", "agent", "--keep-tags")
 	var dep struct {
 		DeploymentID string
 		Endpoint     struct{ Node, MagicDNS string }
@@ -315,6 +316,10 @@ func TestCLILink(t *testing.T) {
 	dev.MustJSON(&ls, "ls")
 	if len(ls.Deployments) != 1 || ls.Deployments[0].DeployedBy != lk.Actor || !strings.Contains(ls.Deployments[0].DeployedBy, "ttest-dev") && !strings.Contains(ls.Deployments[0].DeployedBy, "@") {
 		t.Fatalf("remote ls deployedBy: %+v (actor %q)", ls.Deployments, lk.Actor)
+	}
+	// The workload's log, read by mgmt from the host over the push channel.
+	if _, se, _, err := dev.Twd("logs", ls.Deployments[0].Workload, "-n", "5"); err != nil {
+		t.Fatalf("remote logs of the workload: %v %s", err, se)
 	}
 	var kr struct {
 		Result struct{ Killed []string }
@@ -380,7 +385,7 @@ func TestDevOnce(t *testing.T) {
 	bin := cliflow.BuildBinaries(t)
 	work := t.TempDir()
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
-	e.MustJSON(nil, "init", filepath.Join(work, "hello"), "--template", "hello")
+	e.MustJSON(nil, "init", filepath.Join(work, "hello"), "--template", "hello", "--keep-tags")
 	var r struct {
 		Smoke struct {
 			Status float64 `json:"status"`
