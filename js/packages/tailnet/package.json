@@ -2,6 +2,13 @@
   "name": "@twd/tailnet",
   "version": "0.2.0",
   "description": "Verified tailnet caller identity and per-object egress for twd Workers and Durable Objects",
+  "keywords": [
+    "twd",
+    "tailscale",
+    "tailnet",
+    "workers",
+    "durable-objects"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +27,18 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "test": "node --test test/*.test.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rosskukulinski/twd.git",
+    "directory": "js/packages/tailnet"
+  },
+  "homepage": "https://github.com/rosskukulinski/twd#readme",
+  "bugs": "https://github.com/rosskukulinski/twd/issues",
   "license": "BSD-3-Clause"
 }

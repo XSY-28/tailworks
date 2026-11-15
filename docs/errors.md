@@ -358,6 +358,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### tenant_has_live_objects
 409 · mgmt, cli. **When:** `twd tenant rm` of a tenant with live objects. **Fix:** `twd tenant rm <tenant> --force` (kills and purges first).
 
+### types_stale
+1 · cli. **When:** `twd types --check` found the app's `worker-configuration.d.ts` (or `--out`) missing, or different from what `twd types` writes for the current wrangler config, twd.jsonc and secret names. **Fix:** run `twd types` and commit the file.
+
 ### unhealthy
 503 · cli. **When:** `twd status` finds twd not healthy: mgmt not answering, or no live host. **Fix:** `twd logs --component mgmt|hostd`.
 

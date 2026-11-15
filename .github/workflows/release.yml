@@ -8,7 +8,10 @@
 #                             kernel, firecracker + jailer (pinned, checked).
 #   vz-assets                 arm64 Linux: `make vz-assets`, the macOS
 #                             (Virtualization.framework) guest kernel + image.
-#   gates                     Linux: `make lint test`, the install.sh rollback
+#   gates                     Linux: `make lint test`, a dry run of the npm
+#                             publish (scripts/npm-publish.sh; the packages
+#                             and templates at the tag's version), the
+#                             install.sh rollback
 #                             test, and `make e2e-upgrade` (upgrade from the
 #                             previous release to this tag: data, rejoin, old
 #                             bundles; ADR-041 §9). No draft
@@ -61,6 +64,8 @@ jobs:
           node-version: "22"
       - name: make lint test
         run: make lint test
+      - name: npm packages at the tag's version (dry run; npm-publish.yml publishes)
+        run: sh scripts/npm-publish.sh "${TAG#v}" --dry-run
       - name: install.sh upgrade and rollback
         run: make install-test
       - name: make e2e-upgrade (previous release → this tag)

@@ -247,8 +247,10 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		}
 		return bindingHint + "ignored"
 	case "observability", "logpush", "limits", "usage_model", "send_metrics", "keep_vars", "dev",
-		"compliance_region", "first_party_worker", "legacy_env", "secrets", "python_modules":
+		"compliance_region", "first_party_worker", "legacy_env", "python_modules":
 		return "ignored by twd"
+	case "secrets":
+		return "" // secrets.required: names `twd types` declares (deploy doesn't check them)
 	case "node_compat":
 		return "ignored: removed in wrangler 4; use compatibility_flags [\"nodejs_compat\"]"
 	}
