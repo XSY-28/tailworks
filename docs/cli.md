@@ -223,6 +223,26 @@ flags:
     	lifecycle trust credential ("-" = clear)
 ```
 
+### twd doctor
+
+check this machine can run twd
+
+```text
+twd doctor: check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier
+
+usage: twd doctor [--tailnet <tailnet> --api-key-file <file>]
+
+flags:
+  -api-key-file string
+    	API key file to check (default: from twd up)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tailnet string
+    	tailnet to check the API key against (default: from twd up)
+```
+
 ### twd host
 
 add, list, remove or set up hosts
@@ -340,26 +360,6 @@ flags:
     	state directory (default $TWD_STATE_DIR or ~/.twd)
 ```
 
-### twd doctor
-
-check this machine can run twd
-
-```text
-twd doctor: check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier
-
-usage: twd doctor [--tailnet <tailnet> --api-key-file <file>]
-
-flags:
-  -api-key-file string
-    	API key file to check (default: from twd up)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-  -tailnet string
-    	tailnet to check the API key against (default: from twd up)
-```
-
 ## Develop
 
 ### twd init
@@ -445,6 +445,73 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
 ```
 
+### twd docs
+
+search and read twd's docs offline
+
+```text
+twd docs: twd's docs, offline: search them, print one doc or section (e.g. errors.md#acl_denied)
+
+usage: twd docs search <words…> [--limit 10] | docs show <doc>[#<anchor>] | docs ls
+  (every command takes --state-dir, default ~/.twd, and --json)
+```
+
+#### twd docs ls
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -limit int
+    	search: at most this many sections (default 10)
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
+#### twd docs search
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -limit int
+    	search: at most this many sections (default 10)
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
+#### twd docs show
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -limit int
+    	search: at most this many sections (default 10)
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
+### twd mcp
+
+twd's MCP server for coding agents (stdio)
+
+```text
+twd mcp: twd's MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it
+
+usage: twd mcp [--allow deploy,kill,undeploy] | mcp --config
+
+flags:
+  -allow string
+    	also allow these tools: deploy, kill, undeploy (comma-separated). On the twd host this is what enables them; from a linked machine your twd.dev/cap/mcp grant decides, and this only narrows
+  -config
+    	print how to register twd's MCP server with a coding agent, and exit
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
 ### twd agent
 
 teach coding agents to drive twd (skills)
@@ -512,73 +579,6 @@ flags:
 flags:
   -json
     	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-### twd mcp
-
-twd's MCP server for coding agents (stdio)
-
-```text
-twd mcp: twd's MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it
-
-usage: twd mcp [--allow deploy,kill,undeploy] | mcp --config
-
-flags:
-  -allow string
-    	also allow these tools: deploy, kill, undeploy (comma-separated). On the twd host this is what enables them; from a linked machine your twd.dev/cap/mcp grant decides, and this only narrows
-  -config
-    	print how to register twd's MCP server with a coding agent, and exit
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-### twd docs
-
-search and read twd's docs offline
-
-```text
-twd docs: twd's docs, offline: search them, print one doc or section (e.g. errors.md#acl_denied)
-
-usage: twd docs search <words…> [--limit 10] | docs show <doc>[#<anchor>] | docs ls
-  (every command takes --state-dir, default ~/.twd, and --json)
-```
-
-#### twd docs ls
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -limit int
-    	search: at most this many sections (default 10)
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-#### twd docs search
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -limit int
-    	search: at most this many sections (default 10)
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-#### twd docs show
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -limit int
-    	search: at most this many sections (default 10)
   -state-dir string
     	state directory (default $TWD_STATE_DIR or ~/.twd)
 ```
@@ -1594,69 +1594,6 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
 ```
 
-### twd logs
-
-request records and console lines; daemon logs
-
-```text
-twd logs: show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs
-
-usage: twd logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]
-
-flags:
-  -caller string
-    	only callers whose login or node name contains this (public: Funnel requests)
-  -component string
-    	mgmt | hostd | supervisor (default: hostd, or workerd for a workload)
-  -console
-    	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
-  -errors
-    	only errors (status ≥ 400, an outcome other than ok, or an exception)
-  -f	follow
-  -host string
-    	linked machine: only the replica on this host
-  -json
-    	machine-readable output
-  -n int
-    	lines (default 50)
-  -object string
-    	only this object (object ID, Class/name, Class or name)
-  -outcome string
-    	only this outcome (ok, exception, canceled, …)
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-  -status string
-    	only this status (404) or class (5xx)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
-  -trace string
-    	only this trace ID (or a prefix), or audit trace ID
-```
-
-### twd audit
-
-the hash-chained audit trail
-
-```text
-twd audit: show the hash-chained audit trail
-
-usage: twd audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all
-
-flags:
-  -all
-    	every record of the tenant
-  -human string
-    	records acting for this principal (login or caller node)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
-  -trace string
-    	records of one trace
-```
-
 ### twd telemetry
 
 the tenant's OTLP export
@@ -1715,6 +1652,69 @@ flags:
     	state directory (default $TWD_STATE_DIR or ~/.twd)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+```
+
+### twd audit
+
+the hash-chained audit trail
+
+```text
+twd audit: show the hash-chained audit trail
+
+usage: twd audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all
+
+flags:
+  -all
+    	every record of the tenant
+  -human string
+    	records acting for this principal (login or caller node)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -trace string
+    	records of one trace
+```
+
+### twd logs
+
+request records and console lines; daemon logs
+
+```text
+twd logs: show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs
+
+usage: twd logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]
+
+flags:
+  -caller string
+    	only callers whose login or node name contains this (public: Funnel requests)
+  -component string
+    	mgmt | hostd | supervisor (default: hostd, or workerd for a workload)
+  -console
+    	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
+  -errors
+    	only errors (status ≥ 400, an outcome other than ok, or an exception)
+  -f	follow
+  -host string
+    	linked machine: only the replica on this host
+  -json
+    	machine-readable output
+  -n int
+    	lines (default 50)
+  -object string
+    	only this object (object ID, Class/name, Class or name)
+  -outcome string
+    	only this outcome (ok, exception, canceled, …)
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -status string
+    	only this status (404) or class (5xx)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -trace string
+    	only this trace ID (or a prefix), or audit trace ID
 ```
 
 ## Operate
@@ -1785,6 +1785,52 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -workflow string
     	the Workflow's name (default: the one whose instance waits)
+```
+
+### twd completion
+
+shell completion script (bash, zsh, fish)
+
+```text
+twd completion: print a shell completion script for every command, subcommand and flag (bash: eval "$(twd completion bash)"; zsh: twd completion zsh > "${fpath[1]}/_twd"; fish: twd completion fish > ~/.config/fish/completions/twd.fish)
+
+usage: twd completion bash|zsh|fish
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
+#### twd completion bash
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
+#### twd completion fish
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+```
+
+#### twd completion zsh
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
 ```
 
 ### twd upgrade
@@ -1913,52 +1959,6 @@ usage: twd version
 flags:
   -check
     	compare with the latest release, print how to upgrade, and say whether the running twd up needs a restart
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-### twd completion
-
-shell completion script (bash, zsh, fish)
-
-```text
-twd completion: print a shell completion script for every command, subcommand and flag (bash: eval "$(twd completion bash)"; zsh: twd completion zsh > "${fpath[1]}/_twd"; fish: twd completion fish > ~/.config/fish/completions/twd.fish)
-
-usage: twd completion bash|zsh|fish
-
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-#### twd completion bash
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-#### twd completion fish
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TWD_STATE_DIR or ~/.twd)
-```
-
-#### twd completion zsh
-
-```text
-flags:
   -json
     	machine-readable output
   -state-dir string

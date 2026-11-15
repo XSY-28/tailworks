@@ -62,3 +62,14 @@ master; this branch was re-merged with master and re-opened against it.
   workload (its README says so).
 - README.md now links CHANGELOG.md, SECURITY.md and docs/cli.md (#53 has
   merged).
+
+## Verification (after merging master, 2026-11-15)
+
+- `make lint`: passes.
+- `make templates-typecheck`: passes (all seven templates).
+- `make test`: everything passes except the four tests CI quarantines for
+  #75 (`TestEgressWaitsForNewPeerPath`, `TestRejoinRejectedRemints`,
+  `TestR2Streaming`, `TestGeneratedWorkflows/AppCannotApprove`). They are
+  in netd and hostd, which this branch doesn't touch.
+- limits.md's `file:line` references were remapped to the merged code (all
+  still point at the same, unchanged lines).

@@ -120,6 +120,8 @@ and break master together (as #54, #55 and #57 did).
    - New CLI command: one entry in `commands` (`cmd/twd/main.go`) with its
      `group:` and `short:` (≤ 60 characters). There is nothing else to
      register.
+   - Command, flag or help text change: run `make cli-docs` and commit
+     `docs/cli.md` (`TestCLIReferenceUpToDate` fails when it is stale).
    - New error code: add it to `docs/errors.md` with "When" and "Fix".
    - Template or binding change: run `twd types` and commit the template's
      `worker-configuration.d.ts`.
