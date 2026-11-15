@@ -240,9 +240,9 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
-	// poolsStopped: no more pool refills (POST /v1/pools/stop, twd down
-	// --purge; poolstop.go).
-	poolsStopped bool
+	// teardown gate (teardown.go): POST /v1/teardown, twd down --purge.
+	tearingDown     bool
+	createsInFlight int
 
 	capOnce    sync.Once
 	capVec     mgmtapi.HostCapacity // capacity(): measured once

@@ -89,7 +89,7 @@ func (h *Host) maintainPools() {
 	}
 	var todo []want
 	h.mu.Lock()
-	if h.poolsStopped { // poolstop.go: twd down --purge is tearing down
+	if h.tearingDown { // teardown.go: twd down --purge
 		h.mu.Unlock()
 		return
 	}
