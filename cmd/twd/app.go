@@ -75,8 +75,9 @@ func cmdInit(args []string) error {
 	if _, err := os.Stat(filepath.Join(dir, "gitignore")); err == nil {
 		os.Rename(filepath.Join(dir, "gitignore"), filepath.Join(dir, ".gitignore"))
 	}
-	// Name the workload after the directory (twd.jsonc and wrangler.jsonc).
-	for _, fn := range []string{"twd.jsonc", "wrangler.jsonc"} {
+	// Name the workload after the directory (twd.jsonc and wrangler.jsonc),
+	// and the npm package too (its first "name" is the top-level one).
+	for _, fn := range []string{"package.json", "twd.jsonc", "wrangler.jsonc"} {
 		p := filepath.Join(dir, fn)
 		b, err := os.ReadFile(p)
 		if err != nil {
