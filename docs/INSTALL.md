@@ -2,79 +2,22 @@
 
 twd runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 ≥ 2.35)**. Each has a self-contained release tarball and the same
-`install.sh`; nothing needs root. [macOS](#macos) · [Linux](#linux) ·
-[Linux support matrix](#linux-support-matrix).
+`install.sh`; nothing needs root.
 
-## Try it without a tailnet
-
-You don't need a tailnet, a credential or `twd up` to run an app: `twd dev`
-starts the same twd-hostd, netd and workerd as production against an
-embedded control plane on 127.0.0.1 (Tailscale's testcontrol plus a local
-DERP/STUN) and an in-memory mgmt, and proxies a local port to the
-workload's node through a dev client node, so `getCaller()` sees a real
-(dev) caller.
-
-```sh
-twd init hello --template agent && cd hello
-twd dev                      # ready on http://127.0.0.1:8787 · edits reload · Ctrl-C to stop
-twd dev --once --json        # start, make one request, print it, exit (a smoke test)
-```
-
-`twd dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
-The `mcp` template serves on `/mcp` (its `/` answers 404); `twd dev` says
-so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
-policy evaluator (every dev node sees every other and gets the same test
-capabilities). Everything else below is for running apps on a real
-tailnet.
+The path through this page: install on [macOS](#macos) or [Linux](#linux),
+then your first deploy (the [README quick start](../README.md#quick-start-deploy-your-first-durable-object),
+and [troubleshooting](troubleshooting.md) if it doesn't answer), then
+[upgrade](#upgrade) and [uninstall](#uninstall) when the time comes. Also
+here: [trying an app without a tailnet](#try-it-without-a-tailnet), how
+workloads are [isolated](#isolation), and [tuning](#tuning-how-fast-a-new-objects-own-node-comes-up).
+The words (tenant, workload, tier, …) are explained in
+[concepts.md](concepts.md). Where each platform is tested, and what was
+measured there: [install-testing.md](install-testing.md).
 
 ## macOS
 
 These are the exact steps for an Apple-silicon Mac with nothing installed:
-no Go, no Node.js, no Homebrew packages. They were run on `mbp` (M2 Pro,
-macOS 26.6) by `make e2e-mbp`; measured numbers are in STATUS.md (M6).
-
-> **Isolation, honestly.** twd's default is the **process tier**: every app
-> runs in a workerd (or Node) process on your machine, and each Durable
-> Object gets its own tailnet node and identity. V8 isolates and twd's
-> egress guard are real boundaries, but this is **dev-grade isolation**:
-> there is no VM between tenants and your user account. On top of that,
-> twd-hostd runs every tenant's workerd **and Node app** in a per-workload
-> **process sandbox**, on by default (`twd-hostd -sandbox auto`):
->
-> - **macOS: Seatbelt** (`sandbox-exec`, generated profile).
-> - **Linux: Landlock + seccomp** (no root and no user namespaces needed;
->   kernel 5.13+ with Landlock enabled, e.g. Ubuntu 22.04+/24.04, Debian 12,
->   Fedora). A small launcher in twd-hostd applies the rules, then execs
->   workerd or node in place.
->
-> Either way a workload can write only its own instance and data dirs, read
-> only the OS, its runtime binary and its install prefix, and can't read
-> your home dir (including `~/.twd`), twd's state (node keys, mgmt custody,
-> other tenants' storage) or any tenant's API key file, and can't use
-> mgmt's or hostd's sockets. **Linux adds more:** with Landlock ABI ≥ 4
-> (kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) a workload may open TCP only
-> to its own app port and egress proxy, so a malicious Node app can't
-> bypass netd's proxy; a seccomp filter refuses ptrace and
-> `process_vm_readv/writev` (so no reading a sibling's memory), kexec,
-> mount, bpf, perf_event_open, keyctl, new namespaces, io_uring, and
-> UDP/ICMP/raw/MPTCP sockets; and other processes' `/proc` entries (their
-> environment, cmdline) are unreadable. Workloads get **no unix sockets**
-> (seccomp; workerd's listener is inherited and its services are
-> token-checked loopback TCP), so the host's tailscaled or docker socket is
-> out of reach, and they may signal only themselves. twd's own sockets
-> refuse sandboxed peers too. As defence in depth, if *your user* can reach
-> the system tailscaled's socket or a container engine (or is in the
-> docker/podman/lxd groups), `twd doctor` warns (`host_sockets`) and twd
-> serves one tenant only unless `twd up --insecure-shared-host`: run twd as
-> a dedicated user to share a host.
->
-> `twd doctor` checks that the sandbox enforces on your machine (Linux: the
-> Landlock ABI too), and while twd runs, that every workload is under it.
-> **Without a sandbox** (Linux without Landlock) `twd doctor` warns loudly,
-> and twd refuses to run a second tenant's process-tier workloads unless you
-> pass `twd up --insecure-shared-host`. **microVM isolation needs Linux with
-> KVM (Firecracker) or macOS (Virtualization.framework)**; see
-> [COMPAT.md](COMPAT.md#containers). Don't run code you don't trust on the process tier.
+no Go, no Node.js, no Homebrew packages.
 
 ### What you need
 
@@ -417,7 +360,8 @@ start `twd-hostd -host-id <id> -mgmt http://twd-mgmt.<tailnet> -tsnet-control-ur
 
 #### Where a workload runs (placement, multi-host)
 
-With more than one host, mgmt picks the host at deploy (ADR-033 draft, Proposed):
+With more than one host, mgmt picks the host at deploy
+([ADR-033](design/adr/033-smart-placement.md)):
 
 1. **Eligible hosts** are live (a heartbeat in the last 10 s), in the tenant's
    pool (`twd tenant set --pool`), offer the workload's tier (`"tier":
@@ -507,8 +451,13 @@ no Funnel and no posture. See [headscale.md](headscale.md).
 `~/.twd` (`--state-dir` to use another directory). `twd deploy` preflights
 the grants your app declares (`tailnet.connects`), bundles it, and waits
 until the workload node is on your tailnet, then prints its address:
-`http://twd-support-<id>.<tailnet>.ts.net/`. Day 2: `twd ls`, `twd logs
-support`, `twd kill <object> --cascade`, `twd audit <object>`, `twd status`.
+`http://twd-support-<id>.<tailnet>.ts.net/`. To call it, a grant must let
+you reach the workload's tag on port 80 (the
+[quick start](../README.md#quick-start-deploy-your-first-durable-object)
+shows it, and `twd deploy` prints it with the tagOwners for new tags). If
+the first deploy doesn't answer, see [troubleshooting.md](troubleshooting.md).
+Day 2: `twd ls`, `twd logs support`, `twd kill <object> --cascade`,
+`twd audit <object>`, `twd status`.
 
 #### A second tenant (another tailnet) on the same Mac
 
@@ -588,6 +537,77 @@ Installed with `get.sh`? It doesn't keep the release directory; see
   From a linked machine, `host_unavailable` means mgmt could not reach the
   workload's host on its push port (the policy grant `tag:twd-mgmt` →
   `tag:twd-host` `tcp:7474`, or the host is down).
+- `twd deploy` worked but the app doesn't answer, `identity_pending`,
+  `peer_not_visible`, or a deployment `failed` in `twd ls`: see
+  [troubleshooting.md](troubleshooting.md).
+
+## Try it without a tailnet
+
+You don't need a tailnet, a credential or `twd up` to run an app. `twd dev`
+runs it on your machine with the same host agent (twd-hostd, netd) and
+workerd as production. In place of your tailnet, it starts a test control
+plane and relay on 127.0.0.1, with an in-memory mgmt. A local port reaches
+the app through a dev client node, so `getCaller()` sees a real (dev)
+caller.
+
+```sh
+twd init hello --template agent && cd hello
+twd dev                      # ready on http://127.0.0.1:8787 · edits reload · Ctrl-C to stop
+twd dev --once --json        # start, make one request, print it, exit (a smoke test)
+```
+
+`twd dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
+The `mcp` template serves on `/mcp` (its `/` answers 404); `twd dev` says
+so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
+policy evaluator. Every dev node sees every other and gets the same test
+capabilities, so a call that works in dev can still need a grant on a
+tailnet.
+
+## Isolation
+
+twd's default is the **process tier**: every app runs in a workerd (or
+Node) process on your machine, and each Durable Object gets its own tailnet
+node and identity. V8 isolates and twd's egress guard are real boundaries,
+but this is **dev-grade isolation**: there is no VM between tenants and
+your user account. On top of that, twd-hostd runs every tenant's workerd
+**and Node app** in a per-workload **process sandbox**, on by default
+(`twd-hostd -sandbox auto`):
+
+- **macOS: Seatbelt** (`sandbox-exec`, generated profile).
+- **Linux: Landlock + seccomp** (no root and no user namespaces needed;
+  kernel 5.13+ with Landlock enabled, e.g. Ubuntu 22.04+/24.04, Debian 12,
+  Fedora). A small launcher in twd-hostd applies the rules, then execs
+  workerd or node in place.
+
+Either way a workload can write only its own instance and data dirs, read
+only the OS, its runtime binary and its install prefix, and can't read
+your home dir (including `~/.twd`), twd's state (node keys, mgmt custody,
+other tenants' storage) or any tenant's API key file, and can't use
+mgmt's or hostd's sockets. **Linux adds more:** with Landlock ABI ≥ 4
+(kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) a workload may open TCP only
+to its own app port and egress proxy, so a malicious Node app can't
+bypass netd's proxy; a seccomp filter refuses ptrace and
+`process_vm_readv/writev` (so no reading a sibling's memory), kexec,
+mount, bpf, perf_event_open, keyctl, new namespaces, io_uring, and
+UDP/ICMP/raw/MPTCP sockets; and other processes' `/proc` entries (their
+environment, cmdline) are unreadable. Workloads get **no unix sockets**
+(seccomp; workerd's listener is inherited and its services are
+token-checked loopback TCP), so the host's tailscaled or docker socket is
+out of reach, and they may signal only themselves. twd's own sockets
+refuse sandboxed peers too. As defence in depth, if *your user* can reach
+the system tailscaled's socket or a container engine (or is in the
+docker/podman/lxd groups), `twd doctor` warns (`host_sockets`) and twd
+serves one tenant only unless `twd up --insecure-shared-host`: run twd as
+a dedicated user to share a host.
+
+`twd doctor` checks that the sandbox enforces on your machine (Linux: the
+Landlock ABI too), and while twd runs, that every workload is under it.
+**Without a sandbox** (Linux without Landlock) `twd doctor` warns loudly,
+and twd refuses to run a second tenant's process-tier workloads unless you
+pass `twd up --insecure-shared-host`. **microVM isolation needs Linux with
+KVM (Firecracker) or macOS (Virtualization.framework)**; see
+[COMPAT.md](COMPAT.md#containers) and [the Linux microVM tier](#linux-the-microvm-tier-firecracker-kvm).
+Don't run code you don't trust on the process tier.
 
 ## Upgrade
 
@@ -622,7 +642,9 @@ To restore, `twd down`, put the directory back in the same place, and run
 `twd up`. Never run two copies of the same state at once: they share node
 identities. For one database, `twd d1 export <db> --output <file>` works
 while twd runs ([d1.md](d1.md)). Your OAuth client file
-(`~/.config/twd/oauth.env`) is not in the state dir.
+(`~/.config/twd/oauth.env`) is not in the state dir. `twd upgrade` takes
+its own backup before it installs, in `~/.twd/backups/`
+([upgrading.md](upgrading.md)).
 
 ## Uninstall
 
@@ -657,18 +679,20 @@ defaults are on, and each `twd up` stores them for the service:
 
 Measured on a production tailnet, with all three at their defaults: a new
 object's first request on its own node arrives **~0.23 s** after it is
-created (p95 ~0.3 s), down from ~7 s. Details: STATUS.md, "Fast identity".
+created (p95 ~0.3 s), down from ~7 s
+([how it was measured](install-testing.md#fast-identity)).
 `--warm-keys 0 --pool-nodes 0` turns both pools off.
 
 ## Linux
 
 The same flow on a Linux host: one tarball per architecture, `install.sh`
-into `~/.twd` without root, `twd doctor`, `twd up`. Measured on fresh Lima
-VMs by `make e2e-linux` (see the [support matrix](#linux-support-matrix)).
+into `~/.twd` without root, `twd doctor`, `twd up`. Which distros it was
+tested on, and the measured timings, are in
+[install-testing.md](install-testing.md#linux-support-matrix).
 
 > **Isolation on Linux.** The **process tier** runs every tenant's workerd
 > and Node app under **Landlock + seccomp** (unprivileged; no user
-> namespaces needed), with the guarantees listed at the top of this file.
+> namespaces needed), with the guarantees listed under [Isolation](#isolation).
 > `twd doctor` reports the kernel's Landlock ABI and that the sandbox
 > enforces; without Landlock it warns loudly and twd refuses to host a
 > second tenant on the process tier. The **microVM tier** (Firecracker,
@@ -777,22 +801,15 @@ their saved state with the same node IDs and IPs. **Ephemeral** nodes
 their saved state when they come back; twd notices (the backend sits in
 `NeedsLogin`), deletes the dead device, mints a fresh key and rejoins
 **under the same hostname**, so the MagicDNS name is stable but the node ID
-and IP change. Measured on Ubuntu 24.04 arm64: a spawned sub-agent was
-ready again 4.1 s after `systemctl --user restart twd` and answering a
-client on another machine after 9.5 s.
+and IP change.
 
-**Reboot** (measured, Ubuntu 24.04 arm64, lingering on): from the start of
-boot, ssh up at 6.6 s, `twd.service` active and twd healthy at 6.6 s, every
-object rejoined from saved state (same node IDs, nothing re-minted), and
-the workload answered a client on another machine at 8.6–17.1 s (two runs).
-The spread is on the **client's** side, not twd's: a persistent node comes
-back with the same node key but fresh WireGuard state, so a client that
-still holds a recent session to it keeps sending on that dead session and
-WireGuard only re-handshakes after ~15 s of silence; a client whose session
-had already gone idle, or a client that has never talked to the node,
-reaches it within 2–3 s of `twd up` (measured in STATUS.md, "Diagnosis: the
-12–17 s re-find delay"). The node is reachable over DERP the moment it is
-up.
+**After a reboot** (with lingering on), the service starts at boot and
+every object rejoins from its saved state: same node IDs, nothing
+re-minted. A client that talked to the workload just before the reboot can
+take up to about 15 s more to reach it, because it keeps sending on its old
+WireGuard session until that times out; other clients reach it within a few
+seconds. Measured times are in
+[install-testing.md](install-testing.md#restarts-and-reboots).
 
 ### Per-distro notes
 
@@ -806,71 +823,13 @@ up.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.twd`.
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
-  The matrix ran it under qemu x86-64 emulation on an Apple-silicon Mac, so its
-  timings are slower than a real x86 host's.
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
   because its ELF needs only `GLIBC_2.27`, but twd is not tested below 2.35.
-  Debian 11's kernel 5.10 also has no Landlock. Lima note: its
-  genericcloud image doesn't boot under `vmType: vz`; use qemu.
+  Debian 11's kernel 5.10 also has no Landlock.
 - **Alpine / musl**: refused. workerd can't even be exec'd: there is no glibc
   loader. The same goes for RHEL/Alma/Rocky 8–9 and Amazon Linux 2 (glibc too
-  old; not run in the matrix).
-
-### Linux support matrix
-
-`make e2e-linux`, 2026-11-08, release `0.1.0-bb3a3296`. Every VM was **fresh**:
-a Lima official template, 4 CPU / 6 GiB / 30 GiB, `--plain --mount-none`, and
-nothing mounted from the Mac. The tarball and the API key file (0600) were
-copied in with `limactl copy`. twd ran in the VM under `twd up --service`; the
-tag:ttest client and echo ran on the Mac (M5 Pro) over tailnet 1. Every row
-passed checks (a)–(f), `twd doctor` before and while running,
-`systemctl --user restart twd` (healthy again, the same workload IP answering
-the Mac), `twd down --purge --service`, and cleanup: zero leftover devices or
-keys. **Sandbox: none on every row in L1's run (made before the Landlock sandbox landed).** **microVM
-tier: unavailable on every row** (no `/dev/kvm` in these VMs, no
-firecracker, not root). Raw results: `e2e/real/results/l1-linux/`.
-With the sandbox on, the Ubuntu 24.04 arm64 row (reboot + ephemeral phases),
-Debian 12 and Ubuntu 24.04 amd64 were re-run during integration, and Ubuntu
-24.04 arm64 again on the final tree (`sandbox ok`, both workloads
-`process/landlock`, 410 after kill in ≤ 1 ms, reboot → answering 7.7 s;
-STATUS.md "Integration (Linux)" and "Final verification"). The microVM
-tier's own rows (`make e2e-linux-vm`, `make e2e-linux-reboot` on a
-nested-virt VM, from the shipped tarball) are there too.
-
-| | Ubuntu 24.04 arm64 | Debian 12 arm64 | Ubuntu 22.04 arm64 | Fedora 45 arm64 | Ubuntu 24.04 **amd64** (qemu, emulated) |
-|---|---|---|---|---|---|
-| result | **PASS** | **PASS** | **PASS** | **PASS** | **PASS** |
-| glibc · kernel · Landlock ABI | 2.39 · 6.8 · 4 | 2.36 · 6.1 · 2 | 2.35 · 5.15 · 1 | 2.44 · 7.2 · 10 | 2.39 · 6.8 · 4 |
-| `install.sh` | 0.41 s | 0.81 s | 0.84 s | 0.47 s | 9.1 s |
-| `twd up --service` → ready | 0.70 s | 0.65 s | 0.64 s | 0.68 s | 3.4 s |
-| `twd deploy` → ready (agent / mcp) | 2.78 / 1.57 s | 1.57 / 1.45 s | 1.50 / 1.46 s | 1.59 / 1.56 s | 4.70 / 5.55 s |
-| first request → object node ready | 1.64 s | 1.67 s | 1.62 s | 1.59 s | 3.95 s |
-| `twd kill --cascade` (CLI / push) | 66 / 56 ms | 72 / 63 ms | 65 / 59 ms | 69 / 56 ms | 319 / 133 ms |
-| request to a killed object → 410 | 1.7 ms | 1.3 ms | 0.9 ms | 0.9 ms | 10.9 ms |
-| Mac → VM path | **direct** after 0.19 s | **direct** after 0.18 s | **direct** after 0.18 s | **direct** after 0.20 s | **direct** after 0.47 s |
-| MCP `tools/list` direct · DERP-only (median) | 1.9 · 10.7 ms | 2.5 · 11.2 ms | 3.5 · 11.2 ms | 2.0 · 16.6 ms | 33.1 · 41.8 ms |
-| disco ping direct · DERP (median) | 0.41 · 7.8 ms | 0.57 · 9.2 ms | 0.67 · 8.5 ms | 0.42 · 14.1 ms | 1.47 · 13.4 ms |
-| `systemctl --user restart twd` → healthy / workload answers the Mac | 3.6 / 6.6 s | 3.6 / 6.7 s | 3.6 / 6.7 s | 0.7 / 3.8 s | 5.6 / 13.1 s |
-| `twd down --purge --service` | 0.62 s | 0.56 s | 0.60 s | 0.63 s | 4.0 s |
-| reboot (enable-linger, `limactl stop`/`start`) → service active / healthy / workload answers | 6.6 / 6.6 / 8.6–17.1 s | — | — | — | — |
-| `--ephemeral` sub-agent across `systemctl --user restart` → re-minted, ready / answers | 4.1 / 9.5 s | — | — | — | — |
-
-The direct path is the Mac ↔ Lima VM NAT (a private address); DERP-only
-numbers come from a second client with `TS_DEBUG_ALWAYS_USE_DERP=1`
-(region `sea`). The `systemctl --user restart` command itself returned in
-about 3.1 s on Ubuntu and Debian (the supervisor drains hostd, then mgmt,
-before systemd starts the new one), 0.17 s on Fedora 45, and 4.6 s on amd64.
-In every row, the first request after the restart that succeeded had waited
-about 3 s for the workload node to rejoin.
-
-Unsupported hosts (bonus rows; `TestUnsupportedHost`):
-
-| | Debian 11 arm64 (glibc 2.31, kernel 5.10) | Alpine 3.24 arm64 (musl) |
-|---|---|---|
-| `install.sh` | refused: `glibc 2.31 is too old: twd's workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10)` | refused: `this Linux uses musl libc (Alpine?); twd's workerd needs glibc >= 2.35 …` |
-| `bin/twd doctor` | `✗ glibc` (names the distro and the fix); `! kernel` (< 5.13); `! landlock` (ENOSYS) | `✗ glibc`: `this system uses musl libc (/lib/ld-musl-aarch64.so.1) …` |
-| would workerd start anyway? | yes (`workerd --version`; untested beyond that) | no (no glibc loader) |
+  old).
 
 ## Linux: the microVM tier (Firecracker, KVM)
 
@@ -898,18 +857,15 @@ arch on either. A guest of the wrong arch is refused (`twd doctor`:
 > (Landlock + seccomp) is unaffected. The GitHub release workflow builds every guest
 > on Linux runners and refuses to publish a tarball without one
 > (`RELEASE_VM_ASSETS=1`), so a GitHub release always has the tier;
-> `release.json` says `"microvm": true`. The red team's second pass found a
-> Mac-built tarball without the guest; the `make release` change above is
-> the fix, and the e2e-linux-vm row in STATUS.md says which tarball it ran.
+> `release.json` says `"microvm": true`.
 
 ### What you need
 
 - Linux arm64 or amd64 (x86_64) with `/dev/kvm` (bare metal, or a VM with
   nested virtualization), cgroups v2 and systemd. Tested end to end on
-  Ubuntu 24.04 arm64. amd64: the assets are built and the guest boots to
-  workerd, but the only x86 test host so far (nested KVM in a QEMU VM on an
-  AMD Zen 1 NAS, whose TSC it reports unstable) stalls its guests in an
-  interrupt storm, so the amd64 tier is not yet verified end to end.
+  Ubuntu 24.04 arm64. On amd64 the guest boots to workerd, but the tier is
+  not yet verified end to end
+  ([why](install-testing.md#the-microvm-tier)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
 
@@ -975,8 +931,8 @@ holds no tenant code and no keys (`-vm-snapshot`, on by default) instead of
 booting one. Use `-vm-snapshot-refill` to refill the pool by restoring too:
 refills are faster, but claims are slower. Each restored VM gets private
 copies of its memory pages; no page is shared between VMs. The base is
-rebuilt at every start and every hour (`-vm-snapshot-rotate`). See STATUS.md
-"FV" for the numbers.
+rebuilt at every start and every hour (`-vm-snapshot-rotate`). The numbers
+are in [install-testing.md](install-testing.md#the-microvm-tier).
 
 Check a running VM: `twd host vmcheck <workload> [--keyscan]` (guest memory,
 DO volume fsync latency, and a scan of the guest's disks, files and full RAM

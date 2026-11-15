@@ -15,10 +15,11 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 - **You run the machines.** [INSTALL.md](INSTALL.md): [macOS](INSTALL.md#macos)
   or [Linux](INSTALL.md#linux), then [upgrading.md](upgrading.md),
   [back up and restore](INSTALL.md#back-up-and-restore) and
-  [troubleshooting](INSTALL.md#troubleshooting).
+  [troubleshooting](INSTALL.md#troubleshooting). Where each platform is
+  tested: [install-testing.md](install-testing.md).
 - **You review security.** How callers are identified:
-  [COMPAT.md#identity](COMPAT.md#identity). How isolated an app is: the
-  "Isolation, honestly" note at the top of [INSTALL.md](INSTALL.md) and
+  [COMPAT.md#identity](COMPAT.md#identity). How isolated an app is:
+  [Isolation](INSTALL.md#isolation) in INSTALL.md and
   [containers.md](containers.md) (the microVM tier). The attacker's view:
   [THREAT-MODEL.md](../security/THREAT-MODEL.md) and
   [RED-TEAM.md](../security/RED-TEAM.md). The design:
@@ -32,6 +33,8 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 
 - [Quick start](../README.md#quick-start-deploy-your-first-durable-object):
   install, start twd, deploy a Durable Object, call it.
+- [Concepts](concepts.md): the words twd uses (tenant, workload, object,
+  tiers, facet mode, pool nodes, warm keys).
 - [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `twd dev`.
 - Templates: `twd init <dir> --template <name>`. `hello`, `agent`, `mcp`,
   `ai-agent` (a mock model; `src/model.ts` shows how to point it at an LLM
@@ -41,6 +44,7 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 ## Do: how-to guides
 
 - Bring a wrangler project: [wrangler.md](wrangler.md)
+- Fix a first deploy that doesn't answer: [troubleshooting.md](troubleshooting.md)
 - Store secrets: [secrets.md](secrets.md)
 - Use KV, R2, D1: [kv.md](kv.md), [r2.md](r2.md), [d1.md](d1.md)
 - Send and consume messages: [queues.md](queues.md)
