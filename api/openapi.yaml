@@ -3690,6 +3690,11 @@ components:
         `public_request` (one per public request),
         `public_rejected` (per-minute summary of requests the limits refused),
         `public_object_created` (a name admitted for a public create).
+        Workflow approvals (ADR-workflows-approvals), host chain:
+        `approval_requested` (a Workflow instance waits for an approval),
+        `approval_decision` (approved or rejected, with the approver's identity),
+        `approval_denied` (a decision refused, e.g. `cap_missing`),
+        `approval_timeout` (the wait timed out: rejected by default).
         Both chains:
         `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
       enum:
@@ -3735,6 +3740,10 @@ components:
         - public_request
         - public_rejected
         - public_object_created
+        - approval_requested
+        - approval_decision
+        - approval_denied
+        - approval_timeout
         - expose_on
         - expose_off
     AuditSource:

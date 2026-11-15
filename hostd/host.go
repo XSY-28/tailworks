@@ -279,6 +279,10 @@ type Host struct {
 	runDirOwned bool
 	ctr         *ctrManager
 	nowFn       func() time.Time // wall clock for cron triggers (tests)
+
+	// approvals.go: the Workflows' approval waits on this host.
+	apprOnce sync.Once
+	appr     *approvalStore
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;

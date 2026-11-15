@@ -151,6 +151,8 @@ export default {
         return admin(req, env, ctx, t);
       case "scheduled":
         return scheduled(env, t, req);
+      case "approval":
+        return deliverApproval(env, t);
       case "object":
         return routeObject(env, ctx, t.class, t.name, req);
       case "intercept": {
@@ -249,6 +251,7 @@ function makeHost(cls) {
         const w = this.env.LOADER.get(CFG.deploymentID + ":" + cls + ":" + name, () => {
           const env = { ...CFG.vars };
           for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
+          for (const w of CFG.workflows ?? []) env[w.binding] = exp.WorkflowGate({ props: { workflow: w.name } });
           env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
           return {
             compatibilityDate: CFG.compatDate,
@@ -500,6 +503,7 @@ export class TailnetApi extends WorkerEntrypoint {
         return { ok: false, error: errBody(m.includes("[killed]") ? "killed" : "bad_request", m) };
       }
     }
+    if (op === "approval") return approvalReport(this.env, p, args);
     if (op === "admit") {
       // Create admission: may the caller reach, and so create, class/name?
       // hostd decides from who asks: an attested object (as), a tailnet
@@ -524,5 +528,134 @@ export class TailnetApi extends WorkerEntrypoint {
     } catch (e) {
       return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
     }
+  }
+}
+
+// ---- Workflows and approvals (ADR-workflows-approvals) ----
+//
+// WF_<name> binds workerd's built-in engine (its WorkflowBinding entrypoint).
+// Tenant code never holds it: its env.<binding> is the Workflow API over
+// WorkflowGate (props minted here or in the generated config).
+
+const isApprovalType = (t) => t === "approval" || (typeof t === "string" && t.startsWith("approval-"));
+
+function engineOf(env, workflow) {
+  const w = (CFG.workflows ?? []).find((x) => x.name === workflow);
+  const e = w && env["WF_" + w.name];
+  if (!e) throw new Error("no Workflow " + workflow + " in this app");
+  return e;
+}
+
+// dropApprover removes any "approver" an app put in an event payload (and
+// in payload.metadata, which waitForApproval returns): only twd sets it.
+function dropApprover(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  const { approver: _a, ...rest } = payload;
+  if (rest.metadata && typeof rest.metadata === "object" && !Array.isArray(rest.metadata)) {
+    const { approver: _m, ...meta } = rest.metadata;
+    rest.metadata = meta;
+  }
+  return rest;
+}
+
+// WorkflowGate is the Workflow API tenant code reaches (props.workflow). It
+// forwards to the engine, except that an approval event (type "approval" or
+// "approval-*") can only come from twd, which checked the approver's grant
+// (hostd), and no other event may carry an approver.
+export class WorkflowGate extends WorkerEntrypoint {
+  get #e() {
+    return engineOf(this.env, this.ctx.props.workflow);
+  }
+  getInstance(id) {
+    return this.#e.getInstance(id);
+  }
+  deleteInstance(id) {
+    return this.#e.deleteInstance(id);
+  }
+  create(options) {
+    return this.#e.create(options);
+  }
+  createBatch(options) {
+    return this.#e.createBatch(options);
+  }
+  deleteBatch(options) {
+    return this.#e.deleteBatch(options);
+  }
+  pause(id) {
+    return this.#e.pause(id);
+  }
+  resume(id) {
+    return this.#e.resume(id);
+  }
+  terminate(id, options) {
+    return this.#e.terminate(id, options);
+  }
+  restart(id, options) {
+    return this.#e.restart(id, options);
+  }
+  status(id) {
+    return this.#e.status(id);
+  }
+  subscribe(id, options) {
+    return this.#e.subscribe(id, options);
+  }
+  async sendEvent(id, event) {
+    const type = event?.type;
+    if (isApprovalType(type)) {
+      throw new Error(
+        "[approval_requires_identity] an approval is a decision by a tailnet identity: send it through twd (POST /_twd/approvals/" +
+          this.ctx.props.workflow + "/<instance> on this workload's node, twd approve, or the admin UI), not from app code",
+      );
+    }
+    return this.#e.sendEvent(id, { type, payload: dropApprover(event?.payload) });
+  }
+}
+
+// deliverApproval sends an approval hostd authorised and audited (cf.twd
+// kind "approval": only hostd sets it) to the waiting instance.
+async function deliverApproval(env, t) {
+  if (typeof t.workflow !== "string" || typeof t.instance !== "string" || !isApprovalType(t.type)) {
+    return errResponse("bad_request", "bad approval route");
+  }
+  try {
+    await engineOf(env, t.workflow).sendEvent(t.instance, { type: t.type, payload: t.payload ?? {} });
+  } catch (e) {
+    const m = String(e?.message ?? e);
+    if (m.includes("instance.not_found")) return errResponse("unknown_object", "no instance " + t.instance + " of Workflow " + t.workflow);
+    return json(502, errBody("bad_request", "approval delivery: " + m.slice(0, 512)), { "twd-error": "bad_request" });
+  }
+  return json(200, { ok: true });
+}
+
+// approvalReport: the runtime in the tenant service reports an approval
+// wait (op "requested" | "timeout") of an instance of one of this app's
+// Workflows. The instance must exist; hostd records it (pending list,
+// audit). Only the tenant service runs Workflows, so facets may not report.
+async function approvalReport(env, props, args) {
+  if (props.kind !== "workload") return { ok: false, error: errBody("bad_request", "only a Workflow may report an approval wait") };
+  const a = args ?? {};
+  if (!["requested", "timeout"].includes(a.op) || typeof a.instance !== "string" || typeof a.step !== "string" || !isApprovalType(a.type)) {
+    return { ok: false, error: errBody("bad_request", "bad approval report") };
+  }
+  try {
+    await engineOf(env, a.workflow).status(a.instance);
+  } catch (e) {
+    return { ok: false, error: errBody("unknown_object", "approval report: " + String(e?.message ?? e).slice(0, 256)) };
+  }
+  const facts = {};
+  for (const [k, v] of Object.entries(a.facts ?? {})) if (typeof v === "number" && Number.isFinite(v) && Object.keys(facts).length < 32) facts[k.slice(0, 64)] = v;
+  const approval = {
+    op: a.op,
+    workflow: a.workflow,
+    instance: a.instance,
+    step: a.step.slice(0, 256),
+    type: a.type,
+    timeout: typeof a.timeout === "string" || typeof a.timeout === "number" ? String(a.timeout).slice(0, 64) : "",
+    facts,
+  };
+  try {
+    return { ok: true, value: await hostd(env, "approval", { approval }) };
+  } catch (e) {
+    return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
   }
 }

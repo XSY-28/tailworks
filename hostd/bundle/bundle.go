@@ -71,6 +71,10 @@ type App struct {
 	// text bindings (workerd) or environment variables (runtime node) and
 	// override vars of the same name. Never logged or serialised.
 	Secrets map[string]string `json:"-"`
+
+	// Workflows are wrangler.jsonc "workflows" (workflows.go), run by
+	// workerd's built-in engine.
+	Workflows []Workflow
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -311,6 +315,9 @@ func Parse(files map[string][]byte) (*App, error) {
 		default:
 			return nil, fmt.Errorf("bundle: tailnet.objects.%s.egress must be %q or %q", name, EgressObject, EgressWorkload)
 		}
+	}
+	if err := parseWorkflows(wb, a); err != nil {
+		return nil, err
 	}
 	var twdJSON []byte
 	if tb, ok := files["twd.jsonc"]; ok {

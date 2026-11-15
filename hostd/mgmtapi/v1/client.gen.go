@@ -39,6 +39,10 @@ func (e Arch) Valid() bool {
 // Defines values for AuditKind.
 const (
 	AuditKindAllow               AuditKind = "allow"
+	AuditKindApprovalDecision    AuditKind = "approval_decision"
+	AuditKindApprovalDenied      AuditKind = "approval_denied"
+	AuditKindApprovalRequested   AuditKind = "approval_requested"
+	AuditKindApprovalTimeout     AuditKind = "approval_timeout"
 	AuditKindContainerRelease    AuditKind = "container_release"
 	AuditKindContainerReserve    AuditKind = "container_reserve"
 	AuditKindContainerStart      AuditKind = "container_start"
@@ -88,6 +92,14 @@ const (
 func (e AuditKind) Valid() bool {
 	switch e {
 	case AuditKindAllow:
+		return true
+	case AuditKindApprovalDecision:
+		return true
+	case AuditKindApprovalDenied:
+		return true
+	case AuditKindApprovalRequested:
+		return true
+	case AuditKindApprovalTimeout:
 		return true
 	case AuditKindContainerRelease:
 		return true
@@ -1006,6 +1018,11 @@ type AuditBatch struct {
 // `public_request` (one per public request),
 // `public_rejected` (per-minute summary of requests the limits refused),
 // `public_object_created` (a name admitted for a public create).
+// Workflow approvals (ADR-workflows-approvals), host chain:
+// `approval_requested` (a Workflow instance waits for an approval),
+// `approval_decision` (approved or rejected, with the approver's identity),
+// `approval_denied` (a decision refused, e.g. `cap_missing`),
+// `approval_timeout` (the wait timed out: rejected by default).
 // Both chains:
 // `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 type AuditKind string
@@ -1088,6 +1105,11 @@ type AuditRecord struct {
 	// `public_request` (one per public request),
 	// `public_rejected` (per-minute summary of requests the limits refused),
 	// `public_object_created` (a name admitted for a public create).
+	// Workflow approvals (ADR-workflows-approvals), host chain:
+	// `approval_requested` (a Workflow instance waits for an approval),
+	// `approval_decision` (approved or rejected, with the approver's identity),
+	// `approval_denied` (a decision refused, e.g. `cap_missing`),
+	// `approval_timeout` (the wait timed out: rejected by default).
 	// Both chains:
 	// `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 	Kind     AuditKind `json:"kind"`

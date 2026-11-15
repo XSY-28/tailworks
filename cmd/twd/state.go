@@ -474,7 +474,7 @@ func findWorkerd(flagVal string) (string, error) {
 			return p, nil
 		}
 	}
-	return "", fail("not_installed", "workerd not found").withFix("pass --workerd <path> or set $TWD_WORKERD (twd pins workerd 1.20261108.1)")
+	return "", fail("not_installed", "workerd not found").withFix("pass --workerd <path> or set $TWD_WORKERD (twd pins workerd 1.20261114.1)")
 }
 
 // createTwdDir finds the create-twd package (bundler + templates).
