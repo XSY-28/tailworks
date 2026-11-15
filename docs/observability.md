@@ -116,6 +116,7 @@ unit becomes a suffix, counters end in `_total`).
 | `twd.host.capacity` | `twd_host_capacity` | gauge | `twd.resource` (`nodes`, `vms`, `vm_memory_mib`, `huge_memory_mib`, `vcpus`, `scratch_mib`) | the host's capacity vector |
 | `twd.host.usage` | `twd_host_usage` | gauge | `twd.resource` (the same, plus `containers`) | live usage against it |
 | `twd.logs.dropped` | `twd_logs_dropped_total` | counter | `twd.tenant.id`, `twd.workload` | request records over the workload's rate (below) |
+| `twd.public.rejected` | `twd_public_rejected_total` | counter | `twd.tenant.id`, `twd.workload`, `twd.public.reason` (`conns`, `ip_conns`, `rate_limited`, `too_large`) | public requests and connections the public listener's limits refused (added once a minute, with the `public_rejected` audit summary) |
 | `twd.telemetry.export.dropped` | `twd_telemetry_export_dropped_total` | counter | `twd.tenant.id`, `twd.workload`, `twd.signal` | telemetry not exported (queue full, or the export failed) |
 | `twd.telemetry.export.errors` | `twd_telemetry_export_errors_total` | counter | `twd.tenant.id`, `twd.workload`, `twd.signal` | failed OTLP exports |
 

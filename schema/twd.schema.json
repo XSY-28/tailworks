@@ -150,7 +150,9 @@
             "maxBodyBytes": { "type": "integer" },
             "maxHeaderBytes": { "type": "integer" },
             "timeoutSeconds": { "type": "integer" },
-            "maxConns": { "type": "integer" }
+            "maxConns": { "type": "integer" },
+            "maxConnsPerIp": { "type": "integer", "description": "Concurrent connections per client address (IPv6: per /64)." },
+            "upgradeLifetimeSeconds": { "type": "integer", "description": "Longest an upgraded (WebSocket) connection stays open." }
           }
         }
       }

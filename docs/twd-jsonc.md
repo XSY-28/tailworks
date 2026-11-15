@@ -112,7 +112,7 @@ tailnet-only.
 |---|---|---|
 | `routes` | `["/x", "/x/*", "/*"]` | **Required.** exact paths, prefixes, or everything |
 | `upgrade` | `[route]` | routes (also in `routes`) that may upgrade to WebSocket or SSE |
-| `limits` | object | `rps`, `burst`, `ipRps`, `ipBurst`, `maxBodyBytes`, `maxHeaderBytes`, `timeoutSeconds`, `maxConns`, up to twd's ceilings |
+| `limits` | object | `rps`, `burst`, `ipRps`, `ipBurst`, `maxBodyBytes`, `maxHeaderBytes`, `timeoutSeconds`, `maxConns`, `maxConnsPerIp`, `upgradeLifetimeSeconds`, up to twd's ceilings |
 
 ## Tags and `twd init`
 

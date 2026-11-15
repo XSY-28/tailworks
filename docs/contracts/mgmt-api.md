@@ -4033,9 +4033,11 @@ netd's limits on a public listener (ADR-029 D5); defaults filled in.
 | `ipRps` | number | no | Requests per second, per client IP. |
 | `maxBodyBytes` | integer (int64) | no |  |
 | `maxConns` | integer | no |  |
+| `maxConnsPerIp` | integer | no | Concurrent connections per client address (an IPv6 client counts per /64). |
 | `maxHeaderBytes` | integer | no |  |
 | `rps` | number | no | Requests per second, per workload. |
 | `timeoutSeconds` | integer | no |  |
+| `upgradeLifetimeSeconds` | integer | no | Longest an upgraded (WebSocket) connection stays open. |
 
 #### `PurgeResult`
 
