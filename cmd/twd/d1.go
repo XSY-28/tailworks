@@ -97,10 +97,8 @@ func cmdD1Sub(sub string, args []string) error {
 	appDir := "."
 	a, appErr := loadApp(appDir, "")
 	if appErr == nil {
-		if wb, err := os.ReadFile(filepath.Join(a.Dir, "wrangler.jsonc")); err == nil {
-			if dbs, err = bundle.D1Databases(wb); err != nil {
-				return fail("bad_request", err.Error())
-			}
+		if dbs, err = appD1Databases(a); err != nil {
+			return fail("bad_request", err.Error())
 		}
 	}
 	var db *bundle.D1Database

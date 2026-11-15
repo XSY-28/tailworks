@@ -188,6 +188,11 @@ func TestD1(t *testing.T) {
 		if e := w.qErr(map[string]any{"sql": "SELECT v FROM kv", "method": "first", "col": "nope"}); !strings.Contains(e, "D1_COLUMN_NOTFOUND") {
 			t.Fatalf("first(missing col): %s", e)
 		}
+		// RETURNING: the applied write's rows come back to the caller.
+		if got := js(w.q("INSERT INTO kv (k, v) VALUES ('ret', 5) RETURNING k, v * 2 AS dbl", "first")); got != `{"dbl":10,"k":"ret"}` {
+			t.Fatalf("RETURNING: %s", got)
+		}
+		w.q("DELETE FROM kv WHERE k = 'ret'", "run")
 		if got := js(w.q("SELECT k, v FROM kv ORDER BY k LIMIT 2", "raw")); got != `[["a",1],["b",2]]` {
 			t.Fatalf("raw: %s", got)
 		}

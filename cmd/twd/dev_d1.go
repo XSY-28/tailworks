@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/rosskukulinski/twd/hostd"
@@ -18,6 +17,16 @@ import (
 // migrations_dir layout), through the dev host's store admin op, as
 // `wrangler d1 migrations apply --local` would.
 
+// appD1Databases are the app's d1_databases, from its wrangler config as
+// loaded (wrangler.jsonc, .json or .toml, with --env applied).
+func appD1Databases(a *app) ([]bundle.D1Database, error) {
+	b, err := json.Marshal(a.Wrangler)
+	if err != nil {
+		return nil, err
+	}
+	return bundle.D1Databases(b)
+}
+
 type devD1 struct {
 	Binding  string   `json:"binding"`
 	Database string   `json:"database"`
@@ -25,11 +34,7 @@ type devD1 struct {
 }
 
 func devD1Migrate(ctx context.Context, h *hostd.Host, tenantID string, a *app) ([]devD1, error) {
-	wb, err := os.ReadFile(filepath.Join(a.Dir, "wrangler.jsonc"))
-	if err != nil {
-		return nil, nil
-	}
-	dbs, err := bundle.D1Databases(wb)
+	dbs, err := appD1Databases(a)
 	if err != nil {
 		return nil, err
 	}
