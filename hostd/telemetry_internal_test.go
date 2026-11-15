@@ -10,10 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/twd/hostd/mgmtapi"
 	"github.com/rosskukulinski/twd/internal/obs"
 )
 
@@ -201,5 +203,29 @@ func TestConsoleFollowAcrossRotation(t *testing.T) {
 		if l == "after rotation\n" {
 			return
 		}
+	}
+}
+
+// The export queue keeps the newest QueueMax items, whatever the mix of
+// queued and new.
+func TestExportQueueBound(t *testing.T) {
+	h, w := telHost(t, TelemetryOptions{QueueMax: 5})
+	e := h.tel.exporterOf(w)
+	e.known, e.cfg = true, &mgmtapi.OTLPExport{Endpoint: "http://otel:4318", Signals: obs.AllSignals}
+	rec := func(n int) []obs.LogRecord {
+		out := make([]obs.LogRecord, n)
+		for i := range out {
+			out[i].Body = strconv.Itoa(i)
+		}
+		return out
+	}
+	e.addLogs(rec(3))
+	e.addLogs(rec(4)) // 7 > 5: the two oldest queued go
+	if len(e.logs) != 5 || e.logs[0].Body != "2" || e.logs[1].Body != "0" || e.logs[4].Body != "3" {
+		t.Fatalf("%+v", e.logs)
+	}
+	e.addLogs(rec(8)) // 13 > 5: all queued and three new go
+	if len(e.logs) != 5 || e.logs[0].Body != "3" || e.logs[4].Body != "7" {
+		t.Fatalf("%+v", e.logs)
 	}
 }

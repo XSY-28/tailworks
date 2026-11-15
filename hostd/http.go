@@ -528,7 +528,7 @@ func (h *Host) pushAPI() http.Handler {
 		writeJSON(w, 200, h.Status())
 	})
 	// The operator's local scrape (the tailnet one is MetricsListener).
-	m.Handle("GET /metrics", h.MetricsHandler())
+	m.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) { h.MetricsHandler().ServeHTTP(w, r) })
 	// teardown.go: no new objects before twd down --purge lists them.
 	m.HandleFunc("POST /v1/teardown", h.teardownHandler)
 

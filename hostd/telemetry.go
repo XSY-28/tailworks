@@ -180,7 +180,12 @@ func (t *telemetry) close() {
 func (h *Host) Metrics() *obs.Registry { return h.tel.reg }
 
 // MetricsHandler serves GET /metrics.
-func (h *Host) MetricsHandler() http.Handler { return obs.MetricsHandler(h.tel.reg) }
+func (h *Host) MetricsHandler() http.Handler {
+	if h.tel == nil {
+		return http.NotFoundHandler()
+	}
+	return obs.MetricsHandler(h.tel.reg)
+}
 
 func (t *telemetry) objectCounts(emit func(float64, ...string)) {
 	type k struct{ tenant, wl, class, status string }
@@ -926,11 +931,14 @@ func (e *exporter) addLogs(rs []obs.LogRecord) {
 	if !e.wants(obs.SignalLogs) {
 		return
 	}
+	// Over the bound: drop the oldest (queued first, then new).
 	if over := len(e.logs) + len(rs) - e.t.opt.QueueMax; over > 0 {
-		e.t.expDropped.Add(float64(over), e.w.tenantID, e.w.name, obs.SignalLogs)
-		if over >= len(e.logs) {
+		if e.known {
+			e.t.expDropped.Add(float64(over), e.w.tenantID, e.w.name, obs.SignalLogs)
+		}
+		if old := len(e.logs); over >= old {
 			e.logs = e.logs[:0]
-			rs = rs[min(len(rs), over-len(e.logs)):]
+			rs = rs[min(len(rs), over-old):]
 		} else {
 			e.logs = e.logs[over:]
 		}
@@ -945,7 +953,9 @@ func (e *exporter) addSpan(s obs.Span) {
 		return
 	}
 	if len(e.spans) >= e.t.opt.QueueMax {
-		e.t.expDropped.Add(1, e.w.tenantID, e.w.name, obs.SignalTraces)
+		if e.known {
+			e.t.expDropped.Add(1, e.w.tenantID, e.w.name, obs.SignalTraces)
+		}
 		e.spans = e.spans[1:]
 	}
 	e.spans = append(e.spans, s)

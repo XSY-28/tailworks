@@ -144,8 +144,9 @@ implemented on the branch; phases 2 and 3 are proposals.
      tailnet policy decides whether that workload may reach it. A public
      internet collector is refused like any other egress.
    - twd implements OTLP/HTTP+JSON and the Prometheus text format itself
-     (about 600 lines, `internal/obs`), instead of adding the OpenTelemetry
-     Go SDK, its exporters and their gRPC/protobuf dependencies.
+     (about 700 lines, `internal/obs/otlp.go` and `metrics.go`), instead of
+     adding the OpenTelemetry Go SDK, its exporters and their
+     gRPC/protobuf dependencies.
    - With no config nothing is exported, and records and `/metrics` work as
      above: zero-config `twd up` has structured `twd logs` and metrics.
 7. **Safety.**
@@ -196,3 +197,7 @@ implemented on the branch; phases 2 and 3 are proposals.
 - A caller can choose the W3C trace ID of its requests (that is the point
   of propagation). That can mislead a tenant's trace view, never its
   audit trail, whose IDs it can't choose.
+- The join table and each metric's series cap are per host, shared by all
+  of its tenants. A tenant with very many objects can push others' records
+  to be written unjoined and their per-object egress series into the
+  overflow series; nothing is lost, and the bounds keep memory flat.
