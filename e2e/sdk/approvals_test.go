@@ -4,6 +4,7 @@ package sdk
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -196,6 +197,39 @@ func TestWorkflowApprovals(t *testing.T) {
 		}
 	})
 
+	t.Run("ViaMgmtPushAPI", func(t *testing.T) {
+		// What mgmt sends for `twd approve` / the admin UI: the approver's
+		// WhoIs identity and their grants toward mgmt, to the host's push API.
+		code, r := s.getJSON(base + "/agents/plain-refund-agent/r1/start?amount=5&id=wf-mgmt")
+		if code != 200 {
+			t.Fatalf("start: %d %v", code, r)
+		}
+		push := s.a.Host.PushHandler()
+		pushDo := func(method, path, body string) (int, map[string]any) {
+			req := httptest.NewRequest(method, path, strings.NewReader(body))
+			w := httptest.NewRecorder()
+			push.ServeHTTP(w, req)
+			return w.Code, parse(w.Body.Bytes())
+		}
+		eventually(t, 30*time.Second, "listed on the push API", func() (bool, any) {
+			code, r := pushDo("GET", "/v1/approvals?tenant="+s.a.TenantID, "")
+			return code == 200 && strings.Contains(js(r), `"instance":"wf-mgmt"`), r
+		})
+		bob := `"approver":{"user":"bob@example.com","node":"bob-laptop.ttest.ts.net.","nodeId":"nBOB","tags":[]}`
+		body := `{"tenant":"` + s.a.TenantID + `","workload":"approvals","workflow":"refund","instance":"wf-mgmt","approve":true,` + bob + `,"grants":[]}`
+		if code, r := pushDo("POST", "/v1/approvals/decide", body); code != 403 || r["code"] != "cap_missing" {
+			t.Fatalf("no grants: %d %v", code, r)
+		}
+		body = strings.Replace(body, `"grants":[]`, `"grants":[{"workflows":["refund"],"decisions":["approve"]}]`, 1)
+		if code, r := pushDo("POST", "/v1/approvals/decide", body); code != 200 || get(r, "approval", "approver", "via") != "mgmt" {
+			t.Fatalf("decide: %d %v", code, r)
+		}
+		eventually(t, 30*time.Second, "completes", func() (bool, any) {
+			r := status("plain-refund-agent", "wf-mgmt")
+			return get(r, "outcome", "result", "approver", "user") == "bob@example.com" && get(r, "outcome", "result", "approver", "via") == "mgmt", r
+		})
+	})
+
 	t.Run("Audit", func(t *testing.T) {
 		eventually(t, 20*time.Second, "approval audit records", func() (bool, any) {
 			recs := s.a.Audit(wl.ID).Items
@@ -212,7 +246,7 @@ func TestWorkflowApprovals(t *testing.T) {
 					decided++
 				}
 			}
-			return kinds["approval_requested"] >= 3 && kinds["approval_denied"] >= 3 && decided == 3, kinds
+			return kinds["approval_requested"] >= 4 && kinds["approval_denied"] >= 4 && decided == 3, kinds
 		})
 	})
 }

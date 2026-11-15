@@ -12,6 +12,7 @@
   <nav>
     <a href="/ui/"{{if eq .Path "/ui/"}} class="cur"{{end}}>overview</a>
     <a href="/ui/audit"{{if eq .Path "/ui/audit"}} class="cur"{{end}}>audit</a>
+    <a href="/ui/approvals"{{if eq .Path "/ui/approvals"}} class="cur"{{end}}>approvals</a>
   </nav>
   <div class="stats" data-live="stats">
     <span title="hosts live / total"><b data-stat="hosts.live">{{.Status.Hosts.Live}}</b>/<span data-stat="hosts.total">{{.Status.Hosts.Total}}</span> hosts live</span>

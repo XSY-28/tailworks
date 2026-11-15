@@ -44,7 +44,7 @@ func init() {
 		{name: "link", usage: "link [twd-mgmt.<tailnet>.ts.net] [--unlink]", help: "developer machine: use a remote twd-mgmt over your own Tailscale connection (WhoIs identity; no key or token)", run: cmdLink},
 		{name: "status", usage: "status", help: "health of mgmt, the host, the tenant and deployments", run: cmdStatus},
 		{name: "tenant", usage: "tenant add <tailnet> --api-key-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--wif-client-id ID] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]", help: "serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants", run: cmdTenant},
-		{name: "init", usage: "init <dir> [--template hello|agent|mcp|ai-agent|node-workflow] [--name <workload>]", help: "create an app from a template (node-workflow needs Node.js on the deploying machine)", run: cmdInit},
+		{name: "init", usage: "init <dir> [--template hello|agent|mcp|ai-agent|refund-approval|node-workflow] [--name <workload>]", help: "create an app from a template (node-workflow needs Node.js on the deploying machine)", run: cmdInit},
 		{name: "dev", usage: "dev [dir] [--port 8787]", help: "run an app locally: process tier + embedded control plane (no tailnet)", run: cmdDev},
 		{name: "deploy", usage: "deploy [dir] [--tenant <tailnet>] [--name <workload>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m]", help: "bundle, preflight grants, build + push Dockerfile container images (docker buildx), place (prints why), deploy, wait until ready; --replace re-places a running workload", run: cmdDeploy},
 		{name: "ls", usage: "ls [--tenant <tailnet>] [--all] [--limit N]", help: "list deployments and objects (paged; --all follows every page and shows killed objects)", run: cmdLs},
@@ -52,6 +52,8 @@ func init() {
 		{name: "expose", usage: "expose on|off <workload> [--tenant <tailnet>]", help: "open or close a workload's public (Funnel) routes; survives redeploys (twd.jsonc \"public\", ADR-029)", run: cmdExpose},
 		{name: "secret", usage: "secret put <NAME> | secret ls | secret rm <NAME>   [--workload <workload>] [--tenant <tailnet>]", help: "a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), ls shows names only; changes apply on the next deploy", run: cmdSecret},
 		{name: "kill", usage: "kill <object> [--tenant <tailnet>] [--cascade] [--reason <text>]", help: "kill an object (and with --cascade its sub-agents)", run: cmdKill},
+		{name: "approvals", usage: "approvals [workload] [--tenant <tailnet>] [--all]", help: "Workflow approvals waiting for a decision (with age and the instance's params)", run: cmdApprovals},
+		{name: "approve", usage: "approve <workload> <instance> [--reject] [--comment <text>] [--workflow <name>] [--step <name>] [--tenant <tailnet>]", help: "approve (or --reject) a waiting Workflow as your own tailnet identity (needs a twd.dev/cap/approve grant; from a `twd link`ed machine)", run: cmdApprove},
 		{name: "audit", usage: "audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all", help: "show the hash-chained audit trail", run: cmdAudit},
 		{name: "logs", usage: "logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f]", help: "show logs (workerd for a workload, else the daemons)", run: cmdLogs},
 		{name: "doctor", usage: "doctor [--tailnet <tailnet> --api-key-file <file>]", help: "check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier", run: cmdDoctor},
@@ -72,7 +74,7 @@ func usage(w io.Writer) {
 			fmt.Fprintf(w, "  %-8s %s\n           twd %s\n", c.name, c.help, c.usage)
 		}
 	}
-	fmt.Fprintln(w, "\ntemplates (twd init --template): hello | agent | mcp | ai-agent | node-workflow (node-workflow needs Node.js on the deploying machine)")
+	fmt.Fprintln(w, "\ntemplates (twd init --template): hello | agent | mcp | ai-agent | refund-approval | node-workflow (node-workflow needs Node.js on the deploying machine)")
 }
 
 // commandUsage prints one command's help (`twd <cmd> --help`): the usage

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/twd/internal/approvecap"
 	"github.com/rosskukulinski/twd/netd"
 )
 
@@ -40,16 +40,8 @@ import (
 // host chain.
 
 // ApproveCap is the app capability that lets a tailnet identity decide
-// approvals. Its values (grants) may narrow it:
-//
-//	{"workloads": [...], "workflows": [...], "steps": [...],
-//	 "decisions": ["approve", "reject"], "limits": {"<param>": <max>}}
-//
-// A missing field does not narrow. limits compare against the instance's
-// numeric params; a grant with a limit the instance has no number for does
-// not match (fail closed). The union of grants applies: any one matching
-// grant allows the decision.
-const ApproveCap = "twd.dev/cap/approve"
+// approvals (internal/approvecap: the grant shape and its rules).
+const ApproveCap = approvecap.Cap
 
 // Approval statuses.
 const (
@@ -267,70 +259,21 @@ func approvalDetail(a *Approval, extra map[string]any) json.RawMessage {
 	return b
 }
 
-// approveGrant is one value of ApproveCap.
-type approveGrant struct {
-	Workloads []string           `json:"workloads"`
-	Workflows []string           `json:"workflows"`
-	Steps     []string           `json:"steps"`
-	Decisions []string           `json:"decisions"`
-	Limits    map[string]float64 `json:"limits"`
-}
-
-func listOK(l []string, v string) bool {
-	if l == nil {
-		return true
-	}
-	for _, x := range l {
-		if x == "*" || x == v {
-			return true
-		}
-	}
-	return false
+func (a *Approval) target() approvecap.Target {
+	return approvecap.Target{Workload: a.Workload, Workflow: a.Workflow, Step: a.Step, Facts: a.Facts}
 }
 
 // authorizeApproval checks grants (ApproveCap values) for deciding a with
 // decision ("approve" | "reject"). It returns a cap_missing error naming
 // what is missing, with the grant to add.
 func authorizeApproval(grants []json.RawMessage, a *Approval, decision string, src string) *apiError {
-	var why []string
-	for _, raw := range grants {
-		var g approveGrant
-		if err := json.Unmarshal(raw, &g); err != nil {
-			continue
-		}
-		switch {
-		case !listOK(g.Workloads, a.Workload):
-			why = append(why, "workloads")
-		case !listOK(g.Workflows, a.Workflow):
-			why = append(why, "workflows")
-		case !listOK(g.Steps, a.Step):
-			why = append(why, "steps")
-		case !listOK(g.Decisions, decision):
-			why = append(why, "decisions")
-		default:
-			ok := true
-			for k, max := range g.Limits {
-				v, has := a.Facts[k]
-				if !has || math.IsNaN(v) || v > max {
-					ok = false
-					why = append(why, fmt.Sprintf("limits.%s", k))
-					break
-				}
-			}
-			if ok {
-				return nil
-			}
-		}
+	ok, why := approvecap.Check(grants, a.target(), decision)
+	if ok {
+		return nil
 	}
-	detail := fmt.Sprintf("%s may not %s %s/%s step %q: no %s grant", src, decision, a.Workload, a.Workflow, a.Step, ApproveCap)
-	if len(grants) > 0 {
-		detail += " matches (" + strings.Join(why, ", ") + ")"
-	}
-	snippet, _ := json.Marshal(map[string]any{"src": []string{src}, "dst": []string{"<the workload's tag>", "tag:twd-mgmt"}, "app": map[string]any{
-		ApproveCap: []map[string]any{{"workloads": []string{a.Workload}, "workflows": []string{a.Workflow}}}}})
-	return &apiError{Code: "cap_missing", Detail: detail, Extra: map[string]any{
+	return &apiError{Code: "cap_missing", Detail: approvecap.Denied(src, decision, a.target(), len(grants), why), Extra: map[string]any{
 		"missing": map[string]any{"cap": ApproveCap, "workload": a.Workload, "workflow": a.Workflow, "step": a.Step, "decision": decision},
-		"snippet": string(snippet)}}
+		"snippet": approvecap.Snippet(src, a.target())}}
 }
 
 // approvalDecision is one decision, from either surface.
@@ -575,7 +518,7 @@ func (h *Host) serveApprovals(w http.ResponseWriter, r *http.Request, wl *worklo
 
 // mayDecide: some decision on a is open to these grants (who may see it).
 func mayDecide(grants []json.RawMessage, a *Approval) bool {
-	return authorizeApproval(grants, a, "approve", "") == nil || authorizeApproval(grants, a, "reject", "") == nil
+	return approvecap.MayDecide(grants, a.target())
 }
 
 // callerApprover reads the verified caller (netd's cf.tailscale.caller)

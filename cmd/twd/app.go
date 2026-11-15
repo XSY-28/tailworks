@@ -35,7 +35,7 @@ func workloadLabel(s string) string {
 
 func cmdInit(args []string) error {
 	f := newFlags("init")
-	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | node-workflow")
+	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | refund-approval | node-workflow")
 	name := f.String("name", "", "workload name (default: the directory name)")
 	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:twd-wl-<workload>, tag:twd-<workload>-<class>)")
 	pos, err := f.parse(args)
@@ -147,7 +147,7 @@ func loadApp(dir, name string) (*app, error) {
 	a := &app{Dir: dir}
 	raw, err := os.ReadFile(filepath.Join(dir, "twd.jsonc"))
 	if err != nil {
-		return nil, fail("bad_request", "no twd.jsonc in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|node-workflow")
+		return nil, fail("bad_request", "no twd.jsonc in "+dir).withFix("twd init <dir> --template hello|agent|mcp|ai-agent|refund-approval|node-workflow")
 	}
 	a.TwdRaw = raw
 	if err := checkTwdSchema(raw); err != nil {

@@ -18,6 +18,66 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ApprovalStatus.
+const (
+	ApprovalStatusApproved ApprovalStatus = "approved"
+	ApprovalStatusPending  ApprovalStatus = "pending"
+	ApprovalStatusRejected ApprovalStatus = "rejected"
+	ApprovalStatusTimeout  ApprovalStatus = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalStatus enum.
+func (e ApprovalStatus) Valid() bool {
+	switch e {
+	case ApprovalStatusApproved:
+		return true
+	case ApprovalStatusPending:
+		return true
+	case ApprovalStatusRejected:
+		return true
+	case ApprovalStatusTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApprovalDecisionRequestDecision.
+const (
+	Approve ApprovalDecisionRequestDecision = "approve"
+	Reject  ApprovalDecisionRequestDecision = "reject"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalDecisionRequestDecision enum.
+func (e ApprovalDecisionRequestDecision) Valid() bool {
+	switch e {
+	case Approve:
+		return true
+	case Reject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApproverVia.
+const (
+	ApproverViaMgmt    ApproverVia = "mgmt"
+	ApproverViaTailnet ApproverVia = "tailnet"
+)
+
+// Valid indicates whether the value is a known member of the ApproverVia enum.
+func (e ApproverVia) Valid() bool {
+	switch e {
+	case ApproverViaMgmt:
+		return true
+	case ApproverViaTailnet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Arch.
 const (
 	ArchAmd64 Arch = "amd64"
@@ -285,6 +345,7 @@ func (e DeploymentStatus) Valid() bool {
 // Defines values for ErrorCode.
 const (
 	ErrorCodeAlreadyJoined           ErrorCode = "already_joined"
+	ErrorCodeApprovalNotPending      ErrorCode = "approval_not_pending"
 	ErrorCodeAuditKeyRequired        ErrorCode = "audit_key_required"
 	ErrorCodeAuditObjectForeign      ErrorCode = "audit_object_foreign"
 	ErrorCodeBadBundle               ErrorCode = "bad_bundle"
@@ -292,6 +353,7 @@ const (
 	ErrorCodeBadHostSig              ErrorCode = "bad_host_sig"
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
+	ErrorCodeCapMissing              ErrorCode = "cap_missing"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
@@ -350,6 +412,8 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case ErrorCodeAlreadyJoined:
 		return true
+	case ErrorCodeApprovalNotPending:
+		return true
 	case ErrorCodeAuditKeyRequired:
 		return true
 	case ErrorCodeAuditObjectForeign:
@@ -363,6 +427,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBadRequest:
 		return true
 	case ErrorCodeBootstrapFailed:
+		return true
+	case ErrorCodeCapMissing:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
 		return true
@@ -912,6 +978,87 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	}
 }
 
+// Approval One approval wait of one Workflow instance, as the host running it records it.
+type Approval struct {
+	// Approver The verified tailnet identity that decided an approval (WireGuard, never the request body).
+	Approver  *Approver  `json:"approver,omitempty"`
+	Comment   *string    `json:"comment,omitempty"`
+	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+
+	// Facts The instance's numeric params, which grant `limits` are checked against.
+	Facts *map[string]float64 `json:"facts,omitempty"`
+
+	// Host The host that runs the instance (set by mgmt).
+	Host        *string        `json:"host,omitempty"`
+	Instance    string         `json:"instance"`
+	RequestedAt time.Time      `json:"requestedAt"`
+	Status      ApprovalStatus `json:"status"`
+
+	// Step The `waitForEvent` step name (`wait-for-approval` for `waitForApproval`).
+	Step     string `json:"step"`
+	TenantID string `json:"tenantID"`
+
+	// Timeout The wait's timeout as the Workflow gave it.
+	Timeout *string `json:"timeout,omitempty"`
+
+	// Type The event type waited for: `approval` or `approval-*`.
+	Type     string `json:"type"`
+	Workflow string `json:"workflow"`
+	Workload string `json:"workload"`
+}
+
+// ApprovalStatus defines model for Approval.Status.
+type ApprovalStatus string
+
+// ApprovalDecisionRequest defines model for ApprovalDecisionRequest.
+type ApprovalDecisionRequest struct {
+	// Comment Shown to the Workflow (`comment`; a rejection's `reason`) and audited.
+	Comment  *string                         `json:"comment,omitempty"`
+	Decision ApprovalDecisionRequestDecision `json:"decision"`
+
+	// Metadata Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by twd's.
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
+
+	// Step Which wait, when the instance waits for several.
+	Step *string `json:"step,omitempty"`
+}
+
+// ApprovalDecisionRequestDecision defines model for ApprovalDecisionRequest.Decision.
+type ApprovalDecisionRequestDecision string
+
+// ApprovalDecisionResponse defines model for ApprovalDecisionResponse.
+type ApprovalDecisionResponse struct {
+	// Approval One approval wait of one Workflow instance, as the host running it records it.
+	Approval Approval `json:"approval"`
+}
+
+// ApprovalList defines model for ApprovalList.
+type ApprovalList struct {
+	Approvals []Approval `json:"approvals"`
+
+	// Unreachable Hosts that did not answer (their approvals are missing).
+	Unreachable *[]string `json:"unreachable,omitempty"`
+}
+
+// Approver The verified tailnet identity that decided an approval (WireGuard, never the request body).
+type Approver struct {
+	// Node MagicDNS name.
+	Node string `json:"node"`
+
+	// NodeID Stable node ID.
+	NodeID string   `json:"nodeId"`
+	Tags   []string `json:"tags"`
+
+	// User Login (untagged nodes).
+	User *string `json:"user,omitempty"`
+
+	// Via `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+	Via ApproverVia `json:"via"`
+}
+
+// ApproverVia `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+type ApproverVia string
+
 // Arch A Go GOARCH. Container images must match their host's.
 type Arch string
 
@@ -1446,6 +1593,7 @@ type Error struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -1484,11 +1632,12 @@ type Error struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
-	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
 	DocURL  string    `json:"doc_url"`
@@ -1516,6 +1665,7 @@ type Error struct {
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
 // | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 // | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 // | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -1554,11 +1704,12 @@ type Error struct {
 // | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
-// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 // | `internal` | 500 | — |
 type ErrorCode string
 
@@ -2573,6 +2724,7 @@ type TombstoneError struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -2611,11 +2763,12 @@ type TombstoneError struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
-	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
 	DocURL  string    `json:"doc_url"`
@@ -3030,6 +3183,15 @@ type UpdateTenantParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// ListApprovalsParams defines parameters for ListApprovals.
+type ListApprovalsParams struct {
+	// Workload Only this workload's approvals.
+	Workload *string `form:"workload,omitempty" json:"workload,omitempty"`
+
+	// All Include decided (and timed-out) approvals the hosts still keep.
+	All *bool `form:"all,omitempty" json:"all,omitempty"`
+}
+
 // PurgeTenantObjectsParams defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParams struct {
 	// State Terminal states to purge. Repeatable. Any other value is `400 bad_request`.
@@ -3119,6 +3281,9 @@ type UpdateTenantJSONRequestBody = TenantPatch
 
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
+
+// DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
+type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
@@ -4353,6 +4518,20 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/tenants/{id} (the `UpdateTenant` operationId).
 	UpdateTenantWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, params *UpdateTenantParams, body UpdateTenantApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	//
+	// A Workflow instance that waits for an event of type `approval` or
+	// `approval-*` (the Agents SDK's `waitForApproval`) is listed here
+	// (ADR-workflows-approvals, docs/approvals.md). mgmt asks every live
+	// host over the mgmt → hostd channel and merges the answers, oldest
+	// first; a host that does not answer is named in `unreachable`.
+	// Admins see every approval; a tailnet caller holding only
+	// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+	// grants let it decide. A read, so not audited.
+	//
+	// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
+	ListApprovals(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	//
 	// Forgets the tenant's objects in the given terminal `state`s (default:
@@ -4374,6 +4553,46 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	//
+	// The decision is made by the caller's own tailnet identity: mgmt's
+	// WhoIs of the connection (user, node, tags). mgmt sends it, with
+	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the host holding the workload's lease; that host checks the grants
+	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+	// numeric limits a grant names), delivers the event (the Workflow
+	// sees `approver`, never one from the request) and audits the
+	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// admin does not let anyone approve: the grant does. The operator
+	// console and the local socket have no personal identity, so they
+	// get `403 no_identity`; use `twd link` from your own machine.
+	// `409 approval_not_pending` when nothing waits for this decision.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+	DecideApprovalWithBody(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	//
+	// The decision is made by the caller's own tailnet identity: mgmt's
+	// WhoIs of the connection (user, node, tags). mgmt sends it, with
+	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the host holding the workload's lease; that host checks the grants
+	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+	// numeric limits a grant names), delivers the event (the Workflow
+	// sees `approver`, never one from the request) and audits the
+	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// admin does not let anyone approve: the grant does. The operator
+	// console and the local socket have no personal identity, so they
+	// get `403 no_identity`; use `twd link` from your own machine.
+	// `409 approval_not_pending` when nothing waits for this decision.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+	DecideApproval(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
@@ -6009,6 +6228,30 @@ func (c *Client) UpdateTenantWithApplicationMergePatchPlusJSONBody(ctx context.C
 	return c.Client.Do(req)
 }
 
+// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+//
+// A Workflow instance that waits for an event of type `approval` or
+// `approval-*` (the Agents SDK's `waitForApproval`) is listed here
+// (ADR-workflows-approvals, docs/approvals.md). mgmt asks every live
+// host over the mgmt → hostd channel and merges the answers, oldest
+// first; a host that does not answer is named in `unreachable`.
+// Admins see every approval; a tailnet caller holding only
+// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+// grants let it decide. A read, so not audited.
+//
+// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
+func (c *Client) ListApprovals(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListApprovalsRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PurgeTenantObjects Purge terminal objects of a tenant
 //
 // Forgets the tenant's objects in the given terminal `state`s (default:
@@ -6041,6 +6284,66 @@ func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *Pu
 // Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 func (c *Client) CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckTenantWIFRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+//
+// The decision is made by the caller's own tailnet identity: mgmt's
+// WhoIs of the connection (user, node, tags). mgmt sends it, with
+// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the host holding the workload's lease; that host checks the grants
+// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+// numeric limits a grant names), delivers the event (the Workflow
+// sees `approver`, never one from the request) and audits the
+// decision (`approval_decision`, or `approval_denied`). Being a twd
+// admin does not let anyone approve: the grant does. The operator
+// console and the local socket have no personal identity, so they
+// get `403 no_identity`; use `twd link` from your own machine.
+// `409 approval_not_pending` when nothing waits for this decision.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+func (c *Client) DecideApprovalWithBody(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecideApprovalRequestWithBody(c.Server, id, workload, workflow, instance, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+//
+// The decision is made by the caller's own tailnet identity: mgmt's
+// WhoIs of the connection (user, node, tags). mgmt sends it, with
+// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the host holding the workload's lease; that host checks the grants
+// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+// numeric limits a grant names), delivers the event (the Workflow
+// sees `approver`, never one from the request) and audits the
+// decision (`approval_decision`, or `approval_denied`). Being a twd
+// admin does not let anyone approve: the grant does. The operator
+// console and the local socket have no personal identity, so they
+// get `403 no_identity`; use `twd link` from your own machine.
+// `409 approval_not_pending` when nothing waits for this decision.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+func (c *Client) DecideApproval(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecideApprovalRequest(c.Server, id, workload, workflow, instance, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8793,6 +9096,79 @@ func NewUpdateTenantRequestWithBody(server string, id TenantID, params *UpdateTe
 	return req, nil
 }
 
+// NewListApprovalsRequest constructs an http.Request for the ListApprovals method
+func NewListApprovalsRequest(server string, id TenantID, params *ListApprovalsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/approvals", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Workload != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "workload", *params.Workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.All != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "all", *params.All, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPurgeTenantObjectsRequest constructs an http.Request for the PurgeTenantObjects method
 func NewPurgeTenantObjectsRequest(server string, id TenantID, params *PurgeTenantObjectsParams) (*http.Request, error) {
 	var err error
@@ -8884,6 +9260,74 @@ func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error)
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewDecideApprovalRequest calls the generic DecideApproval builder with application/json body
+func NewDecideApprovalRequest(server string, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDecideApprovalRequestWithBody(server, id, workload, workflow, instance, "application/json", bodyReader)
+}
+
+// NewDecideApprovalRequestWithBody constructs an http.Request for the DecideApproval method, with any body, and a specified content type
+func NewDecideApprovalRequestWithBody(server string, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "workflow", workflow, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "instance", instance, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/approvals/%s/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -10433,6 +10877,22 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/tenants/{id} (the `UpdateTenant` operationId).
 	UpdateTenantWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, params *UpdateTenantParams, body UpdateTenantApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTenantResponse, error)
 
+	// ListApprovalsWithResponse The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	//
+	// A Workflow instance that waits for an event of type `approval` or
+	// `approval-*` (the Agents SDK's `waitForApproval`) is listed here
+	// (ADR-workflows-approvals, docs/approvals.md). mgmt asks every live
+	// host over the mgmt → hostd channel and merges the answers, oldest
+	// first; a host that does not answer is named in `unreachable`.
+	// Admins see every approval; a tailnet caller holding only
+	// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+	// grants let it decide. A read, so not audited.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
+	ListApprovalsWithResponse(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*ListApprovalsResponse, error)
+
 	// PurgeTenantObjectsWithResponse Purge terminal objects of a tenant
 	//
 	// Forgets the tenant's objects in the given terminal `state`s (default:
@@ -10458,6 +10918,46 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
 	CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error)
+
+	// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	//
+	// The decision is made by the caller's own tailnet identity: mgmt's
+	// WhoIs of the connection (user, node, tags). mgmt sends it, with
+	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the host holding the workload's lease; that host checks the grants
+	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+	// numeric limits a grant names), delivers the event (the Workflow
+	// sees `approver`, never one from the request) and audits the
+	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// admin does not let anyone approve: the grant does. The operator
+	// console and the local socket have no personal identity, so they
+	// get `403 no_identity`; use `twd link` from your own machine.
+	// `409 approval_not_pending` when nothing waits for this decision.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+	DecideApprovalWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideApprovalResponse, error)
+
+	// DecideApprovalWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	//
+	// The decision is made by the caller's own tailnet identity: mgmt's
+	// WhoIs of the connection (user, node, tags). mgmt sends it, with
+	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the host holding the workload's lease; that host checks the grants
+	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+	// numeric limits a grant names), delivers the event (the Workflow
+	// sees `approver`, never one from the request) and audits the
+	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// admin does not let anyone approve: the grant does. The operator
+	// console and the local socket have no personal identity, so they
+	// get `403 no_identity`; use `twd link` from your own machine.
+	// `409 approval_not_pending` when nothing waits for this decision.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+	DecideApprovalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideApprovalResponse, error)
 
 	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	//
@@ -14735,6 +15235,89 @@ func (r UpdateTenantResponse) ContentType() string {
 	return ""
 }
 
+// ListApprovalsResponse403Headers the declared response headers of an HTTP 403 response for ListApprovals
+type ListApprovalsResponse403Headers struct {
+	TwdError *string
+}
+
+// ListApprovalsResponse404Headers the declared response headers of an HTTP 404 response for ListApprovals
+type ListApprovalsResponse404Headers struct {
+	TwdError *string
+}
+
+// ListApprovalsResponseDefaultHeaders the declared response headers of an HTTP default response for ListApprovals
+type ListApprovalsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListApprovalsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ApprovalList
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListApprovalsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListApprovalsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListApprovalsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListApprovalsResponse) GetJSON200() *ApprovalList {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListApprovalsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListApprovalsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListApprovalsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListApprovalsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListApprovalsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListApprovalsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListApprovalsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // PurgeTenantObjectsResponse400Headers the declared response headers of an HTTP 400 response for PurgeTenantObjects
 type PurgeTenantObjectsResponse400Headers struct {
 	TwdError *string
@@ -14923,6 +15506,117 @@ func (r CheckTenantWIFResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CheckTenantWIFResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DecideApprovalResponse400Headers the declared response headers of an HTTP 400 response for DecideApproval
+type DecideApprovalResponse400Headers struct {
+	TwdError *string
+}
+
+// DecideApprovalResponse403Headers the declared response headers of an HTTP 403 response for DecideApproval
+type DecideApprovalResponse403Headers struct {
+	TwdError *string
+}
+
+// DecideApprovalResponse404Headers the declared response headers of an HTTP 404 response for DecideApproval
+type DecideApprovalResponse404Headers struct {
+	TwdError *string
+}
+
+// DecideApprovalResponse409Headers the declared response headers of an HTTP 409 response for DecideApproval
+type DecideApprovalResponse409Headers struct {
+	TwdError *string
+}
+
+// DecideApprovalResponseDefaultHeaders the declared response headers of an HTTP default response for DecideApproval
+type DecideApprovalResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DecideApprovalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ApprovalDecisionResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *DecideApprovalResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DecideApprovalResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DecideApprovalResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *DecideApprovalResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DecideApprovalResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DecideApprovalResponse) GetJSON200() *ApprovalDecisionResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DecideApprovalResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DecideApprovalResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DecideApprovalResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DecideApprovalResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DecideApprovalResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DecideApprovalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DecideApprovalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DecideApprovalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DecideApprovalResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17118,6 +17812,28 @@ func (c *ClientWithResponses) UpdateTenantWithApplicationMergePatchPlusJSONBodyW
 	return ParseUpdateTenantResponse(rsp)
 }
 
+// ListApprovalsWithResponse The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+//
+// A Workflow instance that waits for an event of type `approval` or
+// `approval-*` (the Agents SDK's `waitForApproval`) is listed here
+// (ADR-workflows-approvals, docs/approvals.md). mgmt asks every live
+// host over the mgmt → hostd channel and merges the answers, oldest
+// first; a host that does not answer is named in `unreachable`.
+// Admins see every approval; a tailnet caller holding only
+// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+// grants let it decide. A read, so not audited.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
+func (c *ClientWithResponses) ListApprovalsWithResponse(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*ListApprovalsResponse, error) {
+	rsp, err := c.ListApprovals(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListApprovalsResponse(rsp)
+}
+
 // PurgeTenantObjectsWithResponse Purge terminal objects of a tenant
 //
 // Forgets the tenant's objects in the given terminal `state`s (default:
@@ -17154,6 +17870,58 @@ func (c *ClientWithResponses) CheckTenantWIFWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseCheckTenantWIFResponse(rsp)
+}
+
+// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+//
+// The decision is made by the caller's own tailnet identity: mgmt's
+// WhoIs of the connection (user, node, tags). mgmt sends it, with
+// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the host holding the workload's lease; that host checks the grants
+// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+// numeric limits a grant names), delivers the event (the Workflow
+// sees `approver`, never one from the request) and audits the
+// decision (`approval_decision`, or `approval_denied`). Being a twd
+// admin does not let anyone approve: the grant does. The operator
+// console and the local socket have no personal identity, so they
+// get `403 no_identity`; use `twd link` from your own machine.
+// `409 approval_not_pending` when nothing waits for this decision.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+func (c *ClientWithResponses) DecideApprovalWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideApprovalResponse, error) {
+	rsp, err := c.DecideApprovalWithBody(ctx, id, workload, workflow, instance, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecideApprovalResponse(rsp)
+}
+
+// DecideApprovalWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+//
+// The decision is made by the caller's own tailnet identity: mgmt's
+// WhoIs of the connection (user, node, tags). mgmt sends it, with
+// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the host holding the workload's lease; that host checks the grants
+// (`cap_missing` otherwise: the workload, Workflow, step, decision and
+// numeric limits a grant names), delivers the event (the Workflow
+// sees `approver`, never one from the request) and audits the
+// decision (`approval_decision`, or `approval_denied`). Being a twd
+// admin does not let anyone approve: the grant does. The operator
+// console and the local socket have no personal identity, so they
+// get `403 no_identity`; use `twd link` from your own machine.
+// `409 approval_not_pending` when nothing waits for this decision.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
+func (c *ClientWithResponses) DecideApprovalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideApprovalResponse, error) {
+	rsp, err := c.DecideApproval(ctx, id, workload, workflow, instance, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecideApprovalResponse(rsp)
 }
 
 // GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
@@ -21528,6 +22296,86 @@ func ParseUpdateTenantResponse(rsp *http.Response) (*UpdateTenantResponse, error
 	return response, nil
 }
 
+// ParseListApprovalsResponse parses an HTTP response from a ListApprovalsWithResponse call
+func ParseListApprovalsResponse(rsp *http.Response) (*ListApprovalsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListApprovalsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApprovalList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers ListApprovalsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListApprovalsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListApprovalsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParsePurgeTenantObjectsResponse parses an HTTP response from a PurgeTenantObjectsWithResponse call
 func ParsePurgeTenantObjectsResponse(rsp *http.Response) (*PurgeTenantObjectsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -21709,6 +22557,120 @@ func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, e
 		response.Headers404 = &headers
 	case true:
 		var headers CheckTenantWIFResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseDecideApprovalResponse parses an HTTP response from a DecideApprovalWithResponse call
+func ParseDecideApprovalResponse(rsp *http.Response) (*DecideApprovalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DecideApprovalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApprovalDecisionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers DecideApprovalResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers DecideApprovalResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DecideApprovalResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers DecideApprovalResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers DecideApprovalResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

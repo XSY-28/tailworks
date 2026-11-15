@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rosskukulinski/twd/internal/approvecap"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/internal/tssvc"
 	"github.com/rosskukulinski/twd/mgmt"
@@ -376,6 +377,10 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			}
 			for c := range wi.CapMap {
 				info.Caps = append(info.Caps, string(c))
+			}
+			// Approval grants (ADR-workflows-approvals): their values matter.
+			for _, v := range wi.CapMap[approvecap.Cap] {
+				info.Approve = append(info.Approve, json.RawMessage(v))
 			}
 			return info, nil
 		}

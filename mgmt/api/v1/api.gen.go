@@ -20,6 +20,66 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ApprovalStatus.
+const (
+	ApprovalStatusApproved ApprovalStatus = "approved"
+	ApprovalStatusPending  ApprovalStatus = "pending"
+	ApprovalStatusRejected ApprovalStatus = "rejected"
+	ApprovalStatusTimeout  ApprovalStatus = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalStatus enum.
+func (e ApprovalStatus) Valid() bool {
+	switch e {
+	case ApprovalStatusApproved:
+		return true
+	case ApprovalStatusPending:
+		return true
+	case ApprovalStatusRejected:
+		return true
+	case ApprovalStatusTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApprovalDecisionRequestDecision.
+const (
+	Approve ApprovalDecisionRequestDecision = "approve"
+	Reject  ApprovalDecisionRequestDecision = "reject"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalDecisionRequestDecision enum.
+func (e ApprovalDecisionRequestDecision) Valid() bool {
+	switch e {
+	case Approve:
+		return true
+	case Reject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApproverVia.
+const (
+	ApproverViaMgmt    ApproverVia = "mgmt"
+	ApproverViaTailnet ApproverVia = "tailnet"
+)
+
+// Valid indicates whether the value is a known member of the ApproverVia enum.
+func (e ApproverVia) Valid() bool {
+	switch e {
+	case ApproverViaMgmt:
+		return true
+	case ApproverViaTailnet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Arch.
 const (
 	ArchAmd64 Arch = "amd64"
@@ -287,6 +347,7 @@ func (e DeploymentStatus) Valid() bool {
 // Defines values for ErrorCode.
 const (
 	ErrorCodeAlreadyJoined           ErrorCode = "already_joined"
+	ErrorCodeApprovalNotPending      ErrorCode = "approval_not_pending"
 	ErrorCodeAuditKeyRequired        ErrorCode = "audit_key_required"
 	ErrorCodeAuditObjectForeign      ErrorCode = "audit_object_foreign"
 	ErrorCodeBadBundle               ErrorCode = "bad_bundle"
@@ -294,6 +355,7 @@ const (
 	ErrorCodeBadHostSig              ErrorCode = "bad_host_sig"
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
+	ErrorCodeCapMissing              ErrorCode = "cap_missing"
 	ErrorCodeContainerQuotaExceeded  ErrorCode = "container_quota_exceeded"
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
@@ -352,6 +414,8 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case ErrorCodeAlreadyJoined:
 		return true
+	case ErrorCodeApprovalNotPending:
+		return true
 	case ErrorCodeAuditKeyRequired:
 		return true
 	case ErrorCodeAuditObjectForeign:
@@ -365,6 +429,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBadRequest:
 		return true
 	case ErrorCodeBootstrapFailed:
+		return true
+	case ErrorCodeCapMissing:
 		return true
 	case ErrorCodeContainerQuotaExceeded:
 		return true
@@ -914,6 +980,87 @@ func (e PurgeTenantObjectsParamsState) Valid() bool {
 	}
 }
 
+// Approval One approval wait of one Workflow instance, as the host running it records it.
+type Approval struct {
+	// Approver The verified tailnet identity that decided an approval (WireGuard, never the request body).
+	Approver  *Approver  `json:"approver,omitempty"`
+	Comment   *string    `json:"comment,omitempty"`
+	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+
+	// Facts The instance's numeric params, which grant `limits` are checked against.
+	Facts *map[string]float64 `json:"facts,omitempty"`
+
+	// Host The host that runs the instance (set by mgmt).
+	Host        *string        `json:"host,omitempty"`
+	Instance    string         `json:"instance"`
+	RequestedAt time.Time      `json:"requestedAt"`
+	Status      ApprovalStatus `json:"status"`
+
+	// Step The `waitForEvent` step name (`wait-for-approval` for `waitForApproval`).
+	Step     string `json:"step"`
+	TenantID string `json:"tenantID"`
+
+	// Timeout The wait's timeout as the Workflow gave it.
+	Timeout *string `json:"timeout,omitempty"`
+
+	// Type The event type waited for: `approval` or `approval-*`.
+	Type     string `json:"type"`
+	Workflow string `json:"workflow"`
+	Workload string `json:"workload"`
+}
+
+// ApprovalStatus defines model for Approval.Status.
+type ApprovalStatus string
+
+// ApprovalDecisionRequest defines model for ApprovalDecisionRequest.
+type ApprovalDecisionRequest struct {
+	// Comment Shown to the Workflow (`comment`; a rejection's `reason`) and audited.
+	Comment  *string                         `json:"comment,omitempty"`
+	Decision ApprovalDecisionRequestDecision `json:"decision"`
+
+	// Metadata Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by twd's.
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
+
+	// Step Which wait, when the instance waits for several.
+	Step *string `json:"step,omitempty"`
+}
+
+// ApprovalDecisionRequestDecision defines model for ApprovalDecisionRequest.Decision.
+type ApprovalDecisionRequestDecision string
+
+// ApprovalDecisionResponse defines model for ApprovalDecisionResponse.
+type ApprovalDecisionResponse struct {
+	// Approval One approval wait of one Workflow instance, as the host running it records it.
+	Approval Approval `json:"approval"`
+}
+
+// ApprovalList defines model for ApprovalList.
+type ApprovalList struct {
+	Approvals []Approval `json:"approvals"`
+
+	// Unreachable Hosts that did not answer (their approvals are missing).
+	Unreachable *[]string `json:"unreachable,omitempty"`
+}
+
+// Approver The verified tailnet identity that decided an approval (WireGuard, never the request body).
+type Approver struct {
+	// Node MagicDNS name.
+	Node string `json:"node"`
+
+	// NodeID Stable node ID.
+	NodeID string   `json:"nodeId"`
+	Tags   []string `json:"tags"`
+
+	// User Login (untagged nodes).
+	User *string `json:"user,omitempty"`
+
+	// Via `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+	Via ApproverVia `json:"via"`
+}
+
+// ApproverVia `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+type ApproverVia string
+
 // Arch A Go GOARCH. Container images must match their host's.
 type Arch string
 
@@ -1448,6 +1595,7 @@ type Error struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -1486,11 +1634,12 @@ type Error struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
-	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
 	DocURL  string    `json:"doc_url"`
@@ -1518,6 +1667,7 @@ type Error struct {
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
 // | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 // | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 // | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -1556,11 +1706,12 @@ type Error struct {
 // | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
-// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 // | `internal` | 500 | — |
 type ErrorCode string
 
@@ -2575,6 +2726,7 @@ type TombstoneError struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
@@ -2613,11 +2765,12 @@ type TombstoneError struct {
 	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
-	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs) |
+	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
 	DocURL  string    `json:"doc_url"`
@@ -3032,6 +3185,15 @@ type UpdateTenantParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// ListApprovalsParams defines parameters for ListApprovals.
+type ListApprovalsParams struct {
+	// Workload Only this workload's approvals.
+	Workload *string `form:"workload,omitempty" json:"workload,omitempty"`
+
+	// All Include decided (and timed-out) approvals the hosts still keep.
+	All *bool `form:"all,omitempty" json:"all,omitempty"`
+}
+
 // PurgeTenantObjectsParams defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParams struct {
 	// State Terminal states to purge. Repeatable. Any other value is `400 bad_request`.
@@ -3121,6 +3283,9 @@ type UpdateTenantJSONRequestBody = TenantPatch
 
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
+
+// DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
+type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
@@ -3528,12 +3693,18 @@ type ServerInterface interface {
 	// UpdateTenant Update a tenant (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id})
 	UpdateTenant(w http.ResponseWriter, r *http.Request, id TenantID, params UpdateTenantParams)
+	// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	// (GET /v1/tenants/{id}/approvals)
+	ListApprovals(w http.ResponseWriter, r *http.Request, id TenantID, params ListApprovalsParams)
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(w http.ResponseWriter, r *http.Request, id TenantID, params PurgeTenantObjectsParams)
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID)
+	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
+	DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
@@ -5372,6 +5543,61 @@ func (siw *ServerInterfaceWrapper) UpdateTenant(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListApprovals operation middleware
+func (siw *ServerInterfaceWrapper) ListApprovals(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListApprovalsParams
+
+	// ------------- Optional query parameter "workload" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workload", r.URL.Query(), &params.Workload, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workload"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "all" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "all", r.URL.Query(), &params.All, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "all"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListApprovals(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PurgeTenantObjects operation middleware
 func (siw *ServerInterfaceWrapper) PurgeTenantObjects(w http.ResponseWriter, r *http.Request) {
 
@@ -5431,6 +5657,59 @@ func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckTenantWIF(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideApproval operation middleware
+func (siw *ServerInterfaceWrapper) DecideApproval(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workflow" -------------
+	var workflow string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workflow", r.PathValue("workflow"), &workflow, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workflow", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instance string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instance, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideApproval(w, r, id, workload, workflow, instance)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5998,6 +6277,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/objects", wrapper.PurgeTenantObjects)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/wif-check", wrapper.CheckTenantWIF)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/logs", wrapper.GetWorkloadLogs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/approvals", wrapper.ListApprovals)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}", wrapper.DecideApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.GetWorkloadPublic)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.UpdateWorkloadPublic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets", wrapper.ListWorkloadSecrets)
@@ -10330,6 +10611,84 @@ func (response UpdateTenantdefaultJSONResponse) VisitUpdateTenantResponse(w http
 	return err
 }
 
+type ListApprovalsRequestObject struct {
+	ID     TenantID `json:"id"`
+	Params ListApprovalsParams
+}
+
+type ListApprovalsResponseObject interface {
+	VisitListApprovalsResponse(w http.ResponseWriter) error
+}
+
+type ListApprovals200JSONResponse ApprovalList
+
+func (response ListApprovals200JSONResponse) VisitListApprovalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApprovals403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListApprovals403JSONResponse) VisitListApprovalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApprovals404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListApprovals404JSONResponse) VisitListApprovalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApprovalsdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListApprovalsdefaultJSONResponse) VisitListApprovalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PurgeTenantObjectsRequestObject struct {
 	ID     TenantID `json:"id"`
 	Params PurgeTenantObjectsParams
@@ -10505,6 +10864,121 @@ type CheckTenantWIFdefaultJSONResponse struct {
 }
 
 func (response CheckTenantWIFdefaultJSONResponse) VisitCheckTenantWIFResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApprovalRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Workflow string       `json:"workflow"`
+	Instance string       `json:"instance"`
+	Body     *DecideApprovalJSONRequestBody
+}
+
+type DecideApprovalResponseObject interface {
+	VisitDecideApprovalResponse(w http.ResponseWriter) error
+}
+
+type DecideApproval200JSONResponse ApprovalDecisionResponse
+
+func (response DecideApproval200JSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApproval400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DecideApproval400JSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApproval403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DecideApproval403JSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApproval404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DecideApproval404JSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApproval409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DecideApproval409JSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwdError != nil {
+		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideApprovaldefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response DecideApprovaldefaultJSONResponse) VisitDecideApprovalResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11556,12 +12030,18 @@ type StrictServerInterface interface {
 	// UpdateTenant Update a tenant (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id})
 	UpdateTenant(ctx context.Context, request UpdateTenantRequestObject) (UpdateTenantResponseObject, error)
+	// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	// (GET /v1/tenants/{id}/approvals)
+	ListApprovals(ctx context.Context, request ListApprovalsRequestObject) (ListApprovalsResponseObject, error)
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	// (DELETE /v1/tenants/{id}/objects)
 	PurgeTenantObjects(ctx context.Context, request PurgeTenantObjectsRequestObject) (PurgeTenantObjectsResponseObject, error)
 	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
 	// (POST /v1/tenants/{id}/wif-check)
 	CheckTenantWIF(ctx context.Context, request CheckTenantWIFRequestObject) (CheckTenantWIFResponseObject, error)
+	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
+	DecideApproval(ctx context.Context, request DecideApprovalRequestObject) (DecideApprovalResponseObject, error)
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
@@ -12871,6 +13351,33 @@ func (sh *strictHandler) UpdateTenant(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// ListApprovals operation middleware
+func (sh *strictHandler) ListApprovals(w http.ResponseWriter, r *http.Request, id TenantID, params ListApprovalsParams) {
+	var request ListApprovalsRequestObject
+
+	request.ID = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListApprovals(ctx, request.(ListApprovalsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListApprovals")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListApprovalsResponseObject); ok {
+		if err := validResponse.VisitListApprovalsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PurgeTenantObjects operation middleware
 func (sh *strictHandler) PurgeTenantObjects(w http.ResponseWriter, r *http.Request, id TenantID, params PurgeTenantObjectsParams) {
 	var request PurgeTenantObjectsRequestObject
@@ -12917,6 +13424,42 @@ func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CheckTenantWIFResponseObject); ok {
 		if err := validResponse.VisitCheckTenantWIFResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DecideApproval operation middleware
+func (sh *strictHandler) DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string) {
+	var request DecideApprovalRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Workflow = workflow
+	request.Instance = instance
+
+	var body DecideApprovalJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DecideApproval(ctx, request.(DecideApprovalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DecideApproval")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DecideApprovalResponseObject); ok {
+		if err := validResponse.VisitDecideApprovalResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

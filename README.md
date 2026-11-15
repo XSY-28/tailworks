@@ -94,7 +94,7 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-twd init support --template agent              # also: hello, mcp, ai-agent, node-workflow
+twd init support --template agent              # also: hello, mcp, ai-agent, refund-approval, node-workflow
 cd support
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```

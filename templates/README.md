@@ -1,7 +1,7 @@
 # templates
 
 The app templates live in `js/packages/create-twd/templates/` so they ship
-with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|node-workflow`):
+with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|refund-approval|node-workflow`):
 
 - `hello`: a Worker that returns its verified caller and does a private fetch.
 - `agent`: a Cloudflare Agents SDK `Agent` (state, `this.sql`, per-object node
@@ -15,6 +15,12 @@ with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai
   tailnet (`@ai-sdk/mcp` + `@twd/mcp` `mcpFetch`); it streams a UI message
   response. It ships with a scripted mock model (`src/model.ts`, no keys);
   swap in a real provider.
+- `refund-approval`: a Cloudflare Workflow (`AgentWorkflow`) started by an
+  Agent that waits for a person's approval (`waitForApproval`). twd delivers
+  the approval only from a tailnet identity holding `twd.dev/cap/approve`
+  (`twd approve`, the admin UI, or the page at `/`), and the Workflow sees
+  who approved; it also refuses an approval by the requester. See
+  `docs/approvals.md`.
 - `node-workflow`: the opt-in Node process tier (`docs/node-tier.md`): a
   `node:http` server with a Vercel Workflow (`"use workflow"`) behind
   `@twd/node`. Needs Node.js and `npm install` on the deploying machine; it is

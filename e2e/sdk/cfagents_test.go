@@ -187,7 +187,7 @@ func TestCloudflareAgents(t *testing.T) {
 	t.Run("UnsupportedBindings", func(t *testing.T) {
 		code, r := s.getJSON(base + "/agents/state-agent/pr1/probe")
 		t.Logf("probe: %d %v", code, r)
-		for _, k := range []string{"AI", "KV", "WORKFLOW", "BROWSER", "LOADER"} {
+		for _, k := range []string{"AI", "KV", "BROWSER", "LOADER"} { // Workflows: TestWorkflowApprovals
 			if r[k] != "undefined" {
 				t.Fatalf("env.%s is %v; expected absent (update docs/COMPAT.md)", k, r[k])
 			}

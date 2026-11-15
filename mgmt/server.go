@@ -33,6 +33,11 @@ type Principal struct {
 	// Caps are the app capabilities the caller holds toward mgmt (WhoIs
 	// CapMap): twd.dev/cap/admin makes a tailnet caller an admin.
 	Caps []string
+
+	// Approvals (approvals.go): the caller's MagicDNS name and its
+	// twd.dev/cap/approve grants toward mgmt.
+	Name    string
+	Approve []json.RawMessage
 }
 
 // Actor names the principal for audit records (deployedBy, kill by):
@@ -185,6 +190,7 @@ func readJSON(r *http.Request, v any) error {
 const (
 	roleHost  = 1 << iota // hostd endpoints
 	roleAdmin             // CLI endpoints
+	roleApprover          // approvals: a tailnet identity holding twd.dev/cap/approve (approvals.go)
 )
 
 func (s *Server) allowed(p Principal, roles int) bool {
@@ -194,6 +200,9 @@ func (s *Server) allowed(p Principal, roles int) bool {
 	case "host":
 		return roles&roleHost != 0
 	case "user":
+		if roles&roleApprover != 0 && isApprover(p) {
+			return true
+		}
 		if roles&roleAdmin == 0 {
 			return false
 		}
@@ -357,6 +366,9 @@ type WhoIsInfo struct {
 	Tags   []string // tagged nodes
 	Login  string   // UserProfile.LoginName (tagged nodes: "tagged-devices")
 	Caps   []string // app capabilities the caller holds toward mgmt (CapMap keys)
+
+	// Approve are the values of twd.dev/cap/approve (approvals.go).
+	Approve []json.RawMessage
 }
 
 // WhoIsFunc resolves a tailnet caller (tsnet LocalClient.WhoIs).
@@ -422,7 +434,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			writeErr(w, r, errf(401, "no_identity", "WhoIs failed for %s", r.RemoteAddr))
 			return
 		}
-		p := Principal{NodeID: wi.NodeID, Tags: wi.Tags, Caps: wi.Caps}
+		p := Principal{NodeID: wi.NodeID, Tags: wi.Tags, Caps: wi.Caps, Name: wi.Name, Approve: wi.Approve}
 		switch {
 		case s.Self.NodeID != "" && wi.NodeID == s.Self.NodeID:
 			// mgmt's own node: the operator console on the host machine
@@ -451,7 +463,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			if len(wi.Tags) > 0 {
 				p.Login = wi.Tags[0]
 			}
-			if !s.allowed(p, roleAdmin) {
+			if !s.allowed(p, roleAdmin|roleApprover) {
 				who := wi.Login
 				src := wi.Login
 				if len(wi.Tags) > 0 {

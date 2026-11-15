@@ -101,14 +101,28 @@
     ev.preventDefault();
     var msg = form.getAttribute('data-confirm') || 'Proceed?';
     if (!window.confirm(msg)) return;
-    var url = form.getAttribute('data-api') + queryOf(form);
+    // data-body="json": the inputs (except data-skip ones) are the JSON body.
+    var asJSON = form.getAttribute('data-body') === 'json';
+    var url = form.getAttribute('data-api') + (asJSON ? '' : queryOf(form));
     var method = form.getAttribute('data-method') || 'DELETE';
+    var headers = { 'X-Twd-UI': '1', 'Accept': 'application/json' };
+    var body;
+    if (asJSON) {
+      var o = {};
+      $$('input[name]', form).forEach(function (inp) {
+        if (inp.getAttribute('data-skip') || inp.value.trim() === '') return;
+        o[inp.name] = inp.value.trim();
+      });
+      body = JSON.stringify(o);
+      headers['Content-Type'] = 'application/json';
+    }
     var after = form.getAttribute('data-after') || location.href;
     var btn = $('button[type=submit]', form);
     if (btn) btn.disabled = true;
     fetch(url, {
       method: method,
-      headers: { 'X-Twd-UI': '1', 'Accept': 'application/json' },
+      headers: headers,
+      body: body,
       cache: 'no-store',
       credentials: 'same-origin'
     }).then(function (res) {
