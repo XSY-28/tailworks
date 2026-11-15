@@ -159,7 +159,7 @@ func TestWorkflowApprovals(t *testing.T) {
 			res, _ := get(out, "outcome", "result").(map[string]any)
 			if get(res, "approver", "nodeId") != s.clientID || get(res, "approver", "via") != "tailnet" ||
 				!strings.HasPrefix(get(res, "approver", "node").(string), "ttest-client.") || res["comment"] != "ok by me" || res["note"] != "n1" {
-				t.Fatalf("%s: the Workflow saw %v", m.class, res)
+				t.Fatalf("%s: the Workflow saw %v (%v)", m.class, res, out)
 			}
 			if strings.Contains(js(out), "forged") {
 				t.Fatalf("%s: forged approver reached the Workflow: %v", m.class, out)
@@ -198,7 +198,7 @@ func TestWorkflowApprovals(t *testing.T) {
 
 	t.Run("Audit", func(t *testing.T) {
 		eventually(t, 20*time.Second, "approval audit records", func() (bool, any) {
-			recs := s.a.Audit("").Items
+			recs := s.a.Audit(wl.ID).Items
 			kinds := map[string]int{}
 			decided := 0
 			for _, r := range recs {

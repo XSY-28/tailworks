@@ -105,7 +105,9 @@ export class RefundWorkflow extends AgentWorkflow<RefundBase, Params> {
     await step.do("refund", async () => {
       await this.agent.note(wf, "refund");
     });
-    return { order, amount: quote.amount, approver: approval?.approver ?? null, comment: approval?.comment ?? null, note: approval?.note ?? null };
+    const result = { order, amount: quote.amount, approver: approval?.approver ?? null, comment: approval?.comment ?? null, note: approval?.note ?? null };
+    await step.reportComplete(result); // the Agent's onWorkflowComplete
+    return result;
   }
 }
 

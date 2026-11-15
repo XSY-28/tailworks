@@ -30,6 +30,10 @@ function numericFacts(payload: unknown): Record<string, number> {
   return out;
 }
 
+function isAborted(e: unknown): boolean {
+  return (e as any)?.name === "WorkflowAbortedError" || String((e as any)?.message ?? "").includes("WorkflowAbortedError");
+}
+
 function isTimeout(e: unknown): boolean {
   const m = String((e as any)?.message ?? "");
   return (e as any)?.name === "WorkflowTimeoutError" || m.includes("Execution timed out");
@@ -88,7 +92,16 @@ export function wrapWorkflowClass(C: any, name: string, workflow: string, _bindi
       }
       async run(event: any, step: any) {
         installApprovalWaits(step, (this as any).__twd_tw, workflow, event);
-        return super.run(event, step);
+        try {
+          return await super.run(event, step);
+        } catch (e) {
+          // workerd's engine ends a run() that waits long (a sleep or an
+          // event wait) by throwing WorkflowAbortedError through it; the run
+          // goes on later. It is not a failure: keep the Agents SDK's
+          // AgentWorkflow from reporting it to its Agent (onWorkflowError).
+          if (isAborted(e) && "_errorReported" in (this as any)) (this as any)._errorReported = true;
+          throw e;
+        }
       }
     },
   }[name];

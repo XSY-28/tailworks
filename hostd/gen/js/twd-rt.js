@@ -554,6 +554,9 @@ function numericFacts(payload) {
   }
   return out;
 }
+function isAborted(e) {
+  return e?.name === "WorkflowAbortedError" || String(e?.message ?? "").includes("WorkflowAbortedError");
+}
 function isTimeout(e) {
   const m = String(e?.message ?? "");
   return e?.name === "WorkflowTimeoutError" || m.includes("Execution timed out");
@@ -599,7 +602,12 @@ function wrapWorkflowClass(C, name, workflow, _binding, bindings) {
       }
       async run(event, step) {
         installApprovalWaits(step, this.__twd_tw, workflow, event);
-        return super.run(event, step);
+        try {
+          return await super.run(event, step);
+        } catch (e) {
+          if (isAborted(e) && "_errorReported" in this) this._errorReported = true;
+          throw e;
+        }
       }
     }
   }[name];
