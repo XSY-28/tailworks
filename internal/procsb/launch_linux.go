@@ -43,7 +43,8 @@ var selfProc = []string{"maps", "smaps", "smaps_rollup", "stat", "statm", "statu
 	"mounts", "auxv", "cmdline", "comm", "environ", "io", "fd", "fdinfo", "oom_score_adj"}
 
 // Rules builds the Landlock rules for p, for the process with pid.
-func (p *Profile) Rules(pid int) []landlock.Rule {
+// abi is the kernel's Landlock ABI: "refer" is only requested on ABI >= 2.
+func (p *Profile) Rules(pid, abi int) []landlock.Rule {
 	ro := func(paths []string) []landlock.Rule {
 		var rs []landlock.Rule
 		for _, x := range paths {
@@ -75,7 +76,7 @@ func (p *Profile) Rules(pid int) []landlock.Rule {
 		landlock.ROFiles("/dev/urandom", "/dev/random").IgnoreIfMissing(),
 	)
 	if len(p.Own) > 0 {
-		rs = append(rs, landlock.RWDirs(p.Own...).WithRefer().WithResolveUnix())
+		rs = append(rs, ownRule(p.Own, abi))
 	}
 	for _, port := range p.ConnectTCP {
 		rs = append(rs, landlock.ConnectTCP(port))
@@ -84,6 +85,21 @@ func (p *Profile) Rules(pid int) []landlock.Rule {
 		rs = append(rs, landlock.BindTCP(port))
 	}
 	return rs
+}
+
+// ownRule is read-write on the workload's own dirs. "refer" (moving and
+// linking files between directories) exists from Landlock ABI 2 only, and
+// go-landlock's BestEffort mode drops the WHOLE ruleset ("ABI V0": no
+// filesystem restriction at all) when a rule asks for refer on an ABI 1
+// kernel such as Ubuntu 22.04's 5.15. So ask for it only on ABI >= 2. On
+// ABI 1, Landlock refuses cross-directory renames and links (EXDEV) inside
+// the own dirs, which beats no sandbox.
+func ownRule(own []string, abi int) landlock.Rule {
+	r := landlock.RWDirs(own...).WithResolveUnix()
+	if abi >= 2 {
+		r = r.WithRefer()
+	}
+	return r
 }
 
 // Apply restricts the calling process (all threads) to p: Landlock (best
@@ -99,7 +115,7 @@ func (p *Profile) Apply() error {
 			return err
 		}
 	}
-	if err := landlock.V11.BestEffort().Restrict(p.Rules(os.Getpid())...); err != nil {
+	if err := landlock.V11.BestEffort().Restrict(p.Rules(os.Getpid(), abi)...); err != nil {
 		return fmt.Errorf("landlock: %w", err)
 	}
 	return installSeccomp(filterOpts{self: os.Getpid(), noUnix: p.NoUnixSockets})
