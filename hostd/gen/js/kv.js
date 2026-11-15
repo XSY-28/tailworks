@@ -1,5 +1,5 @@
 // twd Workers KV (TRUSTED; runs in the platform worker, never in a tenant
-// isolate). ADR-036, on the platform-store substrate
+// isolate). ADR-037, on the platform-store substrate
 // (ADR-platform-stores, twd-store.js).
 //
 // A tenant's env.<BINDING> is workerd's own `kvNamespace` binding, so the

@@ -19,7 +19,7 @@ import (
 	"github.com/rosskukulinski/twd/netd/nettest"
 )
 
-// TestE2EVMKV: Workers KV (ADR-036) on the microVM tier. The
+// TestE2EVMKV: Workers KV (ADR-037) on the microVM tier. The
 // namespace's Store object runs in the guest's workerd, on the guest's
 // encrypted DO volume, and reaches hostd's store API over the guest NIC;
 // the binding behaves as on the process tier (worker and facet), and the

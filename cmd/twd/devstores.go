@@ -1,8 +1,8 @@
 package main
 
-// twd dev keeps the app's platform stores (Workers KV namespaces) between
-// runs, as `wrangler dev` keeps its local state: the in-memory mgmt's
-// journals are saved to <app>/.twd/dev-stores.json when twd dev stops and
+// twd dev keeps the app's Workers KV namespaces between runs, as
+// `wrangler dev` keeps its local state: the in-memory mgmt's KV journals
+// are saved to <app>/.twd/dev-stores.json when twd dev stops and
 // loaded when it starts; each store object rebuilds itself from its journal.
 // The directory ignores itself in git (.twd/.gitignore), and the file is
 // readable by the owner only (it holds the data, unencrypted).
@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/rosskukulinski/twd/hostd/fakemgmt"
+	"github.com/rosskukulinski/twd/internal/kvwire"
 )
 
 func devStoresFile(appDir string) string { return filepath.Join(appDir, ".twd", "dev-stores.json") }
@@ -36,8 +37,17 @@ func loadDevStores(fm *fakemgmt.Server, tenantID, appDir string) (int, error) {
 
 // saveDevStores saves tenantID's stores (nothing, and no file, when there
 // are none and none were saved before).
+//
+// Only KV: a kind whose journal points at data kept elsewhere (R2's index
+// and its blobs in the dev process's temporary directory) would come back
+// dangling.
 func saveDevStores(fm *fakemgmt.Server, tenantID, appDir string) error {
-	snaps := fm.ExportStores(tenantID)
+	var snaps []fakemgmt.StoreSnapshot
+	for _, sn := range fm.ExportStores(tenantID) {
+		if sn.Kind == kvwire.Kind {
+			snaps = append(snaps, sn)
+		}
+	}
 	p := devStoresFile(appDir)
 	if _, err := os.Stat(p); len(snaps) == 0 && os.IsNotExist(err) {
 		return nil

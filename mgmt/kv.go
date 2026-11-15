@@ -1,6 +1,6 @@
 package mgmt
 
-// Workers KV, operator view (ADR-036): `twd kv key get|put|delete|
+// Workers KV, operator view (ADR-037): `twd kv key get|put|delete|
 // list` read and write a KV namespace (a platform store of kind "kv",
 // ADR-platform-stores) through mgmt. The store substrate never interprets
 // entries; this view is the one place in mgmt that decodes KV's entries

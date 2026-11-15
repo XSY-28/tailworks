@@ -1878,7 +1878,7 @@ type JWKS struct {
 	Keys []map[string]interface{} `json:"keys"`
 }
 
-// KVKey A Workers KV key as `list()` returns it (ADR-036).
+// KVKey A Workers KV key as `list()` returns it (ADR-037).
 type KVKey struct {
 	// Expiration Unix seconds when the key expires (absent: never).
 	Expiration *int64 `json:"expiration,omitempty"`

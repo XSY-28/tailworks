@@ -1,6 +1,6 @@
 package main
 
-// Workers KV (ADR-036), CLI side, like `wrangler kv`:
+// Workers KV (ADR-037), CLI side, like `wrangler kv`:
 //
 //	twd kv namespace create|list|delete [NAME]
 //	twd kv key put <KEY> [VALUE] | get <KEY> | delete <KEY> | list [--prefix P]

@@ -13,7 +13,7 @@ import (
 )
 
 // TestWorkersKVMove: a KV namespace survives a hostd restart and a lease
-// move to another host (ADR-036; ADR-028 forced takeover), and a
+// move to another host (ADR-037; ADR-028 forced takeover), and a
 // host that gets the workload back catches up on what was written while it
 // didn't hold it; with mgmt's journal down, reads fail static and writes
 // fail. Two twd-hostd processes (each with its own data dir and

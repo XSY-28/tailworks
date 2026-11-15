@@ -892,7 +892,7 @@ paths:
       summary: List a KV namespace's keys
       description: |
         Workers KV's `list()` for operators (`twd kv key list`,
-        ADR-036): live keys in UTF-8 byte order, with their
+        ADR-037): live keys in UTF-8 byte order, with their
         expiration and metadata, `limit` at a time (default and maximum
         1000). Pass the answer's `cursor` to get the next page. mgmt reads
         the namespace's journal (its own copy), so the answer includes
@@ -4602,7 +4602,7 @@ components:
         more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
     KVKey:
       type: object
-      description: A Workers KV key as `list()` returns it (ADR-036).
+      description: A Workers KV key as `list()` returns it (ADR-037).
       required: [name]
       properties:
         name: { type: string }

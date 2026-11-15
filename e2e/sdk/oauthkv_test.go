@@ -17,7 +17,7 @@ import (
 )
 
 // TestOAuthProviderKV runs @cloudflare/workers-oauth-provider unmodified
-// on twd with its OAUTH_KV on the Workers KV binding (ADR-036):
+// on twd with its OAUTH_KV on the Workers KV binding (ADR-037):
 // dynamic client registration, the authorization code flow with PKCE,
 // tokens (stored with expirationTtl), refresh, a protected API call, and
 // the library's own list() calls. Everything it stored is in the

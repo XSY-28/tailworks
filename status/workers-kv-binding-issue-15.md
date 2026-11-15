@@ -1,8 +1,8 @@
-Last update: 2026-11-15 PT. Merged master (#32, agent-first DX); ADR numbered ADR-036; kv subcommands in the --json contract. Ready to merge.
+Last update: 2026-11-15 PT. Merged master (#32, agent-first DX); ADR numbered ADR-037; kv subcommands in the --json contract. Ready to merge.
 
 # Workers KV (`kv_namespaces`)
 
-Design: [ADR-036](../docs/design/adr/036-workers-kv.md) (draft; answers the
+Design: [ADR-037](../docs/design/adr/037-workers-kv.md) (draft; answers the
 issue's five questions). User doc: [docs/kv.md](../docs/kv.md). Built on
 [ADR-platform-stores](../docs/design/adr/platform-stores.md)
 (`status/platform-stores.md`, landed first as its own PR, #27). KV is that
@@ -147,7 +147,7 @@ substrate's first real kind; nothing in the substrate had to change.
 
 ## Merge with #32 (agent-first DX), 2026-11-15
 
-- The design is numbered **ADR-036** (`docs/design/adr/036-workers-kv.md`,
+- The design is numbered **ADR-037** (`docs/design/adr/037-workers-kv.md`,
   slug replaced everywhere, row in `docs/design/adr/README.md`).
 - Semantic conflict: #32's `TestCLIJSONContract` requires every
   subcommand in `twd help` to have a `cliSurface` entry and a

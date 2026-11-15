@@ -1876,7 +1876,7 @@ type JWKS struct {
 	Keys []map[string]interface{} `json:"keys"`
 }
 
-// KVKey A Workers KV key as `list()` returns it (ADR-036).
+// KVKey A Workers KV key as `list()` returns it (ADR-037).
 type KVKey struct {
 	// Expiration Unix seconds when the key expires (absent: never).
 	Expiration *int64 `json:"expiration,omitempty"`
@@ -5036,7 +5036,7 @@ type ClientInterface interface {
 	// ListKVKeys List a KV namespace's keys
 	//
 	// Workers KV's `list()` for operators (`twd kv key list`,
-	// ADR-036): live keys in UTF-8 byte order, with their
+	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
 	// the namespace's journal (its own copy), so the answer includes
@@ -7103,7 +7103,7 @@ func (c *Client) ListWorkloadStores(ctx context.Context, id TenantID, workload W
 // ListKVKeys List a KV namespace's keys
 //
 // Workers KV's `list()` for operators (`twd kv key list`,
-// ADR-036): live keys in UTF-8 byte order, with their
+// ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
 // the namespace's journal (its own copy), so the answer includes
@@ -12834,7 +12834,7 @@ type ClientWithResponsesInterface interface {
 	// ListKVKeysWithResponse List a KV namespace's keys
 	//
 	// Workers KV's `list()` for operators (`twd kv key list`,
-	// ADR-036): live keys in UTF-8 byte order, with their
+	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
 	// the namespace's journal (its own copy), so the answer includes
@@ -21270,7 +21270,7 @@ func (c *ClientWithResponses) ListWorkloadStoresWithResponse(ctx context.Context
 // ListKVKeysWithResponse List a KV namespace's keys
 //
 // Workers KV's `list()` for operators (`twd kv key list`,
-// ADR-036): live keys in UTF-8 byte order, with their
+// ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
 // the namespace's journal (its own copy), so the answer includes

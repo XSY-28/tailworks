@@ -7,7 +7,7 @@ the same API: `get` (with `text`, `json`, `arrayBuffer` and `stream`),
 `metadata`, `delete`, and `list` with `prefix`, `limit` and `cursor`.
 Libraries that need KV, like `@cloudflare/workers-oauth-provider` and its
 `OAUTH_KV`, run unmodified. The design is in
-[ADR-036](design/adr/036-workers-kv.md).
+[ADR-037](design/adr/037-workers-kv.md).
 
 ```jsonc
 // wrangler.jsonc

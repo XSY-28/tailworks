@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Workers KV (ADR-036): wrangler.jsonc "kv_namespaces" entries
+// Workers KV (ADR-037): wrangler.jsonc "kv_namespaces" entries
 // become platform stores of kind "kv".
 //
 //	"kv_namespaces": [{ "binding": "OAUTH_KV", "id": "oauth" }]
