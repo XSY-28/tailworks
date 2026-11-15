@@ -546,7 +546,7 @@ func (t *telemetry) tail(inst *instance, as *attested, ev *tailEvent) {
 		rec.Logs = append(rec.Logs, obs.LogLine{Time: msTime(l.T), Level: l.Level, Message: l.Msg})
 	}
 	for _, x := range ev.Exceptions {
-		rec.Exceptions = append(rec.Exceptions, obs.Exception{Time: msTime(x.T), Name: x.Name, Message: x.Message, Stack: x.Stack})
+		rec.Exceptions = append(rec.Exceptions, obs.Exception{Time: msTime(x.T), Name: x.Name, Message: x.Message, Stack: inst.mapStack(x.Stack)}) // stackmap.go
 	}
 	t.invocations.Add(1, w.tenantID, w.name, rec.Class, ev.Event, ev.Outcome)
 	if tc, ok := obs.ParseTraceparent(ev.Traceparent); ok {

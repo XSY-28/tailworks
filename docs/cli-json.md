@@ -87,6 +87,7 @@ stream on **stdout**:
 | `event` | Fields |
 |---|---|
 | `ready` | `url`, `serves` (with the MCP route), `workload`, `node`, `as`, `tags`, `timingsMs` |
+| `inspector` | `addr`, `ws` (with `--inspector-port`: where a debugger attaches; [dev-debugging.md](dev-debugging.md)) |
 | `reload` | `workload`, `node`, `ms` (after a file change) |
 | `request` | `record`: one request record, as in `twd logs --json` (`$defs/logs.record`), with its console lines and exceptions |
 | `error` | `error` (a rebuild failed; the last good version keeps running) |

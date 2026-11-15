@@ -63,6 +63,7 @@ func cmdDev(args []string) error {
 	workerdFlag := f.String("workerd", "", "workerd binary")
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
+	inspectorPort := f.Int("inspector-port", 0, "serve workerd's V8 inspector on 127.0.0.1:<port> for Chrome DevTools or VS Code (devinspector.go)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	pos, err := f.parse(args)
 	if err != nil {
@@ -72,6 +73,7 @@ func cmdDev(args []string) error {
 	if len(pos) > 0 {
 		dir = pos[0]
 	}
+	ao.SourceMap = devSourceMapMode(*inspectorPort) // sourcemap.go
 	a, err := loadAppWith(dir, "", *ao)
 	if err != nil {
 		return err
@@ -126,7 +128,9 @@ func cmdDev(args []string) error {
 		WorkerdBin: wd, HeartbeatEvery: 300 * time.Millisecond, Ephemeral: true, ControlURL: ctl.URL, Logger: log, HostnamePrefix: "dev-",
 		// twd dev is explicitly process-tier: a "tier": "microvm" app runs
 		// in a local process here (never on a host serving tenants).
-		ForceProcessTier: true})
+		ForceProcessTier: true,
+		// --inspector-port: each workerd gets an inspector (hostd/inspector.go).
+		WorkerdInspector: *inspectorPort > 0})
 	if err != nil {
 		return err
 	}
@@ -201,7 +205,10 @@ func cmdDev(args []string) error {
 		Transport: client.HTTPClient(0).Transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			ip := cur.Load().(string)
-			pr.Out.URL.Scheme, pr.Out.URL.Host, pr.Out.Host = "http", ip, ip
+			// Host stays the one the developer used (127.0.0.1:<port>), so
+			// req.url matches wrangler dev's; identity is WhoIs of this
+			// proxy's dev node, never the Host header (docs/COMPAT.md).
+			pr.Out.URL.Scheme, pr.Out.URL.Host, pr.Out.Host = "http", ip, pr.In.Host
 		},
 	}
 	pl, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
@@ -268,6 +275,11 @@ func cmdDev(args []string) error {
 		where = res.Serves + "  (MCP server; / answers 404)"
 	}
 	fmt.Fprintf(hout, "ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
+	quit, stopInteractive, err := devInteractive(*inspectorPort, func() string { return h.InspectorAddr(tr.TenantID, a.Name) }, res.URL+route, *f.json, hout, ev) // devhotkeys.go
+	if err != nil {
+		return err
+	}
+	defer stopInteractive()
 	go followDevRecords(ctx, h.RequestLogPath(tr.TenantID, a.Name), hout, ev) // devrecords.go
 
 	sig := make(chan os.Signal, 1)
@@ -280,6 +292,10 @@ func cmdDev(args []string) error {
 	for {
 		select {
 		case <-sig:
+			ev.emit("stopping", nil)
+			fmt.Fprintln(hout, "\nstopping")
+			return nil
+		case <-quit: // x or q (devhotkeys.go)
 			ev.emit("stopping", nil)
 			fmt.Fprintln(hout, "\nstopping")
 			return nil

@@ -232,7 +232,10 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		}
 		return "needs wrangler's bundler; ignored by twd's built-in esbuild (use twd deploy --wrangler)"
 	case "upload_source_maps":
-		return "ignored: twd does not ship source maps"
+		if builder == "wrangler" {
+			return "ignored: twd ships source maps only from its built-in esbuild"
+		}
+		return "" // sourcemap.go: false leaves the map out of twd deploy
 	case "routes", "route", "workers_dev", "preview_urls", "account_id", "zone_id":
 		return "ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (twd.jsonc \"public\" for the internet)"
 	case "assets", "site":
