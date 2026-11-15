@@ -137,7 +137,7 @@ use it.
 before anything else. Nothing is ignored silently:
 
 ```
-› wrangler.toml: kv_namespaces: no such binding on twd: env.CACHE will be undefined
+› wrangler.toml: r2_buckets: no such binding on twd: env.CACHE will be undefined
 › wrangler.toml: routes: ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (twd.jsonc "public" for the internet)
 › wrangler.toml: workers_dev: ignored: there is no Cloudflare zone or workers.dev; …
 › no twd.jsonc: using defaults (workload node tag:twd-wl-wtoml; Durable Object classes internal, no node of their own); add a twd.jsonc to change them
@@ -148,7 +148,7 @@ before anything else. Nothing is ignored silently:
 | keys | what twd says |
 |---|---|
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `twd.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
-| `kv_namespaces`, `r2_buckets`, `d1_databases`, `services`, `queues`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `workflows`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on twd; the warning names each `env.X` that will be undefined. A section twd supports as a [platform store](design/adr/platform-stores.md) is not warned about |
+| `r2_buckets`, `d1_databases`, `services`, `queues`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `workflows`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on twd; the warning names each `env.X` that will be undefined. A section twd supports as a [platform store](design/adr/platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md)) is not warned about |
 | `assets`, `site` | not supported |
 | `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by twd |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |

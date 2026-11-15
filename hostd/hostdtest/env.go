@@ -79,6 +79,9 @@ type Env struct {
 	Host     *hostd.Host
 	TenantID string
 	Dir      string
+
+	// cfg is the hostd config (hosts.go: Restart, StartHost).
+	cfg hostd.Config
 }
 
 // Start starts fakemgmt, creates the tenant and starts hostd.
@@ -139,7 +142,7 @@ func Start(t testing.TB, o Options) *Env {
 	if o.HeartbeatEvery == 0 {
 		o.HeartbeatEvery = 200 * time.Millisecond
 	}
-	h, err := hostd.New(hostd.Config{
+	cfg := hostd.Config{
 		HostID: "h1", Mgmt: hc, DataDir: filepath.Join(dir, "data"), RunDir: filepath.Join(dir, "run"),
 		WorkerdBin: wd, HeartbeatEvery: o.HeartbeatEvery, Ephemeral: o.Ephemeral, ControlURL: o.ControlURL,
 		KillTombstone: o.KillTombstone, HostnamePrefix: o.HostnamePrefix, Logger: log,
@@ -150,7 +153,8 @@ func Start(t testing.TB, o Options) *Env {
 		PublicListen: o.PublicListen,
 		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
 		Telemetry: o.Telemetry,
-	})
+	}
+	h, err := hostd.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +162,7 @@ func Start(t testing.TB, o Options) *Env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { h.Close() })
-	return &Env{T: t, FM: fm, Mgmt: cli, Host: h, TenantID: tr.TenantID, Dir: dir}
+	return &Env{T: t, FM: fm, Mgmt: cli, Host: h, TenantID: tr.TenantID, Dir: dir, cfg: cfg}
 }
 
 // tenantCreate is the spec's TenantCreate body (no read-only fields).

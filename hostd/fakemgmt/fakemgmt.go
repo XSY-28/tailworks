@@ -114,6 +114,9 @@ type Server struct {
 	stores       map[string]*fakeStore
 	storeAppends int
 
+	// storesDown: the store journal answers 503 (storesdown.go).
+	storesDown bool
+
 	// OTLP export (telemetry.go): tenantID -> config.
 	telemetry map[string]*mgmtapi.OTLPExport
 }

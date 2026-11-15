@@ -142,6 +142,16 @@ func cmdDev(args []string) error {
 		}
 	}
 
+	// KV namespaces (and other platform stores) last between runs (devstores.go).
+	if _, err := loadDevStores(fm, tr.TenantID, a.Dir); err != nil {
+		return err
+	}
+	defer func() {
+		if err := saveDevStores(fm, tr.TenantID, a.Dir); err != nil {
+			fmt.Fprintf(os.Stderr, "twd dev: could not save the KV namespaces to %s: %v\n", devStoresFile(a.Dir), err)
+		}
+	}()
+
 	var devVars []string // .dev.vars names (devvars.go): the workload's secrets in dev
 	deploy := func() (hostd.ObjectStatus, error) {
 		if devVars, err = syncDevVars(ctx, mc, tr.TenantID, a.Name, a.Dir); err != nil {

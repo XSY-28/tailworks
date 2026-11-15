@@ -141,7 +141,7 @@ prove every ✅ and ⚠️.
 | Durable Objects | [Hibernation](docs/COMPAT.md#hibernation) | ✅ | |
 | Durable Objects | [RPC](docs/COMPAT.md#do-rpc) | ⚠️ | no cross-Worker `script_name` |
 | Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
-| Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
+| Bindings | [KV](docs/COMPAT.md#kv) | ⚠️ | per workload; values ≤ 2 MiB |
 | Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
 | Bindings | [D1](docs/COMPAT.md#d1) | ❌ | DO SQLite works |
 | Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
