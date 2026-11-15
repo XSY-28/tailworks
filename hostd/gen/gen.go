@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -215,7 +214,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	type entry struct{ name, ident, kind string }
 	var ents []entry
 	for i, p := range mods {
-		k := moduleKind(p)
+		k := app.ModuleKind(p)
 		ents = append(ents, entry{p, fmt.Sprintf("m%d", i), k})
 		fmt.Fprintf(&tm, "import m%d from %s;\n", i, jsq("t/"+p))
 	}
@@ -342,7 +341,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString(storeModules(app))
 	for _, p := range mods {
 		kind := "text"
-		if k := moduleKind(p); k == "wasm" || k == "data" {
+		if k := app.ModuleKind(p); k == "wasm" || k == "data" {
 			kind = "data"
 		}
 		fmt.Fprintf(&c, "    (name = %s, %s = embed %s),\n", cq("t/"+p), kind, cq("t/"+p))
@@ -372,7 +371,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("],\n  modules = [\n    (name = \"__twd_main.js\", esModule = embed \"__twd_main.js\"),\n    (name = \"__twd_rt.js\", esModule = embed \"__twd_rt.js\"),\n")
 	for _, p := range mods {
 		var kind string
-		switch moduleKind(p) {
+		switch app.ModuleKind(p) {
 		case "js":
 			kind = "esModule"
 		case "json":
@@ -428,20 +427,6 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-func moduleKind(p string) string {
-	switch strings.ToLower(path.Ext(p)) {
-	case ".js", ".mjs":
-		return "js"
-	case ".json":
-		return "json"
-	case ".txt", ".html":
-		return "text"
-	case ".wasm":
-		return "wasm"
-	}
-	return "data"
 }
 
 // jsq quotes s as a JS string literal.
