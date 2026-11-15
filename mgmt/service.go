@@ -2932,7 +2932,13 @@ var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": tru
 	"tenant": true, "deploy": true, "obo_root": true, "container_start": true, "container_stop": true,
 	"image_push": true, "image_pin": true, "image_public": true,
 	// ADR-029: public ingress records come from netd/hostd only.
-	"public_request": true, "public_rejected": true, "public_object_created": true, "expose_on": true, "expose_off": true}
+	"public_request": true, "public_rejected": true, "public_object_created": true, "expose_on": true, "expose_off": true,
+	// Workflow approvals (hostd/approvals.go): decisions are hostd's.
+	"approval_requested": true,
+	"approval_decision":  true,
+	"approval_denied":    true,
+	"approval_timeout":   true,
+}
 
 // checkAuditSource enforces the provenance contract on a host-submitted
 // record: a "tenant" source may only carry a tenant_note, and a tenant_note

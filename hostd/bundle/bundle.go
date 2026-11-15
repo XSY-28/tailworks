@@ -85,6 +85,10 @@ type App struct {
 
 	// Queues is wrangler.jsonc "queues" (queues.go, ADR-039); nil: none.
 	Queues *queuecfg.Config
+
+	// Workflows are wrangler.jsonc "workflows" (workflows.go), run by
+	// workerd's built-in engine.
+	Workflows []Workflow
 }
 
 // RuntimeNode is the opt-in Node.js process tier (twd.jsonc "runtime": "node").
@@ -343,6 +347,9 @@ func Parse(files map[string][]byte) (*App, error) {
 	}
 	a.Stores = stores
 	if a.Queues, err = parseQueues(StripJSONC(wb), a); err != nil {
+		return nil, err
+	}
+	if err := parseWorkflows(wb, a); err != nil {
 		return nil, err
 	}
 	var twdJSON []byte

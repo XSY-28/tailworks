@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/rosskukulinski/twd/master/schema/twd.schema.json",
+  "name": "refunds",
+  "tailnet": {
+    // Approvers reach the approval page and POST /_twd/approvals/... on this
+    // workload's node. Who may decide is a tailnet grant of
+    // twd.dev/cap/approve to this tag (docs/approvals.md).
+    "tags": ["tag:twd-wl-refunds"],
+    "objects": {
+      // one node per customer's agent
+      "RefundAgent": { "tags": ["tag:twd-agent-refunds"], "agent": true }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{{define "content"}}
+<h1>Approvals</h1>
+<p class="small muted">Workflow instances waiting for a person's decision (<span class="mono">waitForApproval</span>, or <span class="mono">waitForEvent</span> of type <span class="mono">approval</span> / <span class="mono">approval-*</span>). You decide as your own tailnet identity: the host running the Workflow checks your <span class="mono">twd.dev/cap/approve</span> grants, and the Workflow sees who you are. Being a twd admin is not enough. Same as <span class="mono">twd approvals</span> / <span class="mono">twd approve</span>.</p>
+<form method="get" action="/ui/approvals" class="filters">
+  <label>tenant <input type="text" name="tenant" class="mono" value="{{.Tenant}}" placeholder="tenant ID (default: every tenant you can list)"></label>
+  <label><input type="checkbox" name="all" value="1"{{if .All}} checked{{end}}> also decided</label>
+  <button type="submit">show</button>
+</form>
+{{range .Errors}}<div class="flash bad">{{.}}</div>{{end}}
+<section>
+  <h2>{{if .All}}approvals{{else}}waiting{{end}} <span class="count">{{len .Approvals}}</span></h2>
+  <table>
+    <thead><tr><th>workload</th><th>workflow</th><th>instance</th><th>step</th><th>params</th><th>age</th><th>status</th><th>host</th><th>decide</th></tr></thead>
+    <tbody>{{range .Approvals}}<tr>
+      <td class="mono">{{.Workload}}</td><td class="mono">{{.Workflow}}</td><td class="mono">{{.Instance}}</td><td class="mono small">{{.Step}}</td>
+      <td class="mono small">{{.FactsText}}</td><td class="mono">{{.Age}}</td><td>{{template "status" .Status}}</td><td class="mono small">{{.Host}}</td>
+      <td>{{if eq .Status "pending"}}
+        {{$a := .}}{{range $dec := (seqDecisions)}}
+        <form method="post" action="/ui/approvals/decide" class="inline"
+              data-confirm="{{$dec}} {{$a.Workload}}/{{$a.Workflow}}/{{$a.Instance}} as yourself?">
+          <input type="hidden" name="tenant" value="{{$a.TenantID}}"><input type="hidden" name="workload" value="{{$a.Workload}}">
+          <input type="hidden" name="workflow" value="{{$a.Workflow}}"><input type="hidden" name="instance" value="{{$a.Instance}}">
+          <input type="hidden" name="back_tenant" value="{{$.Tenant}}">
+          <input type="hidden" name="decision" value="{{$dec}}">
+          <input type="text" name="comment" placeholder="comment" maxlength="1024">
+          <button type="submit"{{if eq $dec "reject"}} class="danger"{{end}}>{{$dec}}</button>
+        </form>{{end}}
+      {{else if .Approver}}<span class="small">{{or .Approver.User .Approver.Node}} via {{.Approver.Via}}{{if .Comment}}: {{.Comment}}{{end}}</span>{{else}}-{{end}}</td>
+    </tr>{{else}}<tr><td colspan="9" class="muted">nothing waiting</td></tr>{{end}}</tbody>
+  </table>
+</section>
+{{end}}

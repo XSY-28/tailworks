@@ -37,6 +37,9 @@ type Principal struct {
 	// CapValues are the grants' values per capability (WhoIs CapMap);
 	// MCPCap's name the MCP tools the caller may use (mcp.go).
 	CapValues map[string][]json.RawMessage
+
+	// Name is the caller's MagicDNS name (approvals.go: the approver).
+	Name string
 }
 
 // Actor names the principal for audit records (deployedBy, kill by):
@@ -191,6 +194,10 @@ const (
 	roleAdmin             // CLI endpoints
 )
 
+// roleApprover: the approvals routes, for a tailnet identity holding
+// twd.dev/cap/approve (approvals.go).
+const roleApprover = roleAdmin << 1
+
 func (s *Server) allowed(p Principal, roles int) bool {
 	switch p.Kind {
 	case "local":
@@ -198,6 +205,9 @@ func (s *Server) allowed(p Principal, roles int) bool {
 	case "host":
 		return roles&roleHost != 0
 	case "user":
+		if roles&roleApprover != 0 && isApprover(p) {
+			return true
+		}
 		if roles&roleAdmin == 0 {
 			return false
 		}
@@ -435,7 +445,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			writeErr(w, r, errf(401, "no_identity", "WhoIs failed for %s", r.RemoteAddr))
 			return
 		}
-		p := Principal{NodeID: wi.NodeID, Tags: wi.Tags, Caps: wi.Caps, CapValues: wi.CapValues}
+		p := Principal{NodeID: wi.NodeID, Tags: wi.Tags, Caps: wi.Caps, CapValues: wi.CapValues, Name: wi.Name}
 		switch {
 		case s.Self.NodeID != "" && wi.NodeID == s.Self.NodeID:
 			// mgmt's own node: the operator console on the host machine
@@ -466,7 +476,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			}
 			if !s.allowed(p, roleAdmin) && r.URL.Path == MCPPath && slices.Contains(wi.Caps, MCPCap) {
 				p.Kind = "mcp" // MCPCap without AdminCap: /mcp only (mcp.go)
-			} else if !s.allowed(p, roleAdmin) {
+			} else if !s.allowed(p, roleAdmin|roleApprover) {
 				who := wi.Login
 				src := wi.Login
 				if len(wi.Tags) > 0 {

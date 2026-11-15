@@ -32,6 +32,8 @@ var errStatus = map[string]int{
 	// Create admission (docs/create-admission.md): a new name nobody admitted.
 	"create_not_admitted": 403,
 	"push_unauthorized":   403,
+	// Approvals (approvals.go): nothing is waiting for that decision.
+	"approval_not_pending": 409,
 }
 
 func writeAPIError(w http.ResponseWriter, e *apiError) {
@@ -70,6 +72,9 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 		var blob map[string]any
 		if err := json.Unmarshal([]byte(r.Header.Get(netd.HeaderCF)), &blob); err != nil || blob == nil {
 			writeAPIError(w, &apiError{Code: "no_identity", Detail: "missing cf blob"})
+			return
+		}
+		if h.serveApprovals(w, r, wl, blob) { // approvals.go: /_twd/approvals
 			return
 		}
 		route := map[string]any{"kind": "workload", "workload": o.Workload, "objectID": o.ID}
@@ -242,6 +247,9 @@ type apiReq struct {
 	// hostd-issued for tailnet requests and cron runs); it admits creates
 	// ("admit", a workload-level "spawn"). Public requests have none.
 	Ticket string `json:"ticket"`
+
+	// Approval is a Workflow's approval wait (op "approval", approvals.go).
+	Approval json.RawMessage `json:"approval"`
 }
 
 // objView snapshots o for the platform; o's fields are guarded by h.mu
@@ -475,6 +483,13 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				n++
 			}
 			writeJSON(w, 200, map[string]any{"ok": true, "accepted": n, "kind": kindTenantNote})
+		case "approval":
+			out, e := h.approvalReport(inst, req.Approval)
+			if e != nil {
+				fail(e)
+				return
+			}
+			writeJSON(w, 200, out)
 		default:
 			fail(&apiError{Code: "bad_request", Detail: "unknown op"})
 		}
@@ -507,6 +522,9 @@ func (h *Host) pushHandlers(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/logs", h.logsHandler)
 	// storeadmin.go: an operator op on a platform store (twd d1 execute, …).
 	m.HandleFunc("POST /v1/store-admin", h.storeAdminHandler)
+	// approvals.go: twd approvals / twd approve and the admin UI, through mgmt.
+	m.HandleFunc("GET /v1/approvals", h.approvalsListHandler)
+	m.HandleFunc("POST /v1/approvals/decide", h.approvalsDecideHandler)
 }
 
 // tsnetPushAPI is what the host's own tailnet node serves (Config.
