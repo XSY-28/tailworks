@@ -415,7 +415,7 @@ type NotifyResult struct {
 }
 
 // TestNotifications sends one test event now.
-func (m *Mgmt) TestNotifications(ctx context.Context, tenantID string) (NotifyResult, error) {
+func (m *Mgmt) TestNotifications(ctx context.Context, tenantID, by string) (NotifyResult, error) {
 	if err := m.checkTenant(ctx, tenantID); err != nil {
 		return NotifyResult{}, err
 	}
@@ -428,7 +428,10 @@ func (m *Mgmt) TestNotifications(ctx context.Context, tenantID string) (NotifyRe
 	}
 	ev := NotificationEvent{Event: EventTest, TenantID: tenantID, SentAt: m.now().UTC(), Link: ApprovalLink(m.consoleURL(), tenantID, "")}
 	ev.Text = "twd test notification for tenant " + tenantID + ". Approvals: " + ev.Link
-	return m.deliver(ctx, *e.Webhook, ev), nil
+	res := m.deliver(ctx, *e.Webhook, ev)
+	m.audit(ctx, AuditRecord{TenantID: tenantID, Kind: "notification_test", ActingFor: by},
+		map[string]any{"origin": urlOrigin(e.Webhook.URL), "delivered": res.Delivered, "status": res.Status, "error": res.Error, "by": by})
+	return res, nil
 }
 
 // deliver POSTs ev once. Errors never carry the URL (its path is secret).
@@ -552,7 +555,7 @@ func (a *v1api) DeleteTenantNotifications(w http.ResponseWriter, r *http.Request
 }
 
 func (a *v1api) TestTenantNotifications(w http.ResponseWriter, r *http.Request, id v1.TenantID) {
-	res, err := a.s.M.TestNotifications(r.Context(), id)
+	res, err := a.s.M.TestNotifications(r.Context(), id, principalOf(r.Context()).Actor(r))
 	if err != nil {
 		writeErr(w, r, err)
 		return

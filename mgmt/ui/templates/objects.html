@@ -14,7 +14,7 @@
     <label>Status
       <select name="status">
         <option value="">any</option>
-        {{range .States}}<option value="{{.}}"{{if eq . $.Status}} selected{{end}}>{{.}}</option>{{end}}
+        {{range .States}}<option value="{{.}}"{{if eq . $.State}} selected{{end}}>{{.}}</option>{{end}}
       </select>
     </label>
     <label>Tag <input type="text" name="tag" class="mono" value="{{.Tag}}" placeholder="tag:agent"></label>

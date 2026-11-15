@@ -688,9 +688,11 @@ paths:
       summary: Send a test notification now (`twd notify test`)
       description: |
         POSTs a `NotificationEvent` with `event: test` to the configured
-        webhook once, synchronously, and reports the outcome. Not retried
-        and not audited as a failure. `404 not_found` when no webhook is set.
+        webhook once, synchronously, and reports the outcome. Not retried.
+        Audited (`kind: notification_test`, the origin and the outcome).
+        `404 not_found` when no webhook is set.
       x-twd-role: admin
+      x-twd-audit: true
       responses:
         "200":
           description: The delivery attempt.
@@ -5411,6 +5413,7 @@ components:
         `notification_put` (the tenant's notification webhook set; its host and header names only),
         `notification_delete`,
         `notification_failed` (a notification was not delivered; the webhook's host and the error),
+        `notification_test` (`twd notify test`; the origin and the outcome),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -5486,6 +5489,7 @@ components:
         - notification_put
         - notification_delete
         - notification_failed
+        - notification_test
         - reap
         - preflight
         - host_add

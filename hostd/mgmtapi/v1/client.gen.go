@@ -132,6 +132,7 @@ const (
 	AuditKindNotificationDelete  AuditKind = "notification_delete"
 	AuditKindNotificationFailed  AuditKind = "notification_failed"
 	AuditKindNotificationPut     AuditKind = "notification_put"
+	AuditKindNotificationTest    AuditKind = "notification_test"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
 	AuditKindPreflight           AuditKind = "preflight"
@@ -242,6 +243,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindNotificationFailed:
 		return true
 	case AuditKindNotificationPut:
+		return true
+	case AuditKindNotificationTest:
 		return true
 	case AuditKindObjectUpdate:
 		return true
@@ -1589,6 +1592,7 @@ type AuditBatch struct {
 // `notification_put` (the tenant's notification webhook set; its host and header names only),
 // `notification_delete`,
 // `notification_failed` (a notification was not delivered; the webhook's host and the error),
+// `notification_test` (`twd notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1700,6 +1704,7 @@ type AuditRecord struct {
 	// `notification_put` (the tenant's notification webhook set; its host and header names only),
 	// `notification_delete`,
 	// `notification_failed` (a notification was not delivered; the webhook's host and the error),
+	// `notification_test` (`twd notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -6226,8 +6231,9 @@ type ClientInterface interface {
 	// TestTenantNotifications Send a test notification now (`twd notify test`)
 	//
 	// POSTs a `NotificationEvent` with `event: test` to the configured
-	// webhook once, synchronously, and reports the outcome. Not retried
-	// and not audited as a failure. `404 not_found` when no webhook is set.
+	// webhook once, synchronously, and reports the outcome. Not retried.
+	// Audited (`kind: notification_test`, the origin and the outcome).
+	// `404 not_found` when no webhook is set.
 	//
 	// Corresponds with POST /v1/tenants/{id}/notifications/test (the `TestTenantNotifications` operationId).
 	TestTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8786,8 +8792,9 @@ func (c *Client) PutTenantNotifications(ctx context.Context, id TenantID, body P
 // TestTenantNotifications Send a test notification now (`twd notify test`)
 //
 // POSTs a `NotificationEvent` with `event: test` to the configured
-// webhook once, synchronously, and reports the outcome. Not retried
-// and not audited as a failure. `404 not_found` when no webhook is set.
+// webhook once, synchronously, and reports the outcome. Not retried.
+// Audited (`kind: notification_test`, the origin and the outcome).
+// `404 not_found` when no webhook is set.
 //
 // Corresponds with POST /v1/tenants/{id}/notifications/test (the `TestTenantNotifications` operationId).
 func (c *Client) TestTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -16892,8 +16899,9 @@ type ClientWithResponsesInterface interface {
 	// TestTenantNotificationsWithResponse Send a test notification now (`twd notify test`)
 	//
 	// POSTs a `NotificationEvent` with `event: test` to the configured
-	// webhook once, synchronously, and reports the outcome. Not retried
-	// and not audited as a failure. `404 not_found` when no webhook is set.
+	// webhook once, synchronously, and reports the outcome. Not retried.
+	// Audited (`kind: notification_test`, the origin and the outcome).
+	// `404 not_found` when no webhook is set.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -28426,8 +28434,9 @@ func (c *ClientWithResponses) PutTenantNotificationsWithResponse(ctx context.Con
 // TestTenantNotificationsWithResponse Send a test notification now (`twd notify test`)
 //
 // POSTs a `NotificationEvent` with `event: test` to the configured
-// webhook once, synchronously, and reports the outcome. Not retried
-// and not audited as a failure. `404 not_found` when no webhook is set.
+// webhook once, synchronously, and reports the outcome. Not retried.
+// Audited (`kind: notification_test`, the origin and the outcome).
+// `404 not_found` when no webhook is set.
 //
 // Returns a wrapper object for the known response body format(s).
 //

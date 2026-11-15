@@ -37,15 +37,15 @@ var objectStates = []string{
 
 type objectsData struct {
 	base
-	Tenant, Workload, Status, Tag, Caller string
-	Tenants                               []tenant
-	States                                []string
-	Objects                               []object
-	Total                                 int  // matches before paging
-	Truncated                             bool // objectsScanMax reached
-	Page                                  int  // 1-based
-	PrevURL, NextURL                      string
-	Errors                                []string
+	Tenant, Workload, State, Tag, Caller string
+	Tenants                              []tenant
+	States                               []string
+	Objects                              []object
+	Total                                int  // matches before paging
+	Truncated                            bool // objectsScanMax reached
+	Page                                 int  // 1-based
+	PrevURL, NextURL                     string
+	Errors                               []string
 }
 
 // ClientFiltered: a tag or caller filter applied by the UI.
@@ -53,7 +53,7 @@ func (d objectsData) ClientFiltered() bool { return d.Tag != "" || d.Caller != "
 
 func (u *ui) objects(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	d := objectsData{base: u.base(r, "objects"), Tenant: q.Get("tenant"), Workload: q.Get("workload"), Status: q.Get("status"),
+	d := objectsData{base: u.base(r, "objects"), Tenant: q.Get("tenant"), Workload: q.Get("workload"), State: q.Get("status"),
 		Tag: strings.TrimSpace(q.Get("tag")), Caller: strings.TrimSpace(q.Get("caller")), States: objectStates, Page: 1}
 	if n, err := strconv.Atoi(q.Get("page")); err == nil && n > 1 {
 		d.Page = n
@@ -66,8 +66,8 @@ func (u *ui) objects(w http.ResponseWriter, r *http.Request) {
 	if d.Workload != "" {
 		api.Set("workload", d.Workload)
 	}
-	if d.Status != "" {
-		api.Set("state", d.Status)
+	if d.State != "" {
+		api.Set("state", d.State)
 	}
 	objs, err := listAll[object](u, r, "/v1/objects?"+api.Encode(), objectsScanMax)
 	if err != nil {
@@ -247,6 +247,7 @@ var auditKinds = []string{
 	"notification_delete",
 	"notification_failed",
 	"notification_put",
+	"notification_test",
 	"principal",
 	"public_request",
 	"ready",

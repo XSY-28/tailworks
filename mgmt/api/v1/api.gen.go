@@ -134,6 +134,7 @@ const (
 	AuditKindNotificationDelete  AuditKind = "notification_delete"
 	AuditKindNotificationFailed  AuditKind = "notification_failed"
 	AuditKindNotificationPut     AuditKind = "notification_put"
+	AuditKindNotificationTest    AuditKind = "notification_test"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
 	AuditKindPreflight           AuditKind = "preflight"
@@ -244,6 +245,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindNotificationFailed:
 		return true
 	case AuditKindNotificationPut:
+		return true
+	case AuditKindNotificationTest:
 		return true
 	case AuditKindObjectUpdate:
 		return true
@@ -1591,6 +1594,7 @@ type AuditBatch struct {
 // `notification_put` (the tenant's notification webhook set; its host and header names only),
 // `notification_delete`,
 // `notification_failed` (a notification was not delivered; the webhook's host and the error),
+// `notification_test` (`twd notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1702,6 +1706,7 @@ type AuditRecord struct {
 	// `notification_put` (the tenant's notification webhook set; its host and header names only),
 	// `notification_delete`,
 	// `notification_failed` (a notification was not delivered; the webhook's host and the error),
+	// `notification_test` (`twd notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
