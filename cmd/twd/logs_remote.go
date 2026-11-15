@@ -22,7 +22,7 @@ var remoteLogsContext = func() (context.Context, context.CancelFunc) {
 // (GET /v1/tenants/{id}/workloads/{workload}/logs). A workload with
 // replicas prints every replica's lines prefixed "[<host>] "; --host picks
 // one. The daemons' logs (--component) stay on the host.
-func remoteLogs(out io.Writer, s *state, pos []string, comp, tenantRef, host string, n int, follow bool) error {
+func remoteLogs(out io.Writer, s *state, pos []string, comp, tenantRef, host string, n int, follow bool, lo logsOpts) error {
 	if comp != "" || len(pos) != 1 {
 		return fail("remote_unsupported", "the daemons' logs (--component mgmt|hostd|supervisor) are files on the host that runs twd up (this machine is linked to "+s.Link.Endpoint+")").
 			withFix("twd logs <workload>   (a workload's log works from here)", "run `twd logs --component …` on the host")
@@ -38,6 +38,9 @@ func remoteLogs(out io.Writer, s *state, pos []string, comp, tenantRef, host str
 	defer stop()
 	c := s.mgmt()
 	opts := mgmtapi.LogsOptions{N: n, Follow: follow, Host: host}
+	if !lo.console {
+		opts.Source, opts.Filter = "requests", lo.filter.Values()
+	}
 	for {
 		start := time.Now()
 		body, err := c.WorkloadLogs(ctx, tn.TenantID, pos[0], opts)
@@ -47,7 +50,12 @@ func remoteLogs(out io.Writer, s *state, pos []string, comp, tenantRef, host str
 			}
 			return err
 		}
-		_, cerr := io.Copy(out, body)
+		var cerr error
+		if lo.console {
+			_, cerr = io.Copy(out, body) // with --json: one log event per line (agentjson.go)
+		} else {
+			cerr = copyRecords(os.Stdout, body) // logs_records.go
+		}
 		body.Close()
 		if !follow || ctx.Err() != nil {
 			return nil

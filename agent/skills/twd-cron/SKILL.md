@@ -48,7 +48,7 @@ the first one.
 
 ```sh
 twd deploy --json
-twd logs <workload> -f          # the scheduled() handler's console output
+twd logs <workload> -f          # each run, with its console output
 ```
 
 Run outcomes and failures are logged by twd's host agent:

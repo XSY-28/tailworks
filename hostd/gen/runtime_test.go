@@ -20,7 +20,7 @@ func TestRuntimeEmbedFresh(t *testing.T) {
 	}
 	out := filepath.Join(t.TempDir(), "rt.js")
 	cmd := exec.Command(esb, "js/packages/tailnet/src/runtime.ts", "--bundle", "--format=esm", "--platform=neutral",
-		"--target=es2022", "--legal-comments=none", "--log-level=warning", "--outfile="+out)
+		"--target=es2022", "--legal-comments=none", "--log-level=warning", "--external:node:async_hooks", "--outfile="+out)
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, b)

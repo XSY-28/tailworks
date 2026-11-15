@@ -181,7 +181,10 @@ prove every ✅ and ⚠️.
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
 | Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container |
-| Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `twd logs`; no Tail Workers |
+| Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `twd logs`: a structured line per request; no Tail Workers |
+| Platform | [Metrics](docs/COMPAT.md#metrics) | ⚠️ | Prometheus `/metrics` on the tailnet, and OTLP; no CPU time |
+| Platform | [Tracing (`traceparent`)](docs/COMPAT.md#traces) | ⚠️ | across DO calls and egress; not DO RPC |
+| Platform | [Export to OpenTelemetry](docs/COMPAT.md#otlp-export) | ⚠️ | `twd telemetry set`; collector on the tailnet |
 | Platform | [Wrangler config (`wrangler.toml`/`.json`/`.jsonc`)](docs/COMPAT.md#wrangler-config) | ⚠️ | keys twd can't use are warned, one line each |
 | Platform | [Environments (`--env`)](docs/COMPAT.md#wrangler-env) | ✅ | one workload per environment |
 | Platform | [Bundling (`define`, `alias`, `rules`, `--wrangler`)](docs/COMPAT.md#wrangler-bundling) | ✅ | built-in esbuild, or wrangler's own |
@@ -217,6 +220,11 @@ prove every ✅ and ⚠️.
   [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
+- **Logs, metrics and traces:** `twd logs <workload>` shows one structured
+  line per request (`--json`, `--errors`, …), hosts serve Prometheus
+  `/metrics` on their tailnet node, and `twd telemetry set --otlp …`
+  exports logs, metrics and traces to your OpenTelemetry collector. See
+  [docs/observability.md](docs/observability.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).

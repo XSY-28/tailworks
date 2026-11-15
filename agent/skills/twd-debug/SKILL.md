@@ -9,12 +9,20 @@ description: Use when a twd app misbehaves or a twd command fails - read a workl
 
 <!-- twd-eval: logs -->
 ```sh
-twd logs hello-mcp -n 50 --json       # one {"event": "log", "line", "workload"} per line
+twd logs hello-mcp -n 50 --json       # one request record per line
+twd logs hello-mcp --errors --json    # only failed requests: status >= 400, exceptions
 ```
 
-- `twd logs <workload>` prints the workload's own log: the app's
-  `console.log` output and workerd's errors.
-- `-f` follows it. With `--json` that is a stream of one JSON object per
+- `twd logs <workload>` prints the workload's request records, one per
+  request: `time`, `method`, `path`, `status`, `durationMs`, `outcome`,
+  the `object` and `caller`, `traceId`, and the request's `console.*`
+  output (`logs`) and `exceptions` under it.
+- Filters: `--errors`, `--status 5xx`, `--object <Class/name>`,
+  `--caller <login>`, `--trace <id>`. `-n` counts matching records.
+- `--console` prints the app's raw output instead (workerd's own errors,
+  output outside a request); with `--json` one
+  `{"event": "log", "line"}` per line.
+- `-f` follows. With `--json` that is a stream of one JSON object per
   line, so run it in the background and stop it when you've seen enough.
 - `--component mgmt|hostd|supervisor` prints twd's own daemons' logs
   instead. That only works on the machine that ran `twd up`.

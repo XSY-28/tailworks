@@ -179,12 +179,15 @@ func TestAgentEval(t *testing.T) {
 		if !r.OK() {
 			t.Fatalf("%s: %s", r.Ref, r.Stderr)
 		}
-		if _, err := agenteval.CheckStream("logs.line", r.Stdout); err != nil {
+		if _, err := agenteval.CheckLogs(r.Stdout); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// Every other command once, with --json, against this twd.
+	if _, err := agenteval.CheckLogs(ag.Exec("logs", "hello-mcp", "--console", "-n", "20", "--json").Stdout); err != nil {
+		t.Fatal(err)
+	}
 	ok("version", ag.Exec("version", "--json"))
 	if r := ag.Exec("doctor", "--json"); true {
 		if err := agenteval.CheckDoc("doctor", doc(r)); err != nil {

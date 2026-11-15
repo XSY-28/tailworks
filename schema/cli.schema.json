@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/rosskukulinski/twd/master/schema/cli.schema.json",
   "title": "twd CLI --json output",
-  "description": "The shape of every twd command's --json output (docs/cli-json.md). $defs are named after the command ('deploy', 'tenant ls'); 'dev.event', 'deploy.event' and 'logs.line' are NDJSON lines; 'error' is the error line on stderr. Objects may gain properties; the required ones and every listed type are stable. cmd/twd TestAgentEval and TestCLIJSONContract check real output against this file.",
+  "description": "The shape of every twd command's --json output (docs/cli-json.md). $defs are named after the command ('deploy', 'tenant ls'); 'dev.event', 'deploy.event', 'logs.record' and 'logs.line' are NDJSON lines; 'error' is the error line on stderr. Objects may gain properties; the required ones and every listed type are stable. cmd/twd TestAgentEval and TestCLIJSONContract check real output against this file.",
   "$defs": {
     "timings": {
       "type": "object",
@@ -1316,7 +1316,7 @@
     },
     "logs.line": {
       "type": "object",
-      "description": "twd logs --json: one per log line on stdout (with -f, until stopped)",
+      "description": "twd logs --json for raw output (--console, --component, or a workload without request records): one per log line on stdout (with -f, until stopped)",
       "properties": {
         "event": {
           "type": "string",
@@ -1351,6 +1351,94 @@
         "event",
         "ts",
         "line"
+      ]
+    },
+    "logs.record": {
+      "type": "object",
+      "description": "twd logs <workload> --json (the default, without --console): one structured request record per line on stdout (ADR-observability)",
+      "properties": {
+        "time": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "workload": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "caller": {
+          "type": "object"
+        },
+        "method": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "durationMs": {
+          "type": "number"
+        },
+        "event": {
+          "type": "string"
+        },
+        "entrypoint": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "spanId": {
+          "type": "string"
+        },
+        "auditTraceId": {
+          "type": "string"
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "dropped": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "time",
+        "kind"
       ]
     },
     "doctor": {

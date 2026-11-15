@@ -200,6 +200,25 @@ func CheckStream(def, s string) ([]map[string]any, error) {
 	return ls, nil
 }
 
+// CheckLogs checks `twd logs --json` output: request records
+// ($defs/logs.record, they have "kind") or raw lines ($defs/logs.line).
+func CheckLogs(s string) ([]map[string]any, error) {
+	ls, err := Lines(s)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range ls {
+		def := "logs.line"
+		if _, ok := l["kind"]; ok {
+			def = "logs.record"
+		}
+		if err := CheckDoc(def, l); err != nil {
+			return nil, err
+		}
+	}
+	return ls, nil
+}
+
 var codeHeading = regexp.MustCompile(`(?m)^### ([a-z_]+)$`)
 
 // KnownCodes are the error codes docs/errors.md documents.

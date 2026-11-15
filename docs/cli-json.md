@@ -89,13 +89,19 @@ stream on **stdout**:
 
 `twd dev --once --json` is a single result document instead (`$defs/dev`).
 
-### `twd logs --json`: one line per log line on stdout
+### `twd logs --json`: one line per record or log line on stdout
+
+`twd logs <workload> --json` prints the workload's request records, one
+per line (`$defs/logs.record`: `time`, `kind`, `method`, `path`, `status`,
+`durationMs`, `outcome`, `object`, `caller`, `traceId`, `logs`,
+`exceptions`, …). Raw output (`--console`, `--component`) is one event per
+line (`$defs/logs.line`):
 
 ```json
 {"event": "log", "ts": "…", "workload": "hello-mcp", "line": "…"}
 ```
 
-`workload` is set for `twd logs <workload>`, `component` for
+`workload` is set for `twd logs <workload> --console`, `component` for
 `--component mgmt|hostd|supervisor`. From a machine linked with `twd link`,
 replica lines also carry the `host` they came from. With `-f`, lines keep
 coming until the command is stopped.

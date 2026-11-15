@@ -122,7 +122,7 @@ func TestCLIJSONContract(t *testing.T) {
 			t.Errorf("schema/cli.schema.json $defs/%q: no such command in cliSurface", d)
 		}
 	}
-	for _, d := range []string{"dev.event", "deploy.event", "logs.line", "error"} {
+	for _, d := range []string{"dev.event", "deploy.event", "logs.line", "logs.record", "error"} {
 		if !defs[d] {
 			t.Errorf("schema/cli.schema.json has no $defs/%q", d)
 		}
@@ -151,7 +151,7 @@ func TestCLIJSONContract(t *testing.T) {
 				}
 			}
 		case c.def == "logs.line" && r.OK():
-			if _, err := agenteval.CheckStream(c.def, r.Stdout); err != nil {
+			if _, err := agenteval.CheckLogs(r.Stdout); err != nil {
 				t.Error(err)
 			}
 		case r.OK():
