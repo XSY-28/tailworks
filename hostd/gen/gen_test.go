@@ -144,13 +144,19 @@ func start(t *testing.T, appDir string, vars map[string]string) *inst {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available")
 	}
-	wdBin, err := nettest.WorkerdBinary()
-	if err != nil {
-		t.Skip(err)
-	}
 	files, err := hostdtest.Build(appDir, vars)
 	if err != nil {
 		t.Fatal(err)
+	}
+	return startFiles(t, files)
+}
+
+// startFiles runs an already-built bundle (path -> contents).
+func startFiles(t *testing.T, files map[string][]byte) *inst {
+	t.Helper()
+	wdBin, err := nettest.WorkerdBinary()
+	if err != nil {
+		t.Skip(err)
 	}
 	app, err := bundle.Parse(files)
 	if err != nil {
