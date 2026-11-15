@@ -134,6 +134,8 @@ tags:
     description: Single-use auth keys and node certificates.
   - name: secrets
     description: Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
+  - name: stores
+    description: Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
   - name: audit
     description: Hash-chained, append-only audit log.
   - name: volumes
@@ -636,6 +638,194 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [stores]
+      operationId: ListWorkloadStores
+      summary: List a workload's stores
+      description: |
+        Every store of the workload (all kinds), ordered by `(kind, name)`.
+        A store exists once something was written to it (a binding's first
+        write, or `PUT …/stores/{kind}/{name}`). Sizes are of the journal
+        mgmt keeps, after compaction.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: kind
+          in: query
+          description: Only stores of this kind.
+          schema: { $ref: "#/components/schemas/StoreKind" }
+      responses:
+        "200":
+          description: One page of stores.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeKind"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: GetWorkloadStore
+      summary: Get one store
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The store.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [stores]
+      operationId: PutWorkloadStore
+      summary: Create a store (idempotent)
+      description: |
+        Creates an empty store (`201`), or answers the existing one
+        (`200`). A binding's first write creates its store too, so this is
+        only needed to create one before the first deploy. Audited
+        (`kind: store_create`) when it creates.
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: The store already existed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [stores]
+      operationId: DeleteWorkloadStore
+      summary: Delete a store and its data
+      description: |
+        Deletes the journal and the store's data key (custody), so the
+        sealed entries can't be read again even from a backup of the
+        database. A running workload's store object notices on its next
+        sync (a new incarnation) and empties itself; a later write starts
+        a new, empty store. `404 unknown_store` if there is none. Audited
+        (`kind: store_delete`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeKind"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ReadStoreJournal
+      summary: Read a store's journal after a sequence number
+      description: |
+        The entries with `seq > after`, in order, for a store object
+        catching up (after a restart, on a new host, or when another
+        writer appended). Entries superseded by a later entry with the same
+        `ckey` are gone (compaction), so `seq` has gaps; the page is still
+        a complete catch-up from `after`. An unknown store is an empty page
+        with `head` 0 and no `incarnation`.
+
+        A host must give `epoch`: the data is released only to the holder
+        of the workload's lease at that epoch (`409 lease_lost`, as for
+        secrets). An admin reads without it (`twd kv key get`).
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/storeEpoch"
+        - name: after
+          in: query
+          description: Return entries with a larger `seq` (default 0).
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: limit
+          in: query
+          description: At most this many entries (default and maximum 1000; a page also stops at about 4 MiB of data).
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: A page of entries.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreJournal" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [stores]
+      operationId: AppendStoreJournal
+      summary: Append entries to a store's journal (conditional on its head)
+      description: |
+        The write path of a store object: it appends here **before** it
+        applies the change locally, so an acknowledged write is never only
+        on one host's disk. The append succeeds only if the journal's head
+        is still `after` (and `incarnation` matches when given); otherwise
+        `409 store_conflict`, and the writer catches up
+        (`GET …/journal?after=`) and retries. That makes the journal
+        linearizable across writers (a workload's replicas, an admin's
+        `twd kv key put`). An entry with a `ckey` supersedes every earlier
+        entry with the same `ckey`, which mgmt deletes in the same
+        transaction. The first append creates the store.
+
+        Entries are sealed at rest with the store's data key (AES-256-GCM,
+        custody); `ckey` is stored as an HMAC under a key derived from it.
+
+        A host must give `epoch` (lease holder at that epoch, `409
+        lease_lost`): a host that lost the workload can't write. Not
+        audited per append (stores are high volume); creation is
+        (`kind: store_create`). Limits: 128 entries and 4 MiB of data per
+        append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
+      x-twd-role: admin|host
+      parameters:
+        - $ref: "#/components/parameters/storeEpoch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreAppend" }
+      responses:
+        "201":
+          description: Appended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoreAppendResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StoreConflict" }
         default: { $ref: "#/components/responses/Error" }
 
   # ------------------------------------------------------------------ hosts
@@ -2373,6 +2563,23 @@ components:
       required: true
       description: "Secret name: a JS identifier that is also an environment variable name; `TWD_…` and `__TWD…` are reserved."
       schema: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
+    storeKind:
+      name: kind
+      in: path
+      required: true
+      description: The store kind (the binding type, e.g. `kv`).
+      schema: { $ref: "#/components/schemas/StoreKind" }
+    storeName:
+      name: name
+      in: path
+      required: true
+      description: "The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none)."
+      schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" }
+    storeEpoch:
+      name: epoch
+      in: query
+      description: "Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out."
+      schema: { type: integer, format: int64, minimum: 1 }
     tenantID:
       name: id
       in: path
@@ -2574,6 +2781,13 @@ components:
             message: "the caller does not hold the namespace lease at this epoch (want 4, have 3)"
             doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#lease_lost
             trace_id: 7f3a…
+    StoreConflict:
+      description: "`lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry."
+      headers:
+        Twd-Error: { schema: { type: string, enum: [lease_lost, store_conflict] } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     Gone:
       description: The object was killed. The body is the typed error plus the kill record; it stays until purged.
       headers:
@@ -2663,9 +2877,12 @@ components:
         | `unknown_namespace` | 404 | `(workload, class)` not declared |
         | `no_logs` | 404 | the workload's host has no log file for it yet |
         | `unknown_secret` | 404 | the workload has no secret of that name |
+        | `unknown_store` | 404 | the workload has no store of that kind and name |
         | `exists` | 409 | create of an existing ID |
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
+        | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
+        | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
         | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
         | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
@@ -2718,9 +2935,12 @@ components:
         - unknown_namespace
         - no_logs
         - unknown_secret
+        - unknown_store
         - exists
         - lease_lost
         - lease_held
+        - store_conflict
+        - store_limit
         - takeover_unconfirmed
         - service_conflict
         - service_api_failed
@@ -3673,6 +3893,8 @@ components:
         `secret_put` (a workload secret set; name only),
         `secret_delete`,
         `secret_release` (a workload's secrets released to its lease holder; names only),
+        `store_create` (a platform store created, by its first write or an admin),
+        `store_delete` (a platform store and its data key deleted),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -3719,6 +3941,8 @@ components:
         - secret_put
         - secret_delete
         - secret_release
+        - store_create
+        - store_delete
         - reap
         - preflight
         - host_add
@@ -3842,6 +4066,72 @@ components:
         key: { type: string, contentEncoding: base64, format: password, description: 32 bytes. }
         grantedAt: { type: integer, format: int64 }
       x-twd-secret: true
+
+    # -------------------------------------------------------------- stores
+    StoreKind:
+      type: string
+      pattern: "^[a-z][a-z0-9]{0,15}$"
+      description: A storage binding type (`kv`; later `d1`, `queue`, …).
+    Store:
+      type: object
+      description: A platform storage object of a workload (ADR-platform-stores).
+      required: [tenantID, workload, kind, name, incarnation, head, entries, bytes, createdAt, updatedAt]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        kind: { $ref: "#/components/schemas/StoreKind" }
+        name: { type: string }
+        incarnation: { type: string, description: "Random per creation: a store deleted and created again has a new one, so a store object holding the old data empties itself." }
+        head: { type: integer, format: int64, description: The last sequence number appended. }
+        entries: { type: integer, format: int64, description: Journal entries kept (after compaction). }
+        bytes: { type: integer, format: int64, description: Plaintext bytes of the kept entries. }
+        createdAt: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
+    StorePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Store" } }
+    StoreEntryIn:
+      type: object
+      required: [data]
+      properties:
+        ckey: { type: string, maxLength: 1024, description: "Compaction key: this entry supersedes every earlier entry with the same `ckey` (for KV, the key). Empty: never compacted." }
+        data: { type: string, format: byte, description: "The entry, opaque to mgmt (its kind's encoding), at most 2 MiB." }
+      additionalProperties: false
+    StoreAppend:
+      type: object
+      required: [after, entries]
+      properties:
+        after: { type: integer, format: int64, minimum: 0, description: The journal head the writer has applied; the append fails with `store_conflict` unless it is still the head. }
+        incarnation: { type: string, description: "The incarnation the writer has applied (empty for a new store). A mismatch is a `store_conflict`." }
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items: { $ref: "#/components/schemas/StoreEntryIn" }
+      additionalProperties: false
+    StoreAppendResult:
+      type: object
+      required: [incarnation, head]
+      properties:
+        incarnation: { type: string }
+        head: { type: integer, format: int64, description: "The new head: the entries got `after+1 … head`, in order." }
+    StoreEntry:
+      type: object
+      required: [seq, data]
+      properties:
+        seq: { type: integer, format: int64 }
+        data: { type: string, format: byte }
+    StoreJournal:
+      type: object
+      required: [head, entries, more]
+      properties:
+        incarnation: { type: string, description: Empty when the store does not exist. }
+        head: { type: integer, format: int64 }
+        entries: { type: array, items: { $ref: "#/components/schemas/StoreEntry" } }
+        more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
 
     # ---------------------------------------------------------- containers
     ContainerResources:

@@ -114,6 +114,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	if err := checkSecrets(app); err != nil {
 		return nil, err
 	}
+	if err := checkStores(app); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(o.Dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -252,7 +255,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		Classes      map[string]classCfg        `json:"classes"`
 		Vars         map[string]json.RawMessage `json:"vars"`
 		Crons        []string                   `json:"crons"`
-	}{o.DeploymentID, o.Workload, app.CompatDate, nonNil(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons)}
+
+		// Stores are the storage bindings a facet's env gets (stores.go).
+		Stores []storeCfg `json:"stores"`
+	}{o.DeploymentID, o.Workload, app.CompatDate, nonNil(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app)}
 	cfg.Vars = varsWithSecrets(cfg.Vars, app.Secrets)
 	if cfg.Vars == nil {
 		cfg.Vars = map[string]json.RawMessage{}
@@ -276,6 +282,12 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		fmt.Fprintf(&hc, "export const Host_%s = makeHost(%s);\n", c, jsq(c))
 	}
 	pjs := strings.Replace(platformJS, "//@@HOST_CLASSES@@", hc.String(), 1)
+	pjs = strings.Replace(pjs, "//@@STORES@@", storePlatformExports(app), 1)
+	for name, b := range storeFiles(app) {
+		if err := write(name, []byte(b)); err != nil {
+			return nil, err
+		}
+	}
 
 	for name, b := range map[string]string{
 		"platform.js": pjs, "twd-config.json": string(cfgb), "twd-modules.js": tm.String(),
@@ -327,6 +339,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("    (name = \"twd-modules.js\", esModule = embed \"twd-modules.js\"),\n")
 	c.WriteString("    (name = \"__twd_facet.js.txt\", text = embed \"__twd_facet.js\"),\n")
 	c.WriteString("    (name = \"__twd_rt.js.txt\", text = embed \"__twd_rt.js\"),\n")
+	c.WriteString(storeModules(app))
 	for _, p := range mods {
 		kind := "text"
 		if k := moduleKind(p); k == "wasm" || k == "data" {
@@ -338,9 +351,11 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	for _, cl := range facets {
 		fmt.Fprintf(&c, "    (className = %s, uniqueKey = %s, enableSql = true),\n", cq("Host_"+cl), uk(cl))
 	}
+	c.WriteString(storeNamespace(app, o.Workload))
 	c.WriteString("  ],\n  durableObjectStorage = (localDisk = \"do-storage\"),\n  bindings = [\n")
 	c.WriteString("    (name = \"LOADER\", workerLoader = ()),\n    (name = \"NETD_EGRESS\", service = \"netd-egress\"),\n    (name = \"HOSTD\", service = \"hostd\"),\n    (name = \"EGRESS_WL\", service = \"egress-wl\"),\n    (name = \"TENANT\", service = \"tenant\"),\n")
 	fmt.Fprintf(&c, "    (name = \"MAC_KEY\", text = %s),\n", cq(res.MACKey))
+	c.WriteString(storePlatformBindings(app))
 	for _, cl := range plains {
 		fmt.Fprintf(&c, "    (name = %s, durableObjectNamespace = (className = %s, serviceName = \"tenant\")),\n", cq("NS_"+cl), cq(cl))
 	}
@@ -399,6 +414,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		fmt.Fprintf(&c, "    (name = %s, json = %s),\n", cq(k), cq(string(app.Vars[k])))
 	}
 	c.WriteString(secretBindings(app))
+	c.WriteString(storeTenantBindings(app))
 	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n);\n\n")
 	c.WriteString("const deny :Workerd.Worker = (\n  compatibilityDate = \"2026-04-01\",\n  modules = [ (name = \"deny.js\", esModule = embed \"deny.js\") ],\n);\n")
 	if err := write("config.capnp", []byte(c.String())); err != nil {
