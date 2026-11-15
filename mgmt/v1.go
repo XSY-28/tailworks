@@ -14,7 +14,6 @@ import (
 	"time"
 
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
-	"github.com/rosskukulinski/twd/mgmt/ui"
 )
 
 // v1api implements the generated v1.ServerInterface (api/openapi.yaml is
@@ -1528,14 +1527,15 @@ func (s *Server) Handler() http.Handler {
 	})
 	// The admin UI (mgmt/ui) rides on the same principal; browserGuard
 	// refuses cross-site browser mutations (CSRF) for the UI and the API.
-	return browserGuard(s.mountUI(api, ui.Handler(api)))
+	return browserGuard(s.mountUI(api, embeddedUI(api)))
 }
 
 // mountUI dispatches the admin UI (mgmt/ui) next to the API: /ui/* goes to
 // the UI once the caller is admitted (the local operator or an admin user;
 // never a host), GET / from a browser (Accept: text/html) is redirected to
-// /ui/, and everything else is the API. The UI itself renders from
-// in-process calls to api, so it sees exactly what the principal may see.
+// /ui/, and everything else is the API. The UI itself is a plain /v1
+// client (embeddedUI, uiclient.go) and also checks /v1/whoami, so this
+// gate is a second layer; it sees exactly what the principal may see.
 func (s *Server) mountUI(api, uiH http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
