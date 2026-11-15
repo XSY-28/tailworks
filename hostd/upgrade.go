@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -22,7 +23,8 @@ import (
 // Self-upgrade (ADR-041 §8): an upgrade run in mgmt
 // pushes POST /v1/push/upgrade; a host started with Config.SelfUpgrade
 // downloads the release tarball from mgmt (GET /v1/releases/{v}/artifacts/
-// {name}, host role), checks its SHA-256, runs the tarball's install.sh
+// {name}, host role), checks its SHA-256 and its release signature against
+// the keys pinned in this binary (upgradesig.go), runs the tarball's install.sh
 // into Config.InstallPrefix (which keeps the previous install as .prev),
 // and calls Config.Restart. twd-hostd then exits for its service manager
 // to start the new binary; the run waits for the host to re-register at
@@ -45,6 +47,10 @@ var (
 type upgrader struct {
 	mu      sync.Mutex
 	running string // the version being installed ("" = idle)
+
+	// signers overrides the release keys pinned in this binary (tests
+	// only; never set from mgmt). upgradesig.go.
+	signers []ed25519.PublicKey
 }
 
 // upgradeHandler is POST /v1/push/upgrade.
@@ -119,6 +125,9 @@ func (h *Host) installArtifact(ctx context.Context, tgz, dir string) error {
 	inst, err := filepath.Glob(filepath.Join(dir, "twd-*", "install.sh"))
 	if err != nil || len(inst) != 1 {
 		return fmt.Errorf("%s has no install.sh", name)
+	}
+	if err := h.verifyRelease(filepath.Dir(inst[0])); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
 	}
 	cmd := exec.CommandContext(ctx, "sh", inst[0], "--prefix", h.cfg.InstallPrefix, "--force")
 	cmd.Env = append(os.Environ(), "TWD_HOME="+h.cfg.InstallPrefix)

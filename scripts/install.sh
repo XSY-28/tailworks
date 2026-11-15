@@ -6,8 +6,12 @@
 #   ./install.sh --uninstall     remove bin/ and share/ (keeps twd state: twd.json, logs, …)
 #   ./install.sh --uninstall --purge   also remove the state in the prefix (run `twd down` first)
 #   ~/.twd/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
+#   ./install.sh --allow-unsigned      install a release without a valid SHA256SUMS.sig (local builds)
 #
-# No sudo, nothing outside the prefix is touched (your shell profile
+# The release must be signed: SHA256SUMS.sig, an SSH signature of SHA256SUMS
+# by a key pinned below (ssh-keygen -Y verify). Local builds (a version with
+# a "-" suffix, as `make release` stamps) may be unsigned; the check is
+# skipped, with a warning, when ssh-keygen is missing. No sudo, nothing outside the prefix is touched (your shell profile
 # included: it prints the PATH line to add). Re-running is safe. An upgrade
 # keeps the version it replaces as bin.prev/share.prev/VERSION.prev (a
 # re-install of the same version keeps the older .prev), and copies this
@@ -19,6 +23,13 @@ PREFIX=${TWD_HOME:-$HOME/.twd}
 MODE=install
 PURGE=0
 FORCE=0
+ALLOW_UNSIGNED=${TWD_ALLOW_UNSIGNED:-0}
+# The release signing keys (allowed_signers lines; TWD_RELEASE_SIGNERS=FILE
+# overrides, for tests and private builds).
+# BEGIN twd release signers (copied from internal/releasesig/allowed_signers by scripts/release-keygen.sh --sync)
+SIGNERS='
+'
+# END twd release signers
 while [ $# -gt 0 ]; do
 	case $1 in
 	--prefix) PREFIX=$2; shift ;;
@@ -27,7 +38,8 @@ while [ $# -gt 0 ]; do
 	--purge) PURGE=1 ;;
 	--force) FORCE=1 ;;
 	--rollback) MODE=rollback ;;
-	-h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+	--allow-unsigned) ALLOW_UNSIGNED=1 ;;
+	-h | --help) sed -n '2,20p' "$0"; exit 0 ;;
 	*) echo "install.sh: unknown argument $1" >&2; exit 2 ;;
 	esac
 	shift
@@ -112,6 +124,28 @@ if [ "$os" = linux ]; then
 	if [ "$gmaj" -lt 2 ] || { [ "$gmaj" -eq 2 ] && [ "$gmin" -lt 35 ]; }; then
 		die "glibc $glibc is too old: twd's workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10). Details: $SRC/bin/twd doctor"
 	fi
+fi
+
+# Authenticity: SHA256SUMS is signed by a pinned release key.
+if [ "$ALLOW_UNSIGNED" = 1 ]; then
+	say "WARNING: not checking the release signature (--allow-unsigned)"
+elif [ ! -f "$SRC/SHA256SUMS.sig" ]; then
+	case $VERSION in
+	*-*) say "WARNING: $VERSION is a local build with no SHA256SUMS.sig: not signature-checked" ;;
+	*) die "this release is not signed (no SHA256SUMS.sig). Install releases from GitHub (scripts/get.sh), or pass --allow-unsigned for a build you made" ;;
+	esac
+elif ! command -v ssh-keygen >/dev/null 2>&1; then
+	say "WARNING: no ssh-keygen (OpenSSH): can't check SHA256SUMS.sig (see INSTALL.md, \"Verify a release\")"
+else
+	signers=$(mktemp)
+	if [ -n "${TWD_RELEASE_SIGNERS:-}" ]; then cat "$TWD_RELEASE_SIGNERS" >"$signers"; else printf '%s\n' "$SIGNERS" >"$signers"; fi
+	grep -q '^twd-release ' "$signers" || { rm -f "$signers"; die "this install.sh pins no release signing key, so it can't check SHA256SUMS.sig (--allow-unsigned to install anyway)"; }
+	if ! ssh-keygen -Y verify -f "$signers" -I twd-release -n twd-release -s "$SRC/SHA256SUMS.sig" <"$SRC/SHA256SUMS" >/dev/null 2>&1; then
+		rm -f "$signers"
+		die "SHA256SUMS.sig is not a valid signature by a twd release key: refusing to install"
+	fi
+	rm -f "$signers"
+	say "✓ signed by a twd release key"
 fi
 
 # Integrity (hashing ~300 MB takes a few seconds; say so).

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ed25519"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -53,10 +54,12 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 // installArtifact runs the tarball's install.sh into the prefix.
 func TestSelfUpgradeInstalls(t *testing.T) {
 	prefix := t.TempDir()
-	tgz := tarGz(t, map[string]string{
+	pub, priv := testReleaseKey(t)
+	tgz := tarGz(t, signRelease(t, priv, "twd-0.2.0-linux-amd64", map[string]string{
 		"twd-0.2.0-linux-amd64/install.sh": "#!/bin/sh\n[ \"$1\" = --prefix ] || exit 3\necho 0.2.0 > \"$2/installed\"\n",
-	})
+	}))
 	h := &Host{cfg: Config{DataDir: t.TempDir(), SelfUpgrade: true, InstallPrefix: prefix, Restart: func() {}}}
+	h.upg.signers = []ed25519.PublicKey{pub}
 	p := filepath.Join(t.TempDir(), "twd-0.2.0-linux-amd64.tar.gz")
 	os.WriteFile(p, tgz, 0o600)
 	if err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "x")); err != nil {
@@ -66,7 +69,7 @@ func TestSelfUpgradeInstalls(t *testing.T) {
 		t.Fatalf("install.sh did not run into the prefix: %q", b)
 	}
 	// A failing install.sh is an error (the old release stays).
-	bad := tarGz(t, map[string]string{"twd-0.2.0-linux-amd64/install.sh": "#!/bin/sh\necho nope; exit 1\n"})
+	bad := tarGz(t, signRelease(t, priv, "twd-0.2.0-linux-amd64", map[string]string{"twd-0.2.0-linux-amd64/install.sh": "#!/bin/sh\necho nope; exit 1\n"}))
 	os.WriteFile(p, bad, 0o600)
 	if err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "y")); err == nil || !strings.Contains(err.Error(), "nope") {
 		t.Fatalf("failing install.sh: %v", err)

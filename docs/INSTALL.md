@@ -53,16 +53,34 @@ offline).
 
 The quickest way is [`scripts/get.sh`](../scripts/get.sh). It downloads
 the latest [GitHub release](https://github.com/rosskukulinski/twd/releases)
-for this machine, checks it against `SHA256SUMS` and runs its `install.sh`
-(step 2): `curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/twd/master/scripts/get.sh && sh get.sh`.
+for this machine, checks the release signature and `SHA256SUMS`, and runs
+its `install.sh` (step 2): `curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/twd/master/scripts/get.sh && sh get.sh`.
 To do it by hand, or from a tarball you built (`make release`):
 
 ```sh
 mkdir -p ~/Downloads/twd && cd ~/Downloads/twd
-# download (or copy) twd-<version>-darwin-arm64.tar.gz and SHA256SUMS here
+# download (or copy) twd-<version>-darwin-arm64.tar.gz, SHA256SUMS and SHA256SUMS.sig here
+# (verify the signature first: "Verify a release" below)
 shasum -a 256 -c SHA256SUMS --ignore-missing
 tar -xzf twd-*-darwin-arm64.tar.gz
 ```
+
+#### Verify a release
+
+Releases from v0.3.0 on are signed. `get.sh`, `install.sh` and twd-hostd's
+self-upgrade check the signature themselves. To check one by hand, take
+the pinned keys from the repository, not from the release:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/twd/master/internal/releasesig/allowed_signers
+ssh-keygen -Y verify -f allowed_signers -I twd-release -n twd-release -s SHA256SUMS.sig <SHA256SUMS
+```
+
+`ssh-keygen` ships with OpenSSH on macOS and Linux. A good release prints
+`Good "twd-release" signature`. `install.sh` refuses an unsigned or badly
+signed release unless you pass `--allow-unsigned`, which is meant for
+tarballs you built yourself. A local build (`make release`, version
+`x.y.z-<commit>`) is unsigned, and `install.sh` installs it with a warning.
 
 The binaries are **unsigned except for an ad-hoc signature** (`codesign -s -`,
 required to run arm64 code). Files copied with `scp`, `curl` or `tar` are not
@@ -79,7 +97,7 @@ export PATH="$HOME/.twd/bin:$PATH"
 echo 'export PATH="$HOME/.twd/bin:$PATH"' >> ~/.zprofile   # the installer prints this; it doesn't edit your profile
 ```
 
-It verifies `SHA256SUMS`, checks the platform, copies `bin/` and `share/`
+It checks the release signature (`SHA256SUMS.sig`) and `SHA256SUMS`, checks the platform, copies `bin/` and `share/`
 into `~/.twd`, runs `workerd --version` and `twd version`, and touches
 nothing outside `~/.twd`.
 
@@ -730,8 +748,8 @@ socket or state. It reads `/proc/<pid>/fd` and matches unix-socket peers with
 
 ```sh
 mkdir -p ~/twd-release && cd ~/twd-release
-# download (or copy) twd-<version>-linux-arm64.tar.gz (or -linux-amd64) and SHA256SUMS here
-# (or skip this block: `sh get.sh` does all of it, as on macOS)
+# download (or copy) twd-<version>-linux-arm64.tar.gz (or -linux-amd64), SHA256SUMS and SHA256SUMS.sig here
+# (or skip this block: `sh get.sh` does all of it, as on macOS; "Verify a release" checks the signature)
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf twd-*-linux-*.tar.gz
 cd twd-*-linux-*/ && ./install.sh          # no sudo; refuses to run as root
