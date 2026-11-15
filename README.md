@@ -119,6 +119,30 @@ twd audit <object-id>                          # who created, called, spawned or
 twd kill <object-id> --cascade                 # cut it (and its sub-agents) off the tailnet
 ```
 
+## Using twd with a coding agent
+
+twd ships skills that teach coding agents (Claude Code, Codex, Cursor,
+Gemini CLI, OpenCode) to drive the CLI: scaffold an app, run it with
+`twd dev`, deploy it, read its logs, debug a failing deploy, draft the
+tailnet policy it needs, and stop it. Install them for the agents on your
+machine:
+
+```sh
+twd agent setup --dry-run      # shows every file it would write
+twd agent setup                # asks first; twd agent remove undoes it
+```
+
+Then ask your agent something like "build me an MCP server and run it on
+twd". The skills are built into the CLI (`twd agent show <skill>` prints
+one), every command takes `--json` with a documented schema, and errors carry
+a code and a hint. The skills tell agents to leave credentials and tailnet
+policy changes to you, and to ask before anything destructive.
+
+Agents can also operate twd over MCP: `claude mcp add twd -- twd mcp`
+(`twd mcp --config` prints the setup for others). Read tools work for
+anyone you grant; `kill`, `undeploy` and `deploy` only for callers whose
+tailnet grant names them. Details: [docs/agents.md](docs/agents.md).
+
 ## Compatibility at a glance
 
 What of Cloudflare Workers works on twd. ✅ works, tested · ⚠️ partial or
@@ -141,8 +165,9 @@ prove every ✅ and ⚠️.
 | Durable Objects | [Hibernation](docs/COMPAT.md#hibernation) | ✅ | |
 | Durable Objects | [RPC](docs/COMPAT.md#do-rpc) | ⚠️ | no cross-Worker `script_name` |
 | Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
-| Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
-| Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
+| Bindings | [KV](docs/COMPAT.md#kv) | ⚠️ | per workload; values ≤ 2 MiB |
+| Bindings | [R2](docs/COMPAT.md#r2) | ⚠️ | bytes on the host's disk or an S3-compatible service |
+| Bindings | [R2 multipart upload](docs/COMPAT.md#r2-multipart) | ⚠️ | unfinished uploads are kept |
 | Bindings | [D1](docs/COMPAT.md#d1) | ⚠️ | one workload's database; survives host moves |
 | Bindings | [D1 sessions](docs/COMPAT.md#d1-sessions) | ⚠️ | bookmarks are journal positions |
 | Bindings | [D1 migrations](docs/COMPAT.md#d1-migrations) | ✅ | wrangler's layout |
@@ -175,6 +200,10 @@ prove every ✅ and ⚠️.
 | SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core runs unmodified; no `subAgent()` |
 | SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
+| Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
+| Tooling | [Coding-agent skills (`twd agent`)](docs/COMPAT.md#agent-skills) | ✅ | Claude Code, Codex, Cursor, Gemini CLI, OpenCode |
+| Tooling | [twd's MCP server (`/mcp`, `twd mcp`)](docs/COMPAT.md#twd-mcp) | ✅ | tools gated per tool by a tailnet grant |
+| Tooling | [Docs for agents (`llms.txt`, `twd docs`)](docs/COMPAT.md#docs-for-agents) | ✅ | offline search |
 
 ## More
 
@@ -209,6 +238,10 @@ prove every ✅ and ⚠️.
   [docs/contracts/mgmt-api.md](docs/contracts/mgmt-api.md).
 - **The admin console:** [docs/ADMIN-UI.md](docs/ADMIN-UI.md).
 - **Every typed error code and its fix:** [docs/errors.md](docs/errors.md).
+- **Scripting twd, or driving it from a coding agent:** `--json` output and
+  its schema in [docs/cli-json.md](docs/cli-json.md); skills and
+  `twd agent setup` in [docs/agents.md](docs/agents.md); an index of these
+  docs for agents in [llms.txt](llms.txt), and `twd docs search` offline.
 - **Security:** [security/THREAT-MODEL.md](security/THREAT-MODEL.md) and
   [security/RED-TEAM.md](security/RED-TEAM.md) (the attacker's view,
   findings and fixes).

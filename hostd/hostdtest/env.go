@@ -15,6 +15,7 @@ import (
 	"github.com/rosskukulinski/twd/hostd/fakemgmt"
 	"github.com/rosskukulinski/twd/hostd/image"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/twd/hostd/r2"
 	"github.com/rosskukulinski/twd/hostd/sandbox"
 	"github.com/rosskukulinski/twd/internal/procsb"
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
@@ -69,6 +70,10 @@ type Options struct {
 
 	// Telemetry is passed to hostd (ADR-observability).
 	Telemetry hostd.TelemetryOptions
+
+	// R2 is passed to hostd (R2 bucket blobs; nil: its default, files
+	// under its data dir).
+	R2 r2.Backend
 }
 
 // Env is fakemgmt (on a unix socket) plus one running twd-hostd.
@@ -79,6 +84,9 @@ type Env struct {
 	Host     *hostd.Host
 	TenantID string
 	Dir      string
+
+	// cfg is the hostd config (hosts.go: Restart, StartHost).
+	cfg hostd.Config
 }
 
 // Start starts fakemgmt, creates the tenant and starts hostd.
@@ -139,7 +147,7 @@ func Start(t testing.TB, o Options) *Env {
 	if o.HeartbeatEvery == 0 {
 		o.HeartbeatEvery = 200 * time.Millisecond
 	}
-	h, err := hostd.New(hostd.Config{
+	cfg := hostd.Config{
 		HostID: "h1", Mgmt: hc, DataDir: filepath.Join(dir, "data"), RunDir: filepath.Join(dir, "run"),
 		WorkerdBin: wd, HeartbeatEvery: o.HeartbeatEvery, Ephemeral: o.Ephemeral, ControlURL: o.ControlURL,
 		KillTombstone: o.KillTombstone, HostnamePrefix: o.HostnamePrefix, Logger: log,
@@ -150,7 +158,9 @@ func Start(t testing.TB, o Options) *Env {
 		PublicListen: o.PublicListen,
 		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
 		Telemetry: o.Telemetry,
-	})
+		R2:        o.R2,
+	}
+	h, err := hostd.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +168,7 @@ func Start(t testing.TB, o Options) *Env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { h.Close() })
-	return &Env{T: t, FM: fm, Mgmt: cli, Host: h, TenantID: tr.TenantID, Dir: dir}
+	return &Env{T: t, FM: fm, Mgmt: cli, Host: h, TenantID: tr.TenantID, Dir: dir, cfg: cfg}
 }
 
 // tenantCreate is the spec's TenantCreate body (no read-only fields).

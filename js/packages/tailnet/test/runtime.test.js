@@ -75,3 +75,19 @@ test("wrapHandler installs ctx.tailnet; wrapFacetClass hides __TWD", async () =>
   assert.equal(w.env.X, 1);
   assert.equal(typeof w.ctx.tailnet.fetch, "function");
 });
+
+test("wrapHandler keeps handler methods of a class instance (export default new OAuthProvider(...))", async () => {
+  class Provider {
+    constructor() { this.n = 0; }
+    async fetch(req, env, ctx) { this.n++; return `${this.n}:${typeof ctx.tailnet.spawn}`; }
+    scheduled() { return "cron"; }
+    helper() { return "not a handler"; }
+  }
+  const p = new Provider();
+  const H = wrapHandler(p, {});
+  assert.equal(typeof H.fetch, "function");
+  assert.equal(typeof H.scheduled, "function");
+  assert.equal(H.helper, undefined);
+  assert.equal(await H.fetch({}, { __TWD: fakeTw([]) }, {}), "1:function");
+  assert.equal(p.n, 1); // called with the instance as this
+});

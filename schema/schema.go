@@ -78,18 +78,19 @@ func CheckTwd(raw []byte) ([]Problem, error) {
 		return nil, err
 	}
 	var out []Problem
-	check(root, v, "", &out)
+	check(root, root, v, "", &out)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
 }
 
-func resolve(n *node) *node {
+// resolve follows local $refs against r, the schema document's root.
+func resolve(r, n *node) *node {
 	for n != nil && n.Ref != "" {
 		name, ok := strings.CutPrefix(n.Ref, "#/$defs/")
 		if !ok {
 			panic("schema: unsupported $ref " + n.Ref)
 		}
-		n = root.Defs[name]
+		n = r.Defs[name]
 	}
 	return n
 }
@@ -101,8 +102,8 @@ func join(path, key string) string {
 	return path + "." + key
 }
 
-func check(n *node, v any, path string, out *[]Problem) {
-	n = resolve(n)
+func check(r, n *node, v any, path string, out *[]Problem) {
+	n = resolve(r, n)
 	if n == nil {
 		return
 	}
@@ -125,7 +126,7 @@ func check(n *node, v any, path string, out *[]Problem) {
 	case []any:
 		if n.Items != nil {
 			for i, e := range x {
-				check(n.Items, e, fmt.Sprintf("%s[%d]", path, i), out)
+				check(r, n.Items, e, fmt.Sprintf("%s[%d]", path, i), out)
 			}
 		}
 	case map[string]any:
@@ -153,11 +154,11 @@ func check(n *node, v any, path string, out *[]Problem) {
 		}
 		for _, k := range keys {
 			if p, ok := n.Properties[k]; ok {
-				check(p, x[k], join(path, k), out)
+				check(r, p, x[k], join(path, k), out)
 				continue
 			}
 			if extra != nil {
-				check(extra, x[k], join(path, k), out)
+				check(r, extra, x[k], join(path, k), out)
 				continue
 			}
 			if closed {

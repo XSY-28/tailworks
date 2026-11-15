@@ -42,3 +42,6 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [032](032-containers-code-sandboxes.md) | Containers and code sandboxes: Cloudflare's `ctx.container` on the microVM tier, one VM per container, attached to its DO, no tailnet reach by default | 2026-11-13 | Accepted |
 | [033](033-smart-placement.md) | Smart placement: put a workload on the host with the best measured tailnet path to what it connects to | 2026-11-13 | Proposed |
 | [034](034-worker-secrets.md) | Worker secrets: values in mgmt custody, released only to the workload's lease holder at its epoch, text bindings in workerd | 2026-11-14 | Proposed |
+| [035](035-mgmt-mcp.md) | twd's own MCP server on mgmt, next to `/v1`: tools run the API in process, destructive tools only from a `twd.dev/cap/mcp` grant naming them | 2026-11-15 | Proposed |
+| [036](036-r2-buckets.md) | R2 buckets as a platform store: the index in the journal, the bytes in an operator-configured blob backend that hostd talks to | 2026-11-15 | Proposed |
+| [037](037-workers-kv.md) | Workers KV: a platform store per workload behind workerd's own `kvNamespace` binding; read-your-writes per host, writes journaled in mgmt first | 2026-11-15 | Proposed |
