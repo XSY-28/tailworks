@@ -283,6 +283,15 @@ printed anywhere.
 ### stop_timeout
 500 · cli. **When:** `twd down` waited 3 min for the supervisor to stop and killed it. **Fix:** `twd status`; `twd logs --component supervisor`.
 
+### store_conflict
+409 · mgmt. **When:** a platform store journal append named a head (`after`) or incarnation that is no longer current: another writer (a replica, an admin) appended first, or the store was deleted. **Fix:** nothing for app code: the store object catches up and retries on its own. A client of the REST API reads the journal from its `after` and retries.
+
+### store_limit
+400 · mgmt, hostd. **When:** a platform store write is too big: an entry over 2 MiB, an append over 4 MiB or 128 entries, a compaction key over 1 KiB, or a store over 1 GiB. **Fix:** write less at once, or delete data you no longer need.
+
+### store_unavailable
+503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads still answer from the host's copy if the store has caught up with the journal on this host before, and fail if it never has (a new host). From the mgmt API it also means its database is unreachable. **Fix:** retry; check `twd status` for mgmt and the host.
+
 ### superseded
 409 · mgmt. **When:** undeploy of a deployment that is not the latest for its workload. **Fix:** `twd undeploy <workload>` acts on the latest.
 
@@ -307,6 +316,9 @@ printed anywhere.
 ### unknown_object
 404 · netd, hostd, cli. **When:** no such object for this ID or name (or not in the tenant you named). **Fix:** `twd ls --all --tenant <tailnet>`.
 
+### unknown_store
+404 · mgmt. **When:** the workload has no platform store of that kind and name (`twd kv namespace`, `GET …/stores/{kind}/{name}`). A store exists from its first write. **Fix:** check the name, or create it.
+
 ### unknown_tenant
 404 · mgmt, cli. **When:** no tenant with that tailnet or ID. **Fix:** `twd tenant ls`.
 
@@ -327,3 +339,6 @@ printed anywhere.
 
 ### wif_exchange_failed
 401 · cli. **When:** Tailscale did not accept a token from mgmt's issuer for the mint credential: the credential's issuer or subject does not match what `twd up` printed (trailing slash, wrong tenant ID). **Fix:** fix it in the console and `twd up --wif-client-id <id>`.
+
+### wrangler_required
+1 · cli. **When:** `twd deploy --wrangler` / `twd dev --wrangler` found no wrangler CLI (`$TWD_WRANGLER`, the project's `node_modules/.bin/wrangler`, or `wrangler` on PATH). **Fix:** `npm install --save-dev wrangler`, or drop `--wrangler` to bundle with twd's built-in esbuild ([wrangler.md](wrangler.md)).

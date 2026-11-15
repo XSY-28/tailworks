@@ -11,7 +11,8 @@ Tailscale tailnet, with its own MagicDNS name, tags and grants:
 - `twd kill` cuts an object off in under a second.
 
 It runs Cloudflare Agents SDK agents, MCP servers and Vercel AI SDK agents
-unmodified (see [docs/COMPAT.md](docs/COMPAT.md)).
+unmodified. What works and what doesn't, surface by surface:
+[Compatibility at a glance](#compatibility-at-a-glance).
 
 ## Quick start: deploy your first Durable Object
 
@@ -118,6 +119,57 @@ twd audit <object-id>                          # who created, called, spawned or
 twd kill <object-id> --cascade                 # cut it (and its sub-agents) off the tailnet
 ```
 
+## Compatibility at a glance
+
+What of Cloudflare Workers works on twd. ✅ works, tested · ⚠️ partial or
+different · ❌ not supported yet · 🚫 not supported, by design. Each row links
+to its detail in [docs/COMPAT.md](docs/COMPAT.md), which names the tests that
+prove every ✅ and ⚠️.
+
+| Area | Surface | Status | Note |
+|---|---|---|---|
+| Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers only (no internet, by default) |
+| Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
+| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
+| Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
+| Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
+| Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
+| Runtime | [Node.js apps (`runtime: "node"`)](docs/COMPAT.md#node-runtime) | ✅ | twd-only |
+| Durable Objects | [One tailnet node per object](docs/COMPAT.md#do-identity) | ✅ | twd-only: own name, tags, grants, egress |
+| Durable Objects | [Storage (KV API, SQLite)](docs/COMPAT.md#do-storage) | ✅ | one host, no replication |
+| Durable Objects | [Alarms](docs/COMPAT.md#alarms) | ✅ | |
+| Durable Objects | [Hibernation](docs/COMPAT.md#hibernation) | ✅ | |
+| Durable Objects | [RPC](docs/COMPAT.md#do-rpc) | ⚠️ | no cross-Worker `script_name` |
+| Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
+| Bindings | [KV](docs/COMPAT.md#kv) | ❌ | |
+| Bindings | [R2](docs/COMPAT.md#r2) | ❌ | |
+| Bindings | [D1](docs/COMPAT.md#d1) | ❌ | DO SQLite works |
+| Bindings | [Queues](docs/COMPAT.md#queues) | ❌ | |
+| Bindings | [Workflows](docs/COMPAT.md#workflows) | ❌ | Vercel Workflow SDK on Node apps |
+| Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
+| Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
+| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
+| Bindings | [Browser Rendering](docs/COMPAT.md#browser) | ❌ | |
+| Bindings | [Email](docs/COMPAT.md#email) | ❌ | |
+| Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
+| Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `twd secret`; applied on the next deploy |
+| Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
+| Bindings | [Static assets](docs/COMPAT.md#assets) | ❌ | |
+| Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
+| Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ❌ | |
+| Platform | [Caller identity and auth](docs/COMPAT.md#identity) | 🚫 | `getCaller` from WireGuard, not tokens or Access JWTs |
+| Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
+| Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
+| Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container |
+| Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `twd logs`; no Tail Workers |
+| Platform | [Wrangler config (`wrangler.toml`/`.json`/`.jsonc`)](docs/COMPAT.md#wrangler-config) | ⚠️ | keys twd can't use are warned, one line each |
+| Platform | [Environments (`--env`)](docs/COMPAT.md#wrangler-env) | ✅ | one workload per environment |
+| Platform | [Bundling (`define`, `alias`, `rules`, `--wrangler`)](docs/COMPAT.md#wrangler-bundling) | ✅ | built-in esbuild, or wrangler's own |
+| Platform | [`wrangler deploy` / `secret` / `tail`](docs/COMPAT.md#wrangler-api) | 🚫 | use `twd deploy` / `secret` / `logs` |
+| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core runs unmodified; no `subAgent()` |
+| SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
+| SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
+
 ## More
 
 - **Install details, other modes and troubleshooting:**
@@ -135,9 +187,11 @@ twd kill <object-id> --cascade                 # cut it (and its sub-agents) off
 - **Run an app locally with no tailnet at all:** `twd dev`.
 - **`twd.jsonc`, every key:** [docs/twd-jsonc.md](docs/twd-jsonc.md)
   (with a JSON Schema for editor completion).
+- **An existing Workers project** (`wrangler.toml`, environments, bundling
+  with wrangler): [docs/wrangler.md](docs/wrangler.md).
 - **What runs and what doesn't:** [docs/COMPAT.md](docs/COMPAT.md)
-  (Agents SDK, MCP, Vercel AI SDK) and [docs/node-tier.md](docs/node-tier.md)
-  (Node.js apps).
+  (every Workers surface, with the tests behind it) and
+  [docs/node-tier.md](docs/node-tier.md) (Node.js apps).
 - **Cron triggers** (`triggers.crons` → `scheduled()`):
   [docs/cron-triggers.md](docs/cron-triggers.md).
 - **mgmt's API:** [api/openapi.yaml](api/openapi.yaml), rendered in

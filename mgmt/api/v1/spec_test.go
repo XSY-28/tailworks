@@ -108,6 +108,9 @@ var unauditedOK = map[string]bool{
 	"ReportHostStatus": true, // 3 s heartbeat
 	"ReportHostPaths":  true, // placement telemetry (≤ 1/min); decisions are audited with the deploy
 	"CheckTenantWIF":   true, // diagnostic; creates nothing
+	// Platform store writes are high volume (one per KV put); creating a
+	// store and deleting one are audited.
+	"AppendStoreJournal": true,
 }
 
 func assertPaged(t *testing.T, name string, op *openapi3.Operation) {

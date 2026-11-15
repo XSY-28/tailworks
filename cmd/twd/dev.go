@@ -60,6 +60,7 @@ func cmdDev(args []string) error {
 	workerdFlag := f.String("workerd", "", "workerd binary")
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
+	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -68,10 +69,11 @@ func cmdDev(args []string) error {
 	if len(pos) > 0 {
 		dir = pos[0]
 	}
-	a, err := loadApp(dir, "")
+	a, err := loadAppWith(dir, "", *ao)
 	if err != nil {
 		return err
 	}
+	a.printWarnings(os.Stderr)
 	if err := checkDevPort(*port, os.Stderr); err != nil { // devlog.go
 		return err
 	}
@@ -256,7 +258,7 @@ func cmdDev(args []string) error {
 			}
 			last = now
 			rs := time.Now()
-			if na, err := loadApp(a.Dir, a.Name); err == nil {
+			if na, err := loadAppWith(a.Dir, a.Name, a.Opts); err == nil {
 				a = na
 			}
 			o, err := deploy()
