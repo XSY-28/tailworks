@@ -28,3 +28,8 @@ Approvers no longer need a tenant ID, and they hear about waiting approvals
 - Browsers on public (Funnel) routes get a minimal HTML error page (status,
   code, docs link, nothing about the request) instead of JSON when they ask
   for `text/html`. JSON stays the default.
+- `twd dev` serves a read-only data console on `127.0.0.1` (press `e`, or
+  open the printed `console on …` URL): Workers KV namespaces, keys and
+  values, and D1 tables and rows of the run. `--console-port <port>` picks
+  the port (default: a free one); `--console-port -1` turns it off. With
+  `--json`, a `console` event gives its URL.

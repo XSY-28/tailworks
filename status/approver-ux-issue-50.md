@@ -1,10 +1,16 @@
-Last update: 2026-11-15 14:00 PT. Issue #50: approver UX, approval notifications, console search, public HTML errors. Dev console left open (design note below).
+Last update: 2026-11-15 16:00 PT. Issue #50: approver UX, approval notifications, console search, public HTML errors, and the `twd dev` data console. All six items built.
 
 # Approver UX and console (issue #50)
 
-Branch `approver-ux-console-issue-50`, based on the benchmark branch
-(`benchmark-dx-infra-vs-cloudflare-workerd-vercel`, PR #49: reworked
-approvals page, `internal/auditfmt`).
+Branch `approver-ux-issue-50`. History: the work started on
+`approver-ux-console-issue-50`, based on the benchmark branch. Its PR #62
+was merged into `benchmark-dx-infra-vs-cloudflare-workerd-vercel` after
+that branch had already landed on master (PR #49), so it never reached
+master. This branch is that work with `origin/master` merged in (the
+`api/openapi.yaml` and `mgmt/v1.go` `WhoAmI` conflicts with deploy
+history/rollback and #54's `caps`/`approver`/`mcpTools` resolved by hand,
+generated files rebuilt with `make api`; `notify` added to `twd help`'s
+groups) plus item 6 below.
 
 ## Built
 
@@ -73,6 +79,26 @@ approvals page, `internal/auditfmt`).
    `public_disabled` isn't a netd code; `not_public`, `rate_limited` etc.
    are covered.
 
+6. **`twd dev` data console.** `cmd/twd/devconsole.go`: a read-only
+   page set on `127.0.0.1:<--console-port>` (default 0: a free port; -1:
+   off), opened with the `e` hotkey (`devhotkeys.go`) as in `wrangler
+   dev`. Option (b) of the earlier design note: it reads dev's own stores,
+   not `/v1`, so fakemgmt stays minimal. Pages: overview (KV namespaces
+   with key counts, D1 databases with migrations applied, other stores
+   listed), KV keys (folded from fakemgmt's journals with
+   `kvwire.Fold`/`Page`: deletes and expired keys gone, prefix filter, 100
+   per page), a KV value (JSON indented, binary as hex, capped at 256 KiB),
+   D1 tables with row counts and rows (50 per page) through the dev host's
+   store admin `query` op (SELECTs only; `devD1Exec`, shared with the
+   migrations in `dev_d1.go`). Shares the admin UI's `app.css`
+   (`mgmt/ui/static_export.go`). GET only; requests whose `Host` isn't the
+   loopback listener get 421 (DNS rebinding); CSP `default-src 'none';
+   style-src 'self'`. `--json` emits a `console` event (schema enum, docs
+   table). Edits to hotspots: one flag, five lines around
+   `devInteractive`, one `con.setD1` on reload in `cmd/twd/dev.go`.
+   Docs: `docs/dev-debugging.md` ("Look at the data"), `docs/COMPAT.md`
+   parity row, `docs/cli-json.md`.
+
 ## Tests
 
     make lint                                         # ok
@@ -85,24 +111,23 @@ retries then `notification_failed`, dial policy), `mgmt/ui/search_test.go`
 (objects filters/paging/order, audit filters/paging, approvals defaults,
 anchors, facts, tenant box, redirect fragment), `cmd/twd/notify_test.go`,
 `TestApproveCLI` without `--tenant`, `netd/errors_html_test.go`,
-auditfmt cases. `TestUsesOnlyPublicAPI` and the UI spec-conformance
+auditfmt cases, `cmd/twd/devconsole_test.go` (`TestDevConsole`: overview,
+KV fold/prefix/value/binary, D1 tables/rows, HTML escaping of app data,
+SELECT-only, POST refused, foreign Host refused, app.css;
+`TestDevConsoleListen`; `TestDevHotkeyConsole`), and
+`cmd/twd/devconsole_live_test.go` (`TestDevConsoleLive`: a real `twd dev
+--json` run, its `console` event, and the KV key and D1 row the app
+wrote, seen through the console). Writing that test found that `twd dev
+--json` printed its `d1 …` ready line to stdout, breaking the NDJSON
+stream; fixed (it goes to the text writer like the other lines). `TestUsesOnlyPublicAPI` and the UI spec-conformance
 integration test walk the new pages. Reviewed the approvals page in a
 browser through an uncommitted harness over `populatedAPI()`.
 
 ## Open
 
-- **`twd dev` console (item 6): not built.** Cost: `twd dev` runs an
-  in-memory fakemgmt (`cmd/twd/dev*.go`) that implements only what a dev
-  workload needs, not `/v1` lists of tenants/objects/audit, and the admin
-  UI is a strict `/v1` client. Two paths: (a) teach fakemgmt the read
-  subset the UI's pages call (`whoami`, `status`, `objects`, `audit`,
-  `tenants`) and mount `ui.Handler` on `--ui-port` with an in-process
-  transport like `mgmt/uiclient.go`; KV keys and D1 tables would need new
-  read-only `/v1` routes or a dev-only page, since the admin UI has no KV
-  or D1 pages today; or (b) a small dev-only page set (objects, KV keys,
-  D1 tables) reading dev's own stores directly, sharing `app.css`. (b) is
-  smaller and keeps fakemgmt minimal; (a) gives one console. Estimate:
-  (b) ~1 day with tests.
+- **Dev console gaps.** Durable Object storage isn't shown (it lives in
+  each object's SQLite in workerd, with no read op from hostd); R2 and
+  queues are listed, not browsable; no SQL box (read-only by design).
 - Notifications are at most once per wait (no outbox); a mgmt restart
   between ingest and delivery drops that one. Per-app routing stays in the
   Workflow (documented recipe in docs/approvals.md).

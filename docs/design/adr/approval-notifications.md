@@ -1,7 +1,7 @@
 # ADR-approval-notifications: tenant notification webhooks, starting with `approval_requested`
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/approver-ux-console-issue-50.md`).
+**Status:** Proposed (results in `status/approver-ux-issue-50.md`).
 Builds on ADR-040 (Workflows and approvals) and ADR-observability (the
 tenant's OTLP export, whose custody pattern it reuses).
 

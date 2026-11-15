@@ -67,6 +67,7 @@ func cmdDev(args []string) error {
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
 	inspectorPort := f.Int("inspector-port", 0, "serve workerd's V8 inspector on 127.0.0.1:<port> for Chrome DevTools or VS Code (devinspector.go)")
+	consolePort := f.Int("console-port", 0, "serve the read-only data console (KV keys, D1 rows) on 127.0.0.1:<port>; 0 picks a free port, -1 turns it off (devconsole.go)")
 	var callers callerFlags
 	f.Var(&callers, "caller", "an extra identity: its own dev node (tagged with =tag:a,tag:b) and local URL, listed in the result (repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
@@ -268,7 +269,7 @@ func cmdDev(args []string) error {
 		fmt.Fprintf(hout, "  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
 	}
 	for _, d := range devD1s {
-		fmt.Printf("  d1    %-27s %s (in memory for this run; %d migration(s) applied)\n", d.Binding, d.Database, len(d.Applied))
+		fmt.Fprintf(hout, "  d1    %-27s %s (in memory for this run; %d migration(s) applied)\n", d.Binding, d.Database, len(d.Applied))
 	}
 	for _, c := range a.Cfg.Classes() {
 		if c.Class != "_workload" {
@@ -291,7 +292,13 @@ func cmdDev(args []string) error {
 		where = res.Serves + "  (MCP server; / answers 404)"
 	}
 	fmt.Fprintf(hout, "ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
-	quit, stopInteractive, err := devInteractive(*inspectorPort, func() string { return h.InspectorAddr(tr.TenantID, a.Name) }, res.URL+route, *f.json, hout, ev) // devhotkeys.go
+	con := newDevConsole(fm, h, tr.TenantID, a.Name, res.URL+route, devD1s)
+	consoleURL, stopConsole, err := startDevConsole(*consolePort, con) // devconsole.go
+	if err != nil {
+		return err
+	}
+	defer stopConsole()
+	quit, stopInteractive, err := devInteractive(*inspectorPort, func() string { return h.InspectorAddr(tr.TenantID, a.Name) }, res.URL+route, consoleURL, *f.json, hout, ev) // devhotkeys.go
 	if err != nil {
 		return err
 	}
@@ -334,6 +341,7 @@ func cmdDev(args []string) error {
 				continue
 			}
 			cur.Store(o.IP)
+			con.setD1(devD1s)
 			ev.emit("reload", map[string]any{"workload": a.Name, "node": o.Hostname, "ms": ms(time.Since(rs))})
 			fmt.Fprintf(hout, "↻ reloaded in %.0f ms\n", ms(time.Since(rs)))
 		}
