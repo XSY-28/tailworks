@@ -1176,6 +1176,41 @@
         "as": {
           "type": "string"
         },
+        "callers": {
+          "type": "array",
+          "description": "twd dev --caller: one extra identity each, with its own local URL",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "as": {
+                "type": "string",
+                "description": "the login of an untagged caller"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "node": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ]
+          }
+        },
         "smoke": {
           "type": "object",
           "description": "the one request --once made",
@@ -1234,6 +1269,41 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "callers": {
+          "type": "array",
+          "description": "twd dev --caller: one extra identity each, with its own local URL",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "as": {
+                "type": "string",
+                "description": "the login of an untagged caller"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "node": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ]
           }
         },
         "ms": {

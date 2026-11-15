@@ -125,7 +125,7 @@ stream on **stdout**:
 
 | `event` | Fields |
 |---|---|
-| `ready` | `url`, `serves` (with the MCP route), `workload`, `node`, `as`, `tags`, `timingsMs` |
+| `ready` | `url`, `serves` (with the MCP route), `workload`, `node`, `as`, `tags`, `timingsMs`; with `--caller`, `callers` (`name`, `url`, `as` or `tags`, `nodeId`, `node`; see [testing.md](testing.md#black-box-tests-twd-dev---caller-and-startdev)) |
 | `inspector` | `addr`, `ws` (with `--inspector-port`: where a debugger attaches; [dev-debugging.md](dev-debugging.md)) |
 | `reload` | `workload`, `node`, `ms` (after a file change) |
 | `request` | `record`: one request record, as in `twd logs --json` (`$defs/logs.record`), with its console lines and exceptions |

@@ -23,6 +23,7 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 
 - [twd.jsonc reference](https://github.com/rosskukulinski/twd/blob/master/docs/twd-jsonc.md): every key, tags and `twd init`
 - [Using wrangler with twd](https://github.com/rosskukulinski/twd/blob/master/docs/wrangler.md): wrangler.toml/json/jsonc, `--env`, bundling, what's ignored
+- [Testing a twd app](https://github.com/rosskukulinski/twd/blob/master/docs/testing.md): `npm test` in the templates, `@twd/tailnet/testing` (`withCaller`, a fake `ctx.tailnet`), `@cloudflare/vitest-plugin`, `twd dev --caller` and `startDev`
 - [Cloudflare Workers compatibility](https://github.com/rosskukulinski/twd/blob/master/docs/COMPAT.md): what works, surface by surface, with the tests behind it
 - [Worker secrets](https://github.com/rosskukulinski/twd/blob/master/docs/secrets.md): `twd secret`, `.dev.vars`
 - [Workers KV](https://github.com/rosskukulinski/twd/blob/master/docs/kv.md): `kv_namespaces`, `twd kv`, consistency and limits
