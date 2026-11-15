@@ -479,6 +479,14 @@ node: `twd up … --mgmt-hostname twd-mgmt` (the join is interactive unless
 up` with no mode flag reuses it); switch with `twd down --purge` and a
 fresh `--state-dir`.
 
+### Self-hosted control: Headscale
+
+twd also runs on a [Headscale](https://github.com/juanfont/headscale)
+server (v0.29 or later) instead of Tailscale: `twd up --control=headscale
+--control-url <server_url> --tailnet <base_domain> --api-key-file <file with
+HEADSCALE_API_KEY=…> --policy-apply`. The profile has no Tailscale Services,
+no Funnel and no posture. See [headscale.md](headscale.md).
+
 ### 4. Day 2, stop and uninstall
 
 `twd up` starts `twd-mgmt` (SQLite, local key custody) and `twd-hostd`
