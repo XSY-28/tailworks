@@ -1,6 +1,6 @@
 package mgmt
 
-// D1 operator routes (ADR-d1): `twd d1 execute`, `twd d1 migrations
+// D1 operator routes (ADR-038): `twd d1 execute`, `twd d1 migrations
 // apply` and `twd d1 export`. A D1 database is the workload's platform
 // store of kind "d1" (create, list and delete are the generic store
 // routes); its data is served by the store object in the workload's

@@ -11,7 +11,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/d1mig"
 )
 
-// D1 in twd dev (ADR-d1): dev stores live in the in-memory mgmt, so every
+// D1 in twd dev (ADR-038): dev stores live in the in-memory mgmt, so every
 // `twd dev` starts with empty databases. After each (re)deploy, dev
 // applies each d1_databases entry's pending migrations (wrangler's
 // migrations_dir layout), through the dev host's store admin op, as

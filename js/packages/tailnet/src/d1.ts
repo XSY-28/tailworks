@@ -1,4 +1,4 @@
-// D1 inside a facet (ADR-d1). A facet-mode Durable Object runs in a Dynamic
+// D1 inside a facet (ADR-038). A facet-mode Durable Object runs in a Dynamic
 // Worker, and workerd can't hand it the tenant worker's D1 binding (a
 // wrapped binding is not serializable). Its env gets an RPC stub to the
 // platform's D1Backend instead (the same backend the tenant worker's

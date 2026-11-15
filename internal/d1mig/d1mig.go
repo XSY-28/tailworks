@@ -1,4 +1,4 @@
-// Package d1mig is D1's migration workflow (ADR-d1), compatible with
+// Package d1mig is D1's migration workflow (ADR-038), compatible with
 // wrangler's: numbered .sql files in the database's migrations_dir
 // (`0001_create_users.sql`), applied in name order, each recorded by file
 // name in the migrations table (default d1_migrations, wrangler's schema).

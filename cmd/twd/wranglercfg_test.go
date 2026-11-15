@@ -148,7 +148,7 @@ func TestWranglerWarnings(t *testing.T) {
 		"routes":      []any{"example.com/*"},
 		"workers_dev": true,
 		"vectorize":   []any{map[string]any{"binding": "CACHE", "index_name": "x"}, map[string]any{"binding": "SESSIONS", "index_name": "y"}},
-		// Platform store bindings (Workers KV, ADR-037; R2, ADR-036; D1, ADR-d1): no line.
+		// Platform store bindings (Workers KV, ADR-037; R2, ADR-036; D1, ADR-038): no line.
 		"d1_databases":  []any{map[string]any{"binding": "DB", "database_name": "d"}},
 		"kv_namespaces": []any{map[string]any{"binding": "KV", "id": "k"}},
 		"r2_buckets":    []any{map[string]any{"binding": "BUCKET", "bucket_name": "b"}},

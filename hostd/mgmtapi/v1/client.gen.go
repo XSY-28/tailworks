@@ -4933,7 +4933,7 @@ type ClientInterface interface {
 
 	// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 	//
-	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
 	// by the store object in the workload's workerd, so mgmt sends the
 	// statements to the host holding the workload's lease (the mgmt →
@@ -4959,7 +4959,7 @@ type ClientInterface interface {
 
 	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 	//
-	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
 	// by the store object in the workload's workerd, so mgmt sends the
 	// statements to the host holding the workload's lease (the mgmt →
@@ -6965,7 +6965,7 @@ func (c *Client) ExportD1(ctx context.Context, id TenantID, workload WorkloadNam
 
 // QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 //
-// A D1 database (ADR-d1) is the workload's platform store of kind
+// A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
 // by the store object in the workload's workerd, so mgmt sends the
 // statements to the host holding the workload's lease (the mgmt →
@@ -7001,7 +7001,7 @@ func (c *Client) QueryD1WithBody(ctx context.Context, id TenantID, workload Work
 
 // QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 //
-// A D1 database (ADR-d1) is the workload's platform store of kind
+// A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
 // by the store object in the workload's workerd, so mgmt sends the
 // statements to the host holding the workload's lease (the mgmt →
@@ -12990,7 +12990,7 @@ type ClientWithResponsesInterface interface {
 
 	// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 	//
-	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
 	// by the store object in the workload's workerd, so mgmt sends the
 	// statements to the host holding the workload's lease (the mgmt →
@@ -13016,7 +13016,7 @@ type ClientWithResponsesInterface interface {
 
 	// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 	//
-	// A D1 database (ADR-d1) is the workload's platform store of kind
+	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
 	// by the store object in the workload's workerd, so mgmt sends the
 	// statements to the host holding the workload's lease (the mgmt →
@@ -21627,7 +21627,7 @@ func (c *ClientWithResponses) ExportD1WithResponse(ctx context.Context, id Tenan
 
 // QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 //
-// A D1 database (ADR-d1) is the workload's platform store of kind
+// A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
 // by the store object in the workload's workerd, so mgmt sends the
 // statements to the host holding the workload's lease (the mgmt →
@@ -21659,7 +21659,7 @@ func (c *ClientWithResponses) QueryD1WithBodyWithResponse(ctx context.Context, i
 
 // QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 //
-// A D1 database (ADR-d1) is the workload's platform store of kind
+// A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
 // by the store object in the workload's workerd, so mgmt sends the
 // statements to the host holding the workload's lease (the mgmt →

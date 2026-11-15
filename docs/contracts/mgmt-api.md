@@ -1228,7 +1228,7 @@ audited.
 
 `QueryD1` · role **admin** · audited: yes
 
-A D1 database (ADR-d1) is the workload's platform store of kind
+A D1 database (ADR-038) is the workload's platform store of kind
 `d1` named after the binding's `database_name`. Its data is served
 by the store object in the workload's workerd, so mgmt sends the
 statements to the host holding the workload's lease (the mgmt →

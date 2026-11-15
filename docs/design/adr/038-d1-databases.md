@@ -1,4 +1,4 @@
-# ADR-d1: D1 databases are platform-store Durable Objects behind workerd's own D1 API, with statement journals in mgmt
+# ADR-038: D1 databases are platform-store Durable Objects behind workerd's own D1 API, with statement journals in mgmt
 
 **Date:** 2026-11-15
 **Status:** Proposed (results in `status/d1-databases.md`). Builds on

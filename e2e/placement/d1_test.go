@@ -24,7 +24,7 @@ import (
 	"tailscale.com/tsnet"
 )
 
-// TestD1SurvivesRestartAndMove (ADR-d1): a D1 database written through the
+// TestD1SurvivesRestartAndMove (ADR-038): a D1 database written through the
 // binding and through mgmt's operator API survives a restart of its
 // hostd, and a lease move to another host (`--replace`), whose workerd
 // starts with no DO storage and rebuilds the database from mgmt's

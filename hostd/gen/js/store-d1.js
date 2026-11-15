@@ -1,4 +1,4 @@
-// twd D1 (TRUSTED; runs in the platform worker). ADR-d1.
+// twd D1 (TRUSTED; runs in the platform worker). ADR-038.
 //
 // A D1 database is a platform store of kind "d1" (twd-store.js): one
 // platform-owned SQLite Durable Object per database, whose SQL namespace

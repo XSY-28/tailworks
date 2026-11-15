@@ -2,7 +2,7 @@ package gen
 
 import _ "embed"
 
-// D1 (ADR-d1): a d1_databases binding is a platform store of kind "d1".
+// D1 (ADR-038): a d1_databases binding is a platform store of kind "d1".
 // Tenant code gets workerd's own D1 API (the wrapped binding
 // "cloudflare-internal:d1-api"); its inner fetcher is the platform's
 // D1Backend entrypoint (js/store-d1.js) with props {kind, name}. A facet

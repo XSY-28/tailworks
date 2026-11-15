@@ -1,6 +1,6 @@
 package main
 
-// D1 (ADR-d1), CLI side: `twd d1 …`, like `wrangler d1 …`. A database
+// D1 (ADR-038), CLI side: `twd d1 …`, like `wrangler d1 …`. A database
 // is the platform store (kind "d1") of a workload, named by the binding's
 // database_name. create, list and delete use mgmt's store routes; execute,
 // export and migrations go through mgmt to the host running the workload

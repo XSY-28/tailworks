@@ -74,7 +74,7 @@ func (c d1Client) qErr(body map[string]any) string {
 	return e
 }
 
-// TestD1 is the D1 binding (ADR-d1) on real workerd: workerd's own D1 API
+// TestD1 is the D1 binding (ADR-038) on real workerd: workerd's own D1 API
 // in the worker, the same API in a facet, the prepared-statement API, type
 // mapping, batch atomicity, exec, limits, sessions, migrations from a
 // wrangler-layout directory, operator queries and export (hostd's store
@@ -439,7 +439,7 @@ func TestD1(t *testing.T) {
 		var ex struct{ SQL string }
 		json.Unmarshal(admin("export", map[string]any{}), &ex)
 		// DEFAULT CURRENT_TIMESTAMP (users.created_at, d1_migrations.
-		// applied_at) is evaluated again on replay (ADR-d1: statement
+		// applied_at) is evaluated again on replay (ADR-038: statement
 		// replay); compare everything else.
 		ts := regexp.MustCompile(`'\d{4}-\d\d-\d\d \d\d:\d\d:\d\d'`)
 		norm := func(s string) string { return ts.ReplaceAllString(s, "'<now>'") }

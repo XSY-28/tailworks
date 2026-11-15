@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// D1 (ADR-d1): wrangler.jsonc "d1_databases" entries are platform stores
+// D1 (ADR-038): wrangler.jsonc "d1_databases" entries are platform stores
 // of kind "d1", one per database_name. The migration settings are read by
 // the CLI (`twd d1 migrations …`), not by hostd.
 
