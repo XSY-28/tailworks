@@ -90,7 +90,7 @@ const (
 )
 
 // PublicAllowed reports whether the tenant's gate lets public routes take effect.
-func (t Tenant) PublicAllowed() bool { return t.PublicIngress == PublicAllow }
+func (t Tenant) PublicAllowed() bool { return t.PublicIngress == PublicAllow && !t.Headscale() }
 
 // DeploymentPublic is a deployment's validated twd.jsonc "public" (ADR-029),
 // plus the per-class public-create settings, persisted with the deployment.
@@ -138,7 +138,7 @@ type Host struct {
 	LastSeen   int64  `json:"lastSeen"` // unix ms
 
 	// Version, Protocols and Features are what the host reported at its
-	// last registration (ADR-upgrades-and-releases §7). Version "" = a
+	// last registration (ADR-041 §7). Version "" = a
 	// hostd from before version reporting (0.1.x).
 	Version   string         `json:"version,omitempty"`
 	OS        string         `json:"os,omitempty"` // GOOS ("" = not reported)

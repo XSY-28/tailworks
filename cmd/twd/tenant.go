@@ -143,7 +143,8 @@ type tenantAddResult struct {
 // key file path is stored, never the key.
 func cmdTenantAdd(args []string) error {
 	f := newFlags("tenant add")
-	keyFile := f.String("api-key-file", "", "file with TS_API_KEY=… for this tailnet (mint mode \"apikey\"; read at use, never copied)")
+	keyFile := f.String("api-key-file", "", "file with TS_API_KEY=… for this tailnet (mint mode \"apikey\"), or HEADSCALE_API_KEY=… with --control=headscale; read at use, never copied")
+	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
 	apply := f.Bool("policy-apply", false, "apply the base policy snippet (validated first, written with If-Match); default: print it")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
 	rpm := f.Int("registrations-per-minute", 0, "this tenant's node registration throttle (default 200/min)")
@@ -155,6 +156,13 @@ func cmdTenantAdd(args []string) error {
 		return fail("bad_request", "twd tenant add needs one tailnet", "usage: twd "+usageOf("tenant"))
 	}
 	tailnet := strings.TrimSuffix(pos[0], ".")
+	if err := checkControlProfile(*profile, *control, "tenant add"); err != nil {
+		return err
+	}
+	if *keyFile == "" && *profile == controlHeadscale {
+		_, err := headscaleKeyFile("")
+		return err
+	}
 	if *keyFile == "" {
 		return fail("bad_request", "twd tenant add needs --api-key-file (mint mode \"apikey\")",
 			"WIF trust credentials (no stored secret) need `twd connect`, which is not built yet").
@@ -200,13 +208,15 @@ func cmdTenantAdd(args []string) error {
 	t0 := time.Now()
 	res := tenantAddResult{Tailnet: tailnet, ControlURL: *control, Timings: map[string]float64{}}
 	absKey, _ := filepath.Abs(*keyFile)
-	apiKey, err := tsapi.LoadSecretEnvFile(absKey, "TS_API_KEY")
-	if err != nil {
-		var ins *tsapi.InsecureFileError
-		if errors.As(err, &ins) {
-			return fail("credential_file_insecure", absKey+" is readable by other users", err.Error()).withFix("chmod 600 " + absKey + "   then twd tenant add again")
+	var apiKey string
+	if *profile == controlTailscale {
+		if apiKey, err = tsapi.LoadSecretEnvFile(absKey, "TS_API_KEY"); err != nil {
+			var ins *tsapi.InsecureFileError
+			if errors.As(err, &ins) {
+				return fail("credential_file_insecure", absKey+" is readable by other users", err.Error()).withFix("chmod 600 " + absKey + "   then twd tenant add again")
+			}
+			return fail("bad_request", "can't read TS_API_KEY from "+absKey, err.Error())
 		}
-		return fail("bad_request", "can't read TS_API_KEY from "+absKey, err.Error())
 	}
 	for _, t := range s.tenants() {
 		if t.APIKeyFile == absKey && t.Tailnet != tailnet {
@@ -216,12 +226,20 @@ func cmdTenantAdd(args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey, BaseURL: s.Cfg.TSAPIURL}
-	pol, _, err := api.GetPolicyHuJSON(ctx)
-	if err != nil {
-		return fail("bootstrap_failed", "the Tailscale API rejected the key for "+tailnet,
-			"step:  GET /api/v2/tailnet/"+tailnet+"/acl → "+err.Error()).
-			withFix("check the tailnet name and that the key in " + absKey + " is valid and can read the policy")
+	var api controlAPI
+	var pol []byte
+	if *profile == controlHeadscale {
+		if api, pol, err = headscaleClient(ctx, absKey, *control, tailnet); err != nil {
+			return err
+		}
+	} else {
+		tc := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey, BaseURL: s.Cfg.TSAPIURL}
+		if pol, _, err = tc.GetPolicyHuJSON(ctx); err != nil {
+			return fail("bootstrap_failed", "the Tailscale API rejected the key for "+tailnet,
+				"step:  GET /api/v2/tailnet/"+tailnet+"/acl → "+err.Error()).
+				withFix("check the tailnet name and that the key in " + absKey + " is valid and can read the policy")
+		}
+		api = tc
 	}
 	res.Timings["api_check"] = ms(time.Since(t0))
 
@@ -233,7 +251,7 @@ func cmdTenantAdd(args []string) error {
 		}
 		res.Existing = true
 	} else {
-		body := map[string]any{"tenantID": tid, "tailnet": tailnet, "controlURL": *control, "mintMode": "apikey", "apiKeyFile": absKey}
+		body := map[string]any{"tenantID": tid, "tailnet": tailnet, "controlURL": *control, "mintMode": mintModeFor(*profile), "apiKeyFile": absKey}
 		if *rpm > 0 {
 			body["registrationsPerMinute"] = *rpm
 		}
@@ -263,7 +281,8 @@ func cmdTenantAdd(args []string) error {
 	}
 	res.Timings["tenant_ready"] = ms(time.Since(t0))
 
-	miss, err := policy.Missing(pol, baseSnippet())
+	snip, popts := profileSnippet(*profile)
+	miss, err := policy.Missing(pol, snip)
 	if err != nil {
 		return err
 	}
@@ -271,9 +290,9 @@ func cmdTenantAdd(args []string) error {
 	if !res.PolicyOK {
 		res.PolicyDiff = miss.HuJSON()
 		if *apply {
-			ar, err := policy.Apply(ctx, api, baseSnippet())
+			ar, err := policy.ApplyWith(ctx, api, snip, popts)
 			if err != nil {
-				return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in the admin console:", res.PolicyDiff)
+				return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in "+policyHome(*profile)+":", res.PolicyDiff)
 			}
 			res.Applied, res.PolicyOK = ar.Changed, true
 		}
@@ -284,7 +303,7 @@ func cmdTenantAdd(args []string) error {
 		if res.Existing {
 			verb = "already served"
 		}
-		fmt.Printf("✓ tenant   %s %s (tenant %s, API key, mint mode apikey) · control %s\n", tailnet, verb, tid, *control)
+		fmt.Printf("✓ tenant   %s %s (tenant %s, API key, mint mode %s) · control %s\n", tailnet, verb, tid, mintModeFor(*profile), *control)
 		fmt.Printf("  isolated: its own netd registry, workerd processes, state dir (0700) and registration throttle\n")
 		switch {
 		case res.Applied:
@@ -292,10 +311,13 @@ func cmdTenantAdd(args []string) error {
 		case res.PolicyOK:
 			fmt.Printf("✓ policy   tag:twd tagOwners present\n")
 		default:
-			fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in the admin console):\n")
+			fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in %s):\n", policyHome(*profile))
 			for _, l := range strings.Split(strings.TrimSpace(res.PolicyDiff), "\n") {
 				fmt.Printf("    %s\n", l)
 			}
+		}
+		if *profile == controlHeadscale {
+			fmt.Printf("› profile  %s\n", headscaleProfileNote)
 		}
 		fmt.Printf("deploy to it with `twd deploy --tenant %s`\n", tailnet)
 	})

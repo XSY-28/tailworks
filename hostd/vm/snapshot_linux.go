@@ -45,7 +45,7 @@ type baseSnap struct {
 	built time.Time
 	// guest is the GuestIdentity the base was built from. A base is only
 	// restored while the configured guest still has that identity
-	// (ADR-upgrades-and-releases §5): never under a different guest.
+	// (ADR-041 §5): never under a different guest.
 	guest string
 	// ctlToken is the base VM's control-channel token: every copy restored
 	// from this base holds it in guestd's memory, so it authenticates a

@@ -10,7 +10,7 @@ import (
 
 // fixture returns testdata/formats/<name>. With TWD_WRITE_FIXTURES=1 a
 // missing fixture is written from gen first; an existing one is never
-// overwritten (ADR-upgrades-and-releases §4).
+// overwritten (ADR-041 §4).
 func fixture(t *testing.T, name string, gen func() []byte) []byte {
 	t.Helper()
 	p := filepath.Join("testdata", "formats", name)

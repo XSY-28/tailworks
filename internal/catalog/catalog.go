@@ -1,4 +1,4 @@
-// Package catalog is twd's release catalog (ADR-upgrades-and-releases §8):
+// Package catalog is twd's release catalog (ADR-041 §8):
 // for every release, its notes and the facts an upgrade plan needs (the
 // workerd pin, the newest mgmt migration, contract migrations, protocol
 // versions). One JSON file per release lives in releases/, written by

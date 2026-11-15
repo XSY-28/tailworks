@@ -97,6 +97,7 @@ func (h *Host) ensureTenant(ctx context.Context, id string) (*tenant, error) {
 	}
 	reg, err := netd.New(netd.Config{
 		ControlURL:    control,
+		KeyTagsOnly:   info.MintMode == "headscale",
 		StateRoot:     filepath.Join(h.tenantDir(id), "nodes"),
 		Keys:          &keySource{h: h, tenantID: id},
 		Upstream:      h.ingressHandler(t),

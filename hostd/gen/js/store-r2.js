@@ -290,7 +290,7 @@ registerStoreKind("r2", {
       etag TEXT NOT NULL, md5 TEXT NOT NULL, PRIMARY KEY (upload, n))`);
   },
   // Journal entries (JSON), with their compaction keys. Every entry
-  // carries v (ADR-upgrades-and-releases §4): R2_ENTRY_V is what this twd
+  // carries v (ADR-041 §4): R2_ENTRY_V is what this twd
   // writes; an entry without v was written before versioning and is v1.
   // A newer v (or an unknown op) was written by a newer twd: apply throws,
   // so the store refuses to sync instead of silently dropping writes.

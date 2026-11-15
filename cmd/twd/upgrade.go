@@ -24,7 +24,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// twd upgrade (ADR-upgrades-and-releases §8).
+// twd upgrade (ADR-041 §8).
 //
 //   - On a `twd up` machine (homelab): download (or take --from) a release,
 //     verify it, show the plan from its catalog, back up mgmt's store with

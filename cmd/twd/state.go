@@ -24,7 +24,7 @@ import (
 
 // Config is <state>/twd.json, written by `twd up`.
 type Config struct {
-	// V is the twd.json format version (ADR-upgrades-and-releases §4): 0 =
+	// V is the twd.json format version (ADR-041 §4): 0 =
 	// written before versioning (the same layout as 1).
 	V        int    `json:"v"`
 	Tailnet  string `json:"tailnet"`
@@ -32,8 +32,9 @@ type Config struct {
 	// MintMode is "oauth" (the default since M12: a Tailscale OAuth client
 	// whose secret stays in a 0600 file; no browser, no Funnel), "wif"
 	// (keyless browser flow: the OIDC issuer on its own node over Funnel + a trust
-	// credential) or "apikey" (--api-key-file). Empty means apikey (state
-	// written before M10).
+	// credential), "apikey" (--api-key-file) or "headscale" (--control=
+	// headscale: the API key file holds a Headscale API key; ADR-015). Empty
+	// means apikey (state written before M10).
 	MintMode   string `json:"mintMode,omitempty"`
 	APIKeyFile string `json:"apiKeyFile,omitempty"` // apikey mode: path only; the key itself is never copied
 	// oauth mode: the client file's absolute path (read at use by the CLI
@@ -130,6 +131,9 @@ func (c Config) modeLabel() string {
 // keyless reports whether this state runs in keyless (WIF) mint mode.
 func (c Config) keyless() bool { return c.MintMode == "wif" }
 
+// headscale reports whether this state runs the Headscale profile (ADR-015).
+func (c Config) headscale() bool { return c.MintMode == "headscale" }
+
 // oauth reports whether this state mints through an OAuth client (M12).
 func (c Config) oauth() bool { return c.MintMode == "oauth" }
 
@@ -148,6 +152,8 @@ func (c Config) mintMode() string {
 		return "wif (keyless)"
 	case c.oauth():
 		return "oauth"
+	case c.headscale():
+		return "headscale"
 	}
 	return "apikey"
 }

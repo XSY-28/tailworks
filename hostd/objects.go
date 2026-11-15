@@ -27,7 +27,7 @@ const (
 // object is one tailnet identity hosted here: a workload entry node
 // (Class == "") or a Durable Object instance.
 type object struct {
-	// V is the objects.json record version (ADR-upgrades-and-releases §4):
+	// V is the objects.json record version (ADR-041 §4):
 	// 0 = written before versioning (the same layout as 1).
 	V        int      `json:"v"`
 	ID       string   `json:"id"` // mgmt object ID

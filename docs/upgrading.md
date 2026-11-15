@@ -4,7 +4,7 @@ Every part of twd ships in one release with one version: the `twd` CLI,
 `twd-mgmt`, `twd-hostd`, `twd-vmhelper`, the microVM guest image, workerd,
 the admin UI and the `@twd/*` packages. This page covers what may run
 together, how to upgrade a `twd up` machine, and how to upgrade a fleet. The
-design is in [ADR-upgrades-and-releases](design/adr/upgrades-and-releases.md),
+design is in [ADR-041](design/adr/041-upgrades-and-releases.md),
 and the maintainer side is in [RELEASING.md](RELEASING.md).
 
 ## What may run together

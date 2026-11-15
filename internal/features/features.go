@@ -1,5 +1,5 @@
 // Package features names the host-side capabilities a deployment can need
-// (ADR-upgrades-and-releases §7). hostd advertises Host() when it
+// (ADR-041 §7). hostd advertises Host() when it
 // registers; mgmt places a deployment only on hosts that advertise every
 // feature Required() finds in its bundle, so a feature that needs new
 // hostd code can merge and roll out host by host.

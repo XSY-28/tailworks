@@ -13,7 +13,7 @@ import (
 )
 
 // /v1 handlers for cordon, drain, releases and upgrade runs
-// (ADR-upgrades-and-releases; hostops.go, upgrades.go).
+// (ADR-041; hostops.go, upgrades.go).
 
 func (a *v1api) CordonHost(w http.ResponseWriter, r *http.Request, id v1.HostID) {
 	h, err := a.s.M.CordonHost(r.Context(), id, true, principalOf(r.Context()).Actor(r))

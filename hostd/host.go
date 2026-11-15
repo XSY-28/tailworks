@@ -224,7 +224,7 @@ type Config struct {
 	// <DataDir>/r2). Only hostd talks to it.
 	R2 r2.Backend
 
-	// Upgrades (ADR-upgrades-and-releases, upgrade.go): Version overrides
+	// Upgrades (ADR-041, upgrade.go): Version overrides
 	// the reported version (tests; "" = internal/version's). SelfUpgrade
 	// lets mgmt's upgrade runs install a release on this host and restart
 	// it: InstallPrefix is the install.sh prefix to install into, and

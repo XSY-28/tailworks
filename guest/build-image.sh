@@ -91,7 +91,7 @@ else
 fi
 [ -d "$BASE_ROOTFS/usr/lib/$LIBDIR" ] || { echo "BASE_ROOTFS=$BASE_ROOTFS has no usr/lib/$LIBDIR" >&2; exit 1; }
 
-# The twd release this guest belongs to (ADR-upgrades-and-releases §1):
+# The twd release this guest belongs to (ADR-041 §1):
 # TWD_VERSION from the release build, else <VERSION>-dev. Stamped into
 # twd-guestd (its hello reports it) and manifest.json.
 TWD_GUEST_VERSION=${TWD_VERSION:-$(cat "$ROOT/VERSION")-dev}

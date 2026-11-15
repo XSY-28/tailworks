@@ -16,7 +16,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/version"
 )
 
-// Releases and upgrade runs (ADR-upgrades-and-releases §8).
+// Releases and upgrade runs (ADR-041 §8).
 //
 // The release catalog is the entries built into this binary
 // (internal/catalog: this release and every earlier one) plus imported

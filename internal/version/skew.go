@@ -2,7 +2,7 @@ package version
 
 import "fmt"
 
-// Skew policy (ADR-upgrades-and-releases §7). N is the mgmt version.
+// Skew policy (ADR-041 §7). N is the mgmt version.
 //
 //   - hostd: N−1 ≤ hostd ≤ N, counted in release lines (Semver.Line).
 //     A host newer than mgmt is refused: hosts upgrade after mgmt.

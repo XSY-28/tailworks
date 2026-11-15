@@ -1,7 +1,7 @@
 //go:build e2eupgrade
 
 // Package upgrade is the release gate for upgrades
-// (ADR-upgrades-and-releases §9): the previous release's twd-mgmt and
+// (ADR-041 §9): the previous release's twd-mgmt and
 // twd-hostd, real processes on testcontrol (hermetic), serve a workload
 // with Durable Object storage; then mgmt and the host are replaced by the
 // candidate, in order, on the same state, and the test checks nothing was

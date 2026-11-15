@@ -1,7 +1,7 @@
 # Releasing twd
 
 This is the maintainer process. The design behind it is
-`docs/design/adr/upgrades-and-releases.md`.
+`docs/design/adr/041-upgrades-and-releases.md`.
 
 ## Versions
 

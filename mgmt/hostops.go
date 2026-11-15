@@ -9,7 +9,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/features"
 )
 
-// Host cordon and drain (ADR-upgrades-and-releases §5). A cordoned host
+// Host cordon and drain (ADR-041 §5). A cordoned host
 // keeps what it runs, keeps heartbeating and keeps its leases; placement
 // skips it (Candidate.Draining). Drain cordons, then re-places each
 // workload assigned to the host elsewhere through the ordinary deploy path

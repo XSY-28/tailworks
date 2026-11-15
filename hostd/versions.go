@@ -9,7 +9,7 @@ import (
 // run and restarts itself (Config.SelfUpgrade; upgrade.go).
 const FeatureSelfUpgrade = "self-upgrade"
 
-// version is what this host reports (ADR-upgrades-and-releases §7).
+// version is what this host reports (ADR-041 §7).
 func (h *Host) version() string {
 	if h.cfg.Version != "" {
 		return h.cfg.Version

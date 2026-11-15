@@ -2,7 +2,7 @@
 kind: feature
 upgrade: [schema-expand, protocol, feature-string, format, cli-json]
 ---
-You can now plan, check and undo upgrades (ADR-upgrades-and-releases).
+You can now plan, check and undo upgrades (ADR-041).
 
 - **Versions everywhere.**
   - Every binary carries the release version (`--version`).

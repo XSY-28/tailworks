@@ -155,6 +155,10 @@ type Options struct {
 	// AllowSrcs may additionally appear as grant sources (the base snippet
 	// grants autogroup:admin the admin capability on tag:twd-mgmt).
 	AllowSrcs []string
+
+	// Headscale checks the snippet against the Headscale profile too
+	// (ADR-015; headscale.go).
+	Headscale bool
 }
 
 // TwdTagPrefix: the only tags twd may own or use as a grant source.
@@ -189,6 +193,11 @@ func IsTwdTag(t string) bool {
 //     tags or svc: names (never "*" or autogroup:*);
 //   - grants may only carry src, dst, ip and app.
 func Check(s Snippet, o Options) error {
+	if o.Headscale {
+		if err := checkHeadscale(s); err != nil {
+			return err
+		}
+	}
 	okTag := func(t string) bool {
 		return IsTwdTag(t) || slices.Contains(o.AllowTags, t)
 	}
@@ -201,7 +210,7 @@ func Check(s Snippet, o Options) error {
 		if !okTag(t) {
 			return fmt.Errorf("policy snippet: refusing to add tagOwners for %q: twd only adds %s* tags", t, TwdTagPrefix)
 		}
-		if len(s.TagOwners[t]) == 0 {
+		if len(s.TagOwners[t]) == 0 && !(o.Headscale && t == TwdTagPrefix) {
 			return fmt.Errorf("policy snippet: tagOwners %q has no owners", t)
 		}
 		for _, owner := range s.TagOwners[t] {

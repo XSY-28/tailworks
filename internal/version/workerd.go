@@ -4,7 +4,7 @@ package version
 // against. It must equal package-lock.json's node_modules/workerd version
 // (TestWorkerdPinMatchesLockfile fails otherwise): bump workerd with
 // `npm install workerd@<v>` and update this line in the same PR
-// (ADR-upgrades-and-releases §6).
+// (ADR-041 §6).
 const WorkerdPin = "1.20261114.1"
 
 // WorkerdPinDate is the date `workerd --version` prints for WorkerdPin

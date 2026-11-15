@@ -94,7 +94,7 @@ PG_PORT ?= 55433
 test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
 
-## e2e-upgrade: the upgrade release gate (ADR-upgrades-and-releases §9), hermetic: the previous
+## e2e-upgrade: the upgrade release gate (ADR-041 §9), hermetic: the previous
 ## release's twd-mgmt + twd-hostd (TWD_UPGRADE_FROM: a git ref, default the last v* tag before
 ## HEAD, built in a temporary worktree; "self" stamps this tree TWD_UPGRADE_FROM_VERSION) serve a
 ## Durable Object workload; mgmt then the host move to this tree on the same state; storage, node
@@ -122,6 +122,15 @@ e2e-real: deps
 		echo "e2e-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ereal -count=1 -v -timeout 15m ./e2e/real/...
+
+## e2e-headscale: the Headscale profile (ADR-015) against a pinned Headscale release in Docker
+## (policy conformance, node lifecycle, `twd up --control=headscale` end to end, the v0.29 gate).
+## HEADSCALE_IMAGE picks another release; TWD_HEADSCALE_URL (+ _API_KEY_FILE, _BASE_DOMAIN) an
+## existing server. Skips without docker.
+HEADSCALE_IMAGE ?= headscale/headscale:v0.29.7
+.PHONY: e2e-headscale
+e2e-headscale: deps
+	HEADSCALE_IMAGE=$(HEADSCALE_IMAGE) $(GO) test -tags e2eheadscale -count=1 -v -timeout 20m ./e2e/headscale/...
 
 ## e2e-coldid: cold-identity breakdown (create → own node reachable, per stage), hermetic.
 ## TWD_COLDID_N objects; TWD_COLDID_DIAL=ready makes the caller wait for "ready". Results: e2e/coldid/results/.
@@ -501,6 +510,7 @@ lint: api-check compat-check changes-check
 	$(GO) vet -tags e2emulti ./e2e/multi/...
 	$(GO) vet -tags e2ekeyless ./e2e/keyless/...
 	$(GO) vet -tags e2eoauth ./e2e/oauth/...
+	$(GO) vet -tags e2eheadscale ./e2e/headscale/...
 	$(GO) vet -tags e2epublic ./e2e/public/...
 	$(GO) vet -tags e2embp ./e2e/mbp/...
 	$(GO) vet -tags e2elinux ./e2e/linux/...

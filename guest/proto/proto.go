@@ -309,7 +309,7 @@ type Msg struct {
 	Token string `json:"token,omitempty"`
 	// hello: the guest's protocol (internal/version.GuestProtocol; 0 = a
 	// guest from before protocol reporting, which speaks 1) and its twd
-	// release version (ADR-upgrades-and-releases §2). hostd and its guest
+	// release version (ADR-041 §2). hostd and its guest
 	// image ship in one tarball, so a mismatch means a mixed install:
 	// hostd logs it, and treats an "unknown op" reply to an op newer than
 	// the guest's protocol as "feature absent" (UnknownOp), not a failure.

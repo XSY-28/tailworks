@@ -1,8 +1,8 @@
-# ADR-upgrades-and-releases: One release train, declared skew, expand/contract state, tested upgrades
+# ADR-041: One release train, declared skew, expand/contract state, tested upgrades
 
 **Date:** 2026-11-15
-**Status:** Proposed. Built on branch `design-component-upgrade-release-process`
-except where "Not built" says otherwise; results in
+**Status:** Proposed. Built, except where "Not built" says otherwise (first
+shipped in twd 0.2.0); results in
 `status/design-component-upgrade-release-process.md`.
 
 ## Context
@@ -482,9 +482,11 @@ Built on this branch, with tests:
 
 Not built:
 
-- **The Headscale gate (§9, gate 6).** twd has no Headscale profile yet
-  (ADR-015 is design only), so there is no Headscale control plane to run
-  the gate against. It lands with the profile.
+- **Half of the Headscale gate (§9, gate 6).** The Headscale profile (ADR-015,
+  #39) merged. `release.yml` now runs `make e2e-headscale` for each supported
+  Headscale minor (a matrix). Only v0.29 is supported until v0.30
+  (docs/headscale.md), so the matrix has one entry for now. Running
+  `e2e-upgrade` itself against Headscale is not built.
 - **The opt-in root vmhelper updater** (open question 1). A run's plan warns
   when a host's helper protocol changes.
 - **The microVM upgrade gate (gate 5).** It needs a KVM runner in CI.
@@ -521,8 +523,9 @@ Not built:
    and newer releases are imported (or fetched, if opted in), so planning
    works offline (§8).
 3. **Headscale:** the upgrade and skew gates run against both supported
-   Headscale minors as well as testcontrol (§9, gate 6). Not built yet: it
-   waits for the Headscale profile (ADR-015).
+   Headscale minors as well as testcontrol (§9, gate 6). The Headscale e2e
+   runs per supported minor in `release.yml`; the upgrade test itself still
+   uses testcontrol.
 
 ## Open questions
 

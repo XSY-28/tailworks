@@ -104,7 +104,7 @@ type Candidate struct {
 	Arch string
 
 	// Skew is why the host is outside the version window ("" = within),
-	// and Features what it offers (ADR-upgrades-and-releases §7). Version
+	// and Features what it offers (ADR-041 §7). Version
 	// names it in messages.
 	Skew     string
 	Features []string

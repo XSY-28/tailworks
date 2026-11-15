@@ -1,4 +1,4 @@
--- ADR-upgrades-and-releases §8: imported release catalog entries (the
+-- ADR-041 §8: imported release catalog entries (the
 -- built-in ones are embedded in the binary) and durable upgrade runs.
 CREATE TABLE IF NOT EXISTS releases (
   version TEXT PRIMARY KEY, entry TEXT NOT NULL,

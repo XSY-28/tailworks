@@ -13,7 +13,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// Store maintenance subcommands (ADR-upgrades-and-releases §3, §8):
+// Store maintenance subcommands (ADR-041 §3, §8):
 //
 //	twd-mgmt migrate --check  [-state-dir D | -db DSN | -db-file F] [-json]
 //	twd-mgmt migrate --apply  …   apply pending migrations, contract ones included, then exit

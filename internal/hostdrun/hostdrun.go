@@ -73,6 +73,11 @@ type Options struct {
 	TSNetControlURL string
 	JoinTokenFile   string
 	PushPort        int
+
+	// TSNetKeyTagsOnly: the host's node takes tag:twd-host from its join
+	// key alone (Headscale refuses a pre-auth-key join that requests tags).
+	TSNetKeyTagsOnly bool
+
 	// PortMapping turns UPnP/NAT-PMP/PCP on for this host's tailnet nodes
 	// (off by default, process-wide: netd.DisablePortMapping).
 	PortMapping bool
@@ -308,7 +313,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		if o.TSNetDir == "" {
 			o.TSNetDir = filepath.Join(o.DataDir, "tsnet")
 		}
-		if rt.TS, err = JoinHostNode(ctx, o.TSNetDir, HostNodeName(o.HostID), o.TSNetControlURL, o.JoinTokenFile, log); err != nil {
+		if rt.TS, err = JoinHostNode(ctx, o.TSNetDir, HostNodeName(o.HostID), o.TSNetControlURL, o.JoinTokenFile, o.TSNetKeyTagsOnly, log); err != nil {
 			return nil, err
 		}
 		regSecret = RegistrationSecret(o.JoinTokenFile, o.TSNetDir)
@@ -437,13 +442,16 @@ func (rt *Runtime) Close() error {
 // saved state re-opens without a key. Otherwise it needs the single-use
 // join key: from joinFile, which is waited for (twd up writes it after
 // mgmt minted it) and deleted once the node is up. The key never reaches
-// the log.
-func JoinHostNode(ctx context.Context, dir, hostname, control, joinFile string, log *slog.Logger) (*tsnet.Server, error) {
+// the log. keyTagsOnly: advertise no tags (Headscale; the key carries them).
+func JoinHostNode(ctx context.Context, dir, hostname, control, joinFile string, keyTagsOnly bool, log *slog.Logger) (*tsnet.Server, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	ts := &tsnet.Server{Hostname: hostname, Dir: dir, ControlURL: control, AdvertiseTags: []string{HostTag},
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
+	if keyTagsOnly {
+		ts.AdvertiseTags = nil
+	}
 	hasState := false
 	if _, err := os.Stat(filepath.Join(dir, "tailscaled.state")); err == nil {
 		hasState = true

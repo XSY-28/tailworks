@@ -14,7 +14,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/version"
 )
 
-// Numbered store migrations (ADR-upgrades-and-releases §3; the rules are
+// Numbered store migrations (ADR-041 §3; the rules are
 // in migrations/README.md). The DDL in migrate() is the baseline: it is
 // idempotent and still runs on every open, so stores created before this
 // file adopt the scheme unchanged. Everything newer is one file in

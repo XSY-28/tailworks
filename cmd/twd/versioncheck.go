@@ -11,7 +11,7 @@ import (
 )
 
 // The CLI tells mgmt its version (User-Agent: twd/<v>) and compares
-// mgmt's Twd-Version answer with its own (ADR-upgrades-and-releases §7):
+// mgmt's Twd-Version answer with its own (ADR-041 §7):
 // a CLI more than one release line behind, or newer than mgmt, gets one
 // warning on stderr (not in --json mode, whose stderr carries only the
 // error line).

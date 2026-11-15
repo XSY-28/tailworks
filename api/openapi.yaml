@@ -146,7 +146,7 @@ tags:
     description: Workflow approvals decided by tailnet identities (`twd.dev/cap/approve`), not links or tokens (ADR-040).
   - name: upgrades
     description: |
-      Releases and upgrades (ADR-upgrades-and-releases). twd-mgmt keeps a release catalog (the
+      Releases and upgrades (ADR-041). twd-mgmt keeps a release catalog (the
       releases it was built with, plus imported ones), plans upgrades from it and the fleet's
       reported versions and features, and runs fleet upgrades as durable upgrade runs.
   - name: volumes
@@ -218,6 +218,8 @@ paths:
                 value: { tailnet: tail7906d5.ts.net, mintMode: apikey, apiKeyFile: /Users/me/.config/tailnet1_api.env }
               oauth:
                 value: { tailnet: tail7906d5.ts.net, mintMode: oauth, oauthClientID: kOAuth123CNTRL, oauthClientFile: /Users/me/.config/twd/oauth.env }
+              headscale:
+                value: { tailnet: hs.example.net, controlURL: "https://headscale.example.net", mintMode: headscale, apiKeyFile: /Users/me/.config/twd/headscale.env }
       responses:
         "201":
           description: Created.
@@ -3967,6 +3969,7 @@ components:
         | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
         | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
         | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
+        | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
         | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
         | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
         | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -3977,7 +3980,7 @@ components:
         | `superseded` | 409 | undeploy of a non-latest deployment |
         | `tenant_has_live_objects` | 409 | tenant delete without `force` |
         | `host_holds_leases` | 409 | host delete without `drain` |
-        | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-upgrades-and-releases §7) |
+        | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
         | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
         | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
         | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -4033,6 +4036,7 @@ components:
         - takeover_unconfirmed
         - service_conflict
         - service_api_failed
+        - profile_unsupported
         - replica_conflict
         - tier_unavailable
         - move_unconfirmed
@@ -4231,8 +4235,13 @@ components:
     # ------------------------------------------------------------- tenants
     MintMode:
       type: string
-      description: "`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `static`: fakemgmt only (testcontrol accepts any key)."
-      enum: [oauth, wif, apikey, static]
+      description: "`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key)."
+      enum:
+        - oauth
+        - wif
+        - apikey
+        - headscale
+        - static
     Tier:
       type: string
       enum: [process, microvm]
@@ -4246,7 +4255,7 @@ components:
         mintMode: { $ref: "#/components/schemas/MintMode" }
         apiKeyFile:
           type: string
-          description: "`apikey` mode: absolute path, read at use; the key is never stored or returned."
+          description: "`apikey` and `headscale` modes: absolute path, read at use; the key is never stored or returned."
         wifClientID: { type: string, description: Public client ID of the mint trust credential (`auth_keys`). }
         wifLifecycleClientID: { type: string, description: "Public client ID of the lifecycle credential (`devices:core`, `policy_file:read`)." }
         oauthClientID:
@@ -5958,7 +5967,7 @@ components:
         versions: { $ref: "#/components/schemas/StatusVersions" }
     StatusVersions:
       type: object
-      description: What runs where (ADR-upgrades-and-releases §7).
+      description: What runs where (ADR-041 §7).
       required: [mgmt, hosts]
       properties:
         mgmt: { type: object, additionalProperties: { type: string }, description: "Each live replica's version, by replica ID." }

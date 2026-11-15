@@ -8,7 +8,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// twd host cordon | uncordon | drain (ADR-upgrades-and-releases §5).
+// twd host cordon | uncordon | drain (ADR-041 §5).
 
 func cmdHostCordon(args []string, on bool) error {
 	name := "host uncordon"

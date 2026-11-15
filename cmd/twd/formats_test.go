@@ -9,7 +9,7 @@ import (
 )
 
 // formatFixture returns testdata/formats/<name>; TWD_WRITE_FIXTURES=1
-// writes it from gen only if it is missing (ADR-upgrades-and-releases §4).
+// writes it from gen only if it is missing (ADR-041 §4).
 func formatFixture(t *testing.T, name string, gen func() []byte) []byte {
 	t.Helper()
 	p := filepath.Join("testdata", "formats", name)

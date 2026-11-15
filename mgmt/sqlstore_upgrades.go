@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-// Releases, upgrade runs and restores (ADR-upgrades-and-releases §8).
+// Releases, upgrade runs and restores (ADR-041 §8).
 
 // upgradeStore is implemented by stores that hold the release catalog and
 // upgrade runs (SQLStore).

@@ -1,5 +1,5 @@
 // Package version is the one place a twd binary learns its release
-// version, commit and the contracts it speaks (ADR-upgrades-and-releases
+// version, commit and the contracts it speaks (ADR-041
 // §1). Version and Commit are set by the linker:
 //
 //	go build -ldflags "-X github.com/rosskukulinski/twd/internal/version.Version=0.2.0 \
@@ -26,7 +26,7 @@ var Commit = ""
 // Dev is the Version of an unstamped build.
 const Dev = "dev"
 
-// Protocol versions twd speaks (ADR-upgrades-and-releases §2). Each is
+// Protocol versions twd speaks (ADR-041 §2). Each is
 // an integer bumped only on an incompatible change to that contract;
 // additive changes (new optional fields, new messages gated by a feature)
 // keep it.
@@ -102,7 +102,7 @@ func (s Semver) Compare(o Semver) int {
 
 // LinesBehind is how many release lines s is behind o (negative: ahead).
 // A release line is the minor before 1.0 (0.MINOR) and the major from 1.0
-// on (ADR-upgrades-and-releases §9). Two versions on the same line are
+// on (ADR-041 §9). Two versions on the same line are
 // compatible in every direction; one line apart is the N−1 window. The
 // last 0.x line is the one before 1: any 0.x counts as one line behind
 // 1.y, since the final 0.x minor isn't known in advance.

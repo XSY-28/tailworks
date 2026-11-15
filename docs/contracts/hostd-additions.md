@@ -73,7 +73,7 @@ The tailnet surface authenticates every request by WhoIs on the host's node (`ho
 
 Refusals are `403 {"code":"push_unauthorized","detail":…}` with `twd-error: push_unauthorized`, and one log line per refusal carrying the peer address and its tags (never key material). `GET /v1/status`, `POST /v1/purge` and `POST /v1/vm/check` are not routed on the tailnet surface at all (404 even for mgmt): the status dump (tenant IDs, node IDs/IPs, PIDs, dirs, ports) is the operator's.
 
-## Self-upgrade push (ADR-upgrades-and-releases)
+## Self-upgrade push (ADR-041)
 
 `POST /v1/push/upgrade {runID, version, name, url, sha256}` is on every push
 surface. mgmt's upgrade runs send it, and only to a host that advertises the

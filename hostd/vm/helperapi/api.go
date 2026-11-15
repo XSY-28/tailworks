@@ -45,7 +45,7 @@ const Version = 2
 // MinVersion is the oldest protocol this side still serves. A helper and
 // a hostd work together when their [MinVersion, Version] ranges overlap
 // (Compatible), so the root-owned helper can be upgraded first and keep
-// serving the previous hostd (ADR-upgrades-and-releases §2, §5).
+// serving the previous hostd (ADR-041 §2, §5).
 const MinVersion = 2
 
 // Compatible reports whether a peer speaking [peerMin, peerMax] can talk

@@ -4,7 +4,7 @@ Last update: 2026-11-15 PT. Merged origin/master with Workflows (#34, ADR-040) a
 - A Workflows app counts as stateful: fenced, and not moved by a drain.
 - `approvals.json` records carry a version.
 
-Earlier 2026-11-15: built ADR-upgrades-and-releases: versions and skew, numbered migrations, feature-gated placement, cordon/drain, twd upgrade, release catalog, upgrade runs, release gates. make lint test and make e2e-upgrade pass.
+Earlier 2026-11-15: built ADR-041: versions and skew, numbered migrations, feature-gated placement, cordon/drain, twd upgrade, release catalog, upgrade runs, release gates. make lint test and make e2e-upgrade pass.
 
 ## Built (2026-11-15)
 
@@ -46,11 +46,11 @@ Merged origin/master twice (observability, agent DX + MCP, R2, KV, D1, queues, l
 
 Earlier 2026-11-15: resolved the three open questions (mgmt runs fleet upgrades, mgmt keeps a release catalog, gates cover both Headscale minors).
 
-Earlier 2026-11-15: drafted ADR-upgrades-and-releases (Proposed). Design only at that point.
+Earlier 2026-11-15: drafted ADR-041 (Proposed). Design only at that point.
 
 # Component upgrades and the release process
 
-The design is in `docs/design/adr/upgrades-and-releases.md`.
+The design is in `docs/design/adr/041-upgrades-and-releases.md`.
 
 ## Findings: the upgrade machinery on master (46ff0c3)
 

@@ -87,6 +87,10 @@ type APIError struct {
 	Status     int
 	Message    string
 	RetryAfter time.Duration // from Retry-After on 429/503, if present
+
+	// API names the server in Error ("" = the Tailscale API; "headscale
+	// api" for the Headscale profile's client, internal/headscale).
+	API string
 }
 
 // IsRateLimited reports a 429.
@@ -109,7 +113,13 @@ func retryAfter(h http.Header) time.Duration {
 	return 0
 }
 
-func (e *APIError) Error() string { return fmt.Sprintf("tailscale api: %d %s", e.Status, e.Message) }
+func (e *APIError) Error() string {
+	api := e.API
+	if api == "" {
+		api = "tailscale api"
+	}
+	return fmt.Sprintf("%s: %d %s", api, e.Status, e.Message)
+}
 
 // IsNotFound reports a 404.
 func IsNotFound(err error) bool {

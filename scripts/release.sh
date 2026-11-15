@@ -36,7 +36,7 @@ mkdir -p "$DIST" "$CACHE"
 COMMIT=$(git rev-parse HEAD)
 VPKG=github.com/rosskukulinski/twd/internal/version
 VLDFLAGS="-X $VPKG.Version=$VERSION -X $VPKG.Commit=$COMMIT"
-# The newest mgmt schema migration this release applies (ADR-upgrades-and-releases §3).
+# The newest mgmt schema migration this release applies (ADR-041 §3).
 PROTOCOLS=$(go run ./internal/version/protocols)
 SCHEMA=$(ls mgmt/migrations/*.sql 2>/dev/null | sed 's|.*/||; s|\..*||' | LC_ALL=C sort -u | tail -n 1)
 # The release catalog (internal/catalog): every release's notes and upgrade facts, for offline plans.

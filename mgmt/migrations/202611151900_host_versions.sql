@@ -1,4 +1,4 @@
--- ADR-upgrades-and-releases §7: hosts and replicas report their version,
+-- ADR-041 §7: hosts and replicas report their version,
 -- protocols and features; a cordoned host takes no new placements (§5).
 ALTER TABLE hosts ADD COLUMN version TEXT NOT NULL DEFAULT '';
 ALTER TABLE hosts ADD COLUMN os TEXT NOT NULL DEFAULT '';

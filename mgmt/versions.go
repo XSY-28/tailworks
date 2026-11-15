@@ -12,7 +12,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/version"
 )
 
-// Versions, skew and features (ADR-upgrades-and-releases §7).
+// Versions, skew and features (ADR-041 §7).
 
 // Version is this replica's twd-mgmt version: Config.Version, else the
 // built-in one.

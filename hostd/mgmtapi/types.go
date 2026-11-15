@@ -101,7 +101,7 @@ type RegisterRequest struct {
 	Capacity *HostCapacity `json:"capacity,omitempty"`
 
 	// Version, OS, Protocols and Features: what this hostd runs and offers
-	// (ADR-upgrades-and-releases §7).
+	// (ADR-041 §7).
 	Version   string         `json:"version,omitempty"`
 	OS        string         `json:"os,omitempty"`
 	Protocols map[string]int `json:"protocols,omitempty"`

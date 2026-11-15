@@ -16,7 +16,7 @@ import (
 // size and mtime of the kernel and rootfs files themselves (a hand-copied
 // image without a fresh manifest still changes identity).
 //
-// ADR-030 base snapshots are keyed by it (ADR-upgrades-and-releases §5):
+// ADR-030 base snapshots are keyed by it (ADR-041 §5):
 // a base is never restored under a different guest, e.g. after install.sh
 // swapped share/twd/vm under a running hostd. Restores then boot cold
 // until the next base is built from the new guest.

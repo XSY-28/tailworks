@@ -105,7 +105,7 @@ func (a *Approval) key() string {
 }
 
 // approvalsFormat is approvals.json's record version
-// (ADR-upgrades-and-releases §4): records without "v" are version 1, from
+// (ADR-041 §4): records without "v" are version 1, from
 // before versioning; a newer version is not loaded.
 const approvalsFormat = 1
 

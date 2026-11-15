@@ -1,6 +1,6 @@
 # mgmt store migrations
 
-One file per migration (ADR-upgrades-and-releases §3). Migrations apply in
+One file per migration (ADR-041 §3). Migrations apply in
 ID order, once each; `schema_migrations` records which ran.
 
 - **Name:** `<UTC yyyymmddhhmm>_<slug>.sql`, for example

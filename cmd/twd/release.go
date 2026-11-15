@@ -17,7 +17,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-// twd release (ADR-upgrades-and-releases §8): twd-mgmt's release catalog.
+// twd release (ADR-041 §8): twd-mgmt's release catalog.
 //
 //	twd release ls
 //	twd release import <tarball>…   (SHA256SUMS next to them)

@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// Self-upgrade (ADR-upgrades-and-releases §8): an upgrade run in mgmt
+// Self-upgrade (ADR-041 §8): an upgrade run in mgmt
 // pushes POST /v1/push/upgrade; a host started with Config.SelfUpgrade
 // downloads the release tarball from mgmt (GET /v1/releases/{v}/artifacts/
 // {name}, host role), checks its SHA-256, runs the tarball's install.sh

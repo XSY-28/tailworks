@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The JS half of the persisted-format fixtures (ADR-upgrades-and-releases
+// The JS half of the persisted-format fixtures (ADR-041
 // §4): the platform store kinds in js/ (kv.js, store-r2.js, store-d1.js)
 // decode or replay every committed fixture, in node with the workerd-only
 // imports stubbed. The R2 and D1 fixtures are entries exactly as those

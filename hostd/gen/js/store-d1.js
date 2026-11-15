@@ -233,7 +233,7 @@ function encodeEntry(id, stmts) {
   return te.encode(JSON.stringify({ v: D1_ENTRY_V, id, q }));
 }
 // D1_ENTRY_V is the journal entry version this twd writes
-// (ADR-upgrades-and-releases §4); every D1 entry has carried v since the
+// (ADR-041 §4); every D1 entry has carried v since the
 // first release, and a missing v reads as v1.
 const D1_ENTRY_V = 1;
 // D1FormatError: an entry written by a newer twd. apply rethrows it (a

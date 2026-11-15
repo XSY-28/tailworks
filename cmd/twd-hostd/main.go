@@ -63,6 +63,7 @@ func run() error {
 		localDev   = flag.Bool("local-dev", false, "talk to mgmt over its unix socket with the per-host token instead of this host's own tailnet node (twd dev, hermetic tests)")
 		tsDir      = flag.String("tsnet-dir", "", "state of this host's own tailnet node (default <data-dir>/tsnet)")
 		tsControl  = flag.String("tsnet-control-url", "", "operator tailnet control URL for this host's node (required unless -local-dev)")
+		tsKeyTags  = flag.Bool("tsnet-key-tags-only", false, "the host's node advertises no tags; its join key carries tag:twd-host (required on Headscale, ADR-015)")
 		joinFile   = flag.String("join-token-file", "", "TS_AUTHKEY=… file with the single-use join key mgmt minted (twd host add / twd up); waited for when the node has no state yet. Deleted after use")
 		pushPort   = flag.Int("push-port", hostdrun.DefaultPushPort, "port on this host's node where mgmt pushes kills and assignment changes")
 		metricsPrt = flag.Int("metrics-port", obs.DefaultMetricsPort, "port on this host's node serving GET /metrics (Prometheus; who may scrape is a tailnet policy grant); 0 = off")
@@ -135,7 +136,7 @@ func run() error {
 	}
 	log := slog.New(netd.NewRedactingHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
 	o := hostdrun.Options{MgmtAddr: *mgmtAddr, LocalDev: *localDev, MgmtTokenFile: *tokenFile,
-		TSNetDir: *tsDir, TSNetControlURL: *tsControl, JoinTokenFile: *joinFile, PushPort: *pushPort, PortMapping: *portMap,
+		TSNetDir: *tsDir, TSNetControlURL: *tsControl, TSNetKeyTagsOnly: *tsKeyTags, JoinTokenFile: *joinFile, PushPort: *pushPort, PortMapping: *portMap,
 		MetricsPort: *metricsPrt,
 		HostID:      *hostID, DataDir: *dataDir, RunDir: *runDir, Workerd: *workerd,
 		Heartbeat: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL, CapacityNodes: *capacity,
@@ -224,6 +225,7 @@ func runJoin(args []string) error {
 	control := fs.String("control-url", "https://controlplane.tailscale.com", "operator tailnet control URL")
 	tokenFile := fs.String("token-file", "", "TS_AUTHKEY=… file with the join key (twd host add --json > …)")
 	token := fs.String("token", "", "the join key itself (prefer --token-file; argv is visible to other users)")
+	keyTags := fs.Bool("key-tags-only", false, "advertise no tags; the join key carries tag:twd-host (required on Headscale, ADR-015)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -250,6 +252,9 @@ func runJoin(args []string) error {
 	}
 	ts := &tsnet.Server{Hostname: hostdrun.HostNodeName(*hostID), Dir: *tsDir, ControlURL: *control, AdvertiseTags: []string{hostdrun.HostTag}, AuthKey: key,
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
+	if *keyTags {
+		ts.AdvertiseTags = nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	st, err := ts.Up(ctx)

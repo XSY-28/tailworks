@@ -1,6 +1,6 @@
 #!/bin/sh
 # check-changes.sh [base]: release-note fragments are present and valid
-# (ADR-upgrades-and-releases §9; changes/README.md).
+# (ADR-041 §9; changes/README.md).
 #
 #   1. Every changes/*.md and changes/released/*/*.md has valid front matter.
 #   2. If the diff base...HEAD (plus uncommitted changes) touches an
