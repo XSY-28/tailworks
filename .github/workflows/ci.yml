@@ -1,0 +1,76 @@
+# CI: the hermetic gates on every PR, on the merge queue, and on master.
+#
+#   lint   `make lint`: gofmt, go vet (every build tag), api-check (generated
+#          files current), compat-check, changes-check (release-note
+#          fragments, against the merge base), check-secrets.
+#   test   `make test`: Go unit + integration tests with -race (testcontrol,
+#          local DERP/STUN, stock workerd) and the JS package tests.
+#   ci-ok  needs both. Branch protection requires this one check, so
+#          adding or renaming a job here never needs a settings change.
+#
+# merge_group runs the same gates on master + the queued PRs combined, which
+# is what catches two PRs that pass alone and break master together. The
+# suites that need Docker, VMs, credentials or a real tailnet stay out of
+# here (see the Makefile: e2e-*, test-pg, test-images); release.yml runs the
+# release gates.
+name: ci
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # check-changes diffs against the merge base with origin/master
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: make lint
+        run: make lint
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: make test
+        run: make test
+
+  ci-ok:
+    if: always()
+    needs: [lint, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: every gate passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
