@@ -2,6 +2,8 @@
 // Don't edit it: run `twd types` again after changing them
 // (`twd types --check` fails when this file is stale).
 interface Env {
+  // vars
+  APP_NAME: string;
   // Durable Objects
   RefundAgent: DurableObjectNamespace<import("./src/index").RefundAgent>;
   // Workflows
