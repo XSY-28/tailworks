@@ -40,7 +40,7 @@ test: deps test-go test-js
 
 .PHONY: test-go
 test-go:
-	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/...
+	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:

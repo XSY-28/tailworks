@@ -11,7 +11,10 @@ surfaces:
 - **From the mgmt REST API** (`/v1`, `docs/contracts/mgmt-api.md`): the same
   body; `trace_id` correlates with `twd audit --trace <id>`.
 - **From the `twd` CLI**: `error [code]: message`, detail lines, `fix:` and a
-  link to this page (`--json` gives the same as JSON on stderr).
+  link to this page. With `--json`, one line on stderr:
+  `{"error": {code, message, hint, doc_url, detail?, fix?, trace_id?}}`
+  ([cli-json.md](cli-json.md)); `twd docs show errors.md#<code>` prints an
+  entry offline.
 
 The `doc_url` / link is `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>`,
 so every code below is a heading. Codes are alphabetical; the source column
@@ -53,13 +56,16 @@ printed anywhere.
 500 · cli. **When:** esbuild (workerd apps) or `create-twd build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run.
 
 ### cancelled
-0 · cli. **When:** you answered no at a `twd up` confirmation prompt. **Fix:** nothing was started; re-run with the policy in place, or `--yes` to skip the prompt.
+0 · cli. **When:** you answered no at a `twd up`, `twd agent setup` or `twd agent remove` confirmation prompt. **Fix:** nothing was started or written; re-run with the policy in place, or `--yes` to skip the prompt.
 
 ### cap_limit_exceeded
 403 · netd (SDK `@twd/mcp`). **When:** the caller holds the tool but a numeric limit or budget in its grant is exceeded (e.g. `maxUsd`, `perDayUsd`). **Fix:** raise the limit in the `app` capability of the grant, or wait for the daily budget to reset.
 
 ### cap_missing
 403 · netd (SDK `@twd/mcp`). **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it).
+
+### confirmation_required
+1 · cli. **When:** `twd agent setup` or `twd agent remove` would write or delete files, and there is no terminal to ask on (a coding agent, a script, or `--json`). Nothing was written. **Fix:** review the change list with `--dry-run`, then run it in a terminal to answer the prompt, or add `--yes`. An agent should show the user the dry run and let them decide.
 
 ### credential_file_insecure
 403 · cli. **When:** the OAuth client file given to `twd up --oauth-client-file` is readable by other users. **Fix:** `chmod 600 <file>` then `twd up` again.
@@ -103,6 +109,9 @@ printed anywhere.
 ### helper_failed
 500 · cli. **When:** `twd host setup --microvm` installed `twd-vmhelper.service` but it did not come up. **Fix:** `journalctl -u twd-vmhelper`.
 
+### host_failed
+1 · cli. **When:** `twd up` (single process): the host agent embedded in twd-mgmt failed to start or to register with mgmt. **Fix:** the detail has the cause; `twd logs --component hostd` and `twd doctor`, then `twd up` again.
+
 ### host_holds_leases
 409 · mgmt, cli. **When:** `twd host rm <id>` while the host still holds namespace leases. **Fix:** `twd host rm <id> --drain`.
 
@@ -136,6 +145,9 @@ printed anywhere.
 ### identity_pending
 503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); `twd dev` waited 60 s for a deploy. **Fix:** retry; if it persists, `twd logs <workload>` and check the control plane.
 
+### image_build_failed
+1 · cli. **When:** `twd deploy` could not build or push an app's Dockerfile container image with `docker buildx`. **Fix:** the build output is in the detail; check `docker buildx version` works on the deploying machine.
+
 ### immutable_field
 400 · mgmt. **When:** a PATCH touched a field the caller may not change (IDs, tailnet, creation time). **Fix:** send only the mutable fields (`twd tenant set`, `PATCH /v1/objects/{id}`).
 
@@ -159,6 +171,9 @@ printed anywhere.
 
 ### login_timeout
 408 · cli. **When:** `twd up --wif` printed a login URL and nobody completed the browser login within `--login-timeout` (default 5 min). **Fix:** run `twd up` again and finish the login, or `--mgmt-authkey-file` for an unattended join.
+
+### mgmt_failed
+1 · cli. **When:** `twd up` (single process): the embedded twd-mgmt failed to start. **Fix:** the detail has the cause; `twd logs --component mgmt` and `twd doctor`, then `twd up` again.
 
 ### mgmt_not_found
 404 · cli. **When:** `twd link` with no endpoint found no `twd-mgmt` through MagicDNS. **Fix:** `twd link twd-mgmt.<tailnet>.ts.net`.
@@ -249,6 +264,9 @@ printed anywhere.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
+
+### public_unreachable
+1 · cli. **When:** `twd deploy --wait-public` waited for the workload's public URL and it didn't answer from the public internet in time. The deploy itself succeeded. **Fix:** a new public name's certificate and DNS can take minutes; retry with a longer `--wait-public`, check the tailnet has HTTPS certificates on, and see [docs/public-ingress.md](public-ingress.md).
 
 ### push_unauthorized
 403 · hostd. **When:** something other than mgmt's node pushed to hostd's push listener (port 7474). **Fix:** only `tag:twd-mgmt` may push; check the grant and who is on that tag.

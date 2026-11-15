@@ -22,7 +22,7 @@ var remoteLogsContext = func() (context.Context, context.CancelFunc) {
 // (GET /v1/tenants/{id}/workloads/{workload}/logs). A workload with
 // replicas prints every replica's lines prefixed "[<host>] "; --host picks
 // one. The daemons' logs (--component) stay on the host.
-func remoteLogs(s *state, pos []string, comp, tenantRef, host string, n int, follow bool) error {
+func remoteLogs(out io.Writer, s *state, pos []string, comp, tenantRef, host string, n int, follow bool) error {
 	if comp != "" || len(pos) != 1 {
 		return fail("remote_unsupported", "the daemons' logs (--component mgmt|hostd|supervisor) are files on the host that runs twd up (this machine is linked to "+s.Link.Endpoint+")").
 			withFix("twd logs <workload>   (a workload's log works from here)", "run `twd logs --component …` on the host")
@@ -47,7 +47,7 @@ func remoteLogs(s *state, pos []string, comp, tenantRef, host string, n int, fol
 			}
 			return err
 		}
-		_, cerr := io.Copy(os.Stdout, body)
+		_, cerr := io.Copy(out, body)
 		body.Close()
 		if !follow || ctx.Err() != nil {
 			return nil

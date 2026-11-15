@@ -97,6 +97,14 @@ table, in logical position, not at the end. `make lint` runs
 | <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@twd/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`) | — | stdio transport | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet` |
 | <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70165-and-mcp-handler-231) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@twd/mcp` `mcpFetch` | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow` |
 
+## Tooling
+
+| Surface | Status | workerd provides | twd adds | Different from Cloudflare | Missing | Tests |
+|---|---|---|---|---|---|---|
+| <a id="cli-json"></a>CLI `--json` output | ✅ | — (twd-only) | every command's result is one JSON document matching [`schema/cli.schema.json`](../schema/cli.schema.json); every error is `{code, message, hint, doc_url}` with a code from [errors.md](errors.md); `twd deploy` streams progress events (stderr), `twd dev` and `twd logs` stream NDJSON (stdout). [Details](cli-json.md) | not a Cloudflare surface (wrangler's `--json` covers some commands) | `status`'s `workloads[]`, `image push` and `host vmcheck --container` use Go field names | `cmd/twd:TestCLIJSONContract`, `cmd/twd:TestAgentEval`, `cmd/twd:TestDevJSONEvents`, `cmd/twd:TestRemoteLogs` |
+| <a id="agent-skills"></a>Coding-agent skills (`twd agent`) | ✅ | — (twd-only) | ten skills built into the CLI (scaffold, dev, deploy, debug, policy, secrets, cron, public routes, teardown); `twd agent setup` installs them for Claude Code, Codex, Cursor, Gemini CLI and OpenCode, per user or per project, after showing what it writes; `twd agent remove` undoes it. [Details](agents.md) | not a Cloudflare surface | an MCP server for twd itself; per-user Cursor rules (Cursor keeps them in its settings) | `cmd/twd:TestSkillCommandsExist`, `cmd/twd:TestSkillsWellFormed`, `cmd/twd:TestAgentEval`, `cmd/twd:TestAgentSetupSnapshot`, `agent:TestPlanBlock`, `agent:TestPlanStaleAndForeign` |
+| <a id="docs-for-agents"></a>Docs for agents (`llms.txt`, `twd docs`) | ✅ | — (twd-only) | [`llms.txt`](../llms.txt) indexes the docs; `twd docs search` and `twd docs show <doc>#<anchor>` read the docs built into the CLI, offline | not a Cloudflare surface | — | `docs:TestLLMsTxt`, `docs:TestShowAndSearch` |
+
 ---
 
 # Details
