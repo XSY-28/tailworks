@@ -479,6 +479,8 @@ func (h *Host) pushAPI() http.Handler {
 		writeJSON(w, 200, h.Status())
 	})
 	m.HandleFunc("GET /v1/logs", h.logsHandler) // logs.go: one workload's app log
+	// poolstop.go: stop pool refills before twd down --purge lists objects.
+	m.HandleFunc("POST /v1/pools/stop", h.poolsStopHandler)
 
 	// Operator checks of a workload's microVM (twd host vmcheck): guest
 	// stats, DO volume fsync latency, and the no-keys-in-guest scan. The

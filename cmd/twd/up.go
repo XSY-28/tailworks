@@ -1049,6 +1049,10 @@ func cmdDown(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if (*purge || s.Cfg.Ephemeral) && s.Cfg.TenantID != "" && s.mgmtHealthy(ctx) {
+		// No pool refills from here on, and none in flight, so the list
+		// below has every pool node (hostd/poolstop.go). An older hostd
+		// without the route answers 404: carry on as before.
+		s.hostd().Do(ctx, "POST", "/v1/pools/stop", nil, nil)
 		// Every tenant this host serves (each kill goes to its own tailnet).
 		var objs []mgmt.Object
 		for _, tn := range s.tenants() {

@@ -240,6 +240,10 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
+	// poolsStopped: no more pool refills (POST /v1/pools/stop, twd down
+	// --purge; poolstop.go).
+	poolsStopped bool
+
 	capOnce    sync.Once
 	capVec     mgmtapi.HostCapacity // capacity(): measured once
 	containers containerLedger      // admitted containers and held reservations
