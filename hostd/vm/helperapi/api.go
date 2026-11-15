@@ -42,6 +42,39 @@ const DefaultSocket = "/run/twd/vmhelper.sock"
 // 2: VolumeSlot + the attach op (warm pool); snapshot-base + Restore.
 const Version = 2
 
+// MinVersion is the oldest protocol this side still serves. A helper and
+// a hostd work together when their [MinVersion, Version] ranges overlap
+// (Compatible), so the root-owned helper can be upgraded first and keep
+// serving the previous hostd (ADR-upgrades-and-releases §2, §5).
+const MinVersion = 2
+
+// Compatible reports whether a peer speaking [peerMin, peerMax] can talk
+// to this side ([MinVersion, Version]). A peer that reports no minimum
+// (peerMin 0, a helper from before ranges) speaks only peerMax.
+func Compatible(peerMin, peerMax int) bool {
+	return rangesOverlap(MinVersion, Version, peerMin, peerMax)
+}
+
+func rangesOverlap(min, max, peerMin, peerMax int) bool {
+	if peerMin <= 0 || peerMin > peerMax {
+		peerMin = peerMax
+	}
+	return peerMin <= max && min <= peerMax
+}
+
+// Check returns nil when the ping response r is from a compatible helper,
+// else an error naming both ranges.
+func Check(r Response) error {
+	if Compatible(r.MinVersion, r.Version) {
+		return nil
+	}
+	min := r.MinVersion
+	if min <= 0 {
+		min = r.Version
+	}
+	return fmt.Errorf("twd-vmhelper speaks protocol %d-%d, this twd %d-%d", min, r.Version, MinVersion, Version)
+}
+
 // Error codes.
 const (
 	CodeUnauthorized = "unauthorized"  // peer uid not allowed
@@ -154,11 +187,12 @@ type Response struct {
 	Error string `json:"error,omitempty"`
 
 	// ping
-	Version  int      `json:"version,omitempty"`
-	UID      int      `json:"uid,omitempty"` // the caller's uid, as the helper sees it
-	Jailer   string   `json:"jailer,omitempty"`
-	Crypt    string   `json:"crypt,omitempty"`
-	Features []string `json:"features,omitempty"`
+	Version    int      `json:"version,omitempty"`
+	MinVersion int      `json:"minVersion,omitempty"` // oldest protocol served (0: only Version)
+	UID        int      `json:"uid,omitempty"`        // the caller's uid, as the helper sees it
+	Jailer     string   `json:"jailer,omitempty"`
+	Crypt      string   `json:"crypt,omitempty"`
+	Features   []string `json:"features,omitempty"`
 
 	// start
 	PID       int                `json:"pid,omitempty"`       // firecracker (in the jail)

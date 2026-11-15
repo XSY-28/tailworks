@@ -54,6 +54,10 @@ func main() {
 		logf("config: %v", err)
 		os.Exit(2)
 	}
+	if err := vzapi.CheckProto(cfg.Proto); err != nil {
+		logf("%v", err)
+		os.Exit(2)
+	}
 	ctlConn, err := fileConn(vzapi.FDCtl, "ctl")
 	if err != nil {
 		logf("ctl fd: %v", err)

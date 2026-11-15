@@ -91,9 +91,13 @@ else
 fi
 [ -d "$BASE_ROOTFS/usr/lib/$LIBDIR" ] || { echo "BASE_ROOTFS=$BASE_ROOTFS has no usr/lib/$LIBDIR" >&2; exit 1; }
 
+# The twd release this guest belongs to (ADR-upgrades-and-releases §1):
+# TWD_VERSION from the release build, else <VERSION>-dev. Stamped into
+# twd-guestd (its hello reports it) and manifest.json.
+TWD_GUEST_VERSION=${TWD_VERSION:-$(cat "$ROOT/VERSION")-dev}
 # twd-guestd: static, reproducible.
 (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=$GARCH GOFLAGS=-mod=mod \
-  $GO build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o "$STAGE/sbin/twd-guestd" ./guest/twd-guestd)
+  $GO build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/rosskukulinski/twd/internal/version.Version=$TWD_GUEST_VERSION" -o "$STAGE/sbin/twd-guestd" ./guest/twd-guestd)
 [ "$(elf_machine "$STAGE/sbin/twd-guestd")" = "$GARCH" ] || { echo "build-image: twd-guestd is not $GARCH" >&2; exit 1; }
 
 mkdir -p "$STAGE"/{usr/bin,usr/sbin,usr/lib/$LIBDIR,dev,proc,sys,run,tmp,etc}
@@ -195,6 +199,7 @@ cat >"$OUT/manifest.json" <<EOF
 {
   "rootfs": "rootfs.ext4",
   "arch": "$GARCH",
+  "twd_version": "$TWD_GUEST_VERSION",
   "rootfs_sha256": "$(sha "$IMG")",
   "size_bytes": $(stat -c %s "$IMG"),
   "source_date_epoch": $SOURCE_DATE_EPOCH,
