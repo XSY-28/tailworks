@@ -273,7 +273,9 @@ func cmdDev(args []string) error {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	last := snapshot(a.Dir)
-	tick := time.NewTicker(500 * time.Millisecond)
+	// 150 ms: a reload shows within ~0.2 s (500 ms added 0.25 s on average).
+	// snapshot skips node_modules, dist and dot dirs, so a poll is cheap.
+	tick := time.NewTicker(150 * time.Millisecond)
 	defer tick.Stop()
 	for {
 		select {
