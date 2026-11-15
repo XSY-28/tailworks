@@ -91,7 +91,7 @@ macOS arm64:
     WhoIs is the workload node, with the tenant's header; spans form the
     tree SERVER(P) → CLIENT "Obj fetch" → CLIENT; no host-level series
     exported), `ExportStopsWhenUnset`.
-- `go test -race -run 'TestRecordRateLimit|TestRecordLogRotates|TestJoin|TestIngressTraceContext|TestConsoleFollowAcrossRotation' ./hostd/`.
+- `go test -race -run 'TestRecordRateLimit|TestRecordLogRotates|TestJoin|TestIngressTraceContext|TestConsoleFollowAcrossRotation|TestExportQueueBound' ./hostd/`.
 - `go test -run TestTelemetry ./mgmt/`: config CRUD and validation, values
   never in custody plaintext/logs/audit, the fenced grant, audit-once,
   roles (admins configure, hosts take grants, tenant code refused).
@@ -104,7 +104,13 @@ macOS arm64:
   through mgmt from the hostd process; `/metrics`; 4 OTLP exports (logs,
   metrics, traces) from `h1-obsprobe-…` with the custody credential;
   `telemetry_release` audited without it.
-- `make lint test`: see the PR.
+- After merging `origin/master` (platform stores, wrangler, README
+  matrix): `make lint` passes (including `internal/compatdoc`), `make
+  test-go` passes (`-race`; one `hostd` failure found by the full run,
+  `TestLocalPushAPIKeepsOperatorRoutes`, fixed: `/metrics` on a bare
+  `Host`), `make test-js` passes, and `make test-sdk` passes
+  (`TestCloudflareAgents`, `TestAgentTemplate`, `TestVercelAI`: the
+  runtime's new fetch wrappers under real SDK classes).
 
 ## Findings
 
