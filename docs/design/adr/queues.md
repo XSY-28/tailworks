@@ -84,10 +84,14 @@
      that queue's key, attempts reset), or is dropped if there is none.
      `max_retries` 3 means up to 4 deliveries, as on Cloudflare.
    - Consumer crashes: if the handler throws, every message not acked
-     explicitly is retried. If workerd dies, hostd gets no result and
-     retries the whole batch. If hostd or its host dies, the leases expire
-     and the messages come back. A lease move just changes which host's
-     hostd claims next.
+     explicitly is retried. If workerd dies mid-run, hostd gets no result
+     and retries the whole batch. A batch that never reached the handler
+     (workerd restarting: the connection is refused) is *released*: visible
+     again at once, its attempt not counted. If hostd or its host dies, the
+     leases expire and the messages come back. A lease move just changes
+     which host's hostd claims next; a batch the old holder was running
+     when the lease moved can't be settled (`lease_lost`) and is delivered
+     again.
    - Ordering: best effort FIFO (by `visibleAt`, then send order). Not
      guaranteed: retries and delays reorder, and with concurrency > 1 or
      two consumers, batches interleave. Same as Cloudflare.

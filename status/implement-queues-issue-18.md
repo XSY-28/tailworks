@@ -114,6 +114,9 @@ workload's latest deployment declares, fenced by the workload's lease.
   drained. Redeliveries: 0 / 0 / 10 of 60 around the move (the old
   holder's settle is refused after the move: at-least-once, as designed).
 - `go test -race ./hostd/`: ok (127 s) after the change.
+- After merging origin/master (observability, wrangler CLI): `make lint`
+  ok; `make test` ok (every Go package, `-race`, and `npm test` 25/25);
+  `make e2e-queues` ok again.
 
 ## Findings
 
