@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/rosskukulinski/twd/internal/features"
 	"io"
 	"net"
 	"net/http"
@@ -78,7 +79,7 @@ func sqliteD1Host(t *testing.T, e *pubEnv, id string) {
 	go srv.Serve(ln)
 	t.Cleanup(func() { srv.Close() })
 	ctx := context.Background()
-	if _, _, err := e.m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: id, CapacityNodes: 10, Tiers: []string{"process"}, PushURL: "unix://" + sock}, "", ""); err != nil {
+	if _, _, err := e.m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: id, CapacityNodes: 10, Tiers: []string{"process"}, Features: features.Host(), PushURL: "unix://" + sock}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.st.AcquireLease(ctx, mgmt.LeaseName(e.tenantID, "support"), id, time.Minute, time.Now()); err != nil {

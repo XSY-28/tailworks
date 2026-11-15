@@ -36,9 +36,8 @@ type SQLStore struct {
 
 var _ Store = (*SQLStore)(nil)
 
-// OpenStore opens a store. dsn is "postgres://…" / "postgresql://…" for
-// Postgres, otherwise a SQLite file path (optionally "sqlite:" prefixed).
-func OpenStore(ctx context.Context, dsn string) (*SQLStore, error) {
+// openSQL opens and pings the database without migrating it.
+func openSQL(ctx context.Context, dsn string) (*SQLStore, error) {
 	var s *SQLStore
 	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
 		dsn, maxConns := takeMaxConns(dsn)
@@ -69,6 +68,16 @@ func OpenStore(ctx context.Context, dsn string) (*SQLStore, error) {
 	}
 	if err := s.db.PingContext(ctx); err != nil {
 		s.db.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// OpenStore opens a store. dsn is "postgres://…" / "postgresql://…" for
+// Postgres, otherwise a SQLite file path (optionally "sqlite:" prefixed).
+func OpenStore(ctx context.Context, dsn string) (*SQLStore, error) {
+	s, err := openSQL(ctx, dsn)
+	if err != nil {
 		return nil, err
 	}
 	if err := s.migrate(ctx); err != nil {
@@ -227,14 +236,14 @@ func (s *SQLStore) DeleteSecretChoice(ctx context.Context, name string) error {
 }
 
 func (s *SQLStore) UpsertReplica(ctx context.Context, r Replica) error {
-	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO replicas (id, custody, started_at, last_seen) VALUES (?, ?, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET custody=excluded.custody, started_at=excluded.started_at, last_seen=excluded.last_seen`),
-		r.ID, r.Custody, r.StartedAt, r.LastSeen)
+	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO replicas (id, custody, started_at, last_seen, version) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (id) DO UPDATE SET custody=excluded.custody, started_at=excluded.started_at, last_seen=excluded.last_seen, version=excluded.version`),
+		r.ID, r.Custody, r.StartedAt, r.LastSeen, r.Version)
 	return err
 }
 
 func (s *SQLStore) ListReplicas(ctx context.Context) ([]Replica, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, custody, started_at, last_seen FROM replicas ORDER BY id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, custody, started_at, last_seen, version FROM replicas ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +251,7 @@ func (s *SQLStore) ListReplicas(ctx context.Context) ([]Replica, error) {
 	var out []Replica
 	for rows.Next() {
 		var r Replica
-		if err := rows.Scan(&r.ID, &r.Custody, &r.StartedAt, &r.LastSeen); err != nil {
+		if err := rows.Scan(&r.ID, &r.Custody, &r.StartedAt, &r.LastSeen, &r.Version); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -455,6 +464,18 @@ func (s *SQLStore) migrate(ctx context.Context) error {
 		}
 		defer s.db.ExecContext(context.Background(), "SELECT pg_advisory_unlock(7464)")
 	}
+	// Numbered migrations (migrations.go): refuse a store a newer
+	// twd-mgmt has contracted before touching it.
+	if err := s.ensureSchemaTables(ctx); err != nil {
+		return err
+	}
+	_, meta, err := readSchema(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	if err := checkMinBinary(meta, StoreBinaryVersion); err != nil {
+		return err
+	}
 	legacy, err := s.renameLegacyObjects(ctx)
 	if err != nil {
 		return err
@@ -483,7 +504,10 @@ func (s *SQLStore) migrate(ctx context.Context) error {
 	if err := s.addColumns(ctx); err != nil {
 		return err
 	}
-	return s.addIndexes(ctx)
+	if err := s.addIndexes(ctx); err != nil {
+		return err
+	}
+	return s.applyMigrations(ctx, Migrations(), StoreBinaryVersion, !s.olderReplicaLive(ctx, StoreBinaryVersion))
 }
 
 // addIndexes creates the cursor-pagination indexes (/v1 lists are ordered
@@ -891,15 +915,23 @@ func (s *SQLStore) ListTenants(ctx context.Context, pg Page) ([]Tenant, error) {
 
 // ---- hosts ----
 
-const hostCols = "id, capacity, tiers, node_id, audit_pubkey, live_nodes, last_seen, pool, push_port, created_at, updated_at, push_target, arch, capacity_vec, usage_vec, reg_secret_hash"
+const hostCols = "id, capacity, tiers, node_id, audit_pubkey, live_nodes, last_seen, pool, push_port, created_at, updated_at, push_target, arch, capacity_vec, usage_vec, reg_secret_hash, " +
+	"version, os, protocols, features, cordoned_at, cordoned_by"
 
 func scanHost(sc interface{ Scan(...any) error }) (Host, error) {
 	var h Host
 	var capacity, live int64
-	var tiers, capVec, usageVec string
+	var tiers, capVec, usageVec, protocols, features string
 	var port int64
 	err := sc.Scan(&h.ID, &capacity, &tiers, &h.NodeID, &h.AuditPubKey, &live, &h.LastSeen, &h.Pool, &port, &h.CreatedAt, &h.UpdatedAt, &h.PushTarget,
-		&h.Arch, &capVec, &usageVec, &h.RegistrationSecretHash)
+		&h.Arch, &capVec, &usageVec, &h.RegistrationSecretHash,
+		&h.Version, &h.OS, &protocols, &features, &h.CordonedAt, &h.CordonedBy)
+	if protocols != "" {
+		json.Unmarshal([]byte(protocols), &h.Protocols)
+	}
+	if features != "" {
+		json.Unmarshal([]byte(features), &h.Features)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return h, ErrNotFound
 	}
@@ -936,13 +968,44 @@ func (s *SQLStore) UpsertHost(ctx context.Context, h Host) error {
 	}
 	// created_at is kept from the first insert (the page key must be stable).
 	// usage_vec is the heartbeat's (TouchHost), kept across re-registration.
-	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO hosts (`+hostCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	// cordoned_at/cordoned_by belong to SetHostCordon: a re-registration
+	// keeps them.
+	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO hosts (`+hostCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (id) DO UPDATE SET capacity=excluded.capacity, tiers=excluded.tiers, node_id=excluded.node_id,
 		audit_pubkey=excluded.audit_pubkey, last_seen=excluded.last_seen, pool=excluded.pool, push_port=excluded.push_port, updated_at=excluded.updated_at,
-		push_target=excluded.push_target, arch=excluded.arch, capacity_vec=excluded.capacity_vec, reg_secret_hash=excluded.reg_secret_hash`),
+		push_target=excluded.push_target, arch=excluded.arch, capacity_vec=excluded.capacity_vec, reg_secret_hash=excluded.reg_secret_hash,
+		version=excluded.version, os=excluded.os, protocols=excluded.protocols, features=excluded.features`),
 		h.ID, h.CapacityNodes, jsonStr(h.Tiers), h.NodeID, h.AuditPubKey, h.LiveNodes, h.LastSeen, h.Pool, h.PushPort, h.CreatedAt, h.UpdatedAt, h.PushTarget,
-		h.Arch, vecStr(h.Capacity), vecStr(h.Usage), h.RegistrationSecretHash)
+		h.Arch, vecStr(h.Capacity), vecStr(h.Usage), h.RegistrationSecretHash,
+		h.Version, h.OS, optJSON(h.Protocols), optJSON(h.Features), h.CordonedAt, h.CordonedBy)
 	return err
+}
+
+// optJSON is a JSON column that is ” when v is empty (nil map/slice).
+func optJSON[T any](v T) string {
+	switch x := any(v).(type) {
+	case map[string]int:
+		if len(x) == 0 {
+			return ""
+		}
+	case []string:
+		if len(x) == 0 {
+			return ""
+		}
+	}
+	return jsonStr(v)
+}
+
+// SetHostCordon cordons (at > 0) or uncordons (at == 0) a host.
+func (s *SQLStore) SetHostCordon(ctx context.Context, id string, at int64, by string) error {
+	r, err := s.db.ExecContext(ctx, s.q("UPDATE hosts SET cordoned_at=?, cordoned_by=? WHERE id=?"), at, by, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *SQLStore) GetHost(ctx context.Context, id string) (Host, error) {

@@ -146,6 +146,12 @@ type Options struct {
 
 	// QueueVisibility is hostd.Config.QueueVisibility (0 = default).
 	QueueVisibility time.Duration
+
+	// SelfUpgrade, InstallPrefix and Restart are hostd.Config's (upgrade
+	// runs install a pushed release here and restart the host).
+	SelfUpgrade   bool
+	InstallPrefix string
+	Restart       func()
 }
 
 // VMOptions configures the microVM tier (Firecracker on Linux + KVM,
@@ -342,7 +348,11 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		ContainerIdle: o.ContainerIdle, ContainerMaxLife: o.ContainerMaxLife, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: hostd.ContainerCapacity{Max: o.ContainerMax, MemMiB: o.ContainerMemMiB, VCPU: o.ContainerVCPU},
 		PushInProcess:     o.Client != nil, RegistrationSecret: regSecret,
-		R2: o.R2}
+		R2:            o.R2,
+		SelfUpgrade:   o.SelfUpgrade,
+		InstallPrefix: o.InstallPrefix,
+		Restart:       o.Restart,
+	}
 	hcfg.QueueVisibility = o.QueueVisibility
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).

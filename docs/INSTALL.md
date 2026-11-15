@@ -131,7 +131,7 @@ attribute from its own copy.
 
 ```sh
 cd twd-*-darwin-arm64
-./install.sh                  # installs into ~/.twd; safe to re-run (upgrade/repair)
+./install.sh                  # installs into ~/.twd; safe to re-run (repair); to upgrade, use `twd upgrade` (docs/upgrading.md)
 export PATH="$HOME/.twd/bin:$PATH"
 echo 'export PATH="$HOME/.twd/bin:$PATH"' >> ~/.zprofile   # the installer prints this; it doesn't edit your profile
 ```

@@ -26,6 +26,21 @@
 // closes (hostd died or dropped it), so a VM never outlives its hostd.
 package vzapi
 
+import (
+	"fmt"
+
+	"github.com/rosskukulinski/twd/internal/version"
+)
+
+// CheckProto is twd-vz's check of a hostd's Config.Proto: 0 (a hostd
+// from before protocol reporting) and version.VZProtocol are accepted.
+func CheckProto(p int) error {
+	if p != 0 && p != version.VZProtocol {
+		return fmt.Errorf("hostd speaks twd-vz protocol %d, this twd-vz %d: twd-vz is from a different twd release; reinstall twd (./install.sh from one release)", p, version.VZProtocol)
+	}
+	return nil
+}
+
 // Inherited descriptor numbers in the VMM.
 const (
 	FDNet    = 3
@@ -36,6 +51,11 @@ const (
 
 // Config is the VMM's boot configuration (stdin, JSON).
 type Config struct {
+	// Proto is the hostd ↔ twd-vz protocol (internal/version.VZProtocol;
+	// 0 = a hostd from before protocol reporting). Both ship in one
+	// tarball; twd-vz refuses a non-zero Proto it doesn't speak
+	// (CheckProto).
+	Proto   int    `json:"proto,omitempty"`
 	Kernel  string `json:"kernel"`
 	Initrd  string `json:"initrd,omitempty"`
 	Cmdline string `json:"cmdline"`

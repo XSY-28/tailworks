@@ -73,6 +73,26 @@ The tailnet surface authenticates every request by WhoIs on the host's node (`ho
 
 Refusals are `403 {"code":"push_unauthorized","detail":…}` with `twd-error: push_unauthorized`, and one log line per refusal carrying the peer address and its tags (never key material). `GET /v1/status`, `POST /v1/purge` and `POST /v1/vm/check` are not routed on the tailnet surface at all (404 even for mgmt): the status dump (tenant IDs, node IDs/IPs, PIDs, dirs, ports) is the operator's.
 
+## Self-upgrade push (ADR-041)
+
+`POST /v1/push/upgrade {runID, version, name, url, sha256}` is on every push
+surface. mgmt's upgrade runs send it, and only to a host that advertises the
+`self-upgrade` feature: one started with `twd-hostd -self-upgrade`, under a
+service manager.
+
+1. The host answers `202 {"ok": true, "installing": "<version>"}` at once.
+   A repeated push while an install runs gets the same answer.
+2. It downloads `name` from mgmt (`GET /v1/releases/{version}/artifacts/{name}`,
+   host role).
+3. It checks the SHA-256, extracts the tarball (refusing entries that escape
+   it), and runs its `install.sh --prefix <install prefix> --force`. The
+   prefix keeps the previous release as `.prev`.
+4. It exits with status 75 for its service manager to start the new binary.
+
+Any failure is logged. The host keeps running the old release, and the run's
+wait gate times out and pauses it. A host without `-self-upgrade` answers
+`400 bad_request`.
+
 ## Embedded host (single-process mode, M13)
 The default `twd up` runs mgmt and the host agent in **one process** (`twd __supervise`; `twd.json` `"mode": "single"`): mgmt's tsnet node is the only infrastructure device, the host has no node of its own, no join key and no registration secret. `twd up --separate-host` keeps the two-process layout above; `twd host add` machines are unchanged.
 

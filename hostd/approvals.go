@@ -104,6 +104,17 @@ func (a *Approval) key() string {
 	return a.TenantID + "/" + a.Workload + "/" + a.Workflow + "/" + a.Instance + "/" + a.Step
 }
 
+// approvalsFormat is approvals.json's record version
+// (ADR-041 §4): records without "v" are version 1, from
+// before versioning; a newer version is not loaded.
+const approvalsFormat = 1
+
+// approvalRecord is one approvals.json record: the Approval plus "v".
+type approvalRecord struct {
+	V int `json:"v,omitempty"`
+	*Approval
+}
+
 // approvalStore is the host's list, persisted in <data>/approvals.json so a
 // wait survives a hostd restart (the instance itself is in DO storage).
 type approvalStore struct {
@@ -116,10 +127,16 @@ func (h *Host) approvals() *approvalStore {
 	h.apprOnce.Do(func() {
 		s := &approvalStore{path: filepath.Join(h.cfg.DataDir, "approvals.json"), m: map[string]*Approval{}}
 		if b, err := os.ReadFile(s.path); err == nil {
-			var list []*Approval
+			var list []approvalRecord
 			if json.Unmarshal(b, &list) == nil {
-				for _, a := range list {
-					s.m[a.key()] = a
+				for _, r := range list {
+					if r.V > approvalsFormat {
+						h.log.Warn("approvals.json was written by a newer twd; upgrade: its waits are not loaded", "v", r.V)
+						break
+					}
+					if r.Approval != nil {
+						s.m[r.key()] = r.Approval
+					}
 				}
 			}
 		}
@@ -150,7 +167,11 @@ func (s *approvalStore) saveLocked() {
 		}
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].RequestedAt.Before(list[j].RequestedAt) })
-	b, _ := json.MarshalIndent(list, "", " ")
+	recs := make([]approvalRecord, len(list))
+	for i, a := range list {
+		recs[i] = approvalRecord{V: approvalsFormat, Approval: a}
+	}
+	b, _ := json.MarshalIndent(recs, "", " ")
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err == nil {
 		os.Rename(tmp, s.path)

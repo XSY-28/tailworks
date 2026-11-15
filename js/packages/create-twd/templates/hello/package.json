@@ -4,6 +4,6 @@
   "type": "module",
   "scripts": { "dev": "twd dev", "deploy": "twd deploy" },
   "dependencies": {
-    "@twd/tailnet": "^0.1.0"
+    "@twd/tailnet": "^0.2.0"
   }
 }
