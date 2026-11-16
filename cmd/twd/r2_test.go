@@ -58,7 +58,7 @@ func TestCLIR2(t *testing.T) {
 	if _, err := e.call(t, cmdR2, "bucket", "create", "a/b", "--workload", "support"); cliCode(err) != "bad_request" {
 		t.Fatalf("bad bucket name: %v", err)
 	}
-	if out, err := e.call(t, cmdR2, "bucket", "rm", "photos", "--workload", "support"); err != nil || !strings.Contains(out, "deleted") {
+	if out, err := e.call(t, cmdR2, "bucket", "rm", "photos", "--workload", "support", "--yes"); err != nil || !strings.Contains(out, "deleted") {
 		t.Fatalf("rm: %v\n%s", err, out)
 	}
 	if out, err := e.call(t, cmdR2, "object", "ls", "photos", "--workload", "support"); err != nil || !strings.Contains(out, "no objects") {

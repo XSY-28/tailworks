@@ -257,7 +257,7 @@ func TestAgentEval(t *testing.T) {
 	ok("tenant set", ag.Exec("tenant", "set", tenantID, "--max-objects", "500", "--json"))
 	ok("host ls", ag.Exec("host", "ls", "--json"))
 	ok("host add", ag.Exec("host", "add", "twd-v-extra", "--out", filepath.Join(work, "extra.join"), "--json"))
-	ok("host rm", ag.Exec("host", "rm", "twd-v-extra", "--json")) // 204 from mgmt: nothing to clean up
+	ok("host rm", ag.Exec("host", "rm", "twd-v-extra", "--yes", "--json")) // 204 from mgmt: nothing to clean up
 	ag.Stdin = "not-a-real-secret"
 	ok("secret put", ag.Exec("secret", "put", "API_TOKEN", "--json"))
 	ok("secret ls", ag.Exec("secret", "ls", "--json"))
