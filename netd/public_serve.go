@@ -39,6 +39,10 @@ type publicState struct {
 	ln    net.Listener // nil when closed
 	hs    *http.Server
 	conns int // open public connections (MaxConns)
+
+	// ipConns counts open connections per client (connKey, public_conns.go).
+	ipConns map[netip.Addr]int
+
 	// prefetched: the node's certificate was requested once (real Funnel).
 	prefetched bool
 
@@ -53,12 +57,14 @@ type publicState struct {
 type rejectCounts struct {
 	from                     time.Time
 	rate, tooLarge, connsRef int
+	ipConnsRef               int // over MaxConnsPerIP
 	ips                      map[netip.Addr]int
 }
 
 func newPublicState(o PublicOptions) *publicState {
 	o.Routes = append([]string(nil), o.Routes...)
 	o.Upgrade = append([]string(nil), o.Upgrade...)
+	o.Limits = withConnDefaults(o.Limits)
 	return &publicState{opts: o, ips: map[netip.Addr]*bucket{},
 		node: newBucket(o.Limits.RPS, o.Limits.Burst), rej: rejectCounts{ips: map[netip.Addr]int{}}, window: publicRejectWindow}
 }
@@ -128,6 +134,7 @@ const (
 	rejRate = iota
 	rejTooLarge
 	rejConns
+	rejIPConns
 )
 
 func (p *publicState) countReject(kind int, ip netip.Addr) {
@@ -141,6 +148,8 @@ func (p *publicState) countReject(kind int, ip netip.Addr) {
 		p.rej.rate++
 	case rejConns:
 		p.rej.connsRef++
+	case rejIPConns:
+		p.rej.ipConnsRef++
 	default:
 		p.rej.tooLarge++
 	}
@@ -156,12 +165,12 @@ func (p *publicState) takeSummary(id string, now time.Time) *PublicRejectSummary
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	r := p.rej
-	if r.rate+r.tooLarge+r.connsRef == 0 {
+	if r.rate+r.tooLarge+r.connsRef+r.ipConnsRef == 0 {
 		return nil
 	}
 	p.rej = rejectCounts{ips: map[netip.Addr]int{}}
 	s := &PublicRejectSummary{ObjectID: id, From: r.from, To: now, RateLimited: r.rate, TooLarge: r.tooLarge,
-		ConnsRefused: r.connsRef, UniqueIPApprox: len(r.ips)}
+		ConnsRefused: r.connsRef, IPConnsRefused: r.ipConnsRef, UniqueIPApprox: len(r.ips)}
 	for ip, n := range r.ips {
 		s.TopIPs = append(s.TopIPs, IPCount{IP: ip, Count: n})
 	}
@@ -201,20 +210,9 @@ func funnelConnOf(c net.Conn) *ipn.FunnelConn {
 	return nil
 }
 
-// limitedConn releases its MaxConns slot when closed.
-type limitedConn struct {
-	net.Conn
-	once    sync.Once
-	release func()
-}
-
-func (c *limitedConn) Close() error {
-	c.once.Do(c.release)
-	return c.Conn.Close()
-}
-
-// publicListener admits only Funnel conns, enforces MaxConns and tracks
-// every admitted conn as a flow (Kill and expose off RST them).
+// publicListener admits only Funnel conns, enforces MaxConns and
+// MaxConnsPerIP (public_conns.go) and tracks every admitted conn as a flow
+// (Kill and expose off RST them).
 type publicListener struct {
 	net.Listener
 	o *Object
@@ -235,23 +233,13 @@ func (l *publicListener) Accept() (net.Conn, error) {
 			c.Close()
 			continue
 		}
-		p := l.p
-		p.mu.Lock()
-		over := p.opts.Limits.MaxConns > 0 && p.conns >= p.opts.Limits.MaxConns
-		if !over {
-			p.conns++
-		}
-		p.mu.Unlock()
-		if over {
-			p.countReject(rejConns, fc.Src.Addr().Unmap())
+		p, ip := l.p, fc.Src.Addr().Unmap()
+		if kind, ok := p.admitConn(ip); !ok {
+			p.countReject(kind, ip)
 			rst(c)
 			continue
 		}
-		lc := &limitedConn{Conn: c, release: func() {
-			p.mu.Lock()
-			p.conns--
-			p.mu.Unlock()
-		}}
+		lc := newLimitedConn(c, func() { p.releaseConn(ip) })
 		if f, ok := l.o.track(lc); ok {
 			return f, nil
 		}
@@ -299,9 +287,12 @@ func (o *Object) openPublic() error {
 		// handler enforces the configured limit itself with a typed body.
 		MaxHeaderBytes: mhb,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-			return context.WithValue(ctx, funnelCtxKey{}, funnelConnOf(c))
+			return context.WithValue(withPublicConn(ctx, c), funnelCtxKey{}, funnelConnOf(c))
 		},
 		ErrorLog: slog.NewLogLogger(o.reg.log.Handler(), slog.LevelDebug),
+
+		// ConnState lifts the first-request deadline (public_conns.go).
+		ConnState: publicConnState,
 	}
 	p.mu.Lock()
 	if !p.opts.Enabled || p.ln != nil { // raced with SetPublicEnabled
@@ -668,6 +659,11 @@ func (o *Object) servePublic(w http.ResponseWriter, req *http.Request) {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, lim.Timeout())
 		defer cancel()
+	}
+	if upgrade {
+		var stop func()
+		ctx, stop = boundUpgrade(ctx, lim)
+		defer stop()
 	}
 	req = req.WithContext(ctx)
 	pw.gate = func() *Error {

@@ -88,8 +88,11 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### delegation_invalid
 403 · mgmt, hostd, netd. **When:** a spawn names a child tag not owned by the parent's tags, the parent is unknown (404) or dead (410), or an object tried to kill something that is not itself or a descendant. **Fix:** fix the `tagOwners` so the parent's tag owns the child's; kill through an ancestor or the CLI.
 
+### deploy_crashloop
+500 · cli. **When:** `twd deploy` was waiting for the deployment and its workerd, after it had answered its health check once, kept exiting: the deployment is `crashloop`. The host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and never gives up; it reports `active` again once a restart answers. The detail lines are the attempt count and workerd's last log lines. **Fix:** `twd logs <workload>`; fix the Worker and deploy again. See [observability.md](observability.md#crash-loops).
+
 ### deploy_failed
-500 · cli. **When:** the host could not start the workload (workerd or node exited); `twd dev` prints workerd's output. **Fix:** read the detail lines; `twd logs <workload>` on the host.
+500 · cli. **When:** the host could not start the workload (bad bundle or config, or workerd or node exited before it ever answered its health check); the host does not retry it. `twd dev` prints workerd's output. **Fix:** read the detail lines; `twd logs <workload>` on the host.
 
 ### derp_unreachable
 502 · netd (SDK). **When:** no direct path to the peer and no reachable DERP relay. **Fix:** check the host's outbound connectivity (UDP 3478, TCP 443 to DERP).
@@ -288,6 +291,12 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### profile_unsupported
 400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or `twd up --wif` (no workload identity federation). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
+
+### public_name_in_use
+409 · mgmt. **When:** a release of a public name (`DELETE /v1/tenants/{id}/public-names/{name}`) while the workload still serves it: its latest deployment declares `"public"` routes, or its public node is live. **Fix:** `twd undeploy <workload>`, or remove `"public"` from its `twd.jsonc` and redeploy, then release the name ([public-ingress](public-ingress.md#name-ownership)).
+
+### public_name_owned
+409 · mgmt, cli. **When:** a deploy (or `--dry-run`) declares `"public"` routes under a workload name that another tenant on the same tailnet owns as its public name. The first tenant to deploy public routes under a name keeps `https://<name>.<tailnet>.ts.net/` across undeploys, until it releases the name, so its public traffic (webhooks, OAuth callbacks) can't move to someone else. **Fix:** deploy under another workload name, or ask the operator to have the owning tenant release the name ([public-ingress](public-ingress.md#name-ownership)).
 
 ### public_unreachable
 1 · cli. **When:** `twd deploy --wait-public` waited for the workload's public URL and it didn't answer from the public internet in time. The deploy itself succeeded. **Fix:** a new public name's certificate and DNS can take minutes; retry with a longer `--wait-public`, check the tailnet has HTTPS certificates on, and see [docs/public-ingress.md](public-ingress.md).

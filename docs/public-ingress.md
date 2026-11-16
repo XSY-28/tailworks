@@ -94,6 +94,38 @@ twd deploy --wait-public 10m    # …and waits until it answers from the interne
 - **Name taken:** if another device already has the name, MagicDNS would
   append `-1`. twd refuses to serve that name (`public_name_taken`).
 
+### Name ownership
+
+The public URL is `https://<workload>.<tailnet>.ts.net/`, so a public name
+is shared by every tenant on a tailnet. mgmt gives each name one owner:
+
+- **First deploy claims it.** The first tenant on a tailnet to deploy
+  `"public"` routes under a workload name owns that name on that tailnet.
+  The claim is made when the deploy is accepted, even if the deploy then
+  fails to place.
+- **The claim persists.** Undeploying, removing `"public"`, or killing the
+  public node doesn't release the name. A webhook sender that still has the
+  old URL can't end up sending signed payloads to another tenant's code.
+- **Other tenants are refused.** A deploy or `--dry-run` by another tenant
+  on the same tailnet that declares `"public"` under that name fails with
+  `409 public_name_owned`, and so does a host's request to create that
+  tenant's public node. A tailnet-only deploy of the same workload name is
+  unaffected, and so are tenants on other tailnets.
+- **Scope.** The scope is the tenant's `tailnet`, compared case-insensitively
+  and without a trailing dot. Give every tenant on one tailnet the same
+  tailnet name (its MagicDNS suffix): two tenants that name the same tailnet
+  differently can't see each other's claims.
+- **Releasing.** `GET /v1/tenants/{id}/public-names` lists a tenant's names.
+  `DELETE /v1/tenants/{id}/public-names/{name}` releases one once nothing
+  serves it (else `409 public_name_in_use`). Deleting a tenant releases all
+  of its names. Claims and releases are audited (`public_name_claim`,
+  `public_name_release`), and a refusal is a `deny` record with code
+  `public_name_owned` whose detail names the owner.
+- **Upgrading.** Names served before ownership existed have no claim yet.
+  The first claim of such a name goes to the tenant serving it: the one
+  with a live public node, or else the one with the earliest live public
+  deployment. Whoever deploys first after the upgrade doesn't get it.
+
 ## What your code sees
 
 ```ts
@@ -170,9 +202,26 @@ netd enforces these on the public listener. Each is overridable in
 | `maxBodyBytes` | 1 MiB | 32 MiB | `413 payload_too_large` |
 | `maxHeaderBytes` | 32 KiB | 64 KiB | `431 header_too_large` |
 | `timeoutSeconds` | 30 | 300 | `504 request_timeout` |
-| `maxConns` | 256 | 4096 | connection closed |
+| `maxConns` (per workload) | 256 | 4096 | connection closed |
+| `maxConnsPerIp` (per client address) | 32 | 1024 | connection closed |
+| `upgradeLifetimeSeconds` | 3600 | 86400 | upgraded connection closed |
 
 Upgrades on a route not listed in `upgrade` get `403 upgrade_not_allowed`.
+
+Connections:
+
+- **Per client:** one address can hold at most `maxConnsPerIp` of the
+  workload's `maxConns` connections, so a single client can't fill them
+  and lock everyone else out. An IPv6 client counts per /64. Clients
+  behind one NAT share the cap, so raise it if many of your users share
+  an address.
+- **First request:** a new connection has 5 seconds to finish its TLS
+  handshake and send its first request's headers, or it's closed. After
+  that, an idle keep-alive connection is closed after 60 seconds, and
+  each later request has 10 seconds to send its headers.
+- **Upgrades:** an upgraded (WebSocket) connection is closed after
+  `upgradeLifetimeSeconds`, even if it's busy. Clients should reconnect.
+  `timeoutSeconds` doesn't apply to upgrades.
 Funnel has its own bandwidth limits, which Tailscale doesn't publish.
 
 **Error bodies.** netd's refusals are the typed JSON error (`code`,
@@ -204,8 +253,11 @@ twd expose on  <workload>
   method, the path **without the query string**, the matched route, the
   status, the client IP, bytes and duration.
 - **Limit refusals:** requests the limits refused (429/413/431, and
-  connections over `maxConns`) are rolled up in one `public_rejected`
-  summary per minute, so a refused flood can't grow the chain.
+  connections over `maxConns` or `maxConnsPerIp`) are rolled up in one
+  `public_rejected` summary per minute, so a refused flood can't grow the
+  chain. The summary has `rateLimited`, `tooLarge`, `connsRefused`,
+  `ipConnsRefused` and the top client IPs. The same counts go to the
+  `twd.public.rejected` metric (see [observability](observability.md)).
 - **Other records:** `public_object_created`, and `expose_on`/`expose_off`.
   The operator's change is recorded on mgmt's chain and the listener
   change on the host's.

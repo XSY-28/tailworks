@@ -868,6 +868,7 @@ func (s *SQLStore) GetTenant(ctx context.Context, id string) (Tenant, error) {
 func (s *SQLStore) DeleteTenant(ctx context.Context, id string) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		for _, q := range []string{"DELETE FROM objects WHERE tenant_id=?", "DELETE FROM deployments WHERE tenant_id=?", "DELETE FROM workload_public WHERE tenant_id=?",
+			"DELETE FROM public_names WHERE tenant_id=?", // publicnames.go: a deleted tenant releases its names
 			"DELETE FROM leases WHERE name LIKE ? || '/%'", "DELETE FROM container_reservations WHERE tenant_id=?"} {
 			if _, err := tx.ExecContext(ctx, s.q(q), id); err != nil {
 				return err

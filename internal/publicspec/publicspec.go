@@ -62,15 +62,28 @@ type Limits struct {
 	MaxHeaderBytes int     `json:"maxHeaderBytes,omitempty"` // request headers
 	TimeoutSeconds int     `json:"timeoutSeconds,omitempty"` // whole request
 	MaxConns       int     `json:"maxConns,omitempty"`       // concurrent connections
+
+	// MaxConnsPerIP caps one client address's concurrent connections
+	// (an IPv6 client counts per /64), below MaxConns.
+	MaxConnsPerIP int `json:"maxConnsPerIp,omitempty"`
+
+	// UpgradeLifetimeSeconds bounds an upgraded (WebSocket) connection.
+	UpgradeLifetimeSeconds int `json:"upgradeLifetimeSeconds,omitempty"`
 }
 
 // Defaults are the limits when twd.jsonc sets none (ADR-029 D5).
 var Defaults = Limits{RPS: 50, Burst: 100, IPRPS: 10, IPBurst: 20, MaxBodyBytes: 1 << 20,
-	MaxHeaderBytes: 32 << 10, TimeoutSeconds: 30, MaxConns: 256}
+	MaxHeaderBytes: 32 << 10, TimeoutSeconds: 30, MaxConns: 256,
+	MaxConnsPerIP:          32,
+	UpgradeLifetimeSeconds: 3600,
+}
 
 // Ceilings are the most a workload may ask for (the operator ceiling).
 var Ceilings = Limits{RPS: 1000, Burst: 2000, IPRPS: 200, IPBurst: 400, MaxBodyBytes: 32 << 20,
-	MaxHeaderBytes: 64 << 10, TimeoutSeconds: 300, MaxConns: 4096}
+	MaxHeaderBytes: 64 << 10, TimeoutSeconds: 300, MaxConns: 4096,
+	MaxConnsPerIP:          1024,
+	UpgradeLifetimeSeconds: 86400,
+}
 
 // Effective fills unset fields from Defaults.
 func (l *Limits) Effective() Limits {
@@ -102,11 +115,22 @@ func (l *Limits) Effective() Limits {
 	if l.MaxConns > 0 {
 		e.MaxConns = l.MaxConns
 	}
+	if l.MaxConnsPerIP > 0 {
+		e.MaxConnsPerIP = l.MaxConnsPerIP
+	}
+	if l.UpgradeLifetimeSeconds > 0 {
+		e.UpgradeLifetimeSeconds = l.UpgradeLifetimeSeconds
+	}
 	return e
 }
 
 // Timeout is TimeoutSeconds as a duration.
 func (l Limits) Timeout() time.Duration { return time.Duration(l.TimeoutSeconds) * time.Second }
+
+// UpgradeLifetime is UpgradeLifetimeSeconds as a duration.
+func (l Limits) UpgradeLifetime() time.Duration {
+	return time.Duration(l.UpgradeLifetimeSeconds) * time.Second
+}
 
 // ClassSpec is twd.jsonc tailnet.objects.<Class>.public.
 type ClassSpec struct {
@@ -185,6 +209,8 @@ func (l *Limits) validate() error {
 		check("maxHeaderBytes", float64(l.MaxHeaderBytes), float64(c.MaxHeaderBytes)),
 		check("timeoutSeconds", float64(l.TimeoutSeconds), float64(c.TimeoutSeconds)),
 		check("maxConns", float64(l.MaxConns), float64(c.MaxConns)),
+		check("maxConnsPerIp", float64(l.MaxConnsPerIP), float64(c.MaxConnsPerIP)),
+		check("upgradeLifetimeSeconds", float64(l.UpgradeLifetimeSeconds), float64(c.UpgradeLifetimeSeconds)),
 	} {
 		if e != nil {
 			return e
