@@ -34,7 +34,7 @@ Tailscale already has the primitives needed:
 - node identity, tags, and grants with app capabilities;
 - WhoIs with CapMap;
 - MagicDNS, Services and ephemeral nodes;
-- workload identity federation (WIF), so a platform can join nodes without a stored customer secret.
+- OAuth clients scoped to auth keys for one tag, so a platform can mint node keys without an all-powerful API key.
 
 The missing piece is a *compute runtime* that makes these primitives the default for each object.
 
@@ -75,7 +75,7 @@ The defensible claim is narrow: twd is the Workers/DO runtime where each object 
 ```mermaid
 flowchart LR
   subgraph OP["Operator tailnet (tag:twd-mgmt, tag:twd-host)"]
-    MGMT["twd-mgmt ×N (stateless)<br/>issuer · mint broker · leases<br/>key custody (setec) · spawn checks<br/>reaper · audit index"]
+    MGMT["twd-mgmt ×N (stateless)<br/>mint broker · leases<br/>key custody (setec) · spawn checks<br/>reaper · audit index"]
     STORE[("durable store<br/>Postgres or S3 conditional writes")]
     KMS[("KMS / HSM")]
     MGMT --- STORE
@@ -97,7 +97,7 @@ flowchart LR
   end
   CLI["twd CLI / CI (OIDC)"] -->|HTTPS| MGMT
   MGMT <-->|operator tailnet| HOSTD
-  MGMT -->|WIF token exchange<br/>POST /keys| TSAPI["Tailscale API / Headscale"]
+  MGMT -->|OAuth client token<br/>POST /keys| TSAPI["Tailscale API / Headscale"]
   NETD <-->|WireGuard| TN["Tenant tailnet acme:<br/>humans, pg-prod, MCP servers,<br/>Aperture, other objects"]
   STORD -->|encrypted WAL| BKT[("tenant bucket prefix")]
 ```
@@ -107,7 +107,7 @@ flowchart LR
 | Component | Runs where | Responsibilities | Never holds |
 |---|---|---|---|
 | `twd` CLI | Developer laptop, CI | `init`, `dev`, `link`, `connect`, `deploy`, `policy test/lint/push`, `types`, `kill`, `audit`, `tail` | Any tailnet key |
-| `twd-mgmt` | Operator tailnet, N≥2 stateless replicas | Tenant registry; OIDC issuer for WIF; minting broker; namespace and object leases; per-object key custody; spawn verification against policy; reaper/reconciler; audit index | Decrypted node keys (it unwraps a DEK only *for* a lease holder) |
+| `twd-mgmt` | Operator tailnet, N≥2 stateless replicas | Tenant registry; minting broker; namespace and object leases; per-object key custody; spawn verification against policy; reaper/reconciler; audit index | Decrypted node keys (it unwraps a DEK only *for* a lease holder) |
 | `twd-hostd` | One per host | The host's operator-tailnet node (`tag:twd-host`); Firecracker and netd supervisor; lease renewal; sleep hooks on dev hosts | Tenant node keys |
 | `netd[tenant]` | One process per (tenant, host) | N `tsnet.Server`s in the tenant's tailnet; ingress demux with WhoIs; attributed egress proxy; assertion signing and verification; local policy check for object→object calls; Tier-1 kill; audit records | Mint credentials; other tenants' keys |
 | `stord[tenant]` | One process per (tenant, host) | Receives DO storage I/O from the guest over vsock; local fsync; encrypts with the per-object DEK; ships asynchronously to the tenant bucket prefix | Other tenants' data |
@@ -121,7 +121,7 @@ flowchart LR
 
 | Principal | Tailnet representation | MagicDNS name | Tags |
 |---|---|---|---|
-| Tenant | A tailnet, bound by two federated trust credentials (§4.4) | — | Owns `tag:twd-*` through `tagOwners` |
+| Tenant | A tailnet, bound by its OAuth client (§4.4) | — | Owns `tag:twd-*` through `tagOwners` |
 | Workload (a Worker) | One node per (workload, host), advertising `svc:<workload>` where Services exist | `<workload>-<host>`; Service `<workload>` | `tag:twd-wl-<workload>` |
 | Object (a DO instance) | **One persistent node per object** | `<class>-<b32(hmac(id))[:10]>` by default; `<class>-<slug>` if the class sets `publicNames` | From class config, e.g. `tag:twd-do-room` |
 | Agent | An object whose class sets `agent: true` | as for objects | e.g. `tag:twd-agent-support` |
@@ -139,42 +139,47 @@ Rules:
 
 ### 4.4 Credential bootstrap
 
-**Tailscale SaaS (hosted, or self-hosted with a single org).** twd-mgmt is an OIDC issuer at a stable HTTPS origin, `https://issuer.<operator-domain>/t/<tenant>`. This is never a MagicDNS name. Self-hosters may back it with Funnel behind a fixed custom domain. Tailscale WIF accepts custom public issuers [verified: tailscale.com/kb/1581]. The tenant admin creates two trust credentials:
+> Revised by ADR-oauth-only-minting. The first design used workload
+> identity federation (mgmt as an OIDC issuer, trust credentials per
+> tenant) with an API key as a fallback; both modes were built (M10, M2)
+> and then removed. A self-hosted operator owns the tailnet and the host,
+> so an OAuth client gives the same scoping without a public issuer, a
+> Funnel node or HTTPS. A mgmt that holds other operators' credentials
+> would revisit a secretless option.
+
+**Tailscale.** The tenant admin creates one OAuth client in the admin console:
 
 ```jsonc
-// (1) mint credential: required. It can only create auth keys for twd tags.
-{ "keyType": "federated", "scopes": ["auth_keys"], "tags": ["tag:twd"],
-  "issuer": "https://issuer.example.net/t/tn_8c2f", "subject": "twd:tenant:tn_8c2f:mint" }
-// (2) lifecycle credential: optional, recommended. It enables kill Tiers 2 and 3 and the reaper.
-{ "keyType": "federated", "scopes": ["devices:core", "devices:posture_attributes"], "tags": ["tag:twd"],
-  "issuer": "https://issuer.example.net/t/tn_8c2f", "subject": "twd:tenant:tn_8c2f:lifecycle" }
+// required: it can only create auth keys for tags tag:twd owns.
+{ "scopes": ["auth_keys"], "tags": ["tag:twd"] }
+// optional scopes: devices:core (kill Tier 2 and the reaper delete devices),
+// policy_file:read (deploy preflight, spawn checks), services (Tailscale Services).
 ```
 
-- **Subjects are pinned per tenant,** with no wildcards. Each token's audience is `api.tailscale.com/<tenant clientID>`. A bare client ID is rejected; this was measured in the twd M2 WIF e2e on 2026-11-07.
-- The issuer signing key lives in KMS/HSM and never sits on hosts. Tokens have a TTL of ≤5 min.
-- **Auth keys are single-use, preauthorized, and expire in ≤5 min.** Revoking a credential therefore leaves no usable key behind.
-- **What twd stores:** two public client IDs per tenant. **The customer's kill switch** is to delete the trust credentials.
-- **Caveat.** The mint credential can't list, delete or retag human devices, but the lifecycle credential's `devices:core` scope is tailnet-wide. Restricting it to `tag:twd-*` devices at token-exchange time is an open question (TS-5). Until it is answered, the lifecycle credential is opt-in, and the reconciler only ever acts on devices that twd itself minted.
+- The secret stays in a 0600 file on the mgmt host. twd stores the file's path and the client's public ID, re-reads the secret at each client-credentials exchange (`POST /api/v2/oauth/token`), caches the access token until shortly before it expires, and never logs or copies the secret.
+- `tag:twd` must own twd's own tags (`tag:twd-mgmt`, `tag:twd-host`) and the workload tags, so the client can mint their keys; `twd up` checks this before minting anything.
+- **Auth keys are single-use, preauthorized, and expire in ≤5 min.** Revoking the client therefore leaves no usable key behind.
+- **The customer's kill switch** is to revoke the OAuth client.
+- **Caveat.** `devices:core` is tailnet-wide. Restricting it to `tag:twd-*` devices is an open question (TS-5). Until it is answered the scope is opt-in, and the reconciler only ever acts on devices that twd itself minted.
 
 **Minting** is done by twd-mgmt and never by a host:
-1. Sign a JWT with `exp=5m`.
-2. Exchange it at `POST /api/v2/oauth/token-exchange`.
-3. Call `POST /api/v2/tailnet/-/keys` with `{reusable:false, preauthorized:true, tags:[…], nodeAttributes:{…}, expirySeconds:300}`.
-4. Send the key over the operator tailnet to the one host holding the lease. That host uses it once.
+1. Get an access token for the tenant's OAuth client (cached).
+2. Call `POST /api/v2/tailnet/-/keys` with `{reusable:false, preauthorized:true, tags:[…], nodeAttributes:{…}, expirySeconds:300}`.
+3. Send the key over the operator tailnet to the one host holding the lease. That host uses it once.
 
-We call the REST API ourselves because the tsnet WIF path can't set `nodeAttributes`. The mint broker keeps **5 warm keys** per (tenant, tag set), not warm nodes, refreshed before they expire. A cold join still takes ~2 s (§9), so warm keys only remove the mint round-trip. All minting goes through the per-tenant registration throttle (§4.9), and object creation is asynchronous.
+We call the REST API ourselves because tsnet can't set `nodeAttributes` on a join. The mint broker keeps **5 warm keys** per (tenant, tag set), not warm nodes, refreshed before they expire. A cold join still takes ~2 s (§9), so warm keys only remove the mint round-trip. All minting goes through the per-tenant registration throttle (§4.9), and object creation is asynchronous.
 
-**Fallbacks**
+**Other control planes**
 
 | Control plane | Credential | Long-lived secret? |
 |---|---|---|
-| Tailscale SaaS, admin declines WIF | An OAuth client scoped to `auth_keys` and `tag:twd`, sealed with KMS | Yes, flagged by `twd connect` |
-| Headscale profile | Operator-issued pre-auth keys, tagged, rotated every 24 h | Yes. Headscale has no WIF |
+| Tailscale | An OAuth client scoped to `auth_keys` and `tag:twd` | Yes: the client secret, in a 0600 file on the mgmt host |
+| Headscale profile | A Headscale API key that mints tagged, single-use pre-auth keys (ADR-015) | Yes. Headscale has no OAuth clients |
 | `twd dev` | None. An embedded control plane | No |
 
 **Developers and CI** (no secret anywhere):
 - `twd login`: self-hosted twd-mgmt identifies the developer by WhoIs over the tailnet; hosted twd-mgmt uses a browser OIDC flow.
-- CI deploys exchange GitHub/GitLab OIDC tokens with twd-mgmt (WIF-shaped trust rules per repo and environment).
+- CI deploys exchange GitHub/GitLab OIDC tokens with twd-mgmt (trust rules per repo and environment).
 - Hosts enrol in the operator tailnet with a single-use key minted by twd-mgmt, then persist their node key.
 - `twd link` binds a checkout to a tenant and namespace in `.twd/`, which is gitignored.
 
@@ -206,7 +211,7 @@ This holds until Tailscale can carry per-node cap values (TS-2).
 The resolutions drop bearer delegation tokens. On-behalf-of is a **per-request assertion signed by the sending netd and bound to the sending node**.
 
 - **Per-object assertion key.** At mint, twd-mgmt generates an Ed25519 key for each object and stores it with the node state, under the same DEK.
-- **Node certificate.** twd-mgmt signs a node certificate `{tenant, node: StableNodeID, tags, cnf: <assertion pubkey>, lim?, parent?, root?, exp: 24h}` with the tenant's **OBO root key**. That key is in KMS and is separate from the WIF issuer key. Its JWKS is published at `https://issuer.<operator-domain>/t/<tenant>/obo.jwks`.
+- **Node certificate.** twd-mgmt signs a node certificate `{tenant, node: StableNodeID, tags, cnf: <assertion pubkey>, lim?, parent?, root?, exp: 24h}` with the tenant's **OBO root key**. That key is in KMS. Its public key is published with the tenant (`GET /v1/tenants/{id}`, `oboPublicKey`), and hosts pin it.
 - **Per request.** On each egress that carries a principal, netd signs a compact JWS:
 
 ```json
@@ -367,14 +372,11 @@ sequenceDiagram
   participant TS as Tailscale API
   participant H as hostd + netd[acme]
   A->>CLI: twd connect acme.com
-  CLI->>M: RegisterTenant → issuer https://issuer.example.net/t/tn_8c2f
-  M-->>CLI: policy snippet (tagOwners, postures, grants), 2 trust-credential specs
-  A->>TS: apply policy; create mint (+ optional lifecycle) credential
-  A->>CLI: paste client IDs (public)
-  CLI->>M: SetTenantCreds{mintClientId, lifecycleClientId?}
-  M->>M: KMS-sign JWT(sub=twd:tenant:tn_8c2f:mint, aud, exp 5m)
-  M->>TS: POST /oauth/token-exchange
-  TS->>M: fetch JWKS from issuer (HTTPS)
+  M-->>CLI: policy snippet (tagOwners, postures, grants), OAuth client spec
+  A->>TS: apply policy; generate the OAuth client (auth_keys, tag:twd)
+  A->>CLI: save the client to a 0600 file on the mgmt host
+  CLI->>M: RegisterTenant{mintMode: oauth, oauthClientFile}
+  M->>TS: POST /oauth/token (client credentials)
   TS-->>M: short-lived API token
   M->>TS: POST /keys (single-use, preauthorized, tags, nodeAttributes, 300 s)
   TS-->>M: tskey-auth-…
@@ -616,7 +618,7 @@ export default withTailnet(createMcpHandler(server), { path: "/mcp" }); // no se
 srv := &tsnet.Server{Hostname: "payments-mcp"}
 ln, _ := srv.ListenTLS("tcp", ":443")
 lc, _ := srv.LocalClient()                       // *local.Client
-v := verify.New(lc, verify.Options{OBOJWKS: "https://issuer.example.net/t/tn_8c2f/obo.jwks"})
+v := verify.New(lc, verify.Options{OBOJWKS: "https://twd-mgmt.example.ts.net/t/tn_8c2f/obo.jwks"})
 http.Serve(ln, v.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	c := verify.CallerFrom(r.Context())         // WhoIs(r.RemoteAddr) + verified Tailnet-Assertion
 	if err := c.Authorize("acme.com/cap/mcp", verify.Facts{"tool": "refund", "usd": 40}); err != nil {
@@ -633,7 +635,7 @@ Under the hood the verifier calls `lc.WhoIs(ctx, r.RemoteAddr)`, which returns `
 
 ```python
 from twd_verify import Verifier, TailnetError
-v = Verifier(obo_jwks="https://issuer.example.net/t/tn_8c2f/obo.jwks")  # LocalAPI: GET /localapi/v0/whois?addr=
+v = Verifier(obo_jwks="https://twd-mgmt.example.ts.net/t/tn_8c2f/obo.jwks")  # LocalAPI: GET /localapi/v0/whois?addr=
 
 @app.post("/mcp")
 async def mcp(request: Request):
@@ -736,7 +738,7 @@ Measured on Headscale v0.29.7 (ADR-015 has the details):
 
 | Threat | Mitigation | Residual risk |
 |---|---|---|
-| The platform issuer key is stolen | KMS/HSM, never on hosts. Per-tenant pinned subjects. The mint credential is `auth_keys`-only for `tag:twd`. Keys are single-use with ≤5 min expiry. The reconciler deletes tagged devices that twd didn't mint | Within one tenant, the attacker can mint `tag:twd-*` nodes until the credential is revoked. With the opt-in lifecycle credential, the reach of `devices:core` depends on TS-5 |
+| A tenant's OAuth client secret is stolen | The secret is in a 0600 file on the mgmt host only, never on other hosts, never logged. The client is `auth_keys`-only for `tag:twd`. Keys are single-use with ≤5 min expiry. The reconciler deletes tagged devices that twd didn't mint | Within one tenant, the attacker can mint `tag:twd-*` nodes until the client is revoked. With the opt-in `devices:core` scope, its reach depends on TS-5 |
 | An object's node key is stolen | Per-object DEK, released only to the lease holder. Key rotation on migration and every 30 days. Assertions are bound to node certificates (24 h) | The attacker can impersonate that object until rotation or kill |
 | A recipient replays an assertion | `aud` = the receiving node, sender bound to the WhoIs peer, 60 s TTL, `jti` cache, every hop re-signs | The PII in `grp`/`act` is visible to the recipient. `sub` is pairwise |
 | Egress identity is forged in-VM | Platform wrapper with a MAC bound to the request. Unattributed traffic is treated as the workload. One VM per trust domain | A V8 escape impersonates the co-resident objects of the *same* trust domain (WD-3 closes the non-escape path fully) |
@@ -847,8 +849,8 @@ Two spikes ran on 2026-11-07, on macOS arm64 (Apple M5 Pro) with tailscale.com m
 ## 10. Operations
 
 **Operator bootstrap** (DX.md journey 6):
-- **Production:** `twd-mgmt init --tailnet <ops> --store <postgres|s3> --custody setec://… --issuer https://…` joins as `tag:twd-mgmt`, and runs as N≥2 stateless replicas behind `svc:twd-mgmt`. A host is added with `twd host add h1`, which mints a single-use join token valid for 5 minutes; then `twd-hostd join --token …` runs on the host, which persists its own node key from then on. Tenants are assigned a pool with `twd tenant set`.
-- **Homelab:** `twd up` runs everything (mgmt, homelab-mode setec, SQLite leases, a Funnel issuer) on one machine, bootstrapped from its existing tailscaled login. It has two interactive consents: the policy diff and the trust credential.
+- **Production:** `twd-mgmt init --tailnet <ops> --store <postgres|s3> --custody setec://…` joins as `tag:twd-mgmt`, and runs as N≥2 stateless replicas behind `svc:twd-mgmt`. A host is added with `twd host add h1`, which mints a single-use join token valid for 5 minutes; then `twd-hostd join --token …` runs on the host, which persists its own node key from then on. Tenants are assigned a pool with `twd tenant set`.
+- **Homelab:** `twd up --oauth-client-file <file>` runs everything (mgmt, homelab-mode setec, SQLite leases) on one machine, as its own tsnet nodes; it never uses the machine's tailscaled. It has two console steps: the policy snippet and the OAuth client.
 
 **Deploy** (`twd deploy`, blue/green per tenant VM):
 1. hostd boots a new VM with the new bundle and the pinned workerd.
@@ -931,11 +933,11 @@ None is on the MVP critical path. Every item has a fallback that also works on t
 | TS-2 | Per-node cap values: cap values that reference node attributes, or a control-evaluated attenuation attribute that intersects caps | Grants key on tags; caps merge by union, so they can't be subtracted | `lim` in the controller-signed node certificate, checked by netd/verifiers |
 | TS-3 | Wake-on-tailnet: a parked node stays dialable, and DERP signals a designated waker | DERP drops frames for absent peers | Keep objects online within the node budget; wake parked objects through the workload entry |
 | TS-4 | API-settable quarantine (`IsJailed`), with an audit event | The field exists and peers honour it, but no public API sets it | Tier 1 + Tier 3 posture flip + Tier 2 delete |
-| TS-5 | WIF/OAuth scopes restricted to devices with given tags at token exchange | `devices:core` reaches every device | Split credentials; lifecycle credential opt-in; the reconciler acts only on devices twd minted |
+| TS-5 | OAuth client scopes restricted to devices with given tags | `devices:core` reaches every device | `devices:core` is an opt-in scope; the reconciler acts only on devices twd minted |
 | TS-6 | On-demand peers for nodes that may see ≥10⁴ peers | Full peer lists to all-seeing nodes | Policy discipline (`svc:` entries, lint) and parking |
 | TS-7 | Per-key ephemeral inactivity timeout | 30–60 min crash cleanup | Persistent nodes plus the twd reaper |
 | TS-8 | App-cap assertions in policy `tests` | Native tests cover L3/L4 only | `twd policy test` with the embedded evaluator |
-| TS-9 | tsnet: `nodeAttributes` on the WIF path; per-server log-upload opt-out; DERP connection sharing across co-located nodes | WIF sets tags only; each node uploads logs and holds its own DERP connection [assumption] | Call the REST API directly; process-wide log policy; netd process sharding |
+| TS-9 | tsnet: `nodeAttributes` on the join path; per-server log-upload opt-out; DERP connection sharing across co-located nodes | a tsnet join sets tags only; each node uploads logs and holds its own DERP connection [assumption] | Call the REST API directly; process-wide log policy; netd process sharding |
 | WD-1 | workerd: a public ownership-change hook (event stream or callback with epoch) | The only signal today is the private bucket layout | v1 is blocked; MVP is single-host |
 | WD-2 | workerd: degrade to read-only, or stop accepting new work, on a bucket stall, instead of exiting | A fence calls exit, and restarts crash-loop | No multi-host |
 | WD-3 | workerd: a per-actor `globalOutbound` (or Egress props for top-level DO classes) | `globalOutbound` is per Worker | The platform wrapper with request-bound MAC (§4.8) |
@@ -946,9 +948,9 @@ Headscale: twd needs no Headscale changes, only the profile (§7.2).
 ## 13. Open questions
 
 1. What per-tailnet registration rate (sustained and burst) applies to API-minted single-use keys from a few source hosts? Does parallelism across processes add up?
-2. What are the TTL and rate limits for `/oauth/token-exchange`, `POST /keys`, device attribute writes, and `DELETE /device`?
+2. What are the TTL and rate limits for `/oauth/token`, `POST /keys`, device attribute writes, and `DELETE /device`?
 3. How quickly do posture-attribute changes and device deletes propagate to peers? Is there a published SLO?
-4. Can WIF scopes be restricted to tagged devices at exchange time (TS-5)?
+4. Can OAuth client scopes be restricted to tagged devices (TS-5)?
 5. How fast is re-attach of a known node key from a different host, and do peers converge on it quickly?
 6. Can multiple co-located nodes share a DERP connection, and what NAT/conntrack load should self-hosters on consumer routers expect?
 7. How should twd coexist with Tailnet Lock: for example, a tenant-pre-signed twd signing key with limited authority?
@@ -961,7 +963,7 @@ Headscale: twd needs no Headscale changes, only the profile (§7.2).
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | **P0: Prototypes** | tsnet density (done), per-object identity, kill-switch latency, rejoin storm on Linux, FUSE-over-vsock latency | Numbers published in this RFC. Egress attribution survives the adversarial tests |
-| **P1: MVP** | Single host per tenant namespace; Linux Firecracker; macOS process-tier `twd dev`; stateless twd-mgmt on Postgres/S3/SQLite; WIF bootstrap; per-request assertions; kill Tiers 1–3; `twd audit`; Agents SDK + MCP adapters; Go/TS/Python verifiers; Tailscale SaaS and Headscale profiles | Quickstart meets ≤5 LOC + one CLI step. Compatibility matrix is green in the conformance suite. Tier-1 kill p99 < 1 s. 500 nodes per netd rejoin within 60 s on Linux. No secret in the guest (audited). Headscale profile is CI-gated. External security review |
+| **P1: MVP** | Single host per tenant namespace; Linux Firecracker; macOS process-tier `twd dev`; stateless twd-mgmt on Postgres/S3/SQLite; OAuth-client minting; per-request assertions; kill Tiers 1–3; `twd audit`; Agents SDK + MCP adapters; Go/TS/Python verifiers; Tailscale SaaS and Headscale profiles | Quickstart meets ≤5 LOC + one CLI step. Compatibility matrix is green in the conformance suite. Tier-1 kill p99 < 1 s. 500 nodes per netd rejoin within 60 s on Linux. No secret in the guest (audited). Headscale profile is CI-gated. External security review |
 | **P2: MVP hardening** | Parking/GC; netd sharding; warm-key tuning; plan-feature detection; restore drills | 1k objects per tenant soak for 7 days. Restore drill RPO ≤ 5 s |
 | **P3: v1** | workerd cluster mode through WD-1/2/4; `durability: "sync"` with ≥3 hosts; migration; optional per-object HTTPS; adoption of TS-* items where available | Host-loss RTO ≤ 30 s + rejoin with RPO 0. No reads of private workerd files. Each adopted TS-* item has its fallback still tested |
 

@@ -36,10 +36,9 @@ type Tenant struct {
 	TenantID               string `json:"tenantID,omitempty"`
 	Tailnet                string `json:"tailnet"`
 	ControlURL             string `json:"controlURL,omitempty"`
-	MintMode               string `json:"mintMode"` // "apikey" | "wif" | "static" (v0.1, tests only)
-	APIKeyFile             string `json:"apiKeyFile,omitempty"`
+	MintMode               string `json:"mintMode"`                  // "oauth" | "headscale" | "static" (tests only)
+	APIKeyFile             string `json:"apiKeyFile,omitempty"`      // headscale mode: the Headscale API key file (path only)
 	OAuthClientFile        string `json:"oauthClientFile,omitempty"` // oauth mode: the 0600 client file (path only)
-	WIFClientID            string `json:"wifClientID,omitempty"`
 	RegistrationsPerMinute int    `json:"registrationsPerMinute,omitempty"`
 	MaxObjects             int    `json:"maxObjects,omitempty"`
 	// Tier (v0.1, optional) is the tenant's default isolation tier

@@ -25,7 +25,7 @@ func svcBundle(t *testing.T, service string) string {
 }
 
 func TestServiceDeploy(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	e.ts.policy = svcPolicy
 	tn := v1Tenant(t, e, "ttest.ts.net", nil)
 	h := v1Host(t, e, "h1")

@@ -11,7 +11,6 @@ import (
 	"github.com/rosskukulinski/twd/internal/headscale"
 	"github.com/rosskukulinski/twd/internal/policy"
 	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/mgmt"
 )
 
 // Control-plane profiles (`--control`, ADR-015).
@@ -108,14 +107,6 @@ func headscaleKeyFile(keyFile string) (string, error) {
 	}
 	abs, _ := filepath.Abs(keyFile)
 	return abs, nil
-}
-
-// mintModeFor is the mgmt mint mode of an API-key setup in profile.
-func mintModeFor(profile string) string {
-	if profile == controlHeadscale {
-		return mgmt.MintHeadscale
-	}
-	return mgmt.MintAPIKey
 }
 
 // policyHome says where a human edits the policy in profile.

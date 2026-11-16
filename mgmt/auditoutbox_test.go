@@ -2,7 +2,6 @@ package mgmt
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,8 +23,8 @@ func h22World(t *testing.T) (*Mgmt, *SQLStore, string) {
 	}
 	t.Cleanup(m.Close)
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	return m, st, tn.ID
 }
 

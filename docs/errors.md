@@ -95,7 +95,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 502 · netd (SDK). **When:** no direct path to the peer and no reachable DERP relay. **Fix:** check the host's outbound connectivity (UDP 3478, TCP 443 to DERP).
 
 ### device_delete_unavailable
-403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope, or the WIF lifecycle credential is missing. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `twd up`; remove leftover devices in the admin console.
+403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `twd up`; remove leftover devices in the admin console.
 
 ### dial_failed
 502 · netd. **When:** the tailnet dial to a visible peer failed (connection refused, timeout). **Fix:** is the destination up and listening on that port? Try again; check `twd logs`.
@@ -119,7 +119,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · netd. **When:** egress to a destination class netd refuses: loopback, link-local, multicast, cloud metadata, the object itself, a sibling object on the same host, the host, or a non-tailnet address (ADR-019). **Fix:** only tailnet peers are reachable from an object; talk to siblings through the tailnet name of another host, or `twd up --allow-sibling-egress` for dev.
 
 ### funnel_required
-412 · cli. **When:** `twd up --wif` needs mgmt's node to publish its OIDC issuer over Funnel, and `tag:twd-mgmt` has no funnel node attribute. **Fix:** add `"nodeAttrs": [{"target": ["tag:twd-mgmt"], "attr": ["funnel"]}]` and re-run `twd up`; or use an OAuth client (no Funnel).
+412 · cli. **When:** `twd deploy` of an app with twd.jsonc `"public"` routes, and the tenant policy has no `funnel` node attribute for `tag:twd-public` (ADR-029). **Fix:** add the printed `nodeAttrs` entry for `tag:twd-public` (never `tag:twd-mgmt`) and deploy again.
 
 ### helper_failed
 500 · cli. **When:** `twd host setup --microvm` installed `twd-vmhelper.service` but it did not come up. **Fix:** `journalctl -u twd-vmhelper`.
@@ -151,9 +151,6 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### hostd_unavailable
 503 · hostd, netd (SDK). **When:** the host agent could not be reached from the platform wrapper (hostapi socket down). **Fix:** `twd status`; the host is restarting or dead.
 
-### https_required
-412 · cli. **When:** `twd up --wif` on a tailnet without HTTPS certificates (needed for the Funnel-published issuer). **Fix:** admin console › DNS › HTTPS Certificates › Enable, then `twd up` again; or use an OAuth client.
-
 ### identity_conflict
 409 · mgmt. **When:** an object ID collided across identities (two workloads derived the same ID). **Fix:** rename one object or class; report it (IDs are HMAC-derived and this should not happen).
 
@@ -169,9 +166,6 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### internal
 500 · mgmt, cli. **When:** an unexpected error with no better code; the CLI wraps any untyped error this way. **Fix:** the detail is redacted but usually names the cause; `twd logs --component mgmt|hostd`; report it with the `trace_id`.
 
-### issuer_unreachable
-503 · cli. **When:** `twd up --wif` published mgmt's OIDC issuer over Funnel, but it never answered from the public internet. **Fix:** check the funnel node attribute and `twd logs --component mgmt`; the first certificate for a new node name can take 1–2 minutes.
-
 ### keys_in_guest
 1 · cli. **When:** `twd host vmcheck --keyscan` found key material inside a microVM guest. **Fix:** this must never happen (keys stay in hostd); report it with the output.
 
@@ -185,7 +179,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt, hostd, netd (SDK). **When:** the host's lease epoch was fenced: the store knows a newer holder (after a partition or a restart race). **Fix:** hostd re-acquires on its own; persistent `lease_lost` means two hosts with the same host ID.
 
 ### login_timeout
-408 · cli. **When:** `twd up --wif` printed a login URL and nobody completed the browser login within `--login-timeout` (default 5 min). **Fix:** run `twd up` again and finish the login, or `--mgmt-authkey-file` for an unattended join.
+408 · cli. **When:** a tailnet node twd joins interactively (`twd link --tsnet`) printed a login URL and nobody completed the browser login within 5 minutes. **Fix:** run the command again and finish the login, or pass an auth key file for an unattended join.
 
 ### mgmt_failed
 1 · cli. **When:** `twd up` (single process): the embedded twd-mgmt failed to start. **Fix:** the detail has the cause; `twd logs --component mgmt` and `twd doctor`, then `twd up` again.
@@ -199,8 +193,11 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### mgmt_unreachable
 503 · cli. **When:** a linked developer machine cannot reach mgmt's node. **Fix:** is your Tailscale connected to the tailnet that runs twd, and does a grant let you reach `tag:twd-mgmt` on tcp:443/80?
 
+### mint_mode_removed
+400 · mgmt, cli. **When:** a Tailscale API key (`--api-key-file` without `--control=headscale`) or workload identity federation was asked for, or a state dir or tenant an older twd set up in the `apikey` or `wif` mint mode tried to mint. Both modes were removed: twd mints with an OAuth client. **Fix:** create an OAuth client (INSTALL.md), then `twd up --oauth-client-file <file>` (keeps the tenant and its deployments), or `twd tenant set <tenant> --oauth-client-file <file>` for a tenant added with `twd tenant add`.
+
 ### mint_mode_required
-400 · cli. **When:** `twd up` was given no credential. **Fix:** `--oauth-client-file <file>` (recommended), `--wif`, or `--tailnet <t> --api-key-file <file>`; see INSTALL.md.
+400 · cli. **When:** `twd up` was given no credential. **Fix:** `twd up --oauth-client-file <file>` with an OAuth client of your tailnet (the error prints how to create one; INSTALL.md); on Headscale, `--control=headscale … --api-key-file <file>`.
 
 ### missing_tools
 1 · cli. **When:** `twd host setup --microvm` needs `ip`, `cryptsetup`, `losetup`, `mkfs.ext4` and one is missing. **Fix:** `apt-get install iproute2 cryptsetup-bin util-linux e2fsprogs` (Debian/Ubuntu) or `dnf install iproute cryptsetup util-linux e2fsprogs` (Fedora).
@@ -278,16 +275,16 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 500 · cli. **When:** `--policy-apply` could not write the policy snippet (validation failed, or the ETag changed). **Fix:** add the printed snippet in the admin console.
 
 ### policy_missing_tag_owners
-403 · mgmt, cli. **When:** the control plane refused to mint a key for twd's own tags: `tag:twd` does not own `tag:twd-mgmt` / `tag:twd-host` (and in `--wif`, your login does not own `tag:twd-mgmt`). Nothing was minted. **Fix:** add the printed `tagOwners` snippet and re-run `twd up`.
+403 · mgmt, cli. **When:** the control plane refused to mint a key for twd's own tags: `tag:twd` does not own `tag:twd-mgmt` / `tag:twd-host`. Nothing was minted. **Fix:** add the printed `tagOwners` snippet and re-run `twd up`.
 
 ### policy_unavailable
-503 · mgmt. **When:** mgmt cannot read the tenant policy: no lifecycle credential or OAuth client with `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read (or add the WIF lifecycle credential); until then `twd deploy` says `preflight skipped`.
+503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `twd deploy` says `preflight skipped`.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
 
 ### profile_unsupported
-400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or `twd up --wif` (no workload identity federation). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
+400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or an OAuth client (`--oauth-client-file`: Headscale mints with its API key). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
 
 ### public_unreachable
 1 · cli. **When:** `twd deploy --wait-public` waited for the workload's public URL and it didn't answer from the public internet in time. The deploy itself succeeded. **Fix:** a new public name's certificate and DNS can take minutes; retry with a longer `--wait-public`, check the tailnet has HTTPS certificates on, and see [docs/public-ingress.md](public-ingress.md).
@@ -359,7 +356,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 500 · cli. **When:** `systemctl` failed during `twd host setup`. **Fix:** `journalctl -u twd-vmhelper`.
 
 ### tailnet_required
-400 · cli. **When:** apikey mode (`--api-key-file`) needs `--tailnet`, or the tailnet could not be determined from the OAuth client. twd never bootstraps from the machine's own Tailscale login. **Fix:** `twd up --tailnet <name>.ts.net …`.
+400 · cli. **When:** the tailnet could not be determined from the OAuth client, or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). twd never bootstraps from the machine's own Tailscale login. **Fix:** `twd up --tailnet <name> …`.
 
 ### tenant_has_live_objects
 409 · mgmt, cli. **When:** `twd tenant rm` of a tenant with live objects. **Fix:** `twd tenant rm <tenant> --force` (kills and purges first).
@@ -408,12 +405,6 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### version_skew
 409 · mgmt, cli. **When:** two twd components are outside the supported version window: a host newer than twd-mgmt, or more than one release line behind it; a CLI more than one line behind mgmt (in `--json` mode); mgmt replicas more than one line apart; or a twd-mgmt older than the store's minimum (a newer twd-mgmt ran a contract migration). **Fix:** upgrade in order, mgmt first, then hosts ([upgrading.md](upgrading.md)); a store contracted by a newer twd-mgmt needs that version or newer, or the pre-upgrade backup restored.
-
-### wif_credential_required
-412 · cli. **When:** `twd up --wif --yes` ran without the trust credential's client ID; the stack is running and the console steps were printed. **Fix:** add the trust credential in the admin console, then `twd up --wif-client-id <id>`.
-
-### wif_exchange_failed
-401 · cli. **When:** Tailscale did not accept a token from mgmt's issuer for the mint credential: the credential's issuer or subject does not match what `twd up` printed (trailing slash, wrong tenant ID). **Fix:** fix it in the console and `twd up --wif-client-id <id>`.
 
 ### wrangler_required
 1 · cli. **When:** `twd deploy --wrangler` / `twd dev --wrangler` found no wrangler CLI (`$TWD_WRANGLER`, the project's `node_modules/.bin/wrangler`, or `wrangler` on PATH). **Fix:** `npm install --save-dev wrangler`, or drop `--wrangler` to bundle with twd's built-in esbuild ([wrangler.md](wrangler.md)).

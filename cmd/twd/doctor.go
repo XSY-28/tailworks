@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	twdversion "github.com/rosskukulinski/twd/internal/version"
 	"os"
@@ -17,7 +16,6 @@ import (
 	"github.com/rosskukulinski/twd/hostd"
 	"github.com/rosskukulinski/twd/hostd/bundle"
 	"github.com/rosskukulinski/twd/internal/esbundle"
-	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
@@ -59,11 +57,9 @@ type check struct {
 
 // cmdDoctor checks this machine can run twd: workerd runs, the bundler and
 // templates are there (offline), ~/.twd and the state dir are writable, the
-// API key works, and twd is not using the system tailscaled.
+// mint credential is usable, and twd is not using the system tailscaled.
 func cmdDoctor(args []string) error {
 	f := newFlags("doctor")
-	tailnetF := f.String("tailnet", "", "tailnet to check the API key against (default: from twd up)")
-	keyF := f.String("api-key-file", "", "API key file to check (default: from twd up)")
 	if _, err := f.parse(args); err != nil {
 		return err
 	}
@@ -198,9 +194,9 @@ func cmdDoctor(args []string) error {
 		case s != nil && s.remote():
 			return "info", "this machine is linked to " + s.Link.Endpoint + " (twd link: your Tailscale identity, no key or token here)", ""
 		case s == nil || !s.configured():
-			return "skip", "twd up not run here (recommended: --oauth-client-file <file> = mint mode oauth; --wif; --api-key-file)", ""
+			return "skip", "twd up not run here (twd up --oauth-client-file <file>: mint mode oauth)", ""
 		case s.Cfg.oauth():
-			d := "oauth: OAuth client " + s.Cfg.OAuthClientID + " from " + s.Cfg.OAuthClientFile + " mints every node key (no browser, no Funnel, no API key)"
+			d := "oauth: OAuth client " + s.Cfg.OAuthClientID + " from " + s.Cfg.OAuthClientFile + " mints every node key"
 			st, err := os.Stat(s.Cfg.OAuthClientFile)
 			switch {
 			case err != nil:
@@ -209,17 +205,11 @@ func cmdDoctor(args []string) error {
 				return "warn", fmt.Sprintf("%s; the file has mode %#o: other users can read the secret, and twd-mgmt refuses it", d, st.Mode().Perm()), "chmod 600 " + s.Cfg.OAuthClientFile
 			}
 			return "ok", d, ""
-		case s.Cfg.keyless():
-			d := "wif (keyless): the issuer's own node " + s.Cfg.IssuerDNSName + " (" + mgmt.IssuerTag + ") serves the OIDC issuer " + s.Cfg.IssuerURL + " over Funnel; mgmt's node " + s.Cfg.MgmtDNSName + " is never Funnel-capable; trust credential client ID " + s.Cfg.WIFClientID + " (public)"
-			if s.Cfg.WIFLifecycleClientID == "" {
-				return "warn", d + "; no lifecycle credential (kill deletes no devices; no preflight or spawn checks)", "twd up --wif-lifecycle-client-id <id> (scopes devices:core, policy_file:read)"
-			}
-			return "ok", d + ", lifecycle credential " + s.Cfg.WIFLifecycleClientID, ""
 		}
 		if s.Cfg.headscale() {
 			return "ok", "headscale (ADR-015): the Headscale API key in " + s.Cfg.APIKeyFile + " mints every node key at " + s.Cfg.ControlURL + " (a long-lived secret: rotate it; no Services, no Funnel, no posture)", ""
 		}
-		return "ok", "apikey: the API key file " + s.Cfg.APIKeyFile + " mints every node key (fallback mode; an OAuth client is recommended)", ""
+		return "fail", "mint mode " + s.Cfg.modeName() + " was removed: this state can't mint until it is switched to an OAuth client", "twd up --oauth-client-file <file>   (keeps the tenant and its deployments; docs/INSTALL.md)"
 	})
 
 	run("transport", func() (string, string, string) {
@@ -247,58 +237,14 @@ func cmdDoctor(args []string) error {
 	})
 
 	run("api_key", func() (string, string, string) {
-		tn, kf := *tailnetF, *keyF
-		if s != nil {
-			if tn == "" {
-				tn = s.Cfg.Tailnet
-			}
-			if kf == "" {
-				kf = s.Cfg.APIKeyFile
-			}
+		if s == nil || !s.Cfg.headscale() {
+			return "skip", "no API key on this machine (a Tailscale tailnet mints through its OAuth client; only the Headscale profile uses an API key)", ""
 		}
-		if s != nil && s.Cfg.keyless() && *keyF == "" {
-			return "skip", "keyless mode: no API key on this machine (nodes are minted through the WIF trust credential)", ""
-		}
-		if s != nil && s.Cfg.oauth() && *keyF == "" {
-			return "skip", "oauth mode: no API key on this machine (nodes are minted through the OAuth client)", ""
-		}
-		if tn == "" || kf == "" {
-			return "skip", "no API key file configured (keyless mode needs none; apikey mode: twd up --api-key-file)", ""
-		}
-		kf, _ = filepath.Abs(kf)
-		if s != nil && s.Cfg.headscale() && *keyF == "" {
-			return doctorHeadscaleKey(s, kf)
-		}
-		key, err := tsapi.LoadSecretEnvFile(kf, "TS_API_KEY")
-		if err != nil {
-			var ins *tsapi.InsecureFileError
-			if errors.As(err, &ins) {
-				return "fail", kf + " is readable by other users (" + ins.Mode.Perm().String() + ")", "chmod 600 " + kf
-			}
-			return "fail", "can't read TS_API_KEY from " + kf, "the file needs a TS_API_KEY=… line (0600)"
-		}
-		api := &tsapi.Client{Tailnet: tn, APIKey: key}
-		if s != nil && s.Cfg.TSAPIURL != "" && *tailnetF == "" {
-			api.BaseURL = s.Cfg.TSAPIURL
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if _, _, err := api.GetPolicyHuJSON(ctx); err != nil {
-			return "fail", "the Tailscale API rejected the key for " + tn + ": " + firstLine(err.Error()), "check the tailnet name and the key in " + kf
-		}
-		st := "ok"
-		d := "the key in " + kf + " can read " + tn + "'s policy (key not shown)"
-		if fi, err := os.Stat(kf); err == nil && fi.Mode().Perm()&0o077 != 0 {
-			return "warn", d + ", but the file is mode " + fi.Mode().Perm().String(), "chmod 600 " + kf
-		}
-		return st, d, ""
+		kf, _ := filepath.Abs(s.Cfg.APIKeyFile)
+		return doctorHeadscaleKey(s, kf)
 	})
 
-	pubKey := *keyF
-	if pubKey == "" && s != nil {
-		pubKey = s.Cfg.APIKeyFile
-	}
-	doctorPublic(run, s, pubKey)
+	doctorPublic(run, s)
 
 	run("sandbox", func() (string, string, string) { return doctorSandbox(s) })
 	run("host_sockets", func() (string, string, string) { return doctorHostSockets(s) })

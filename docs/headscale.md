@@ -15,7 +15,7 @@ an older server with `profile_unsupported`. Tested against v0.29.7 with
 
 | | Tailscale | Headscale profile |
 |---|---|---|
-| Minting node keys | OAuth client, WIF trust credential or API key | A Headscale **API key** mints tagged, single-use pre-auth keys through Headscale's REST API (`/api/v1`) |
+| Minting node keys | OAuth client | A Headscale **API key** mints tagged, single-use pre-auth keys through Headscale's REST API (`/api/v1`) |
 | Long-lived secret | none with WIF | **yes**: the API key. Keep its file `0600` and rotate it (below) |
 | Workload address | Tailscale Service `svc:<name>` (`tailnet.service`) | The workload's own node: `<workload node>.<base_domain>` (MagicDNS). `tailnet.service` is refused with `profile_unsupported` |
 | Public routes (Funnel) | `twd.jsonc` `public`, `twd expose` | Not available: Headscale has no Funnel. `publicIngress` is always `deny` |

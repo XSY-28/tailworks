@@ -85,10 +85,10 @@ func TestCLIImages(t *testing.T) {
 	state, _ := hostdtest.ShortDir("twd-im-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	authFile := filepath.Join(work, "auth.env")
 	os.WriteFile(authFile, []byte("TS_AUTHKEY="+nettest.DummyKey+"\n"), 0o600)
-	host := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	host := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-i-", Res: cliflow.NewResults("hermetic-images", "ttest.ts.net")}
 	dev := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "dev-state"), WorkDir: work, Res: host.Res}
 	t.Cleanup(func() {
@@ -102,7 +102,7 @@ func TestCLIImages(t *testing.T) {
 		os.RemoveAll(state)
 	})
 	var up struct{ MgmtNode, MgmtIP string }
-	host.MustJSON(&up, "up", "--tailnet", "ttest.ts.net", "--api-key-file", keyFile, "--yes", "--ephemeral", "--control-url", ctl.URL,
+	host.MustJSON(&up, "up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--ephemeral", "--control-url", ctl.URL,
 		"--tsapi-url", api.URL, "--hostname-prefix", "twd-i-", "--mgmt-hostname", "twd-mgmt", "--mgmt-authkey-file", authFile)
 	t.Setenv("TWD_LINK_DISCOVER_NAME", "twd-mgmt-hermetic.invalid")
 	var lk struct {

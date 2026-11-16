@@ -372,11 +372,11 @@ func cmdLink(args []string) error {
 }
 
 func mintModeName(m string) string {
-	if m == "wif" {
-		return "wif (keyless)"
-	}
-	if m == "" {
-		return "apikey"
+	switch m {
+	case "":
+		return "apikey (removed: switch to oauth)"
+	case "apikey", "wif":
+		return m + " (removed: switch to oauth)"
 	}
 	return m
 }

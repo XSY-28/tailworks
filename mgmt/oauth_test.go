@@ -61,7 +61,7 @@ func (e *testEnv) oauthExchanges() int {
 // refusal typed as policy_missing_tag_owners, and no secret or token in
 // any response or log.
 func TestOAuthMintPath(t *testing.T) {
-	e := newTestEnv(t, nil) // no issuer: oauth needs none
+	e := newTestEnv(t) // no issuer: oauth needs none
 	c, h1 := e.c, e.asHost("h1")
 	full := e.writeOAuthFile(t, "kFULL1CNTRL", 0o600, "auth_keys", "devices:core", "policy_file:read")
 	loose := e.writeOAuthFile(t, "kLOOSE1CNTRL", 0o644, "auth_keys")

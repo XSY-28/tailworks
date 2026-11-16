@@ -65,7 +65,7 @@ spec.
   **deployments**, **hosts**, **tenants**, **objects** and **recent
   activity**, each with a one-line explanation; and a collapsed
   "Control plane details" panel for mgmt itself (DNS name, tailnet,
-  version, listeners, transport, WIF issuer, the tenants' mint modes).
+  version, listeners, transport, the tenants' mint modes).
   The sections show: **hosts** (status live / pending / stale, heartbeat age,
   nodes live/capacity, tiers, pool, push transport, leases, node ID);
   **tenants** (tailnet, mint mode, quotas, registrations/min and the

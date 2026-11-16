@@ -44,8 +44,8 @@ twd upgrade --from twd-0.3.1-linux-amd64.tar.gz   # an offline copy (SHA256SUMS 
 1. It downloads the release, or takes `--from`, and checks its SHA-256.
 2. It shows the plan from the release's catalog: breaking changes, operator
    actions, contract migrations and the workerd change.
-3. It backs up mgmt's store together with custody (and the issuer and ID
-   secrets, the node state and `twd.json`) into `~/.twd/backups/<time>-<from>`.
+3. It backs up mgmt's store together with custody (and the ID
+   secret, the node state and `twd.json`) into `~/.twd/backups/<time>-<from>`.
    The store and custody are only valid together, because platform store,
    queue and secret data is sealed by custody keys.
 4. It stops twd, installs the release (`install.sh` keeps the previous one

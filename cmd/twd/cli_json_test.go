@@ -35,7 +35,7 @@ var cliSurface = []struct {
 	{"down", []string{"down"}},
 	{"link", []string{"link", "--unlink"}},
 	{"whoami", []string{"whoami"}},
-	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--api-key-file", "/nonexistent/api.env"}},
+	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--oauth-client-file", "/nonexistent/oauth.env"}},
 	{"tenant ls", []string{"tenant", "ls"}},
 	{"tenant set", []string{"tenant", "set", "other.example.ts.net", "--max-objects", "5"}},
 	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net"}},

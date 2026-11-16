@@ -1,7 +1,7 @@
 # ADR-026: Keyless by default: tailnet identity for every twd connection; WIF for minting; API keys only as an explicit fallback
 
 **Date:** 2026-11-08
-**Status:** Accepted (Ross). Implementation: twd M10.
+**Status:** Accepted (Ross). Implementation: twd M10. Decision 3 (WIF minting, API keys as the fallback) is superseded by ADR-oauth-only-minting: twd mints with an OAuth client only. Decisions 1, 2 and 4 stand.
 **Context:** The first product flow shipped the test-harness shortcut: `twd up --api-key-file`, a CLI that only reached mgmt over a local unix socket, and interactive login refused. Ross: "We shouldn't have to use an API key. We've got Tailscale identity built into the connection." The RFC (§4.4) and ADR-013 had already specified WhoIs-authenticated mgmt and WIF minting.
 **Decision:**
 1. **Operator node:** `twd up` joins mgmt/hostd to the tailnet by tsnet interactive login (browser URL), advertising `tag:twd-mgmt`/`tag:twd-host`; state persists, so later runs need no login.

@@ -36,7 +36,7 @@ const (
 
 func newUIEnv(t *testing.T) *uiEnv {
 	t.Helper()
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net", NodeID: "nSELF"}, Version: "test-ui", Listeners: []string{"tsnet:80"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {

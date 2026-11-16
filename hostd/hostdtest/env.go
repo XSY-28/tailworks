@@ -178,7 +178,7 @@ func Start(t testing.TB, o Options) *Env {
 // tenantCreate is the spec's TenantCreate body (no read-only fields).
 func tenantCreate(t mgmtapi.Tenant) map[string]any {
 	m := map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode}
-	for k, v := range map[string]string{"controlURL": t.ControlURL, "apiKeyFile": t.APIKeyFile, "wifClientID": t.WIFClientID, "tier": t.Tier, "tenantID": t.TenantID} {
+	for k, v := range map[string]string{"controlURL": t.ControlURL, "apiKeyFile": t.APIKeyFile, "oauthClientFile": t.OAuthClientFile, "tier": t.Tier, "tenantID": t.TenantID} {
 		if v != "" {
 			m[k] = v
 		}

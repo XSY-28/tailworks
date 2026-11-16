@@ -445,6 +445,7 @@ const (
 	ErrorCodeLeaseChanged            ErrorCode = "lease_changed"
 	ErrorCodeLeaseHeld               ErrorCode = "lease_held"
 	ErrorCodeLeaseLost               ErrorCode = "lease_lost"
+	ErrorCodeMintModeRemoved         ErrorCode = "mint_mode_removed"
 	ErrorCodeMirrorDisabled          ErrorCode = "mirror_disabled"
 	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
@@ -554,6 +555,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeLeaseHeld:
 		return true
 	case ErrorCodeLeaseLost:
+		return true
+	case ErrorCodeMintModeRemoved:
 		return true
 	case ErrorCodeMirrorDisabled:
 		return true
@@ -1220,27 +1223,6 @@ func (e UpgradeStepStatus) Valid() bool {
 	case UpgradeStepStatusSkipped:
 		return true
 	case UpgradeStepStatusWaiting:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for WIFCheckResultLifecycle.
-const (
-	WIFCheckResultLifecycleAbsent WIFCheckResultLifecycle = "absent"
-	WIFCheckResultLifecycleError  WIFCheckResultLifecycle = "error"
-	WIFCheckResultLifecycleOk     WIFCheckResultLifecycle = "ok"
-)
-
-// Valid indicates whether the value is a known member of the WIFCheckResultLifecycle enum.
-func (e WIFCheckResultLifecycle) Valid() bool {
-	switch e {
-	case WIFCheckResultLifecycleAbsent:
-		return true
-	case WIFCheckResultLifecycleError:
-		return true
-	case WIFCheckResultLifecycleOk:
 		return true
 	default:
 		return false
@@ -2071,6 +2053,7 @@ type Error struct {
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2154,6 +2137,7 @@ type Error struct {
 // | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2356,6 +2340,7 @@ type HostDrainResult struct {
 		// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 		// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 		// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+		// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 		// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 		// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 		// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2568,11 +2553,6 @@ type ImageAliasList struct {
 	Items []ImageAlias `json:"items"`
 }
 
-// JWKS defines model for JWKS.
-type JWKS struct {
-	Keys []map[string]interface{} `json:"keys"`
-}
-
 // KVKey A Workers KV key as `list()` returns it (ADR-037).
 type KVKey struct {
 	// Expiration Unix seconds when the key expires (absent: never).
@@ -2656,7 +2636,7 @@ type Lease struct {
 	Namespace string `json:"namespace"`
 }
 
-// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-oauth-only-minting): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 type MintMode string
 
 // NodeCertificate defines model for NodeCertificate.
@@ -2701,17 +2681,6 @@ type NodeCertificatePayload struct {
 
 // NodeCertificatePayloadV defines model for NodeCertificatePayload.V.
 type NodeCertificatePayloadV int
-
-// OIDCConfiguration defines model for OIDCConfiguration.
-type OIDCConfiguration struct {
-	ClaimsSupported                  *[]string              `json:"claims_supported,omitempty"`
-	IDTokenSigningAlgValuesSupported []string               `json:"id_token_signing_alg_values_supported"`
-	Issuer                           string                 `json:"issuer"`
-	JwksURI                          string                 `json:"jwks_uri"`
-	ResponseTypesSupported           []string               `json:"response_types_supported"`
-	SubjectTypesSupported            []string               `json:"subject_types_supported"`
-	AdditionalProperties             map[string]interface{} `json:"-"`
-}
 
 // OTLPExport A tenant's OTLP export, without header values.
 type OTLPExport struct {
@@ -3512,7 +3481,6 @@ type SelfInfo struct {
 	// DNSName `twd-mgmt.<tailnet>`
 	DNSName *string `json:"dnsName,omitempty"`
 	HTTPS   bool    `json:"https"`
-	Issuer  *string `json:"issuer,omitempty"`
 	Tailnet *string `json:"tailnet,omitempty"`
 
 	// Transport `tsnet` in normal operation; `local-dev` when the unix socket is serving.
@@ -3533,7 +3501,7 @@ type ServiceEndpoint struct {
 
 // Status defines model for Status.
 type Status struct {
-	// Clock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
+	// Clock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave.
 	Clock *StatusClock `json:"clock,omitempty"`
 	Hosts struct {
 		Live  int `json:"live"`
@@ -3560,7 +3528,7 @@ type Status struct {
 	Versions *StatusVersions `json:"versions,omitempty"`
 }
 
-// StatusClock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
+// StatusClock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave.
 type StatusClock struct {
 	Message *string `json:"message,omitempty"`
 
@@ -3708,7 +3676,7 @@ type TelemetrySignal string
 
 // Tenant defines model for Tenant.
 type Tenant struct {
-	// APIKeyFile `apikey` and `headscale` modes: absolute path, read at use; the key is never stored or returned.
+	// APIKeyFile `headscale` mode: absolute path of the Headscale API key file, read at use; the key is never stored or returned.
 	APIKeyFile *string `json:"apiKeyFile,omitempty"`
 
 	// ControlURL Non-default control plane (testcontrol, headscale).
@@ -3725,7 +3693,7 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-oauth-only-minting): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
 	// OauthClientFile `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused).
@@ -3755,15 +3723,6 @@ type Tenant struct {
 	TenantID  string `json:"tenantID"`
 	Tier      *Tier  `json:"tier,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"`
-
-	// Wif Present in wif mode.
-	Wif *WIFInfo `json:"wif,omitempty"`
-
-	// WifClientID Public client ID of the mint trust credential (`auth_keys`).
-	WifClientID *string `json:"wifClientID,omitempty"`
-
-	// WifLifecycleClientID Public client ID of the lifecycle credential (`devices:core`, `policy_file:read`).
-	WifLifecycleClientID *string `json:"wifLifecycleClientID,omitempty"`
 }
 
 // TenantCreate defines model for TenantCreate.
@@ -3775,7 +3734,7 @@ type TenantCreate struct {
 	MaxContainers      *int     `json:"maxContainers,omitempty"`
 	MaxObjects         *int     `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-oauth-only-minting): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode        MintMode `json:"mintMode"`
 	OauthClientFile *string  `json:"oauthClientFile,omitempty"`
 	OauthClientID   *string  `json:"oauthClientID,omitempty"`
@@ -3791,10 +3750,8 @@ type TenantCreate struct {
 	Tailnet                string         `json:"tailnet"`
 
 	// TenantID Optional; generated (`tn_…`) when absent.
-	TenantID             *string `json:"tenantID,omitempty"`
-	Tier                 *Tier   `json:"tier,omitempty"`
-	WifClientID          *string `json:"wifClientID,omitempty"`
-	WifLifecycleClientID *string `json:"wifLifecycleClientID,omitempty"`
+	TenantID *string `json:"tenantID,omitempty"`
+	Tier     *Tier   `json:"tier,omitempty"`
 }
 
 // TenantDeleteResult defines model for TenantDeleteResult.
@@ -3822,7 +3779,7 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-oauth-only-minting): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode        *MintMode                 `json:"mintMode,omitempty"`
 	OauthClientFile nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
 	OauthClientID   nullable.Nullable[string] `json:"oauthClientID,omitempty"`
@@ -3832,8 +3789,6 @@ type TenantPatch struct {
 	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int                      `json:"registrationsPerMinute,omitempty"`
 	Tier                   *Tier                     `json:"tier,omitempty"`
-	WifClientID            nullable.Nullable[string] `json:"wifClientID,omitempty"`
-	WifLifecycleClientID   nullable.Nullable[string] `json:"wifLifecycleClientID,omitempty"`
 }
 
 // Tier defines model for Tier.
@@ -3877,6 +3832,7 @@ type TombstoneError struct {
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -4056,41 +4012,6 @@ type VolumeKeyGrant struct {
 	Workload string `json:"workload"`
 }
 
-// WIFCheckResult defines model for WIFCheckResult.
-type WIFCheckResult struct {
-	Issuer string `json:"issuer"`
-
-	// Lifecycle `absent`: no lifecycle client ID (kill tier 2, reaper device deletes, spawn checks and preflight are off).
-	Lifecycle      WIFCheckResultLifecycle `json:"lifecycle"`
-	LifecycleError *string                 `json:"lifecycleError,omitempty"`
-
-	// Mint The mint credential's token exchange succeeded (its `auth_keys` scope is only proven by the first real mint).
-	Mint      bool    `json:"mint"`
-	MintError *string `json:"mintError,omitempty"`
-
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
-	MintMode MintMode `json:"mintMode"`
-
-	// PolicyRead The lifecycle credential read the policy (`policy_file:read`).
-	PolicyRead      bool    `json:"policyRead"`
-	PolicyReadError *string `json:"policyReadError,omitempty"`
-}
-
-// WIFCheckResultLifecycle `absent`: no lifecycle client ID (kill tier 2, reaper device deletes, spawn checks and preflight are off).
-type WIFCheckResultLifecycle string
-
-// WIFInfo Present in wif mode.
-type WIFInfo struct {
-	// Issuer Examples: https://twd-mgmt.tail7906d5.ts.net/t/tn_tail7906d5
-	Issuer string `json:"issuer"`
-
-	// LifecycleSubject Examples: twd:tenant:tn_tail7906d5:lifecycle
-	LifecycleSubject string `json:"lifecycleSubject"`
-
-	// MintSubject Examples: twd:tenant:tn_tail7906d5:mint
-	MintSubject string `json:"mintSubject"`
-}
-
 // WhoAmI defines model for WhoAmI.
 type WhoAmI struct {
 	Actor string `json:"actor"`
@@ -4182,9 +4103,6 @@ type StoreName = string
 
 // TenantID defines model for tenantID.
 type TenantID = string
-
-// TenantPath defines model for tenantPath.
-type TenantPath = string
 
 // VolumeID defines model for volumeID.
 type VolumeID = string
@@ -4783,145 +4701,6 @@ type CreateUpgradeJSONRequestBody = UpgradeRequest
 // ActOnUpgradeJSONRequestBody defines body for ActOnUpgrade for application/json ContentType.
 type ActOnUpgradeJSONRequestBody ActOnUpgradeJSONBody
 
-// Getter for additional properties for OIDCConfiguration. Returns the specified
-// element and whether it was found
-func (a OIDCConfiguration) Get(fieldName string) (value interface{}, found bool) {
-	if a.AdditionalProperties != nil {
-		value, found = a.AdditionalProperties[fieldName]
-	}
-	return
-}
-
-// Setter for additional properties for OIDCConfiguration
-func (a *OIDCConfiguration) Set(fieldName string, value interface{}) {
-	if a.AdditionalProperties == nil {
-		a.AdditionalProperties = make(map[string]interface{})
-	}
-	a.AdditionalProperties[fieldName] = value
-}
-
-// Override default JSON handling for OIDCConfiguration to handle AdditionalProperties
-func (a *OIDCConfiguration) UnmarshalJSON(b []byte) error {
-	object := make(map[string]json.RawMessage)
-	err := json.Unmarshal(b, &object)
-	if err != nil {
-		return err
-	}
-
-	if raw, found := object["claims_supported"]; found {
-		err = json.Unmarshal(raw, &a.ClaimsSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'claims_supported': %w", err)
-		}
-		delete(object, "claims_supported")
-	}
-
-	if raw, found := object["id_token_signing_alg_values_supported"]; found {
-		err = json.Unmarshal(raw, &a.IDTokenSigningAlgValuesSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'id_token_signing_alg_values_supported': %w", err)
-		}
-		delete(object, "id_token_signing_alg_values_supported")
-	}
-
-	if raw, found := object["issuer"]; found {
-		err = json.Unmarshal(raw, &a.Issuer)
-		if err != nil {
-			return fmt.Errorf("error reading 'issuer': %w", err)
-		}
-		delete(object, "issuer")
-	}
-
-	if raw, found := object["jwks_uri"]; found {
-		err = json.Unmarshal(raw, &a.JwksURI)
-		if err != nil {
-			return fmt.Errorf("error reading 'jwks_uri': %w", err)
-		}
-		delete(object, "jwks_uri")
-	}
-
-	if raw, found := object["response_types_supported"]; found {
-		err = json.Unmarshal(raw, &a.ResponseTypesSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'response_types_supported': %w", err)
-		}
-		delete(object, "response_types_supported")
-	}
-
-	if raw, found := object["subject_types_supported"]; found {
-		err = json.Unmarshal(raw, &a.SubjectTypesSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'subject_types_supported': %w", err)
-		}
-		delete(object, "subject_types_supported")
-	}
-
-	if len(object) != 0 {
-		a.AdditionalProperties = make(map[string]interface{})
-		for fieldName, fieldBuf := range object {
-			var fieldVal interface{}
-			err := json.Unmarshal(fieldBuf, &fieldVal)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
-			}
-			a.AdditionalProperties[fieldName] = fieldVal
-		}
-	}
-	return nil
-}
-
-// Override default JSON handling for OIDCConfiguration to handle AdditionalProperties
-func (a OIDCConfiguration) MarshalJSON() ([]byte, error) {
-	var err error
-	object := make(map[string]json.RawMessage)
-
-	if a.ClaimsSupported != nil {
-		object["claims_supported"], err = json.Marshal(a.ClaimsSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'claims_supported': %w", err)
-		}
-	}
-
-	if a.IDTokenSigningAlgValuesSupported != nil {
-		object["id_token_signing_alg_values_supported"], err = json.Marshal(a.IDTokenSigningAlgValuesSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'id_token_signing_alg_values_supported': %w", err)
-		}
-	}
-
-	object["issuer"], err = json.Marshal(a.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'issuer': %w", err)
-	}
-
-	object["jwks_uri"], err = json.Marshal(a.JwksURI)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'jwks_uri': %w", err)
-	}
-
-	if a.ResponseTypesSupported != nil {
-		object["response_types_supported"], err = json.Marshal(a.ResponseTypesSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'response_types_supported': %w", err)
-		}
-	}
-
-	if a.SubjectTypesSupported != nil {
-		object["subject_types_supported"], err = json.Marshal(a.SubjectTypesSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'subject_types_supported': %w", err)
-		}
-	}
-
-	for fieldName, field := range a.AdditionalProperties {
-		object[fieldName], err = json.Marshal(field)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
-		}
-	}
-	return json.Marshal(object)
-}
-
 // AsAuditRecordDetail0 returns the union data inside the AuditRecord_Detail as a AuditRecordDetail0
 func (t AuditRecord_Detail) AsAuditRecordDetail0() (AuditRecordDetail0, error) {
 	var body AuditRecordDetail0
@@ -5048,18 +4827,6 @@ func (t *ObjectCreate_TTL) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// GetOIDCConfiguration OIDC discovery (base issuer)
-	// (GET /.well-known/openid-configuration)
-	GetOIDCConfiguration(w http.ResponseWriter, r *http.Request)
-	// GetJWKS Issuer signing keys
-	// (GET /jwks)
-	GetJWKS(w http.ResponseWriter, r *http.Request)
-	// GetTenantOIDCConfiguration OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-	// (GET /t/{tenant}/.well-known/openid-configuration)
-	GetTenantOIDCConfiguration(w http.ResponseWriter, r *http.Request, tenant TenantPath)
-	// GetTenantJWKS Per-tenant issuer signing keys (same key set)
-	// (GET /t/{tenant}/jwks)
-	GetTenantJWKS(w http.ResponseWriter, r *http.Request, tenant TenantPath)
 	// ListAudit Query audit records
 	// (GET /v1/audit)
 	ListAudit(w http.ResponseWriter, r *http.Request, params ListAuditParams)
@@ -5243,9 +5010,6 @@ type ServerInterface interface {
 	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
 	// (PUT /v1/tenants/{id}/telemetry)
 	PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
-	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
-	// (POST /v1/tenants/{id}/wif-check)
-	CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID)
 	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string)
@@ -5343,86 +5107,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// GetOIDCConfiguration operation middleware
-func (siw *ServerInterfaceWrapper) GetOIDCConfiguration(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetOIDCConfiguration(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetJWKS operation middleware
-func (siw *ServerInterfaceWrapper) GetJWKS(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetJWKS(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetTenantOIDCConfiguration operation middleware
-func (siw *ServerInterfaceWrapper) GetTenantOIDCConfiguration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "tenant" -------------
-	var tenant TenantPath
-
-	err = runtime.BindStyledParameterWithOptions("simple", "tenant", r.PathValue("tenant"), &tenant, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetTenantOIDCConfiguration(w, r, tenant)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetTenantJWKS operation middleware
-func (siw *ServerInterfaceWrapper) GetTenantJWKS(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "tenant" -------------
-	var tenant TenantPath
-
-	err = runtime.BindStyledParameterWithOptions("simple", "tenant", r.PathValue("tenant"), &tenant, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetTenantJWKS(w, r, tenant)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // ListAudit operation middleware
 func (siw *ServerInterfaceWrapper) ListAudit(w http.ResponseWriter, r *http.Request) {
@@ -7962,32 +7646,6 @@ func (siw *ServerInterfaceWrapper) PutTenantTelemetry(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
-// CheckTenantWIF operation middleware
-func (siw *ServerInterfaceWrapper) CheckTenantWIF(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "id" -------------
-	var id TenantID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CheckTenantWIF(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // DecideApproval operation middleware
 func (siw *ServerInterfaceWrapper) DecideApproval(w http.ResponseWriter, r *http.Request) {
 
@@ -9688,7 +9346,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}", wrapper.GetTenant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}", wrapper.UpdateTenant)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/objects", wrapper.PurgeTenantObjects)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/wif-check", wrapper.CheckTenantWIF)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/logs", wrapper.GetWorkloadLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/approvals", wrapper.ListApprovals)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}", wrapper.DecideApproval)
@@ -9773,10 +9430,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/upgrades/{id}/actions", wrapper.ActOnUpgrade)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/whoami", wrapper.WhoAmI)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/device-delete-runs", wrapper.CreateDeviceDeleteRun)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/.well-known/openid-configuration", wrapper.GetOIDCConfiguration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/jwks", wrapper.GetJWKS)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/t/{tenant}/.well-known/openid-configuration", wrapper.GetTenantOIDCConfiguration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/t/{tenant}/jwks", wrapper.GetTenantJWKS)
 
 	return m
 }
@@ -9886,160 +9539,6 @@ type UnauthorizedJSONResponse struct {
 	Body Error
 
 	Headers UnauthorizedResponseHeaders
-}
-
-type GetOIDCConfigurationRequestObject struct {
-}
-
-type GetOIDCConfigurationResponseObject interface {
-	VisitGetOIDCConfigurationResponse(w http.ResponseWriter) error
-}
-
-type GetOIDCConfiguration200JSONResponse OIDCConfiguration
-
-func (response GetOIDCConfiguration200JSONResponse) VisitGetOIDCConfigurationResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetOIDCConfiguration404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response GetOIDCConfiguration404JSONResponse) VisitGetOIDCConfigurationResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetJWKSRequestObject struct {
-}
-
-type GetJWKSResponseObject interface {
-	VisitGetJWKSResponse(w http.ResponseWriter) error
-}
-
-type GetJWKS200JSONResponse JWKS
-
-func (response GetJWKS200JSONResponse) VisitGetJWKSResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetJWKS404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response GetJWKS404JSONResponse) VisitGetJWKSResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetTenantOIDCConfigurationRequestObject struct {
-	Tenant TenantPath `json:"tenant"`
-}
-
-type GetTenantOIDCConfigurationResponseObject interface {
-	VisitGetTenantOIDCConfigurationResponse(w http.ResponseWriter) error
-}
-
-type GetTenantOIDCConfiguration200JSONResponse OIDCConfiguration
-
-func (response GetTenantOIDCConfiguration200JSONResponse) VisitGetTenantOIDCConfigurationResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetTenantOIDCConfiguration404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response GetTenantOIDCConfiguration404JSONResponse) VisitGetTenantOIDCConfigurationResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetTenantJWKSRequestObject struct {
-	Tenant TenantPath `json:"tenant"`
-}
-
-type GetTenantJWKSResponseObject interface {
-	VisitGetTenantJWKSResponse(w http.ResponseWriter) error
-}
-
-type GetTenantJWKS200JSONResponse JWKS
-
-func (response GetTenantJWKS200JSONResponse) VisitGetTenantJWKSResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetTenantJWKS404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response GetTenantJWKS404JSONResponse) VisitGetTenantJWKSResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
 }
 
 type ListAuditRequestObject struct {
@@ -15943,100 +15442,6 @@ func (response PutTenantTelemetrydefaultJSONResponse) VisitPutTenantTelemetryRes
 	return err
 }
 
-type CheckTenantWIFRequestObject struct {
-	ID TenantID `json:"id"`
-}
-
-type CheckTenantWIFResponseObject interface {
-	VisitCheckTenantWIFResponse(w http.ResponseWriter) error
-}
-
-type CheckTenantWIF200JSONResponse WIFCheckResult
-
-func (response CheckTenantWIF200JSONResponse) VisitCheckTenantWIFResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CheckTenantWIF400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response CheckTenantWIF400JSONResponse) VisitCheckTenantWIFResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CheckTenantWIF403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response CheckTenantWIF403JSONResponse) VisitCheckTenantWIFResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CheckTenantWIF404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response CheckTenantWIF404JSONResponse) VisitCheckTenantWIFResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CheckTenantWIFdefaultJSONResponse struct {
-	Body       Error
-	Headers    ErrorResponseHeaders
-	StatusCode int
-}
-
-func (response CheckTenantWIFdefaultJSONResponse) VisitCheckTenantWIFResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
-	}
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type DecideApprovalRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -19041,18 +18446,6 @@ func (response WhoAmIdefaultJSONResponse) VisitWhoAmIResponse(w http.ResponseWri
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// GetOIDCConfiguration OIDC discovery (base issuer)
-	// (GET /.well-known/openid-configuration)
-	GetOIDCConfiguration(ctx context.Context, request GetOIDCConfigurationRequestObject) (GetOIDCConfigurationResponseObject, error)
-	// GetJWKS Issuer signing keys
-	// (GET /jwks)
-	GetJWKS(ctx context.Context, request GetJWKSRequestObject) (GetJWKSResponseObject, error)
-	// GetTenantOIDCConfiguration OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-	// (GET /t/{tenant}/.well-known/openid-configuration)
-	GetTenantOIDCConfiguration(ctx context.Context, request GetTenantOIDCConfigurationRequestObject) (GetTenantOIDCConfigurationResponseObject, error)
-	// GetTenantJWKS Per-tenant issuer signing keys (same key set)
-	// (GET /t/{tenant}/jwks)
-	GetTenantJWKS(ctx context.Context, request GetTenantJWKSRequestObject) (GetTenantJWKSResponseObject, error)
 	// ListAudit Query audit records
 	// (GET /v1/audit)
 	ListAudit(ctx context.Context, request ListAuditRequestObject) (ListAuditResponseObject, error)
@@ -19236,9 +18629,6 @@ type StrictServerInterface interface {
 	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
 	// (PUT /v1/tenants/{id}/telemetry)
 	PutTenantTelemetry(ctx context.Context, request PutTenantTelemetryRequestObject) (PutTenantTelemetryResponseObject, error)
-	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
-	// (POST /v1/tenants/{id}/wif-check)
-	CheckTenantWIF(ctx context.Context, request CheckTenantWIFRequestObject) (CheckTenantWIFResponseObject, error)
 	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(ctx context.Context, request DecideApprovalRequestObject) (DecideApprovalResponseObject, error)
@@ -19365,106 +18755,6 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
-}
-
-// GetOIDCConfiguration operation middleware
-func (sh *strictHandler) GetOIDCConfiguration(w http.ResponseWriter, r *http.Request) {
-	var request GetOIDCConfigurationRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetOIDCConfiguration(ctx, request.(GetOIDCConfigurationRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetOIDCConfiguration")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetOIDCConfigurationResponseObject); ok {
-		if err := validResponse.VisitGetOIDCConfigurationResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetJWKS operation middleware
-func (sh *strictHandler) GetJWKS(w http.ResponseWriter, r *http.Request) {
-	var request GetJWKSRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetJWKS(ctx, request.(GetJWKSRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetJWKS")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetJWKSResponseObject); ok {
-		if err := validResponse.VisitGetJWKSResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetTenantOIDCConfiguration operation middleware
-func (sh *strictHandler) GetTenantOIDCConfiguration(w http.ResponseWriter, r *http.Request, tenant TenantPath) {
-	var request GetTenantOIDCConfigurationRequestObject
-
-	request.Tenant = tenant
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetTenantOIDCConfiguration(ctx, request.(GetTenantOIDCConfigurationRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetTenantOIDCConfiguration")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetTenantOIDCConfigurationResponseObject); ok {
-		if err := validResponse.VisitGetTenantOIDCConfigurationResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetTenantJWKS operation middleware
-func (sh *strictHandler) GetTenantJWKS(w http.ResponseWriter, r *http.Request, tenant TenantPath) {
-	var request GetTenantJWKSRequestObject
-
-	request.Tenant = tenant
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetTenantJWKS(ctx, request.(GetTenantJWKSRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetTenantJWKS")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetTenantJWKSResponseObject); ok {
-		if err := validResponse.VisitGetTenantJWKSResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
 }
 
 // ListAudit operation middleware
@@ -21208,32 +20498,6 @@ func (sh *strictHandler) PutTenantTelemetry(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutTenantTelemetryResponseObject); ok {
 		if err := validResponse.VisitPutTenantTelemetryResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CheckTenantWIF operation middleware
-func (sh *strictHandler) CheckTenantWIF(w http.ResponseWriter, r *http.Request, id TenantID) {
-	var request CheckTenantWIFRequestObject
-
-	request.ID = id
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CheckTenantWIF(ctx, request.(CheckTenantWIFRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CheckTenantWIF")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CheckTenantWIFResponseObject); ok {
-		if err := validResponse.VisitCheckTenantWIFResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

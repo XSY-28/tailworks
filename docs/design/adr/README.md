@@ -22,7 +22,7 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [010](010-behalf-delegation-node-bound-per-request.md) | On-behalf-of and delegation as node-bound, per-request, single-hop assertions; no bearer tokens | 2026-11-07 | Accepted |
 | [011](011-leases-conditional-writes-durable-store.md) | Leases as conditional writes on a durable store; stateless controller replicas; no Raft | 2026-11-07 | Accepted |
 | [012](012-mvp-single-host-per-tenant-namespace.md) | MVP is single-host per tenant namespace; v1 adopts upstream workerd cluster via public hooks | 2026-11-07 | Accepted |
-| [013](013-credentials.md) | Credentials: per-tenant WIF trust, scoped to auth keys for twd tags only; issuer key in KMS | 2026-11-07 | Accepted |
+| [013](013-credentials.md) | Credentials: per-tenant WIF trust, scoped to auth keys for twd tags only; issuer key in KMS | 2026-11-07 | Accepted; WIF superseded by ADR-oauth-only-minting |
 | [014](014-local-dev-evaluates-real-policy.md) | Local dev evaluates real policy; outbound dependencies are declared | 2026-11-07 | Accepted |
 | [015](015-headscale-profile-framework-scope.md) | Headscale profile and framework scope | 2026-11-07 | Accepted |
 | [018](018-use-setec-node-key-dek-custody.md) | Use setec for node-key/DEK custody; borrow thundersnap's lease + state-broker pattern; don't depend on thundersnap | 2026-11-07 | Proposed |
@@ -33,7 +33,7 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [023](023-linux-process-tier-sandbox.md) | Linux process-tier sandbox: Landlock + seccomp, no unix sockets for workloads | 2026-11-08 | Accepted |
 | [024](024-microvm-privilege-model-persistent-encrypted-storage.md) | microVM privilege model and persistent encrypted storage | 2026-11-08 | Accepted |
 | [025](025-node-certificates-make-spawn-lim-real.md) | Node certificates make spawn `lim` real; audit provenance; host token | 2026-11-08 | Accepted |
-| [026](026-keyless-default.md) | Keyless by default: tailnet identity for every twd connection; WIF for minting; API keys only as an explicit fallback | 2026-11-08 | Accepted |
+| [026](026-keyless-default.md) | Keyless by default: tailnet identity for every twd connection; WIF for minting; API keys only as an explicit fallback | 2026-11-08 | Accepted; minting superseded by ADR-oauth-only-minting |
 | [027](027-spec-first-rest-v1.md) | Spec-first REST v1: OpenAPI 3.1 as the source of truth, real CRUD, pagination from day one, tsnet-only transport | 2026-11-08 | Accepted |
 | [028](028-database-lease-clock-hosts-fence-themselves.md) | The database is the lease clock, and hosts fence themselves for stateful namespaces | 2026-11-11 | Accepted |
 | [029](029-public-ingress-over-funnel-through-netd.md) | Public ingress over Funnel, through netd on a stable per-workload public node; tsidp deferred | 2026-11-13 | Proposed |

@@ -20,7 +20,7 @@ func TestStoreIdentityScope(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
 		ctx := context.Background()
 		for _, id := range []string{"tA", "tB"} {
-			if err := s.CreateTenant(ctx, Tenant{ID: id, Tailnet: id + ".ts.net", MintMode: MintAPIKey, RegistrationsPerMinute: 200, MaxObjects: 10}); err != nil {
+			if err := s.CreateTenant(ctx, Tenant{ID: id, Tailnet: id + ".ts.net", MintMode: MintOAuth, RegistrationsPerMinute: 200, MaxObjects: 10}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -150,12 +150,12 @@ func TestStoreMigratesLegacyObjects(t *testing.T) {
 // workload is refused as ambiguous instead of guessing; spawns inherit the
 // parent's workload; and the throttles are per tenant.
 func TestAPIIdentityScope(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	var ta, tb struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "a.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile, "registrationsPerMinute": 10}, &ta)
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "b.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tb)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "a.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile, "registrationsPerMinute": 10}, &ta)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "b.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tb)
 	if ta.TenantID == tb.TenantID {
 		t.Fatal("tenant IDs collide")
 	}

@@ -126,7 +126,7 @@ func TestStoreDeploymentHistory(t *testing.T) {
 // unknown ID), the audit kind and retention. Every exchange is checked
 // against api/openapi.yaml.
 func TestV1DeployHistoryRollback(t *testing.T) {
-	e := newTestEnvWith(t, nil, func(c *Config) { c.BundleRetention = 2 })
+	e := newTestEnvWith(t, func(c *Config) { c.BundleRetention = 2 })
 	tn := v1Tenant(t, e, "ttest.ts.net", nil)
 	h1 := v1Host(t, e, "h1")
 	c := e.c

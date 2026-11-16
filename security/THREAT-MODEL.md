@@ -14,8 +14,8 @@ paper threat model and the code disagree, the code wins.
 | # | Asset | Where it lives |
 |---|-------|----------------|
 | A1 | Per-object tailnet **node keys** / machine keys | `~/.twd` state dirs, one `tsnet.Server` per object (netd) |
-| A2 | Tenant **API keys** (`tskey-*`, OAuth client secrets) | tenant `apiKeyFile` paths; mgmt reads at use time |
-| A3 | mgmt **custody key** + custody secrets (AES-256-GCM DEKs, WIF issuer P-256 key) | `custody.key`, `issuer` key (0600) |
+| A2 | Tenant **mint credentials** (OAuth client secrets `tskey-client-*`; Headscale API keys) | tenant `oauthClientFile` / `apiKeyFile` paths (0600); mgmt reads at use time |
+| A3 | mgmt **custody key** + custody secrets (AES-256-GCM DEKs, OBO root keys) | `custody.key` (0600) |
 | A4 | **Caller identity** (`request.cf.tailscale.caller`, Node `x-twd-caller`) | set by netd/hostd from WhoIs |
 | A5 | **Object egress identity** (which node a `fetch()` leaves from) | platform Egress + MAC + netd dialer |
 | A6 | **Capabilities / delegation** (policy capMap, spawn `lim`) | tailnet policy + mgmt spawn checks |
@@ -43,7 +43,7 @@ paper threat model and the code disagree, the code wins.
   attribution; spawn `lim` is meant to narrow a child.
 - **B4 Host ↔ mgmt.** hostd authenticates by lease epoch + (tsnet) WhoIs `tag:twd-host`;
   the local admin socket trusts same-uid peercred.
-- **B5 Platform ↔ Tailscale control.** mint broker (API-key / WIF). Keys are single-use,
+- **B5 Platform ↔ Tailscale control.** mint broker (OAuth client; Headscale API key). Keys are single-use,
   ≤300 s, ephemeral for children.
 
 ## 3. Attacker capabilities per tier
@@ -69,7 +69,7 @@ DO storage on restart. The process/Node tiers on Linux are effectively single-te
    escalate A6 or exhaust A9, SSRF via egress. → props/caller are unforgeable in-isolate;
    egress ADR-019 guard is robust for workerd; spawn `lim` is **not enforced** (RT-01);
    Node-tier egress is advisory (RT-08).
-3. **Identity/crypto** (A4/A6/A3): OBO assertions, caller HMAC, WIF, custody. → OBO
+3. **Identity/crypto** (A4/A6/A3): OBO assertions, caller HMAC, custody. → OBO
    assertions are **not implemented** (RFC §4.6); caller HMAC is sound (60 s replay
    window, local-only); custody/issuer keys are 0600 and mode-checked.
 4. **Kill/revocation** (A9): race the reaper/throttle, survive a kill. → in-flight flows

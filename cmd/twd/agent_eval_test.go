@@ -56,8 +56,8 @@ func TestAgentEval(t *testing.T) {
 	state, _ := hostdtest.ShortDir("twd-ev-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	writeFakeOAuthFile(t, keyFile)
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-v-", SingleProcess: true}
 	apps := filepath.Join(work, "projects")
 	os.MkdirAll(apps, 0o755)

@@ -11,12 +11,11 @@ import (
 	"github.com/rosskukulinski/twd/internal/publicspec"
 )
 
-// Mint modes.
+// Mint modes (MintHeadscale is in headscale.go; the removed modes are in
+// mintmodes.go).
 const (
-	MintAPIKey = "apikey"
-	MintWIF    = "wif"
 	// MintOAuth (M12): a Tailscale OAuth client whose secret stays in a
-	// 0600 file on the mgmt host; the default for self-hosted installs.
+	// 0600 file on the mgmt host. The only mint mode for Tailscale tailnets.
 	MintOAuth = "oauth"
 )
 
@@ -52,13 +51,11 @@ const (
 
 // Tenant is one customer tailnet.
 type Tenant struct {
-	ID                   string `json:"tenantID"`
-	Tailnet              string `json:"tailnet"`
-	ControlURL           string `json:"controlURL,omitempty"`
-	MintMode             string `json:"mintMode"`
-	APIKeyFile           string `json:"apiKeyFile,omitempty"` // path only; the key is read at use and never stored
-	WIFClientID          string `json:"wifClientID,omitempty"`
-	WIFLifecycleClientID string `json:"wifLifecycleClientID,omitempty"` // optional (RFC §4.4 credential 2)
+	ID         string `json:"tenantID"`
+	Tailnet    string `json:"tailnet"`
+	ControlURL string `json:"controlURL,omitempty"`
+	MintMode   string `json:"mintMode"`
+	APIKeyFile string `json:"apiKeyFile,omitempty"` // headscale: path only; the key is read at use and never stored
 	// OAuthClientID is the OAuth client's public ID; OAuthClientFile the
 	// absolute path of its 0600 credential file (the secret is read at
 	// use and never stored).

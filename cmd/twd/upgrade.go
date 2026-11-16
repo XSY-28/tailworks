@@ -774,7 +774,7 @@ func extractRelease(tgz, stage string) (string, error) {
 }
 
 // backupMgmt copies the store (VACUUM INTO) and the rest of mgmt's state
-// that must match it (custody, issuer and ID secrets, node state), plus
+// that must match it (custody, ID secret, node state), plus
 // twd.json, into <state>/backups/<time>-<version>.
 func backupMgmt(ctx context.Context, s *state, cur string) (string, error) {
 	dst := filepath.Join(s.Dir, "backups", time.Now().UTC().Format("20060102T150405Z")+"-"+cur)

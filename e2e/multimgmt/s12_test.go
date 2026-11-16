@@ -31,7 +31,7 @@ func TestMM_S12_SmartPlacement(t *testing.T) {
 	keyFile := r.dir + "/api.env"
 	writeAPIKey(t, keyFile)
 	var tn struct{ TenantID string }
-	c.must(0, "", "POST", "/v1/tenants", map[string]any{"tailnet": "f.ts.net", "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	c.must(0, "", "POST", "/v1/tenants", map[string]any{"tailnet": "f.ts.net", "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	hosts := []string{"h1", "h2", "h3"}
 	for i, h := range hosts {
 		c.must(i, h, "PUT", "/v1/hosts/"+h, map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)

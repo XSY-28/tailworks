@@ -3,9 +3,7 @@
 // ~/.twd), app scaffolding and deploys, and the day-2 commands (kill,
 // audit, ls, logs, status).
 //
-//	twd up --oauth-client-file <file> [--service] --yes      # recommended (M12): OAuth client, no browser, no Funnel
-//	twd up --wif                                             # keyless: tailnet login + WIF trust credential (ADR-026)
-//	twd up --tailnet <tailnet> --api-key-file <file> --yes   # fallback: apikey mint mode (tests)
+//	twd up --oauth-client-file <file> [--service] --yes      # an OAuth client of your tailnet mints every node key
 //	twd link twd-mgmt.<tailnet>.ts.net                       # a developer machine: every command below goes to mgmt over the tailnet (WhoIs)
 //	twd init hello --template agent && cd hello && twd deploy
 //	twd ls · twd kill <object> --cascade · twd audit <object> · twd logs <workload>
@@ -39,12 +37,12 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{name: "up", usage: "up --oauth-client-file <file> [--service] [--yes]  |  up --wif [--wif-client-id <id>]  |  up --tailnet <tailnet> --api-key-file <file> [--policy-apply]", help: "start twd on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); recommended: an OAuth client (no browser, no Funnel); --wif for the keyless browser flow, --api-key-file as the fallback", run: cmdUp},
+		{name: "up", usage: "up --oauth-client-file <file> [--service] [--yes]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--policy-apply]", help: "start twd on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); an OAuth client of your tailnet mints every node key (Headscale: its API key)", run: cmdUp},
 		{name: "down", usage: "down [--purge] [--service]", help: "stop everything twd up started (--purge: kill every object and delete its device first)", run: cmdDown},
 		{name: "link", usage: "link [twd-mgmt.<tailnet>.ts.net] [--unlink]", help: "developer machine: use a remote twd-mgmt over your own Tailscale connection (WhoIs identity; no key or token)", run: cmdLink},
 		{name: "whoami", usage: "whoami", help: "who this CLI acts as (WhoIs through twd link, or the local operator), its tenant, the mgmt it talks to, and its twd.dev/cap/* capabilities: admin, approve, MCP tools", run: cmdWhoami},
 		{name: "status", usage: "status", help: "health of mgmt, the host, the tenant and deployments", run: cmdStatus},
-		{name: "tenant", usage: "tenant add <tailnet> --api-key-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--wif-client-id ID] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]", help: "serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants", run: cmdTenant},
+		{name: "tenant", usage: "tenant add <tailnet> --oauth-client-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]", help: "serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants", run: cmdTenant},
 		{name: "init", usage: "init <dir> [--template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow] [--name <workload>]", help: "create an app from a template (node-workflow needs Node.js on the deploying machine)", run: cmdInit},
 		{name: "dev", usage: "dev [dir] [--port 8787] [--caller <name>[=<tag>,…]]… [--env <name>] [--wrangler | --from-wrangler-out <dir>]", help: "run an app locally: process tier + embedded control plane (no tailnet)", run: cmdDev},
 		{name: "types", usage: "types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check] [--remote]", help: "write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and twd.jsonc, like wrangler types; --check fails when the file is stale (CI)", run: cmdTypes},
@@ -65,7 +63,7 @@ func init() {
 		{name: "approve", usage: "approve <workload> <instance> [--reject] [--comment <text>] [--workflow <name>] [--step <name>] [--tenant <tailnet>]", help: "approve (or --reject) a waiting Workflow as your own tailnet identity (needs a twd.dev/cap/approve grant; from a `twd link`ed machine)", run: cmdApprove},
 		{name: "audit", usage: "audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all", help: "show the hash-chained audit trail", run: cmdAudit},
 		{name: "logs", usage: "logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]", help: "show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs", run: cmdLogs},
-		{name: "doctor", usage: "doctor [--tailnet <tailnet> --api-key-file <file>]", help: "check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier", run: cmdDoctor},
+		{name: "doctor", usage: "doctor", help: "check this machine: workerd runs, bundler offline, ~/.twd writable, the mint credential works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier", run: cmdDoctor},
 		{name: "docs", usage: "docs search <words…> [--limit 10] | docs show <doc>[#<anchor>] | docs ls", help: "twd's docs, offline: search them, print one doc or section (e.g. errors.md#acl_denied)", run: cmdDocs},
 		{name: "completion", usage: "completion bash|zsh|fish", help: "print a shell completion script for every command, subcommand and flag (bash: eval \"$(twd completion bash)\"; zsh: twd completion zsh > \"${fpath[1]}/_twd\"; fish: twd completion fish > ~/.config/fish/completions/twd.fish)", run: cmdCompletion},
 		{name: "mcp", usage: "mcp [--allow deploy,kill,undeploy] | mcp --config", help: "twd's MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it", run: cmdMCP},

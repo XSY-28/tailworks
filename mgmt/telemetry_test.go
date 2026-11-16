@@ -15,10 +15,10 @@ const otlpToken = "Bearer otlp-s3cret-0123456789"
 // OTLP export. Header values go to custody only: never returned, logged
 // or audited.
 func TestTelemetryConfig(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	path := "/v1/tenants/" + tn.TenantID + "/telemetry"
 
 	var v TelemetryView
@@ -77,10 +77,10 @@ func TestTelemetryConfig(t *testing.T) {
 // the host holding the workload's lease at its epoch; the release is
 // audited once per host, workload and config version.
 func TestTelemetryRelease(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1, h2 := e.c, e.asHost("h1"), e.asHost("h2")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse
@@ -127,9 +127,9 @@ func TestTelemetryRelease(t *testing.T) {
 // (any other caller, tenant code included, is not_admin); only hosts take
 // a grant.
 func TestTelemetryRoles(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	var tn struct{ TenantID string }
-	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
