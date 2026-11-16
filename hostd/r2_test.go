@@ -505,6 +505,10 @@ func TestR2IndexSurvivesMove(t *testing.T) {
 	r2op(t, s, base, map[string]any{"op": "mpu", "key": "b", "parts": []int{5 << 20, 7}})
 	r2op(t, s, base, map[string]any{"op": "put", "key": "gone", "value": "x"})
 	r2op(t, s, base, map[string]any{"op": "delete", "key": "gone"})
+	// The deleted put's blob goes a moment after the delete returns.
+	for deadline := time.Now().Add(10 * time.Second); len(fake.Keys()) != 3 && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+	}
 	if n := len(fake.Keys()); n != 3 {
 		t.Fatalf("blobs after a put, a 2-part upload and a deleted put: %d, want 3 (%v)", n, fake.Keys())
 	}
