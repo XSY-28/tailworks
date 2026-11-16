@@ -286,6 +286,15 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
 
+### preview_conflict
+409 · mgmt, cli. **When:** `twd deploy --preview` would run the preview as `<workload>--preview-<alias>`, and a workload of that name exists that is not a preview of this workload. **Fix:** pick another `--preview-alias`, or undeploy that workload.
+
+### preview_failed
+409 · mgmt, cli. **When:** `twd promote` named a preview its host reported `failed`. **Fix:** `twd logs <workload>--preview-<alias>`, fix the app, and deploy a new preview.
+
+### preview_unsupported
+400 · mgmt, cli. **When:** `twd deploy --preview` of a bundle that binds queues (queues are shared by the whole tenant, so a preview would send to and consume the workload's messages), or of a workload that is itself a preview or a replica. **Fix:** deploy it as a workload of its own (`--name`); preview the workload itself, not its preview or replica.
+
 ### profile_unsupported
 400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or an OAuth client (`--oauth-client-file`: Headscale mints with its API key). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
 
@@ -378,6 +387,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### unknown_namespace
 404 · mgmt. **When:** `(workload, class)` is not declared in the workload's `twd.jsonc`. **Fix:** declare the class under `tailnet.objects`, redeploy.
+
+### unknown_preview
+404 · mgmt, cli. **When:** `twd promote <workload> <preview>` named a preview the workload doesn't have, or one that is stopped (a promotion undeploys its preview). **Fix:** `twd previews <workload>` lists the running ones.
 
 ### unknown_object
 404 · netd, hostd, cli. **When:** no such object for this ID or name (or not in the tenant you named). **Fix:** `twd ls --all --tenant <tailnet>`.

@@ -17,7 +17,8 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
   [back up and restore](INSTALL.md#back-up-and-restore) and
   [troubleshooting](INSTALL.md#troubleshooting). Where each platform is
   tested: [install-testing.md](install-testing.md).
-- **You review security.** How callers are identified:
+- **You review security.** Start with the one-page [security model](security-model.md); report a vulnerability through [SECURITY.md](../SECURITY.md).
+  How callers are identified:
   [COMPAT.md#identity](COMPAT.md#identity). How isolated an app is:
   [Isolation](INSTALL.md#isolation) in INSTALL.md and
   [containers.md](containers.md) (the microVM tier). The attacker's view:
@@ -40,6 +41,8 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
   `ai-agent` (a mock model; `src/model.ts` shows how to point it at an LLM
   gateway on your tailnet), `lock`,
   `refund-approval` (a Workflow that waits for a person), `node-workflow`.
+  Each has a README.md: what it shows, how to run it, what to change.
+- [Recipes](recipes.md): short, runnable how-tos (internet APIs and LLMs through a tailnet gateway, a Durable Object per user, a signed webhook, cron into KV).
 
 ## Do: how-to guides
 
@@ -63,17 +66,18 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 
 ## Look up: reference
 
-- CLI: `twd help` lists every command with its flags; `twd <command> --help`
-  shows one. There is no separate CLI page yet.
+- CLI: [cli.md](cli.md) has every command, subcommand and flag (generated
+  from `--help`); `twd help` groups the commands, `twd <command> --help`
+  shows one.
 - `twd.jsonc`, every key: [twd-jsonc.md](twd-jsonc.md)
 - What works from Cloudflare Workers: [COMPAT.md](COMPAT.md)
 - Error codes and their fixes: [errors.md](errors.md)
 - `--json` output: [cli-json.md](cli-json.md)
 - The management API: [contracts/mgmt-api.md](contracts/mgmt-api.md)
-- Limits live on each feature's page:
-  [KV](kv.md#limits), [D1](d1.md#limits), [R2](r2.md#limits-and-differences),
-  [public routes](public-ingress.md#limits).
-- Versions and release notes: [RELEASING.md](RELEASING.md#versions) and
+- Every limit, and the ones that don't exist: [limits.md](limits.md)
+- What changed in each release: [CHANGELOG.md](../CHANGELOG.md)
+- Versions and release notes: [RELEASING.md](RELEASING.md#versions),
+  [compatibility dates](upgrading.md#versions-compatibility-dates-and-the-changelog) and
   the [GitHub releases](https://github.com/rosskukulinski/twd/releases).
 
 ## Understand: how it works

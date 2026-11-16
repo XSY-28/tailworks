@@ -50,10 +50,11 @@ test: deps test-go test-js
 .PHONY: test-go
 # GO_TEST_SKIP: a go test -skip regexp (CI quarantines known failures with it; see ci.yml).
 # Read from the environment as-is, so a regexp's "$" survives make.
+# -timeout 20m: cmd/twd alone takes ~9-10 min under -race on CI; the default 10m is too tight.
 GO_TEST_SKIP ?=
 export GO_TEST_SKIP
 test-go:
-	$(GO) test -race -count=1 $(if $(GO_TEST_SKIP),-skip "$$GO_TEST_SKIP") ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
+	$(GO) test -race -count=1 -timeout 20m $(if $(GO_TEST_SKIP),-skip "$$GO_TEST_SKIP") ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:
@@ -445,6 +446,12 @@ e2e-linux: release
 		TWD_E2E_TARBALL_arm64="$(CURDIR)/dist/twd-$(RELEASE_VERSION)-linux-arm64.tar.gz" \
 		TWD_E2E_TARBALL_amd64="$(CURDIR)/dist/twd-$(RELEASE_VERSION)-linux-amd64.tar.gz" \
 		sh scripts/e2e-linux.sh $(LINUX_DISTROS)
+
+## cli-docs: regenerate docs/cli.md (every command's --help output) from cmd/twd;
+## TestCLIReferenceUpToDate fails when it is stale.
+.PHONY: cli-docs
+cli-docs:
+	TWD_UPDATE_CLI_DOCS=1 $(GO) test ./cmd/twd -run '^TestCLIReferenceUpToDate$$' -count=1
 
 ## api: regenerate everything derived from api/openapi.yaml (the /v1 source of truth):
 ## Go server interfaces + types + embedded spec (mgmt/api/v1), the Go client

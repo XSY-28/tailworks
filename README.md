@@ -241,8 +241,10 @@ prove every ✅ and ⚠️.
 ## More
 
 - **Docs map** (every doc by role and by task): [docs/README.md](docs/README.md).
-- **CLI reference:** `twd help` lists every command and its flags;
-  `twd <command> --help` shows one.
+- **CLI reference:** [docs/cli.md](docs/cli.md), every command and flag
+  (generated from `--help`); `twd help` groups the commands.
+- **What changed in each release:** [CHANGELOG.md](CHANGELOG.md).
+  Security reports: [SECURITY.md](SECURITY.md).
 - **The words twd uses** (tenant, workload, tier, facet mode, pool node,
   …): [docs/concepts.md](docs/concepts.md).
 - **A first deploy that doesn't answer:**

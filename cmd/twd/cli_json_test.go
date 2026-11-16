@@ -44,6 +44,8 @@ var cliSurface = []struct {
 	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
 	{"deployments", []string{"deployments", "app"}},
+	{"previews", []string{"previews", "app"}},
+	{"promote", []string{"promote", "app", "3f9a1c2b"}},
 	{"rollback", []string{"rollback", "app"}},
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},
@@ -68,6 +70,10 @@ var cliSurface = []struct {
 	{"kill", []string{"kill", "app"}},
 	{"approvals", []string{"approvals"}},
 	{"approve", []string{"approve", "app", "wf_1"}},
+	{"notify", []string{"notify"}},
+	{"notify", []string{"notify", "set", "--webhook", "https://hooks.example.com/x"}},
+	{"notify", []string{"notify", "test"}},
+	{"notify", []string{"notify", "rm"}},
 	{"audit", []string{"audit", "--all"}},
 	{"logs.line", []string{"logs", "app"}},
 	{"doctor", []string{"doctor"}},
@@ -331,6 +337,9 @@ func TestDevJSONEvents(t *testing.T) {
 	ready := next("ready")
 	if u, _ := ready["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") || ready["workload"] != "hello" {
 		t.Fatalf("ready event: %v", ready)
+	}
+	if u, _ := next("console")["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") { // devconsole.go
+		t.Fatalf("console event url %q", u)
 	}
 	src := filepath.Join(app, "src", "index.ts")
 	b, _ := os.ReadFile(src)

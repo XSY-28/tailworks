@@ -224,6 +224,15 @@ Connections:
   `timeoutSeconds` doesn't apply to upgrades.
 Funnel has its own bandwidth limits, which Tailscale doesn't publish.
 
+**Error bodies.** netd's refusals are the typed JSON error (`code`,
+`detail`, `doc_url`, and the `twd-error` header). A request whose `Accept`
+prefers `text/html` to JSON (a browser) gets a minimal HTML page instead,
+with the same status and `twd-error` header: the status, the code, one
+fixed sentence per code, `Retry-After` when there is one, and the docs
+link. The page never includes the request's path, the detail or anything
+about the workload. A wildcard `Accept: */*` (curl) or a tie keeps JSON.
+Errors your own code returns are passed through unchanged.
+
 ## Exposing and unexposing
 
 ```sh
@@ -239,16 +248,24 @@ twd expose on  <workload>
 
 ## Audit
 
-- **Per request:** every public request is a `public_request` record in
-  the host audit chain (`twd audit <public-object-id>`). It holds the
-  method, the path **without the query string**, the matched route, the
-  status, the client IP, bytes and duration.
-- **Limit refusals:** requests the limits refused (429/413/431, and
-  connections over `maxConns` or `maxConnsPerIp`) are rolled up in one
-  `public_rejected` summary per minute, so a refused flood can't grow the
-  chain. The summary has `rateLimited`, `tooLarge`, `connsRefused`,
-  `ipConnsRefused` and the top client IPs. The same counts go to the
-  `twd.public.rejected` metric (see [observability](observability.md)).
+- **Per request:** every public request that matched a route is a
+  `public_request` record in the host audit chain
+  (`twd audit <public-object-id>`). It holds the method, the path
+  **without the query string**, the matched route, the status, the client
+  IP, bytes and duration.
+- **Refusals:** requests the limits refused (429/413/431, and connections
+  over `maxConns` or `maxConnsPerIp`) and paths refused before routing
+  (`404 not_public`, `400 bad_request`) are rolled up in one
+  `public_rejected` summary per minute, so a refused flood or a path scan
+  can't grow the chain. The summary has `rateLimited`, `tooLarge`,
+  `connsRefused`, `ipConnsRefused`, `notPublic`, `badRequest` and the top
+  client IPs. The limit refusals also go to the `twd.public.rejected`
+  metric (see [observability](observability.md)).
+- **Backlog:** while mgmt is unreachable, hostd queues host records in
+  memory and then on disk; none is dropped. If the disk queue reaches its
+  cap, further `public_request` records are refused and counted. Every
+  refused record is reported in an `audit_dropped` record, so the chain
+  still verifies and the gap is visible.
 - **Other records:** `public_object_created`, and `expose_on`/`expose_off`.
   The operator's change is recorded on mgmt's chain and the listener
   change on the host's.

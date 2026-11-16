@@ -202,6 +202,10 @@ type ClassConfig struct {
 	// Replicas (replica 1, the workload itself) is how many there are.
 	ReplicaOf string `json:"replicaOf,omitempty"`
 	Replicas  int    `json:"replicas,omitempty"`
+
+	// PreviewOf (the _workload namespace of previews only) names the
+	// workload this deployment previews (ADR-deploy-preview).
+	PreviewOf string `json:"previewOf,omitempty"`
 }
 
 // Deployment is one deploy of a workload.
