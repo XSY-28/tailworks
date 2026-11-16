@@ -325,15 +325,15 @@ func traceID() string {
 
 // TenantRequest is POST /v0/tenants.
 type TenantRequest struct {
-	ID                     string `json:"tenantID,omitempty"`
-	Tailnet                string `json:"tailnet"`
-	ControlURL             string `json:"controlURL,omitempty"`
-	MintMode               string `json:"mintMode"`
-	APIKeyFile             string `json:"apiKeyFile,omitempty"` // headscale
+	ID         string `json:"tenantID,omitempty"`
+	Tailnet    string `json:"tailnet"`
+	ControlURL string `json:"controlURL,omitempty"`
+	MintMode   string `json:"mintMode"`
+	APIKeyFile string `json:"apiKeyFile,omitempty"` // headscale
 	// Several tenants on one tailnet (teams.go): its owner tag and name
 	// prefix; "" = tag:twd and none.
-	OwnerTag   string `json:"ownerTag,omitempty"`
-	NamePrefix string `json:"namePrefix,omitempty"`
+	OwnerTag               string `json:"ownerTag,omitempty"`
+	NamePrefix             string `json:"namePrefix,omitempty"`
 	OAuthClientID          string `json:"oauthClientID,omitempty"`
 	OAuthClientFile        string `json:"oauthClientFile,omitempty"`
 	RegistrationsPerMinute int    `json:"registrationsPerMinute,omitempty"`
