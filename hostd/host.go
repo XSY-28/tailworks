@@ -677,7 +677,7 @@ func (h *Host) heartbeat(ctx context.Context) error {
 			continue
 		}
 		req.Deployments = append(req.Deployments, st)
-		if st.Status == "active" || st.Status == "starting" {
+		if liveStatus(st.Status) { // restart.go: a crash-looping workload keeps its lease
 			req.Leases = append(req.Leases, mgmtapi.Lease{Namespace: w.lease(), Epoch: w.epochNow()})
 		}
 	}
@@ -804,7 +804,7 @@ func (h *Host) syncAssignments(ctx context.Context) error {
 	}
 	h.mu.Unlock()
 	for _, w := range gone {
-		if w.statusSnapshot().Status == "active" {
+		if st := w.statusSnapshot().Status; st == "active" || st == statusCrashloop {
 			h.undeploy(w, "no longer assigned")
 		}
 	}
