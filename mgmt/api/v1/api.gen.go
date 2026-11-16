@@ -3149,14 +3149,20 @@ type PublicLimits struct {
 	IPBurst *int `json:"ipBurst,omitempty"`
 
 	// IPRps Requests per second, per client IP.
-	IPRps          *float32 `json:"ipRps,omitempty"`
-	MaxBodyBytes   *int64   `json:"maxBodyBytes,omitempty"`
-	MaxConns       *int     `json:"maxConns,omitempty"`
-	MaxHeaderBytes *int     `json:"maxHeaderBytes,omitempty"`
+	IPRps        *float32 `json:"ipRps,omitempty"`
+	MaxBodyBytes *int64   `json:"maxBodyBytes,omitempty"`
+	MaxConns     *int     `json:"maxConns,omitempty"`
+
+	// MaxConnsPerIP Concurrent connections per client address (an IPv6 client counts per /64).
+	MaxConnsPerIP  *int `json:"maxConnsPerIp,omitempty"`
+	MaxHeaderBytes *int `json:"maxHeaderBytes,omitempty"`
 
 	// Rps Requests per second, per workload.
 	Rps            *float32 `json:"rps,omitempty"`
 	TimeoutSeconds *int     `json:"timeoutSeconds,omitempty"`
+
+	// UpgradeLifetimeSeconds Longest an upgraded (WebSocket) connection stays open.
+	UpgradeLifetimeSeconds *int `json:"upgradeLifetimeSeconds,omitempty"`
 }
 
 // PurgeResult defines model for PurgeResult.

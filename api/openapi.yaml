@@ -4474,6 +4474,8 @@ components:
         maxHeaderBytes: { type: integer }
         timeoutSeconds: { type: integer }
         maxConns: { type: integer }
+        maxConnsPerIp: { type: integer, description: "Concurrent connections per client address (an IPv6 client counts per /64)." }
+        upgradeLifetimeSeconds: { type: integer, description: "Longest an upgraded (WebSocket) connection stays open." }
     PublicAssignment:
       type: object
       description: |
