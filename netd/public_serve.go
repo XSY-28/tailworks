@@ -57,8 +57,10 @@ type publicState struct {
 type rejectCounts struct {
 	from                     time.Time
 	rate, tooLarge, connsRef int
-	ipConnsRef               int // over MaxConnsPerIP
-	ips                      map[netip.Addr]int
+	// notPublic and badRequest: route refusals (H03).
+	notPublic, badRequest int
+	ipConnsRef            int // over MaxConnsPerIP
+	ips                   map[netip.Addr]int
 }
 
 func newPublicState(o PublicOptions) *publicState {
@@ -134,6 +136,8 @@ const (
 	rejRate = iota
 	rejTooLarge
 	rejConns
+	rejNotPublic
+	rejBadRequest
 	rejIPConns
 )
 
@@ -148,6 +152,10 @@ func (p *publicState) countReject(kind int, ip netip.Addr) {
 		p.rej.rate++
 	case rejConns:
 		p.rej.connsRef++
+	case rejNotPublic:
+		p.rej.notPublic++
+	case rejBadRequest:
+		p.rej.badRequest++
 	case rejIPConns:
 		p.rej.ipConnsRef++
 	default:
@@ -165,12 +173,12 @@ func (p *publicState) takeSummary(id string, now time.Time) *PublicRejectSummary
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	r := p.rej
-	if r.rate+r.tooLarge+r.connsRef+r.ipConnsRef == 0 {
+	if r.rate+r.tooLarge+r.connsRef+r.notPublic+r.badRequest+r.ipConnsRef == 0 {
 		return nil
 	}
 	p.rej = rejectCounts{ips: map[netip.Addr]int{}}
 	s := &PublicRejectSummary{ObjectID: id, From: r.from, To: now, RateLimited: r.rate, TooLarge: r.tooLarge,
-		ConnsRefused: r.connsRef, IPConnsRefused: r.ipConnsRef, UniqueIPApprox: len(r.ips)}
+		ConnsRefused: r.connsRef, NotPublic: r.notPublic, BadRequest: r.badRequest, IPConnsRefused: r.ipConnsRef, UniqueIPApprox: len(r.ips)}
 	for ip, n := range r.ips {
 		s.TopIPs = append(s.TopIPs, IPCount{IP: ip, Count: n})
 	}
@@ -442,6 +450,10 @@ type pubWriter struct {
 	wrote   bool
 	swallow bool // upstream output is discarded (netd answered instead)
 	gate    func() *Error
+
+	// html: the client prefers text/html, so netd's errors are an HTML
+	// page (errors_html.go).
+	html bool
 }
 
 func (w *pubWriter) WriteHeader(c int) {
@@ -490,6 +502,10 @@ func (w *pubWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 // writeErr answers with e directly.
 func (w *pubWriter) writeErr(e *Error) {
 	w.wrote, w.status = true, e.Status()
+	if w.html {
+		WriteErrorHTML(w.ResponseWriter, e)
+		return
+	}
 	WriteError(w.ResponseWriter, e)
 }
 
@@ -537,7 +553,7 @@ func isUpgrade(r *http.Request) bool {
 func (o *Object) servePublic(w http.ResponseWriter, req *http.Request) {
 	t0 := time.Now()
 	p := o.pub
-	pw := &pubWriter{ResponseWriter: w}
+	pw := &pubWriter{ResponseWriter: w, html: WantsHTML(req)}
 	fc, _ := req.Context().Value(funnelCtxKey{}).(*ipn.FunnelConn)
 	if fc == nil { // unreachable: Accept admits only Funnel conns
 		w.Header().Set("Connection", "close")
@@ -586,7 +602,10 @@ func (o *Object) servePublic(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// 2. Route. From here on every request is reported.
+	// 2. Route. Route refusals (bad_request, not_public) are counted for
+	// the summary like the limits (H03: a scan of unlisted paths must not
+	// grow the chain one record per request); from the route on every
+	// request is reported.
 	rec := PublicRequestRecord{ObjectID: o.id, Time: t0, Method: req.Method, ClientIP: ip}
 	report := func() {
 		rec.Status, rec.BytesOut, rec.Duration = pw.status, pw.bytes, time.Since(t0)
@@ -599,17 +618,15 @@ func (o *Object) servePublic(w http.ResponseWriter, req *http.Request) {
 	}
 	cp, err := publicspec.CanonicalPath(req.URL)
 	if err != nil {
-		rec.Code = CodeBadRequest
+		p.countReject(rejBadRequest, ip)
 		pw.writeErr(newErr(CodeBadRequest, "path refused: "+err.Error()))
-		report()
 		return
 	}
 	rec.Path = cp
 	route, ok := publicspec.MatchAny(opts.Routes, cp)
 	if !ok {
-		rec.Code = CodeNotPublic
+		p.countReject(rejNotPublic, ip)
 		pw.writeErr(newErr(CodeNotPublic, "this path is not public"))
-		report()
 		return
 	}
 	rec.Route = route

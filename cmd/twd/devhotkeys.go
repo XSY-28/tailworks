@@ -1,7 +1,7 @@
 package main
 
 // twd dev's hotkeys (issue #42), like `wrangler dev`'s: b opens the app in
-// a browser, x or q stops. Only when stdin is the terminal's foreground
+// a browser, e opens the dev console (devconsole.go), x or q stops. Only when stdin is the terminal's foreground
 // and --json is off; the terminal goes to non-canonical, no-echo mode (one
 // key, no Enter) and is restored on exit. Ctrl-C still works (ISIG stays).
 
@@ -20,6 +20,9 @@ import (
 // devHotkeysHint is printed under the ready line when the hotkeys are on.
 const devHotkeysHint = "  [b] open in a browser · [x] or [q] stop"
 
+// devHotkeysConsoleHint is the hint when the dev console is on.
+const devHotkeysConsoleHint = "  [b] open in a browser · [e] open the data console · [x] or [q] stop"
+
 // devHotkeyAction is what a key does.
 type devHotkeyAction int
 
@@ -27,6 +30,8 @@ const (
 	hotkeyNone devHotkeyAction = iota
 	hotkeyBrowser
 	hotkeyQuit
+	// e: the dev console (devconsole.go).
+	hotkeyConsole
 )
 
 // devHotkey maps a key to its action.
@@ -36,6 +41,8 @@ func devHotkey(c byte) devHotkeyAction {
 		return hotkeyBrowser
 	case 'x', 'X', 'q', 'Q':
 		return hotkeyQuit
+	case 'e', 'E':
+		return hotkeyConsole
 	}
 	return hotkeyNone
 }
@@ -51,8 +58,8 @@ func devHotkeysOn(json bool) bool {
 }
 
 // startDevHotkeys puts the terminal in one-key mode and reads keys: b opens
-// url, x/q closes quit. restore puts the terminal back (call it on exit).
-func startDevHotkeys(url string, out io.Writer) (quit <-chan struct{}, restore func()) {
+// url, e opens consoleURL (when not ""), x/q closes quit. restore puts the terminal back (call it on exit).
+func startDevHotkeys(url, consoleURL string, out io.Writer) (quit <-chan struct{}, restore func()) {
 	saved, err := stty("-g")
 	if err != nil {
 		return nil, func() {}
@@ -72,6 +79,13 @@ func startDevHotkeys(url string, out io.Writer) (quit <-chan struct{}, restore f
 			case hotkeyBrowser:
 				if err := openBrowser(url); err != nil {
 					fmt.Fprintf(out, "! can't open a browser (%v): %s\n", err, url)
+				}
+			case hotkeyConsole:
+				if consoleURL == "" {
+					continue
+				}
+				if err := openBrowser(consoleURL); err != nil {
+					fmt.Fprintf(out, "! can't open a browser (%v): %s\n", err, consoleURL)
 				}
 			case hotkeyQuit:
 				close(q)
@@ -105,9 +119,10 @@ func openBrowser(url string) error {
 }
 
 // devInteractive starts what `twd dev` adds after its ready line: the
-// inspector proxy (--inspector-port, devinspector.go) and the hotkeys.
+// inspector proxy (--inspector-port, devinspector.go), the dev console's
+// line (consoleURL, "" when it is off; devconsole.go) and the hotkeys.
 // quit closes on x/q (nil: no hotkeys); stop undoes both.
-func devInteractive(port int, target func() string, url string, json bool, out io.Writer, ev *events) (quit <-chan struct{}, stop func(), err error) {
+func devInteractive(port int, target func() string, url, consoleURL string, json bool, out io.Writer, ev *events) (quit <-chan struct{}, stop func(), err error) {
 	var stops []func()
 	stop = func() {
 		for _, s := range stops {
@@ -123,12 +138,20 @@ func devInteractive(port int, target func() string, url string, json bool, out i
 		ev.emit("inspector", map[string]any{"addr": addr, "ws": "ws://" + addr})
 		fmt.Fprintf(out, "  inspector on %s · Chrome DevTools: chrome://inspect, Configure, add %s · VS Code: attach to port %d (docs/dev-debugging.md)\n", addr, addr, port)
 	}
+	if consoleURL != "" {
+		ev.emit("console", map[string]any{"url": consoleURL})
+		fmt.Fprintf(out, "  console on %s · KV keys and D1 rows of this run, read-only\n", consoleURL)
+	}
 	if devHotkeysOn(json) {
 		var restore func()
-		quit, restore = startDevHotkeys(url, out)
+		quit, restore = startDevHotkeys(url, consoleURL, out)
 		if quit != nil {
 			stops = append(stops, restore)
-			fmt.Fprintln(out, devHotkeysHint)
+			hint := devHotkeysHint
+			if consoleURL != "" {
+				hint = devHotkeysConsoleHint
+			}
+			fmt.Fprintln(out, hint)
 		}
 	}
 	return quit, stop, nil

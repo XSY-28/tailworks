@@ -321,6 +321,10 @@ type deployResult struct {
 
 	// Warnings: wrangler config twd ignores, one line per key.
 	Warnings []string `json:"warnings,omitempty"`
+
+	// Preview (--preview, ADR-deploy-preview): the preview's own workload
+	// name; Workload is the workload it previews.
+	Preview string `json:"preview,omitempty"`
 }
 
 func cmdDeploy(args []string) error {
@@ -332,6 +336,8 @@ func cmdDeploy(args []string) error {
 	platform := f.String("platform", "", "containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)")
 	hostF := f.String("host", "", "pin the workload to this host (it must be live, in the tenant's pool and offer the tier)")
 	replace := f.Bool("replace", false, "re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs")
+	preview := f.Bool("preview", false, "deploy as a preview next to the workload (<workload>--preview-<alias>), leaving the workload as it is; twd promote makes it the workload")
+	previewAlias := f.String("preview-alias", "", "the preview's alias (implies --preview; default: the start of the bundle's SHA-256)")
 	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
 	waitPublic := f.Duration("wait-public", 0, "also wait (up to this long) until the public URL answers from the public internet (twd.jsonc \"public\")")
 	tenantF := tenantFlag(f)
@@ -447,6 +453,7 @@ func cmdDeploy(args []string) error {
 	if *replace {
 		body["replace"] = true
 	}
+	res.Preview = addPreview(body, a.Name, *preview, *previewAlias, tb) // preview.go
 	if err := mc.Do(ctx, "POST", "/v1/deployments", body, &dr); err != nil {
 		return err
 	}
@@ -503,7 +510,10 @@ func cmdDeploy(args []string) error {
 	res.Timings["ready"] = ms(time.Since(ds))
 	ev.emit("ready", map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": "http://" + v.Endpoint.MagicDNS + "/"})
 	if !*f.json {
-		fmt.Printf("✓ deployed   %s@%s · node %s · http://%s/  (deploy → ready %.1fs)\n", a.Name, v.Host, v.Endpoint.Node, v.Endpoint.MagicDNS, res.Timings["ready"]/1000)
+		fmt.Printf("✓ deployed   %s@%s · node %s · http://%s/  (deploy → ready %.1fs)\n", orName(res.Preview, a.Name), v.Host, v.Endpoint.Node, v.Endpoint.MagicDNS, res.Timings["ready"]/1000)
+		if res.Preview != "" {
+			fmt.Print(previewNotice(a.Name, res.Preview, "http://"+v.Endpoint.MagicDNS+"/"))
+		}
 		if len(dr.Replicas) > 1 {
 			parts := make([]string, 0, len(dr.Replicas))
 			for _, rp := range dr.Replicas {
