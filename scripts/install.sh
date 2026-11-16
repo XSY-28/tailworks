@@ -134,18 +134,21 @@ elif [ ! -f "$SRC/SHA256SUMS.sig" ]; then
 	*-*) say "WARNING: $VERSION is a local build with no SHA256SUMS.sig: not signature-checked" ;;
 	*) die "this release is not signed (no SHA256SUMS.sig). Install releases from GitHub (scripts/get.sh), or pass --allow-unsigned for a build you made" ;;
 	esac
-elif ! command -v ssh-keygen >/dev/null 2>&1; then
-	say "WARNING: no ssh-keygen (OpenSSH): can't check SHA256SUMS.sig (see INSTALL.md, \"Verify a release\")"
 else
+	# The pinned key first: an install.sh that pins none refuses, even
+	# without ssh-keygen ("no key" never means "accept").
 	signers=$(mktemp)
 	if [ -n "${TWD_RELEASE_SIGNERS:-}" ]; then cat "$TWD_RELEASE_SIGNERS" >"$signers"; else printf '%s\n' "$SIGNERS" >"$signers"; fi
 	grep -q '^twd-release ' "$signers" || { rm -f "$signers"; die "this install.sh pins no release signing key, so it can't check SHA256SUMS.sig (--allow-unsigned to install anyway)"; }
-	if ! ssh-keygen -Y verify -f "$signers" -I twd-release -n twd-release -s "$SRC/SHA256SUMS.sig" <"$SRC/SHA256SUMS" >/dev/null 2>&1; then
+	if ! command -v ssh-keygen >/dev/null 2>&1; then
+		say "WARNING: no ssh-keygen (OpenSSH): can't check SHA256SUMS.sig (see INSTALL.md, \"Verify a release\")"
+	elif ! ssh-keygen -Y verify -f "$signers" -I twd-release -n twd-release -s "$SRC/SHA256SUMS.sig" <"$SRC/SHA256SUMS" >/dev/null 2>&1; then
 		rm -f "$signers"
 		die "SHA256SUMS.sig is not a valid signature by a twd release key: refusing to install"
+	else
+		say "✓ signed by a twd release key"
 	fi
 	rm -f "$signers"
-	say "✓ signed by a twd release key"
 fi
 
 # Integrity (hashing ~300 MB takes a few seconds; say so).

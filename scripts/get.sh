@@ -17,7 +17,6 @@
 set -eu
 REPO=${TWD_REPO:-rosskukulinski/twd}
 TAG=${1:-latest}
-SIGNED_FROM=0.3.0 # the first signed release
 # The release signing keys (allowed_signers lines; TWD_RELEASE_SIGNERS=FILE
 # overrides, for tests and mirrors of private builds).
 # BEGIN twd release signers (copied from internal/releasesig/allowed_signers by scripts/release-keygen.sh --sync)
@@ -27,12 +26,6 @@ SIGNERS='
 
 die() { printf 'get.sh: %s\n' "$*" >&2; exit 1; }
 warn() { printf 'get.sh: WARNING: %s\n' "$*" >&2; }
-# older A B: version A (x.y.z) is before B.
-older() {
-	awk -v a="$1" -v b="$2" 'BEGIN { split(a, x, /[.-]/); split(b, y, /[.-]/)
-		for (i = 1; i <= 3; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 }
-		exit 1 }'
-}
 [ "$(id -u)" != 0 ] || die "don't run as root (twd installs per user and needs no sudo)"
 command -v curl >/dev/null || die "needs curl"
 command -v tar >/dev/null || die "needs tar"
@@ -68,8 +61,10 @@ curl -fsSL -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS" || die "no SHA256SUMS in rele
 if [ "${TWD_ALLOW_UNSIGNED:-0}" = 1 ]; then
 	warn "not checking the release signature (TWD_ALLOW_UNSIGNED=1)"
 elif ! curl -fsSL -o "$TMP/SHA256SUMS.sig" "$BASE/SHA256SUMS.sig" 2>/dev/null; then
-	older "$VERSION" "$SIGNED_FROM" || die "release $TAG has no SHA256SUMS.sig: refusing an unsigned release (TWD_ALLOW_UNSIGNED=1 to install it anyway)"
-	warn "$TAG predates signed releases (v$SIGNED_FROM): checking its SHA-256 only"
+	# Every published release is signed (no unsigned one was ever
+	# published), so there is no "old release" exception: one would let
+	# whoever can publish a release pick a tag that skips this check.
+	die "release $TAG has no SHA256SUMS.sig: refusing an unsigned release (TWD_ALLOW_UNSIGNED=1 to install it anyway)"
 else
 	command -v ssh-keygen >/dev/null || die "needs ssh-keygen (OpenSSH) to check the release signature"
 	if [ -n "${TWD_RELEASE_SIGNERS:-}" ]; then cat "$TWD_RELEASE_SIGNERS" >"$TMP/allowed_signers"; else printf '%s\n' "$SIGNERS" >"$TMP/allowed_signers"; fi

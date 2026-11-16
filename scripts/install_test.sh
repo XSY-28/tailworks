@@ -143,10 +143,12 @@ mkmirror "$T/m-unsigned" 0.3.0
 rm "$T/m-unsigned/SHA256SUMS.sig"
 if get "$T/m-unsigned" 0.3.0; then fail "get.sh installed an unsigned release"; fi
 grep -q 'no SHA256SUMS.sig' "$T/out" || fail "get.sh unsigned message: $(cat "$T/out")"
-# Releases from before signing (< 0.3.0) still install, checksum only.
-mkmirror "$T/m-old" 0.2.0
-rm "$T/m-old/SHA256SUMS.sig"
-get "$T/m-old" 0.2.0 || fail "get.sh a pre-signing release: $(cat "$T/out")"
-grep -q 'predates signed releases' "$T/out" || fail "get.sh pre-signing release: $(cat "$T/out")"
-rm -rf "$P"
+# No version skips the check: an "old" or non-numeric tag with no
+# signature is refused too (whoever can publish a release picks the tag).
+for v in 0.2.0 0.2.99; do
+	mkmirror "$T/m-old-$v" "$v"
+	rm "$T/m-old-$v/SHA256SUMS.sig"
+	if get "$T/m-old-$v" "$v"; then fail "get.sh installed unsigned release $v"; fi
+	[ ! -e "$P/bin" ] || fail "get.sh installed unsigned release $v"
+done
 echo "install_test: ok"

@@ -55,7 +55,7 @@ func TestSelfUpgradeRefusesUnsignedReleases(t *testing.T) {
 	pub, priv := testReleaseKey(t)
 	_, other := testReleaseKey(t)
 	top := "twd-0.3.0-linux-amd64"
-	files := map[string]string{top + "/install.sh": "#!/bin/sh\necho ran > \"$2/installed\"\n"}
+	files := map[string]string{top + "/install.sh": "#!/bin/sh\necho ran > \"$2/installed\"\n", top + "/VERSION": "0.3.0\n"}
 	for name, tgz := range map[string]map[string]string{
 		"unsigned":  files,
 		"other key": signRelease(t, other, top, files),
@@ -71,7 +71,7 @@ func TestSelfUpgradeRefusesUnsignedReleases(t *testing.T) {
 		h.upg.signers = []ed25519.PublicKey{pub}
 		p := filepath.Join(t.TempDir(), top+".tar.gz")
 		os.WriteFile(p, tarGz(t, tgz), 0o600)
-		err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "x"))
+		err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "x"), "0.3.0")
 		if err == nil || !strings.Contains(err.Error(), "refusing an unverified release") {
 			t.Errorf("%s: %v", name, err)
 		}
@@ -83,7 +83,7 @@ func TestSelfUpgradeRefusesUnsignedReleases(t *testing.T) {
 	h := &Host{cfg: Config{DataDir: t.TempDir(), SelfUpgrade: true, InstallPrefix: t.TempDir(), Restart: func() {}}}
 	p := filepath.Join(t.TempDir(), top+".tar.gz")
 	os.WriteFile(p, tarGz(t, signRelease(t, priv, top, files)), 0o600)
-	if err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "x")); err == nil {
+	if err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "x"), "0.3.0"); err == nil {
 		t.Fatal("installed a release signed by an unpinned key")
 	}
 }

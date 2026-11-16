@@ -67,7 +67,7 @@ tar -xzf twd-*-darwin-arm64.tar.gz
 
 #### Verify a release
 
-Releases from v0.3.0 on are signed. `get.sh`, `install.sh` and twd-hostd's
+Every published release is signed. `get.sh`, `install.sh` and twd-hostd's
 self-upgrade check the signature themselves. To check one by hand, take
 the pinned keys from the repository, not from the release:
 

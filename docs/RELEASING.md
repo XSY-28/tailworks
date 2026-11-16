@@ -123,9 +123,13 @@ release workflow.
   twd-release`) by an Ed25519 key.
 - **Who checks it.**
   - `scripts/get.sh` checks the release's `SHA256SUMS.sig` before it trusts
-    the hashes in `SHA256SUMS`. Releases before v0.3.0 are unsigned; for
-    those it checks the SHA-256 only, and says so.
+    the hashes in `SHA256SUMS`. It refuses an unsigned release whatever its
+    version: an exception for "old" releases would let whoever can publish
+    a release pick a tag that skips the check. (No unsigned release was
+    ever published.)
   - `install.sh` checks the tarball's `SHA256SUMS.sig` before it installs.
+    It is only a second check: a tampered tarball ships its own
+    `install.sh`, which is why `get.sh` and hostd check first.
     A build whose version has a `-` suffix (what `make release` stamps on a
     local build) may be unsigned.
   - twd-hostd's self-upgrade checks the tarball's signature in Go, against

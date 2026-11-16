@@ -8,8 +8,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -112,12 +114,13 @@ func (h *Host) selfUpgrade(ctx context.Context, o UpgradeOrder) error {
 	if err := h.downloadArtifact(ctx, o, tgz); err != nil {
 		return err
 	}
-	return h.installArtifact(ctx, tgz, filepath.Join(work, "x"))
+	return h.installArtifact(ctx, tgz, filepath.Join(work, "x"), o.Version)
 }
 
-// installArtifact extracts a verified release tarball into dir and runs
-// its install.sh into Config.InstallPrefix.
-func (h *Host) installArtifact(ctx context.Context, tgz, dir string) error {
+// installArtifact extracts a release tarball into dir, verifies it (signed
+// by a pinned key, and the version that was ordered), and runs its
+// install.sh into Config.InstallPrefix.
+func (h *Host) installArtifact(ctx context.Context, tgz, dir, version string) error {
 	name := filepath.Base(tgz)
 	if err := extractTarGz(tgz, dir); err != nil {
 		return fmt.Errorf("extract %s: %w", name, err)
@@ -128,6 +131,12 @@ func (h *Host) installArtifact(ctx context.Context, tgz, dir string) error {
 	}
 	if err := h.verifyRelease(filepath.Dir(inst[0])); err != nil {
 		return fmt.Errorf("%s: %w", name, err)
+	}
+	// The signature says the release is genuine, not which one: a
+	// compromised mgmt could send an older signed release (with a known
+	// bug) under the new version's name. VERSION is in the signed list.
+	if b, err := os.ReadFile(filepath.Join(filepath.Dir(inst[0]), "VERSION")); err != nil || strings.TrimSpace(string(b)) != version {
+		return fmt.Errorf("%s: refusing an unverified release: its VERSION is %q, the order was for %s", name, strings.TrimSpace(string(b)), version)
 	}
 	cmd := exec.CommandContext(ctx, "sh", inst[0], "--prefix", h.cfg.InstallPrefix, "--force")
 	cmd.Env = append(os.Environ(), "TWD_HOME="+h.cfg.InstallPrefix)
@@ -166,8 +175,15 @@ func (h *Host) downloadArtifact(ctx context.Context, o UpgradeOrder, dst string)
 	return nil
 }
 
-// extractTarGz unpacks a release tarball into dir, refusing entries that
-// escape it and anything but files, directories and in-tree symlinks.
+// extractTarGz unpacks a release tarball into dir (which it creates),
+// allowing only files, directories and symlinks that resolve inside dir.
+// It runs before the signature check (the signed SHA256SUMS is inside the
+// tarball), so it must be safe on hostile input: every write goes through
+// an os.Root, which refuses any path that resolves outside dir, including
+// through a symlink an earlier entry created (a -> ., a/b -> .., b/evil);
+// no entry may replace an existing one; and once everything is out, every
+// symlink must resolve inside dir, so nothing that later reads or copies
+// the tree (VerifyTree, install.sh) can be led outside it.
 func extractTarGz(src, dir string) error {
 	f, err := os.Open(src)
 	if err != nil {
@@ -178,53 +194,82 @@ func extractTarGz(src, dir string) error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	tr := tar.NewReader(zr)
-	root := filepath.Clean(dir) + string(os.PathSeparator)
+	var links []string
 	for {
 		hd, err := tr.Next()
 		if err == io.EOF {
-			return nil
+			break
 		}
 		if err != nil {
 			return err
 		}
-		p := filepath.Join(dir, hd.Name)
-		if filepath.IsAbs(hd.Name) || !strings.HasPrefix(p+string(os.PathSeparator), root) {
+		name := filepath.Clean(filepath.FromSlash(hd.Name))
+		if filepath.IsAbs(hd.Name) || name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
 			return fmt.Errorf("entry %q escapes the archive", hd.Name)
+		}
+		if name == "." {
+			continue
+		}
+		if parent := filepath.Dir(name); parent != "." {
+			if err := root.MkdirAll(parent, 0o755); err != nil {
+				return fmt.Errorf("entry %q: %w", hd.Name, err)
+			}
 		}
 		switch hd.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(p, 0o755); err != nil {
-				return err
+			if fi, err := root.Lstat(name); err == nil {
+				if !fi.IsDir() {
+					return fmt.Errorf("entry %q replaces an earlier entry", hd.Name)
+				}
+				continue
+			}
+			if err := root.Mkdir(name, 0o755); err != nil {
+				return fmt.Errorf("entry %q: %w", hd.Name, err)
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-				return err
-			}
-			out, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hd.Mode)&0o755|0o600)
+			out, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.FileMode(hd.Mode)&0o755|0o600)
 			if err != nil {
-				return err
+				return fmt.Errorf("entry %q: %w", hd.Name, err)
 			}
 			_, err = io.Copy(out, io.LimitReader(tr, 1<<30))
-			out.Close()
+			if cerr := out.Close(); err == nil {
+				err = cerr
+			}
 			if err != nil {
 				return err
 			}
 		case tar.TypeSymlink:
-			t := filepath.Join(filepath.Dir(p), hd.Linkname)
-			if filepath.IsAbs(hd.Linkname) || !strings.HasPrefix(t+string(os.PathSeparator), root) {
+			t := filepath.Join(filepath.Dir(name), hd.Linkname)
+			if filepath.IsAbs(hd.Linkname) || t == ".." || strings.HasPrefix(t, ".."+string(os.PathSeparator)) {
 				return fmt.Errorf("symlink %q escapes the archive", hd.Name)
 			}
-			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-				return err
+			if err := root.Symlink(hd.Linkname, name); err != nil {
+				return fmt.Errorf("entry %q: %w", hd.Name, err)
 			}
-			if err := os.Symlink(hd.Linkname, p); err != nil {
-				return err
-			}
+			links = append(links, name)
 		default:
 			return fmt.Errorf("entry %q: unsupported type %c", hd.Name, hd.Typeflag)
 		}
 	}
+	// The lexical check above can't see symlinks resolved through other
+	// symlinks (x -> s/.. where s -> . is in-tree on paper, the parent of
+	// dir on disk). Resolve each one inside the root: a link that leads
+	// out of it fails here. A dangling in-tree link is fine.
+	for _, l := range links {
+		if _, err := root.Stat(l); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("symlink %q escapes the archive: %w", l, err)
+		}
+	}
+	return nil
 }
 
 func lastLines(s string, n int) string {
