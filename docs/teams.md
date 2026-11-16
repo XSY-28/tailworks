@@ -1,15 +1,88 @@
-# Teams: tenant admins
+# Teams: several tenants on one tailnet
 
-Several teams can share one twd install and one tailnet. Give each team its
-own tenant, then grant the team `twd.dev/cap/tenant-admin` for that tenant.
-A tenant admin manages its own tenant's workloads, and nothing else: not
-other teams' tenants, not hosts, not releases or upgrades, and not the
-tenant's own limits.
+Several teams can share one twd install and one tailnet. Each team gets:
 
-The design is
-[ADR-team-tenants](design/adr/team-tenants.md), tracked in issue #80.
+- its **own tenant**, with its own owner tag, OAuth client and name prefix,
+  so neither team can mint the other's tags or collide with its names;
+- a **`twd.dev/cap/tenant-admin` grant** for that tenant, so the team can
+  manage its own workloads, and nothing else: not other teams' tenants,
+  not hosts, not releases or upgrades, and not its tenant's own limits.
 
-## Grant a team its tenant
+The design is [ADR-team-tenants](design/adr/team-tenants.md), tracked in
+issue #80.
+
+If teams don't trust each other's tailnet admins, give each team its own
+tailnet instead. A tailnet admin can grant themselves any tenant, or
+change tag ownership.
+
+## 1. Give every tenant on the tailnet its own owner tag
+
+A tenant's **owner tag** owns its workload and object tags in the tailnet
+policy's `tagOwners`, and its OAuth client is scoped to that tag. Tailscale
+only lets a client mint tags its own tag owns, so team B's client can't
+mint team A's tags, even if mgmt has a bug.
+
+A tenant alone on its tailnet uses `tag:twd` and needs nothing new. Before
+a second tenant joins the tailnet, move the existing tenant to its own
+owner tag:
+
+1. In the admin console, create an OAuth client with **Auth Keys (write)**
+   scoped to the new tag, for example `tag:twd-t-ops`, and add the tag to
+   `tagOwners` (owned by `autogroup:admin`).
+2. Make that tag the owner of the tenant's workload tags in `tagOwners`,
+   for example `"tag:twd-wl-api": ["autogroup:admin", "tag:twd-t-ops"]`.
+3. On the twd host, run
+   `twd tenant set <tenant> --owner-tag tag:twd-t-ops --oauth-client-file <the new client's file>`.
+
+Existing nodes keep their tags; only who owns them changes. Hosts are
+created with a tenant whose client can mint `tag:twd-host`, which is the
+operator's tenant on `tag:twd`. Keep a separate operator tenant for that,
+or add hosts before you move the operator tenant to an owner tag.
+
+## 2. Add the team's tenant
+
+With an OAuth client scoped to the team's own owner tag:
+
+```sh
+twd tenant add example.ts.net --oauth-client-file payments-oauth.env \
+  --owner-tag tag:twd-t-payments --name-prefix pay --policy-apply
+```
+
+- `--owner-tag` must differ from every other tenant's on the tailnet, and
+  can't be one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`,
+  `tag:twd-public`). Otherwise it fails with `409 shared_owner_tag` or
+  `400 reserved_tag`.
+- `--name-prefix` (up to 11 of a-z, 0-9 and inner hyphens) goes in front of
+  every tailnet name twd generates for the tenant:
+  - object and workload nodes: `pay-<object ID>`;
+  - Services: `svc:pay-<name>`;
+  - public URLs: `https://pay-<workload>.<tailnet>/`;
+  - deploy endpoints: `pay-<workload>-<host>`.
+
+  At most one tenant per tailnet may go without a prefix. Prefixes must
+  differ, and neither may start with the other followed by a hyphen
+  (`409 name_prefix_required`). A prefix is fixed once the tenant has
+  deployed.
+- The tenant's ID is `tn_<tailnet label>-<prefix>`. With several tenants on
+  a tailnet, name one by ID: `--tenant tn_example-pay`. Naming the tailnet
+  is `ambiguous_tenant`.
+
+Each team's workload tags must be owned by its owner tag only:
+
+```jsonc
+"tagOwners": {
+  "tag:twd-t-payments": ["autogroup:admin"],
+  "tag:pay-api":        ["autogroup:admin", "tag:twd-t-payments"]
+}
+```
+
+A tag that another team's owner tag also owns, or that the team's owner tag
+doesn't own, fails the deploy with `400 tag_not_owned`. `twd policy` lists
+these under `tagOwnerProblems`. Public routes need `tag:twd-public` owned
+by each team's owner tag too; `twd policy` prints the line. Public nodes are
+separate per workload, so sharing that tag is safe.
+
+## 3. Grant the team its tenant
 
 In the tailnet policy file, grant the team the capability on
 `tag:twd-mgmt`, naming its tenants and what it may do there:
@@ -18,14 +91,14 @@ In the tailnet policy file, grant the team the capability on
 "grants": [
   {"src": ["group:payments"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"],
    "app": {"twd.dev/cap/tenant-admin": [
-     {"tenants": ["tn_payments"], "actions": ["read", "deploy", "kill", "secrets", "data"]}
+     {"tenants": ["tn_example-pay"], "actions": ["read", "deploy", "kill", "secrets", "data"]}
    ]}}
 ]
 ```
 
 `tenants` are tenant IDs (`twd tenant ls` as an admin). Both fields are
-required. A value without `tenants` or `actions`, with a wildcard, an
-unknown action or an unknown field grants nothing. `twd whoami` and
+required. A value without `tenants` or `actions`, or with a wildcard, an
+unknown action or an unknown field, grants nothing. `twd whoami` and
 `GET /v1/whoami` (`invalidTenantGrants`) say why.
 
 | Action | Lets the team |
@@ -41,25 +114,63 @@ single value names both the tenant and the action.
 `{"tenants": ["a"], "actions": ["read"]}` plus
 `{"tenants": ["b"], "actions": ["deploy"]}` doesn't allow deploying to `a`.
 
+### MCP and approvals
+
+A value can also carry:
+
+- **`"mcp": {"tools": [...]}`**: admits the caller to twd's MCP server
+  (`/mcp`) for that value's tenants.
+  - It gets the read tools (`whoami`, `ls`, `logs`, `audit`) with `read`.
+  - It gets the write and destructive tools (`deploy`, `undeploy`, `kill`)
+    only if they're named in `tools` and their action is in `actions`.
+  - The tools run as the caller, limited to the values that carry `mcp`.
+    By contrast, a `twd.dev/cap/mcp` holder's tools run as an admin.
+- **`"approve": [<twd.dev/cap/approve value>, ...]`**: makes the caller an
+  approver for Workflow approvals in that value's tenants only, with the
+  same fields as [approvals.md](approvals.md). A value with `approve`
+  needs no `actions`. `actions` alone never make someone an approver.
+
+```jsonc
+{"tenants": ["tn_example-pay"], "actions": ["read", "kill"], "mcp": {"tools": ["kill"]},
+ "approve": [{"workflows": ["refund"], "limits": {"amount": 500}}]}
+```
+
 ## What a team sees
 
 - `twd link` works for a tenant admin and prints the tenants and actions.
   `twd deploy`, `twd ls`, `twd logs`, `twd kill` and `twd audit` work in
   the granted tenants.
 - Lists (`GET /v1/tenants`, `/v1/deployments`, `/v1/objects`,
-  `/v1/audit`) show only the granted tenants. A team with `read` in
-  several tenants names one with `?tenant=`.
+  `/v1/audit`) show only the granted tenants, merged when there are
+  several.
 - Asking for a tenant it wasn't granted is `403 tenant_forbidden`, with the
   grant to add. Another tenant's deployment or object, by ID, is
   `404 not_found`, so its existence doesn't leak.
-- Admin-only routes are `403 tenant_forbidden`: hosts (create, cordon,
-  drain, delete), creating, changing or deleting tenants, purging all of a
-  tenant's objects, releases, upgrades, `GET /v1/status`, container
-  reservations and pushing operator base images.
-- The admin console (`/ui`) and twd's MCP server (`/mcp`) aren't open to
-  tenant admins yet.
-- Approvals are unchanged: deciding them needs `twd.dev/cap/approve`
-  ([approvals.md](approvals.md)).
+- The admin console (`/ui`) shows its tenants' deployments, objects and
+  audit records, without the hosts, status and audit-chain panels.
+- Admin-only routes are `403 tenant_forbidden`:
+  - hosts (create, cordon, drain, delete);
+  - creating, changing or deleting tenants, and purging all of a tenant's
+    objects;
+  - releases, upgrades and `GET /v1/status`;
+  - container reservations, and pushing operator base images.
+
+## Checks
+
+`twd policy` and `twd deploy` read the tailnet policy and warn
+(`accessWarnings`) about grants to `tag:twd-mgmt` that don't do what they
+look like:
+
+- **Values on `twd.dev/cap/admin`.** They don't narrow it: the holder is a
+  full admin of every tenant and host. Versions of twd-mgmt before this
+  one also ignore those values. Use `twd.dev/cap/tenant-admin`, which those
+  versions don't know and refuse.
+- **Invalid `twd.dev/cap/tenant-admin` values,** and values naming tenant
+  IDs that don't exist.
+- **On a tailnet with several tenants, `twd.dev/cap/mcp` and
+  `twd.dev/cap/approve` grants.** These apply to every tenant on the
+  tailnet. Use the `mcp` and `approve` entries of a tenant-admin value to
+  limit them to one team.
 
 ## Admins
 
@@ -67,16 +178,15 @@ single value names both the tenant and the action.
 tenant. Holding both capabilities makes a caller an admin; a tenant-admin
 value never narrows an admin.
 
-Use a separate capability, not values on `twd.dev/cap/admin`. Versions of
-twd-mgmt before this one treat *holding* `twd.dev/cap/admin` as full admin
-and ignore its values, so a value meant to limit a team would make it an
-admin there. Those versions don't know `twd.dev/cap/tenant-admin`, so they
-refuse it.
+## Devices
 
-## Not yet
+twd deletes a device only by the node ID it recorded when it minted that
+node for the tenant. It never sweeps the tailnet for "foreign" devices.
+So one team's tenant never touches another team's devices, even though
+the OAuth clients' device scopes are tailnet-wide.
 
-Two teams' tenants on one tailnet aren't fully separated on the data plane
-yet. Until the rest of the ADR lands, their workloads' tags share an owner
-(`tag:twd`), so either tenant's OAuth client could mint the other's tags,
-and workload names can collide. Separate tailnets, or one trusted team per
-tailnet, are the safe setups for now. See the ADR's implementation plan.
+## Headscale
+
+On Headscale a tailnet keeps one tenant. A Headscale tenant can't have an
+owner tag, so a second tenant on the same Headscale tailnet fails with
+`409 shared_owner_tag`.

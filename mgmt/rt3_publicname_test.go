@@ -27,7 +27,7 @@ func TestRT3_H10_PublicNameSquat(t *testing.T) {
 	publicHost(t, e)
 	allow := map[string]any{"publicIngress": "allow"}
 	a := v1Tenant(t, e, "t.ts.net", allow)
-	b := v1Tenant(t, e, "t.ts.net", allow)
+	b := legacySharedTenant(t, e, a, "t.ts.net")
 	other := v1Tenant(t, e, "other.ts.net", allow)
 	pub := publicBundle(t, publicTwdJSONC)
 	deploy := func(tn string) map[string]any {
@@ -54,7 +54,7 @@ func TestRT3_H10_PublicNameSquat(t *testing.T) {
 		t.Fatalf("B's deny audit: %+v", recs)
 	}
 	// Spelling the tailnet differently doesn't escape the scope.
-	b2 := v1Tenant(t, e, "T.ts.net.", allow)
+	b2 := legacySharedTenant(t, e, a, "T.ts.net.")
 	c.fail("POST", "/v1/deployments", deploy(b2), 409, "public_name_owned")
 	// A tailnet-only deploy of the same name is unaffected (no public node).
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": b, "workload": "support", "bundle": publicBundle(t, tailnetOnlyTwdJSONC)}, nil)
@@ -110,7 +110,7 @@ func TestRT3_H10_PublicNameLegacyOwner(t *testing.T) {
 	publicHost(t, e)
 	allow := map[string]any{"publicIngress": "allow"}
 	a := v1Tenant(t, e, "t.ts.net", allow)
-	b := v1Tenant(t, e, "t.ts.net", allow)
+	b := legacySharedTenant(t, e, a, "t.ts.net")
 	pub := publicBundle(t, publicTwdJSONC)
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": a, "workload": "support", "bundle": pub}, nil)
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": a, "workload": "support", "namespace": PublicNamespace, "objectName": "support"}, nil)
@@ -122,4 +122,22 @@ func TestRT3_H10_PublicNameLegacyOwner(t *testing.T) {
 	if cl := publicNameClaims(t, e, a); len(cl) != 1 || cl[0].ClaimedBy != claimedByLegacy {
 		t.Fatalf("A's backfilled claim %+v", cl)
 	}
+}
+
+// legacySharedTenant is a second tenant on tenant of's tailnet with neither
+// an owner tag nor a name prefix, as installs from before ADR-team-tenants
+// can have. The API now refuses to create one (shared_owner_tag), so it
+// goes straight into the store.
+func legacySharedTenant(t *testing.T, e *testEnv, of, tailnet string) string {
+	t.Helper()
+	ctx := context.Background()
+	x, err := e.store.GetTenant(ctx, of)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x.ID, x.Tailnet = newID("tn_")[:11], tailnet
+	if err := e.store.CreateTenant(ctx, x); err != nil {
+		t.Fatal(err)
+	}
+	return x.ID
 }

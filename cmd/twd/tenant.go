@@ -73,10 +73,29 @@ func (s *state) tenant(ref string) (TenantRef, error) {
 	}
 	ref = strings.TrimSuffix(ref, ".")
 	for _, t := range ts {
-		label, _, _ := strings.Cut(t.Tailnet, ".")
-		if ref == t.Tailnet || ref == t.TenantID || ref == label {
+		if ref == t.TenantID {
 			return t, nil
 		}
+	}
+	// By tailnet: ambiguous when several teams' tenants share it (teams.md).
+	var byTailnet []TenantRef
+	for _, t := range ts {
+		label, _, _ := strings.Cut(t.Tailnet, ".")
+		if ref == t.Tailnet || ref == label {
+			byTailnet = append(byTailnet, t)
+		}
+	}
+	switch len(byTailnet) {
+	case 1:
+		return byTailnet[0], nil
+	case 0:
+	default:
+		var ids []string
+		for _, t := range byTailnet {
+			ids = append(ids, t.TenantID)
+		}
+		return TenantRef{}, fail("ambiguous_tenant", fmt.Sprintf("tailnet %q has %d tenants: name one by tenant ID", ref, len(byTailnet)), "tenants: "+strings.Join(ids, ", ")).
+			withFix("--tenant " + ids[0])
 	}
 	var names []string
 	for _, t := range ts {
@@ -153,6 +172,8 @@ func cmdTenantAdd(args []string) error {
 	apply := f.Bool("policy-apply", false, "apply the base policy snippet (validated first, written with If-Match); default: print it")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
 	rpm := f.Int("registrations-per-minute", 0, "this tenant's node registration throttle (default 200/min)")
+	ownerTag := f.String("owner-tag", "", "another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:twd-t-payments; its --oauth-client-file must be scoped to it")
+	namePrefix := f.String("name-prefix", "", "with --owner-tag: goes in front of every tailnet name twd makes for this tenant (up to 11 of a-z, 0-9, -)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -237,8 +258,12 @@ func cmdTenantAdd(args []string) error {
 	if hs {
 		cred, mode = absKey, mgmt.MintHeadscale
 	}
+	tid := tenantIDFor(tailnet)
+	if *namePrefix != "" {
+		tid += "-" + *namePrefix // a second team's tenant on the same tailnet
+	}
 	for _, t := range s.tenants() {
-		if (t.APIKeyFile == cred || t.OAuthClientFile == cred) && t.Tailnet != tailnet {
+		if (t.APIKeyFile == cred || t.OAuthClientFile == cred) && t.TenantID != tid {
 			return fail("state_conflict", "that credential file already serves tenant "+t.Tailnet,
 				"a credential belongs to one tailnet; each tenant needs its own").withFix("twd tenant add " + tailnet + " --oauth-client-file <this tailnet's OAuth client file>")
 		}
@@ -268,7 +293,6 @@ func cmdTenantAdd(args []string) error {
 	}
 	res.Timings["api_check"] = ms(time.Since(t0))
 
-	tid := tenantIDFor(tailnet)
 	var existing mgmt.Tenant
 	if err := s.mgmt().Do(ctx, "GET", "/v1/tenants/"+tid, nil, &existing); err == nil {
 		if existing.Tailnet != tailnet {
@@ -282,6 +306,12 @@ func cmdTenantAdd(args []string) error {
 		}
 		if *rpm > 0 {
 			body["registrationsPerMinute"] = *rpm
+		}
+		if *ownerTag != "" {
+			body["ownerTag"] = *ownerTag
+		}
+		if *namePrefix != "" {
+			body["namePrefix"] = *namePrefix
 		}
 		var tr struct {
 			TenantID string `json:"tenantID"`
@@ -311,6 +341,15 @@ func cmdTenantAdd(args []string) error {
 	res.Timings["tenant_ready"] = ms(time.Since(t0))
 
 	snip, popts := profileSnippet(*profile)
+	owner := "tag:twd"
+	if *ownerTag != "" {
+		// The team's owner tag, owned by the tailnet's admins (teams.md).
+		owner = *ownerTag
+		if snip.TagOwners == nil {
+			snip.TagOwners = map[string][]string{}
+		}
+		snip.TagOwners[owner] = []string{"autogroup:admin"}
+	}
 	miss, err := policy.Missing(pol, snip)
 	if err != nil {
 		return err
@@ -340,11 +379,11 @@ func cmdTenantAdd(args []string) error {
 		fmt.Printf("  isolated: its own netd registry, workerd processes, state dir (0700) and registration throttle\n")
 		switch {
 		case res.Applied:
-			fmt.Printf("✓ policy   applied tag:twd tagOwners (validated, If-Match)\n")
+			fmt.Printf("✓ policy   applied %s tagOwners (validated, If-Match)\n", owner)
 		case res.PolicyOK && !policyReadable:
-			fmt.Printf("✓ policy   not checked (the OAuth client can't read the policy); the first mint proves tag:twd ownership\n")
+			fmt.Printf("✓ policy   not checked (the OAuth client can't read the policy); the first mint proves %s ownership\n", owner)
 		case res.PolicyOK:
-			fmt.Printf("✓ policy   tag:twd tagOwners present\n")
+			fmt.Printf("✓ policy   %s tagOwners present\n", owner)
 		default:
 			fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in %s):\n", policyHome(*profile))
 			for _, l := range strings.Split(strings.TrimSpace(res.PolicyDiff), "\n") {
@@ -353,6 +392,11 @@ func cmdTenantAdd(args []string) error {
 		}
 		if *profile == controlHeadscale {
 			fmt.Printf("› profile  %s\n", headscaleProfileNote)
+		}
+		if *ownerTag != "" {
+			fmt.Printf("  team     owner tag %s, name prefix %q: its workload tags must be owned by %s in tagOwners; grant the team twd.dev/cap/tenant-admin for %s (docs/teams.md)\n", owner, *namePrefix, owner, tid)
+			fmt.Printf("deploy to it with `twd deploy --tenant %s`\n", tid)
+			return
 		}
 		fmt.Printf("deploy to it with `twd deploy --tenant %s`\n", tailnet)
 	})
@@ -456,6 +500,8 @@ func cmdTenantSet(args []string) error {
 	maxCtrMem := f.Int("max-container-mem-mib", 0, "containers: total guest memory quota (MiB)")
 	maxCtrCPU := f.Float64("max-container-vcpu", 0, "containers: total vCPU quota (fractional, e.g. 2.5)")
 	pubIngress := f.String("public-ingress", "", "public (Funnel) ingress gate for twd.jsonc \"public\" routes: allow | deny (ADR-029)")
+	ownerTag := f.String("owner-tag", "", "move the tenant to its own owner tag, e.g. tag:twd-t-ops (\"-\" = back to tag:twd); pair it with --oauth-client-file scoped to that tag (docs/teams.md)")
+	namePrefix := f.String("name-prefix", "", "name prefix for the tenant's tailnet names; only before its first deploy (\"-\" = none)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -506,6 +552,12 @@ func cmdTenantSet(args []string) error {
 			return fail("bad_request", "can't read the OAuth client from "+absOAuth, netd.Redact(err.Error()))
 		}
 		patch["mintMode"], patch["oauthClientFile"], patch["oauthClientID"] = mgmt.MintOAuth, absOAuth, nil
+	}
+	if *ownerTag != "" {
+		patch["ownerTag"] = val(*ownerTag)
+	}
+	if *namePrefix != "" {
+		patch["namePrefix"] = val(*namePrefix)
 	}
 	if *maxCtr > 0 {
 		patch["maxContainers"] = *maxCtr

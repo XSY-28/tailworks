@@ -472,6 +472,7 @@ const (
 	ErrorCodeMintModeRemoved         ErrorCode = "mint_mode_removed"
 	ErrorCodeMirrorDisabled          ErrorCode = "mirror_disabled"
 	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
+	ErrorCodeNamePrefixRequired      ErrorCode = "name_prefix_required"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
 	ErrorCodeNoHost                  ErrorCode = "no_host"
 	ErrorCodeNoIdentity              ErrorCode = "no_identity"
@@ -496,11 +497,13 @@ const (
 	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
+	ErrorCodeSharedOwnerTag          ErrorCode = "shared_owner_tag"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
 	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
 	ErrorCodeStoreLimit              ErrorCode = "store_limit"
 	ErrorCodeStoreUnavailable        ErrorCode = "store_unavailable"
 	ErrorCodeSuperseded              ErrorCode = "superseded"
+	ErrorCodeTagNotOwned             ErrorCode = "tag_not_owned"
 	ErrorCodeTakeoverUnconfirmed     ErrorCode = "takeover_unconfirmed"
 	ErrorCodeTenantForbidden         ErrorCode = "tenant_forbidden"
 	ErrorCodeTenantHasLiveObjects    ErrorCode = "tenant_has_live_objects"
@@ -593,6 +596,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeMoveUnconfirmed:
 		return true
+	case ErrorCodeNamePrefixRequired:
+		return true
 	case ErrorCodeNamespaceAmbiguous:
 		return true
 	case ErrorCodeNoHost:
@@ -641,6 +646,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeServiceConflict:
 		return true
+	case ErrorCodeSharedOwnerTag:
+		return true
 	case ErrorCodeSpawnBudgetExceeded:
 		return true
 	case ErrorCodeStoreConflict:
@@ -650,6 +657,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeStoreUnavailable:
 		return true
 	case ErrorCodeSuperseded:
+		return true
+	case ErrorCodeTagNotOwned:
 		return true
 	case ErrorCodeTakeoverUnconfirmed:
 		return true
@@ -2252,6 +2261,9 @@ type Error struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
+	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+	// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
 	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
@@ -2343,6 +2355,9 @@ type Error struct {
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
 // | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
+// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
 // | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 // | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
@@ -2553,6 +2568,9 @@ type HostDrainResult struct {
 		// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 		// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 		// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+		// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
+		// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+		// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
 		// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 		// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 		// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
@@ -3217,7 +3235,10 @@ type PreflightResult struct {
 	ServiceUnapproved *bool `json:"serviceUnapproved,omitempty"`
 
 	// SrcTags The tags checked (workload + object tags from the bundle).
-	SrcTags          *[]string `json:"srcTags,omitempty"`
+	SrcTags *[]string `json:"srcTags,omitempty"`
+
+	// TagOwnerProblems For a tenant with its own `ownerTag`, the tags its owner tag doesn't own, or that another tenant's owner tag on the tailnet owns. Makes `ok` false.
+	TagOwnerProblems *[]string `json:"tagOwnerProblems,omitempty"`
 	TagOwnersSnippet *string   `json:"tagOwnersSnippet,omitempty"`
 
 	// Unchecked `tailnet.connects` entries that are names, not tags.
@@ -4034,6 +4055,13 @@ type Tenant struct {
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
+	// NamePrefix Goes in front of every tailnet name twd generates for this tenant (object
+	// and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11
+	// of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most
+	// one may go without (`409 name_prefix_required`). Fixed once the tenant
+	// has deployed.
+	NamePrefix *string `json:"namePrefix,omitempty"`
+
 	// OauthClientFile `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused).
 	OauthClientFile *string `json:"oauthClientFile,omitempty"`
 
@@ -4042,6 +4070,12 @@ type Tenant struct {
 
 	// OboPublicKey base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it.
 	OboPublicKey *string `json:"oboPublicKey,omitempty"`
+
+	// OwnerTag The tag that owns this tenant's workload and object tags, and that its
+	// OAuth client is scoped to. Default `tag:twd`. Two tenants on one
+	// tailnet need their own, so neither's client can mint the other's tags
+	// (`409 shared_owner_tag`). See docs/teams.md (ADR-team-tenants).
+	OwnerTag *string `json:"ownerTag,omitempty"`
 
 	// Pool Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host).
 	Pool *string `json:"pool,omitempty"`
@@ -4073,10 +4107,16 @@ type TenantCreate struct {
 	MaxObjects         *int     `json:"maxObjects,omitempty"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
-	MintMode        MintMode `json:"mintMode"`
-	OauthClientFile *string  `json:"oauthClientFile,omitempty"`
-	OauthClientID   *string  `json:"oauthClientID,omitempty"`
-	Pool            *string  `json:"pool,omitempty"`
+	MintMode MintMode `json:"mintMode"`
+
+	// NamePrefix Default none (see `Tenant.namePrefix`).
+	NamePrefix      *string `json:"namePrefix,omitempty"`
+	OauthClientFile *string `json:"oauthClientFile,omitempty"`
+	OauthClientID   *string `json:"oauthClientID,omitempty"`
+
+	// OwnerTag Default `tag:twd` (see `Tenant.ownerTag`).
+	OwnerTag *string `json:"ownerTag,omitempty"`
+	Pool     *string `json:"pool,omitempty"`
 
 	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
 	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
@@ -4135,10 +4175,16 @@ type TenantPatch struct {
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
-	MintMode        *MintMode                 `json:"mintMode,omitempty"`
+	MintMode *MintMode `json:"mintMode,omitempty"`
+
+	// NamePrefix Only before the tenant's first deploy (`400 immutable_field` after).
+	NamePrefix      nullable.Nullable[string] `json:"namePrefix,omitempty"`
 	OauthClientFile nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
 	OauthClientID   nullable.Nullable[string] `json:"oauthClientID,omitempty"`
-	Pool            nullable.Nullable[string] `json:"pool,omitempty"`
+
+	// OwnerTag Move the tenant to its own owner tag (`null` = back to `tag:twd`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch.
+	OwnerTag nullable.Nullable[string] `json:"ownerTag,omitempty"`
+	Pool     nullable.Nullable[string] `json:"pool,omitempty"`
 
 	// PublicIngress The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`).
 	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
@@ -4194,6 +4240,9 @@ type TombstoneError struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
+	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+	// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
 	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |

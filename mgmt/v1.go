@@ -454,7 +454,7 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 		var sp *string
 		var ip *int
 		switch k {
-		case "mintMode", "apiKeyFile", "oauthClientID", "oauthClientFile", "pool", "tier", "publicIngress":
+		case "mintMode", "apiKeyFile", "oauthClientID", "oauthClientFile", "pool", "tier", "publicIngress", "ownerTag", "namePrefix":
 			var s string
 			if !null {
 				if err := json.Unmarshal(raw, &s); err != nil {
@@ -517,6 +517,10 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 			p.Tier = sp
 		case "publicIngress":
 			p.PublicIngress = sp
+		case "ownerTag":
+			p.OwnerTag = sp
+		case "namePrefix":
+			p.NamePrefix = sp
 		case "registrationsPerMinute":
 			p.RegistrationsPerMinute = ip
 		case "maxObjects":
@@ -798,7 +802,7 @@ func (a *v1api) deploymentView(r *http.Request, id string) (deploymentView, erro
 	if v.Endpoint.Node == "" {
 		d, _ := a.s.M.store.GetDeployment(r.Context(), id)
 		t, _ := a.s.M.store.GetTenant(r.Context(), d.TenantID)
-		v.Endpoint.Node = d.Workload + "-" + d.HostID
+		v.Endpoint.Node = t.Name(d.Workload) + "-" + d.HostID
 		v.Endpoint.MagicDNS = v.Endpoint.Node + "." + t.Tailnet
 	}
 	if v.Namespaces == nil {

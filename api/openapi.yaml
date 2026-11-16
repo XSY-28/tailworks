@@ -4214,6 +4214,9 @@ components:
         | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
         | `host_token_invalid` | 403 | local-dev socket, wrong token |
         | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+        | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
+        | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+        | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
         | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
         | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
         | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
@@ -4291,6 +4294,9 @@ components:
         - host_token_invalid
         - not_admin
         - tenant_forbidden
+        - tag_not_owned
+        - shared_owner_tag
+        - name_prefix_required
         - cap_missing
         - forbidden
         - host_not_registered
@@ -4645,6 +4651,21 @@ components:
           description: Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host).
         tier: { $ref: "#/components/schemas/Tier" }
         publicIngress: { $ref: "#/components/schemas/PublicIngress" }
+        ownerTag:
+          type: string
+          description: |
+            The tag that owns this tenant's workload and object tags, and that its
+            OAuth client is scoped to. Default `tag:twd`. Two tenants on one
+            tailnet need their own, so neither's client can mint the other's tags
+            (`409 shared_owner_tag`). See docs/teams.md (ADR-team-tenants).
+        namePrefix:
+          type: string
+          description: |
+            Goes in front of every tailnet name twd generates for this tenant (object
+            and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11
+            of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most
+            one may go without (`409 name_prefix_required`). Fixed once the tenant
+            has deployed.
         oboPublicKey: { type: string, description: base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. }
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
@@ -4667,6 +4688,8 @@ components:
         pool: { type: string }
         tier: { $ref: "#/components/schemas/Tier" }
         publicIngress: { $ref: "#/components/schemas/PublicIngress" }
+        ownerTag: { type: string, description: "Default `tag:twd` (see `Tenant.ownerTag`)." }
+        namePrefix: { type: string, description: "Default none (see `Tenant.namePrefix`)." }
       additionalProperties: false
     TenantPatch:
       type: object
@@ -4685,6 +4708,12 @@ components:
         tier: { $ref: "#/components/schemas/Tier" }
         publicIngress:
           description: "The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`)."
+          type: [string, "null"]
+        ownerTag:
+          description: "Move the tenant to its own owner tag (`null` = back to `tag:twd`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch."
+          type: [string, "null"]
+        namePrefix:
+          description: "Only before the tenant's first deploy (`400 immutable_field` after)."
           type: [string, "null"]
       additionalProperties: false
     PublicIngress:
@@ -5475,6 +5504,10 @@ components:
           description: Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes.
         nodeAttrsSnippet: { type: string, description: The `tagOwners` + `nodeAttrs` policy to add (HuJSON). }
         publicURL: { type: string, format: uri, description: Where the workload's public routes will be served. }
+        tagOwnerProblems:
+          type: array
+          items: { type: string }
+          description: For a tenant with its own `ownerTag`, the tags its owner tag doesn't own, or that another tenant's owner tag on the tailnet owns. Makes `ok` false.
         accessWarnings:
           type: array
           items: { type: string }

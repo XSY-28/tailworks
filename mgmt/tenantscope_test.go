@@ -197,8 +197,9 @@ func newTenantEnv(t *testing.T) *tenantEnv {
 	a := &authzEnv{testEnv: e, t: t, h: srv.TailnetHandler(whois, val.Middleware(specReporter(t))(srv.Handler()))}
 	te.authzEnv = a
 	te.raw = srv.TailnetHandler(whois, srv.Handler())
-	a.tn = v1Tenant(t, e, "t.ts.net", nil)
-	a.tn2 = v1Tenant(t, e, "t.ts.net", nil) // a second team on the same tailnet
+	// Two teams on one tailnet: each its own owner tag; the second, a prefix.
+	a.tn = v1Tenant(t, e, "t.ts.net", map[string]any{"ownerTag": "tag:twd-t-a"})
+	a.tn2 = v1Tenant(t, e, "t.ts.net", map[string]any{"ownerTag": "tag:twd-t-b", "namePrefix": "b"})
 	a.addHost("h1", nodeH1)
 	a.addHost("h2", nodeH2)
 	var d struct{ DeploymentID string }

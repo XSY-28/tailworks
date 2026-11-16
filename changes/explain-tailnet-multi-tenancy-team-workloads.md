@@ -1,21 +1,37 @@
 ---
 kind: security
-upgrade: [protocol, cli-json]
+upgrade: [protocol, cli-json, schema-expand]
 ---
-Tenant admins: a team can manage only its own tenants. Grant it
-`twd.dev/cap/tenant-admin` on `tag:twd-mgmt` with values like
-`{"tenants": ["tn_payments"], "actions": ["read", "deploy", "kill"]}`
-(actions: `read`, `deploy`, `kill`, `secrets`, `data`). A tenant admin can
-`twd link`, deploy, list, read logs and audit, and kill in those tenants.
-Hosts, tenant settings, releases, upgrades, the admin console and `/mcp`
-stay with admins. Refusals are `403 tenant_forbidden` with the grant to
-add; another tenant's deployment or object is `404`. `twd whoami` shows
-what the grants allow, and why an invalid value grants nothing. See
-docs/teams.md.
+Several teams on one tailnet (ADR-team-tenants, docs/teams.md).
+
+- Tenant admins: grant a team `twd.dev/cap/tenant-admin` on `tag:twd-mgmt`
+  with values like `{"tenants": ["tn_example-pay"], "actions": ["read",
+  "deploy", "kill"]}`. The actions are `read`, `deploy`, `kill`, `secrets`
+  and `data`.
+  - The team can `twd link`, deploy, list, read logs and audit, and kill in
+    those tenants, through the CLI, the API, the registry and the admin
+    console.
+  - An `"mcp"` entry admits twd's MCP server for those tenants, and an
+    `"approve"` entry makes the team an approver there only.
+  - Hosts, tenant settings, releases and upgrades stay with admins.
+  - Refusals are `403 tenant_forbidden` with the grant to add; another
+    tenant's deployment or object is `404`.
+- Owner tags and name prefixes: `twd tenant add <tailnet> --owner-tag
+  tag:twd-t-<team> --name-prefix <p>` adds a second team's tenant to a
+  tailnet. Each tenant on a shared tailnet must have its own owner tag
+  (`409 shared_owner_tag`), and the OAuth client scoped to it can't mint
+  another team's tags. Its tailnet names get the prefix (`<p>-…`,
+  `svc:<p>-…`).
+- `twd policy` and `twd deploy` warn about grants to `tag:twd-mgmt` that
+  don't do what they look like (`accessWarnings`), and about tags another
+  team owns (`tagOwnerProblems`).
 
 Fix: a tailnet user holding only `twd.dev/cap/approve` could push and
-pull every tenant's images in mgmt's registry. The registry now admits only admins, hosts and tenant admins.
+pull every tenant's images in mgmt's registry. The registry now admits only
+admins, hosts and tenant admins.
 
-Operator action: none. Don't scope a team by adding values to
-`twd.dev/cap/admin`; older mgmts ignore those values and treat the holder
-as a full admin.
+Operator action: none for a tenant alone on its tailnet. To add a second
+team's tenant to a tailnet, first move the existing tenant to its own owner
+tag (`twd tenant set <tenant> --owner-tag … --oauth-client-file …`). Don't
+scope a team by adding values to `twd.dev/cap/admin`: older mgmts ignore
+them and treat the holder as a full admin.

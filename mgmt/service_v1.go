@@ -36,6 +36,11 @@ type TenantPatch struct {
 	// PublicIngress is the ADR-029 gate ("allow" | "deny"; null clears = deny).
 	PublicIngress *string
 	By            string
+
+	// teams.go: the owner tag (null = tag:twd) and the name prefix (only
+	// before the tenant's first deploy).
+	OwnerTag   *string
+	NamePrefix *string
 }
 
 // UpdateTenant applies a merge patch. Changing the mode, client ID or
@@ -126,6 +131,9 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 		gateChanged = t.PublicAllowed() != (*p.PublicIngress == PublicAllow)
 		t.PublicIngress = *p.PublicIngress
 		changed["publicIngress"] = t.PublicIngress
+	}
+	if err := m.patchTeamFields(ctx, &t, p, changed); err != nil { // teams.go
+		return Tenant{}, err
 	}
 	switch t.MintMode {
 	case MintHeadscale:
@@ -577,7 +585,7 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 				return res, err
 			}
 			if pub != nil {
-				if err := m.checkPublicName(ctx, t, r.Workload); err != nil { // publicnames.go (H10)
+				if err := m.checkPublicName(ctx, t, t.Name(r.Workload)); err != nil { // publicnames.go (H10)
 					return res, err
 				}
 			}
@@ -588,7 +596,7 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 			svcCfg = cfg
 		}
 	}
-	svcName, err := applyService(svcCfg, r.Workload, classes)
+	svcName, err := applyTeamService(t, svcCfg, r.Workload, classes) // teams.go
 	if err != nil {
 		return res, errf(400, "bad_bundle", "%v", err)
 	}
@@ -620,6 +628,11 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 			if !slices.Contains(src, t) {
 				src = append(src, t)
 			}
+		}
+	}
+	if tn, err := m.store.GetTenant(ctx, r.TenantID); err == nil {
+		if err := m.checkTenantTags(ctx, tn, src, nil); err != nil { // teams.go: no owner tags
+			return res, err
 		}
 	}
 	res, err = m.Preflight(ctx, r.TenantID, PreflightRequest{SrcTags: src, Connects: connects, Public: pub != nil, Service: svcName, WorkloadTags: wlTags})

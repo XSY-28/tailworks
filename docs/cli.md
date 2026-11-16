@@ -137,7 +137,7 @@ serve, list, update or remove tenants
 ```text
 twd tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
-usage: twd tenant add <tailnet> --oauth-client-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
+usage: twd tenant add <tailnet> --oauth-client-file <file> [--policy-apply] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
   (every command takes --state-dir, default ~/.twd, and --json)
 ```
 
@@ -153,8 +153,12 @@ flags:
     	coordination server for this tailnet's nodes (default "https://controlplane.tailscale.com")
   -json
     	machine-readable output
+  -name-prefix string
+    	with --owner-tag: goes in front of every tailnet name twd makes for this tenant (up to 11 of a-z, 0-9, -)
   -oauth-client-file string
     	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:twd); read at use, never copied
+  -owner-tag string
+    	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:twd-t-payments; its --oauth-client-file must be scoped to it
   -policy-apply
     	apply the base policy snippet (validated first, written with If-Match); default: print it
   -registrations-per-minute int
@@ -201,8 +205,12 @@ flags:
     	containers (ADR-032): running containers quota
   -max-objects int
     	object quota
+  -name-prefix string
+    	name prefix for the tenant's tailnet names; only before its first deploy ("-" = none)
   -oauth-client-file string
     	switch the tenant to mint mode oauth with this 0600 OAuth client file (on this host; read at use, never copied)
+  -owner-tag string
+    	move the tenant to its own owner tag, e.g. tag:twd-t-ops ("-" = back to tag:twd); pair it with --oauth-client-file scoped to that tag (docs/teams.md)
   -pool string
     	host pool the tenant's deployments are placed on ("-" = any host)
   -public-ingress string

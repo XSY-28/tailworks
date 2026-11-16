@@ -37,6 +37,9 @@ printed anywhere.
 ### ambiguous_object
 400 · cli. **When:** the object reference you gave (`twd kill`, `twd audit`) matches more than one object. **Fix:** name it by object ID (`twd ls` prints them).
 
+### ambiguous_tenant
+400 · cli. **When:** `--tenant` named a tailnet that has more than one tenant (several teams on one tailnet, [teams.md](teams.md)). **Fix:** name the tenant by its ID; the error lists them (`twd tenant ls`).
+
 ### approval_not_pending
 409 · hostd, mgmt, cli. **When:** a decision (`twd approve`, the admin UI, `POST /_twd/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, timed out, or it never asked. **Fix:** `twd approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
 
@@ -205,6 +208,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### missing_tools
 1 · cli. **When:** `twd host setup --microvm` needs `ip`, `cryptsetup`, `losetup`, `mkfs.ext4` and one is missing. **Fix:** `apt-get install iproute2 cryptsetup-bin util-linux e2fsprogs` (Debian/Ubuntu) or `dnf install iproute cryptsetup util-linux e2fsprogs` (Fedora).
 
+### name_prefix_required
+409 · mgmt, cli. **When:** a tenant was created on a tailnet that already has a tenant, without a `namePrefix` that differs from every other tenant's there (and doesn't start with another's followed by a hyphen), or with a prefix an unprefixed tenant's existing workload names already use. **Fix:** `twd tenant add <tailnet> --owner-tag <tag> --name-prefix <p>` with an unused prefix ([teams.md](teams.md)).
+
 ### namespace_ambiguous
 409 · mgmt. **When:** a class is declared by several workloads and the request did not say which. **Fix:** pass `workload` (or rename the class).
 
@@ -346,6 +352,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### service_unsupported
 1 · cli. **When:** `--service` needs systemd (Linux, with a reachable user manager) or launchd (macOS) and neither applies. **Fix:** run `twd up` without `--service`, or fix the user session (`loginctl enable-linger`).
 
+### shared_owner_tag
+409 · mgmt, cli. **When:** a tenant was created (or its owner tag changed) on a tailnet where another tenant uses `tag:twd` as its owner tag, or the same owner tag: either tenant's OAuth client could mint the other's tags. **Fix:** give each tenant on the tailnet its own owner tag: `twd tenant set <existing> --owner-tag tag:twd-t-<team> --oauth-client-file <a client scoped to it>`, then `twd tenant add … --owner-tag …` ([teams.md](teams.md)).
+
 ### spawn_budget_exceeded
 429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `twd.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps), or raise the budget.
 
@@ -372,6 +381,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### systemd_failed
 500 · cli. **When:** `systemctl` failed during `twd host setup`. **Fix:** `journalctl -u twd-vmhelper`.
+
+### tag_not_owned
+400 · mgmt, cli. **When:** a tenant with its own owner tag deployed or spawned with a tag that, in the tailnet policy's `tagOwners`, its owner tag doesn't own, or another tenant's owner tag on the same tailnet also owns; `twd policy` lists them as `tagOwnerProblems`. **Fix:** own the tag by the tenant's owner tag only (the printed `snippet`), or use a tag of your own team's ([teams.md](teams.md)).
 
 ### tailnet_required
 400 · cli. **When:** the tailnet could not be determined from the OAuth client, or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). twd never bootstraps from the machine's own Tailscale login. **Fix:** `twd up --tailnet <name> …`.

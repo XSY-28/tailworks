@@ -121,7 +121,7 @@ flowchart LR
 
 | Principal | Tailnet representation | MagicDNS name | Tags |
 |---|---|---|---|
-| Tenant | A tailnet, bound by its OAuth client (§4.4) | — | Owns `tag:twd-*` through `tagOwners` |
+| Tenant | A trust domain in one tailnet, bound by its own OAuth client (§4.4). A tailnet may hold several, one per team, each with its own owner tag and name prefix ([ADR-team-tenants](adr/team-tenants.md)) | — (with a name prefix, every generated name is `<prefix>-<name>`) | Its owner tag (`tag:twd` by default) owns its tags through `tagOwners` |
 | Workload (a Worker) | One node per (workload, host), advertising `svc:<workload>` where Services exist | `<workload>-<host>`; Service `<workload>` | `tag:twd-wl-<workload>` |
 | Object (a DO instance) | **One persistent node per object** | `<class>-<b32(hmac(id))[:10]>` by default; `<class>-<slug>` if the class sets `publicNames` | From class config, e.g. `tag:twd-do-room` |
 | Agent | An object whose class sets `agent: true` | as for objects | e.g. `tag:twd-agent-support` |
@@ -738,7 +738,7 @@ Measured on Headscale v0.29.7 (ADR-015 has the details):
 
 | Threat | Mitigation | Residual risk |
 |---|---|---|
-| A tenant's OAuth client secret is stolen | The secret is in a 0600 file on the mgmt host only, never on other hosts, never logged. The client is `auth_keys`-only for `tag:twd`. Keys are single-use with ≤5 min expiry. The reconciler deletes tagged devices that twd didn't mint | Within one tenant, the attacker can mint `tag:twd-*` nodes until the client is revoked. With the opt-in `devices:core` scope, its reach depends on TS-5 |
+| A tenant's OAuth client secret is stolen | The secret is in a 0600 file on the mgmt host only, never on other hosts, never logged. The client is `auth_keys`-only for the tenant's owner tag (`tag:twd`, or the team's own on a shared tailnet). Keys are single-use with ≤5 min expiry. twd deletes devices only by the node IDs it recorded when minting | Within one tenant, the attacker can mint the tags that tenant's owner tag owns, until the client is revoked; on a shared tailnet, not another team's ([ADR-team-tenants](adr/team-tenants.md)). With the opt-in `devices:core` scope, its reach depends on TS-5 |
 | An object's node key is stolen | Per-object DEK, released only to the lease holder. Key rotation on migration and every 30 days. Assertions are bound to node certificates (24 h) | The attacker can impersonate that object until rotation or kill |
 | A recipient replays an assertion | `aud` = the receiving node, sender bound to the WhoIs peer, 60 s TTL, `jti` cache, every hop re-signs | The PII in `grp`/`act` is visible to the recipient. `sub` is pairwise |
 | Egress identity is forged in-VM | Platform wrapper with a MAC bound to the request. Unattributed traffic is treated as the workload. One VM per trust domain | A V8 escape impersonates the co-resident objects of the *same* trust domain (WD-3 closes the non-escape path fully) |
