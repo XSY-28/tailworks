@@ -421,7 +421,10 @@ func (h *Host) onPublicRejected(s netd.PublicRejectSummary) {
 	top := append([]netd.IPCount(nil), s.TopIPs...)
 	sort.Slice(top, func(i, j int) bool { return top[i].Count > top[j].Count })
 	b, _ := json.Marshal(map[string]any{"from": s.From.UTC().Format(time.RFC3339), "to": s.To.UTC().Format(time.RFC3339),
-		"rateLimited": s.RateLimited, "tooLarge": s.TooLarge, "connsRefused": s.ConnsRefused, "topIPs": top, "uniqueIPApprox": s.UniqueIPApprox})
+		"rateLimited": s.RateLimited, "tooLarge": s.TooLarge, "connsRefused": s.ConnsRefused, "topIPs": top, "uniqueIPApprox": s.UniqueIPApprox,
+		"ipConnsRefused": s.IPConnsRefused,
+	})
+	h.countPublicRejected(o, s)
 	h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "public_rejected", ActingFor: OriginPublic, Detail: b, TraceID: newTraceID()})
 }
 

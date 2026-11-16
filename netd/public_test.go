@@ -49,6 +49,9 @@ type pubEnv struct {
 	rejs  chan netd.PublicRejectSummary
 	raw   bool // PublicListen returns plain (non-Funnel) conns
 	slow  chan struct{}
+
+	// up, when set (in newPubEnv's mod), replaces upstream.
+	up http.Handler
 }
 
 const pubID = "pub1"
@@ -150,6 +153,10 @@ func (e *pubEnv) url(path string) string {
 }
 
 func (e *pubEnv) upstream(w http.ResponseWriter, r *http.Request) {
+	if e.up != nil {
+		e.up.ServeHTTP(w, r)
+		return
+	}
 	n := 0
 	if r.Body != nil {
 		b, err := io.ReadAll(r.Body)

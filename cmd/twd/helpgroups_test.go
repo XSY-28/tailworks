@@ -18,7 +18,7 @@ func TestHelpGroups(t *testing.T) {
 			for _, c := range groups[i] {
 				names = append(names, c.name)
 			}
-			t.Errorf("commands in no help group (add them to helpGroups and shortHelp): %s", strings.Join(names, ", "))
+			t.Errorf("commands in no help group (set group: and short: on their entry in commands, main.go): %s", strings.Join(names, ", "))
 		}
 		for _, c := range groups[i] {
 			seen[c.name]++
@@ -34,8 +34,8 @@ func TestHelpGroups(t *testing.T) {
 		if seen[c.name] != 1 {
 			t.Errorf("twd help lists %s %d times", c.name, seen[c.name])
 		}
-		if _, ok := shortHelp[c.name]; !ok {
-			t.Errorf("no shortHelp line for %s", c.name)
+		if c.short == "" {
+			t.Errorf("no short: line for %s (its entry in commands, main.go)", c.name)
 		}
 		if l := helpLine(c); len([]rune(l)) > 60 {
 			t.Errorf("twd help line for %s is %d characters (≤ 60): %q", c.name, len([]rune(l)), l)
