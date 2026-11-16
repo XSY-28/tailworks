@@ -814,13 +814,13 @@ func jsonStr(v any) string {
 // columns stay in the schema (rows written by older twd versions; no
 // migration needed) but nothing reads them since the wif mint mode was
 // removed, and UpdateTenant clears them.
-const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress"
+const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress, owner_tag, name_prefix"
 
 func scanTenant(sc interface{ Scan(...any) error }) (Tenant, error) {
 	var t Tenant
 	var rpm, mo, mc, mm, mv int64
 	err := sc.Scan(&t.ID, &t.Tailnet, &t.ControlURL, &t.MintMode, &t.APIKeyFile, &rpm, &mo, &t.CreatedAt, &t.Pool, &t.Tier, &t.UpdatedAt, &t.OAuthClientID, &t.OAuthClientFile,
-		&mc, &mm, &mv, &t.PublicIngress)
+		&mc, &mm, &mv, &t.PublicIngress, &t.OwnerTag, &t.NamePrefix)
 	t.RegistrationsPerMinute, t.MaxObjects = int(rpm), int(mo)
 	t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU = int(mc), int(mm), float64(mv)/1e6
 	t.containerDefaults() // rows from before the columns
@@ -840,10 +840,10 @@ func (s *SQLStore) CreateTenant(ctx context.Context, t Tenant) error {
 	if t.UpdatedAt == 0 {
 		t.UpdatedAt = t.CreatedAt
 	}
-	_, err := s.db.ExecContext(ctx, s.q("INSERT INTO tenants ("+tenantCols+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
+	_, err := s.db.ExecContext(ctx, s.q("INSERT INTO tenants ("+tenantCols+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
 		t.ID, t.Tailnet, t.ControlURL, t.MintMode, t.APIKeyFile,
 		t.RegistrationsPerMinute, t.MaxObjects, t.CreatedAt, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
-		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress)
+		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.OwnerTag, t.NamePrefix)
 	if isUnique(err) {
 		return ErrExists
 	}
@@ -853,9 +853,9 @@ func (s *SQLStore) CreateTenant(ctx context.Context, t Tenant) error {
 // UpdateTenant rewrites a tenant's mint configuration (mode, credential
 // files) and limits; ID, tailnet and createdAt are immutable.
 func (s *SQLStore) UpdateTenant(ctx context.Context, t Tenant) error {
-	res, err := s.db.ExecContext(ctx, s.q("UPDATE tenants SET control_url=?, mint_mode=?, api_key_file=?, wif_client_id='', wif_lifecycle_client_id='', rpm=?, max_objects=?, pool=?, tier=?, updated_at=?, oauth_client_id=?, oauth_client_file=?, max_containers=?, max_container_mem=?, max_container_uvcpu=?, public_ingress=? WHERE id=?"),
+	res, err := s.db.ExecContext(ctx, s.q("UPDATE tenants SET control_url=?, mint_mode=?, api_key_file=?, wif_client_id='', wif_lifecycle_client_id='', rpm=?, max_objects=?, pool=?, tier=?, updated_at=?, oauth_client_id=?, oauth_client_file=?, max_containers=?, max_container_mem=?, max_container_uvcpu=?, public_ingress=?, owner_tag=?, name_prefix=? WHERE id=?"),
 		t.ControlURL, t.MintMode, t.APIKeyFile, t.RegistrationsPerMinute, t.MaxObjects, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
-		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.ID)
+		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.OwnerTag, t.NamePrefix, t.ID)
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,9 @@
 {{define "content"}}
 <div class="tiles" data-live="tiles">
-  <a class="tile {{if and .Status.Hosts.Total (eq .Status.Hosts.Live .Status.Hosts.Total)}}good{{else if .Status.Hosts.Total}}alert{{end}}" href="#hosts">
+  {{if .Who.Admin}}<a class="tile {{if and .Status.Hosts.Total (eq .Status.Hosts.Live .Status.Hosts.Total)}}good{{else if .Status.Hosts.Total}}alert{{end}}" href="#hosts">
     <div class="label">Hosts online</div>
     <div class="value">{{.Status.Hosts.Live}} <span class="of">of {{.Status.Hosts.Total}}</span></div>
-  </a>
+  </a>{{end}}
   <a class="tile" href="#deployments">
     <div class="label">Deployments</div>
     <div class="value">{{len .Deployments}}</div>
@@ -11,18 +11,18 @@
   </a>
   <a class="tile" href="#tenants">
     <div class="label">Tenants</div>
-    <div class="value">{{.Status.Tenants}}</div>
+    <div class="value">{{if .Who.Admin}}{{.Status.Tenants}}{{else}}{{len .Tenants}}{{end}}</div>
   </a>
   <a class="tile" href="#objects">
     <div class="label">Objects</div>
-    <div class="value">{{.Status.Objects}}</div>
-    <div class="sub" title="Devices deleted from the tailnet once the tombstone window passes">{{.Status.PendingDeviceDeletes}} device deletes pending</div>
+    <div class="value">{{if .Who.Admin}}{{.Status.Objects}}{{else}}{{len .Objects}}{{end}}</div>
+    {{if .Who.Admin}}<div class="sub" title="Devices deleted from the tailnet once the tombstone window passes">{{.Status.PendingDeviceDeletes}} device deletes pending</div>{{end}}
   </a>
-  <a class="tile {{if .Verification.OK}}good{{else}}alert{{end}}" href="/ui/audit">
+  {{if .Who.Admin}}<a class="tile {{if .Verification.OK}}good{{else}}alert{{end}}" href="/ui/audit">
     <div class="label">Audit log</div>
     <div class="value">{{if .Verification.OK}}Verified{{else}}NOT VERIFIED{{end}}</div>
     {{if .Verification.VerifiedAt}}<div class="sub">checked {{since .Verification.VerifiedAt}}</div>{{end}}
-  </a>
+  </a>{{end}}
 </div>
 
 {{if .Errors}}<div class="flash bad">{{range .Errors}}<div>{{.}}</div>{{end}}</div>{{end}}
@@ -51,7 +51,7 @@
   </div>
 </section>
 
-<section id="hosts" data-live="hosts">
+{{if .Who.Admin}}<section id="hosts" data-live="hosts">
   <div class="sect-head"><div>
     <h2>Hosts <span class="count">{{len .Hosts}}</span></h2>
     <p class="hint">Machines that run workloads. A host goes stale when it stops sending heartbeats.</p>
@@ -74,7 +74,7 @@
     </tbody>
   </table>
   </div>
-</section>
+</section>{{end}}
 
 <section id="tenants" data-live="tenants">
   <div class="sect-head"><div>
@@ -124,10 +124,10 @@
     <tbody>{{template "auditrows" (auditSet .Audit .Names)}}{{if not .Audit}}<tr><td colspan="6" class="empty">There are no audit records yet.</td></tr>{{end}}</tbody>
   </table>
   </div>
-  <p class="chains">{{template "chains" .Verification.Chains}}</p>
+  {{if .Who.Admin}}<p class="chains">{{template "chains" .Verification.Chains}}</p>{{end}}
 </section>
 
-<details class="more card">
+{{if not .Who.Admin}}<p class="hint">You're a tenant admin: this shows the tenants your <span class="mono">twd.dev/cap/tenant-admin</span> grant names. Hosts and the control plane are the admins'.</p>{{else}}<details class="more card">
   <summary>Control plane details</summary>
   <dl class="kv">
     <dt>DNS name</dt><dd class="mono">{{or .Who.Mgmt.DNSName "—"}}</dd>
@@ -138,5 +138,5 @@
     <dt>Tenant auth modes</dt><dd class="mono">{{if .MintModes}}{{join .MintModes}}{{else}}<span class="muted">no tenants</span>{{end}}</dd>
     <dt>Your connection</dt><dd><span class="mono">{{.Who.Actor}}</span> · {{.Who.Kind}}{{if .Who.Admin}} · admin{{end}}</dd>
   </dl>
-</details>
+</details>{{end}}
 {{end}}

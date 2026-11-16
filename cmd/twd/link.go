@@ -350,8 +350,15 @@ func cmdLink(args []string) error {
 		return err
 	}
 	l.Scheme = strings.SplitN(ep, "://", 2)[0]
-	if !w.Admin {
-		return fail("not_admin", w.Actor+" is not a twd admin at "+ep).withFix("ask the tailnet admin for the " + mgmt.AdminCap + " grant to " + mgmt.MgmtTag)
+	if !w.Admin && len(w.TenantGrants) == 0 {
+		// A tenant admin (mgmt.TenantAdminCap) links too: mgmt limits it
+		// to the tenants its grants name.
+		c := fail("not_admin", w.Actor+" is not a twd admin at "+ep).withFix("ask the tailnet admin for the "+mgmt.AdminCap+" grant to "+mgmt.MgmtTag,
+			"or, to manage only your team's tenants, a "+mgmt.TenantAdminCap+" grant naming them")
+		for _, bad := range w.InvalidTenantGrants {
+			c = c.withFix("your " + mgmt.TenantAdminCap + " value grants nothing: " + bad)
+		}
+		return c
 	}
 	l.Tailnet, l.MgmtNode, l.Login = w.Mgmt.Tailnet, w.Mgmt.DNSName, w.Actor
 	if err := l.save(s.linkPath()); err != nil {
@@ -359,7 +366,16 @@ func cmdLink(args []string) error {
 	}
 	res := linkResult{Endpoint: ep, Scheme: l.Scheme, Tailnet: l.Tailnet, MgmtNode: l.MgmtNode, Login: w.Login, Actor: w.Actor, NodeID: w.NodeID, Admin: w.Admin, Tenants: s.tenants(), Path: s.linkPath()}
 	emit(f, res, func() {
-		fmt.Printf("✓ linked    %s · tailnet %s · you are %s (admin, by WhoIs: no key or token stored)\n", ep, l.Tailnet, w.Actor)
+		role := "admin"
+		if !w.Admin {
+			role = "tenant admin"
+		}
+		fmt.Printf("✓ linked    %s · tailnet %s · you are %s (%s, by WhoIs: no key or token stored)\n", ep, l.Tailnet, w.Actor, role)
+		for _, g := range w.TenantGrants {
+			if !w.Admin {
+				fmt.Printf("  may %s in %s\n", strings.Join(g.Actions, ", "), strings.Join(g.Tenants, ", "))
+			}
+		}
 		if l.Scheme == "http" {
 			fmt.Printf("  over plain HTTP on :80 (no HTTPS certificate on mgmt's node): WireGuard encrypts it and WhoIs authenticates it\n")
 		}

@@ -103,5 +103,5 @@ func tagOwnersFor(t Tenant) string {
 	if t.Headscale() {
 		return `["tag:twd"]`
 	}
-	return `["autogroup:admin", "tag:twd"]`
+	return `["autogroup:admin", "` + t.Owner() + `"]` // teams.go
 }

@@ -23,7 +23,8 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
 - **twd's own API works the same way.** twd-mgmt serves `/v1` on its
   tailnet node and authorizes each request by WhoIs: admins hold
   `twd.dev/cap/admin`, approvers `twd.dev/cap/approve`, MCP tool users
-  `twd.dev/cap/mcp` ([agents.md](agents.md), [approvals.md](approvals.md)).
+  `twd.dev/cap/mcp`, and a team's own tenants `twd.dev/cap/tenant-admin`
+  ([agents.md](agents.md), [approvals.md](approvals.md), [teams.md](teams.md)).
   `twd link` stores only mgmt's address; no key or token.
 - **One credential mints node keys:** an OAuth client, a workload identity
   federation trust credential, or an API key ([INSTALL.md](INSTALL.md)).

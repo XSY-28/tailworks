@@ -375,7 +375,8 @@ func (a *v1api) ListTenants(w http.ResponseWriter, r *http.Request, params v1.Li
 		return
 	}
 	_, mine, isHost := a.hostScope(r)
-	if isHost {
+	scoped := a.s.tenantScoped(principalOf(r.Context()))
+	if isHost || scoped {
 		pg.Limit = 0 // filter in memory, then page
 	}
 	ts, err := a.s.M.store.ListTenants(r.Context(), pg)
@@ -392,6 +393,13 @@ func (a *v1api) ListTenants(w http.ResponseWriter, r *http.Request, params v1.Li
 			}
 		}
 		ts = kept
+		if len(ts) > n+1 {
+			ts = ts[:n+1]
+		}
+	}
+	if p := principalOf(r.Context()); scoped {
+		// Tenant admins see only the tenants their grants name (tenantscope.go).
+		ts = slices.DeleteFunc(ts, func(t Tenant) bool { return !p.tenantAllows(t.ID, ActionRead) })
 		if len(ts) > n+1 {
 			ts = ts[:n+1]
 		}
@@ -446,7 +454,7 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 		var sp *string
 		var ip *int
 		switch k {
-		case "mintMode", "apiKeyFile", "oauthClientID", "oauthClientFile", "pool", "tier", "publicIngress":
+		case "mintMode", "apiKeyFile", "oauthClientID", "oauthClientFile", "pool", "tier", "publicIngress", "ownerTag", "namePrefix":
 			var s string
 			if !null {
 				if err := json.Unmarshal(raw, &s); err != nil {
@@ -509,6 +517,10 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 			p.Tier = sp
 		case "publicIngress":
 			p.PublicIngress = sp
+		case "ownerTag":
+			p.OwnerTag = sp
+		case "namePrefix":
+			p.NamePrefix = sp
 		case "registrationsPerMinute":
 			p.RegistrationsPerMinute = ip
 		case "maxObjects":
@@ -790,7 +802,7 @@ func (a *v1api) deploymentView(r *http.Request, id string) (deploymentView, erro
 	if v.Endpoint.Node == "" {
 		d, _ := a.s.M.store.GetDeployment(r.Context(), id)
 		t, _ := a.s.M.store.GetTenant(r.Context(), d.TenantID)
-		v.Endpoint.Node = d.Workload + "-" + d.HostID
+		v.Endpoint.Node = t.Name(d.Workload) + "-" + d.HostID
 		v.Endpoint.MagicDNS = v.Endpoint.Node + "." + t.Tailnet
 	}
 	if v.Namespaces == nil {
@@ -802,6 +814,10 @@ func (a *v1api) deploymentView(r *http.Request, id string) (deploymentView, erro
 func (a *v1api) CreateDeployment(w http.ResponseWriter, r *http.Request, params v1.CreateDeploymentParams) {
 	var req DeployRequest
 	if err := readJSON(r, &req); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	if err := a.tenantOK(r, req.TenantID, true); err != nil {
 		writeErr(w, r, err)
 		return
 	}
@@ -835,12 +851,21 @@ func (a *v1api) ListDeployments(w http.ResponseWriter, r *http.Request, params v
 		writeErr(w, r, err)
 		return
 	}
-	ds, err := a.s.M.store.ListDeployments(r.Context(), DeploymentFilter{TenantID: str(params.Tenant), Workload: str(params.Workload),
+	tenant, mine, err := a.tenantListScope(r, params.Tenant) // tenantscope.go
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	if mine != nil {
+		pg.Limit = 0 // filter in memory, then page
+	}
+	ds, err := a.s.M.store.ListDeployments(r.Context(), DeploymentFilter{TenantID: tenant, Workload: str(params.Workload),
 		HostID: str(params.Host), Latest: boolOf(params.Latest)}, pg)
 	if err != nil {
 		writeErr(w, r, err)
 		return
 	}
+	ds = keepTenants(ds, mine, n, func(d Deployment) string { return d.TenantID })
 	views := make([]deploymentView, 0, len(ds))
 	for _, d := range ds {
 		if v, err := a.deploymentView(r, d.ID); err == nil {
@@ -860,11 +885,18 @@ func (a *v1api) GetDeployment(w http.ResponseWriter, r *http.Request, id v1.Depl
 		writeErr(w, r, errf(403, "forbidden", "deployment %s is not assigned to host %s", id, p.HostID))
 		return
 	}
+	if err := a.tenantOK(r, v.TenantID, false); err != nil {
+		writeErr(w, r, err)
+		return
+	}
 	writeResource(w, r, 200, v)
 }
 
 func (a *v1api) DeleteDeployment(w http.ResponseWriter, r *http.Request, id v1.DeploymentID, params v1.DeleteDeploymentParams) {
 	cur, err := a.deploymentView(r, id)
+	if err == nil {
+		err = a.tenantOK(r, cur.TenantID, false)
+	}
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -889,6 +921,10 @@ func (a *v1api) GetDeploymentBundle(w http.ResponseWriter, r *http.Request, id v
 	}
 	if p := principalOf(r.Context()); p.Kind == "host" && d.HostID != p.HostID {
 		writeErr(w, r, errf(403, "forbidden", "deployment %s is not assigned to host %s", d.ID, p.HostID))
+		return
+	}
+	if err := a.tenantOK(r, d.TenantID, false); err != nil {
+		writeErr(w, r, err)
 		return
 	}
 	sum := sha256.Sum256(d.Bundle)
@@ -967,15 +1003,20 @@ func (a *v1api) ListObjects(w http.ResponseWriter, r *http.Request, params v1.Li
 		writeErr(w, r, err)
 		return
 	}
-	f := ObjectFilter{TenantID: str(params.Tenant), Workload: str(params.Workload), Namespace: str(params.Namespace),
+	tenant, mine, err := a.tenantListScope(r, params.Tenant) // tenantscope.go
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	f := ObjectFilter{TenantID: tenant, Workload: str(params.Workload), Namespace: str(params.Namespace),
 		ParentID: str(params.Parent), RootID: str(params.Root), Page: pg}
 	if params.State != nil {
 		for _, s := range *params.State {
 			f.Status = append(f.Status, string(s))
 		}
 	}
-	mine, _, isHost := a.hostScope(r)
-	if isHost {
+	leases, _, isHost := a.hostScope(r)
+	if isHost || mine != nil {
 		f.Page.Limit = 0 // filter in memory, then page
 	}
 	objs, err := a.s.M.store.ListObjects(r.Context(), f)
@@ -983,11 +1024,12 @@ func (a *v1api) ListObjects(w http.ResponseWriter, r *http.Request, params v1.Li
 		writeErr(w, r, err)
 		return
 	}
+	objs = keepTenants(objs, mine, n, func(o Object) string { return o.TenantID })
 	if isHost {
 		// M3: a host lists only objects whose lease it holds.
 		kept := make([]Object, 0, len(objs))
 		for _, o := range objs {
-			if mine[o.Lease] {
+			if leases[o.Lease] {
 				kept = append(kept, o)
 			}
 		}
@@ -1015,6 +1057,9 @@ func (a *v1api) ListObjects(w http.ResponseWriter, r *http.Request, params v1.Li
 
 func (a *v1api) GetObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID, _ v1.GetObjectParams) {
 	o, err := a.s.M.GetObject(r.Context(), id)
+	if err == nil {
+		err = a.tenantOK(r, o.TenantID, false)
+	}
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -1032,6 +1077,9 @@ func (a *v1api) GetObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID
 
 func (a *v1api) UpdateObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID, _ v1.UpdateObjectParams) {
 	cur, err := a.s.M.GetObject(r.Context(), id)
+	if err == nil {
+		err = a.tenantOK(r, cur.TenantID, false)
+	}
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -1126,6 +1174,9 @@ func (a *v1api) UpdateObject(w http.ResponseWriter, r *http.Request, id v1.Objec
 
 func (a *v1api) DeleteObject(w http.ResponseWriter, r *http.Request, id v1.ObjectID, params v1.DeleteObjectParams) {
 	cur, err := a.s.M.GetObject(r.Context(), id)
+	if err == nil {
+		err = a.tenantOK(r, cur.TenantID, false)
+	}
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -1271,7 +1322,12 @@ func (a *v1api) ListAudit(w http.ResponseWriter, r *http.Request, params v1.List
 		writeErr(w, r, err)
 		return
 	}
-	f := AuditFilter{ObjectID: str(params.Object), ActingFor: str(params.Human), TraceID: str(params.Trace), TenantID: str(params.Tenant),
+	tenant, mine, err := a.tenantListScope(r, params.Tenant) // tenantscope.go
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	f := AuditFilter{ObjectID: str(params.Object), ActingFor: str(params.Human), TraceID: str(params.Trace), TenantID: tenant,
 		Chain: str(params.Chain), Since: normTS(str(params.Since)), Until: normTS(str(params.Until)), Page: pg}
 	f.Desc = params.Order != nil && *params.Order == v1.Desc
 	if params.Kind != nil {
@@ -1279,7 +1335,13 @@ func (a *v1api) ListAudit(w http.ResponseWriter, r *http.Request, params v1.List
 			f.Kinds = append(f.Kinds, string(k))
 		}
 	}
-	recs, chains, err := a.s.M.QueryAudit(r.Context(), f)
+	var recs []AuditRecord
+	var chains []ChainStatus
+	if mine != nil {
+		recs, chains, err = a.s.M.auditForTenants(r.Context(), f, mine, n)
+	} else {
+		recs, chains, err = a.s.M.QueryAudit(r.Context(), f)
+	}
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -1289,8 +1351,8 @@ func (a *v1api) ListAudit(w http.ResponseWriter, r *http.Request, params v1.List
 	for _, c := range chains {
 		ok = ok && c.OK
 	}
-	if chains == nil {
-		chains = []ChainStatus{}
+	if chains == nil || a.s.tenantScoped(principalOf(r.Context())) {
+		chains = []ChainStatus{} // host chains are the operator's (tenantscope.go)
 	}
 	writeJSON(w, 200, struct {
 		page[AuditRecord]
@@ -1450,8 +1512,18 @@ func (s *Server) roleGate(roles map[string]string, mux *http.ServeMux) http.Hand
 			return
 		}
 		if !s.roleAllowed(p, role) {
-			writeErr(w, r, errf(403, "forbidden", "caller (%s) may not call %s %s", p.Kind, r.Method, r.URL.Path))
-			return
+			if !s.tenantScoped(p) {
+				if s.holdsTenantAdminCap(p) {
+					writeErr(w, r, noValidTenantGrant(p)) // tenantscope.go
+					return
+				}
+				writeErr(w, r, errf(403, "forbidden", "caller (%s) may not call %s %s", p.Kind, r.Method, r.URL.Path))
+				return
+			}
+			var ok bool
+			if r, ok = s.tenantGate(w, r, p, role, pattern); !ok { // tenantscope.go
+				return
+			}
 		}
 		if p.Kind == "host" && r.Body != nil && pattern != "POST /v1/audit" {
 			// L4: host-role bodies are small (registration, heartbeat, object
@@ -1505,9 +1577,19 @@ func (s *Server) Handler() http.Handler {
 				writeErr(w, r, errf(404, "registry_unavailable", "this twd-mgmt serves no registry (start it with -registry-dir)"))
 				return
 			}
-			if principalOf(r.Context()).Kind == "" {
+			p := principalOf(r.Context())
+			if p.Kind == "" {
 				writeErr(w, r, errf(401, "no_identity", "unauthenticated"))
 				return
+			}
+			if p.Kind == "user" && !s.allowed(p, roleAdmin) {
+				// Approvers and MCP-only callers never reach the registry;
+				// tenant admins reach their own tenants' namespaces.
+				if !s.tenantScoped(p) {
+					writeErr(w, r, errf(403, "forbidden", "caller (%s) may not use the registry", p.Kind))
+					return
+				}
+				r = withRegistryTenantScope(r) // tenantscope_registry.go
 			}
 			reg.ServeHTTP(w, r)
 			return
@@ -1536,7 +1618,7 @@ func (s *Server) mountUI(api, uiH http.Handler) http.Handler {
 			}
 			// An approver who is not an admin gets the approvals page only.
 			approverPage := isApprover(p) && (r.URL.Path == "/ui/approvals" || r.URL.Path == "/ui/approvals/decide" || strings.HasPrefix(r.URL.Path, "/ui/static/"))
-			if p.Kind == "host" || !s.allowed(p, roleAdmin) && !approverPage {
+			if p.Kind == "host" || !s.allowed(p, roleAdmin) && !s.tenantScoped(p) && !approverPage { // tenant admins: tenantscope.go
 				writeErr(w, r, errf(403, "forbidden", "caller (%s) may not use the admin UI", p.Kind))
 				return
 			}

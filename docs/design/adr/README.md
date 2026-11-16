@@ -50,3 +50,4 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [040](040-workflows-approvals.md) | Workflows on workerd's built-in engine; an approval is a decision by a tailnet identity holding `twd.dev/cap/approve`, checked and audited by twd | 2026-11-15 | Proposed |
 | [041](041-upgrades-and-releases.md) | One release train, declared version skew, expand/contract store migrations, feature-gated placement, mgmt-driven upgrade runs, tested upgrades | 2026-11-15 | Proposed |
 | [042](042-oauth-only-minting.md) | Mint node keys with an OAuth client only; remove the API-key and WIF mint modes | 2026-11-15 | Accepted |
+| [043](043-team-tenants.md) | Several tenants per tailnet, one per team: a tenant-admin capability, a per-tenant owner tag, and per-tenant name prefixes | 2026-11-16 | Accepted |

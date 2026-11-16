@@ -22,6 +22,7 @@ Admission is the connection's WhoIs identity, exactly as for the API
 | a user or tagged node holding `twd.dev/cap/admin` (granted to `tag:twd-mgmt`; `autogroup:admin` gets it from the base snippet), or a login in `-admins` | 200, the UI |
 | mgmt's own node (the operator console on the host machine) | 200, the UI |
 | a user or tagged node holding only `twd.dev/cap/approve` (toward `tag:twd-mgmt`) | the **approvals** page only, defaulting to the tenants on its own tailnet (`GET /v1/whoami` `tenants`; `?tenant=<tenant ID>` for another); 403 `forbidden` elsewhere |
+| a user or tagged node holding only `twd.dev/cap/tenant-admin` ([teams.md](teams.md)) | 403 `forbidden`: the console isn't open to tenant admins yet; use the CLI |
 | any other tailnet user | 403 `not_admin`, with the grant snippet to add |
 | a `tag:twd-host` node (registered or not) | 403 `forbidden` (or `host_not_registered`); hosts never reach the UI or its assets |
 

@@ -121,7 +121,7 @@ func (m *Mgmt) publicView(ctx context.Context, d Deployment) *DeploymentPublicVi
 	}
 	t, _ := m.store.GetTenant(ctx, d.TenantID)
 	wp, _ := m.store.GetWorkloadPublic(ctx, d.TenantID, d.Workload)
-	host := d.Workload + "." + t.Tailnet
+	host := t.Name(d.Workload) + "." + t.Tailnet
 	if o, err := m.store.GetObjectByName(ctx, d.TenantID, d.Workload, PublicNamespace, d.Workload); err == nil && o.MagicDNS != "" {
 		host = strings.TrimSuffix(o.MagicDNS, ".")
 	}
@@ -213,7 +213,7 @@ func (m *Mgmt) findPublicClass(ctx context.Context, t Tenant, workload string) (
 			return Deployment{}, ClassConfig{}, errPublicNotAllowed(t, workload)
 		}
 		// Only the name's owner gets a public node (publicnames.go, H10).
-		if err := m.claimPublicName(ctx, t, workload, d.DeployedBy); err != nil {
+		if err := m.claimPublicName(ctx, t, t.Name(workload), d.DeployedBy); err != nil { // teams.go: prefixed
 			return Deployment{}, ClassConfig{}, err
 		}
 		for _, c := range d.Namespaces {

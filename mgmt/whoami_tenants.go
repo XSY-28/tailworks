@@ -3,6 +3,7 @@ package mgmt
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/rosskukulinski/twd/internal/approvecap"
@@ -49,6 +50,7 @@ func normTailnet(t string) string { return strings.TrimSuffix(strings.ToLower(t)
 // whoamiScope fills who's tailnet, tenants and approve grants.
 func (s *Server) whoamiScope(ctx context.Context, p Principal, who *WhoAmI) {
 	who.Tenants, who.ApproveGrants = []WhoAmITenant{}, []ApproveGrant{}
+	who.TenantGrants, who.InvalidTenantGrants = whoamiTenantGrants(p) // tenantscope.go
 	for _, raw := range p.CapValues[approvecap.Cap] {
 		var g ApproveGrant
 		if json.Unmarshal(raw, &g) == nil {
@@ -71,7 +73,11 @@ func (s *Server) whoamiScope(ctx context.Context, p Principal, who *WhoAmI) {
 	if err != nil {
 		return
 	}
+	onlyGranted := (s.tenantScoped(p) || tenantApprovers(p)) && !s.allowed(p, roleAdmin) && !plainApprover(p) // tenantscope.go
 	for _, t := range ts {
+		if onlyGranted && !slices.ContainsFunc(p.tenantGrants(), func(g TenantGrant) bool { return slices.Contains(g.Tenants, t.ID) }) {
+			continue
+		}
 		if p.Kind == "local" || normTailnet(t.Tailnet) == who.Tailnet {
 			who.Tenants = append(who.Tenants, WhoAmITenant{TenantID: t.ID, Tailnet: t.Tailnet})
 		}

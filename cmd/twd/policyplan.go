@@ -182,6 +182,9 @@ func printPolicyChecks(a *app, pf mgmt.PreflightResult) {
 		}
 	}
 	fmt.Printf("? callers    not checked: twd doesn't know who you want to allow to call %s\n", a.Name)
+	for _, w := range pf.AccessWarnings {
+		fmt.Printf("! access     %s\n", w)
+	}
 }
 
 // policyFailure is twd policy's error when a checked part is missing:

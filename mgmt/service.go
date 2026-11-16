@@ -340,6 +340,11 @@ type TenantRequest struct {
 	MaxContainerVCPU   float64 `json:"maxContainerVCPU,omitempty"`
 	// PublicIngress is the ADR-029 gate: "allow" or "deny" (default).
 	PublicIngress string `json:"publicIngress,omitempty"`
+
+	// Several tenants on one tailnet (teams.go): its owner tag and name
+	// prefix; "" = tag:twd and none.
+	OwnerTag   string `json:"ownerTag,omitempty"`
+	NamePrefix string `json:"namePrefix,omitempty"`
 }
 
 func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error) {
@@ -369,7 +374,8 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	t := Tenant{ID: r.ID, Tailnet: r.Tailnet, ControlURL: r.ControlURL, MintMode: r.MintMode, APIKeyFile: r.APIKeyFile,
 		OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
 		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, PublicIngress: r.PublicIngress, CreatedAt: m.now().UnixMilli(),
-		MaxContainers: r.MaxContainers, MaxContainerMemMiB: r.MaxContainerMemMiB, MaxContainerVCPU: r.MaxContainerVCPU}
+		MaxContainers: r.MaxContainers, MaxContainerMemMiB: r.MaxContainerMemMiB, MaxContainerVCPU: r.MaxContainerVCPU,
+		OwnerTag: r.OwnerTag, NamePrefix: r.NamePrefix}
 	t.containerDefaults()
 	if t.ID == registry.PublicNamespace {
 		return Tenant{}, errf(400, "bad_request", "tenant ID %q is reserved (the registry's operator namespace)", t.ID)
@@ -383,10 +389,13 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	if t.MaxObjects <= 0 {
 		t.MaxObjects = DefaultMaxObjects
 	}
+	if err := m.checkTeamFields(ctx, t); err != nil { // teams.go
+		return Tenant{}, err
+	}
 	if err := m.store.CreateTenant(ctx, t); err != nil {
 		return Tenant{}, err
 	}
-	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "publicIngress": t.PublicIngress})
+	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "publicIngress": t.PublicIngress, "ownerTag": t.Owner(), "namePrefix": t.NamePrefix})
 	return t, nil
 }
 
@@ -846,7 +855,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 				return resp, err
 			}
 			if pub != nil {
-				if err := m.claimPublicName(ctx, t, r.Workload, r.By); err != nil { // publicnames.go (H10)
+				if err := m.claimPublicName(ctx, t, t.Name(r.Workload), r.By); err != nil { // publicnames.go (H10)
 					return resp, err
 				}
 			}
@@ -879,7 +888,10 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			}
 		}
 	}
-	svcName, err := applyService(svcCfg, r.replica.owner(r.Workload), classes) // replicas share the group's Service
+	if err := m.checkDeployTeam(ctx, t, r.Workload, classes); err != nil { // teams.go
+		return resp, err
+	}
+	svcName, err := applyTeamService(t, svcCfg, r.replica.owner(r.Workload), classes) // replicas share the group's Service; teams.go
 	if err != nil {
 		return resp, errf(400, "bad_bundle", "%v", err)
 	}
@@ -1010,7 +1022,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		m.killPublicNode(ctx, t.ID, r.Workload, "public routes removed", r.By)
 	}
 	resp.DeploymentID, resp.Host, resp.Epoch, resp.Placement = d.ID, host, lease.Epoch, &dec
-	resp.Endpoint.Node = r.Workload + "-" + host
+	resp.Endpoint.Node = t.Name(r.Workload) + "-" + host
 	resp.Endpoint.MagicDNS = resp.Endpoint.Node + "." + t.Tailnet
 	resp.Endpoint.Service = svcDef
 	m.setDepStatus(host, d.ID, DeploymentStatus{Status: "assigned"})
@@ -1519,10 +1531,10 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		// hand out an existing object's node.
 		return resp, errf(409, "identity_conflict", "object ID %s is already taken by another identity", id)
 	}
-	hostname := id
+	hostname := t.Name(id) // teams.go: the tenant's name prefix, if any
 	if r.Namespace == PublicNamespace {
 		// The public URL is https://<workload>.<tailnet>.ts.net (ADR-029 D2).
-		hostname = workload
+		hostname = t.Name(workload)
 	}
 	o := Object{ID: id, TenantID: t.ID, Workload: workload, Namespace: r.Namespace, Name: r.ObjectName, Hostname: hostname, DeploymentID: dep.ID,
 		Lease: LeaseName(t.ID, dep.Workload), Tags: class.Tags, Caps: r.Caps, RootID: id, TTLSeconds: int64(ttl / time.Second),
@@ -1735,9 +1747,12 @@ func (m *Mgmt) checkSpawn(ctx context.Context, t Tenant, dep Deployment, p, chil
 		}
 		if !pol.TagOwnedBy(tag, p.Tags) {
 			e := errf(403, "delegation_invalid", "child tag %s is not owned by the parent's tags %v", tag, p.Tags)
-			e.Snippet = fmt.Sprintf(`"tagOwners": { %q: ["tag:twd", %q] }`, tag, p.Tags[0])
+			e.Snippet = fmt.Sprintf(`"tagOwners": { %q: [%q, %q] }`, tag, t.Owner(), p.Tags[0])
 			return e
 		}
+	}
+	if err := m.checkTenantTags(ctx, t, child.Tags, pol); err != nil { // teams.go
+		return asAPIError(err)
 	}
 	if e := pol.CheckSpawnCaps(p.Tags, child.Caps); e != nil {
 		return e
@@ -3168,6 +3183,14 @@ type PreflightResult struct {
 	NodeAttrsSnippet string   `json:"nodeAttrsSnippet,omitempty"`
 	// PublicURL is where the workload's public routes will be served.
 	PublicURL string `json:"publicURL,omitempty"`
+
+	// AccessWarnings: grants to tag:twd-mgmt that don't do what they look
+	// like (tenantscope_lint.go). Never fail the preflight.
+	AccessWarnings []string `json:"accessWarnings,omitempty"`
+
+	// TagOwnerProblems: for a tenant with its own owner tag, tags owned by
+	// another tenant's owner tag, or not by its own (teams.go). Fail it.
+	TagOwnerProblems []string `json:"tagOwnerProblems,omitempty"`
 }
 
 // Preflight checks the request against the tenant's current policy (read
@@ -3190,6 +3213,7 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 		port = "tcp:80"
 	}
 	var owners []string
+	res.TagOwnerProblems = m.tagOwnerProblems(ctx, t, r.SrcTags, pol) // teams.go
 	for _, tag := range r.SrcTags {
 		if _, ok := pol.TagOwners[tag]; !ok && !slices.Contains(res.MissingTagOwners, tag) {
 			res.MissingTagOwners = append(res.MissingTagOwners, tag)
@@ -3213,12 +3237,13 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	}
 	if r.Public && !pol.HasNodeAttr(PublicTag, "funnel") {
 		res.MissingNodeAttrs = append(res.MissingNodeAttrs, "funnel on "+PublicTag)
-		res.NodeAttrsSnippet = PublicFunnelSnippet
+		res.NodeAttrsSnippet = publicFunnelSnippet(t) // teams.go
 	}
 	if r.Service != "" {
 		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
 	}
-	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved
+	res.AccessWarnings = m.accessWarnings(ctx, t, pol) // tenantscope_lint.go
+	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved && len(res.TagOwnerProblems) == 0
 	return res, nil
 }
 

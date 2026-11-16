@@ -356,7 +356,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			}
 			for c, vals := range wi.CapMap {
 				info.Caps = append(info.Caps, string(c))
-				if c == mgmt.MCPCap || c == approvecap.Cap { // approvals.go needs the grants' values too
+				if c == mgmt.MCPCap || c == approvecap.Cap || c == mgmt.TenantAdminCap { // their grants' values narrow them
 					if info.CapValues == nil {
 						info.CapValues = map[string][]json.RawMessage{}
 					}

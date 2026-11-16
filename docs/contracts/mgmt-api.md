@@ -27,10 +27,21 @@ connection**, never by a bearer token or API key:
   `twd.dev/cap/admin` toward `tag:twd-mgmt` (granted by the base policy
   snippet to `autogroup:admin`; tenants may grant it to users, groups or
   tags such as a CI node). `twd-mgmt -admins <logins>` is an override.
+- **tenant admin** — the peer holds `twd.dev/cap/tenant-admin` (and not
+  `twd.dev/cap/admin`). Each value names tenants and actions:
+  `{"tenants": ["payments"], "actions": ["read", "deploy"]}`, both
+  required. The actions are `read`, `deploy`, `kill`, `secrets` and
+  `data`. An operation is open to tenant admins only if its `x-twd-role`
+  has a `tenant:<action>` part, and only for a tenant that one single
+  value names with that action. Lists are limited to those tenants, and
+  another tenant's deployment or object is `404`. Hosts, releases,
+  upgrades and tenant settings stay with admins
+  (ADR-043).
 - everyone else: `403 not_admin` with the grant `snippet` to add.
 
 Each operation declares its role in `x-twd-role` (`admin`, `host`,
-`admin|host`, `any`). The security scheme `tailnetWhoIs` documents this;
+`admin|host`, `any`, plus `tenant:<action>` where tenant admins may call
+it). The security scheme `tailnetWhoIs` documents this;
 it is **not** a token scheme and no header is sent.
 
 The unix socket + host token (RT-03) survives **only** behind
@@ -101,18 +112,18 @@ hostd's API, not this document's.
 
 | Method | Path | Role | Audited | Operation | Summary |
 |---|---|---|---|---|---|
-| `GET` | `/v1/audit` | admin | no | `ListAudit` | Query audit records |
+| `GET` | `/v1/audit` | admin\|tenant:read | no | `ListAudit` | Query audit records |
 | `POST` | `/v1/audit` | host | yes | `AppendAudit` | Append a batch of host audit records |
 | `GET` | `/v1/audit/verification` | admin | no | `GetAuditVerification` | Verify every audit chain |
 | `GET` | `/v1/certificates/{stableNodeID}` | host\|admin | no | `GetCertificate` | Look up a node certificate by stable node ID |
 | `GET` | `/v1/container-reservations` | admin\|host | no | `ListContainerReservations` | List container reservations |
 | `POST` | `/v1/container-reservations` | host | yes | `CreateContainerReservation` | Reserve quota for a container before it starts |
 | `DELETE` | `/v1/container-reservations/{id}` | host\|admin | yes | `DeleteContainerReservation` | Release a container reservation (the container stopped) |
-| `GET` | `/v1/deployments` | admin | no | `ListDeployments` | List deployments |
-| `POST` | `/v1/deployments` | admin | yes | `CreateDeployment` | Deploy a workload (async), or preflight it with dryRun |
-| `GET` | `/v1/deployments/{id}` | admin\|host | no | `GetDeployment` | Read a deployment and its status |
-| `DELETE` | `/v1/deployments/{id}` | admin | yes | `DeleteDeployment` | Undeploy |
-| `GET` | `/v1/deployments/{id}/bundle` | host\|admin | no | `GetDeploymentBundle` | Download the raw bundle |
+| `GET` | `/v1/deployments` | admin\|tenant:read | no | `ListDeployments` | List deployments |
+| `POST` | `/v1/deployments` | admin\|tenant:deploy | yes | `CreateDeployment` | Deploy a workload (async), or preflight it with dryRun |
+| `GET` | `/v1/deployments/{id}` | admin\|host\|tenant:read | no | `GetDeployment` | Read a deployment and its status |
+| `DELETE` | `/v1/deployments/{id}` | admin\|tenant:deploy | yes | `DeleteDeployment` | Undeploy |
+| `GET` | `/v1/deployments/{id}/bundle` | host\|admin\|tenant:read | no | `GetDeploymentBundle` | Download the raw bundle |
 | `POST` | `/v1/device-delete-runs` | admin | yes | `CreateDeviceDeleteRun` | Run the scheduled device deletes now |
 | `GET` | `/v1/healthz` | any | no | `GetHealthz` | Liveness |
 | `GET` | `/v1/hosts` | admin | no | `ListHosts` | List hosts |
@@ -127,15 +138,15 @@ hostd's API, not this document's.
 | `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
 | `GET` | `/v1/hosts/{id}/sandbox-deny` | host\|admin | no | `GetHostSandboxDeny` | Every tenant's credential file paths, for the host's sandbox deny list |
 | `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
-| `GET` | `/v1/images/aliases` | admin\|host | no | `ListImageAliases` | The image alias map |
-| `GET` | `/v1/images/public` | admin\|host | no | `ListPublicImages` | List public base images |
+| `GET` | `/v1/images/aliases` | admin\|host\|tenant:read | no | `ListImageAliases` | The image alias map |
+| `GET` | `/v1/images/public` | admin\|host\|tenant:read | no | `ListPublicImages` | List public base images |
 | `POST` | `/v1/images/public` | admin | yes | `CreatePublicImage` | Mark an image as a public base (mirrors it now) |
 | `DELETE` | `/v1/images/public/{id}` | admin | yes | `DeletePublicImage` | Unmark a public base image |
-| `GET` | `/v1/objects` | admin\|host | no | `ListObjects` | List objects (with lineage) |
+| `GET` | `/v1/objects` | admin\|host\|tenant:read | no | `ListObjects` | List objects (with lineage) |
 | `POST` | `/v1/objects` | host | yes | `CreateObject` | Create an object (async mint) |
-| `GET` | `/v1/objects/{id}` | admin\|host | no | `GetObject` | Read an object (lineage, children, kill record) |
-| `PATCH` | `/v1/objects/{id}` | host\|admin | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
-| `DELETE` | `/v1/objects/{id}` | admin\|host | yes | `DeleteObject` | Kill an object |
+| `GET` | `/v1/objects/{id}` | admin\|host\|tenant:read | no | `GetObject` | Read an object (lineage, children, kill record) |
+| `PATCH` | `/v1/objects/{id}` | host\|admin\|tenant:kill | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
+| `DELETE` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `DeleteObject` | Kill an object |
 | `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | Read the object's node certificate |
 | `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
@@ -143,55 +154,55 @@ hostd's API, not this document's.
 | `GET` | `/v1/releases/{version}/artifacts/{name}` | admin\|host | no | `GetReleaseArtifact` | Download a release tarball (hosts upgrading themselves) |
 | `PUT` | `/v1/releases/{version}/artifacts/{name}` | admin | yes | `PutReleaseArtifact` | Upload a release tarball (or its SHA256SUMS) |
 | `GET` | `/v1/status` | admin | no | `GetStatus` | mgmt status |
-| `GET` | `/v1/tenants` | admin\|host | no | `ListTenants` | List tenants |
+| `GET` | `/v1/tenants` | admin\|host\|tenant:read | no | `ListTenants` | List tenants |
 | `POST` | `/v1/tenants` | admin | yes | `CreateTenant` | Create a tenant |
-| `GET` | `/v1/tenants/{id}` | admin\|host | no | `GetTenant` | Read a tenant |
+| `GET` | `/v1/tenants/{id}` | admin\|host\|tenant:read | no | `GetTenant` | Read a tenant |
 | `PATCH` | `/v1/tenants/{id}` | admin | yes | `UpdateTenant` | Update a tenant (JSON Merge Patch) |
 | `DELETE` | `/v1/tenants/{id}` | admin | yes | `DeleteTenant` | Delete a tenant |
 | `GET` | `/v1/tenants/{id}/approvals` | admin\|approver | no | `ListApprovals` | The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI) |
-| `GET` | `/v1/tenants/{id}/notifications` | admin | no | `GetTenantNotifications` | Read the tenant's notification webhook (`twd notify`), without secrets |
-| `PUT` | `/v1/tenants/{id}/notifications` | admin | yes | `PutTenantNotifications` | Set the tenant's notification webhook (`twd notify set`) |
-| `DELETE` | `/v1/tenants/{id}/notifications` | admin | yes | `DeleteTenantNotifications` | Stop the tenant's notifications (`twd notify rm`) |
-| `POST` | `/v1/tenants/{id}/notifications/test` | admin | yes | `TestTenantNotifications` | Send a test notification now (`twd notify test`) |
+| `GET` | `/v1/tenants/{id}/notifications` | admin\|tenant:read | no | `GetTenantNotifications` | Read the tenant's notification webhook (`twd notify`), without secrets |
+| `PUT` | `/v1/tenants/{id}/notifications` | admin\|tenant:deploy | yes | `PutTenantNotifications` | Set the tenant's notification webhook (`twd notify set`) |
+| `DELETE` | `/v1/tenants/{id}/notifications` | admin\|tenant:deploy | yes | `DeleteTenantNotifications` | Stop the tenant's notifications (`twd notify rm`) |
+| `POST` | `/v1/tenants/{id}/notifications/test` | admin\|tenant:deploy | yes | `TestTenantNotifications` | Send a test notification now (`twd notify test`) |
 | `DELETE` | `/v1/tenants/{id}/objects` | admin | yes | `PurgeTenantObjects` | Purge terminal objects of a tenant |
-| `GET` | `/v1/tenants/{id}/public-names` | admin | no | `ListPublicNames` | List the public names a tenant owns |
-| `DELETE` | `/v1/tenants/{id}/public-names/{name}` | admin | yes | `ReleasePublicName` | Release a public name the tenant owns |
-| `GET` | `/v1/tenants/{id}/queues` | admin | no | `ListQueues` | List a tenant's queues |
-| `GET` | `/v1/tenants/{id}/queues/{queue}` | admin\|host | no | `GetQueue` | Get one queue and its backlog |
-| `PUT` | `/v1/tenants/{id}/queues/{queue}` | admin | yes | `PutQueue` | Create a queue (idempotent) |
-| `DELETE` | `/v1/tenants/{id}/queues/{queue}` | admin | yes | `DeleteQueue` | Delete a queue and its messages |
-| `GET` | `/v1/tenants/{id}/queues/{queue}/messages` | admin | no | `PeekQueueMessages` | Read messages without claiming them |
-| `POST` | `/v1/tenants/{id}/queues/{queue}/messages` | admin\|host | no | `SendQueueMessages` | Send messages to a queue |
-| `POST` | `/v1/tenants/{id}/queues/{queue}/messages/ack` | admin\|host | no | `AckQueueMessages` | Settle claimed messages (ack, retry, extend) |
-| `POST` | `/v1/tenants/{id}/queues/{queue}/messages/pull` | admin\|host | no | `PullQueueMessages` | Claim a batch of messages (push consumers and HTTP pull) |
-| `POST` | `/v1/tenants/{id}/queues/{queue}/purge` | admin | yes | `PurgeQueue` | Delete every message of a queue, keeping the queue |
-| `GET` | `/v1/tenants/{id}/telemetry` | admin | no | `GetTenantTelemetry` | Read the tenant's OTLP export (`twd telemetry`), without header values |
-| `PUT` | `/v1/tenants/{id}/telemetry` | admin | yes | `PutTenantTelemetry` | Set the tenant's OTLP export (`twd telemetry set`) |
-| `DELETE` | `/v1/tenants/{id}/telemetry` | admin | yes | `DeleteTenantTelemetry` | Stop the tenant's OTLP export (`twd telemetry rm`) |
+| `GET` | `/v1/tenants/{id}/public-names` | admin\|tenant:read | no | `ListPublicNames` | List the public names a tenant owns |
+| `DELETE` | `/v1/tenants/{id}/public-names/{name}` | admin\|tenant:deploy | yes | `ReleasePublicName` | Release a public name the tenant owns |
+| `GET` | `/v1/tenants/{id}/queues` | admin\|tenant:read | no | `ListQueues` | List a tenant's queues |
+| `GET` | `/v1/tenants/{id}/queues/{queue}` | admin\|host\|tenant:read | no | `GetQueue` | Get one queue and its backlog |
+| `PUT` | `/v1/tenants/{id}/queues/{queue}` | admin\|tenant:data | yes | `PutQueue` | Create a queue (idempotent) |
+| `DELETE` | `/v1/tenants/{id}/queues/{queue}` | admin\|tenant:data | yes | `DeleteQueue` | Delete a queue and its messages |
+| `GET` | `/v1/tenants/{id}/queues/{queue}/messages` | admin\|tenant:data | no | `PeekQueueMessages` | Read messages without claiming them |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/messages` | admin\|host\|tenant:data | no | `SendQueueMessages` | Send messages to a queue |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/messages/ack` | admin\|host\|tenant:data | no | `AckQueueMessages` | Settle claimed messages (ack, retry, extend) |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/messages/pull` | admin\|host\|tenant:data | no | `PullQueueMessages` | Claim a batch of messages (push consumers and HTTP pull) |
+| `POST` | `/v1/tenants/{id}/queues/{queue}/purge` | admin\|tenant:data | yes | `PurgeQueue` | Delete every message of a queue, keeping the queue |
+| `GET` | `/v1/tenants/{id}/telemetry` | admin\|tenant:read | no | `GetTenantTelemetry` | Read the tenant's OTLP export (`twd telemetry`), without header values |
+| `PUT` | `/v1/tenants/{id}/telemetry` | admin\|tenant:deploy | yes | `PutTenantTelemetry` | Set the tenant's OTLP export (`twd telemetry set`) |
+| `DELETE` | `/v1/tenants/{id}/telemetry` | admin\|tenant:deploy | yes | `DeleteTenantTelemetry` | Stop the tenant's OTLP export (`twd telemetry rm`) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` | admin\|approver | yes | `DecideApproval` | Approve or reject a waiting Workflow instance (`twd approve`, the admin UI) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/export` | admin | no | `ExportD1` | Export a D1 database as SQL (`twd d1 export`) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/query` | admin | yes | `QueryD1` | Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/deployments` | admin | no | `ListWorkloadDeployments` | A workload's deployment history, newest first (`twd deployments`) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/previews` | admin | no | `ListWorkloadPreviews` | A workload's running previews (`twd previews`) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/promotions` | admin | yes | `CreatePromotion` | Promote a preview to the workload (`twd promote`), or preflight it with dryRun |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
-| `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin | yes | `CreateRollback` | Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/export` | admin\|tenant:data | no | `ExportD1` | Export a D1 database as SQL (`twd d1 export`) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/query` | admin\|tenant:data | yes | `QueryD1` | Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/deployments` | admin\|tenant:read | no | `ListWorkloadDeployments` | A workload's deployment history, newest first (`twd deployments`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin\|tenant:read | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/previews` | admin\|tenant:read | no | `ListWorkloadPreviews` | A workload's running previews (`twd previews`) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/promotions` | admin\|tenant:deploy | yes | `CreatePromotion` | Promote a preview to the workload (`twd promote`), or preflight it with dryRun |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:read | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
+| `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:deploy | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin\|tenant:deploy | yes | `CreateRollback` | Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/secret-grants` | host | yes | `CreateWorkloadSecretGrant` | Release a workload's secret values to the lease holder |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
-| `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
-| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `DeleteWorkloadSecret` | Delete a workload secret (`twd secret rm`) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores` | admin | no | `ListWorkloadStores` | List a workload's stores |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` | admin | no | `ListKVKeys` | List a KV namespace's keys |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin | no | `GetKVValue` | Get one KV value |
-| `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin | yes | `PutKVValue` | Write one KV value |
-| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin | yes | `DeleteKVValue` | Delete one KV value |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | no | `GetWorkloadStore` | Get one store |
-| `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `PutWorkloadStore` | Create a store (idempotent) |
-| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin | yes | `DeleteWorkloadStore` | Delete a store and its data |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `ReadStoreJournal` | Read a store's journal after a sequence number |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin\|tenant:read | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
+| `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
+| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `DeleteWorkloadSecret` | Delete a workload secret (`twd secret rm`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores` | admin\|tenant:read | no | `ListWorkloadStores` | List a workload's stores |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` | admin\|tenant:data | no | `ListKVKeys` | List a KV namespace's keys |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | no | `GetKVValue` | Get one KV value |
+| `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | yes | `PutKVValue` | Write one KV value |
+| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | yes | `DeleteKVValue` | Delete one KV value |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin\|tenant:read | no | `GetWorkloadStore` | Get one store |
+| `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin\|tenant:data | yes | `PutWorkloadStore` | Create a store (idempotent) |
+| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin\|tenant:data | yes | `DeleteWorkloadStore` | Delete a store and its data |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host\|tenant:data | no | `ReadStoreJournal` | Read a store's journal after a sequence number |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host\|tenant:data | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
 | `GET` | `/v1/upgrades` | admin | no | `ListUpgrades` | Upgrade runs, newest first |
 | `POST` | `/v1/upgrades` | admin | yes | `CreateUpgrade` | Plan an upgrade, or start an upgrade run |
@@ -201,16 +212,16 @@ hostd's API, not this document's.
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/mcp` | admin\|mcp | no | `MCPStream` | Not supported (stateless server; no server-to-client stream) |
 | `POST` | `/mcp` | admin\|mcp | yes | `MCPRequest` | One MCP JSON-RPC request (initialize, ping, tools/list, tools/call) or notification |
-| `GET` | `/v2/` | admin\|host | no | `RegistryBase` | OCI API version check |
-| `POST` | `/v2/{name}/blobs/uploads/` | admin | no | `RegistryStartUpload` | Start a blob upload (or a monolithic upload, or a mount) |
-| `GET` | `/v2/{name}/blobs/uploads/{uuid}` | admin | no | `RegistryUploadStatus` | Upload progress |
-| `PUT` | `/v2/{name}/blobs/uploads/{uuid}` | admin | no | `RegistryFinishUpload` | Finish an upload (`?digest=` required; optional final chunk as the body) |
-| `PATCH` | `/v2/{name}/blobs/uploads/{uuid}` | admin | no | `RegistryUploadChunk` | Upload a chunk |
-| `DELETE` | `/v2/{name}/blobs/uploads/{uuid}` | admin | no | `RegistryCancelUpload` | Cancel an upload |
-| `GET` | `/v2/{name}/blobs/{digest}` | admin\|host | no | `RegistryGetBlob` | Pull a blob (Range supported) |
-| `GET` | `/v2/{name}/manifests/{reference}` | admin\|host | no | `RegistryGetManifest` | Pull a manifest or index (by tag or digest) |
-| `PUT` | `/v2/{name}/manifests/{reference}` | admin | yes | `RegistryPutManifest` | Push a manifest or index (by tag or digest) |
-| `GET` | `/v2/{name}/tags/list` | admin\|host | no | `RegistryListTags` | List a repository's tags (`?n=` / `?last=` paging) |
+| `GET` | `/v2/` | admin\|host\|tenant:read | no | `RegistryBase` | OCI API version check |
+| `POST` | `/v2/{name}/blobs/uploads/` | admin\|tenant:deploy | no | `RegistryStartUpload` | Start a blob upload (or a monolithic upload, or a mount) |
+| `GET` | `/v2/{name}/blobs/uploads/{uuid}` | admin\|tenant:deploy | no | `RegistryUploadStatus` | Upload progress |
+| `PUT` | `/v2/{name}/blobs/uploads/{uuid}` | admin\|tenant:deploy | no | `RegistryFinishUpload` | Finish an upload (`?digest=` required; optional final chunk as the body) |
+| `PATCH` | `/v2/{name}/blobs/uploads/{uuid}` | admin\|tenant:deploy | no | `RegistryUploadChunk` | Upload a chunk |
+| `DELETE` | `/v2/{name}/blobs/uploads/{uuid}` | admin\|tenant:deploy | no | `RegistryCancelUpload` | Cancel an upload |
+| `GET` | `/v2/{name}/blobs/{digest}` | admin\|host\|tenant:read | no | `RegistryGetBlob` | Pull a blob (Range supported) |
+| `GET` | `/v2/{name}/manifests/{reference}` | admin\|host\|tenant:read | no | `RegistryGetManifest` | Pull a manifest or index (by tag or digest) |
+| `PUT` | `/v2/{name}/manifests/{reference}` | admin\|tenant:deploy | yes | `RegistryPutManifest` | Push a manifest or index (by tag or digest) |
+| `GET` | `/v2/{name}/tags/list` | admin\|host\|tenant:read | no | `RegistryListTags` | List a repository's tags (`?n=` / `?last=` paging) |
 
 ## Tenants
 
@@ -218,7 +229,7 @@ Customer tailnets. Admin only.
 
 ### `GET /v1/tenants` — List tenants
 
-`ListTenants` · role **admin\|host** · audited: no
+`ListTenants` · role **admin\|host\|tenant:read** · audited: no
 
 Hosts may list tenants too (they deny each tenant's `apiKeyFile` and
 `oauthClientFile` path to their workload sandboxes), but a host sees
@@ -253,7 +264,7 @@ lease it holds); admins see every tenant.
 
 ### `GET /v1/tenants/{id}` — Read a tenant
 
-`GetTenant` · role **admin\|host** · audited: no
+`GetTenant` · role **admin\|host\|tenant:read** · audited: no
 
 Includes `oboPublicKey` (hostd pins it). A host may read only
 tenants with a deployment assigned
@@ -354,7 +365,7 @@ grants let it decide. A read, so not audited.
 
 ### `GET /v1/tenants/{id}/notifications` — Read the tenant's notification webhook (`twd notify`), without secrets
 
-`GetTenantNotifications` · role **admin** · audited: no
+`GetTenantNotifications` · role **admin\|tenant:read** · audited: no
 
 ADR-approval-notifications. The webhook URL is shown as its origin
 only (scheme and host): a chat webhook's path or query is its
@@ -374,7 +385,7 @@ credential. Header names only. A tenant that sends nothing has no
 
 ### `PUT /v1/tenants/{id}/notifications` — Set the tenant's notification webhook (`twd notify set`)
 
-`PutTenantNotifications` · role **admin** · audited: yes
+`PutTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
 ADR-approval-notifications. When one of `events` happens in the
 tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
@@ -407,7 +418,7 @@ header names).
 
 ### `DELETE /v1/tenants/{id}/notifications` — Stop the tenant's notifications (`twd notify rm`)
 
-`DeleteTenantNotifications` · role **admin** · audited: yes
+`DeleteTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
 Idempotent. Audited (`kind: notification_delete`).
 
@@ -424,7 +435,7 @@ Idempotent. Audited (`kind: notification_delete`).
 
 ### `POST /v1/tenants/{id}/notifications/test` — Send a test notification now (`twd notify test`)
 
-`TestTenantNotifications` · role **admin** · audited: yes
+`TestTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
 POSTs a `NotificationEvent` with `event: test` to the configured
 webhook once, synchronously, and reports the outcome. Not retried.
@@ -468,7 +479,7 @@ Replaces `POST /v0/tenants/{id}/purge`.
 
 ### `GET /v1/tenants/{id}/public-names` — List the public names a tenant owns
 
-`ListPublicNames` · role **admin** · audited: no
+`ListPublicNames` · role **admin\|tenant:read** · audited: no
 
 ADR-029, red-team H10. A public workload is served at
 `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
@@ -495,7 +506,7 @@ same tailnet is refused with `409 public_name_owned`. Ordered by
 
 ### `DELETE /v1/tenants/{id}/public-names/{name}` — Release a public name the tenant owns
 
-`ReleasePublicName` · role **admin** · audited: yes
+`ReleasePublicName` · role **admin\|tenant:deploy** · audited: yes
 
 Red-team H10. Gives up the tenant's claim on a public name, so any
 tenant on the tailnet can deploy public routes under it next. Only
@@ -555,7 +566,7 @@ get `403 no_identity`; use `twd link` from your own machine.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/logs` — Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
 
-`GetWorkloadLogs` · role **admin** · audited: no
+`GetWorkloadLogs` · role **admin\|tenant:read** · audited: no
 
 The app's log is a file on the host that runs it. mgmt finds the
 host holding the workload's namespace lease and reads the log from
@@ -602,7 +613,7 @@ Only the workload's own app log: the daemons' logs
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/public` — Read a workload's public-ingress exposure (`twd expose`)
 
-`GetWorkloadPublic` · role **admin** · audited: no
+`GetWorkloadPublic` · role **admin\|tenant:read** · audited: no
 
 ADR-029. A workload whose `twd.jsonc` declares `public` routes is
 served over Funnel from its public node
@@ -624,7 +635,7 @@ toggled is exposed.
 
 ### `PATCH /v1/tenants/{id}/workloads/{workload}/public` — Expose or unexpose a workload's public routes (JSON Merge Patch)
 
-`UpdateWorkloadPublic` · role **admin** · audited: yes
+`UpdateWorkloadPublic` · role **admin\|tenant:deploy** · audited: yes
 
 `twd expose on|off` (ADR-029 D1): an operator override that survives
 redeploys. `exposed: false` makes the host close the public node's
@@ -950,7 +961,7 @@ Deploys of a workload bundle to a host.
 
 ### `GET /v1/deployments` — List deployments
 
-`ListDeployments` · role **admin** · audited: no
+`ListDeployments` · role **admin\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -970,7 +981,7 @@ Deploys of a workload bundle to a host.
 
 ### `POST /v1/deployments` — Deploy a workload (async), or preflight it with dryRun
 
-`CreateDeployment` · role **admin** · audited: yes
+`CreateDeployment` · role **admin\|tenant:deploy** · audited: yes
 
 mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
 the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
@@ -1044,7 +1055,7 @@ the CLI then prints `preflight skipped` and deploys.
 
 ### `GET /v1/deployments/{id}` — Read a deployment and its status
 
-`GetDeployment` · role **admin\|host** · audited: no
+`GetDeployment` · role **admin\|host\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1061,7 +1072,7 @@ the CLI then prints `preflight skipped` and deploys.
 
 ### `DELETE /v1/deployments/{id}` — Undeploy
 
-`DeleteDeployment` · role **admin** · audited: yes
+`DeleteDeployment` · role **admin\|tenant:deploy** · audited: yes
 
 Kills every object of the deployment (cascade; pushed to the host, then
 device deletes), releases the `(tenant, workload)` lease, marks the
@@ -1087,7 +1098,7 @@ undeployed (`409 superseded` otherwise).
 
 ### `GET /v1/deployments/{id}/bundle` — Download the raw bundle
 
-`GetDeploymentBundle` · role **host\|admin** · audited: no
+`GetDeploymentBundle` · role **host\|admin\|tenant:read** · audited: no
 
 Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (or an admin) may read it.
 
@@ -1104,7 +1115,7 @@ Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (o
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/deployments` — A workload's deployment history, newest first (`twd deployments`)
 
-`ListWorkloadDeployments` · role **admin** · audited: no
+`ListWorkloadDeployments` · role **admin\|tenant:read** · audited: no
 
 ADR-deploy-rollback. Every deployment of the workload, newest first:
 who deployed it, when, the bundle's SHA-256, its status (the current
@@ -1134,7 +1145,7 @@ workload with no deployment is `404 unknown_workload`.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/previews` — A workload's running previews (`twd previews`)
 
-`ListWorkloadPreviews` · role **admin** · audited: no
+`ListWorkloadPreviews` · role **admin\|tenant:read** · audited: no
 
 ADR-deploy-preview. The previews of the workload that are not
 stopped, newest first. A preview is created by
@@ -1159,7 +1170,7 @@ answers an empty list.
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/promotions` — Promote a preview to the workload (`twd promote`), or preflight it with dryRun
 
-`CreatePromotion` · role **admin** · audited: yes
+`CreatePromotion` · role **admin\|tenant:deploy** · audited: yes
 
 ADR-deploy-preview. Deploys the bundle the preview runs to the
 workload itself, as a **new** deployment, through the same code
@@ -1199,7 +1210,7 @@ policy.
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/rollbacks` — Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
 
-`CreateRollback` · role **admin** · audited: yes
+`CreateRollback` · role **admin\|tenant:deploy** · audited: yes
 
 ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 as a **new** deployment, through the same code path as
@@ -1251,7 +1262,7 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 
 ### `GET /v1/objects` — List objects (with lineage)
 
-`ListObjects` · role **admin\|host** · audited: no
+`ListObjects` · role **admin\|host\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1322,7 +1333,7 @@ Spawn checks are unchanged from v0.
 
 ### `GET /v1/objects/{id}` — Read an object (lineage, children, kill record)
 
-`GetObject` · role **admin\|host** · audited: no
+`GetObject` · role **admin\|host\|tenant:read** · audited: no
 
 A host may read only objects whose lease it holds (`403 forbidden` otherwise); peers verify other nodes through `GET /v1/certificates/{stableNodeID}` instead.
 
@@ -1342,7 +1353,7 @@ A host may read only objects whose lease it holds (`403 forbidden` otherwise); p
 
 ### `PATCH /v1/objects/{id}` — Update an object (JSON Merge Patch)
 
-`UpdateObject` · role **host\|admin** · audited: yes
+`UpdateObject` · role **host\|admin\|tenant:kill** · audited: yes
 
 Two callers, two subsets:
 
@@ -1385,7 +1396,7 @@ Any other field, or a host sending admin fields (and vice versa), is
 
 ### `DELETE /v1/objects/{id}` — Kill an object
 
-`DeleteObject` · role **admin\|host** · audited: yes
+`DeleteObject` · role **admin\|host\|tenant:kill** · audited: yes
 
 Marks the object (and with `cascade=true` every descendant) killed,
 pushes the kill to the lease-holding host (tier 1, ≤ 2 s per push;
@@ -1535,7 +1546,7 @@ only) when there is at least one secret.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/secrets` — List a workload's secrets (names and times, never values)
 
-`ListWorkloadSecrets` · role **admin** · audited: no
+`ListWorkloadSecrets` · role **admin\|tenant:read** · audited: no
 
 `twd secret ls`. No admin operation returns a value; only the lease
 holder gets them (`POST …/secret-grants`). Ordered by name. A
@@ -1559,7 +1570,7 @@ workload with no secrets (or never deployed) is an empty page.
 
 ### `PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name}` — Create or replace a workload secret (`twd secret put`)
 
-`PutWorkloadSecret` · role **admin** · audited: yes
+`PutWorkloadSecret` · role **admin\|tenant:secrets** · audited: yes
 
 ADR-034. Stores the value encrypted at rest in mgmt's
 custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
@@ -1591,7 +1602,7 @@ value is never logged, audited or returned. Audited
 
 ### `DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name}` — Delete a workload secret (`twd secret rm`)
 
-`DeleteWorkloadSecret` · role **admin** · audited: yes
+`DeleteWorkloadSecret` · role **admin\|tenant:secrets** · audited: yes
 
 Takes effect on the workload's next deploy. `404 unknown_secret`
 when the workload has no secret of that name. Audited
@@ -1616,7 +1627,7 @@ Platform storage objects (ADR-platform-stores) behind storage bindings such as W
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export` — Export a D1 database as SQL (`twd d1 export`)
 
-`ExportD1` · role **admin** · audited: no
+`ExportD1` · role **admin\|tenant:data** · audited: no
 
 The database's schema and rows as SQL text, in the shape of
 `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
@@ -1642,7 +1653,7 @@ audited.
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query` — Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
 
-`QueryD1` · role **admin** · audited: yes
+`QueryD1` · role **admin\|tenant:data** · audited: yes
 
 A D1 database (ADR-038) is the workload's platform store of kind
 `d1` named after the binding's `database_name`. Its data is served
@@ -1681,7 +1692,7 @@ statement count, never the SQL); a read is logged.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores` — List a workload's stores
 
-`ListWorkloadStores` · role **admin** · audited: no
+`ListWorkloadStores` · role **admin\|tenant:read** · audited: no
 
 Every store of the workload (all kinds), ordered by `(kind, name)`.
 A store exists once something was written to it (a binding's first
@@ -1706,7 +1717,7 @@ mgmt keeps, after compaction.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` — List a KV namespace's keys
 
-`ListKVKeys` · role **admin** · audited: no
+`ListKVKeys` · role **admin\|tenant:data** · audited: no
 
 Workers KV's `list()` for operators (`twd kv key list`,
 ADR-037): live keys in UTF-8 byte order, with their
@@ -1735,7 +1746,7 @@ does not exist.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Get one KV value
 
-`GetKVValue` · role **admin** · audited: no
+`GetKVValue` · role **admin\|tenant:data** · audited: no
 
 `twd kv key get`. `404 not_found` if the key does not exist or has
 expired, `404 unknown_store` if the namespace does not.
@@ -1757,7 +1768,7 @@ expired, `404 unknown_store` if the namespace does not.
 
 ### `PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Write one KV value
 
-`PutKVValue` · role **admin** · audited: yes
+`PutKVValue` · role **admin\|tenant:data** · audited: yes
 
 `twd kv key put`: a journal append, like a binding's `put()`, so
 running workloads see it on their next sync (within 60 s, or a
@@ -1789,7 +1800,7 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 
 ### `DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Delete one KV value
 
-`DeleteKVValue` · role **admin** · audited: yes
+`DeleteKVValue` · role **admin\|tenant:data** · audited: yes
 
 `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 
@@ -1811,7 +1822,7 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Get one store
 
-`GetWorkloadStore` · role **admin** · audited: no
+`GetWorkloadStore` · role **admin\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1829,7 +1840,7 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 
 ### `PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Create a store (idempotent)
 
-`PutWorkloadStore` · role **admin** · audited: yes
+`PutWorkloadStore` · role **admin\|tenant:data** · audited: yes
 
 Creates an empty store (`201`), or answers the existing one
 (`200`). A binding's first write creates its store too, so this is
@@ -1854,7 +1865,7 @@ only needed to create one before the first deploy. Audited
 
 ### `DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Delete a store and its data
 
-`DeleteWorkloadStore` · role **admin** · audited: yes
+`DeleteWorkloadStore` · role **admin\|tenant:data** · audited: yes
 
 Deletes the journal and the store's data key (custody), so the
 sealed entries can't be read again even from a backup of the
@@ -1879,7 +1890,7 @@ a new, empty store. `404 unknown_store` if there is none. Audited
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` — Read a store's journal after a sequence number
 
-`ReadStoreJournal` · role **admin\|host** · audited: no
+`ReadStoreJournal` · role **admin\|host\|tenant:data** · audited: no
 
 The entries with `seq > after`, in order, for a store object
 catching up (after a restart, on a new host, or when another
@@ -1913,7 +1924,7 @@ secrets). An admin reads without it (`twd kv key get`).
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` — Append entries to a store's journal (conditional on its head)
 
-`AppendStoreJournal` · role **admin\|host** · audited: no
+`AppendStoreJournal` · role **admin\|host\|tenant:data** · audited: no
 
 The write path of a store object: it appends here **before** it
 applies the change locally, so an acknowledged write is never only
@@ -1960,7 +1971,7 @@ A tenant's OTLP export (ADR-observability). The config, collector credentials in
 
 ### `GET /v1/tenants/{id}/telemetry` — Read the tenant's OTLP export (`twd telemetry`), without header values
 
-`GetTenantTelemetry` · role **admin** · audited: no
+`GetTenantTelemetry` · role **admin\|tenant:read** · audited: no
 
 ADR-observability. Header names only: no admin operation returns a
 header value. A tenant that exports nothing has no `otlp`.
@@ -1979,7 +1990,7 @@ header value. A tenant that exports nothing has no `otlp`.
 
 ### `PUT /v1/tenants/{id}/telemetry` — Set the tenant's OTLP export (`twd telemetry set`)
 
-`PutTenantTelemetry` · role **admin** · audited: yes
+`PutTenantTelemetry` · role **admin\|tenant:deploy** · audited: yes
 
 Every workload of the tenant exports its request records (as log
 records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -2009,7 +2020,7 @@ header names).
 
 ### `DELETE /v1/tenants/{id}/telemetry` — Stop the tenant's OTLP export (`twd telemetry rm`)
 
-`DeleteTenantTelemetry` · role **admin** · audited: yes
+`DeleteTenantTelemetry` · role **admin\|tenant:deploy** · audited: yes
 
 Hosts stop exporting within a minute. Records stay on the hosts
 (`twd logs`) and in `/metrics`. Idempotent. Audited
@@ -2062,7 +2073,7 @@ Cloudflare-style Queues (ADR-039). A queue belongs to the tenant; its messages a
 
 ### `GET /v1/tenants/{id}/queues` — List a tenant's queues
 
-`ListQueues` · role **admin** · audited: no
+`ListQueues` · role **admin\|tenant:read** · audited: no
 
 Every queue of the tenant, by name, with its backlog. A queue
 exists once something sent to or pulled from it, or after
@@ -2084,7 +2095,7 @@ exists once something sent to or pulled from it, or after
 
 ### `GET /v1/tenants/{id}/queues/{queue}` — Get one queue and its backlog
 
-`GetQueue` · role **admin\|host** · audited: no
+`GetQueue` · role **admin\|host\|tenant:read** · audited: no
 
 The queue's counters: messages kept (`backlog`), of which claimed by
 a consumer and not settled (`inFlight`) and not yet visible
@@ -2110,7 +2121,7 @@ host reads it for a producer binding's `metrics()` (with
 
 ### `PUT /v1/tenants/{id}/queues/{queue}` — Create a queue (idempotent)
 
-`PutQueue` · role **admin** · audited: yes
+`PutQueue` · role **admin\|tenant:data** · audited: yes
 
 Creates an empty queue (`201`) or answers the existing one (`200`).
 A queue is also created by its first send or pull, and a
@@ -2133,7 +2144,7 @@ dead-letter queue by the first message moved to it. Audited
 
 ### `DELETE /v1/tenants/{id}/queues/{queue}` — Delete a queue and its messages
 
-`DeleteQueue` · role **admin** · audited: yes
+`DeleteQueue` · role **admin\|tenant:data** · audited: yes
 
 Deletes every message and the queue's data key (custody), so the
 sealed bodies can't be read again even from a database backup.
@@ -2155,7 +2166,7 @@ is none. Audited (`kind: queue_delete`).
 
 ### `GET /v1/tenants/{id}/queues/{queue}/messages` — Read messages without claiming them
 
-`PeekQueueMessages` · role **admin** · audited: no
+`PeekQueueMessages` · role **admin\|tenant:data** · audited: no
 
 The oldest messages, bodies included, without changing them (no
 lease, no attempt counted). This is how an operator inspects a
@@ -2177,7 +2188,7 @@ dead-letter queue (`twd queues messages <queue>`).
 
 ### `POST /v1/tenants/{id}/queues/{queue}/messages` — Send messages to a queue
 
-`SendQueueMessages` · role **admin\|host** · audited: no
+`SendQueueMessages` · role **admin\|host\|tenant:data** · audited: no
 
 A producer's `send()` / `sendBatch()` (through its host), or an
 operator's `twd queues send`. The messages are durable in mgmt's
@@ -2208,7 +2219,7 @@ messages and 256 KB per call, 128 KB per message, `delaySeconds` ≤
 
 ### `POST /v1/tenants/{id}/queues/{queue}/messages/ack` — Settle claimed messages (ack, retry, extend)
 
-`AckQueueMessages` · role **admin\|host** · audited: no
+`AckQueueMessages` · role **admin\|host\|tenant:data** · audited: no
 
 `acks` deletes messages; `release` hands them back uncounted (the
 consumer never ran them); `retries` makes them visible again after
@@ -2240,7 +2251,7 @@ claimed again, or settled) changes nothing and is counted in
 
 ### `POST /v1/tenants/{id}/queues/{queue}/messages/pull` — Claim a batch of messages (push consumers and HTTP pull)
 
-`PullQueueMessages` · role **admin\|host** · audited: no
+`PullQueueMessages` · role **admin\|host\|tenant:data** · audited: no
 
 Claims up to `batchSize` visible messages, oldest first: each is
 hidden for `visibilityTimeoutMs`, gets a new `leaseId` and counts an
@@ -2276,7 +2287,7 @@ them in the body.
 
 ### `POST /v1/tenants/{id}/queues/{queue}/purge` — Delete every message of a queue, keeping the queue
 
-`PurgeQueue` · role **admin** · audited: yes
+`PurgeQueue` · role **admin\|tenant:data** · audited: yes
 
 Deletes all messages, in flight or not. Audited
 (`kind: queue_purge`, with the count).
@@ -2299,7 +2310,7 @@ Hash-chained, append-only audit log.
 
 ### `GET /v1/audit` — Query audit records
 
-`ListAudit` · role **admin** · audited: no
+`ListAudit` · role **admin\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2625,7 +2636,7 @@ Container images (ADR-032 D3) — public base images shared across tenants, and 
 
 ### `GET /v1/images/aliases` — The image alias map
 
-`ListImageAliases` · role **admin\|host** · audited: no
+`ListImageAliases` · role **admin\|host\|tenant:read** · audited: no
 
 Upstream refs swapped for another image on one arch (ADR-032 D3: Cloudflare publishes
 `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get twd's rebuild from the Apache-2.0
@@ -2640,7 +2651,7 @@ contexts when it builds a Dockerfile, so app source never changes.
 
 ### `GET /v1/images/public` — List public base images
 
-`ListPublicImages` · role **admin\|host** · audited: no
+`ListPublicImages` · role **admin\|host\|tenant:read** · audited: no
 
 Operator-marked public bases (ADR-032 D3): images every tenant's deploy may pin without a
 per-tenant mirror, and every host caches once for all tenants (hostd's `public` cache
@@ -2765,7 +2776,7 @@ excluded from code generation (the registry is hand-written: `internal/registry`
 
 ### `GET /v2/` — OCI API version check
 
-`RegistryBase` · role **admin\|host** · audited: no
+`RegistryBase` · role **admin\|host\|tenant:read** · audited: no
 
 `200 {}` with `Docker-Distribution-API-Version: registry/2.0` (clients probe it before pushing or pulling). Authentication is WhoIs on the connection: there is no token challenge.
 
@@ -2776,7 +2787,7 @@ excluded from code generation (the registry is hand-written: `internal/registry`
 
 ### `POST /v2/{name}/blobs/uploads/` — Start a blob upload (or a monolithic upload, or a mount)
 
-`RegistryStartUpload` · role **admin** · audited: no
+`RegistryStartUpload` · role **admin\|tenant:deploy** · audited: no
 
 `202` with `Location: /v2/{name}/blobs/uploads/{uuid}`. With `?digest=` and a body: a
 monolithic upload (`201`). With `?mount=<digest>&from=<repo>`: links the blob from `from`
@@ -2799,7 +2810,7 @@ mgmt's registry dir (any replica sharing it can continue one).
 
 ### `GET /v2/{name}/blobs/uploads/{uuid}` — Upload progress
 
-`RegistryUploadStatus` · role **admin** · audited: no
+`RegistryUploadStatus` · role **admin\|tenant:deploy** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2813,7 +2824,7 @@ mgmt's registry dir (any replica sharing it can continue one).
 
 ### `PUT /v2/{name}/blobs/uploads/{uuid}` — Finish an upload (`?digest=` required; optional final chunk as the body)
 
-`RegistryFinishUpload` · role **admin** · audited: no
+`RegistryFinishUpload` · role **admin\|tenant:deploy** · audited: no
 
 The whole upload must hash to `digest` (`400 DIGEST_INVALID`, and nothing is linked).
 
@@ -2830,7 +2841,7 @@ The whole upload must hash to `digest` (`400 DIGEST_INVALID`, and nothing is lin
 
 ### `PATCH /v2/{name}/blobs/uploads/{uuid}` — Upload a chunk
 
-`RegistryUploadChunk` · role **admin** · audited: no
+`RegistryUploadChunk` · role **admin\|tenant:deploy** · audited: no
 
 `Content-Range: <start>-<end>` is optional; when given, `start` must equal the bytes received so far (`416` otherwise).
 
@@ -2846,7 +2857,7 @@ The whole upload must hash to `digest` (`400 DIGEST_INVALID`, and nothing is lin
 
 ### `DELETE /v2/{name}/blobs/uploads/{uuid}` — Cancel an upload
 
-`RegistryCancelUpload` · role **admin** · audited: no
+`RegistryCancelUpload` · role **admin\|tenant:deploy** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2859,7 +2870,7 @@ The whole upload must hash to `digest` (`400 DIGEST_INVALID`, and nothing is lin
 
 ### `GET /v2/{name}/blobs/{digest}` — Pull a blob (Range supported)
 
-`RegistryGetBlob` · role **admin\|host** · audited: no
+`RegistryGetBlob` · role **admin\|host\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2874,7 +2885,7 @@ The whole upload must hash to `digest` (`400 DIGEST_INVALID`, and nothing is lin
 
 ### `GET /v2/{name}/manifests/{reference}` — Pull a manifest or index (by tag or digest)
 
-`RegistryGetManifest` · role **admin\|host** · audited: no
+`RegistryGetManifest` · role **admin\|host\|tenant:read** · audited: no
 
 `Content-Type` is the manifest's media type; `Docker-Content-Digest` its digest. `HEAD` answers the same headers without the body.
 
@@ -2891,7 +2902,7 @@ The whole upload must hash to `digest` (`400 DIGEST_INVALID`, and nothing is lin
 
 ### `PUT /v2/{name}/manifests/{reference}` — Push a manifest or index (by tag or digest)
 
-`RegistryPutManifest` · role **admin** · audited: yes
+`RegistryPutManifest` · role **admin\|tenant:deploy** · audited: yes
 
 Image manifests (OCI and Docker v2 schema 2) and indexes (multi-arch). Every blob (config,
 layers) or child manifest it references must already be in **this** repository
@@ -2911,7 +2922,7 @@ layers) or child manifest it references must already be in **this** repository
 
 ### `GET /v2/{name}/tags/list` — List a repository's tags (`?n=` / `?last=` paging)
 
-`RegistryListTags` · role **admin\|host** · audited: no
+`RegistryListTags` · role **admin\|host\|tenant:read** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -3543,7 +3554,7 @@ code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `mint_mode_removed` \| 400 \| a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `cap_missing` \| 403 \| an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `preview_conflict` \| 409 \| a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one \| \| `preview_failed` \| 409 \| promote of a preview its host reported `failed` \| \| `preview_unsupported` \| 400 \| `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica \| \| `unknown_preview` \| 404 \| promote of a preview that doesn't exist or is stopped \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `profile_unsupported` \| 400 \| the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) \| \| `public_name_owned` \| 409 \| a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) \| \| `public_name_in_use` \| 409 \| release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) \| \| `upgrade_blocked` \| 409 \| an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) \| \| `upgrade_state` \| 409 \| pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs, approvals) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `approval_not_pending` \| 409 \| no approval of that Workflow instance is waiting (decided, timed out, or never asked) \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `mint_mode_removed` \| 400 \| a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `tag_not_owned` \| 400 \| a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) \| \| `shared_owner_tag` \| 409 \| a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag \| \| `name_prefix_required` \| 409 \| a second tenant on a tailnet without a distinct `namePrefix` \| \| `tenant_forbidden` \| 403 \| a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) \| \| `cap_missing` \| 403 \| an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `preview_conflict` \| 409 \| a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one \| \| `preview_failed` \| 409 \| promote of a preview its host reported `failed` \| \| `preview_unsupported` \| 400 \| `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica \| \| `unknown_preview` \| 404 \| promote of a preview that doesn't exist or is stopped \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `profile_unsupported` \| 400 \| the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) \| \| `public_name_owned` \| 409 \| a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) \| \| `public_name_in_use` \| 409 \| release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) \| \| `upgrade_blocked` \| 409 \| an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) \| \| `upgrade_state` \| 409 \| pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs, approvals) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `approval_not_pending` \| 409 \| no approval of that Workflow instance is waiting (decided, timed out, or never asked) \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -3568,6 +3579,10 @@ The catalog. Status in parentheses.
 | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 | `host_token_invalid` | 403 | local-dev socket, wrong token |
 | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+| `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
+| `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+| `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
+| `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
@@ -3631,7 +3646,7 @@ The catalog. Status in parentheses.
 | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `mint_mode_removed`, `too_many_secrets`, `d1_error`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `cap_missing`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `unknown_queue`, `exists`, `lease_lost`, `lease_held`, `approval_not_pending`, `store_conflict`, `store_limit`, `queue_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `profile_unsupported`, `replica_conflict`, `preview_conflict`, `preview_failed`, `preview_unsupported`, `unknown_preview`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `version_skew`, `feature_unavailable`, `upgrade_blocked`, `upgrade_state`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `public_name_owned`, `public_name_in_use`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `mint_mode_removed`, `too_many_secrets`, `d1_error`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `tenant_forbidden`, `tag_not_owned`, `shared_owner_tag`, `name_prefix_required`, `cap_missing`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `unknown_queue`, `exists`, `lease_lost`, `lease_held`, `approval_not_pending`, `store_conflict`, `store_limit`, `queue_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `profile_unsupported`, `replica_conflict`, `preview_conflict`, `preview_failed`, `preview_unsupported`, `unknown_preview`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `version_skew`, `feature_unavailable`, `upgrade_blocked`, `upgrade_state`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `public_name_owned`, `public_name_in_use`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
 
 #### `Health`
 
@@ -4165,6 +4180,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `accessWarnings` | array of string | no | Grants to `tag:twd-mgmt` that don't do what they look like: values on `twd.dev/cap/admin` (they don't narrow it), invalid `twd.dev/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `twd.dev/cap/mcp` or `twd.dev/cap/approve` grants (they apply to every tenant). Never make `ok` false. |
 | `missing` | array of `PreflightMissing` | yes |  |
 | `missingNodeAttrs` | array of string | no | Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes. |
 | `missingTagOwners` | array of string | yes |  |
@@ -4175,6 +4191,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `serviceSnippet` | string | no | The `autoApprovers` entry to add (HuJSON). |
 | `serviceUnapproved` | boolean | no | The policy's `autoApprovers.services` doesn't let the workload tags host `service`: the node would advertise it but control would never route it. `ok` is false. |
 | `srcTags` | array of string | no | The tags checked (workload + object tags from the bundle). |
+| `tagOwnerProblems` | array of string | no | For a tenant with its own `ownerTag`, the tags its owner tag doesn't own, or that another tenant's owner tag on the tailnet owns. Makes `ok` false. |
 | `tagOwnersSnippet` | string | no |  |
 | `unchecked` | array of string | no | `tailnet.connects` entries that are names, not tags. |
 
@@ -4813,9 +4830,11 @@ Enum: `logs`, `metrics`, `traces`
 | `maxContainers` | integer | no | Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`. |
 | `maxObjects` | integer | yes |  |
 | `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
+| `namePrefix` | string | no | Goes in front of every tailnet name twd generates for this tenant (object and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11 of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most one may go without (`409 name_prefix_required`). Fixed once the tenant has deployed. |
 | `oauthClientFile` | string | no | `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused). |
 | `oauthClientID` | string | no | `oauth` mode: the OAuth client's public ID (`TS_OAUTH_CLIENT_ID`). The secret is never stored or returned. |
 | `oboPublicKey` | string | no | base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. |
+| `ownerTag` | string | no | The tag that owns this tenant's workload and object tags, and that its OAuth client is scoped to. Default `tag:twd`. Two tenants on one tailnet need their own, so neither's client can mint the other's tags (`409 shared_owner_tag`). See docs/teams.md (ADR-043). |
 | `pool` | string | no | Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host). |
 | `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | yes |  |
@@ -4835,8 +4854,10 @@ Enum: `logs`, `metrics`, `traces`
 | `maxContainers` | integer | no |  |
 | `maxObjects` | integer | no |  |
 | `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
+| `namePrefix` | string | no | Default none (see `Tenant.namePrefix`). |
 | `oauthClientFile` | string | no |  |
 | `oauthClientID` | string | no |  |
+| `ownerTag` | string | no | Default `tag:twd` (see `Tenant.ownerTag`). |
 | `pool` | string | no |  |
 | `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | no |  |
@@ -4853,6 +4874,17 @@ Enum: `logs`, `metrics`, `traces`
 | `killed` | array of string | yes |  |
 | `purged` | array of string | no |  |
 | `tenantID` | string | yes |  |
+
+#### `TenantGrant`
+
+One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it names.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `actions` | array of string: `data` \| `deploy` \| `kill` \| `read` \| `secrets` | yes |  |
+| `approve` | array of `ApproveGrant` | no | `twd.dev/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md). |
+| `mcp` | object | no | Admits the caller to `/mcp` for these tenants. The read tools need `read`; each write or destructive tool must be named here and its action held in `actions`. |
+| `tenants` | array of string | yes |  |
 
 #### `TenantPage`
 
@@ -4874,8 +4906,10 @@ JSON Merge Patch over the updatable fields. `null` clears an optional field.
 | `maxContainers` | integer | no |  |
 | `maxObjects` | integer | no |  |
 | `mintMode` | `MintMode` | no | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
+| `namePrefix` | string \| null | no | Only before the tenant's first deploy (`400 immutable_field` after). |
 | `oauthClientFile` | string \| null | no |  |
 | `oauthClientID` | string \| null | no |  |
+| `ownerTag` | string \| null | no | Move the tenant to its own owner tag (`null` = back to `tag:twd`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch. |
 | `pool` | string \| null | no |  |
 | `publicIngress` | string \| null | no | The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`). |
 | `registrationsPerMinute` | integer | no |  |
@@ -5014,6 +5048,7 @@ A tenant's notification webhook, without its secrets.
 | `approver` | boolean | no | The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity. |
 | `caps` | array of string | no | The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts. |
 | `hostID` | string | no |  |
+| `invalidTenantGrants` | array of string | no | The caller's `twd.dev/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard). |
 | `kind` | string: `user` \| `node` \| `host` \| `local` | yes |  |
 | `login` | string | no |  |
 | `mcpTools` | array of string | no | The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order. |
@@ -5021,6 +5056,7 @@ A tenant's notification webhook, without its secrets.
 | `nodeID` | string | no |  |
 | `tags` | array of string | no |  |
 | `tailnet` | string | no | The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts. |
+| `tenantGrants` | array of `TenantGrant` | no | The caller's valid `twd.dev/cap/tenant-admin` values: the tenants it may act in, and how. Empty when it holds none. An admin's values are listed too but don't narrow it. |
 | `tenants` | array of `WhoAmITenant` | no | The tenants the caller can act in without knowing their IDs: those whose `tailnet` is the caller's own tailnet. The local operator gets every tenant; hosts get none. The admin UI's approvals page and `twd approvals` / `twd approve` default to these. A tailnet admin can still list every tenant (`GET /v1/tenants`). |
 
 #### `WhoAmITenant`

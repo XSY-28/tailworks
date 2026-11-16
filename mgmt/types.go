@@ -78,6 +78,13 @@ type Tenant struct {
 	PublicIngress string `json:"publicIngress,omitempty"`
 	CreatedAt     int64  `json:"createdAt"`
 	UpdatedAt     int64  `json:"updatedAt"`
+
+	// Several tenants on one tailnet (ADR-043, teams.go):
+	// OwnerTag owns the tenant's tags and scopes its OAuth client
+	// ("" = tag:twd); NamePrefix goes in front of every tailnet name twd
+	// generates for it ("" = none).
+	OwnerTag   string `json:"ownerTag,omitempty"`
+	NamePrefix string `json:"namePrefix,omitempty"`
 }
 
 // Tenant.PublicIngress values.

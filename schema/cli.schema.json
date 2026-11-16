@@ -776,12 +776,45 @@
               "items": {
                 "type": "string"
               }
+            },
+            "tenantAdmin": {
+              "type": "array",
+              "description": "tenant admin (twd.dev/cap/tenant-admin): each valid grant value's tenants and actions; empty when none",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tenants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "actions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "tenants",
+                  "actions"
+                ]
+              }
+            },
+            "invalidTenantAdmin": {
+              "type": "array",
+              "description": "twd.dev/cap/tenant-admin values that grant nothing, each with the reason",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": [
             "admin",
             "approve",
-            "mcpTools"
+            "mcpTools",
+            "tenantAdmin"
           ]
         }
       },
