@@ -1,4 +1,68 @@
-Last update: 2026-11-16 PT. Implemented step 1a of ADR-team-tenants: `twd.dev/cap/tenant-admin` scopes a team to its own tenants (/v1, registry, CLI). Merged origin/master first.
+Last update: 2026-11-16 PT. The whole ADR-team-tenants is implemented: tenant admins (D2, D3), MCP, approvals, the console and access warnings, owner tags (D4, D6, D7), name prefixes (D5), docs.
+
+## Steps 1b to 4 (2026-11-16)
+
+Built:
+
+- **1b** (`mgmt/tenantscope_mcp.go`, `tenantscope_approve.go`,
+  `tenantscope_lint.go`):
+  - A tenant-admin value's `mcp` entry admits `/mcp` for its tenants. Those
+    tools run as the caller, not as an admin.
+  - An `approve` entry makes the caller an approver in its tenants only.
+    mgmt sends the host just that tenant's values, so hostd is unchanged.
+  - The console opens to tenant admins, without the hosts, status and
+    audit-chain panels.
+  - Lists merge all of a tenant admin's tenants.
+  - The deploy preflight reports `accessWarnings`: values on
+    `twd.dev/cap/admin`, invalid or unknown tenant-admin values, and
+    mcp/approve grants on a shared tailnet. There is no `twd policy lint`
+    command; the ADR now says so.
+- **Owner tags** (`mgmt/teams.go`; migration
+  `202611161200_tenant_owner_tag_name_prefix.sql`):
+  - A second tenant on a tailnet needs its own owner tag, refused with
+    `409 shared_owner_tag` otherwise.
+  - Snippets name the owner tag.
+  - Deploy, spawn and preflight refuse tags that another team owns
+    (`tag_not_owned` / `tagOwnerProblems`), and refuse owner tags
+    themselves. The deploy checks only when the policy is readable.
+  - `tag:twd-public` is exempt from the cross-team check.
+- **Name prefixes:** mgmt prefixes node hostnames (not the IDs), public
+  names, Services and deploy endpoints. At most one tenant per tailnet may
+  go without a prefix, so an existing tenant never needs a rename.
+- **D6 needed no code.** There is no device sweep (the agent survey found
+  only per-node-ID deletes), and Tier-3 posture isn't implemented. The RFC
+  threat model now says so.
+- **CLI:**
+  - `twd tenant add/set --owner-tag --name-prefix`;
+  - `--tenant <shared tailnet>` is `ambiguous_tenant`;
+  - `twd policy` and `twd deploy` print the access warnings.
+- **Docs:** `docs/teams.md` rewritten as the full guide, four more codes in
+  `docs/errors.md`, the RFC identity table and threat model, and the ADR
+  rewritten to what was built.
+- **Existing tests:** the H10 public-name squat tests now create their
+  second same-tailnet tenant directly in the store
+  (`legacySharedTenant`), since the API refuses one without owner tags.
+
+Tests (2026-11-16, at 1b10f79):
+
+- `make lint`: pass (changes-check needs `cli-json protocol schema-expand`,
+  and the fragment has them).
+- `make test`: pass.
+- `make e2e-upgrade`: pass (`TestUpgradePreviousToCandidate`, which runs the
+  new migration on the previous release's store).
+- `go test ./mgmt/ -run 'TestTenant|TestTeams'`: pass.
+- **`make test-pg`: not run.** No Docker daemon on this machine (OrbStack
+  and Docker Desktop are both down). The migration is two
+  `ALTER TABLE ... ADD COLUMN ... TEXT NOT NULL DEFAULT ''`, valid on both
+  dialects, but it hasn't been run against Postgres. Run it before merging.
+
+Not done:
+
+- The ADR keeps its slug; it takes a number when it merges (AGENTS.md
+  rule 5).
+- No real-tailnet test shows Tailscale refusing one team's client minting
+  another team's tag (`make e2e-real` needs credentials).
+
 
 ## Step 1a: tenant admins (ADR-team-tenants D2, D3)
 
