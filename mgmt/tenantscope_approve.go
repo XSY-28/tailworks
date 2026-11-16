@@ -7,7 +7,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/approvecap"
 )
 
-// Tenant-scoped approvers (ADR-team-tenants D2). A TenantAdminCap value
+// Tenant-scoped approvers (ADR-043 D2). A TenantAdminCap value
 // may carry "approve": [<twd.dev/cap/approve value>, ...]. Those apply
 // only to approvals in the value's tenants. mgmt sends the host just the
 // values that apply to the tenant being decided, so the host's check

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Several tenants on one tailnet (ADR-team-tenants D4, D5, D7).
+// Several tenants on one tailnet (ADR-043 D4, D5, D7).
 
 func TestTeamsTenantRules(t *testing.T) {
 	e := newTestEnv(t)

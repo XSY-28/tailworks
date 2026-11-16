@@ -15,7 +15,7 @@ import (
 	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
 )
 
-// Tenant admins (ADR-team-tenants D2, D3): twd.dev/cap/tenant-admin lets a
+// Tenant admins (ADR-043 D2, D3): twd.dev/cap/tenant-admin lets a
 // team act in the tenants its grant names, and nowhere else.
 
 func rawVals(vals ...string) []json.RawMessage {

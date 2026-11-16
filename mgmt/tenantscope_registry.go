@@ -8,7 +8,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/registry"
 )
 
-// The registry's rule for tenant admins (ADR-team-tenants D3). Handler
+// The registry's rule for tenant admins (ADR-043 D3). Handler
 // marks a tenant admin's /v2 request with registryTenantScopeKey;
 // registryAuthorize then defers here.
 

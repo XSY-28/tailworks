@@ -4074,7 +4074,7 @@ type Tenant struct {
 	// OwnerTag The tag that owns this tenant's workload and object tags, and that its
 	// OAuth client is scoped to. Default `tag:twd`. Two tenants on one
 	// tailnet need their own, so neither's client can mint the other's tags
-	// (`409 shared_owner_tag`). See docs/teams.md (ADR-team-tenants).
+	// (`409 shared_owner_tag`). See docs/teams.md (ADR-043).
 	OwnerTag *string `json:"ownerTag,omitempty"`
 
 	// Pool Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host).

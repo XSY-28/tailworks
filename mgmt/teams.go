@@ -9,7 +9,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/tssvc"
 )
 
-// Several tenants on one tailnet, one per team (ADR-team-tenants D4, D5,
+// Several tenants on one tailnet, one per team (ADR-043 D4, D5,
 // D7). Each tenant on a shared tailnet has:
 //
 //   - its own owner tag (Tenant.OwnerTag). Its OAuth client is scoped to
@@ -88,7 +88,7 @@ func (m *Mgmt) checkTeamFields(ctx context.Context, t Tenant) error {
 		return err
 	}
 	if t.Headscale() && t.OwnerTag != "" {
-		return errf(400, "bad_request", "ownerTag needs Tailscale: on Headscale a tailnet keeps one tenant (ADR-team-tenants, Open)")
+		return errf(400, "bad_request", "ownerTag needs Tailscale: on Headscale a tailnet keeps one tenant (ADR-043, Open)")
 	}
 	ts, err := m.store.ListTenants(ctx, Page{})
 	if err != nil {

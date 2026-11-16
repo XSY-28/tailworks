@@ -8,7 +8,7 @@ Several teams can share one twd install and one tailnet. Each team gets:
   manage its own workloads, and nothing else: not other teams' tenants,
   not hosts, not releases or upgrades, and not its tenant's own limits.
 
-The design is [ADR-team-tenants](design/adr/team-tenants.md), tracked in
+The design is [ADR-043](design/adr/043-team-tenants.md), tracked in
 issue #80.
 
 If teams don't trust each other's tailnet admins, give each team its own

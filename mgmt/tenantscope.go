@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Tenant admins (ADR-team-tenants D2, D3): a team manages its own tenants
+// Tenant admins (ADR-043 D2, D3): a team manages its own tenants
 // through a grant of TenantAdminCap, and nothing else.
 //
 // TenantAdminCap is deliberately not a value on AdminCap: mgmt treats

@@ -1,4 +1,4 @@
-Last update: 2026-11-16 PT. The whole ADR-team-tenants is implemented: tenant admins (D2, D3), MCP, approvals, the console and access warnings, owner tags (D4, D6, D7), name prefixes (D5), docs.
+Last update: 2026-11-16 PT. ADR-043 (was ADR-team-tenants) implemented and numbered; lint, test, test-pg, e2e-upgrade pass; PR opened.
 
 ## Steps 1b to 4 (2026-11-16)
 
@@ -51,20 +51,22 @@ Tests (2026-11-16, at 1b10f79):
 - `make e2e-upgrade`: pass (`TestUpgradePreviousToCandidate`, which runs the
   new migration on the previous release's store).
 - `go test ./mgmt/ -run 'TestTenant|TestTeams'`: pass.
-- **`make test-pg`: not run.** No Docker daemon on this machine (OrbStack
-  and Docker Desktop are both down). The migration is two
-  `ALTER TABLE ... ADD COLUMN ... TEXT NOT NULL DEFAULT ''`, valid on both
-  dialects, but it hasn't been run against Postgres. Run it before merging.
+- `make test-pg`: pass, once OrbStack was started (the first attempt found
+  no Docker daemon).
+- The team tests on Postgres: pass (18 tests). `test-pg` doesn't select
+  them, so they were run by hand with `TWD_TEST_API_POSTGRES=1` against a
+  throwaway `postgres:17-alpine`:
+  `go test -race -p 1 -run 'TestTeams|TestTenant|TestRT3_H10' ./mgmt/`.
 
 Not done:
 
-- The ADR keeps its slug; it takes a number when it merges (AGENTS.md
-  rule 5).
+- The ADR is numbered ADR-043 (Accepted) in the merging change (AGENTS.md
+  rule 5), with the slug replaced everywhere.
 - No real-tailnet test shows Tailscale refusing one team's client minting
   another team's tag (`make e2e-real` needs credentials).
 
 
-## Step 1a: tenant admins (ADR-team-tenants D2, D3)
+## Step 1a: tenant admins (ADR-043 D2, D3)
 
 Built:
 
@@ -136,7 +138,7 @@ them closed to tenant-admins.
 
 ## First draft: several tenants per tailnet, one per team
 
-Draft: `docs/design/adr/team-tenants.md`. The question was how two teams in one
+Draft: `docs/design/adr/043-team-tenants.md`. The question was how two teams in one
 tailnet each manage their own workloads.
 
 What I found in the code, which the ADR builds on:

@@ -125,7 +125,7 @@ func TestRT3_H10_PublicNameLegacyOwner(t *testing.T) {
 }
 
 // legacySharedTenant is a second tenant on tenant of's tailnet with neither
-// an owner tag nor a name prefix, as installs from before ADR-team-tenants
+// an owner tag nor a name prefix, as installs from before ADR-043
 // can have. The API now refuses to create one (shared_owner_tag), so it
 // goes straight into the store.
 func legacySharedTenant(t *testing.T, e *testEnv, of, tailnet string) string {

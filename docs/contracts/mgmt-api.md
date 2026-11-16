@@ -36,7 +36,7 @@ connection**, never by a bearer token or API key:
   value names with that action. Lists are limited to those tenants, and
   another tenant's deployment or object is `404`. Hosts, releases,
   upgrades and tenant settings stay with admins
-  (ADR-team-tenants).
+  (ADR-043).
 - everyone else: `403 not_admin` with the grant `snippet` to add.
 
 Each operation declares its role in `x-twd-role` (`admin`, `host`,
@@ -4834,7 +4834,7 @@ Enum: `logs`, `metrics`, `traces`
 | `oauthClientFile` | string | no | `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused). |
 | `oauthClientID` | string | no | `oauth` mode: the OAuth client's public ID (`TS_OAUTH_CLIENT_ID`). The secret is never stored or returned. |
 | `oboPublicKey` | string | no | base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. |
-| `ownerTag` | string | no | The tag that owns this tenant's workload and object tags, and that its OAuth client is scoped to. Default `tag:twd`. Two tenants on one tailnet need their own, so neither's client can mint the other's tags (`409 shared_owner_tag`). See docs/teams.md (ADR-team-tenants). |
+| `ownerTag` | string | no | The tag that owns this tenant's workload and object tags, and that its OAuth client is scoped to. Default `tag:twd`. Two tenants on one tailnet need their own, so neither's client can mint the other's tags (`409 shared_owner_tag`). See docs/teams.md (ADR-043). |
 | `pool` | string | no | Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host). |
 | `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | yes |  |

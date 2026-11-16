@@ -79,7 +79,7 @@ type Tenant struct {
 	CreatedAt     int64  `json:"createdAt"`
 	UpdatedAt     int64  `json:"updatedAt"`
 
-	// Several tenants on one tailnet (ADR-team-tenants, teams.go):
+	// Several tenants on one tailnet (ADR-043, teams.go):
 	// OwnerTag owns the tenant's tags and scopes its OAuth client
 	// ("" = tag:twd); NamePrefix goes in front of every tailnet name twd
 	// generates for it ("" = none).

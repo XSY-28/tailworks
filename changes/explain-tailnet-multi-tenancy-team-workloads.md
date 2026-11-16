@@ -2,7 +2,7 @@
 kind: security
 upgrade: [protocol, cli-json, schema-expand]
 ---
-Several teams on one tailnet (ADR-team-tenants, docs/teams.md).
+Several teams on one tailnet (ADR-043, docs/teams.md).
 
 - Tenant admins: grant a team `twd.dev/cap/tenant-admin` on `tag:twd-mgmt`
   with values like `{"tenants": ["tn_example-pay"], "actions": ["read",

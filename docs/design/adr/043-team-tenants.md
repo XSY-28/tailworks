@@ -1,10 +1,9 @@
-# ADR-team-tenants: Several tenants per tailnet, one per team: a tenant-admin capability, a per-tenant owner tag, and per-tenant name prefixes
+# ADR-043: Several tenants per tailnet, one per team: a tenant-admin capability, a per-tenant owner tag, and per-tenant name prefixes
 
 **Date:** 2026-11-15 (implemented 2026-11-16)
-**Status:** Proposed; implemented on its branch (results in
-`status/explain-tailnet-multi-tenancy-team-workloads.md`). Tracked in issue
-#80. It takes the next free ADR number when it merges to master
-(AGENTS.md rule 5). User guide: [docs/teams.md](../../teams.md).
+**Status:** Accepted (Ross). Implemented (results in
+`status/explain-tailnet-multi-tenancy-team-workloads.md`); issue #80. User
+guide: [docs/teams.md](../../teams.md).
 
 **Context.**
 

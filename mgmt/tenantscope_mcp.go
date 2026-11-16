@@ -8,7 +8,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/approvecap"
 )
 
-// Tenant admins on twd's MCP server (ADR-team-tenants D2). A TenantAdminCap
+// Tenant admins on twd's MCP server (ADR-043 D2). A TenantAdminCap
 // value with an "mcp" entry admits the caller to /mcp for that value's
 // tenants:
 //

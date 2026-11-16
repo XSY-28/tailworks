@@ -9,7 +9,7 @@ import (
 	"github.com/rosskukulinski/twd/internal/approvecap"
 )
 
-// Access warnings (ADR-team-tenants D2): the deploy preflight, which
+// Access warnings (ADR-043 D2): the deploy preflight, which
 // already reads the tenant's tailnet policy, also reports grants to
 // tag:twd-mgmt that don't do what they look like they do. `twd policy` and
 // `twd deploy` print them; they never fail a deploy.
