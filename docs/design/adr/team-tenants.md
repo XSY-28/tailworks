@@ -2,7 +2,8 @@
 
 **Date:** 2026-11-15
 **Status:** Proposed (results in `status/explain-tailnet-multi-tenancy-team-workloads.md`).
-Not implemented; tracked in issue #80. The implementation plan is at the end.
+Tracked in issue #80. D2 and D3 are implemented (step 1a of the plan at
+the end); the rest isn't yet.
 
 **Context.**
 
@@ -119,11 +120,18 @@ Not implemented; tracked in issue #80. The implementation plan is at the end.
      - `data`: read and write the tenant's data through mgmt (KV, D1, R2
        and queue admin and journal routes).
    - A caller that holds `twd.dev/cap/tenant-admin` but not
-     `twd.dev/cap/admin` is a new principal kind, `tenant-admin`, which
-     carries its matched values. A caller that holds both is an operator.
+     `twd.dev/cap/admin` stays an ordinary `user` principal that isn't an
+     admin; its values travel in the principal's `CapValues`. So every
+     existing check that asks "is this user an admin?" still says no, and
+     the only extra access is what `mgmt/tenantscope.go` grants. A caller
+     that holds both is an operator.
+   - A holder whose values are all invalid is admitted only far enough for
+     `GET /v1/whoami` to report why (`invalidTenantGrants`). Every other
+     route refuses it with `403 tenant_forbidden`, naming the reasons.
    - **MCP and approvals inside a tenant don't get a `tenants` field on
      their own caps,** for the same reason as above: an older mgmt or hostd
-     would ignore it and widen access.
+     would ignore it and widen access. (Not built yet: until step 1b,
+     tenant admins get `403` at `/mcp` and `/ui`.)
      - A tenant-admin value may carry `"mcp": {"tools": [...]}`. That
        admits the caller to `/mcp` for those tenants, with the read tools
        plus the destructive tools it names, and only where the value's
@@ -151,31 +159,49 @@ Not implemented; tracked in issue #80. The implementation plan is at the end.
      example, `admin|tenant:deploy` on `POST
      /v1/tenants/{id}/workloads/{workload}/deployments`, and
      `admin|host|tenant:read` on a route that hosts also read.
-   - `roleAllowed` (`mgmt/v1.go`) admits a `tenant-admin` principal only
-     through a `tenant:<action>` part, and then only after the tenant check
-     below.
+   - When `roleAllowed` (`mgmt/v1.go`) refuses a tenant admin, `roleGate`
+     hands the request to `tenantGate` (`mgmt/tenantscope.go`), which
+     admits it only through a `tenant:<action>` part, and only after the
+     tenant check below.
    - An operation without a `tenant:` part is closed to tenant-admins. A
      new route is therefore operator-only until someone decides otherwise
      (fail closed, ADR-027).
-   - `spec_test.go` gains two checks: every `tenant:` part names a known
-     action, and every operation under `/v1/tenants/{id}/` either has a
-     `tenant:` part or is on a short list of operator routes in the test
-     (`UpdateTenant`, `DeleteTenant`, `WIFCheck`, …). That way, leaving a
-     route out is a deliberate choice, not an oversight.
-   - Routes with `{id}` in the path are checked against it.
-   - Routes keyed by a resource (`/v1/deployments/{id}`,
-     `/v1/objects/{id}`, `/v1/container-reservations/{id}`,
-     `/v1/volumes/{id}/keys`) resolve the resource's tenant first, then
-     check. A resource in another tenant returns `404`, not `403`, so
-     tenant names and IDs don't leak.
-   - List routes (`/v1/tenants`, `/v1/deployments`, `/v1/objects`, the
-     audit index) filter their results to the caller's tenants.
-   - One helper, `authorizeTenant(p, tenantID, action)`, does the check, in
-     a new file (`mgmt/tenantscope.go`). `/v1`, `/ui`, `/mcp` and the
-     registry all call it. The registry's user branch also requires `read`
-     on the repository's tenant to pull, and `deploy` to push.
-   - `GET /v1/whoami` reports the caller's scope, so `twd link` and the UI
-     can show which tenants are visible.
+   - `TestTenantRolesConsistent` (`mgmt/tenantscope_test.go`) checks that
+     every `tenant:` part names a known action and sits where something
+     checks the tenant. It also checks that every operation under
+     `/v1/tenants/{id}` either has a `tenant:` part or is on a short list of
+     admin-only routes in the test (`UpdateTenant`, `DeleteTenant`,
+     `PurgeTenantObjects`, the approver and host routes). That way, leaving
+     a route out is a deliberate choice, not an oversight.
+   - Routes with `{id}` under `/v1/tenants/` are checked by the gate.
+     Naming a tenant you weren't granted is `403 tenant_forbidden`, decided
+     before any lookup, so it says nothing about whether the tenant
+     exists.
+   - Routes whose tenant isn't in the path must be listed in
+     `tenantCheckedInHandler`; otherwise the gate refuses them to tenant
+     admins. Their handlers check the tenant once they know it:
+     - A tenant the caller supplied (the body of `POST /v1/deployments`, a
+       `?tenant=` filter) is `403` if it isn't granted.
+     - A resource looked up by ID (`/v1/deployments/{id}`,
+       `/v1/objects/{id}`) in another tenant is `404`, so its existence
+       doesn't leak.
+     - Lists (`/v1/tenants`, `/v1/deployments`, `/v1/objects`,
+       `/v1/audit`) keep to the granted tenants. Without `?tenant=`, they
+       default to the caller's only tenant, and a caller with several must
+       name one. Host audit-chain statuses aren't shown to tenant admins.
+   - Two read-only routes that hold nothing tenant-specific (operator base
+     images and their aliases) are in `tenantAnyTenant`: `read` in any
+     tenant is enough.
+   - The registry (`/v2/`, not behind the gate) applies the same rule in
+     `mgmt/tenantscope_registry.go`. A tenant admin pulls its tenants'
+     namespaces with `read`, pushes them with `deploy`, and pulls but never
+     pushes `public/…`. Writing this showed that the registry admitted
+     *every* user principal as an admin, including one holding only
+     `twd.dev/cap/approve`. It now admits only admins, hosts and tenant
+     admins.
+   - `GET /v1/whoami` reports `tenantGrants` and `invalidTenantGrants`, and
+     lists only the granted tenants. `twd link` accepts a tenant admin, and
+     `twd whoami` shows its tenants and actions.
 
 4. **Each tenant has its own owner tag, and its trust credentials are
    scoped to it.** A new tenant field, `ownerTag` (for example
@@ -296,32 +322,31 @@ useful on its own, and each follows AGENTS.md (new files for the logic,
 small edits to the hotspots).
 
 1. **Tenant-admin cap (D2, D3).**
-   - Add `TenantAdminCap` and the `tenant:<action>` part of `x-twd-role`.
-     Tag the tenant routes in `api/openapi.yaml`, run `make api`, and add
-     the two new `spec_test.go` checks.
-   - Add `mgmt/tenantscope.go`: value parsing (required fields, unknown
-     actions match nothing), per-value matching, and `authorizeTenant`.
-   - Add the `tenant-admin` principal kind to `TailnetHandler`, and the
-     `roleAllowed` branch. Add the checks in `/v1`, `/ui`, `/mcp` (the
-     `mcp` sub-value) and the registry. List routes filter. Cross-tenant
-     resources return `404`.
-   - Add the `approve` sub-value, checked through `internal/approvecap` and
-     limited to the value's tenants, in mgmt's inbox filter and in hostd.
-   - Report the matched values and any invalid ones in `whoami`, and in
-     `twd policy lint` with the shared-tailnet warnings. Add the
-     `tenant_forbidden` error code.
-   - Tests:
-     - a table test over every operation, by role and action;
-     - a tenant-admin is refused on every operator route (hosts, pools,
-       releases, upgrades, tenant limits);
-     - a value missing `tenants` or `actions` grants nothing;
-     - holding only `twd.dev/cap/tenant-admin` never satisfies `admin`;
-     - a cross-tenant `404` test for each resource-keyed route;
-     - a per-value (not merged) union test;
-     - the registry pull and push rules.
-   - Run `make lint test`, `make test-pg` and `make e2e-upgrade`. The
-     upgrade run checks that a mgmt from before this change refuses a
-     tenant-admin-only caller.
+   - **1a, done** (`mgmt/tenantscope.go`, `mgmt/tenantscope_registry.go`,
+     `tenant:<action>` parts in `api/openapi.yaml`):
+     - the cap, value parsing and per-value matching;
+     - the gate and the handler checks, list filtering, cross-tenant
+       `404`s, and the registry rule;
+     - `whoami`, `twd link`, `twd whoami`, and the `tenant_forbidden`
+       error;
+     - the registry fix for approvers;
+     - docs (`docs/teams.md`).
+     Tests are in `mgmt/tenantscope_test.go`: value parsing, values never
+     merged, the spec/route consistency check, a tenant admin refused on
+     every admin route and on the other tenant, `404` by resource ID, list
+     scoping, an invalid value granting nothing, an admin never narrowed,
+     and the registry rules.
+   - **1b, to do:**
+     - the `mcp` sub-value and `/mcp` for tenant admins;
+     - the `approve` sub-value (checked through `internal/approvecap`,
+       limited to the value's tenants, in mgmt's inbox filter and in
+       hostd);
+     - `/ui` for tenant admins;
+     - `twd policy lint` reporting invalid values, plus the shared-tailnet
+       warnings for `twd.dev/cap/mcp` and `twd.dev/cap/approve`.
+   - Still to run, needing a real setup: `make e2e-upgrade`, with a mgmt
+     from before this change refusing a caller who holds only
+     `twd.dev/cap/tenant-admin`.
 2. **Owner tag (D4, D6, the owner-tag half of D7).**
    - Add the `owner_tag` column (expand migration).
    - Generate the credential and `tagOwners` snippets from the owner tag.

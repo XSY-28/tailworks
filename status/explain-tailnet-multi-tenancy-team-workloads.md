@@ -1,4 +1,43 @@
-Last update: 2026-11-15 PT. ADR-team-tenants revised: team access is a new `twd.dev/cap/tenant-admin` cap, and route scope goes in `x-twd-role`. Tracked in #80.
+Last update: 2026-11-16 PT. Implemented step 1a of ADR-team-tenants: `twd.dev/cap/tenant-admin` scopes a team to its own tenants (/v1, registry, CLI). Merged origin/master first.
+
+## Step 1a: tenant admins (ADR-team-tenants D2, D3)
+
+Built:
+
+- `mgmt/tenantscope.go`: `TenantAdminCap`, value parsing (`tenants` and
+  `actions` required; wildcards, unknown actions and unknown fields grant
+  nothing), per-value matching, `tenantGate` (called by `roleGate` when
+  `roleAllowed` refuses a tenant admin), and the handler-side `tenantOK` /
+  `tenantListScope`.
+- `api/openapi.yaml`: `tenant:<action>` parts on 66 operations, the
+  `tenant_forbidden` error code, and `tenantGrants` / `invalidTenantGrants`
+  on `WhoAmI`. Regenerated with `make api`.
+- `mgmt/v1.go`: checks in the handlers for deployments, objects, audit and
+  tenants, whose tenant isn't in the path. Another tenant's resource by ID
+  is a 404, and a named tenant that isn't granted is a 403.
+- Registry: `mgmt/tenantscope_registry.go`. **Fixed an existing hole:** the
+  registry admitted every `user` principal as an admin, so a tailnet user
+  holding only `twd.dev/cap/approve` could push and pull every tenant's
+  images. `Handler` now refuses non-admin users who aren't tenant admins.
+- `internal/mgmtd/mgmtd.go`: WhoIs keeps the tenant-admin cap's values (it
+  kept only the MCP and approve caps' values before).
+- CLI: `twd link` accepts a tenant admin. `twd whoami` shows `tenantAdmin`
+  and `invalidTenantAdmin` (`schema/cli.schema.json` updated).
+- Docs: `docs/teams.md` (new), `docs/errors.md#tenant_forbidden`,
+  `INSTALL.md`, `ADMIN-UI.md`, `security-model.md`, `docs/README.md`,
+  `llms.txt`. Release note: `changes/explain-tailnet-multi-tenancy-team-workloads.md`.
+- The ADR was updated to match what was built (a tenant admin is a plain
+  non-admin `user`, not a new principal kind), and its plan step 1 is split
+  into 1a (done) and 1b.
+
+Not built yet (step 1b, then steps 2 to 4 of the ADR):
+
+- `/mcp` and `/ui` for tenant admins (both refuse them for now), the
+  `approve` sub-value, and `twd policy lint` warnings.
+- Owner tags, name prefixes and reconciler scoping. Until these land, two
+  tenants on one tailnet aren't separated on the data plane; `docs/teams.md`
+  says so.
+
 
 ## Revision: a new cap instead of values on `twd.dev/cap/admin`
 
