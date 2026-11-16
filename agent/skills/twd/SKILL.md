@@ -77,14 +77,17 @@ user runs `twd mcp --config`.
    next. `twd docs show errors.md#<code>` prints the full entry offline.
 3. **Check flags before you guess them.** `twd <command> --help` lists every
    flag. Don't invent flags; twd refuses unknown ones with `bad_request`.
-4. **Ask before anything destructive.** `twd kill`, `twd undeploy`,
-   `twd down`, `twd tenant rm`, `twd host rm`, `twd secret rm`,
-   `twd kv namespace delete`, `twd kv key delete`, `twd queues rm` and
-   `twd queues purge` act immediately; they
-   have no undo. Run them only after the user has said
-   yes to that specific action. Never pass `--yes` to `twd up` or
-   `twd agent setup` on the user's behalf; those prompts exist so the user
-   sees what will change.
+4. **Ask before anything destructive.** None of these has an undo. Run one
+   only after the user has said yes to that specific action.
+   - `twd kill`, `twd undeploy`, `twd down`, `twd secret rm` and
+     `twd kv key delete` act immediately.
+   - `twd d1 delete`, `twd kv namespace delete`, `twd queues rm`,
+     `twd queues purge`, `twd r2 bucket rm`, `twd tenant rm` and
+     `twd host rm` delete data or a tenant's resources. Without a terminal
+     they refuse with `confirmation_required`. Tell the user what will be
+     lost, and add `--yes` only after they agree.
+   - Never pass `--yes` to `twd up` or `twd agent setup` on the user's
+     behalf; those prompts exist so the user sees what will change.
 5. **Never handle credentials.** Don't write API keys, OAuth client
    secrets or auth keys into files, commands or `twd.jsonc`. Secrets go
    in with `twd secret put <NAME>`, which reads the value from stdin; let

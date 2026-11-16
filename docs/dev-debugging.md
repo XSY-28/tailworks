@@ -107,6 +107,31 @@ The inspector gives full control of the isolate, so it listens on loopback
 only. twd-hostd's `WorkerdInspector` option takes effect only in twd dev's
 process-tier mode, never on a host that serves tenants.
 
+## Look at the data: the dev console
+
+`twd dev` serves a read-only data console on `127.0.0.1`, as `wrangler
+dev`'s `e` hotkey opens a local explorer. The ready output prints its
+address (`console on http://127.0.0.1:<port>/`); press `e` to open it.
+
+- **Workers KV**: each namespace that holds data, its keys (sorted, with a
+  prefix filter, 100 per page), each value's size, expiration and
+  metadata, and the value itself (JSON indented, binary as hex).
+- **D1**: each database the app binds, its tables with their row counts,
+  and the rows of a table, 50 per page.
+- **Other stores** (R2 buckets, queues): listed with their journal size,
+  not browsable.
+
+It reads the run's own stores, so it shows what the app wrote a moment
+ago. It never writes: change data from the app (for a deployed app, `twd
+kv` and `twd d1 execute` also write). Durable Object storage isn't shown
+yet.
+
+`--console-port <port>` picks the port (default `0`, a free one);
+`--console-port -1` turns the console off. It listens on loopback only and
+answers only requests whose `Host` is that loopback address, so a web page
+can't read it through DNS rebinding. With `--json`, the `console` event
+gives its URL.
+
 ## Hotkeys
 
 When stdin is a terminal and `--json` is off, `twd dev` reads single keys:
@@ -114,6 +139,7 @@ When stdin is a terminal and `--json` is off, `twd dev` reads single keys:
 | Key | Action |
 |---|---|
 | `b` | open the app's URL (with the MCP route, if the app has one) in the default browser |
+| `e` | open the data console (below) in the default browser |
 | `x` or `q` | stop, like Ctrl-C |
 
 While twd dev runs, the terminal doesn't echo keys. It goes back to normal

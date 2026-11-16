@@ -1,7 +1,9 @@
 #!/bin/sh
 # install_test.sh: install.sh upgrade keeps .prev, --rollback swaps it back,
-# a same-version repair keeps the older .prev, --uninstall removes it all.
-# Hermetic (fake releases in a temp dir); run: sh scripts/install_test.sh
+# a same-version repair keeps the older .prev, --uninstall removes it all;
+# install.sh and get.sh refuse a release that isn't signed by a pinned key
+# (issue #71). Hermetic (fake releases in a temp dir, signed by a throwaway
+# key that TWD_RELEASE_SIGNERS pins); run: sh scripts/install_test.sh
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d)
@@ -11,9 +13,20 @@ arch=$(uname -m)
 [ "$arch" = aarch64 ] && arch=arm64
 [ "$arch" = x86_64 ] && arch=amd64
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+command -v ssh-keygen >/dev/null || { echo "install_test: needs ssh-keygen (OpenSSH)" >&2; exit 1; }
 
-mkrel() { # version
-	d=$T/rel-$1
+# A release key the test pins, and one it doesn't.
+ssh-keygen -q -t ed25519 -N '' -C test -f "$T/key"
+ssh-keygen -q -t ed25519 -N '' -C other -f "$T/other"
+printf 'twd-release namespaces="twd-release" %s\n' "$(cat "$T/key.pub")" >"$T/allowed_signers"
+export TWD_RELEASE_SIGNERS=$T/allowed_signers
+sign() { # key file
+	rm -f "$2.sig"
+	ssh-keygen -q -Y sign -f "$1" -n twd-release "$2"
+}
+
+mkrel() { # version [dir]: a signed release directory (default $T/rel-<version>)
+	d=${2:-$T/rel-$1}
 	mkdir -p "$d/bin" "$d/share/twd"
 	printf '#!/bin/sh\necho twd %s\n' "$1" >"$d/bin/twd"
 	printf '#!/bin/sh\necho workerd\n' >"$d/bin/workerd"
@@ -21,7 +34,8 @@ mkrel() { # version
 	printf '%s\n' "$1" >"$d/VERSION"
 	printf '{"version":"%s","os":"%s","arch":"%s"}\n' "$1" "$os" "$arch" >"$d/share/twd/release.json"
 	cp "$ROOT/scripts/install.sh" "$d/install.sh"
-	(cd "$d" && find . -type f ! -name SHA256SUMS | sed 's|^\./||' | while read -r f; do sha "$f"; done >SHA256SUMS)
+	(cd "$d" && find . -type f ! -name SHA256SUMS ! -name SHA256SUMS.sig | sed 's|^\./||' | while read -r f; do sha "$f"; done >SHA256SUMS)
+	sign "$T/key" "$d/SHA256SUMS"
 }
 fail() { echo "FAIL: $*" >&2; exit 1; }
 P=$T/prefix
@@ -62,4 +76,79 @@ rm -f "$P/supervisor.pid"
 sh "$P/install.sh" --uninstall >/dev/null
 [ ! -e "$P" ] || fail "uninstall left: $(ls -A "$P")"
 if sh "$T/rel-0.1.0/install.sh" --rollback >/dev/null 2>&1; then fail "rollback with no .prev"; fi
+
+# install.sh: signatures.
+refused() { # what dir [args]: install.sh refuses, installs nothing
+	what=$1 d=$2
+	shift 2
+	rm -rf "$P"
+	if sh "$d/install.sh" "$@" >"$T/out" 2>&1; then fail "install.sh installed $what"; fi
+	[ ! -e "$P/bin" ] || fail "install.sh $what left $P/bin"
+}
+mkrel 0.3.0 "$T/bad-sig"
+sign "$T/other" "$T/bad-sig/SHA256SUMS"
+refused "a release signed by an unpinned key" "$T/bad-sig"
+grep -q 'not a valid signature' "$T/out" || fail "bad signature message: $(cat "$T/out")"
+mkrel 0.3.0 "$T/garbled-sig"
+echo garbage >"$T/garbled-sig/SHA256SUMS.sig"
+refused "a garbled signature" "$T/garbled-sig"
+mkrel 0.3.0 "$T/resummed"
+printf '#!/bin/sh\necho evil\n' >"$T/resummed/bin/twd"
+(cd "$T/resummed" && find . -type f ! -name SHA256SUMS ! -name SHA256SUMS.sig | sed 's|^\./||' | while read -r f; do sha "$f"; done >SHA256SUMS)
+refused "a changed binary with a re-made SHA256SUMS" "$T/resummed"
+mkrel 0.3.0 "$T/unsigned"
+rm "$T/unsigned/SHA256SUMS.sig"
+refused "an unsigned release" "$T/unsigned"
+grep -q 'not signed' "$T/out" || fail "unsigned message: $(cat "$T/out")"
+mkrel 0.3.0 "$T/nokey"
+(TWD_RELEASE_SIGNERS=/dev/null && refused "with no key pinned" "$T/nokey")
+grep -q 'pins no release signing key' "$T/out" || fail "no pinned key message: $(cat "$T/out")"
+rm -rf "$P"
+sh "$T/unsigned/install.sh" --allow-unsigned >"$T/out" 2>&1 || fail "--allow-unsigned: $(cat "$T/out")"
+grep -q WARNING "$T/out" || fail "--allow-unsigned did not warn"
+rm -rf "$P"
+mkrel 0.3.0-abcdef12 "$T/local"
+rm "$T/local/SHA256SUMS.sig"
+sh "$T/local/install.sh" >"$T/out" 2>&1 || fail "a local build: $(cat "$T/out")"
+grep -q 'local build' "$T/out" || fail "a local build did not warn"
+rm -rf "$P"
+mkrel 0.3.0 "$T/good"
+sh "$T/good/install.sh" >"$T/out" 2>&1 || fail "a signed release: $(cat "$T/out")"
+grep -q 'signed by a twd release key' "$T/out" || fail "signed release message: $(cat "$T/out")"
+rm -rf "$P"
+
+# get.sh: SHA256SUMS.sig is checked before the tarball is opened.
+mkmirror() { # dir version: a fake GitHub release (tarball, SHA256SUMS, SHA256SUMS.sig)
+	n=twd-$2-$os-$arch
+	mkdir -p "$1/stage"
+	mkrel "$2" "$1/stage/$n"
+	tar -czf "$1/$n.tar.gz" -C "$1/stage" "$n"
+	rm -rf "$1/stage"
+	(cd "$1" && sha "$n.tar.gz" >SHA256SUMS)
+	sign "$T/key" "$1/SHA256SUMS"
+}
+get() { # dir version
+	TWD_RELEASE_BASE="file://$1" sh "$ROOT/scripts/get.sh" "v$2" >"$T/out" 2>&1
+}
+mkmirror "$T/m-good" 0.3.0
+get "$T/m-good" 0.3.0 || fail "get.sh a signed release: $(cat "$T/out")"
+[ "$(cat "$P/VERSION")" = 0.3.0 ] || fail "get.sh did not install"
+rm -rf "$P"
+mkmirror "$T/m-bad" 0.3.0
+sign "$T/other" "$T/m-bad/SHA256SUMS"
+if get "$T/m-bad" 0.3.0; then fail "get.sh installed a release signed by an unpinned key"; fi
+grep -q 'not a valid signature' "$T/out" || fail "get.sh bad signature message: $(cat "$T/out")"
+[ ! -e "$P/bin" ] || fail "get.sh installed with a bad signature"
+mkmirror "$T/m-unsigned" 0.3.0
+rm "$T/m-unsigned/SHA256SUMS.sig"
+if get "$T/m-unsigned" 0.3.0; then fail "get.sh installed an unsigned release"; fi
+grep -q 'no SHA256SUMS.sig' "$T/out" || fail "get.sh unsigned message: $(cat "$T/out")"
+# No version skips the check: an "old" or non-numeric tag with no
+# signature is refused too (whoever can publish a release picks the tag).
+for v in 0.2.0 0.2.99; do
+	mkmirror "$T/m-old-$v" "$v"
+	rm "$T/m-old-$v/SHA256SUMS.sig"
+	if get "$T/m-old-$v" "$v"; then fail "get.sh installed unsigned release $v"; fi
+	[ ! -e "$P/bin" ] || fail "get.sh installed unsigned release $v"
+done
 echo "install_test: ok"

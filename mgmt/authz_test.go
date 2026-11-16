@@ -37,7 +37,7 @@ const (
 )
 
 func newAuthzEnv(t *testing.T) *authzEnv {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {

@@ -57,7 +57,10 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    writes `internal/catalog/releases/v0.2.0.json`, the catalog entry that
    twd-mgmt embeds for offline upgrade plans. The entry records the notes,
    the workerd pin, the newest migration, contract migrations and protocol
-   versions.
+   versions. Last, it re-renders the user-facing
+   [CHANGELOG.md](../CHANGELOG.md) from the catalog
+   (`go run ./internal/catalog/changes changelog`; a test fails when it is
+   stale).
 3. **Bump `VERSION`**, and the `@twd/*` and `create-twd` package versions,
    to `0.2.0`. Commit all of it as `Release v0.2.0`.
 
@@ -80,8 +83,9 @@ scripts/release-notes.sh v0.1.0 v0.2.0
      `make e2e-upgrade`, which upgrades from the previous release to this
      commit and checks data, rejoin and old bundles;
    - `vm-assets` and `vz-assets`: the microVM guests for each arch;
-   - `release`: the three tarballs with `SHA256SUMS` and the catalog, and a
-     **draft** GitHub release whose body comes from `release-notes.sh`.
+   - `release`: the three tarballs with `SHA256SUMS`, `SHA256SUMS.sig`
+     (see [Signing](#signing)) and the catalog, and a **draft** GitHub
+     release whose body comes from `release-notes.sh`.
 
    A failed gate means no draft.
 6. **Review the draft.**
@@ -109,6 +113,62 @@ scripts/release-notes.sh v0.1.0 v0.2.0
      packages: `make templates-typecheck` (every template's
      `twd init && npm install && npx tsc --noEmit`, with `@twd/*` from
      `npm pack` tarballs).
+
+## Signing
+
+Every release is signed (issue #71). A checksum only proves a download is
+intact; the signature proves the release came from this repository's
+release workflow.
+
+- **What is signed.** `release.yml` signs the release's `SHA256SUMS` and
+  each tarball's inner `SHA256SUMS`. Each gets a `SHA256SUMS.sig` next to
+  it. The signature is an SSH signature (`ssh-keygen -Y sign -n
+  twd-release`) by an Ed25519 key.
+- **Who checks it.**
+  - `scripts/get.sh` checks the release's `SHA256SUMS.sig` before it trusts
+    the hashes in `SHA256SUMS`. It refuses an unsigned release whatever its
+    version: an exception for "old" releases would let whoever can publish
+    a release pick a tag that skips the check. (No unsigned release was
+    ever published.)
+  - `install.sh` checks the tarball's `SHA256SUMS.sig` before it installs.
+    It is only a second check: a tampered tarball ships its own
+    `install.sh`, which is why `get.sh` and hostd check first.
+    A build whose version has a `-` suffix (what `make release` stamps on a
+    local build) may be unsigned.
+  - twd-hostd's self-upgrade checks the tarball's signature in Go, against
+    the keys built into the running binary, before it runs `install.sh`.
+    The keys are never taken from twd-mgmt or the release.
+- **Where the keys are pinned.** `internal/releasesig/allowed_signers` is
+  the source of truth. `scripts/get.sh` and `scripts/install.sh` carry
+  copies, and `make test` fails if they differ.
+- **Opting out.** `install.sh --allow-unsigned`, or `TWD_ALLOW_UNSIGNED=1`
+  for `get.sh` and `install.sh`. Use it for builds you made yourself.
+
+### The key ceremony
+
+Do this once, and again to rotate the key.
+
+1. Make the key outside the repository, on an encrypted volume:
+
+   ```sh
+   sh scripts/release-keygen.sh /Volumes/keys/twd-release
+   ```
+
+   This writes the key pair, adds the public key to
+   `internal/releasesig/allowed_signers`, and copies it into `get.sh` and
+   `install.sh` (`--sync`).
+2. Store the private key as the `release` environment's secret:
+   `gh secret set TWD_RELEASE_SIGNING_KEY --env release <key-file>`.
+   Keep an offline backup.
+3. Commit the three changed files and merge them before you tag.
+   `release.yml` refuses to draft a release without the secret, or with a
+   key that isn't pinned.
+
+**Rotating.** Add the new key first and keep the old line, so binaries
+already installed still trust the next release. Remove the old line a
+release later. **If the key leaks:** remove its line, add a new key and
+ship a patch. Hosts on older releases still trust the leaked key until they
+upgrade, so tell operators to upgrade with `get.sh` from master.
 
 ## If a release is bad
 

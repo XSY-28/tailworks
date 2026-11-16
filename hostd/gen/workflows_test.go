@@ -187,7 +187,16 @@ func TestGeneratedWorkflows(t *testing.T) {
 			if !strings.Contains(fmtAny(r["error"]), "approval_requires_identity") {
 				t.Fatalf("%s: app-sent approval-*: %v", w, r)
 			}
-			if st := status(twd, id); st["status"] != "waiting" {
+			// Not moved on: a refused approval that got through would
+			// complete the instance. workerd's engine can report "running"
+			// for a moment while it replays a waiting instance (it aborts
+			// and restarts run() during long waits), more often on a loaded
+			// machine, so "running" alone isn't progress: the instance must
+			// settle back to "waiting" with no output (issue #75).
+			if st := status(twd, id); st["status"] == "complete" || st["status"] == "errored" || st["output"] != nil {
+				t.Fatalf("%s: instance moved on: %v", w, st)
+			}
+			if st := waitStatus(twd, id, "waiting"); st["output"] != nil {
 				t.Fatalf("%s: instance moved on: %v", w, st)
 			}
 		}

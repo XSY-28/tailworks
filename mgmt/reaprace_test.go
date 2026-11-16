@@ -3,7 +3,6 @@ package mgmt
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -29,8 +28,8 @@ func TestMM_H09_ConcurrentKillOnce(t *testing.T) {
 	}
 	a, b := mk(), mk()
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := a.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := a.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	const n = 20
 	for i := range n {
 		id := fmt.Sprintf("obj%02d", i)
@@ -106,8 +105,8 @@ func TestMM_F21_DeviceDeleteIntentIsAtomic(t *testing.T) {
 	}
 	defer m.Close()
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	// A ready object with a device, killed.
 	st.CreateObject(ctx, Object{ID: "rdy", TenantID: tn.ID, Workload: "w", Namespace: "A", Name: "rdy", Hostname: "rdy", RootID: "rdy",
 		Status: StatusReady, NodeID: "1", StableNodeID: "nRDY"})

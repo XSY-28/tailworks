@@ -13,8 +13,7 @@ import (
 
 // The policy snippets in README.md and docs/INSTALL.md are what admins copy
 // into their tailnet policy, so they must say exactly what twd up checks:
-// operatorSnippet (OAuth, API key) or keylessSnippet (WIF, the block with
-// the funnel nodeAttr). They drifted once (tag:twd-issuer in the OAuth one).
+// operatorSnippet. They drifted once (tag:twd-issuer in the OAuth one).
 func TestDocPolicySnippetsMatchCode(t *testing.T) {
 	block := regexp.MustCompile("(?s)```jsonc\n(.*?)```")
 	n := 0
@@ -44,7 +43,7 @@ func TestDocPolicySnippetsMatchCode(t *testing.T) {
 			}
 			want, which := operatorSnippet(), "operatorSnippet"
 			if len(got.NodeAttrs) > 0 {
-				want, which = keylessSnippet(), "keylessSnippet"
+				t.Errorf("%s: snippet has nodeAttrs %v; the operator snippet has none (mgmt never uses Funnel)", f, got.NodeAttrs)
 			}
 			if !reflect.DeepEqual(got.TagOwners, want.TagOwners) {
 				t.Errorf("%s: tagOwners = %v, want %s's %v", f, got.TagOwners, which, want.TagOwners)
@@ -57,7 +56,7 @@ func TestDocPolicySnippetsMatchCode(t *testing.T) {
 			}
 		}
 	}
-	if n != 3 {
-		t.Errorf("found %d policy snippets in README.md + INSTALL.md, want 3 (update this test if you add one)", n)
+	if n != 2 {
+		t.Errorf("found %d policy snippets in README.md + INSTALL.md, want 2 (update this test if you add one)", n)
 	}
 }

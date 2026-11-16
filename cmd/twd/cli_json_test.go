@@ -35,15 +35,18 @@ var cliSurface = []struct {
 	{"down", []string{"down"}},
 	{"link", []string{"link", "--unlink"}},
 	{"whoami", []string{"whoami"}},
-	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--api-key-file", "/nonexistent/api.env"}},
+	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--oauth-client-file", "/nonexistent/oauth.env"}},
 	{"tenant ls", []string{"tenant", "ls"}},
 	{"tenant set", []string{"tenant", "set", "other.example.ts.net", "--max-objects", "5"}},
-	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net"}},
+	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net", "--yes"}},
 	{"init", []string{"init", "{work}/app", "--template", "hello"}},
 	{"dev", []string{"dev", "{work}/empty", "--once"}},
 	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
 	{"deployments", []string{"deployments", "app"}},
+	{"policy", []string{"policy", "{work}/app"}},
+	{"previews", []string{"previews", "app"}},
+	{"promote", []string{"promote", "app", "3f9a1c2b"}},
 	{"rollback", []string{"rollback", "app"}},
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},
@@ -53,7 +56,7 @@ var cliSurface = []struct {
 	{"secret rm", []string{"secret", "rm", "API_TOKEN", "--workload", "app"}},
 	{"kv namespace create", []string{"kv", "namespace", "create", "sessions", "--workload", "app"}},
 	{"kv namespace list", []string{"kv", "namespace", "list", "--workload", "app"}},
-	{"kv namespace delete", []string{"kv", "namespace", "delete", "sessions", "--workload", "app"}},
+	{"kv namespace delete", []string{"kv", "namespace", "delete", "sessions", "--workload", "app", "--yes"}},
 	{"kv key put", []string{"kv", "key", "put", "k", "v", "--namespace", "sessions", "--workload", "app"}},
 	{"kv key get", []string{"kv", "key", "get", "k", "--namespace", "sessions", "--workload", "app"}},
 	{"kv key delete", []string{"kv", "key", "delete", "k", "--namespace", "sessions", "--workload", "app"}},
@@ -61,13 +64,17 @@ var cliSurface = []struct {
 	{"queues create", []string{"queues", "create", "jobs"}},
 	{"queues ls", []string{"queues", "ls"}},
 	{"queues info", []string{"queues", "info", "jobs"}},
-	{"queues rm", []string{"queues", "rm", "jobs"}},
-	{"queues purge", []string{"queues", "purge", "jobs"}},
+	{"queues rm", []string{"queues", "rm", "jobs", "--yes"}},
+	{"queues purge", []string{"queues", "purge", "jobs", "--yes"}},
 	{"queues messages", []string{"queues", "messages", "jobs"}},
 	{"queues send", []string{"queues", "send", "jobs", `{"k":1}`}},
 	{"kill", []string{"kill", "app"}},
 	{"approvals", []string{"approvals"}},
 	{"approve", []string{"approve", "app", "wf_1"}},
+	{"notify", []string{"notify"}},
+	{"notify", []string{"notify", "set", "--webhook", "https://hooks.example.com/x"}},
+	{"notify", []string{"notify", "test"}},
+	{"notify", []string{"notify", "rm"}},
 	{"audit", []string{"audit", "--all"}},
 	{"logs.line", []string{"logs", "app"}},
 	{"doctor", []string{"doctor"}},
@@ -85,7 +92,7 @@ var cliSurface = []struct {
 	{"agent show", []string{"agent", "show", "twd"}},
 	{"host add", []string{"host", "add", "h1"}},
 	{"host ls", []string{"host", "ls"}},
-	{"host rm", []string{"host", "rm", "h1"}},
+	{"host rm", []string{"host", "rm", "h1", "--yes"}},
 	{"host cordon", []string{"host", "cordon", "h1"}},
 	{"host uncordon", []string{"host", "uncordon", "h1"}},
 	{"host drain", []string{"host", "drain", "h1", "--dry-run"}},
@@ -331,6 +338,9 @@ func TestDevJSONEvents(t *testing.T) {
 	ready := next("ready")
 	if u, _ := ready["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") || ready["workload"] != "hello" {
 		t.Fatalf("ready event: %v", ready)
+	}
+	if u, _ := next("console")["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") { // devconsole.go
+		t.Fatalf("console event url %q", u)
 	}
 	src := filepath.Join(app, "src", "index.ts")
 	b, _ := os.ReadFile(src)

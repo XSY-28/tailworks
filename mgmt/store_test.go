@@ -213,10 +213,10 @@ func dropGuards(t *testing.T, s *SQLStore) {
 func TestStoreObjectsAndDeployments(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
 		ctx := context.Background()
-		if err := s.CreateTenant(ctx, Tenant{ID: "tn", Tailnet: "t.ts.net", MintMode: MintAPIKey, RegistrationsPerMinute: 200, MaxObjects: 10}); err != nil {
+		if err := s.CreateTenant(ctx, Tenant{ID: "tn", Tailnet: "t.ts.net", MintMode: MintOAuth, RegistrationsPerMinute: 200, MaxObjects: 10}); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.CreateTenant(ctx, Tenant{ID: "tn", Tailnet: "x", MintMode: MintAPIKey}); !errors.Is(err, ErrExists) {
+		if err := s.CreateTenant(ctx, Tenant{ID: "tn", Tailnet: "x", MintMode: MintOAuth}); !errors.Is(err, ErrExists) {
 			t.Fatalf("dup tenant: %v", err)
 		}
 		for i, ns := range [][]ClassConfig{{{Class: "A", Tags: []string{"tag:a"}}}, {{Class: "A", Tags: []string{"tag:a2"}}, {Class: "B", Tags: []string{"tag:b"}}}} {

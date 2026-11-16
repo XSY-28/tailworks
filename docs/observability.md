@@ -116,6 +116,7 @@ unit becomes a suffix, counters end in `_total`).
 | `twd.host.capacity` | `twd_host_capacity` | gauge | `twd.resource` (`nodes`, `vms`, `vm_memory_mib`, `huge_memory_mib`, `vcpus`, `scratch_mib`) | the host's capacity vector |
 | `twd.host.usage` | `twd_host_usage` | gauge | `twd.resource` (the same, plus `containers`) | live usage against it |
 | `twd.logs.dropped` | `twd_logs_dropped_total` | counter | `twd.tenant.id`, `twd.workload` | request records over the workload's rate (below) |
+| `twd.public.rejected` | `twd_public_rejected_total` | counter | `twd.tenant.id`, `twd.workload`, `twd.public.reason` (`conns`, `ip_conns`, `rate_limited`, `too_large`) | public requests and connections the public listener's limits refused (added once a minute, with the `public_rejected` audit summary) |
 | `twd.telemetry.export.dropped` | `twd_telemetry_export_dropped_total` | counter | `twd.tenant.id`, `twd.workload`, `twd.signal` | telemetry not exported (queue full, or the export failed) |
 | `twd.telemetry.export.errors` | `twd_telemetry_export_errors_total` | counter | `twd.tenant.id`, `twd.workload`, `twd.signal` | failed OTLP exports |
 
@@ -224,3 +225,29 @@ One noisy object can't fill a host's disk:
   way;
 - the export queue is 4096 items per signal and workload; overflow is
   dropped and counted, never buffered to disk.
+
+## Crash loops
+
+A workerd that exits on its own is restarted by hostd. What happens next
+depends on whether the deployment ever served:
+
+- **It served** (its workerd answered its health check once): hostd
+  restarts it forever, with exponential backoff: 200 ms, 400 ms, 800 ms, …
+  doubling to a 5 min cap. The count starts over once a workerd has run
+  for 30 s. From the second exit in a row the deployment's status is
+  `crashloop`, and its error says how many times it exited, when the next
+  restart is, and workerd's last log lines. `twd ls`, `twd ls --json`, the
+  admin console and the mgmt API all show it. A crash-looping deployment
+  keeps its namespace lease and its nodes; requests get `503
+  upstream_unavailable` until a restart answers, and then it is `active`
+  again on its own. No `twd deploy` is needed.
+- **It never served** (a bad bundle or config, or workerd exits during the
+  deploy): after 3 quick restarts the deployment is `failed`, within a few
+  seconds, and hostd does not retry it. Fix it and deploy again.
+
+Before each restart hostd SIGKILLs the old workerd's process group and
+waits until it is empty, then removes the stale `ingress.sock`, so a
+survivor can't keep the socket or the address (issue #43). The hostd log
+has one `workerd exited; restarting` line per exit (`pid`, `attempt`,
+`backoff`, the log tail) and `workerd recovered` when it serves again.
+`twd logs <workload>` shows workerd's own output.

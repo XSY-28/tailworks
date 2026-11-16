@@ -56,8 +56,8 @@ func TestAgentEval(t *testing.T) {
 	state, _ := hostdtest.ShortDir("twd-ev-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	writeFakeOAuthFile(t, keyFile)
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-v-", SingleProcess: true}
 	apps := filepath.Join(work, "projects")
 	os.MkdirAll(apps, 0o755)
@@ -214,6 +214,28 @@ func TestAgentEval(t *testing.T) {
 		t.Fatalf("rollback events: %v", err)
 	}
 
+	// Preview and promote (ADR-deploy-preview): a preview runs next to the
+	// workload, through to ready, and promote makes its bundle the
+	// workload's, through the whole stack.
+	pv := ag.Exec("deploy", "--preview-alias", "try", "--json")
+	ok("deploy", pv)
+	if d := doc(pv); d["preview"] != "hello-mcp--preview-try" || d["workload"] != "hello-mcp" || d["status"] != "active" {
+		t.Fatalf("twd deploy --preview: %s", pv.Stdout)
+	}
+	pl := ag.Exec("previews", "hello-mcp", "--json")
+	ok("previews", pl)
+	if ps, _ := doc(pl)["previews"].([]any); len(ps) != 1 || ps[0].(map[string]any)["alias"] != "try" {
+		t.Fatalf("twd previews: %s", pl.Stdout)
+	}
+	pm := ag.Exec("promote", "hello-mcp", "try", "--json")
+	ok("promote", pm)
+	if d := doc(pm); d["preview"] != "hello-mcp--preview-try" || d["previewStopped"] != true || d["status"] != "active" {
+		t.Fatalf("twd promote: %s", pm.Stdout)
+	}
+	if _, err := agenteval.CheckStream("deploy.event", pm.Stderr); err != nil {
+		t.Fatalf("promote events: %v", err)
+	}
+
 	// Every other command once, with --json, against this twd.
 	if _, err := agenteval.CheckLogs(ag.Exec("logs", "hello-mcp", "--console", "-n", "20", "--json").Stdout); err != nil {
 		t.Fatal(err)
@@ -235,7 +257,7 @@ func TestAgentEval(t *testing.T) {
 	ok("tenant set", ag.Exec("tenant", "set", tenantID, "--max-objects", "500", "--json"))
 	ok("host ls", ag.Exec("host", "ls", "--json"))
 	ok("host add", ag.Exec("host", "add", "twd-v-extra", "--out", filepath.Join(work, "extra.join"), "--json"))
-	ok("host rm", ag.Exec("host", "rm", "twd-v-extra", "--json")) // 204 from mgmt: nothing to clean up
+	ok("host rm", ag.Exec("host", "rm", "twd-v-extra", "--yes", "--json")) // 204 from mgmt: nothing to clean up
 	ag.Stdin = "not-a-real-secret"
 	ok("secret put", ag.Exec("secret", "put", "API_TOKEN", "--json"))
 	ok("secret ls", ag.Exec("secret", "ls", "--json"))

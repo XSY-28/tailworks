@@ -39,13 +39,18 @@ type whoAmI struct {
 	Login  string   `json:"login"`
 	NodeID string   `json:"nodeID"`
 	Tags   []string `json:"tags"`
-	Admin  bool     `json:"admin"`
-	Actor  string   `json:"actor"`
-	Mgmt   struct {
+
+	// approvals.go: the caller's tailnet, its tenants and approve grants.
+	Tailnet       string         `json:"tailnet"`
+	Tenants       []whoTenant    `json:"tenants"`
+	ApproveGrants []approveGrant `json:"approveGrants"`
+
+	Admin bool   `json:"admin"`
+	Actor string `json:"actor"`
+	Mgmt  struct {
 		DNSName   string `json:"dnsName"`
 		Tailnet   string `json:"tailnet"`
 		HTTPS     bool   `json:"https"`
-		Issuer    string `json:"issuer"`
 		Transport string `json:"transport"`
 		IP        string `json:"ip"`
 	} `json:"mgmt"`
@@ -91,25 +96,22 @@ func (h host) PushTransport() string {
 }
 
 type tenant struct {
-	TenantID                        string         `json:"tenantID"`
-	Tailnet                         string         `json:"tailnet"`
-	ControlURL                      string         `json:"controlURL"`
-	MintMode                        string         `json:"mintMode"`
-	APIKeyFile                      string         `json:"apiKeyFile"`
-	WIFClientID                     string         `json:"wifClientID"`
-	WIFLifecycleClientID            string         `json:"wifLifecycleClientID"`
-	OAuthClientID                   string         `json:"oauthClientID"`
-	OAuthClientFile                 string         `json:"oauthClientFile"`
-	RegistrationsPerMinute          int            `json:"registrationsPerMinute"`
-	MaxObjects                      int            `json:"maxObjects"`
-	Pool                            string         `json:"pool"`
-	Tier                            string         `json:"tier"`
-	CreatedAt                       int64          `json:"createdAt"`
-	UpdatedAt                       int64          `json:"updatedAt"`
-	MintQueue                       int            `json:"mintQueue"`
-	EffectiveRegistrationsPerMinute float64        `json:"effectiveRegistrationsPerMinute"`
-	OBOPublicKey                    string         `json:"oboPublicKey"`
-	WIF                             map[string]any `json:"wif"`
+	TenantID                        string  `json:"tenantID"`
+	Tailnet                         string  `json:"tailnet"`
+	ControlURL                      string  `json:"controlURL"`
+	MintMode                        string  `json:"mintMode"`
+	APIKeyFile                      string  `json:"apiKeyFile"`
+	OAuthClientID                   string  `json:"oauthClientID"`
+	OAuthClientFile                 string  `json:"oauthClientFile"`
+	RegistrationsPerMinute          int     `json:"registrationsPerMinute"`
+	MaxObjects                      int     `json:"maxObjects"`
+	Pool                            string  `json:"pool"`
+	Tier                            string  `json:"tier"`
+	CreatedAt                       int64   `json:"createdAt"`
+	UpdatedAt                       int64   `json:"updatedAt"`
+	MintQueue                       int     `json:"mintQueue"`
+	EffectiveRegistrationsPerMinute float64 `json:"effectiveRegistrationsPerMinute"`
+	OBOPublicKey                    string  `json:"oboPublicKey"`
 }
 
 type classConfig struct {
@@ -369,7 +371,8 @@ func ttl(secs int64) string {
 }
 
 // badge maps a status to its CSS class: ready/live/running green,
-// pending/minted/stale amber, killed/stopped/superseded grey, failed red.
+// pending/minted/stale amber, killed/stopped/superseded grey, failed and
+// crashloop red.
 func badge(st string) string {
 	switch st {
 	case "ready", "live", "running", "ok":
@@ -378,7 +381,8 @@ func badge(st string) string {
 		return "warn"
 	case "killed", "stopped", "superseded":
 		return "off"
-	case "failed", "error", "broken":
+	case "failed", "error", "broken",
+		"crashloop": // served, now restarting with backoff (hostd/restart.go)
 		return "bad"
 	}
 	return "neutral"

@@ -1,7 +1,6 @@
 package mgmt
 
 import (
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,12 +13,9 @@ import (
 func TestHostSandboxDeny(t *testing.T) {
 	a := newAuthzEnv(t)
 	// A third tenant with its own key file, deployed nowhere.
-	other := filepath.Join(t.TempDir(), "other-api.env")
-	if err := os.WriteFile(other, []byte("TS_API_KEY=tskey-api-x\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	other := writeTestOAuthFile(t, filepath.Join(t.TempDir(), "other-oauth.env"))
 	var tn3 struct{ TenantID string }
-	a.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "third.ts.net", "mintMode": "apikey", "apiKeyFile": other}, &tn3)
+	a.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "third.ts.net", "mintMode": "oauth", "oauthClientFile": other}, &tn3)
 
 	var got struct{ Paths []string }
 	if st, eb := a.call(nodeH1, "GET", "/v1/hosts/h1/sandbox-deny", nil, &got); st != 200 {

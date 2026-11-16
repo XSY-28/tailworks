@@ -23,7 +23,7 @@ type Snippet struct {
 	TagOwners map[string][]string `json:"tagOwners,omitempty"`
 	Grants    []map[string]any    `json:"grants,omitempty"`
 	// NodeAttrs are nodeAttrs entries ({"target": [...], "attr": [...]}),
-	// e.g. the funnel attribute for tag:twd-issuer (WIF) or tag:twd-public.
+	// e.g. the funnel attribute for tag:twd-public.
 	NodeAttrs []map[string]any `json:"nodeAttrs,omitempty"`
 }
 
@@ -256,9 +256,9 @@ func Check(s Snippet, o Options) error {
 			return fmt.Errorf("policy snippet: nodeAttrs %d: target and attr must be non-empty lists of strings", i)
 		}
 		for _, t := range target {
-			// ADR-029 D6: funnel (the only attr twd sets) is for mgmt's
-			// issuer node and public nodes only, never workload or object
-			// tags, so a netd bug can't publish an object node.
+			// ADR-029 D6: funnel (the only attr twd sets) is for public
+			// nodes only, never workload or object tags, so a netd bug
+			// can't publish an object node.
 			if !slices.Contains(FunnelTargets, t) {
 				return fmt.Errorf("policy snippet: nodeAttrs %d: refusing target %q: twd only sets funnel on %s", i, t, strings.Join(FunnelTargets, " and "))
 			}
@@ -273,12 +273,9 @@ func Check(s Snippet, o Options) error {
 }
 
 // FunnelTargets are the only tags twd gives the funnel nodeAttr (ADR-029
-// D6): public nodes and the WIF issuer's own node. Never tag:twd-mgmt:
-// mgmt's node serves the API and must not be reachable from the internet.
-var FunnelTargets = []string{PublicTag, IssuerTag}
-
-// IssuerTag is the WIF issuer's own node (mgmt.IssuerTag).
-const IssuerTag = "tag:twd-issuer"
+// D6): public nodes. Never tag:twd-mgmt: mgmt's node serves the API and
+// must not be reachable from the internet.
+var FunnelTargets = []string{PublicTag}
 
 // PublicTag is the tag of a workload's public node (ADR-029).
 const PublicTag = "tag:twd-public"

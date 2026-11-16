@@ -343,13 +343,16 @@ func (m *ctrManager) watch(c *ctr, gen int64, vm sandbox.Container) {
 			m.finish(c, gen, vm, vm.ExitCode(), "exited", 0)
 			return
 		case <-vm.Done():
-			code := -1
+			// When the process exits, Exited and Done can both be ready,
+			// and select picks either: a process exit is "exited" either
+			// way (it used to be reported as "vm exited" at random, a
+			// different error for the app; issue #75).
 			select {
 			case <-vm.Exited():
-				code = vm.ExitCode()
+				m.finish(c, gen, vm, vm.ExitCode(), "exited", 0)
 			default:
+				m.finish(c, gen, vm, -1, "vm exited", 0)
 			}
-			m.finish(c, gen, vm, code, "vm exited", 0)
 			return
 		case <-tk.C:
 			c.mu.Lock()

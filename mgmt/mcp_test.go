@@ -17,7 +17,7 @@ import (
 // else, that tools run the /v1 handlers (their errors and data), and the
 // JSON-RPC edges.
 func TestMCPServer(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	srv := &Server{M: e.m, Version: "v-test", Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	tn := v1Tenant(t, e, "op.ts.net", nil)
 	mcpVals := func(v ...string) map[string][]json.RawMessage {

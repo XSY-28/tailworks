@@ -104,13 +104,17 @@ SQLite storage, **and** its own tailnet node.
 ```sh
 twd init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
 cd support
+twd policy                                     # what this app needs in your tailnet policy, as one snippet
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```
 
 `twd init` names the app's tags after it (`tag:twd-wl-support`,
-`tag:twd-support-support-agent`, …). `twd deploy` checks them first. If
-your policy has no `tagOwners` line for them, it prints the exact snippet
-to add; add it and run `twd deploy` again. Every key of `twd.jsonc` is in
+`tag:twd-support-support-agent`, …). `twd policy` checks your tailnet
+policy for everything the app needs and prints **one snippet** with what's
+missing: the `tagOwners` for its tags, a grant for each `tailnet.connects`,
+and the grant that lets people call it (step 5). Paste it into the policy
+once, then deploy. `twd deploy` runs the same check first and stops if
+something is still missing. Every key of `twd.jsonc` is in
 [docs/twd-jsonc.md](docs/twd-jsonc.md), and `twd dev` / `twd deploy`
 refuse a key they don't know. When it's done, it prints the workload's address,
 e.g. `http://twd-support-<id>.<tailnet>.ts.net/` (`<id>` is a short hash;
@@ -118,8 +122,8 @@ copy the URL from the `✓ deployed` line).
 
 **5. Let people call it.** Nothing on your tailnet can reach a new workload
 until a grant allows it (unless your policy still allows everything). Add
-one for the workload's tag; workload nodes listen on port 80. When
-`twd deploy` prints the tagOwners for new tags, it prints this line too:
+one for the workload's tag; workload nodes listen on port 80. `twd policy`
+includes this line in its snippet:
 
 ```jsonc
 "grants": [
@@ -241,20 +245,22 @@ prove every ✅ and ⚠️.
 ## More
 
 - **Docs map** (every doc by role and by task): [docs/README.md](docs/README.md).
-- **CLI reference:** `twd help` lists every command and its flags;
-  `twd <command> --help` shows one.
+- **CLI reference:** [docs/cli.md](docs/cli.md), every command and flag
+  (generated from `--help`); `twd help` groups the commands.
+- **What changed in each release:** [CHANGELOG.md](CHANGELOG.md).
+  Security reports: [SECURITY.md](SECURITY.md).
 - **The words twd uses** (tenant, workload, tier, facet mode, pool node,
   …): [docs/concepts.md](docs/concepts.md).
 - **A first deploy that doesn't answer:**
   [docs/troubleshooting.md](docs/troubleshooting.md).
-- **Install details, other modes and troubleshooting:**
+- **Install details and troubleshooting:**
   [docs/INSTALL.md](docs/INSTALL.md); where each platform is tested, and
   the measured timings: [docs/install-testing.md](docs/install-testing.md).
   - [Upgrade](docs/upgrading.md),
     [back up and restore](docs/INSTALL.md#back-up-and-restore) and
     [uninstall](docs/INSTALL.md#uninstall).
-  - Other ways to mint keys: workload identity federation (`twd up --wif`)
-    or an API key.
+  - Upgrading a twd that minted with an API key or WIF: switch it to an
+    [OAuth client](docs/INSTALL.md#upgrading-from-api-key-or-wif-mode).
   - A separate developer laptop: `twd link`.
   - Adding hosts: `twd host add`.
   - The Linux microVM tier (Firecracker).

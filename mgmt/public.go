@@ -212,6 +212,10 @@ func (m *Mgmt) findPublicClass(ctx context.Context, t Tenant, workload string) (
 		if !t.PublicAllowed() {
 			return Deployment{}, ClassConfig{}, errPublicNotAllowed(t, workload)
 		}
+		// Only the name's owner gets a public node (publicnames.go, H10).
+		if err := m.claimPublicName(ctx, t, workload, d.DeployedBy); err != nil {
+			return Deployment{}, ClassConfig{}, err
+		}
 		for _, c := range d.Namespaces {
 			if c.Class == PublicNamespace {
 				return d, c, nil

@@ -87,9 +87,13 @@ upgrading twd to update the skills; when nothing changed it does nothing.
   operator's `twd mcp --allow`) names them. See
   [twd's MCP server](#twds-mcp-server).
 - **Destructive commands need your go-ahead.** `twd kill`, `twd undeploy`,
-  `twd down`, `twd tenant rm`, `twd host rm` and `twd secret rm` act
-  immediately and have no undo. The skills tell agents to run them only after
-  you've agreed to that specific action.
+  `twd down` and `twd secret rm` act immediately and have no undo. The
+  commands that delete data or a tenant's resources (`twd d1 delete`,
+  `twd kv namespace delete`, `twd queues rm`, `twd queues purge`,
+  `twd r2 bucket rm`, `twd tenant rm`, `twd host rm`) ask first, and refuse
+  with `confirmation_required` when there is no terminal. The skills tell
+  agents to run any of them, or add `--yes`, only after you've agreed to that
+  specific action.
 - **Confirmations aren't bypassed for agents.** `twd up`, `twd agent setup`
   and `twd agent remove` ask before acting. Without a terminal (which is how
   most agents run commands) they refuse with `bad_request` (`twd up`) or

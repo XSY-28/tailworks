@@ -14,7 +14,7 @@ import (
 
 // newVersionedEnv is a test mgmt that reports version v.
 func newVersionedEnv(t *testing.T, v string) *testEnv {
-	return newTestEnvWith(t, nil, func(c *Config) {
+	return newTestEnvWith(t, func(c *Config) {
 		c.Version = v
 		c.ReleaseDir = t.TempDir()
 	})
@@ -62,7 +62,7 @@ func TestHostVersionSkew(t *testing.T) {
 func TestFeatureGatedPlacementAndCordon(t *testing.T) {
 	e := newVersionedEnv(t, "0.2.0")
 	var tn struct{ TenantID string }
-	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	// h-old is a 0.1 host (no features); h-new offers kv.
 	e.asHost("h-old").ok("PUT", "/v1/hosts/h-old", map[string]any{"capacityNodes": 1000, "tiers": []string{"process"}}, nil)
 	kvBundle := makeBundle(t, map[string]string{

@@ -381,15 +381,16 @@ func (r *Registry) servicePeer(o *Object, st *ipnstate.Status, ip netip.Addr) (c
 }
 
 // PeerPathWait bounds how long an egress dial waits for a just-registered
-// peer to get a path (netd.HasPath) before sending anyway. It equals
-// WireGuard's REKEY_TIMEOUT: a first handshake initiation sent with no path
-// is dropped and retried only after 5 s, so waiting up to that long is never
-// slower than not waiting.
+// peer to get a path and answer a disco ping (WaitPeerReady) before sending
+// anyway. It equals WireGuard's REKEY_TIMEOUT: a first handshake initiation
+// that is dropped (no path yet, or the peer doesn't know us yet) is retried
+// only after 5 s, so waiting up to that long is never slower than not
+// waiting.
 var PeerPathWait = 5 * time.Second
 
 // awaitPeerPath waits (bounded by PeerPathWait) until this object's node has
-// a path to ip. Peers once seen with a path are cached, so only the first
-// dial to a peer costs a status read.
+// a path to ip and ip answers it (WaitPeerReady). Peers once ready are
+// cached, so only the first dial to a peer costs a status read and a ping.
 func (o *Object) awaitPeerPath(ctx context.Context, ip netip.Addr) {
 	o.mu.Lock()
 	lc, known := o.lc, o.pathOK[ip]
@@ -400,7 +401,7 @@ func (o *Object) awaitPeerPath(ctx context.Context, ip netip.Addr) {
 	wctx, cancel := context.WithTimeout(ctx, PeerPathWait)
 	defer cancel()
 	t0 := time.Now()
-	if err := WaitPeerPath(wctx, lc, ip); err != nil {
+	if err := WaitPeerReady(wctx, lc, ip); err != nil {
 		o.reg.log.Warn("egress: peer has no path yet; dialing anyway", "object", o.id, "peer", ip.String(), "waited_ms", time.Since(t0).Milliseconds())
 		return
 	}

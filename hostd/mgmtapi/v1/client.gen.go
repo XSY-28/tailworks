@@ -103,6 +103,7 @@ const (
 	AuditKindApprovalDenied      AuditKind = "approval_denied"
 	AuditKindApprovalRequested   AuditKind = "approval_requested"
 	AuditKindApprovalTimeout     AuditKind = "approval_timeout"
+	AuditKindAuditDropped        AuditKind = "audit_dropped"
 	AuditKindContainerRelease    AuditKind = "container_release"
 	AuditKindContainerReserve    AuditKind = "container_reserve"
 	AuditKindContainerStart      AuditKind = "container_start"
@@ -129,10 +130,16 @@ const (
 	AuditKindKvDelete            AuditKind = "kv_delete"
 	AuditKindKvPut               AuditKind = "kv_put"
 	AuditKindMint                AuditKind = "mint"
+	AuditKindNotificationDelete  AuditKind = "notification_delete"
+	AuditKindNotificationFailed  AuditKind = "notification_failed"
+	AuditKindNotificationPut     AuditKind = "notification_put"
+	AuditKindNotificationTest    AuditKind = "notification_test"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
 	AuditKindPreflight           AuditKind = "preflight"
 	AuditKindPrincipal           AuditKind = "principal"
+	AuditKindPublicNameClaim     AuditKind = "public_name_claim"
+	AuditKindPublicNameRelease   AuditKind = "public_name_release"
 	AuditKindPublicObjectCreated AuditKind = "public_object_created"
 	AuditKindPublicRejected      AuditKind = "public_rejected"
 	AuditKindPublicRequest       AuditKind = "public_request"
@@ -182,6 +189,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindApprovalRequested:
 		return true
 	case AuditKindApprovalTimeout:
+		return true
+	case AuditKindAuditDropped:
 		return true
 	case AuditKindContainerRelease:
 		return true
@@ -235,6 +244,14 @@ func (e AuditKind) Valid() bool {
 		return true
 	case AuditKindMint:
 		return true
+	case AuditKindNotificationDelete:
+		return true
+	case AuditKindNotificationFailed:
+		return true
+	case AuditKindNotificationPut:
+		return true
+	case AuditKindNotificationTest:
+		return true
 	case AuditKindObjectUpdate:
 		return true
 	case AuditKindOboRoot:
@@ -242,6 +259,10 @@ func (e AuditKind) Valid() bool {
 	case AuditKindPreflight:
 		return true
 	case AuditKindPrincipal:
+		return true
+	case AuditKindPublicNameClaim:
+		return true
+	case AuditKindPublicNameRelease:
 		return true
 	case AuditKindPublicObjectCreated:
 		return true
@@ -379,6 +400,7 @@ func (e ContainerImagePinArch) Valid() bool {
 const (
 	DeploymentStatusActive     DeploymentStatus = "active"
 	DeploymentStatusAssigned   DeploymentStatus = "assigned"
+	DeploymentStatusCrashloop  DeploymentStatus = "crashloop"
 	DeploymentStatusDraining   DeploymentStatus = "draining"
 	DeploymentStatusFailed     DeploymentStatus = "failed"
 	DeploymentStatusStarting   DeploymentStatus = "starting"
@@ -392,6 +414,8 @@ func (e DeploymentStatus) Valid() bool {
 	case DeploymentStatusActive:
 		return true
 	case DeploymentStatusAssigned:
+		return true
+	case DeploymentStatusCrashloop:
 		return true
 	case DeploymentStatusDraining:
 		return true
@@ -443,6 +467,7 @@ const (
 	ErrorCodeLeaseChanged            ErrorCode = "lease_changed"
 	ErrorCodeLeaseHeld               ErrorCode = "lease_held"
 	ErrorCodeLeaseLost               ErrorCode = "lease_lost"
+	ErrorCodeMintModeRemoved         ErrorCode = "mint_mode_removed"
 	ErrorCodeMirrorDisabled          ErrorCode = "mirror_disabled"
 	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
@@ -456,8 +481,13 @@ const (
 	ErrorCodePolicyMissingTagOwners  ErrorCode = "policy_missing_tag_owners"
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
+	ErrorCodePreviewConflict         ErrorCode = "preview_conflict"
+	ErrorCodePreviewFailed           ErrorCode = "preview_failed"
+	ErrorCodePreviewUnsupported      ErrorCode = "preview_unsupported"
 	ErrorCodeProfileUnsupported      ErrorCode = "profile_unsupported"
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
+	ErrorCodePublicNameInUse         ErrorCode = "public_name_in_use"
+	ErrorCodePublicNameOwned         ErrorCode = "public_name_owned"
 	ErrorCodeQueueLimit              ErrorCode = "queue_limit"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
@@ -474,6 +504,7 @@ const (
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
 	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
+	ErrorCodeUnknownPreview          ErrorCode = "unknown_preview"
 	ErrorCodeUnknownQueue            ErrorCode = "unknown_queue"
 	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
 	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
@@ -553,6 +584,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeLeaseLost:
 		return true
+	case ErrorCodeMintModeRemoved:
+		return true
 	case ErrorCodeMirrorDisabled:
 		return true
 	case ErrorCodeMoveUnconfirmed:
@@ -579,9 +612,19 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodePreconditionFailed:
 		return true
+	case ErrorCodePreviewConflict:
+		return true
+	case ErrorCodePreviewFailed:
+		return true
+	case ErrorCodePreviewUnsupported:
+		return true
 	case ErrorCodeProfileUnsupported:
 		return true
 	case ErrorCodePublicIngressNotAllowed:
+		return true
+	case ErrorCodePublicNameInUse:
+		return true
+	case ErrorCodePublicNameOwned:
 		return true
 	case ErrorCodeQueueLimit:
 		return true
@@ -614,6 +657,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTooManySecrets:
 		return true
 	case ErrorCodeUnknownNamespace:
+		return true
+	case ErrorCodeUnknownPreview:
 		return true
 	case ErrorCodeUnknownQueue:
 		return true
@@ -765,6 +810,24 @@ const (
 func (e NodeCertificatePayloadV) Valid() bool {
 	switch e {
 	case N1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationEventKind.
+const (
+	NotificationEventKindApprovalRequested NotificationEventKind = "approval_requested"
+	NotificationEventKindTest              NotificationEventKind = "test"
+)
+
+// Valid indicates whether the value is a known member of the NotificationEventKind enum.
+func (e NotificationEventKind) Valid() bool {
+	switch e {
+	case NotificationEventKindApprovalRequested:
+		return true
+	case NotificationEventKindTest:
 		return true
 	default:
 		return false
@@ -1224,27 +1287,6 @@ func (e UpgradeStepStatus) Valid() bool {
 	}
 }
 
-// Defines values for WIFCheckResultLifecycle.
-const (
-	WIFCheckResultLifecycleAbsent WIFCheckResultLifecycle = "absent"
-	WIFCheckResultLifecycleError  WIFCheckResultLifecycle = "error"
-	WIFCheckResultLifecycleOk     WIFCheckResultLifecycle = "ok"
-)
-
-// Valid indicates whether the value is a known member of the WIFCheckResultLifecycle enum.
-func (e WIFCheckResultLifecycle) Valid() bool {
-	switch e {
-	case WIFCheckResultLifecycleAbsent:
-		return true
-	case WIFCheckResultLifecycleError:
-		return true
-	case WIFCheckResultLifecycleOk:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for WhoAmIKind.
 const (
 	WhoAmIKindHost  WhoAmIKind = "host"
@@ -1263,6 +1305,24 @@ func (e WhoAmIKind) Valid() bool {
 	case WhoAmIKindNode:
 		return true
 	case WhoAmIKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAuditParamsOrder.
+const (
+	Asc  ListAuditParamsOrder = "asc"
+	Desc ListAuditParamsOrder = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListAuditParamsOrder enum.
+func (e ListAuditParamsOrder) Valid() bool {
+	switch e {
+	case Asc:
+		return true
+	case Desc:
 		return true
 	default:
 		return false
@@ -1406,6 +1466,15 @@ type ApprovalList struct {
 	Unreachable *[]string `json:"unreachable,omitempty"`
 }
 
+// ApproveGrant One value of a `twd.dev/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
+type ApproveGrant struct {
+	Decisions *[]string           `json:"decisions,omitempty"`
+	Limits    *map[string]float32 `json:"limits,omitempty"`
+	Steps     *[]string           `json:"steps,omitempty"`
+	Workflows *[]string           `json:"workflows,omitempty"`
+	Workloads *[]string           `json:"workloads,omitempty"`
+}
+
 // Approver The verified tailnet identity that decided an approval (WireGuard, never the request body).
 type Approver struct {
 	// Node MagicDNS name.
@@ -1494,7 +1563,8 @@ type AuditBatch struct {
 // `principal`,
 // `tenant_note` (source `tenant`, unverified),
 // `container_start` (an object's container, ADR-032),
-// `container_stop` (an object's container, ADR-032).
+// `container_stop` (an object's container, ADR-032),
+// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 // mgmt chain:
 // `tenant_create`,
 // `tenant_update`,
@@ -1536,6 +1606,10 @@ type AuditBatch struct {
 // `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 // `telemetry_delete`,
 // `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
+// `notification_put` (the tenant's notification webhook set; its host and header names only),
+// `notification_delete`,
+// `notification_failed` (a notification was not delivered; the webhook's host and the error),
+// `notification_test` (`twd notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1551,8 +1625,11 @@ type AuditBatch struct {
 // `revoke` (an unused pooled key revoked).
 // Public ingress (ADR-029), host chain:
 // `public_request` (one per public request),
-// `public_rejected` (per-minute summary of requests the limits refused),
+// `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals),
 // `public_object_created` (a name admitted for a public create).
+// Public ingress, mgmt chain:
+// `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+// `public_name_release` (a tenant gave a public name up).
 // Workflow approvals (ADR-040), host chain:
 // `approval_requested` (a Workflow instance waits for an approval),
 // `approval_decision` (approved or rejected, with the approver's identity),
@@ -1603,7 +1680,8 @@ type AuditRecord struct {
 	// `principal`,
 	// `tenant_note` (source `tenant`, unverified),
 	// `container_start` (an object's container, ADR-032),
-	// `container_stop` (an object's container, ADR-032).
+	// `container_stop` (an object's container, ADR-032),
+	// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 	// mgmt chain:
 	// `tenant_create`,
 	// `tenant_update`,
@@ -1645,6 +1723,10 @@ type AuditRecord struct {
 	// `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 	// `telemetry_delete`,
 	// `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
+	// `notification_put` (the tenant's notification webhook set; its host and header names only),
+	// `notification_delete`,
+	// `notification_failed` (a notification was not delivered; the webhook's host and the error),
+	// `notification_test` (`twd notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1660,8 +1742,11 @@ type AuditRecord struct {
 	// `revoke` (an unused pooled key revoked).
 	// Public ingress (ADR-029), host chain:
 	// `public_request` (one per public request),
-	// `public_rejected` (per-minute summary of requests the limits refused),
+	// `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals),
 	// `public_object_created` (a name admitted for a public create).
+	// Public ingress, mgmt chain:
+	// `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+	// `public_name_release` (a tenant gave a public name up).
 	// Workflow approvals (ADR-040), host chain:
 	// `approval_requested` (a Workflow instance waits for an approval),
 	// `approval_decision` (approved or rejected, with the approver's identity),
@@ -1721,6 +1806,9 @@ type ChainStatus struct {
 type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
+
+	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`.
+	PreviewOf *string `json:"previewOf,omitempty"`
 
 	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
 	ReplicaOf *string `json:"replicaOf,omitempty"`
@@ -1919,7 +2007,20 @@ type Deployment struct {
 	Public *DeploymentPublic `json:"public,omitempty"`
 
 	// Replicas A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
-	Replicas     *[]ReplicaRef    `json:"replicas,omitempty"`
+	Replicas *[]ReplicaRef `json:"replicas,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
 	Status       DeploymentStatus `json:"status"`
 	TenantID     string           `json:"tenantID"`
 	Tier         *Tier            `json:"tier,omitempty"`
@@ -1946,6 +2047,12 @@ type DeploymentCreate struct {
 
 	// Namespaces Override the classes read from `twd.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
+
+	// Preview Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
+	Preview *bool `json:"preview,omitempty"`
+
+	// PreviewAlias The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview.
+	PreviewAlias *string `json:"previewAlias,omitempty"`
 
 	// Replace Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
 	Replace  *bool  `json:"replace,omitempty"`
@@ -2014,19 +2121,56 @@ type DeploymentRecord struct {
 	HostStatus *string `json:"hostStatus,omitempty"`
 
 	// RollbackOf Set on a rollback: the deployment whose bundle it redeployed.
-	RollbackOf *string          `json:"rollbackOf,omitempty"`
-	Status     DeploymentStatus `json:"status"`
-	Workload   string           `json:"workload"`
+	RollbackOf *string `json:"rollbackOf,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status   DeploymentStatus `json:"status"`
+	Workload string           `json:"workload"`
 }
 
 // DeploymentReport defines model for DeploymentReport.
 type DeploymentReport struct {
-	DeploymentID string           `json:"deploymentID"`
-	Error        *string          `json:"error,omitempty"`
-	Status       DeploymentStatus `json:"status"`
+	DeploymentID string  `json:"deploymentID"`
+	Error        *string `json:"error,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status DeploymentStatus `json:"status"`
 }
 
-// DeploymentStatus defines model for DeploymentStatus.
+// DeploymentStatus - `assigned`: mgmt placed it; the host has not reported yet.
+//   - `starting`: the host is starting it.
+//   - `active`: serving.
+//   - `crashloop`: it served, then its workerd kept exiting; the host
+//     keeps restarting it with exponential backoff (200 ms doubling to
+//     5 min) and reports `active` again once it answers. `error` holds
+//     the attempt count, the next delay and the last log lines.
+//   - `draining`: being replaced or undeployed.
+//   - `stopped`: stopped (undeployed, fenced or unassigned).
+//   - `failed`: the deploy failed (bad bundle or config, or it never
+//     became healthy); the host does not retry it. `error` says why.
+//   - `superseded`: a newer deployment of the workload replaced it.
 type DeploymentStatus string
 
 // DeviceDeleteRun defines model for DeviceDeleteRun.
@@ -2069,6 +2213,7 @@ type Error struct {
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2098,9 +2243,15 @@ type Error struct {
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+	// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -2152,6 +2303,7 @@ type Error struct {
 // | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2181,9 +2333,15 @@ type Error struct {
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 // | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 // | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 // | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 // | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 // | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -2354,6 +2512,7 @@ type HostDrainResult struct {
 		// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 		// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 		// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+		// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 		// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 		// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 		// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -2383,9 +2542,15 @@ type HostDrainResult struct {
 		// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 		// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 		// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+		// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+		// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+		// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+		// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 		// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 		// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+		// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+		// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 		// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 		// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -2566,11 +2731,6 @@ type ImageAliasList struct {
 	Items []ImageAlias `json:"items"`
 }
 
-// JWKS defines model for JWKS.
-type JWKS struct {
-	Keys []map[string]interface{} `json:"keys"`
-}
-
 // KVKey A Workers KV key as `list()` returns it (ADR-037).
 type KVKey struct {
 	// Expiration Unix seconds when the key expires (absent: never).
@@ -2654,7 +2814,7 @@ type Lease struct {
 	Namespace string `json:"namespace"`
 }
 
-// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 type MintMode string
 
 // NodeCertificate defines model for NodeCertificate.
@@ -2700,15 +2860,32 @@ type NodeCertificatePayload struct {
 // NodeCertificatePayloadV defines model for NodeCertificatePayload.V.
 type NodeCertificatePayloadV int
 
-// OIDCConfiguration defines model for OIDCConfiguration.
-type OIDCConfiguration struct {
-	ClaimsSupported                  *[]string              `json:"claims_supported,omitempty"`
-	IDTokenSigningAlgValuesSupported []string               `json:"id_token_signing_alg_values_supported"`
-	Issuer                           string                 `json:"issuer"`
-	JwksURI                          string                 `json:"jwks_uri"`
-	ResponseTypesSupported           []string               `json:"response_types_supported"`
-	SubjectTypesSupported            []string               `json:"subject_types_supported"`
-	AdditionalProperties             map[string]interface{} `json:"-"`
+// NotificationConfig defines model for NotificationConfig.
+type NotificationConfig struct {
+	TenantID  string  `json:"tenantID"`
+	UpdatedAt *int64  `json:"updatedAt,omitempty"`
+	UpdatedBy *string `json:"updatedBy,omitempty"`
+
+	// Webhook A tenant's notification webhook, without its secrets.
+	Webhook *WebhookView `json:"webhook,omitempty"`
+}
+
+// NotificationEventKind `approval_requested` (a Workflow instance started waiting for an approval),
+// `test` (`twd notify test`; never subscribed to).
+type NotificationEventKind string
+
+// NotificationTestResult defines model for NotificationTestResult.
+type NotificationTestResult struct {
+	Delivered bool    `json:"delivered"`
+	Error     *string `json:"error,omitempty"`
+
+	// Status The webhook's HTTP status, when it answered.
+	Status *int `json:"status,omitempty"`
+}
+
+// NotificationsPut defines model for NotificationsPut.
+type NotificationsPut struct {
+	Webhook WebhookPut `json:"webhook"`
 }
 
 // OTLPExport A tenant's OTLP export, without header values.
@@ -3010,6 +3187,61 @@ type PreflightResult struct {
 	Unchecked *[]string `json:"unchecked,omitempty"`
 }
 
+// Preview One running preview of a workload (ADR-deploy-preview).
+type Preview struct {
+	// Alias Examples: 3f9a1c2b
+	Alias string `json:"alias"`
+
+	// BundleSHA256 Hex SHA-256 of the preview's bundle.
+	BundleSHA256 *string    `json:"bundleSHA256,omitempty"`
+	Deployment   Deployment `json:"deployment"`
+
+	// PreviewOf Examples: web
+	PreviewOf string `json:"previewOf"`
+
+	// Workload The preview's own workload name.
+	//
+	// Examples: web--preview-3f9a1c2b
+	Workload string `json:"workload"`
+}
+
+// PreviewList defines model for PreviewList.
+type PreviewList struct {
+	Items []Preview `json:"items"`
+}
+
+// Promotion A started promotion.
+type Promotion struct {
+	Deployment Deployment `json:"deployment"`
+
+	// Preview The preview's workload name.
+	Preview string `json:"preview"`
+
+	// PreviewStopped The preview was undeployed.
+	PreviewStopped bool `json:"previewStopped"`
+
+	// PromotedFrom The preview deployment whose bundle was deployed.
+	PromotedFrom string `json:"promotedFrom"`
+}
+
+// PromotionCreate defines model for PromotionCreate.
+type PromotionCreate struct {
+	// ForceTakeover As `POST /v1/deployments` `forceTakeover`.
+	ForceTakeover *bool `json:"forceTakeover,omitempty"`
+
+	// Host Pin a host, as for a deploy.
+	Host *string `json:"host,omitempty"`
+
+	// KeepPreview Leave the preview running after the promotion (default: undeploy it).
+	KeepPreview *bool `json:"keepPreview,omitempty"`
+
+	// Preview The preview to promote, by alias (`3f9a1c2b`) or by its workload name (`web--preview-3f9a1c2b`).
+	Preview string `json:"preview"`
+
+	// Replace Re-place the workload, as `POST /v1/deployments` `replace`.
+	Replace *bool `json:"replace,omitempty"`
+}
+
 // Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
 type Protocols map[string]int
 
@@ -3094,14 +3326,41 @@ type PublicLimits struct {
 	IPBurst *int `json:"ipBurst,omitempty"`
 
 	// IPRps Requests per second, per client IP.
-	IPRps          *float32 `json:"ipRps,omitempty"`
-	MaxBodyBytes   *int64   `json:"maxBodyBytes,omitempty"`
-	MaxConns       *int     `json:"maxConns,omitempty"`
-	MaxHeaderBytes *int     `json:"maxHeaderBytes,omitempty"`
+	IPRps        *float32 `json:"ipRps,omitempty"`
+	MaxBodyBytes *int64   `json:"maxBodyBytes,omitempty"`
+	MaxConns     *int     `json:"maxConns,omitempty"`
+
+	// MaxConnsPerIP Concurrent connections per client address (an IPv6 client counts per /64).
+	MaxConnsPerIP  *int `json:"maxConnsPerIp,omitempty"`
+	MaxHeaderBytes *int `json:"maxHeaderBytes,omitempty"`
 
 	// Rps Requests per second, per workload.
 	Rps            *float32 `json:"rps,omitempty"`
 	TimeoutSeconds *int     `json:"timeoutSeconds,omitempty"`
+
+	// UpgradeLifetimeSeconds Longest an upgraded (WebSocket) connection stays open.
+	UpgradeLifetimeSeconds *int `json:"upgradeLifetimeSeconds,omitempty"`
+}
+
+// PublicNameClaim A tenant's claim on a public name on its tailnet (red-team H10): `https://<name>.<tailnet>/` serves only this tenant.
+type PublicNameClaim struct {
+	ClaimedAt int64 `json:"claimedAt"`
+
+	// ClaimedBy The actor whose deploy claimed it (see Conventions); `legacy` for a name a pre-upgrade deployment already served.
+	ClaimedBy *string `json:"claimedBy,omitempty"`
+	Name      string  `json:"name"`
+
+	// Tailnet The tenant's tailnet, lower-cased, without a trailing dot.
+	Tailnet  string `json:"tailnet"`
+	TenantID string `json:"tenantID"`
+}
+
+// PublicNamePage defines model for PublicNamePage.
+type PublicNamePage struct {
+	Items []PublicNameClaim `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
 
 // PurgeResult defines model for PurgeResult.
@@ -3334,9 +3593,22 @@ type ReleaseNoteKind string
 
 // ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
 type ReplicaRef struct {
-	DeploymentID string            `json:"deploymentID"`
-	Host         string            `json:"host"`
-	Status       *DeploymentStatus `json:"status,omitempty"`
+	DeploymentID string `json:"deploymentID"`
+	Host         string `json:"host"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status *DeploymentStatus `json:"status,omitempty"`
 
 	// Workload Examples: web--r2
 	Workload string `json:"workload"`
@@ -3510,7 +3782,6 @@ type SelfInfo struct {
 	// DNSName `twd-mgmt.<tailnet>`
 	DNSName *string `json:"dnsName,omitempty"`
 	HTTPS   bool    `json:"https"`
-	Issuer  *string `json:"issuer,omitempty"`
 	Tailnet *string `json:"tailnet,omitempty"`
 
 	// Transport `tsnet` in normal operation; `local-dev` when the unix socket is serving.
@@ -3531,7 +3802,7 @@ type ServiceEndpoint struct {
 
 // Status defines model for Status.
 type Status struct {
-	// Clock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
+	// Clock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave.
 	Clock *StatusClock `json:"clock,omitempty"`
 	Hosts struct {
 		Live  int `json:"live"`
@@ -3558,7 +3829,7 @@ type Status struct {
 	Versions *StatusVersions `json:"versions,omitempty"`
 }
 
-// StatusClock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
+// StatusClock The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave.
 type StatusClock struct {
 	Message *string `json:"message,omitempty"`
 
@@ -3706,7 +3977,7 @@ type TelemetrySignal string
 
 // Tenant defines model for Tenant.
 type Tenant struct {
-	// APIKeyFile `apikey` and `headscale` modes: absolute path, read at use; the key is never stored or returned.
+	// APIKeyFile `headscale` mode: absolute path of the Headscale API key file, read at use; the key is never stored or returned.
 	APIKeyFile *string `json:"apiKeyFile,omitempty"`
 
 	// ControlURL Non-default control plane (testcontrol, headscale).
@@ -3723,7 +3994,7 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
 	// OauthClientFile `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused).
@@ -3753,15 +4024,6 @@ type Tenant struct {
 	TenantID  string `json:"tenantID"`
 	Tier      *Tier  `json:"tier,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"`
-
-	// Wif Present in wif mode.
-	Wif *WIFInfo `json:"wif,omitempty"`
-
-	// WifClientID Public client ID of the mint trust credential (`auth_keys`).
-	WifClientID *string `json:"wifClientID,omitempty"`
-
-	// WifLifecycleClientID Public client ID of the lifecycle credential (`devices:core`, `policy_file:read`).
-	WifLifecycleClientID *string `json:"wifLifecycleClientID,omitempty"`
 }
 
 // TenantCreate defines model for TenantCreate.
@@ -3773,7 +4035,7 @@ type TenantCreate struct {
 	MaxContainers      *int     `json:"maxContainers,omitempty"`
 	MaxObjects         *int     `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode        MintMode `json:"mintMode"`
 	OauthClientFile *string  `json:"oauthClientFile,omitempty"`
 	OauthClientID   *string  `json:"oauthClientID,omitempty"`
@@ -3789,10 +4051,8 @@ type TenantCreate struct {
 	Tailnet                string         `json:"tailnet"`
 
 	// TenantID Optional; generated (`tn_…`) when absent.
-	TenantID             *string `json:"tenantID,omitempty"`
-	Tier                 *Tier   `json:"tier,omitempty"`
-	WifClientID          *string `json:"wifClientID,omitempty"`
-	WifLifecycleClientID *string `json:"wifLifecycleClientID,omitempty"`
+	TenantID *string `json:"tenantID,omitempty"`
+	Tier     *Tier   `json:"tier,omitempty"`
 }
 
 // TenantDeleteResult defines model for TenantDeleteResult.
@@ -3820,7 +4080,7 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode        *MintMode                 `json:"mintMode,omitempty"`
 	OauthClientFile nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
 	OauthClientID   nullable.Nullable[string] `json:"oauthClientID,omitempty"`
@@ -3830,8 +4090,6 @@ type TenantPatch struct {
 	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int                      `json:"registrationsPerMinute,omitempty"`
 	Tier                   *Tier                     `json:"tier,omitempty"`
-	WifClientID            nullable.Nullable[string] `json:"wifClientID,omitempty"`
-	WifLifecycleClientID   nullable.Nullable[string] `json:"wifLifecycleClientID,omitempty"`
 }
 
 // Tier defines model for Tier.
@@ -3875,6 +4133,7 @@ type TombstoneError struct {
 	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
@@ -3904,9 +4163,15 @@ type TombstoneError struct {
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+	// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -4054,45 +4319,36 @@ type VolumeKeyGrant struct {
 	Workload string `json:"workload"`
 }
 
-// WIFCheckResult defines model for WIFCheckResult.
-type WIFCheckResult struct {
-	Issuer string `json:"issuer"`
+// WebhookPut defines model for WebhookPut.
+type WebhookPut struct {
+	// Events What to send. Default `[approval_requested]`.
+	Events *[]NotificationEventKind `json:"events,omitempty"`
 
-	// Lifecycle `absent`: no lifecycle client ID (kill tier 2, reaper device deletes, spawn checks and preflight are off).
-	Lifecycle      WIFCheckResultLifecycle `json:"lifecycle"`
-	LifecycleError *string                 `json:"lifecycleError,omitempty"`
+	// Headers Headers sent with every notification (at most 16; values at most 4 KiB). Never logged, audited or returned.
+	Headers *map[string]string `json:"headers,omitempty"`
 
-	// Mint The mint credential's token exchange succeeded (its `auth_keys` scope is only proven by the first real mint).
-	Mint      bool    `json:"mint"`
-	MintError *string `json:"mintError,omitempty"`
-
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
-	MintMode MintMode `json:"mintMode"`
-
-	// PolicyRead The lifecycle credential read the policy (`policy_file:read`).
-	PolicyRead      bool    `json:"policyRead"`
-	PolicyReadError *string `json:"policyReadError,omitempty"`
+	// URL http:// or https:// URL (no user info or fragment). Treated as a secret: a chat webhook's path is its credential.
+	URL *string `json:"url,omitempty"`
 }
 
-// WIFCheckResultLifecycle `absent`: no lifecycle client ID (kill tier 2, reaper device deletes, spawn checks and preflight are off).
-type WIFCheckResultLifecycle string
+// WebhookView A tenant's notification webhook, without its secrets.
+type WebhookView struct {
+	Events      []NotificationEventKind `json:"events"`
+	HeaderNames []string                `json:"headerNames"`
 
-// WIFInfo Present in wif mode.
-type WIFInfo struct {
-	// Issuer Examples: https://twd-mgmt.tail7906d5.ts.net/t/tn_tail7906d5
-	Issuer string `json:"issuer"`
-
-	// LifecycleSubject Examples: twd:tenant:tn_tail7906d5:lifecycle
-	LifecycleSubject string `json:"lifecycleSubject"`
-
-	// MintSubject Examples: twd:tenant:tn_tail7906d5:mint
-	MintSubject string `json:"mintSubject"`
+	// Origin The URL's scheme and host (`https://hooks.slack.com`); its path and query are never returned.
+	Origin string `json:"origin"`
 }
 
 // WhoAmI defines model for WhoAmI.
 type WhoAmI struct {
 	Actor string `json:"actor"`
 	Admin bool   `json:"admin"`
+
+	// ApproveGrants The values of the caller's `twd.dev/cap/approve` grants toward
+	// `tag:twd-mgmt` (docs/approvals.md): what it may decide through
+	// `twd approve` and the admin UI. Empty when it holds none.
+	ApproveGrants *[]ApproveGrant `json:"approveGrants,omitempty"`
 
 	// Approver The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
 	Approver *bool `json:"approver,omitempty"`
@@ -4108,10 +4364,27 @@ type WhoAmI struct {
 	Mgmt     SelfInfo  `json:"mgmt"`
 	NodeID   *string   `json:"nodeID,omitempty"`
 	Tags     *[]string `json:"tags,omitempty"`
+
+	// Tailnet The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts.
+	Tailnet *string `json:"tailnet,omitempty"`
+
+	// Tenants The tenants the caller can act in without knowing their IDs:
+	// those whose `tailnet` is the caller's own tailnet. The local
+	// operator gets every tenant; hosts get none. The admin UI's
+	// approvals page and `twd approvals` / `twd approve` default to
+	// these. A tailnet admin can still list every tenant
+	// (`GET /v1/tenants`).
+	Tenants *[]WhoAmITenant `json:"tenants,omitempty"`
 }
 
 // WhoAmIKind defines model for WhoAmI.Kind.
 type WhoAmIKind string
+
+// WhoAmITenant defines model for WhoAmITenant.
+type WhoAmITenant struct {
+	Tailnet  string `json:"tailnet"`
+	TenantID string `json:"tenantID"`
+}
 
 // WorkloadPublic defines model for WorkloadPublic.
 type WorkloadPublic struct {
@@ -4154,6 +4427,9 @@ type Limit = int
 // ObjectID defines model for objectID.
 type ObjectID = string
 
+// PublicName defines model for publicName.
+type PublicName = string
+
 // QueueEpoch defines model for queueEpoch.
 type QueueEpoch = int64
 
@@ -4180,9 +4456,6 @@ type StoreName = string
 
 // TenantID defines model for tenantID.
 type TenantID = string
-
-// TenantPath defines model for tenantPath.
-type TenantPath = string
 
 // VolumeID defines model for volumeID.
 type VolumeID = string
@@ -4279,7 +4552,15 @@ type ListAuditParams struct {
 	// Since Records at or after this time (RFC 3339 or unix ms).
 	Since *string `form:"since,omitempty" json:"since,omitempty"`
 	Until *string `form:"until,omitempty" json:"until,omitempty"`
+
+	// Order `asc` (default): oldest first. `desc`: newest first, as the admin
+	// UI shows activity. A cursor continues in the order of the page
+	// that returned it, so repeat `order` with the cursor.
+	Order *ListAuditParamsOrder `form:"order,omitempty" json:"order,omitempty"`
 }
+
+// ListAuditParamsOrder defines parameters for ListAudit.
+type ListAuditParamsOrder string
 
 // GetCertificateParams defines parameters for GetCertificate.
 type GetCertificateParams struct {
@@ -4486,6 +4767,15 @@ type PurgeTenantObjectsParams struct {
 // PurgeTenantObjectsParamsState defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParamsState string
 
+// ListPublicNamesParams defines parameters for ListPublicNames.
+type ListPublicNamesParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListQueuesParams defines parameters for ListQueues.
 type ListQueuesParams struct {
 	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
@@ -4585,6 +4875,12 @@ type GetWorkloadLogsParams struct {
 
 // GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParamsSource string
+
+// CreatePromotionParams defines parameters for CreatePromotion.
+type CreatePromotionParams struct {
+	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
+}
 
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
@@ -4739,6 +5035,9 @@ type UpdateTenantJSONRequestBody = TenantPatch
 // UpdateTenantApplicationMergePatchPlusJSONRequestBody defines body for UpdateTenant for application/merge-patch+json ContentType.
 type UpdateTenantApplicationMergePatchPlusJSONRequestBody = TenantPatch
 
+// PutTenantNotificationsJSONRequestBody defines body for PutTenantNotifications for application/json ContentType.
+type PutTenantNotificationsJSONRequestBody = NotificationsPut
+
 // SendQueueMessagesJSONRequestBody defines body for SendQueueMessages for application/json ContentType.
 type SendQueueMessagesJSONRequestBody = QueueSend
 
@@ -4756,6 +5055,9 @@ type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
 type QueryD1JSONRequestBody = D1Query
+
+// CreatePromotionJSONRequestBody defines body for CreatePromotion for application/json ContentType.
+type CreatePromotionJSONRequestBody = PromotionCreate
 
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
@@ -4780,145 +5082,6 @@ type CreateUpgradeJSONRequestBody = UpgradeRequest
 
 // ActOnUpgradeJSONRequestBody defines body for ActOnUpgrade for application/json ContentType.
 type ActOnUpgradeJSONRequestBody ActOnUpgradeJSONBody
-
-// Getter for additional properties for OIDCConfiguration. Returns the specified
-// element and whether it was found
-func (a OIDCConfiguration) Get(fieldName string) (value interface{}, found bool) {
-	if a.AdditionalProperties != nil {
-		value, found = a.AdditionalProperties[fieldName]
-	}
-	return
-}
-
-// Setter for additional properties for OIDCConfiguration
-func (a *OIDCConfiguration) Set(fieldName string, value interface{}) {
-	if a.AdditionalProperties == nil {
-		a.AdditionalProperties = make(map[string]interface{})
-	}
-	a.AdditionalProperties[fieldName] = value
-}
-
-// Override default JSON handling for OIDCConfiguration to handle AdditionalProperties
-func (a *OIDCConfiguration) UnmarshalJSON(b []byte) error {
-	object := make(map[string]json.RawMessage)
-	err := json.Unmarshal(b, &object)
-	if err != nil {
-		return err
-	}
-
-	if raw, found := object["claims_supported"]; found {
-		err = json.Unmarshal(raw, &a.ClaimsSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'claims_supported': %w", err)
-		}
-		delete(object, "claims_supported")
-	}
-
-	if raw, found := object["id_token_signing_alg_values_supported"]; found {
-		err = json.Unmarshal(raw, &a.IDTokenSigningAlgValuesSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'id_token_signing_alg_values_supported': %w", err)
-		}
-		delete(object, "id_token_signing_alg_values_supported")
-	}
-
-	if raw, found := object["issuer"]; found {
-		err = json.Unmarshal(raw, &a.Issuer)
-		if err != nil {
-			return fmt.Errorf("error reading 'issuer': %w", err)
-		}
-		delete(object, "issuer")
-	}
-
-	if raw, found := object["jwks_uri"]; found {
-		err = json.Unmarshal(raw, &a.JwksURI)
-		if err != nil {
-			return fmt.Errorf("error reading 'jwks_uri': %w", err)
-		}
-		delete(object, "jwks_uri")
-	}
-
-	if raw, found := object["response_types_supported"]; found {
-		err = json.Unmarshal(raw, &a.ResponseTypesSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'response_types_supported': %w", err)
-		}
-		delete(object, "response_types_supported")
-	}
-
-	if raw, found := object["subject_types_supported"]; found {
-		err = json.Unmarshal(raw, &a.SubjectTypesSupported)
-		if err != nil {
-			return fmt.Errorf("error reading 'subject_types_supported': %w", err)
-		}
-		delete(object, "subject_types_supported")
-	}
-
-	if len(object) != 0 {
-		a.AdditionalProperties = make(map[string]interface{})
-		for fieldName, fieldBuf := range object {
-			var fieldVal interface{}
-			err := json.Unmarshal(fieldBuf, &fieldVal)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
-			}
-			a.AdditionalProperties[fieldName] = fieldVal
-		}
-	}
-	return nil
-}
-
-// Override default JSON handling for OIDCConfiguration to handle AdditionalProperties
-func (a OIDCConfiguration) MarshalJSON() ([]byte, error) {
-	var err error
-	object := make(map[string]json.RawMessage)
-
-	if a.ClaimsSupported != nil {
-		object["claims_supported"], err = json.Marshal(a.ClaimsSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'claims_supported': %w", err)
-		}
-	}
-
-	if a.IDTokenSigningAlgValuesSupported != nil {
-		object["id_token_signing_alg_values_supported"], err = json.Marshal(a.IDTokenSigningAlgValuesSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'id_token_signing_alg_values_supported': %w", err)
-		}
-	}
-
-	object["issuer"], err = json.Marshal(a.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'issuer': %w", err)
-	}
-
-	object["jwks_uri"], err = json.Marshal(a.JwksURI)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'jwks_uri': %w", err)
-	}
-
-	if a.ResponseTypesSupported != nil {
-		object["response_types_supported"], err = json.Marshal(a.ResponseTypesSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'response_types_supported': %w", err)
-		}
-	}
-
-	if a.SubjectTypesSupported != nil {
-		object["subject_types_supported"], err = json.Marshal(a.SubjectTypesSupported)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'subject_types_supported': %w", err)
-		}
-	}
-
-	for fieldName, field := range a.AdditionalProperties {
-		object[fieldName], err = json.Marshal(field)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
-		}
-	}
-	return json.Marshal(object)
-}
 
 // AsAuditRecordDetail0 returns the union data inside the AuditRecord_Detail as a AuditRecordDetail0
 func (t AuditRecord_Detail) AsAuditRecordDetail0() (AuditRecordDetail0, error) {
@@ -5118,26 +5281,6 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// GetOIDCConfiguration OIDC discovery (base issuer)
-	//
-	// Corresponds with GET /.well-known/openid-configuration (the `GetOIDCConfiguration` operationId).
-	GetOIDCConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetJWKS Issuer signing keys
-	//
-	// Corresponds with GET /jwks (the `GetJWKS` operationId).
-	GetJWKS(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetTenantOIDCConfiguration OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-	//
-	// Corresponds with GET /t/{tenant}/.well-known/openid-configuration (the `GetTenantOIDCConfiguration` operationId).
-	GetTenantOIDCConfiguration(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetTenantJWKS Per-tenant issuer signing keys (same key set)
-	//
-	// Corresponds with GET /t/{tenant}/jwks (the `GetTenantJWKS` operationId).
-	GetTenantJWKS(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListAudit Query audit records
 	//
 	// Corresponds with GET /v1/audit (the `ListAudit` operationId).
@@ -5334,7 +5477,7 @@ type ClientInterface interface {
 	// with an `ip` part whose `src` matches every src tag. Names are
 	// reported `unchecked`. Nothing is written, no lease is taken, and the
 	// answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-	// cannot read the policy (wif tenant without a lifecycle credential);
+	// cannot read the policy (an OAuth client without `policy_file:read`);
 	// the CLI then prints `preflight skipped` and deploys.
 	//
 	// Takes any type of body and a specified content type.
@@ -5395,7 +5538,7 @@ type ClientInterface interface {
 	// with an `ip` part whose `src` matches every src tag. Names are
 	// reported `unchecked`. Nothing is written, no lease is taken, and the
 	// answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-	// cannot read the policy (wif tenant without a lifecycle credential);
+	// cannot read the policy (an OAuth client without `policy_file:read`);
 	// the CLI then prints `preflight skipped` and deploys.
 	//
 	// Takes a body of the `application/json` content type.
@@ -5456,8 +5599,8 @@ type ClientInterface interface {
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-	// through the operator tenant's trust credential (wif) or API key
-	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+	// through the operator tenant's credential (its OAuth client, or the
+	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -5476,8 +5619,8 @@ type ClientInterface interface {
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-	// through the operator tenant's trust credential (wif) or API key
-	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+	// through the operator tenant's credential (its OAuth client, or the
+	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -6063,8 +6206,8 @@ type ClientInterface interface {
 
 	// GetTenant Read a tenant
 	//
-	// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
-	// and subjects). A host may read only tenants with a deployment assigned
+	// Includes `oboPublicKey` (hostd pins it). A host may read only
+	// tenants with a deployment assigned
 	// to it (any other tenant is `404 not_found` for it).
 	//
 	// Corresponds with GET /v1/tenants/{id} (the `GetTenant` operationId).
@@ -6072,10 +6215,11 @@ type ClientInterface interface {
 
 	// UpdateTenantWithBody Update a tenant (JSON Merge Patch)
 	//
-	// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-	// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-	// `maxObjects`, `pool`, `tier`.
-	// Switching mode or changing a client ID / credential file drops cached tokens.
+	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+	// `tier`. Switching mode or changing a client ID / credential file drops
+	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 	//
 	// Takes any type of body and a specified content type.
@@ -6085,10 +6229,11 @@ type ClientInterface interface {
 
 	// UpdateTenant Update a tenant (JSON Merge Patch)
 	//
-	// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-	// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-	// `maxObjects`, `pool`, `tier`.
-	// Switching mode or changing a client ID / credential file drops cached tokens.
+	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+	// `tier`. Switching mode or changing a client ID / credential file drops
+	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 	//
 	// Takes a body of the `application/json` content type.
@@ -6098,10 +6243,11 @@ type ClientInterface interface {
 
 	// UpdateTenantWithApplicationMergePatchPlusJSONBody Update a tenant (JSON Merge Patch)
 	//
-	// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-	// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-	// `maxObjects`, `pool`, `tier`.
-	// Switching mode or changing a client ID / credential file drops cached tokens.
+	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+	// `tier`. Switching mode or changing a client ID / credential file drops
+	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 	//
 	// Takes a body of the `application/merge-patch+json` content type.
@@ -6123,6 +6269,77 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
 	ListApprovals(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteTenantNotifications Stop the tenant's notifications (`twd notify rm`)
+	//
+	// Idempotent. Audited (`kind: notification_delete`).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/notifications (the `DeleteTenantNotifications` operationId).
+	DeleteTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTenantNotifications Read the tenant's notification webhook (`twd notify`), without secrets
+	//
+	// ADR-approval-notifications. The webhook URL is shown as its origin
+	// only (scheme and host): a chat webhook's path or query is its
+	// credential. Header names only. A tenant that sends nothing has no
+	// `webhook`. `404 unknown_tenant`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/notifications (the `GetTenantNotifications` operationId).
+	GetTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutTenantNotificationsWithBody Set the tenant's notification webhook (`twd notify set`)
+	//
+	// ADR-approval-notifications. When one of `events` happens in the
+	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// fires when a Workflow starts waiting for an approval (when mgmt
+	// receives the host's audit record, usually within seconds). mgmt
+	// dials the URL itself: a tailnet name, a `100.x` address or a
+	// `*.ts.net` name over mgmt's tailnet node, anything else over the
+	// host's network; loopback and link-local addresses are refused.
+	// Delivery is tried 3 times; a final failure is audited
+	// (`notification_failed`). The config is stored encrypted in mgmt
+	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// and query and the header values are never logged, audited or
+	// returned. Audited (`kind: notification_put`, the URL's host and
+	// header names).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+	PutTenantNotificationsWithBody(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutTenantNotifications Set the tenant's notification webhook (`twd notify set`)
+	//
+	// ADR-approval-notifications. When one of `events` happens in the
+	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// fires when a Workflow starts waiting for an approval (when mgmt
+	// receives the host's audit record, usually within seconds). mgmt
+	// dials the URL itself: a tailnet name, a `100.x` address or a
+	// `*.ts.net` name over mgmt's tailnet node, anything else over the
+	// host's network; loopback and link-local addresses are refused.
+	// Delivery is tried 3 times; a final failure is audited
+	// (`notification_failed`). The config is stored encrypted in mgmt
+	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// and query and the header values are never logged, audited or
+	// returned. Audited (`kind: notification_put`, the URL's host and
+	// header names).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+	PutTenantNotifications(ctx context.Context, id TenantID, body PutTenantNotificationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestTenantNotifications Send a test notification now (`twd notify test`)
+	//
+	// POSTs a `NotificationEvent` with `event: test` to the configured
+	// webhook once, synchronously, and reports the outcome. Not retried.
+	// Audited (`kind: notification_test`, the origin and the outcome).
+	// `404 not_found` when no webhook is set.
+	//
+	// Corresponds with POST /v1/tenants/{id}/notifications/test (the `TestTenantNotifications` operationId).
+	TestTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PurgeTenantObjects Purge terminal objects of a tenant
 	//
 	// Forgets the tenant's objects in the given terminal `state`s (default:
@@ -6134,6 +6351,33 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 	PurgeTenantObjects(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPublicNames List the public names a tenant owns
+	//
+	// ADR-029, red-team H10. A public workload is served at
+	// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+	// tailnet, not per tenant. The first tenant to deploy public routes
+	// under a name owns it on that tailnet, across undeploys and
+	// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+	// the tenant is deleted. A deploy (or dry run) by another tenant on the
+	// same tailnet is refused with `409 public_name_owned`. Ordered by
+	// `(claimedAt, name)`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+	ListPublicNames(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReleasePublicName Release a public name the tenant owns
+	//
+	// Red-team H10. Gives up the tenant's claim on a public name, so any
+	// tenant on the tailnet can deploy public routes under it next. Only
+	// a name nothing serves can be released: `409 public_name_in_use`
+	// while the workload's latest deployment declares public routes or
+	// its public node is live (undeploy it, or remove `"public"` from its
+	// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+	// does not own the name. Audited (`kind: public_name_release`).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+	ReleasePublicName(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListQueues List a tenant's queues
 	//
@@ -6357,16 +6601,6 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
-	//
-	// A live diagnostic, not a state change: one fresh token exchange per
-	// credential and a policy read with the lifecycle one
-	// (`policy_file:read`). It is a `POST` because it performs work on the
-	// control plane; it creates nothing. `400 bad_request` for non-wif tenants.
-	//
-	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
-	CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
@@ -6512,6 +6746,69 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkloadPreviews A workload's running previews (`twd previews`)
+	//
+	// ADR-deploy-preview. The previews of the workload that are not
+	// stopped, newest first. A preview is created by
+	// `POST /v1/deployments` with `preview: true`: it runs as a workload
+	// of its own, `<workload>--preview-<alias>`, with its own lease,
+	// Durable Object storage and stores, and never joins the workload's
+	// Tailscale Service or public routes. A workload without previews
+	// answers an empty list.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+	ListWorkloadPreviews(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePromotionWithBody Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotion(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
 	//
@@ -6968,66 +7265,6 @@ type ClientInterface interface {
 	WhoAmI(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// GetOIDCConfiguration OIDC discovery (base issuer)
-//
-// Corresponds with GET /.well-known/openid-configuration (the `GetOIDCConfiguration` operationId).
-func (c *Client) GetOIDCConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOIDCConfigurationRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetJWKS Issuer signing keys
-//
-// Corresponds with GET /jwks (the `GetJWKS` operationId).
-func (c *Client) GetJWKS(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetJWKSRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetTenantOIDCConfiguration OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-//
-// Corresponds with GET /t/{tenant}/.well-known/openid-configuration (the `GetTenantOIDCConfiguration` operationId).
-func (c *Client) GetTenantOIDCConfiguration(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetTenantOIDCConfigurationRequest(c.Server, tenant)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetTenantJWKS Per-tenant issuer signing keys (same key set)
-//
-// Corresponds with GET /t/{tenant}/jwks (the `GetTenantJWKS` operationId).
-func (c *Client) GetTenantJWKS(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetTenantJWKSRequest(c.Server, tenant)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // ListAudit Query audit records
 //
 // Corresponds with GET /v1/audit (the `ListAudit` operationId).
@@ -7324,7 +7561,7 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // with an `ip` part whose `src` matches every src tag. Names are
 // reported `unchecked`. Nothing is written, no lease is taken, and the
 // answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-// cannot read the policy (wif tenant without a lifecycle credential);
+// cannot read the policy (an OAuth client without `policy_file:read`);
 // the CLI then prints `preflight skipped` and deploys.
 //
 // Takes any type of body and a specified content type.
@@ -7395,7 +7632,7 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // with an `ip` part whose `src` matches every src tag. Names are
 // reported `unchecked`. Nothing is written, no lease is taken, and the
 // answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-// cannot read the policy (wif tenant without a lifecycle credential);
+// cannot read the policy (an OAuth client without `policy_file:read`);
 // the CLI then prints `preflight skipped` and deploys.
 //
 // Takes a body of the `application/json` content type.
@@ -7526,8 +7763,8 @@ func (c *Client) ListHosts(ctx context.Context, params *ListHostsParams, reqEdit
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-// through the operator tenant's trust credential (wif) or API key
-// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+// through the operator tenant's credential (its OAuth client, or the
+// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -7556,8 +7793,8 @@ func (c *Client) CreateHostWithBody(ctx context.Context, contentType string, bod
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-// through the operator tenant's trust credential (wif) or API key
-// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+// through the operator tenant's credential (its OAuth client, or the
+// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -8545,8 +8782,8 @@ func (c *Client) DeleteTenant(ctx context.Context, id TenantID, params *DeleteTe
 
 // GetTenant Read a tenant
 //
-// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
-// and subjects). A host may read only tenants with a deployment assigned
+// Includes `oboPublicKey` (hostd pins it). A host may read only
+// tenants with a deployment assigned
 // to it (any other tenant is `404 not_found` for it).
 //
 // Corresponds with GET /v1/tenants/{id} (the `GetTenant` operationId).
@@ -8564,10 +8801,11 @@ func (c *Client) GetTenant(ctx context.Context, id TenantID, params *GetTenantPa
 
 // UpdateTenantWithBody Update a tenant (JSON Merge Patch)
 //
-// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-// `maxObjects`, `pool`, `tier`.
-// Switching mode or changing a client ID / credential file drops cached tokens.
+// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+// `tier`. Switching mode or changing a client ID / credential file drops
+// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 //
 // Takes any type of body and a specified content type.
@@ -8587,10 +8825,11 @@ func (c *Client) UpdateTenantWithBody(ctx context.Context, id TenantID, params *
 
 // UpdateTenant Update a tenant (JSON Merge Patch)
 //
-// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-// `maxObjects`, `pool`, `tier`.
-// Switching mode or changing a client ID / credential file drops cached tokens.
+// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+// `tier`. Switching mode or changing a client ID / credential file drops
+// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 //
 // Takes a body of the `application/json` content type.
@@ -8610,10 +8849,11 @@ func (c *Client) UpdateTenant(ctx context.Context, id TenantID, params *UpdateTe
 
 // UpdateTenantWithApplicationMergePatchPlusJSONBody Update a tenant (JSON Merge Patch)
 //
-// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-// `maxObjects`, `pool`, `tier`.
-// Switching mode or changing a client ID / credential file drops cached tokens.
+// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+// `tier`. Switching mode or changing a client ID / credential file drops
+// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 //
 // Takes a body of the `application/merge-patch+json` content type.
@@ -8655,6 +8895,127 @@ func (c *Client) ListApprovals(ctx context.Context, id TenantID, params *ListApp
 	return c.Client.Do(req)
 }
 
+// DeleteTenantNotifications Stop the tenant's notifications (`twd notify rm`)
+//
+// Idempotent. Audited (`kind: notification_delete`).
+//
+// Corresponds with DELETE /v1/tenants/{id}/notifications (the `DeleteTenantNotifications` operationId).
+func (c *Client) DeleteTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTenantNotificationsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTenantNotifications Read the tenant's notification webhook (`twd notify`), without secrets
+//
+// ADR-approval-notifications. The webhook URL is shown as its origin
+// only (scheme and host): a chat webhook's path or query is its
+// credential. Header names only. A tenant that sends nothing has no
+// `webhook`. `404 unknown_tenant`.
+//
+// Corresponds with GET /v1/tenants/{id}/notifications (the `GetTenantNotifications` operationId).
+func (c *Client) GetTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTenantNotificationsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutTenantNotificationsWithBody Set the tenant's notification webhook (`twd notify set`)
+//
+// ADR-approval-notifications. When one of `events` happens in the
+// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// fires when a Workflow starts waiting for an approval (when mgmt
+// receives the host's audit record, usually within seconds). mgmt
+// dials the URL itself: a tailnet name, a `100.x` address or a
+// `*.ts.net` name over mgmt's tailnet node, anything else over the
+// host's network; loopback and link-local addresses are refused.
+// Delivery is tried 3 times; a final failure is audited
+// (`notification_failed`). The config is stored encrypted in mgmt
+// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// and query and the header values are never logged, audited or
+// returned. Audited (`kind: notification_put`, the URL's host and
+// header names).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+func (c *Client) PutTenantNotificationsWithBody(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutTenantNotificationsRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutTenantNotifications Set the tenant's notification webhook (`twd notify set`)
+//
+// ADR-approval-notifications. When one of `events` happens in the
+// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// fires when a Workflow starts waiting for an approval (when mgmt
+// receives the host's audit record, usually within seconds). mgmt
+// dials the URL itself: a tailnet name, a `100.x` address or a
+// `*.ts.net` name over mgmt's tailnet node, anything else over the
+// host's network; loopback and link-local addresses are refused.
+// Delivery is tried 3 times; a final failure is audited
+// (`notification_failed`). The config is stored encrypted in mgmt
+// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// and query and the header values are never logged, audited or
+// returned. Audited (`kind: notification_put`, the URL's host and
+// header names).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+func (c *Client) PutTenantNotifications(ctx context.Context, id TenantID, body PutTenantNotificationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutTenantNotificationsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TestTenantNotifications Send a test notification now (`twd notify test`)
+//
+// POSTs a `NotificationEvent` with `event: test` to the configured
+// webhook once, synchronously, and reports the outcome. Not retried.
+// Audited (`kind: notification_test`, the origin and the outcome).
+// `404 not_found` when no webhook is set.
+//
+// Corresponds with POST /v1/tenants/{id}/notifications/test (the `TestTenantNotifications` operationId).
+func (c *Client) TestTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestTenantNotificationsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PurgeTenantObjects Purge terminal objects of a tenant
 //
 // Forgets the tenant's objects in the given terminal `state`s (default:
@@ -8667,6 +9028,53 @@ func (c *Client) ListApprovals(ctx context.Context, id TenantID, params *ListApp
 // Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPurgeTenantObjectsRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPublicNames List the public names a tenant owns
+//
+// ADR-029, red-team H10. A public workload is served at
+// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+// tailnet, not per tenant. The first tenant to deploy public routes
+// under a name owns it on that tailnet, across undeploys and
+// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+// the tenant is deleted. A deploy (or dry run) by another tenant on the
+// same tailnet is refused with `409 public_name_owned`. Ordered by
+// `(claimedAt, name)`.
+//
+// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+func (c *Client) ListPublicNames(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPublicNamesRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReleasePublicName Release a public name the tenant owns
+//
+// Red-team H10. Gives up the tenant's claim on a public name, so any
+// tenant on the tailnet can deploy public routes under it next. Only
+// a name nothing serves can be released: `409 public_name_in_use`
+// while the workload's latest deployment declares public routes or
+// its public node is live (undeploy it, or remove `"public"` from its
+// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+// does not own the name. Audited (`kind: public_name_release`).
+//
+// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+func (c *Client) ReleasePublicName(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReleasePublicNameRequest(c.Server, id, name)
 	if err != nil {
 		return nil, err
 	}
@@ -9059,26 +9467,6 @@ func (c *Client) PutTenantTelemetry(ctx context.Context, id TenantID, body PutTe
 	return c.Client.Do(req)
 }
 
-// CheckTenantWIF Verify a wif tenant's trust credentials (diagnostic)
-//
-// A live diagnostic, not a state change: one fresh token exchange per
-// credential and a policy read with the lifecycle one
-// (`policy_file:read`). It is a `POST` because it performs work on the
-// control plane; it creates nothing. `400 bad_request` for non-wif tenants.
-//
-// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
-func (c *Client) CheckTenantWIF(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCheckTenantWIFRequest(c.Server, id)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // DecideApprovalWithBody Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
@@ -9285,6 +9673,99 @@ func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workl
 // Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetWorkloadLogsRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkloadPreviews A workload's running previews (`twd previews`)
+//
+// ADR-deploy-preview. The previews of the workload that are not
+// stopped, newest first. A preview is created by
+// `POST /v1/deployments` with `preview: true`: it runs as a workload
+// of its own, `<workload>--preview-<alias>`, with its own lease,
+// Durable Object storage and stores, and never joins the workload's
+// Tailscale Service or public routes. A workload without previews
+// answers an empty list.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+func (c *Client) ListWorkloadPreviews(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkloadPreviewsRequest(c.Server, id, workload)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePromotionWithBody Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *Client) CreatePromotionWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePromotionRequestWithBody(c.Server, id, workload, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *Client) CreatePromotion(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePromotionRequest(c.Server, id, workload, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10069,128 +10550,6 @@ func (c *Client) WhoAmI(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 	return c.Client.Do(req)
 }
 
-// NewGetOIDCConfigurationRequest constructs an http.Request for the GetOIDCConfiguration method
-func NewGetOIDCConfigurationRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/.well-known/openid-configuration")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetJWKSRequest constructs an http.Request for the GetJWKS method
-func NewGetJWKSRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/jwks")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetTenantOIDCConfigurationRequest constructs an http.Request for the GetTenantOIDCConfiguration method
-func NewGetTenantOIDCConfigurationRequest(server string, tenant TenantPath) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "tenant", tenant, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/t/%s/.well-known/openid-configuration", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetTenantJWKSRequest constructs an http.Request for the GetTenantJWKS method
-func NewGetTenantJWKSRequest(server string, tenant TenantPath) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "tenant", tenant, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/t/%s/jwks", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewListAuditRequest constructs an http.Request for the ListAudit method
 func NewListAuditRequest(server string, params *ListAuditParams) (*http.Request, error) {
 	var err error
@@ -10330,6 +10689,18 @@ func NewListAuditRequest(server string, params *ListAuditParams) (*http.Request,
 		if params.Until != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "until", *params.Until, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Order != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "order", *params.Order, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -12866,6 +13237,155 @@ func NewListApprovalsRequest(server string, id TenantID, params *ListApprovalsPa
 	return req, nil
 }
 
+// NewDeleteTenantNotificationsRequest constructs an http.Request for the DeleteTenantNotifications method
+func NewDeleteTenantNotificationsRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/notifications", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetTenantNotificationsRequest constructs an http.Request for the GetTenantNotifications method
+func NewGetTenantNotificationsRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/notifications", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutTenantNotificationsRequest calls the generic PutTenantNotifications builder with application/json body
+func NewPutTenantNotificationsRequest(server string, id TenantID, body PutTenantNotificationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutTenantNotificationsRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewPutTenantNotificationsRequestWithBody constructs an http.Request for the PutTenantNotifications method, with any body, and a specified content type
+func NewPutTenantNotificationsRequestWithBody(server string, id TenantID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/notifications", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTestTenantNotificationsRequest constructs an http.Request for the TestTenantNotifications method
+func NewTestTenantNotificationsRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/notifications/test", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPurgeTenantObjectsRequest constructs an http.Request for the PurgeTenantObjects method
 func NewPurgeTenantObjectsRequest(server string, id TenantID, params *PurgeTenantObjectsParams) (*http.Request, error) {
 	var err error
@@ -12917,6 +13437,120 @@ func NewPurgeTenantObjectsRequest(server string, id TenantID, params *PurgeTenan
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPublicNamesRequest constructs an http.Request for the ListPublicNames method
+func NewListPublicNamesRequest(server string, id TenantID, params *ListPublicNamesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/public-names", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReleasePublicNameRequest constructs an http.Request for the ReleasePublicName method
+func NewReleasePublicNameRequest(server string, id TenantID, name PublicName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/public-names/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -13665,40 +14299,6 @@ func NewPutTenantTelemetryRequestWithBody(server string, id TenantID, contentTyp
 	return req, nil
 }
 
-// NewCheckTenantWIFRequest constructs an http.Request for the CheckTenantWIF method
-func NewCheckTenantWIFRequest(server string, id TenantID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/tenants/%s/wif-check", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewDecideApprovalRequest calls the generic DecideApproval builder with application/json body
 func NewDecideApprovalRequest(server string, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -14128,6 +14728,128 @@ func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewListWorkloadPreviewsRequest constructs an http.Request for the ListWorkloadPreviews method
+func NewListWorkloadPreviewsRequest(server string, id TenantID, workload WorkloadName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/previews", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePromotionRequest calls the generic CreatePromotion builder with application/json body
+func NewCreatePromotionRequest(server string, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePromotionRequestWithBody(server, id, workload, params, "application/json", bodyReader)
+}
+
+// NewCreatePromotionRequestWithBody constructs an http.Request for the CreatePromotion method, with any body, and a specified content type
+func NewCreatePromotionRequestWithBody(server string, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/promotions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.DryRun != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "dryRun", *params.DryRun, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -15710,34 +16432,6 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// GetOIDCConfigurationWithResponse OIDC discovery (base issuer)
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /.well-known/openid-configuration (the `GetOIDCConfiguration` operationId).
-	GetOIDCConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOIDCConfigurationResponse, error)
-
-	// GetJWKSWithResponse Issuer signing keys
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /jwks (the `GetJWKS` operationId).
-	GetJWKSWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetJWKSResponse, error)
-
-	// GetTenantOIDCConfigurationWithResponse OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /t/{tenant}/.well-known/openid-configuration (the `GetTenantOIDCConfiguration` operationId).
-	GetTenantOIDCConfigurationWithResponse(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*GetTenantOIDCConfigurationResponse, error)
-
-	// GetTenantJWKSWithResponse Per-tenant issuer signing keys (same key set)
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /t/{tenant}/jwks (the `GetTenantJWKS` operationId).
-	GetTenantJWKSWithResponse(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*GetTenantJWKSResponse, error)
-
 	// ListAuditWithResponse Query audit records
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -15946,7 +16640,7 @@ type ClientWithResponsesInterface interface {
 	// with an `ip` part whose `src` matches every src tag. Names are
 	// reported `unchecked`. Nothing is written, no lease is taken, and the
 	// answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-	// cannot read the policy (wif tenant without a lifecycle credential);
+	// cannot read the policy (an OAuth client without `policy_file:read`);
 	// the CLI then prints `preflight skipped` and deploys.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -16007,7 +16701,7 @@ type ClientWithResponsesInterface interface {
 	// with an `ip` part whose `src` matches every src tag. Names are
 	// reported `unchecked`. Nothing is written, no lease is taken, and the
 	// answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-	// cannot read the policy (wif tenant without a lifecycle credential);
+	// cannot read the policy (an OAuth client without `policy_file:read`);
 	// the CLI then prints `preflight skipped` and deploys.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -16080,8 +16774,8 @@ type ClientWithResponsesInterface interface {
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-	// through the operator tenant's trust credential (wif) or API key
-	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+	// through the operator tenant's credential (its OAuth client, or the
+	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -16100,8 +16794,8 @@ type ClientWithResponsesInterface interface {
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-	// through the operator tenant's trust credential (wif) or API key
-	// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+	// through the operator tenant's credential (its OAuth client, or the
+	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -16725,8 +17419,8 @@ type ClientWithResponsesInterface interface {
 
 	// GetTenantWithResponse Read a tenant
 	//
-	// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
-	// and subjects). A host may read only tenants with a deployment assigned
+	// Includes `oboPublicKey` (hostd pins it). A host may read only
+	// tenants with a deployment assigned
 	// to it (any other tenant is `404 not_found` for it).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -16736,10 +17430,11 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateTenantWithBodyWithResponse Update a tenant (JSON Merge Patch)
 	//
-	// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-	// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-	// `maxObjects`, `pool`, `tier`.
-	// Switching mode or changing a client ID / credential file drops cached tokens.
+	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+	// `tier`. Switching mode or changing a client ID / credential file drops
+	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -16749,10 +17444,11 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateTenantWithResponse Update a tenant (JSON Merge Patch)
 	//
-	// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-	// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-	// `maxObjects`, `pool`, `tier`.
-	// Switching mode or changing a client ID / credential file drops cached tokens.
+	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+	// `tier`. Switching mode or changing a client ID / credential file drops
+	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -16762,10 +17458,11 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateTenantWithApplicationMergePatchPlusJSONBodyWithResponse Update a tenant (JSON Merge Patch)
 	//
-	// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-	// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-	// `maxObjects`, `pool`, `tier`.
-	// Switching mode or changing a client ID / credential file drops cached tokens.
+	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+	// `tier`. Switching mode or changing a client ID / credential file drops
+	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 	//
 	// Takes a body of the `application/merge-patch+json` content type, and returns a wrapper object for the known response body format(s).
@@ -16789,6 +17486,83 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
 	ListApprovalsWithResponse(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*ListApprovalsResponse, error)
 
+	// DeleteTenantNotificationsWithResponse Stop the tenant's notifications (`twd notify rm`)
+	//
+	// Idempotent. Audited (`kind: notification_delete`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/notifications (the `DeleteTenantNotifications` operationId).
+	DeleteTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantNotificationsResponse, error)
+
+	// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`twd notify`), without secrets
+	//
+	// ADR-approval-notifications. The webhook URL is shown as its origin
+	// only (scheme and host): a chat webhook's path or query is its
+	// credential. Header names only. A tenant that sends nothing has no
+	// `webhook`. `404 unknown_tenant`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/notifications (the `GetTenantNotifications` operationId).
+	GetTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantNotificationsResponse, error)
+
+	// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`twd notify set`)
+	//
+	// ADR-approval-notifications. When one of `events` happens in the
+	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// fires when a Workflow starts waiting for an approval (when mgmt
+	// receives the host's audit record, usually within seconds). mgmt
+	// dials the URL itself: a tailnet name, a `100.x` address or a
+	// `*.ts.net` name over mgmt's tailnet node, anything else over the
+	// host's network; loopback and link-local addresses are refused.
+	// Delivery is tried 3 times; a final failure is audited
+	// (`notification_failed`). The config is stored encrypted in mgmt
+	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// and query and the header values are never logged, audited or
+	// returned. Audited (`kind: notification_put`, the URL's host and
+	// header names).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+	PutTenantNotificationsWithBodyWithResponse(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutTenantNotificationsResponse, error)
+
+	// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`twd notify set`)
+	//
+	// ADR-approval-notifications. When one of `events` happens in the
+	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// fires when a Workflow starts waiting for an approval (when mgmt
+	// receives the host's audit record, usually within seconds). mgmt
+	// dials the URL itself: a tailnet name, a `100.x` address or a
+	// `*.ts.net` name over mgmt's tailnet node, anything else over the
+	// host's network; loopback and link-local addresses are refused.
+	// Delivery is tried 3 times; a final failure is audited
+	// (`notification_failed`). The config is stored encrypted in mgmt
+	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// and query and the header values are never logged, audited or
+	// returned. Audited (`kind: notification_put`, the URL's host and
+	// header names).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+	PutTenantNotificationsWithResponse(ctx context.Context, id TenantID, body PutTenantNotificationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantNotificationsResponse, error)
+
+	// TestTenantNotificationsWithResponse Send a test notification now (`twd notify test`)
+	//
+	// POSTs a `NotificationEvent` with `event: test` to the configured
+	// webhook once, synchronously, and reports the outcome. Not retried.
+	// Audited (`kind: notification_test`, the origin and the outcome).
+	// `404 not_found` when no webhook is set.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/notifications/test (the `TestTenantNotifications` operationId).
+	TestTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*TestTenantNotificationsResponse, error)
+
 	// PurgeTenantObjectsWithResponse Purge terminal objects of a tenant
 	//
 	// Forgets the tenant's objects in the given terminal `state`s (default:
@@ -16802,6 +17576,37 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 	PurgeTenantObjectsWithResponse(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*PurgeTenantObjectsResponse, error)
+
+	// ListPublicNamesWithResponse List the public names a tenant owns
+	//
+	// ADR-029, red-team H10. A public workload is served at
+	// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+	// tailnet, not per tenant. The first tenant to deploy public routes
+	// under a name owns it on that tailnet, across undeploys and
+	// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+	// the tenant is deleted. A deploy (or dry run) by another tenant on the
+	// same tailnet is refused with `409 public_name_owned`. Ordered by
+	// `(claimedAt, name)`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+	ListPublicNamesWithResponse(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*ListPublicNamesResponse, error)
+
+	// ReleasePublicNameWithResponse Release a public name the tenant owns
+	//
+	// Red-team H10. Gives up the tenant's claim on a public name, so any
+	// tenant on the tailnet can deploy public routes under it next. Only
+	// a name nothing serves can be released: `409 public_name_in_use`
+	// while the workload's latest deployment declares public routes or
+	// its public node is live (undeploy it, or remove `"public"` from its
+	// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+	// does not own the name. Audited (`kind: public_name_release`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+	ReleasePublicNameWithResponse(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*ReleasePublicNameResponse, error)
 
 	// ListQueuesWithResponse List a tenant's queues
 	//
@@ -17041,18 +17846,6 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetryWithResponse(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
 
-	// CheckTenantWIFWithResponse Verify a wif tenant's trust credentials (diagnostic)
-	//
-	// A live diagnostic, not a state change: one fresh token exchange per
-	// credential and a policy read with the lifecycle one
-	// (`policy_file:read`). It is a `POST` because it performs work on the
-	// control plane; it creates nothing. `400 bad_request` for non-wif tenants.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
-	CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error)
-
 	// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
@@ -17204,6 +17997,71 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error)
+
+	// ListWorkloadPreviewsWithResponse A workload's running previews (`twd previews`)
+	//
+	// ADR-deploy-preview. The previews of the workload that are not
+	// stopped, newest first. A preview is created by
+	// `POST /v1/deployments` with `preview: true`: it runs as a workload
+	// of its own, `<workload>--preview-<alias>`, with its own lease,
+	// Durable Object storage and stores, and never joins the workload's
+	// Tailscale Service or public routes. A workload without previews
+	// answers an empty list.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+	ListWorkloadPreviewsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*ListWorkloadPreviewsResponse, error)
+
+	// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
+
+	// CreatePromotionWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
 
 	// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
 	//
@@ -17692,226 +18550,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/whoami (the `WhoAmI` operationId).
 	WhoAmIWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*WhoAmIResponse, error)
-}
-
-// GetOIDCConfigurationResponse404Headers the declared response headers of an HTTP 404 response for GetOIDCConfiguration
-type GetOIDCConfigurationResponse404Headers struct {
-	TwdError *string
-}
-
-type GetOIDCConfigurationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *OIDCConfiguration
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// Headers404 the parsed response headers for an HTTP 404 response
-	Headers404 *GetOIDCConfigurationResponse404Headers
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetOIDCConfigurationResponse) GetJSON200() *OIDCConfiguration {
-	return r.JSON200
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetOIDCConfigurationResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetOIDCConfigurationResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetOIDCConfigurationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetOIDCConfigurationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetOIDCConfigurationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// GetJWKSResponse404Headers the declared response headers of an HTTP 404 response for GetJWKS
-type GetJWKSResponse404Headers struct {
-	TwdError *string
-}
-
-type GetJWKSResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *JWKS
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// Headers404 the parsed response headers for an HTTP 404 response
-	Headers404 *GetJWKSResponse404Headers
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetJWKSResponse) GetJSON200() *JWKS {
-	return r.JSON200
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetJWKSResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetJWKSResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetJWKSResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetJWKSResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetJWKSResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// GetTenantOIDCConfigurationResponse404Headers the declared response headers of an HTTP 404 response for GetTenantOIDCConfiguration
-type GetTenantOIDCConfigurationResponse404Headers struct {
-	TwdError *string
-}
-
-type GetTenantOIDCConfigurationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *OIDCConfiguration
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// Headers404 the parsed response headers for an HTTP 404 response
-	Headers404 *GetTenantOIDCConfigurationResponse404Headers
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetTenantOIDCConfigurationResponse) GetJSON200() *OIDCConfiguration {
-	return r.JSON200
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetTenantOIDCConfigurationResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetTenantOIDCConfigurationResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetTenantOIDCConfigurationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetTenantOIDCConfigurationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetTenantOIDCConfigurationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// GetTenantJWKSResponse404Headers the declared response headers of an HTTP 404 response for GetTenantJWKS
-type GetTenantJWKSResponse404Headers struct {
-	TwdError *string
-}
-
-type GetTenantJWKSResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *JWKS
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// Headers404 the parsed response headers for an HTTP 404 response
-	Headers404 *GetTenantJWKSResponse404Headers
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetTenantJWKSResponse) GetJSON200() *JWKS {
-	return r.JSON200
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetTenantJWKSResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetTenantJWKSResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetTenantJWKSResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetTenantJWKSResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetTenantJWKSResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
 }
 
 // ListAuditResponse400Headers the declared response headers of an HTTP 400 response for ListAudit
@@ -22434,6 +23072,345 @@ func (r ListApprovalsResponse) ContentType() string {
 	return ""
 }
 
+// DeleteTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for DeleteTenantNotifications
+type DeleteTenantNotificationsResponse403Headers struct {
+	TwdError *string
+}
+
+// DeleteTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for DeleteTenantNotifications
+type DeleteTenantNotificationsResponse404Headers struct {
+	TwdError *string
+}
+
+// DeleteTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteTenantNotifications
+type DeleteTenantNotificationsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type DeleteTenantNotificationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *DeleteTenantNotificationsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *DeleteTenantNotificationsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *DeleteTenantNotificationsResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteTenantNotificationsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteTenantNotificationsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteTenantNotificationsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteTenantNotificationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTenantNotificationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTenantNotificationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteTenantNotificationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for GetTenantNotifications
+type GetTenantNotificationsResponse403Headers struct {
+	TwdError *string
+}
+
+// GetTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for GetTenantNotifications
+type GetTenantNotificationsResponse404Headers struct {
+	TwdError *string
+}
+
+// GetTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenantNotifications
+type GetTenantNotificationsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type GetTenantNotificationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NotificationConfig
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetTenantNotificationsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetTenantNotificationsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetTenantNotificationsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTenantNotificationsResponse) GetJSON200() *NotificationConfig {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetTenantNotificationsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetTenantNotificationsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetTenantNotificationsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTenantNotificationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTenantNotificationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTenantNotificationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTenantNotificationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// PutTenantNotificationsResponse400Headers the declared response headers of an HTTP 400 response for PutTenantNotifications
+type PutTenantNotificationsResponse400Headers struct {
+	TwdError *string
+}
+
+// PutTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for PutTenantNotifications
+type PutTenantNotificationsResponse403Headers struct {
+	TwdError *string
+}
+
+// PutTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for PutTenantNotifications
+type PutTenantNotificationsResponse404Headers struct {
+	TwdError *string
+}
+
+// PutTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for PutTenantNotifications
+type PutTenantNotificationsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type PutTenantNotificationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NotificationConfig
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *PutTenantNotificationsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *PutTenantNotificationsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *PutTenantNotificationsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *PutTenantNotificationsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutTenantNotificationsResponse) GetJSON200() *NotificationConfig {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutTenantNotificationsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutTenantNotificationsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutTenantNotificationsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PutTenantNotificationsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutTenantNotificationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutTenantNotificationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutTenantNotificationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutTenantNotificationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// TestTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for TestTenantNotifications
+type TestTenantNotificationsResponse403Headers struct {
+	TwdError *string
+}
+
+// TestTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for TestTenantNotifications
+type TestTenantNotificationsResponse404Headers struct {
+	TwdError *string
+}
+
+// TestTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for TestTenantNotifications
+type TestTenantNotificationsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type TestTenantNotificationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NotificationTestResult
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *TestTenantNotificationsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *TestTenantNotificationsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *TestTenantNotificationsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r TestTenantNotificationsResponse) GetJSON200() *NotificationTestResult {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r TestTenantNotificationsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r TestTenantNotificationsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r TestTenantNotificationsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r TestTenantNotificationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r TestTenantNotificationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestTenantNotificationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r TestTenantNotificationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // PurgeTenantObjectsResponse400Headers the declared response headers of an HTTP 400 response for PurgeTenantObjects
 type PurgeTenantObjectsResponse400Headers struct {
 	TwdError *string
@@ -22525,6 +23502,193 @@ func (r PurgeTenantObjectsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PurgeTenantObjectsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListPublicNamesResponse400Headers the declared response headers of an HTTP 400 response for ListPublicNames
+type ListPublicNamesResponse400Headers struct {
+	TwdError *string
+}
+
+// ListPublicNamesResponse403Headers the declared response headers of an HTTP 403 response for ListPublicNames
+type ListPublicNamesResponse403Headers struct {
+	TwdError *string
+}
+
+// ListPublicNamesResponse404Headers the declared response headers of an HTTP 404 response for ListPublicNames
+type ListPublicNamesResponse404Headers struct {
+	TwdError *string
+}
+
+// ListPublicNamesResponseDefaultHeaders the declared response headers of an HTTP default response for ListPublicNames
+type ListPublicNamesResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListPublicNamesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PublicNamePage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListPublicNamesResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListPublicNamesResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListPublicNamesResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListPublicNamesResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPublicNamesResponse) GetJSON200() *PublicNamePage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListPublicNamesResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListPublicNamesResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListPublicNamesResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListPublicNamesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPublicNamesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPublicNamesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPublicNamesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPublicNamesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ReleasePublicNameResponse403Headers the declared response headers of an HTTP 403 response for ReleasePublicName
+type ReleasePublicNameResponse403Headers struct {
+	TwdError *string
+}
+
+// ReleasePublicNameResponse404Headers the declared response headers of an HTTP 404 response for ReleasePublicName
+type ReleasePublicNameResponse404Headers struct {
+	TwdError *string
+}
+
+// ReleasePublicNameResponse409Headers the declared response headers of an HTTP 409 response for ReleasePublicName
+type ReleasePublicNameResponse409Headers struct {
+	TwdError *string
+}
+
+// ReleasePublicNameResponseDefaultHeaders the declared response headers of an HTTP default response for ReleasePublicName
+type ReleasePublicNameResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ReleasePublicNameResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ReleasePublicNameResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ReleasePublicNameResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ReleasePublicNameResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ReleasePublicNameResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReleasePublicNameResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReleasePublicNameResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ReleasePublicNameResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ReleasePublicNameResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReleasePublicNameResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReleasePublicNameResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReleasePublicNameResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReleasePublicNameResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23702,103 +24866,6 @@ func (r PutTenantTelemetryResponse) ContentType() string {
 	return ""
 }
 
-// CheckTenantWIFResponse400Headers the declared response headers of an HTTP 400 response for CheckTenantWIF
-type CheckTenantWIFResponse400Headers struct {
-	TwdError *string
-}
-
-// CheckTenantWIFResponse403Headers the declared response headers of an HTTP 403 response for CheckTenantWIF
-type CheckTenantWIFResponse403Headers struct {
-	TwdError *string
-}
-
-// CheckTenantWIFResponse404Headers the declared response headers of an HTTP 404 response for CheckTenantWIF
-type CheckTenantWIFResponse404Headers struct {
-	TwdError *string
-}
-
-// CheckTenantWIFResponseDefaultHeaders the declared response headers of an HTTP default response for CheckTenantWIF
-type CheckTenantWIFResponseDefaultHeaders struct {
-	TwdError *string
-}
-
-type CheckTenantWIFResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *WIFCheckResult
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *BadRequest
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Forbidden
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-	// Headers400 the parsed response headers for an HTTP 400 response
-	Headers400 *CheckTenantWIFResponse400Headers
-	// Headers403 the parsed response headers for an HTTP 403 response
-	Headers403 *CheckTenantWIFResponse403Headers
-	// Headers404 the parsed response headers for an HTTP 404 response
-	Headers404 *CheckTenantWIFResponse404Headers
-	// HeadersDefault the parsed response headers for an HTTP default response
-	HeadersDefault *CheckTenantWIFResponseDefaultHeaders
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r CheckTenantWIFResponse) GetJSON200() *WIFCheckResult {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CheckTenantWIFResponse) GetJSON400() *BadRequest {
-	return r.JSON400
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r CheckTenantWIFResponse) GetJSON403() *Forbidden {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r CheckTenantWIFResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r CheckTenantWIFResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r CheckTenantWIFResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CheckTenantWIFResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CheckTenantWIFResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CheckTenantWIFResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 // DecideApprovalResponse400Headers the declared response headers of an HTTP 400 response for DecideApproval
 type DecideApprovalResponse400Headers struct {
 	TwdError *string
@@ -24292,6 +25359,228 @@ func (r GetWorkloadLogsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetWorkloadLogsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListWorkloadPreviewsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponse400Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadPreviewsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponse403Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadPreviewsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponse404Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadPreviewsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListWorkloadPreviewsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreviewList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListWorkloadPreviewsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListWorkloadPreviewsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListWorkloadPreviewsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListWorkloadPreviewsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON200() *PreviewList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWorkloadPreviewsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkloadPreviewsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkloadPreviewsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWorkloadPreviewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreatePromotionResponse202Headers the declared response headers of an HTTP 202 response for CreatePromotion
+type CreatePromotionResponse202Headers struct {
+	Location *string
+}
+
+// CreatePromotionResponse400Headers the declared response headers of an HTTP 400 response for CreatePromotion
+type CreatePromotionResponse400Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponse403Headers the declared response headers of an HTTP 403 response for CreatePromotion
+type CreatePromotionResponse403Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponse404Headers the declared response headers of an HTTP 404 response for CreatePromotion
+type CreatePromotionResponse404Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponse409Headers the declared response headers of an HTTP 409 response for CreatePromotion
+type CreatePromotionResponse409Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponseDefaultHeaders the declared response headers of an HTTP default response for CreatePromotion
+type CreatePromotionResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CreatePromotionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreflightResult
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Promotion
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers202 the parsed response headers for an HTTP 202 response
+	Headers202 *CreatePromotionResponse202Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *CreatePromotionResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CreatePromotionResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *CreatePromotionResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *CreatePromotionResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CreatePromotionResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreatePromotionResponse) GetJSON200() *PreflightResult {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r CreatePromotionResponse) GetJSON202() *Promotion {
+	return r.JSON202
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreatePromotionResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreatePromotionResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreatePromotionResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreatePromotionResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreatePromotionResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreatePromotionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePromotionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePromotionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreatePromotionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -26701,58 +27990,6 @@ func (r WhoAmIResponse) ContentType() string {
 	return ""
 }
 
-// GetOIDCConfigurationWithResponse OIDC discovery (base issuer)
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /.well-known/openid-configuration (the `GetOIDCConfiguration` operationId).
-func (c *ClientWithResponses) GetOIDCConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOIDCConfigurationResponse, error) {
-	rsp, err := c.GetOIDCConfiguration(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetOIDCConfigurationResponse(rsp)
-}
-
-// GetJWKSWithResponse Issuer signing keys
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /jwks (the `GetJWKS` operationId).
-func (c *ClientWithResponses) GetJWKSWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetJWKSResponse, error) {
-	rsp, err := c.GetJWKS(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetJWKSResponse(rsp)
-}
-
-// GetTenantOIDCConfigurationWithResponse OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /t/{tenant}/.well-known/openid-configuration (the `GetTenantOIDCConfiguration` operationId).
-func (c *ClientWithResponses) GetTenantOIDCConfigurationWithResponse(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*GetTenantOIDCConfigurationResponse, error) {
-	rsp, err := c.GetTenantOIDCConfiguration(ctx, tenant, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetTenantOIDCConfigurationResponse(rsp)
-}
-
-// GetTenantJWKSWithResponse Per-tenant issuer signing keys (same key set)
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /t/{tenant}/jwks (the `GetTenantJWKS` operationId).
-func (c *ClientWithResponses) GetTenantJWKSWithResponse(ctx context.Context, tenant TenantPath, reqEditors ...RequestEditorFn) (*GetTenantJWKSResponse, error) {
-	rsp, err := c.GetTenantJWKS(ctx, tenant, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetTenantJWKSResponse(rsp)
-}
-
 // ListAuditWithResponse Query audit records
 //
 // Returns a wrapper object for the known response body format(s).
@@ -27021,7 +28258,7 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // with an `ip` part whose `src` matches every src tag. Names are
 // reported `unchecked`. Nothing is written, no lease is taken, and the
 // answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-// cannot read the policy (wif tenant without a lifecycle credential);
+// cannot read the policy (an OAuth client without `policy_file:read`);
 // the CLI then prints `preflight skipped` and deploys.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -27088,7 +28325,7 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // with an `ip` part whose `src` matches every src tag. Names are
 // reported `unchecked`. Nothing is written, no lease is taken, and the
 // answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-// cannot read the policy (wif tenant without a lifecycle credential);
+// cannot read the policy (an OAuth client without `policy_file:read`);
 // the CLI then prints `preflight skipped` and deploys.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -27203,8 +28440,8 @@ func (c *ClientWithResponses) ListHostsWithResponse(ctx context.Context, params 
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-// through the operator tenant's trust credential (wif) or API key
-// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+// through the operator tenant's credential (its OAuth client, or the
+// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -27229,8 +28466,8 @@ func (c *ClientWithResponses) CreateHostWithBodyWithResponse(ctx context.Context
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-// through the operator tenant's trust credential (wif) or API key
-// (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+// through the operator tenant's credential (its OAuth client, or the
+// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 // with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -28096,8 +29333,8 @@ func (c *ClientWithResponses) DeleteTenantWithResponse(ctx context.Context, id T
 
 // GetTenantWithResponse Read a tenant
 //
-// Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
-// and subjects). A host may read only tenants with a deployment assigned
+// Includes `oboPublicKey` (hostd pins it). A host may read only
+// tenants with a deployment assigned
 // to it (any other tenant is `404 not_found` for it).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -28113,10 +29350,11 @@ func (c *ClientWithResponses) GetTenantWithResponse(ctx context.Context, id Tena
 
 // UpdateTenantWithBodyWithResponse Update a tenant (JSON Merge Patch)
 //
-// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-// `maxObjects`, `pool`, `tier`.
-// Switching mode or changing a client ID / credential file drops cached tokens.
+// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+// `tier`. Switching mode or changing a client ID / credential file drops
+// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -28132,10 +29370,11 @@ func (c *ClientWithResponses) UpdateTenantWithBodyWithResponse(ctx context.Conte
 
 // UpdateTenantWithResponse Update a tenant (JSON Merge Patch)
 //
-// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-// `maxObjects`, `pool`, `tier`.
-// Switching mode or changing a client ID / credential file drops cached tokens.
+// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+// `tier`. Switching mode or changing a client ID / credential file drops
+// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -28151,10 +29390,11 @@ func (c *ClientWithResponses) UpdateTenantWithResponse(ctx context.Context, id T
 
 // UpdateTenantWithApplicationMergePatchPlusJSONBodyWithResponse Update a tenant (JSON Merge Patch)
 //
-// Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-// `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-// `maxObjects`, `pool`, `tier`.
-// Switching mode or changing a client ID / credential file drops cached tokens.
+// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+// `tier`. Switching mode or changing a client ID / credential file drops
+// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 //
 // Takes a body of the `application/merge-patch+json` content type, and returns a wrapper object for the known response body format(s).
@@ -28190,6 +29430,113 @@ func (c *ClientWithResponses) ListApprovalsWithResponse(ctx context.Context, id 
 	return ParseListApprovalsResponse(rsp)
 }
 
+// DeleteTenantNotificationsWithResponse Stop the tenant's notifications (`twd notify rm`)
+//
+// Idempotent. Audited (`kind: notification_delete`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/notifications (the `DeleteTenantNotifications` operationId).
+func (c *ClientWithResponses) DeleteTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantNotificationsResponse, error) {
+	rsp, err := c.DeleteTenantNotifications(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTenantNotificationsResponse(rsp)
+}
+
+// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`twd notify`), without secrets
+//
+// ADR-approval-notifications. The webhook URL is shown as its origin
+// only (scheme and host): a chat webhook's path or query is its
+// credential. Header names only. A tenant that sends nothing has no
+// `webhook`. `404 unknown_tenant`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/notifications (the `GetTenantNotifications` operationId).
+func (c *ClientWithResponses) GetTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantNotificationsResponse, error) {
+	rsp, err := c.GetTenantNotifications(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTenantNotificationsResponse(rsp)
+}
+
+// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`twd notify set`)
+//
+// ADR-approval-notifications. When one of `events` happens in the
+// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// fires when a Workflow starts waiting for an approval (when mgmt
+// receives the host's audit record, usually within seconds). mgmt
+// dials the URL itself: a tailnet name, a `100.x` address or a
+// `*.ts.net` name over mgmt's tailnet node, anything else over the
+// host's network; loopback and link-local addresses are refused.
+// Delivery is tried 3 times; a final failure is audited
+// (`notification_failed`). The config is stored encrypted in mgmt
+// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// and query and the header values are never logged, audited or
+// returned. Audited (`kind: notification_put`, the URL's host and
+// header names).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+func (c *ClientWithResponses) PutTenantNotificationsWithBodyWithResponse(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutTenantNotificationsResponse, error) {
+	rsp, err := c.PutTenantNotificationsWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutTenantNotificationsResponse(rsp)
+}
+
+// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`twd notify set`)
+//
+// ADR-approval-notifications. When one of `events` happens in the
+// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// fires when a Workflow starts waiting for an approval (when mgmt
+// receives the host's audit record, usually within seconds). mgmt
+// dials the URL itself: a tailnet name, a `100.x` address or a
+// `*.ts.net` name over mgmt's tailnet node, anything else over the
+// host's network; loopback and link-local addresses are refused.
+// Delivery is tried 3 times; a final failure is audited
+// (`notification_failed`). The config is stored encrypted in mgmt
+// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// and query and the header values are never logged, audited or
+// returned. Audited (`kind: notification_put`, the URL's host and
+// header names).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
+func (c *ClientWithResponses) PutTenantNotificationsWithResponse(ctx context.Context, id TenantID, body PutTenantNotificationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantNotificationsResponse, error) {
+	rsp, err := c.PutTenantNotifications(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutTenantNotificationsResponse(rsp)
+}
+
+// TestTenantNotificationsWithResponse Send a test notification now (`twd notify test`)
+//
+// POSTs a `NotificationEvent` with `event: test` to the configured
+// webhook once, synchronously, and reports the outcome. Not retried.
+// Audited (`kind: notification_test`, the origin and the outcome).
+// `404 not_found` when no webhook is set.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/notifications/test (the `TestTenantNotifications` operationId).
+func (c *ClientWithResponses) TestTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*TestTenantNotificationsResponse, error) {
+	rsp, err := c.TestTenantNotifications(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestTenantNotificationsResponse(rsp)
+}
+
 // PurgeTenantObjectsWithResponse Purge terminal objects of a tenant
 //
 // Forgets the tenant's objects in the given terminal `state`s (default:
@@ -28208,6 +29555,49 @@ func (c *ClientWithResponses) PurgeTenantObjectsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParsePurgeTenantObjectsResponse(rsp)
+}
+
+// ListPublicNamesWithResponse List the public names a tenant owns
+//
+// ADR-029, red-team H10. A public workload is served at
+// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+// tailnet, not per tenant. The first tenant to deploy public routes
+// under a name owns it on that tailnet, across undeploys and
+// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+// the tenant is deleted. A deploy (or dry run) by another tenant on the
+// same tailnet is refused with `409 public_name_owned`. Ordered by
+// `(claimedAt, name)`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+func (c *ClientWithResponses) ListPublicNamesWithResponse(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*ListPublicNamesResponse, error) {
+	rsp, err := c.ListPublicNames(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPublicNamesResponse(rsp)
+}
+
+// ReleasePublicNameWithResponse Release a public name the tenant owns
+//
+// Red-team H10. Gives up the tenant's claim on a public name, so any
+// tenant on the tailnet can deploy public routes under it next. Only
+// a name nothing serves can be released: `409 public_name_in_use`
+// while the workload's latest deployment declares public routes or
+// its public node is live (undeploy it, or remove `"public"` from its
+// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+// does not own the name. Audited (`kind: public_name_release`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+func (c *ClientWithResponses) ReleasePublicNameWithResponse(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*ReleasePublicNameResponse, error) {
+	rsp, err := c.ReleasePublicName(ctx, id, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReleasePublicNameResponse(rsp)
 }
 
 // ListQueuesWithResponse List a tenant's queues
@@ -28544,24 +29934,6 @@ func (c *ClientWithResponses) PutTenantTelemetryWithResponse(ctx context.Context
 	return ParsePutTenantTelemetryResponse(rsp)
 }
 
-// CheckTenantWIFWithResponse Verify a wif tenant's trust credentials (diagnostic)
-//
-// A live diagnostic, not a state change: one fresh token exchange per
-// credential and a policy read with the lifecycle one
-// (`policy_file:read`). It is a `POST` because it performs work on the
-// control plane; it creates nothing. `400 bad_request` for non-wif tenants.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/tenants/{id}/wif-check (the `CheckTenantWIF` operationId).
-func (c *ClientWithResponses) CheckTenantWIFWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*CheckTenantWIFResponse, error) {
-	rsp, err := c.CheckTenantWIF(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCheckTenantWIFResponse(rsp)
-}
-
 // DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
@@ -28754,6 +30126,89 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseGetWorkloadLogsResponse(rsp)
+}
+
+// ListWorkloadPreviewsWithResponse A workload's running previews (`twd previews`)
+//
+// ADR-deploy-preview. The previews of the workload that are not
+// stopped, newest first. A preview is created by
+// `POST /v1/deployments` with `preview: true`: it runs as a workload
+// of its own, `<workload>--preview-<alias>`, with its own lease,
+// Durable Object storage and stores, and never joins the workload's
+// Tailscale Service or public routes. A workload without previews
+// answers an empty list.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+func (c *ClientWithResponses) ListWorkloadPreviewsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*ListWorkloadPreviewsResponse, error) {
+	rsp, err := c.ListWorkloadPreviews(ctx, id, workload, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkloadPreviewsResponse(rsp)
+}
+
+// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *ClientWithResponses) CreatePromotionWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error) {
+	rsp, err := c.CreatePromotionWithBody(ctx, id, workload, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePromotionResponse(rsp)
+}
+
+// CreatePromotionWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *ClientWithResponses) CreatePromotionWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error) {
+	rsp, err := c.CreatePromotion(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePromotionResponse(rsp)
 }
 
 // GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
@@ -29434,190 +30889,6 @@ func (c *ClientWithResponses) WhoAmIWithResponse(ctx context.Context, reqEditors
 		return nil, err
 	}
 	return ParseWhoAmIResponse(rsp)
-}
-
-// ParseGetOIDCConfigurationResponse parses an HTTP response from a GetOIDCConfigurationWithResponse call
-func ParseGetOIDCConfigurationResponse(rsp *http.Response) (*GetOIDCConfigurationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetOIDCConfigurationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OIDCConfiguration
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 404:
-		var headers GetOIDCConfigurationResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers404 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseGetJWKSResponse parses an HTTP response from a GetJWKSWithResponse call
-func ParseGetJWKSResponse(rsp *http.Response) (*GetJWKSResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetJWKSResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest JWKS
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 404:
-		var headers GetJWKSResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers404 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseGetTenantOIDCConfigurationResponse parses an HTTP response from a GetTenantOIDCConfigurationWithResponse call
-func ParseGetTenantOIDCConfigurationResponse(rsp *http.Response) (*GetTenantOIDCConfigurationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetTenantOIDCConfigurationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OIDCConfiguration
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 404:
-		var headers GetTenantOIDCConfigurationResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers404 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseGetTenantJWKSResponse parses an HTTP response from a GetTenantJWKSWithResponse call
-func ParseGetTenantJWKSResponse(rsp *http.Response) (*GetTenantJWKSResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetTenantJWKSResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest JWKS
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 404:
-		var headers GetTenantJWKSResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers404 = &headers
-	}
-
-	return response, nil
 }
 
 // ParseListAuditResponse parses an HTTP response from a ListAuditWithResponse call
@@ -34174,6 +35445,339 @@ func ParseListApprovalsResponse(rsp *http.Response) (*ListApprovalsResponse, err
 	return response, nil
 }
 
+// ParseDeleteTenantNotificationsResponse parses an HTTP response from a DeleteTenantNotificationsWithResponse call
+func ParseDeleteTenantNotificationsResponse(rsp *http.Response) (*DeleteTenantNotificationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTenantNotificationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers DeleteTenantNotificationsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers DeleteTenantNotificationsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers DeleteTenantNotificationsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetTenantNotificationsResponse parses an HTTP response from a GetTenantNotificationsWithResponse call
+func ParseGetTenantNotificationsResponse(rsp *http.Response) (*GetTenantNotificationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTenantNotificationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationConfig
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetTenantNotificationsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetTenantNotificationsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetTenantNotificationsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePutTenantNotificationsResponse parses an HTTP response from a PutTenantNotificationsWithResponse call
+func ParsePutTenantNotificationsResponse(rsp *http.Response) (*PutTenantNotificationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutTenantNotificationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationConfig
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers PutTenantNotificationsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers PutTenantNotificationsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers PutTenantNotificationsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers PutTenantNotificationsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseTestTenantNotificationsResponse parses an HTTP response from a TestTenantNotificationsWithResponse call
+func ParseTestTenantNotificationsResponse(rsp *http.Response) (*TestTenantNotificationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestTenantNotificationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationTestResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers TestTenantNotificationsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers TestTenantNotificationsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers TestTenantNotificationsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParsePurgeTenantObjectsResponse parses an HTTP response from a PurgeTenantObjectsWithResponse call
 func ParsePurgeTenantObjectsResponse(rsp *http.Response) (*PurgeTenantObjectsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -34258,6 +35862,196 @@ func ParsePurgeTenantObjectsResponse(rsp *http.Response) (*PurgeTenantObjectsRes
 		response.Headers404 = &headers
 	case true:
 		var headers PurgeTenantObjectsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListPublicNamesResponse parses an HTTP response from a ListPublicNamesWithResponse call
+func ParseListPublicNamesResponse(rsp *http.Response) (*ListPublicNamesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPublicNamesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PublicNamePage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListPublicNamesResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListPublicNamesResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListPublicNamesResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListPublicNamesResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseReleasePublicNameResponse parses an HTTP response from a ReleasePublicNameWithResponse call
+func ParseReleasePublicNameResponse(rsp *http.Response) (*ReleasePublicNameResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReleasePublicNameResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers ReleasePublicNameResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ReleasePublicNameResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ReleasePublicNameResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ReleasePublicNameResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
@@ -35454,103 +37248,6 @@ func ParsePutTenantTelemetryResponse(rsp *http.Response) (*PutTenantTelemetryRes
 	return response, nil
 }
 
-// ParseCheckTenantWIFResponse parses an HTTP response from a CheckTenantWIFWithResponse call
-func ParseCheckTenantWIFResponse(rsp *http.Response) (*CheckTenantWIFResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CheckTenantWIFResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest WIFCheckResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest BadRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Forbidden
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 400:
-		var headers CheckTenantWIFResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers400 = &headers
-	case rsp.StatusCode == 403:
-		var headers CheckTenantWIFResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers403 = &headers
-	case rsp.StatusCode == 404:
-		var headers CheckTenantWIFResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.Headers404 = &headers
-	case true:
-		var headers CheckTenantWIFResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.TwdError = &value
-		}
-		response.HeadersDefault = &headers
-	}
-
-	return response, nil
-}
-
 // ParseDecideApprovalResponse parses an HTTP response from a DecideApprovalWithResponse call
 func ParseDecideApprovalResponse(rsp *http.Response) (*DecideApprovalResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -36046,6 +37743,234 @@ func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse,
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadLogsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListWorkloadPreviewsResponse parses an HTTP response from a ListWorkloadPreviewsWithResponse call
+func ParseListWorkloadPreviewsResponse(rsp *http.Response) (*ListWorkloadPreviewsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkloadPreviewsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreviewList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListWorkloadPreviewsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListWorkloadPreviewsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListWorkloadPreviewsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListWorkloadPreviewsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreatePromotionResponse parses an HTTP response from a CreatePromotionWithResponse call
+func ParseCreatePromotionResponse(rsp *http.Response) (*CreatePromotionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePromotionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreflightResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Promotion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 202:
+		var headers CreatePromotionResponse202Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uri-reference"}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers202 = &headers
+	case rsp.StatusCode == 400:
+		var headers CreatePromotionResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers CreatePromotionResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers CreatePromotionResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers CreatePromotionResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers CreatePromotionResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

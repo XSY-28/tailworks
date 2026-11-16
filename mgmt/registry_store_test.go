@@ -17,7 +17,7 @@ func TestStoreRegistryMeta(t *testing.T) {
 		ctx := context.Background()
 		const d1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 		const d2 = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
-		if err := s.CreateTenant(ctx, Tenant{ID: "tna", Tailnet: "a.ts.net", MintMode: MintAPIKey, RegistrationsPerMinute: 1, MaxObjects: 1, CreatedAt: 1}); err != nil {
+		if err := s.CreateTenant(ctx, Tenant{ID: "tna", Tailnet: "a.ts.net", MintMode: MintOAuth, RegistrationsPerMinute: 1, MaxObjects: 1, CreatedAt: 1}); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.LinkBlob(ctx, "tna/app", d1, 42); err != nil {
@@ -79,7 +79,7 @@ func TestStoreRegistryMeta(t *testing.T) {
 			t.Fatal("tenant delete dropped public/")
 		}
 		// "_" in a tenant ID is not a wildcard: deleting tn_a leaves tnxa's.
-		if err := s.CreateTenant(ctx, Tenant{ID: "tn_a", Tailnet: "c.ts.net", MintMode: MintAPIKey, RegistrationsPerMinute: 1, MaxObjects: 1, CreatedAt: 1}); err != nil {
+		if err := s.CreateTenant(ctx, Tenant{ID: "tn_a", Tailnet: "c.ts.net", MintMode: MintOAuth, RegistrationsPerMinute: 1, MaxObjects: 1, CreatedAt: 1}); err != nil {
 			t.Fatal(err)
 		}
 		s.LinkBlob(ctx, "tn_a/app", d1, 1)

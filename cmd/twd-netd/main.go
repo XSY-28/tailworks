@@ -2,7 +2,7 @@
 // socket, the attributed egress proxy, and a local control socket.
 //
 //	twd-netd -control-url URL -state-dir DIR -run-dir DIR \
-//	  [-authkey-file F | -mint-api-key-file F -tailnet T -tags tag:x] \
+//	  [-authkey-file F | -mint-oauth-client-file F -tailnet T -tags tag:x] \
 //	  [-upstream unix-socket] [-objects a,b,c] [-rejoin]
 //
 // Sockets (all under -run-dir, which is forced to 0700):
@@ -52,9 +52,9 @@ func run() error {
 		runDir        = flag.String("run-dir", "", "runtime dir for egress.sock and ctl.sock (required)")
 		upstream      = flag.String("upstream", "", "unix socket of the workerd ingress (cfBlobHeader=x-twd-cf)")
 		authKeyFile   = flag.String("authkey-file", "", "file holding a static auth key (raw, or TS_AUTHKEY=...)")
-		mintKeyFile   = flag.String("mint-api-key-file", "", "file with TS_API_KEY=...; mint one single-use key per object via the API")
-		tailnet       = flag.String("tailnet", "", "tailnet name for -mint-api-key-file / -delete-devices (e.g. tail7906d5.ts.net)")
-		deleteDevices = flag.Bool("delete-devices", false, "on kill, delete the device via the API (needs -mint-api-key-file)")
+		mintKeyFile   = flag.String("mint-oauth-client-file", "", "0600 file with TS_OAUTH_CLIENT_ID=... and TS_OAUTH_CLIENT_SECRET=tskey-client-...; mint one single-use key per object with the OAuth client")
+		tailnet       = flag.String("tailnet", "", "tailnet name for -mint-oauth-client-file / -delete-devices (e.g. tail7906d5.ts.net)")
+		deleteDevices = flag.Bool("delete-devices", false, "on kill, delete the device via the API (needs -mint-oauth-client-file and the client's devices:core scope)")
 		tags          = flag.String("tags", "", "comma-separated tags for object nodes")
 		ephemeral     = flag.Bool("ephemeral", false, "register object nodes as ephemeral")
 		objects       = flag.String("objects", "", "comma-separated object IDs to create at start")
@@ -89,7 +89,7 @@ func run() error {
 	}
 	switch {
 	case *authKeyFile != "" && *mintKeyFile != "":
-		return errors.New("use one of -authkey-file and -mint-api-key-file")
+		return errors.New("use one of -authkey-file and -mint-oauth-client-file")
 	case *authKeyFile != "":
 		k, err := readKeyFile(*authKeyFile)
 		if err != nil {
@@ -190,15 +190,17 @@ func readKeyFile(path string) (string, error) {
 	return k, nil
 }
 
-func apiClient(keyFile, tailnet string) (*tsapi.Client, error) {
+// apiClient is a Tailscale API client authenticated by the OAuth client in
+// file (0600; re-read at each token exchange, never logged).
+func apiClient(file, tailnet string) (*tsapi.Client, error) {
 	if tailnet == "" || tailnet == "-" {
 		return nil, errors.New("-tailnet must name the tailnet explicitly")
 	}
-	k, err := tsapi.LoadEnvFile(keyFile, "TS_API_KEY")
-	if err != nil {
+	if _, err := tsapi.LoadOAuthFile(file); err != nil {
 		return nil, err
 	}
-	return &tsapi.Client{Tailnet: tailnet, APIKey: k}, nil
+	src := &tsapi.OAuthSource{Load: func() (tsapi.OAuthCredentials, error) { return tsapi.LoadOAuthFile(file) }}
+	return &tsapi.Client{Tailnet: tailnet, Tokens: src}, nil
 }
 
 func ctlMux(reg *netd.Registry) http.Handler {

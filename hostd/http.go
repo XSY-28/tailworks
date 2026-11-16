@@ -479,7 +479,9 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				if n >= maxTenantNotesPerCall {
 					break
 				}
-				h.audit.add(TenantAuditRecord(o.ID, newTraceID(), o.ActingFor, rec))
+				if !h.audit.add(TenantAuditRecord(o.ID, newTraceID(), o.ActingFor, rec)) {
+					break // over the object's note bucket, or the queue is backed up (H03)
+				}
 				n++
 			}
 			writeJSON(w, 200, map[string]any{"ok": true, "accepted": n, "kind": kindTenantNote})
@@ -644,6 +646,10 @@ type WorkloadStatus struct {
 	RequestLog string `json:",omitempty"`
 	// Public is the workload's public ingress (ADR-029), if any.
 	Public *PublicStatus `json:",omitempty"`
+
+	// Restarts counts the workerd's exits in a row (restart.go; reset after
+	// it ran 30 s). Status is "crashloop" from the second.
+	Restarts int `json:",omitempty"`
 }
 
 // PublicStatus is a workload's public node as this host runs it.
@@ -741,6 +747,7 @@ func (h *Host) Status() StatusView {
 			if w.active.cmd != nil && w.active.cmd.Process != nil {
 				ws.PID = w.active.cmd.Process.Pid
 			}
+			ws.Restarts = w.active.restarts
 			if w.active.tier != "microvm" {
 				ws.Sandbox, ws.SandboxProfile = sandboxOf(w.active.profile), w.active.profile
 				ws.LoopbackPorts = w.active.loopPorts

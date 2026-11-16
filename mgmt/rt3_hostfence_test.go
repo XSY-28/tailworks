@@ -20,11 +20,11 @@ import (
 // deployment status, or write audit records about its objects. h1's own
 // calls keep working, with and without the epoch.
 func TestRT3_HostWritesAreLeaseBound(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1, h2 := e.c, e.asHost("h1"), e.asHost("h2")
 	ctx := context.Background()
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	pub1, key1, _ := ed25519.GenerateKey(rand.Reader)
 	pub2, key2, _ := ed25519.GenerateKey(rand.Reader)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}, "auditPubKey": base64.StdEncoding.EncodeToString(pub1)}, nil)

@@ -3,6 +3,7 @@
 #
 #   dist/twd-<version>-<os>-<arch>.tar.gz   (default targets: darwin-arm64 linux-arm64 linux-amd64)
 #   dist/SHA256SUMS
+#   dist/SHA256SUMS.sig                     (signed builds: TWD_RELEASE_SIGNING_KEY, below)
 #
 # Each tarball holds: bin/{twd,twd-mgmt,twd-hostd,twd-netd} (CGO_ENABLED=0,
 # esbuild built into twd), bin/workerd (the pinned npm
@@ -10,7 +11,7 @@
 # package-lock.json), share/twd/create-twd (templates + build.mjs),
 # share/twd/node_modules (the templates' runtime deps, vendored: deploy works
 # offline, no npm/node), share/twd/catalog.json (the release catalog,
-# internal/catalog), install.sh, VERSION, SHA256SUMS, INSTALL.md.
+# internal/catalog), install.sh, VERSION, SHA256SUMS (+ SHA256SUMS.sig), INSTALL.md.
 # linux tarballs also hold bin/twd-vmhelper (the microVM tier's privileged
 # helper; `sudo twd host setup --microvm` installs a root-owned copy) and,
 # if TWD_VM_ASSETS_<arch> names a directory (make vm-assets, in Lima), the
@@ -49,6 +50,24 @@ for p in tailnet mcp; do
 done
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+
+# Signing (issue #71): with TWD_RELEASE_SIGNING_KEY (an Ed25519 private key
+# file; release.yml passes the TWD_RELEASE_SIGNING_KEY secret), every
+# SHA256SUMS (each tarball's and dist/'s) gets SHA256SUMS.sig, checked
+# against the pinned keys in internal/releasesig/allowed_signers.
+# TWD_RELEASE_SIGN=1 makes the key required; without one the build is
+# unsigned (install.sh accepts that only for local versions, "x.y.z-…").
+if [ -z "${TWD_RELEASE_SIGNING_KEY:-}" ]; then
+	[ "${TWD_RELEASE_SIGN:-0}" != 1 ] || { echo "release: TWD_RELEASE_SIGN=1 but no TWD_RELEASE_SIGNING_KEY"; exit 1; }
+	echo "release: WARNING: unsigned build (no TWD_RELEASE_SIGNING_KEY)"
+fi
+sign() { # file: write file.sig
+	[ -n "${TWD_RELEASE_SIGNING_KEY:-}" ] || return 0
+	rm -f "$1.sig"
+	ssh-keygen -q -Y sign -f "$TWD_RELEASE_SIGNING_KEY" -n twd-release "$1"
+	ssh-keygen -Y verify -f "$ROOT/internal/releasesig/allowed_signers" -I twd-release -n twd-release -s "$1.sig" <"$1" >/dev/null ||
+		{ echo "release: $1.sig does not verify against internal/releasesig/allowed_signers (is the signing key pinned there?)"; exit 1; }
+}
 
 # vendored node_modules (same for every target: pure JS)
 VNM=$CACHE/vendor
@@ -202,7 +221,9 @@ EOF
 	xattr -cr "$st" 2>/dev/null || true
 
 	(cd "$st" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | sed 's|^\./||' | while IFS= read -r f; do sha256 "$f"; done >SHA256SUMS)
+	sign "$st/SHA256SUMS"
 	COPYFILE_DISABLE=1 tar -czf "$DIST/$name.tar.gz" -C "$DIST/stage" "$name"
 	ls -lh "$DIST/$name.tar.gz" | awk '{print "release: " $NF " " $5}'
 done
 (cd "$DIST" && sha256 twd-"$VERSION"-*.tar.gz >SHA256SUMS && cat SHA256SUMS)
+sign "$DIST/SHA256SUMS"

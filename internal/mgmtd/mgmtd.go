@@ -7,9 +7,8 @@
 // node when TSNetHostname is set, and serves the /v1 API on it behind
 // WhoIs (TailnetHandler), optionally as a replica of a Tailscale Service
 // (TSNetService), publishes the node's loopback proxy for the local twd
-// CLI, and in WIF mode serves the OIDC issuer over Funnel on the issuer's
-// OWN node (IssuerTSNetHostname; mgmt's node never serves Funnel). With
-// LocalDev it also serves the unix socket guarded by the per-host token.
+// CLI. mgmt serves nothing over Funnel. With LocalDev it also serves the
+// unix socket guarded by the per-host token.
 package mgmtd
 
 import (
@@ -31,7 +30,6 @@ import (
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/internal/tssvc"
 	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tsnet"
@@ -48,7 +46,7 @@ const (
 
 // Options mirrors twd-mgmt's flags, one field per flag (see cmd/twd-mgmt).
 type Options struct {
-	// StateDir (0700) holds the db, custody, issuer key and the tsnet state.
+	// StateDir (0700) holds the db, custody and the tsnet state.
 	StateDir string
 	// LocalDev also serves the API on Socket, guarded by the per-host token
 	// in HostTokenFile (rotated at start with RotateHostToken).
@@ -62,23 +60,10 @@ type Options struct {
 	DBFile string
 	// TSAPIURL is the Tailscale API base URL (tsapi.DefaultBaseURL).
 	TSAPIURL string
-	// WIF: IssuerURL is the public https issuer origin (default with
-	// Funnel: https://<mgmt node>); IssuerListen also serves the issuer on
-	// a local address (plain HTTP); Funnel serves it publicly on the
-	// issuer's own tsnet node IssuerTSNetHostname (tag mgmt.IssuerTag,
-	// state in IssuerTSNetDir, default <StateDir>/issuer-tsnet; first join
-	// with TS_AUTHKEY=… from IssuerTSNetAuthKeyFile, else the state must be
-	// logged in already). mgmt's own node never uses Funnel.
-	IssuerURL              string
-	IssuerListen           string
-	Funnel                 bool
-	IssuerTSNetHostname    string
-	IssuerTSNetDir         string
-	IssuerTSNetAuthKeyFile string
 	// TSNetHostname names mgmt's own tailnet node (required unless
 	// LocalDev); TSNetControlURL is required with it. TSNetAuthKeyFile
 	// holds TS_AUTHKEY=… for the first join (else the node state must be
-	// logged in already: twd up does the interactive login). TSNetTags are
+	// logged in already: twd up joins it first). TSNetTags are
 	// the tags the node advertises (nil = mgmt.MgmtTag; empty = none).
 	// TSNetService also hosts a Tailscale Service (svc:…) on :80,
 	// advertised only while this replica's store answers. TSNetTLS also
@@ -136,10 +121,6 @@ type Runtime struct {
 	Server *mgmt.Server
 	TS     *tsnet.Server
 	Self   mgmt.SelfInfo
-	// Issuer is the WIF OIDC issuer (nil unless an issuer URL is set);
-	// IssuerTS its own Funnel node (nil unless Funnel).
-	Issuer   *mgmt.Issuer
-	IssuerTS *tsnet.Server
 
 	log      *slog.Logger
 	store    *mgmt.SQLStore
@@ -233,7 +214,6 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	// Operator-tailnet node (optional).
 	var ts *tsnet.Server
 	self := mgmt.SelfInfo{}
-	issuerURL := o.IssuerURL
 	if o.TSNetService != "" {
 		if o.TSNetHostname == "" {
 			return nil, errors.New("-tsnet-service needs -tsnet-hostname")
@@ -277,11 +257,6 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			self.Tailnet = st.CurrentTailnet.MagicDNSSuffix
 		}
 		self.HTTPS = o.TSNetTLS && len(ts.CertDomains()) > 0
-		if o.Funnel && issuerURL == "" {
-			if doms := ts.CertDomains(); len(doms) > 0 {
-				issuerURL = "https://" + doms[0]
-			}
-		}
 		tags := []string{}
 		if st.Self.Tags != nil {
 			tags = st.Self.Tags.AsSlice()
@@ -289,17 +264,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		log.Info("tailnet node", "name", self.DNSName, "tailnet", self.Tailnet, "tags", tags, "https", self.HTTPS, "ips", st.TailscaleIPs)
 	}
 
-	var issuer *mgmt.Issuer
-	if issuerURL != "" {
-		// Shared by every replica through the store and custody (mm-loop F11b).
-		if issuer, err = mgmt.LoadSharedIssuer(ctx, issuerURL, filepath.Join(o.StateDir, "issuer.key"), store, custody); err != nil {
-			return nil, err
-		}
-		log.Info("OIDC issuer", "base", issuer.BaseURL)
-	}
-	rt.Issuer = issuer
-
-	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: o.TSAPIURL, Issuer: issuer},
+	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: o.TSAPIURL},
 		IDSecret: secret, ReplicaID: replicaID, ReapInterval: o.ReapInterval, DeviceDeleteDelay: o.DeviceDeleteDelay, Log: log,
 		OperatorTailnet: self.Tailnet, OperatorControlURL: o.TSNetControlURL, NoMirror: o.NoMirror, WarmKeys: o.WarmKeys, WarmKeyTTL: o.WarmKeyTTL,
 		Version: o.Version, ReleaseDir: filepath.Join(o.StateDir, "releases")}
@@ -334,9 +299,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		return nil, err
 	}
 	rt.M = m
-	if issuer != nil {
-		self.Issuer = issuer.BaseURL
-	}
+	m.SetConsoleURL(self.ConsoleURL()) // notification deep links (mgmt/notify.go)
 	api := &mgmt.Server{M: m, Self: self, Version: o.Version}
 	if len(o.Admins) > 0 {
 		api.Admins = o.Admins
@@ -467,77 +430,13 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			api.Listeners = append(api.Listeners, "tsnet:443")
 			serve("tsnet-tls", tln, th)
 			// Fetch the node's certificate now, in the background: a new
-			// node name's first certificate takes 30–100 s, and without
-			// Funnel (oauth mode) nothing else would request it before the
-			// first `twd link`, whose TLS handshake would time out.
+			// node name's first certificate takes 30–100 s, and nothing
+			// else would request it before the first `twd link`, whose TLS
+			// handshake would time out.
 			go prefetchCert(ts, self.DNSName, log)
 		} else if o.TSNetTLS {
 			log.Warn("HTTPS is not enabled on this tailnet: the API is served on :80 only; `twd link` uses plain HTTP (WireGuard-encrypted, WhoIs-authenticated)")
 		}
-	}
-	if o.Funnel {
-		// The WIF issuer is public, so it runs on its OWN node: mgmt's node
-		// (the API, WhoIs admins, the signing key's process identity) is
-		// never Funnel-capable and never listens on Funnel.
-		if issuer == nil {
-			return nil, errors.New("-funnel needs an issuer URL")
-		}
-		if o.IssuerTSNetHostname == "" || o.TSNetControlURL == "" {
-			return nil, errors.New("-funnel needs -issuer-tsnet-hostname and -tsnet-control-url (the issuer runs on its own node, never on mgmt's)")
-		}
-		if o.IssuerTSNetHostname == o.TSNetHostname {
-			return nil, errors.New("-issuer-tsnet-hostname must differ from -tsnet-hostname: mgmt's node never serves Funnel")
-		}
-		dir := o.IssuerTSNetDir
-		if dir == "" {
-			dir = filepath.Join(o.StateDir, "issuer-tsnet")
-		}
-		if filepath.Clean(dir) == filepath.Clean(filepath.Join(o.StateDir, "tsnet")) {
-			return nil, errors.New("-issuer-tsnet-dir must not be mgmt's own node state")
-		}
-		its := &tsnet.Server{Hostname: o.IssuerTSNetHostname, Dir: dir, ControlURL: o.TSNetControlURL, AdvertiseTags: []string{mgmt.IssuerTag},
-			Logf: func(string, ...any) {}}
-		if o.IssuerTSNetAuthKeyFile != "" {
-			k, err := tsapi.LoadEnvFile(o.IssuerTSNetAuthKeyFile, "TS_AUTHKEY")
-			if err != nil {
-				return nil, err
-			}
-			its.AuthKey = k
-		}
-		rt.IssuerTS = its
-		rt.cleanups = append(rt.cleanups, func() { its.Close() })
-		uctx, ucancel := context.WithTimeout(ctx, 2*time.Minute)
-		_, err := its.Up(uctx)
-		ucancel()
-		if err != nil {
-			return nil, fmt.Errorf("issuer node %s: %w (twd up --wif joins it)", o.IssuerTSNetHostname, err)
-		}
-		fl, err := its.ListenFunnel("tcp", ":443", tsnet.FunnelOnly())
-		if err != nil {
-			return nil, fmt.Errorf("funnel on the issuer node %s: %w", o.IssuerTSNetHostname, err)
-		}
-		if ilc, err := its.LocalClient(); err == nil {
-			if st, err := ilc.StatusWithoutPeers(ctx); err == nil && st.Self != nil {
-				// A new name's first certificate takes longer than a Funnel
-				// client's TLS handshake: warm it now, or every early
-				// handshake (Tailscale's token-exchange verifier fetching the
-				// JWKS) fails until issuance finishes.
-				netd.PrefetchCert(ilc, st.Self.DNSName, log.With("node", o.IssuerTSNetHostname))
-			}
-		}
-		api.Listeners = append(api.Listeners, "issuer-funnel:443")
-		log.Info("WIF issuer served over Funnel on its own node", "node", o.IssuerTSNetHostname, "tag", mgmt.IssuerTag)
-		serve("issuer-funnel", fl, issuer.Handler())
-	}
-	if o.IssuerListen != "" {
-		if issuer == nil {
-			return nil, errors.New("-issuer-listen needs -issuer-url")
-		}
-		ln, err := net.Listen("tcp", o.IssuerListen)
-		if err != nil {
-			return nil, err
-		}
-		serve("issuer", ln, issuer.Handler())
 	}
 	if len(rt.servers) == 0 {
 		return nil, errors.New("no listeners: set -tsnet-hostname (normal operation) or -local-dev")
@@ -554,8 +453,8 @@ func (rt *Runtime) Handler() http.Handler { return rt.handler }
 func (rt *Runtime) Errs() <-chan error { return rt.errc }
 
 // Close stops mgmt in twd-mgmt's shutdown order: withdraw the Service
-// advertisement, stop the listeners (5 s grace), close the issuer node and
-// remove the loopback descriptor and socket, close mgmt (flushes pending
+// advertisement, stop the listeners (5 s grace), remove the loopback
+// descriptor and socket, close mgmt (flushes pending
 // device deletes), then its node and the store. Safe on a partially
 // started runtime.
 func (rt *Runtime) Close() error {
@@ -580,7 +479,6 @@ func (rt *Runtime) Close() error {
 		rt.cleanups[i]()
 	}
 	rt.cleanups = nil
-	rt.IssuerTS = nil
 	if rt.M != nil {
 		rt.M.Close()
 		rt.M = nil
@@ -597,9 +495,9 @@ func (rt *Runtime) Close() error {
 }
 
 // prefetchCert fetches the node's certificate in the background: a new
-// node name's first certificate takes 30–100 s, and without Funnel (oauth
-// mode) nothing else would request it before the first `twd link`, whose
-// TLS handshake would time out.
+// node name's first certificate takes 30–100 s, and nothing else would
+// request it before the first `twd link`, whose TLS handshake would time
+// out.
 func prefetchCert(ts *tsnet.Server, dnsName string, log *slog.Logger) {
 	lc, err := ts.LocalClient()
 	if err != nil || dnsName == "" {

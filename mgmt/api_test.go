@@ -41,11 +41,7 @@ type fakeTS struct {
 	policy         string // overrides samplePolicy when set (before the first fetch)
 	notModified    int
 	rateLimitNext  int // respond 429 to the next N key creates
-	tokenExchanges int
-	// WIF verification
-	issuerJWKS func() []byte
-	wantAud    string
-	apiToken   string
+	apiToken       string
 	// OAuth clients (M12): client ID → its secret and scopes.
 	oauthClients   map[string]fakeOAuthClient
 	oauthTokens    map[string]string // access token → client ID
@@ -86,19 +82,6 @@ func newFakeTS(t *testing.T) *fakeTS {
 func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if r.URL.Path == "/api/v2/oauth/token-exchange" {
-		r.ParseForm()
-		f.tokenExchanges++
-		claims, err := VerifyJWT(r.Form.Get("jwt"), f.issuerJWKS(), time.Now())
-		if err != nil || claims["aud"] != "api.tailscale.com/"+r.Form.Get("client_id") || !strings.HasPrefix(claims["sub"].(string), "twd:tenant:") ||
-			!strings.Contains(claims["iss"].(string), "/t/") {
-			w.WriteHeader(401)
-			fmt.Fprintf(w, `{"message":"invalid token: %v"}`, err)
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]any{"access_token": "wif-access-" + r.Form.Get("client_id"), "expires_in": 3600})
-		return
-	}
 	if r.URL.Path == "/api/v2/oauth/token" {
 		r.ParseForm()
 		c, ok := f.oauthClients[r.Form.Get("client_id")]
@@ -114,17 +97,13 @@ func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if _, isOAuth := f.oauthTokens[auth]; auth != f.apiToken && !strings.HasPrefix(auth, "wif-access-") && !isOAuth {
+	if _, isOAuth := f.oauthTokens[auth]; auth != f.apiToken && !isOAuth {
 		w.WriteHeader(401)
 		w.Write([]byte(`{"message":"invalid or expired token"}`))
 		return
 	}
 	switch {
 	case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/keys"):
-		if strings.HasPrefix(auth, "wif-access-") && auth != "wif-access-mint-client" {
-			w.WriteHeader(403) // only the mint credential has auth_keys
-			return
-		}
 		if !f.oauthScope(auth, "auth_keys") {
 			w.WriteHeader(403)
 			return
@@ -154,7 +133,7 @@ func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "DELETE" && strings.Contains(r.URL.Path, "/keys/"):
 		f.deletedKeys = append(f.deletedKeys, r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:])
 	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/api/v2/device/"):
-		if auth == "wif-access-mint-client" || !f.oauthScope(auth, "devices:core") {
+		if !f.oauthScope(auth, "devices:core") {
 			w.WriteHeader(403)
 			w.Write([]byte(`{"message":"insufficient scope"}`))
 			return
@@ -439,10 +418,13 @@ type testEnv struct {
 	sock    string
 }
 
-func newTestEnv(t *testing.T, issuer *Issuer) *testEnv { return newTestEnvWith(t, issuer, nil) }
+// newTestEnv is mgmt behind its /v1 API with a fake Tailscale API. keyFile
+// is an OAuth client file (client envOAuthClient, every scope) for
+// tenants: {"mintMode": "oauth", "oauthClientFile": e.keyFile}.
+func newTestEnv(t *testing.T) *testEnv { return newTestEnvWith(t, nil) }
 
 // newTestEnvWith is newTestEnv with the Config adjusted by mutate.
-func newTestEnvWith(t *testing.T, issuer *Issuer, mutate func(*Config)) *testEnv {
+func newTestEnvWith(t *testing.T, mutate func(*Config)) *testEnv {
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("/tmp", "twd-mgmt-test-") // short path: unix socket limit
 	if err != nil {
@@ -450,8 +432,8 @@ func newTestEnvWith(t *testing.T, issuer *Issuer, mutate func(*Config)) *testEnv
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	ts := newFakeTS(t)
-	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+ts.apiToken+"\n"), 0o600)
+	ts.oauthClients[envOAuthClient] = fakeOAuthClient{secret: fakeClientSecret(envOAuthClient), scopes: envOAuthScopes}
+	keyFile := writeTestOAuthFile(t, filepath.Join(dir, "oauth.env"))
 	var st *SQLStore
 	if os.Getenv("TWD_TEST_API_POSTGRES") != "" {
 		st = storesUnderTest(t)["postgres"] // fresh schema
@@ -470,7 +452,7 @@ func newTestEnvWith(t *testing.T, issuer *Issuer, mutate func(*Config)) *testEnv
 		t.Fatal(err)
 	}
 	logs := &bytes.Buffer{}
-	cfg := Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL, Issuer: issuer},
+	cfg := Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL},
 		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Hour, PolicyMaxAge: time.Minute,
 		Log: slog.New(slog.NewTextHandler(&lockedWriter{w: logs}, nil))}
 	if mutate != nil {
@@ -530,10 +512,10 @@ func (e *testEnv) asHost(id string) *apiClient {
 // object goes back to pending, a new key is minted under the SAME hostname,
 // the credential is released again, and /ready records the new node ID.
 func TestRemintAfterRejectedRejoin(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, nil)
@@ -586,13 +568,13 @@ func TestRemintAfterRejectedRejoin(t *testing.T) {
 }
 
 func TestAPIEndToEnd(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 
 	var tn struct{ TenantID string }
-	c.fail("POST", "/v1/tenants", map[string]any{"tailnet": "-", "mintMode": "apikey", "apiKeyFile": e.keyFile}, 400, "bad_request")
-	c.fail("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "wif", "wifClientID": "x"}, 400, "bad_request")
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.fail("POST", "/v1/tenants", map[string]any{"tailnet": "-", "mintMode": "oauth", "oauthClientFile": e.keyFile}, 400, "bad_request")
+	c.fail("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "wif"}, 400, "mint_mode_removed")
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	var tns []Tenant
 	c.items("/v1/tenants", &tns)
 	if len(tns) != 1 || tns[0].RegistrationsPerMinute != 200 || tns[0].MaxObjects != 1000 {
@@ -806,10 +788,10 @@ func TestAPIEndToEnd(t *testing.T) {
 }
 
 func TestAPIThrottleBackoffAndTTLReaper(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile, "registrationsPerMinute": 120}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile, "registrationsPerMinute": 120}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}}, nil)
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w", "bundle": noConfigBundle(t), "namespaces": []ClassConfig{
 		{Class: "A", Tags: []string{"tag:twd-agent-support"}}, {Class: "B", Tags: []string{"tag:twd-agent-support-sub"}, TTL: "1s"}}}, nil)
@@ -850,7 +832,7 @@ func TestAPIThrottleBackoffAndTTLReaper(t *testing.T) {
 }
 
 func TestAPIHostAuditChain(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	h1 := e.asHost("h1")
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}, "auditPubKey": base64.StdEncoding.EncodeToString(pub)}, nil)
@@ -901,7 +883,7 @@ func TestAPIHostAuditChain(t *testing.T) {
 }
 
 func TestTailnetAuth(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	srv := &Server{M: e.m, Admins: []string{"ross@example.com"}, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
@@ -936,7 +918,7 @@ func TestTailnetAuth(t *testing.T) {
 	// The operator tenant: twd host add mints the join key and the one-time
 	// registration secret through it (M1).
 	var tn struct{ TenantID string }
-	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	var hj1, hj2 struct{ RegistrationSecret string }
 	e.c.ok("POST", "/v1/hosts", map[string]any{"hostID": "h1", "tenantID": tn.TenantID}, &hj1)
 	e.c.ok("POST", "/v1/hosts", map[string]any{"hostID": "h2", "tenantID": tn.TenantID}, &hj2)
@@ -1046,80 +1028,11 @@ func TestTailnetAuth(t *testing.T) {
 	}
 }
 
-func TestWIFMintPath(t *testing.T) {
-	dir := t.TempDir()
-	is, err := LoadOrCreateIssuer("https://twd-mgmt.example.ts.net", filepath.Join(dir, "issuer.key"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := newTestEnv(t, is)
-	jwks, _ := json.Marshal(is.JWKS())
-	e.ts.issuerJWKS = func() []byte { return jwks }
-	c, h1 := e.c, e.asHost("h1")
-	var tn struct {
-		TenantID string
-		WIF      map[string]string
-	}
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "wif", "wifClientID": "mint-client", "wifLifecycleClientID": "life-client"}, &tn)
-	if tn.WIF["issuer"] != "https://twd-mgmt.example.ts.net/t/"+tn.TenantID || tn.WIF["mintSubject"] != "twd:tenant:"+tn.TenantID+":mint" {
-		t.Fatalf("wif info %v", tn.WIF)
-	}
-	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}}, nil)
-	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w", "bundle": noConfigBundle(t), "namespaces": []ClassConfig{{Class: "A", Tags: []string{"tag:ttest"}}}}, nil)
-	var a CreateObjectResponse
-	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "A", "objectName": "a"}, &a)
-	var cred Credential
-	h1.ok("POST", "/v1/objects/"+a.ObjectID+"/credentials?epoch=1", nil, &cred)
-	if !strings.HasPrefix(cred.AuthKey, "tskey-auth-") {
-		t.Fatal("no key via WIF")
-	}
-	h1.ok("PATCH", "/v1/objects/"+a.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nW"}, nil)
-	var kr KillResult
-	c.ok("DELETE", "/v1/objects/"+a.ObjectID+killQuery(false, "t"), nil, &kr)
-	if len(kr.DevicesDeleted) != 1 || e.ts.devicesDeleted()[0] != "nW" {
-		t.Fatalf("lifecycle delete via WIF: %+v", kr)
-	}
-	if e.ts.tokenExchanges != 2 { // one per credential (mint, lifecycle), cached afterwards
-		t.Fatalf("token exchanges %d", e.ts.tokenExchanges)
-	}
-	// wif-check: fresh exchanges for both credentials, policy read via lifecycle.
-	var chk WIFCheckResult
-	c.ok("POST", "/v1/tenants/"+tn.TenantID+"/wif-check", nil, &chk)
-	if !chk.Mint || chk.Lifecycle != "ok" || !chk.PolicyRead || chk.Issuer != tn.WIF["issuer"] {
-		t.Fatalf("wif-check %+v", chk)
-	}
-	if e.ts.tokenExchanges != 4 {
-		t.Fatalf("wif-check should exchange afresh: %d", e.ts.tokenExchanges)
-	}
-	// Re-keying: an apikey tenant switches to wif with new client IDs; no lifecycle → "absent".
-	var tn2 struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "u.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn2)
-	c.fail("POST", "/v1/tenants/"+tn2.TenantID+"/wif-check", nil, 400, "bad_request")
-	c.fail("PATCH", "/v1/tenants/"+tn2.TenantID, map[string]any{"mintMode": "wif"}, 400, "bad_request")
-	var up struct {
-		MintMode string
-		WIF      map[string]string
-	}
-	c.ok("PATCH", "/v1/tenants/"+tn2.TenantID, map[string]any{"mintMode": "wif", "wifClientID": "mint-client"}, &up)
-	if up.MintMode != "wif" || up.WIF["mintSubject"] != "twd:tenant:"+tn2.TenantID+":mint" {
-		t.Fatalf("wif update %+v", up)
-	}
-	c.ok("POST", "/v1/tenants/"+tn2.TenantID+"/wif-check", nil, &chk)
-	if !chk.Mint || chk.Lifecycle != "absent" || chk.PolicyRead {
-		t.Fatalf("wif-check after update %+v", chk)
-	}
-	var t2 Tenant
-	c.ok("GET", "/v1/tenants/"+tn2.TenantID, nil, &t2)
-	if t2.MintMode != MintWIF || t2.WIFClientID != "mint-client" {
-		t.Fatalf("tenant after wif update %+v", t2)
-	}
-}
-
 func TestKillWhileJoining(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}}, nil)
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w", "bundle": noConfigBundle(t), "namespaces": []ClassConfig{{Class: "A", Tags: []string{"tag:ttest"}}}}, nil)
 	var a CreateObjectResponse
@@ -1150,10 +1063,10 @@ func TestKillWhileJoining(t *testing.T) {
 // them; a create of the same name is then a new pending object, and the
 // deployment's endpoint no longer reads "killed". Live objects stay.
 func TestPurgeAfterKill(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}}, nil)
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "bundle": noConfigBundle(t),
@@ -1221,10 +1134,10 @@ func TestPurgeAfterKill(t *testing.T) {
 // TestAPIVolumeKey: the DO volume data key (L3) is created in custody once,
 // returned stably, and only to the lease holder at the lease's epoch.
 func TestAPIVolumeKey(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1, h2 := e.c, e.asHost("h1"), e.asHost("h2")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process", "microvm"}}, nil)
 	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse

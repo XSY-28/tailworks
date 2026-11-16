@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/hostd/fakemgmt"
 	"github.com/rosskukulinski/twd/hostd/hostdtest"
 	"github.com/rosskukulinski/twd/hostd/mgmtapi"
@@ -71,8 +72,9 @@ func TestRealHostd(t *testing.T) {
 		ControlURL: prodControl, Ephemeral: true, HostnamePrefix: prefix, HeartbeatEvery: time.Second,
 		KillTombstone: 10 * time.Second,
 		Fake:          fakemgmt.Config{ForceTags: []string{testTag}},
-		Tenant:        mgmtapi.Tenant{Tailnet: tailnet, ControlURL: prodControl, MintMode: "apikey", APIKeyFile: keyFile, Tier: tier},
-		VM:            vmb,
+		Tenant: mgmtapi.Tenant{Tailnet: tailnet, ControlURL: prodControl, MintMode: "oauth",
+			OAuthClientFile: cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), prefix+"oauth", testTag), Tier: tier},
+		VM: vmb,
 	})
 	var nodes []*nettest.Node
 	// Cleanup (registered after hostdtest's, so it runs FIRST): track every

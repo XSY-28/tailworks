@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/hostd/hostdtest"
 	"github.com/rosskukulinski/twd/mgmt"
 	"github.com/rosskukulinski/twd/netd/nettest"
@@ -111,7 +112,7 @@ func TestUpgradePreviousToCandidate(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", e.sock)
 	}}}
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeToken+"\n"), 0o600)
+	cliflow.WriteFakeOAuthFile(t, keyFile)
 	startMgmt := func(bin string, rotate bool) {
 		t.Helper()
 		e.binOf["mgmt"] = bin
@@ -155,7 +156,7 @@ func TestUpgradePreviousToCandidate(t *testing.T) {
 	// ---- the previous release: mgmt, one host, a workload with DO storage.
 	startMgmt(oldBin, true)
 	var tn struct{ TenantID string }
-	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	e.binOf["h1"] = oldBin
 	e.startHost("h1", false)
 	waitLive("h1")
