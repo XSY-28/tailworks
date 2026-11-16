@@ -101,8 +101,14 @@ groups) plus item 6 below.
 
 ## Tests
 
+After merging origin/master (2026-11-15, at 9d0c013):
+
     make lint                                         # ok
-    go test ./mgmt/... ./cmd/twd ./internal/... ./netd/...
+    make test                                         # ok except netd TestEgressWaitsForNewPeerPath
+                                                      #   (quarantined in CI, issue #75; this branch
+                                                      #   doesn't touch egress; passed in an earlier run)
+    make test-pg                                      # ok
+    make e2e-upgrade                                  # ok (TestUpgradePreviousToCandidate)
 
 New: `mgmt/whoami_tenants_test.go` (`TestWhoAmITenants`,
 `TestAuditOrderDesc`), `mgmt/notify_test.go` (config + secrets never
