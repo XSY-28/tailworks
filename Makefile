@@ -457,6 +457,12 @@ e2e-linux: release
 		TWD_E2E_TARBALL_amd64="$(CURDIR)/dist/twd-$(RELEASE_VERSION)-linux-amd64.tar.gz" \
 		sh scripts/e2e-linux.sh $(LINUX_DISTROS)
 
+## cli-docs: regenerate docs/cli.md (every command's --help output) from cmd/twd;
+## TestCLIReferenceUpToDate fails when it is stale.
+.PHONY: cli-docs
+cli-docs:
+	TWD_UPDATE_CLI_DOCS=1 $(GO) test ./cmd/twd -run '^TestCLIReferenceUpToDate$$' -count=1
+
 ## api: regenerate everything derived from api/openapi.yaml (the /v1 source of truth):
 ## Go server interfaces + types + embedded spec (mgmt/api/v1), the Go client
 ## (hostd/mgmtapi/v1) and docs/contracts/mgmt-api.md. oapi-codegen is pinned as a
