@@ -18,6 +18,7 @@ import (
 	"tailscale.com/client/local"
 	"tailscale.com/derp/derpserver"
 	"tailscale.com/ipn/store/mem"
+	"tailscale.com/net/netns"
 	"tailscale.com/net/stunserver"
 	"tailscale.com/tailcfg"
 	"tailscale.com/tsnet"
@@ -47,6 +48,12 @@ type Control struct {
 
 // StartControl starts testcontrol, DERP and STUN. Call Close when done.
 func StartControl() (*Control, error) {
+	// DERP and STUN are on 127.0.0.1. On Linux, netns marks magicsock's
+	// sockets (or binds them to the default-route interface), so STUN to
+	// loopback fails, netcheck reports UDP blocked after its ~3 s timeout
+	// and every new node gets a path that much later (issue #75).
+	// Tailscale's own tests with a local DERP do the same.
+	netns.SetEnabled(false)
 	d := derpserver.New(key.NewNode(), logger.Discard)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

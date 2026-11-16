@@ -59,15 +59,12 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      # Quarantined: tests that fail on this runner but pass on macOS
-      # (issue #75). They still run in a local `make test` and in release.yml.
-      # Remove each one from the list when it's fixed. Don't add to it
-      # without an issue.
+      # To quarantine a test that fails on this runner (with an issue for it;
+      # issue #75 fixed the last ones), set
+      #   env: { GO_TEST_SKIP: "^(TestA|TestB)$" }
+      # on this step. It still runs in a local `make test` and in release.yml.
       - name: make test
         run: make test
-        env:
-          GO_TEST_SKIP: >-
-            ^(TestEgressWaitsForNewPeerPath|TestGeneratedWorkflows|TestR2Streaming|TestContainerPolyfill|TestRejoinRejectedRemints)$
 
   ci-ok:
     if: always()

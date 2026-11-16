@@ -387,6 +387,10 @@ func TestR2Streaming(t *testing.T) {
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, func(o *hostdtest.Options) {
 		o.R2 = &r2.FS{Root: blobDir}
 	})
+	// This test measures memory, not speed: moving 1 GiB through workerd
+	// can take well over the suite's 30 s request timeout on a loaded CI
+	// runner (issue #75).
+	s.hc = s.client.HTTPClient(5 * time.Minute)
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("r2probe"), "r2probe", nil)
 	wl := e.WaitActive("r2probe", dep, 60*time.Second)
