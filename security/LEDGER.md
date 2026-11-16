@@ -14,7 +14,7 @@ Roles: see `security/LOOP.md`.
 |---|---|---|---|---|---|---|
 | H01 | High | Hostile host | A registered host can create/spawn objects in a workload whose lease another host holds | RT3-01 | **fixed** (F1, 2026-11-14) | `mgmt.TestRT3_HostWritesAreLeaseBound` |
 | H02 | High | Hostile host | `PATCH /v1/objects/{id} {status:ready}` without `epoch` is unfenced; node IDs and cert are attacker-chosen | RT3-02 | **fixed** (F1) | `mgmt.TestRT3_HostWritesAreLeaseBound` |
-| H03 | High | Internet attacker | A `not_public` flood (or tenant `audit()` flood) overflows hostd's pending queue, drops host-source records, and leaves the chain `BrokenAt` forever | RT3-03 | open (probe only) | `TestRT3_H03_AuditOverflowBreaksChain` |
+| H03 | High | Internet attacker | A `not_public` flood (or tenant `audit()` flood) overflows hostd's pending queue, drops host-source records, and leaves the chain `BrokenAt` forever | RT3-03 | **fixed** (F2) | `attacks.TestRT3_H03_AuditFloodKeepsHostRecordsAndChain`, `netd.TestPublicRoutes`, `hostd.TestAuditSpill*` |
 | H04 | Medium | Hostile host | A host can transfer another host's ready `_pool` node to an object it creates | RT3-04 | **fixed** (F1) | `mgmt.TestRT3_HostWritesAreLeaseBound` |
 | H05 | Medium | Hostile host | Audit ingest accepts unsigned records from hosts without `AuditPubKey`, naming any tenant's object and any `actingFor` | RT3-05 | **fixed** (F1/F3 part) | `mgmt.TestRT3_HostWritesAreLeaseBound` |
 | H06 | Medium | Hostile tenant code | Facet create through the raw-binding bypass is not refused: `isPublic(req)` reads tenant-controlled `request.cf` | RT3-06 | **fixed** (F4) | `hostd.TestPublicIngress` §3b, `gen.TestGeneratedWrapperPublic/HostDORechecksWithHostd` |
@@ -44,7 +44,7 @@ Roles: see `security/LOOP.md`.
 |---|---|---|---|---|
 | C01 | "hostd authenticates by lease epoch" (THREAT-MODEL §2 B4) | `createObjectTx`, `Ready`, `SetDeploymentStatus`, `IngestAudit` (F1) | `TestRT3_HostWritesAreLeaseBound` | pinned (2026-11-14) |
 | C02 | "a raw binding gets create_not_admitted for new names" (docs/public-ingress.md, rewritten) | Host DO `__admitted` + hostd `ensure` (F4) | `TestPublicIngress` §3b | pinned |
-| C03 | "a refused flood can't grow the chain" (docs/public-ingress.md Audit) | `public_serve.go:598` rolls up 429/413/431 only | — | **overstated** (H03) |
+| C03 | "a refused flood can't grow the chain" (docs/public-ingress.md Audit) | `netd/public_serve.go` rolls up 429/413/431 and `not_public`/`bad_request` (F2) | `netd.TestPublicRoutes` | pinned |
 | C04 | "`actingFor` comes from the platform" (STATUS.md:554, :612) | spawn `principal` is inherit/none only; `actingFor` stripped from tenant args (F4); Host DO `principalOf(req.cf)` still forgeable in-process | — | **partially overstated** (H08, F5) |
 | C05 | "request.cf caller comes only from WhoIs" (THREAT-MODEL §5) | netd strips headers; in-process `cf` not sealed | — | **overstated** (H08) |
 | C06 | "Client copies of every identity header are stripped: Tailscale-*" (docs/public-ingress.md) | `ingress.go:125` strips five names | — | **overstated** (H18) |
@@ -68,7 +68,7 @@ Roles: see `security/LOOP.md`.
 | ID | Fix | For | Regression test (fail before, pass after) | Status |
 |---|---|---|---|---|
 | F1 | `CreateObject`/`Ready`/pool transfer: host callers must hold `LeaseName(dep.TenantID, dep.Workload)` (holder always; epoch when sent, hostd always sends); `SetDeploymentStatus` scoped to host; audit ingest requires key + signature + served workload | H01, H02, H04, H05, H12 | `mgmt.TestRT3_HostWritesAreLeaseBound` (fails on 4f23a96, passes after) | **DONE 2026-11-14** |
-| F2 | Audit queue: never drop host-source records; in-chain `audit_dropped{n}`; roll `not_public`/`bad_request` into the per-minute summary; token bucket on tenant notes | H03 | `TestRT3_H03_*` | queued |
+| F2 | Audit queue: never drop host-source records; in-chain `audit_dropped{n}`; roll `not_public`/`bad_request` into the per-minute summary; token bucket on tenant notes | H03 | `attacks.TestRT3_H03_AuditFloodKeepsHostRecordsAndChain` (with the old head-trimming queue it fails: `prevHash does not link to the head of chain`) | **DONE** (branch audit-chain-flood-issue-68) |
 | F3 | Audit ingest: require `AuditPubKey`, verify `hostSig`, scope `objectID` to the host's leases; `SetDeploymentStatus … AND host_id=?` | H05, H12 | folded into F1 | **DONE** (with F1) |
 | F4 | Create admission (`docs/create-admission.md`): hostd-issued ticket on tailnet requests and cron runs; guarded env for every handler; `__TWD` stripped; Host DO asks hostd, never `req.cf`; `ensure` creates only admitted names; `ready` never creates; `spawn.principal` inherit/none only | H06, H07, H08(b) | `hostd.TestPublicIngress` §3b, `gen.TestGeneratedWrapperPublic`, `gen.TestCreateTicket`, `public.test.js` | **DONE 2026-11-14** (before/after on master not re-run: the base worktree could not build the fixture; the bypass was shown hermetically in Pass 3) |
 | F5 | Seal netd's caller blob (HMAC under the instance MAC key) and verify in the runtime; drop `principal`/`actingFor` from tenant-reachable op args | H08 | `TestRT3_H08_*` | queued (design) |

@@ -248,6 +248,8 @@ func TestDescribePublicKinds(t *testing.T) {
 	cases := map[string]mgmt.AuditRecord{
 		"public GET /webhooks/github → 200 from 203.0.113.7 12 ms":    mk("public_request", `{"method":"GET","path":"/webhooks/github","status":200,"ip":"203.0.113.7","ms":12}`),
 		"public refused: 41 rate-limited, 2 too large, 0 connections": mk("public_rejected", `{"rateLimited":41,"tooLarge":2,"connsRefused":0}`),
+		"0 connections, 7 not public, 2 bad path":                     mk("public_rejected", `{"notPublic":7,"badRequest":2}`),
+		"12 audit records refused before chaining":                    mk("audit_dropped", `{"n":12,"byReason":{"tenant_rate":12}}`),
 		"Room/lobby created by a public request from 203.0.113.7":     mk("public_object_created", `{"class":"Room","name":"lobby","ip":"203.0.113.7"}`),
 	}
 	for want, r := range cases {

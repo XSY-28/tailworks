@@ -103,6 +103,7 @@ const (
 	AuditKindApprovalDenied      AuditKind = "approval_denied"
 	AuditKindApprovalRequested   AuditKind = "approval_requested"
 	AuditKindApprovalTimeout     AuditKind = "approval_timeout"
+	AuditKindAuditDropped        AuditKind = "audit_dropped"
 	AuditKindContainerRelease    AuditKind = "container_release"
 	AuditKindContainerReserve    AuditKind = "container_reserve"
 	AuditKindContainerStart      AuditKind = "container_start"
@@ -188,6 +189,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindApprovalRequested:
 		return true
 	case AuditKindApprovalTimeout:
+		return true
+	case AuditKindAuditDropped:
 		return true
 	case AuditKindContainerRelease:
 		return true
@@ -1566,7 +1569,8 @@ type AuditBatch struct {
 // `principal`,
 // `tenant_note` (source `tenant`, unverified),
 // `container_start` (an object's container, ADR-032),
-// `container_stop` (an object's container, ADR-032).
+// `container_stop` (an object's container, ADR-032),
+// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 // mgmt chain:
 // `tenant_create`,
 // `tenant_update`,
@@ -1627,7 +1631,7 @@ type AuditBatch struct {
 // `revoke` (an unused pooled key revoked).
 // Public ingress (ADR-029), host chain:
 // `public_request` (one per public request),
-// `public_rejected` (per-minute summary of requests the limits refused),
+// `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals),
 // `public_object_created` (a name admitted for a public create).
 // Public ingress, mgmt chain:
 // `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
@@ -1682,7 +1686,8 @@ type AuditRecord struct {
 	// `principal`,
 	// `tenant_note` (source `tenant`, unverified),
 	// `container_start` (an object's container, ADR-032),
-	// `container_stop` (an object's container, ADR-032).
+	// `container_stop` (an object's container, ADR-032),
+	// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 	// mgmt chain:
 	// `tenant_create`,
 	// `tenant_update`,
@@ -1743,7 +1748,7 @@ type AuditRecord struct {
 	// `revoke` (an unused pooled key revoked).
 	// Public ingress (ADR-029), host chain:
 	// `public_request` (one per public request),
-	// `public_rejected` (per-minute summary of requests the limits refused),
+	// `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals),
 	// `public_object_created` (a name admitted for a public create).
 	// Public ingress, mgmt chain:
 	// `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),

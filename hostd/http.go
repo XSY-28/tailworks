@@ -479,7 +479,9 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				if n >= maxTenantNotesPerCall {
 					break
 				}
-				h.audit.add(TenantAuditRecord(o.ID, newTraceID(), o.ActingFor, rec))
+				if !h.audit.add(TenantAuditRecord(o.ID, newTraceID(), o.ActingFor, rec)) {
+					break // over the object's note bucket, or the queue is backed up (H03)
+				}
 				n++
 			}
 			writeJSON(w, 200, map[string]any{"ok": true, "accepted": n, "kind": kindTenantNote})
