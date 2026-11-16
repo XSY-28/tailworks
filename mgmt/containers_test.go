@@ -113,7 +113,7 @@ func TestContainerPlacementStickyHolder(t *testing.T) {
 // release and adopt on the store clock; every step is audited; sandboxes
 // don't use the object quota.
 func TestV1ContainerReservations(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	clk := &stepClock{now: time.Now()}
 	e.store.SetClock(clk)
 	c, h1, h2 := e.c, e.asHost("h1"), e.asHost("h2")
@@ -124,7 +124,7 @@ func TestV1ContainerReservations(t *testing.T) {
 		MaxContainerVCPU   float64 `json:"maxContainerVCPU"`
 		MaxObjects         int     `json:"maxObjects"`
 	}
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile, "maxObjects": 1}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile, "maxObjects": 1}, &tn)
 	if tn.MaxContainers != DefaultMaxContainers || tn.MaxContainerMemMiB != DefaultMaxContainerMemMiB || tn.MaxContainerVCPU != DefaultMaxContainerVCPU {
 		t.Fatalf("default container quotas: %+v", tn)
 	}

@@ -49,7 +49,7 @@ type env struct {
 	controlURL string
 	tailnet    string
 	apiBase    string // the Tailscale API for mgmt's broker ("" = production)
-	apiKeyFile string
+	oauthFile  string // the tenant's OAuth client (mgmt mints with it)
 	tags       []string
 	prefix     string // class slug: object IDs/hostnames are <prefix>-<id10>
 	callerKey  func(ctx context.Context) (string, error)
@@ -346,7 +346,7 @@ func runColdIdentity(t *testing.T, e env) []sample {
 	}
 	var tn struct{ TenantID string }
 	if _, err := call(ctx, "POST", "/v1/tenants", map[string]any{"tailnet": e.tailnet, "controlURL": e.controlURL,
-		"mintMode": "apikey", "apiKeyFile": e.apiKeyFile}, &tn); err != nil {
+		"mintMode": "oauth", "oauthClientFile": e.oauthFile}, &tn); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := call(ctx, "PUT", "/v1/hosts/"+hostID, map[string]any{"capacityNodes": 64, "tiers": []string{"process"}}, nil); err != nil {

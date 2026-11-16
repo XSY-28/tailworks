@@ -232,7 +232,10 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		}
 		return "needs wrangler's bundler; ignored by twd's built-in esbuild (use twd deploy --wrangler)"
 	case "upload_source_maps":
-		return "ignored: twd does not ship source maps"
+		if builder == "wrangler" {
+			return "ignored: twd ships source maps only from its built-in esbuild"
+		}
+		return "" // sourcemap.go: false leaves the map out of twd deploy
 	case "routes", "route", "workers_dev", "preview_urls", "account_id", "zone_id":
 		return "ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (twd.jsonc \"public\" for the internet)"
 	case "assets", "site":
@@ -247,8 +250,10 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		}
 		return bindingHint + "ignored"
 	case "observability", "logpush", "limits", "usage_model", "send_metrics", "keep_vars", "dev",
-		"compliance_region", "first_party_worker", "legacy_env", "secrets", "python_modules":
+		"compliance_region", "first_party_worker", "legacy_env", "python_modules":
 		return "ignored by twd"
+	case "secrets":
+		return "" // secrets.required: names `twd types` declares (deploy doesn't check them)
 	case "node_compat":
 		return "ignored: removed in wrangler 4; use compatibility_flags [\"nodejs_compat\"]"
 	}

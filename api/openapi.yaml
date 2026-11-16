@@ -14,8 +14,7 @@ info:
 
     mgmt serves the API on **its own tsnet node** `twd-mgmt` (`tag:twd-mgmt`),
     on `:80` and, when the tailnet has HTTPS, on `:443` with the node's
-    certificate (tailnet-only). The OIDC issuer (`/.well-known/...`, `/jwks`,
-    `/t/{tenant}/...`) is the only thing served over Funnel.
+    certificate (tailnet-only). mgmt serves nothing over Funnel.
 
     Every tailnet request is authenticated by **Tailscale WhoIs on the
     connection**, never by a bearer token or API key:
@@ -94,10 +93,9 @@ info:
     - **Credentials and key grants are `POST`** (`…/credentials`,
       `…/keys`): each call *creates* a single-use grant (a fresh auth key, a
       fenced key release) and is audited, so a `GET` would be wrong.
-    - The only other RPC-shaped operations are diagnostics that produce a
-      report: `POST /v1/tenants/{id}/wif-check` (a live token exchange) and
-      `POST /v1/device-delete-runs` (execute the scheduled device deletes
-      now). Both are documented as such.
+    - The only other RPC-shaped operation is a diagnostic that produces a
+      report: `POST /v1/device-delete-runs` (execute the scheduled device
+      deletes now). It is documented as such.
 
   contact:
     name: twd
@@ -190,8 +188,6 @@ tags:
         (`forbidden`, `not_found`, `bad_request`) and `Twd-Error`.
   - name: operational
     description: Health, status, identity, maintenance.
-  - name: oidc
-    description: The WIF issuer, served over Funnel. Public, unauthenticated.
 
 security:
   - tailnetWhoIs: []
@@ -212,10 +208,6 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/TenantCreate" }
             examples:
-              wif:
-                value: { tailnet: tail7906d5.ts.net, mintMode: wif, wifClientID: k123, wifLifecycleClientID: k456 }
-              apikey:
-                value: { tailnet: tail7906d5.ts.net, mintMode: apikey, apiKeyFile: /Users/me/.config/tailnet1_api.env }
               oauth:
                 value: { tailnet: tail7906d5.ts.net, mintMode: oauth, oauthClientID: kOAuth123CNTRL, oauthClientFile: /Users/me/.config/twd/oauth.env }
               headscale:
@@ -264,8 +256,8 @@ paths:
       operationId: GetTenant
       summary: Read a tenant
       description: |
-        Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
-        and subjects). A host may read only tenants with a deployment assigned
+        Includes `oboPublicKey` (hostd pins it). A host may read only
+        tenants with a deployment assigned
         to it (any other tenant is `404 not_found` for it).
       x-twd-role: admin|host
       parameters:
@@ -287,10 +279,11 @@ paths:
       operationId: UpdateTenant
       summary: Update a tenant (JSON Merge Patch)
       description: |
-        Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-        `apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-        `maxObjects`, `pool`, `tier`.
-        Switching mode or changing a client ID / credential file drops cached tokens.
+        Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+        `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+        `tier`. Switching mode or changing a client ID / credential file drops
+        cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+        can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
         `tailnet` and `controlURL` are immutable (`400 immutable_field`).
       x-twd-role: admin
       x-twd-audit: true
@@ -302,12 +295,10 @@ paths:
           application/merge-patch+json:
             schema: { $ref: "#/components/schemas/TenantPatch" }
             examples:
-              switchToWif:
-                value: { mintMode: wif, wifClientID: k123, wifLifecycleClientID: k456 }
+              switchToOAuth:
+                value: { mintMode: oauth, oauthClientFile: /Users/me/.config/twd/oauth.env }
               raiseQuota:
                 value: { maxObjects: 5000, registrationsPerMinute: 400 }
-              clearLifecycle:
-                value: { wifLifecycleClientID: null }
           application/json:
             schema: { $ref: "#/components/schemas/TenantPatch" }
       responses:
@@ -398,30 +389,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PurgeResult" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /v1/tenants/{id}/wif-check:
-    parameters:
-      - $ref: "#/components/parameters/tenantID"
-    post:
-      tags: [tenants]
-      operationId: CheckTenantWIF
-      summary: Verify a wif tenant's trust credentials (diagnostic)
-      description: |
-        A live diagnostic, not a state change: one fresh token exchange per
-        credential and a policy read with the lifecycle one
-        (`policy_file:read`). It is a `POST` because it performs work on the
-        control plane; it creates nothing. `400 bad_request` for non-wif tenants.
-      x-twd-role: admin
-      responses:
-        "200":
-          description: The check report.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/WIFCheckResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -604,6 +571,289 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/notifications:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [tenants, approvals]
+      operationId: GetTenantNotifications
+      summary: Read the tenant's notification webhook (`twd notify`), without secrets
+      description: |
+        ADR-approval-notifications. The webhook URL is shown as its origin
+        only (scheme and host): a chat webhook's path or query is its
+        credential. Header names only. A tenant that sends nothing has no
+        `webhook`. `404 unknown_tenant`.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The tenant's notification config.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationConfig" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [tenants, approvals]
+      operationId: PutTenantNotifications
+      summary: Set the tenant's notification webhook (`twd notify set`)
+      description: |
+        ADR-approval-notifications. When one of `events` happens in the
+        tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+        `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+        fires when a Workflow starts waiting for an approval (when mgmt
+        receives the host's audit record, usually within seconds). mgmt
+        dials the URL itself: a tailnet name, a `100.x` address or a
+        `*.ts.net` name over mgmt's tailnet node, anything else over the
+        host's network; loopback and link-local addresses are refused.
+        Delivery is tried 3 times; a final failure is audited
+        (`notification_failed`). The config is stored encrypted in mgmt
+        custody (custody name `twd/<tenant>/notifications`); the URL's path
+        and query and the header values are never logged, audited or
+        returned. Audited (`kind: notification_put`, the URL's host and
+        header names).
+      x-twd-role: admin
+      x-twd-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationsPut" }
+            examples:
+              slack:
+                value: { webhook: { url: "https://hooks.slack.com/services/T000/B000/XXXX", events: [approval_requested] } }
+      responses:
+        "200":
+          description: The new config (origin and header names only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [tenants, approvals]
+      operationId: DeleteTenantNotifications
+      summary: Stop the tenant's notifications (`twd notify rm`)
+      description: "Idempotent. Audited (`kind: notification_delete`)."
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Deleted (or there was nothing to delete).
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/notifications/test:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    post:
+      tags: [tenants, approvals]
+      operationId: TestTenantNotifications
+      summary: Send a test notification now (`twd notify test`)
+      description: |
+        POSTs a `NotificationEvent` with `event: test` to the configured
+        webhook once, synchronously, and reports the outcome. Not retried.
+        Audited (`kind: notification_test`, the origin and the outcome).
+        `404 not_found` when no webhook is set.
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "200":
+          description: The delivery attempt.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationTestResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/deployments:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [deployments]
+      operationId: ListWorkloadDeployments
+      summary: A workload's deployment history, newest first (`twd deployments`)
+      description: |
+        ADR-deploy-rollback. Every deployment of the workload, newest first:
+        who deployed it, when, the bundle's SHA-256, its status (the current
+        one is `assigned`, `starting`, `active` or `failed`; older ones are
+        `superseded` or `stopped`), the host's last report (`hostStatus`)
+        and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+        keeps the bundles of the newest `bundleRetention` deployments of
+        each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+        their records stay, without the bundle, so they can't be rolled back
+        to. `rollbackOf` names the deployment a rollback redeployed. A
+        workload with no deployment is `404 unknown_workload`.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: One page of the workload's deployments, ordered by `(createdAt, deploymentID)` descending.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeploymentHistoryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/rollbacks:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [deployments]
+      operationId: CreateRollback
+      summary: Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+      description: |
+        ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+        as a **new** deployment, through the same code path as
+        `POST /v1/deployments`: the same validation, placement, lease at
+        `epoch+1` and host fencing, and the same `409 lease_held`,
+        `move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+        is sticky as for any deploy (the workload stays on its host unless
+        `replace` or `host` say otherwise), so Durable Object storage stays
+        where it is. Container images the original deploy built and pushed
+        to twd's registry are reused by digest.
+
+        Without `deploymentID`, the target is the newest earlier deployment
+        that ran (the host reported it `active` and it did not fail), whose
+        bundle is retained and differs from the current one's;
+        `409 no_rollback_target` if there is none. A target whose bundle was
+        pruned is `409 bundle_pruned`. Naming the current deployment is
+        `409 no_rollback_target`.
+
+        A rollback changes code and configuration only. Durable Object
+        storage, D1 databases (migrations are forward-only), KV, R2 and
+        queues keep their current data, and the workload gets the secrets
+        it has **now**: secrets are not versioned with bundles.
+
+        Audited as `kind: rollback` (in place of `deploy`), with
+        `rollbackOf`. `dryRun=true` preflights the stored bundle against the
+        current policy, like `POST /v1/deployments?dryRun=true`.
+      x-twd-role: admin
+      x-twd-audit: true
+      parameters:
+        - name: dryRun
+          in: query
+          description: Preflight only (`200 PreflightResult`); nothing is deployed.
+          schema: { type: boolean, default: false }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RollbackCreate" }
+      responses:
+        "200":
+          description: "`dryRun=true`: the preflight report of the target's bundle. Nothing was deployed."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreflightResult" }
+        "202":
+          description: Accepted; the host is starting the rolled-back deployment.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rollback" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/previews:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    get:
+      tags: [deployments]
+      operationId: ListWorkloadPreviews
+      summary: A workload's running previews (`twd previews`)
+      description: |
+        ADR-deploy-preview. The previews of the workload that are not
+        stopped, newest first. A preview is created by
+        `POST /v1/deployments` with `preview: true`: it runs as a workload
+        of its own, `<workload>--preview-<alias>`, with its own lease,
+        Durable Object storage and stores, and never joins the workload's
+        Tailscale Service or public routes. A workload without previews
+        answers an empty list.
+      x-twd-role: admin
+      responses:
+        "200":
+          description: The running previews.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreviewList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/promotions:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [deployments]
+      operationId: CreatePromotion
+      summary: Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+      description: |
+        ADR-deploy-preview. Deploys the bundle the preview runs to the
+        workload itself, as a **new** deployment, through the same code
+        path as `POST /v1/deployments`: the same validation, placement
+        (sticky), lease at `epoch+1`, host fencing and refusals, and the
+        workload's own `replicas`, Tailscale Service and public routes.
+        Container images the preview's deploy built are reused by digest.
+        The preview's data does not move: the workload keeps its own
+        Durable Object storage, stores and secrets.
+
+        Then the preview is undeployed, unless `keepPreview`. An unknown
+        preview, or one that is stopped, is `404 unknown_preview`; a preview
+        whose host reported it `failed` is `409 preview_failed`.
+
+        Audited as `kind: promote` (in place of `deploy`), with
+        `promotedFrom` (the preview's deployment) and `preview`.
+        `dryRun=true` preflights the preview's bundle against the current
+        policy.
+      x-twd-role: admin
+      x-twd-audit: true
+      parameters:
+        - name: dryRun
+          in: query
+          description: Preflight only (`200 PreflightResult`); nothing is deployed.
+          schema: { type: boolean, default: false }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromotionCreate" }
+      responses:
+        "200":
+          description: "`dryRun=true`: the preflight report of the preview's bundle. Nothing was deployed."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreflightResult" }
+        "202":
+          description: Accepted; the host is starting the promoted deployment.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Promotion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/workloads/{workload}/public:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -667,6 +917,63 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "412": { $ref: "#/components/responses/PreconditionFailed" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/public-names:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [tenants, deployments]
+      operationId: ListPublicNames
+      summary: List the public names a tenant owns
+      description: |
+        ADR-029, red-team H10. A public workload is served at
+        `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+        tailnet, not per tenant. The first tenant to deploy public routes
+        under a name owns it on that tailnet, across undeploys and
+        redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+        the tenant is deleted. A deploy (or dry run) by another tenant on the
+        same tailnet is refused with `409 public_name_owned`. Ordered by
+        `(claimedAt, name)`.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: One page of the tenant's public names, ordered by `(claimedAt, name)`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicNamePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/public-names/{name}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/publicName"
+    delete:
+      tags: [tenants, deployments]
+      operationId: ReleasePublicName
+      summary: Release a public name the tenant owns
+      description: |
+        Red-team H10. Gives up the tenant's claim on a public name, so any
+        tenant on the tailnet can deploy public routes under it next. Only
+        a name nothing serves can be released: `409 public_name_in_use`
+        while the workload's latest deployment declares public routes or
+        its public node is live (undeploy it, or remove `"public"` from its
+        `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+        does not own the name. Audited (`kind: public_name_release`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Released.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/tenants/{id}/workloads/{workload}/secrets:
@@ -1580,8 +1887,8 @@ paths:
         and a one-time `registrationSecret` (32 random bytes, base64url; only
         its SHA-256 is stored) that the host must present on its first
         `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-        through the operator tenant's trust credential (wif) or API key
-        (apikey). `twd-hostd join --token <key>` joins the operator tailnet
+        through the operator tenant's credential (its OAuth client, or the
+        Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
         with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
         node to the record. Calling it again for a host that has not bound a
         node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -2042,7 +2349,7 @@ paths:
         with an `ip` part whose `src` matches every src tag. Names are
         reported `unchecked`. Nothing is written, no lease is taken, and the
         answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-        cannot read the policy (wif tenant without a lifecycle credential);
+        cannot read the policy (an OAuth client without `policy_file:read`);
         the CLI then prints `preflight skipped` and deploys.
       x-twd-role: admin
       x-twd-audit: true
@@ -2107,7 +2414,7 @@ paths:
                 policyUnavailable:
                   value:
                     code: policy_unavailable
-                    message: "tenant tn_tail7906d5 has no lifecycle credential; the policy cannot be read"
+                    message: "tenant tn_tail7906d5's OAuth client can't read the policy (it needs policy_file:read)"
                     doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#policy_unavailable
                     trace_id: 7f3a…
         default: { $ref: "#/components/responses/Error" }
@@ -2573,7 +2880,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
               example:
                 code: bootstrap_failed
-                message: "mint via trust credential failed: 403 tag:twd-wl-agent not owned by tag:twd"
+                message: "mint via OAuth client failed: 403 tag:twd-wl-agent not owned by tag:twd"
                 doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bootstrap_failed
                 trace_id: 7f3a…
         "503":
@@ -2741,9 +3048,21 @@ paths:
         - name: until
           in: query
           schema: { type: string }
+        - name: order
+          in: query
+          description: |
+            `asc` (default): oldest first. `desc`: newest first, as the admin
+            UI shows activity. A cursor continues in the order of the page
+            that returned it, so repeat `order` with the cursor.
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: asc
       responses:
         "200":
-          description: One page, ordered by `(ts, chain, seq)`, with per-chain verification of the records returned.
+          description: One page, ordered by `(ts, chain, seq)` (reversed with `order=desc`), with per-chain verification of the records returned.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuditPage" }
@@ -3496,68 +3815,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         default: { $ref: "#/components/responses/Error" }
 
-  # ------------------------------------------------------------------- oidc
-  /.well-known/openid-configuration:
-    get:
-      tags: [oidc]
-      operationId: GetOIDCConfiguration
-      summary: OIDC discovery (base issuer)
-      security: []
-      servers:
-        - url: https://twd-mgmt.{tailnet}
-          description: Funnel (public)
-          variables: { tailnet: { default: example.ts.net } }
-      responses:
-        "200":
-          description: The discovery document.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OIDCConfiguration" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /jwks:
-    get:
-      tags: [oidc]
-      operationId: GetJWKS
-      summary: Issuer signing keys
-      security: []
-      responses:
-        "200":
-          description: The JWK set.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/JWKS" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /t/{tenant}/.well-known/openid-configuration:
-    get:
-      tags: [oidc]
-      operationId: GetTenantOIDCConfiguration
-      summary: OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/tenantPath"
-      responses:
-        "200":
-          description: The discovery document with `issuer = <base>/t/{tenant}`.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OIDCConfiguration" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /t/{tenant}/jwks:
-    get:
-      tags: [oidc]
-      operationId: GetTenantJWKS
-      summary: Per-tenant issuer signing keys (same key set)
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/tenantPath"
-      responses:
-        "200":
-          description: The JWK set.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/JWKS" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
 # =========================================================================
 components:
   securitySchemes:
@@ -3618,6 +3875,12 @@ components:
       required: true
       description: Workload name (a DNS label).
       schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+    publicName:
+      name: name
+      in: path
+      required: true
+      description: A public name (the workload name of a public workload; a DNS label).
+      schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
     secretName:
       name: name
       in: path
@@ -3663,11 +3926,6 @@ components:
       required: true
       description: Tenant ID (`tn_…` when generated; one safe path element).
       schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
-    tenantPath:
-      name: tenant
-      in: path
-      required: true
-      schema: { type: string }
     hostID:
       name: id
       in: path
@@ -3738,7 +3996,7 @@ components:
             badRequest:
               value:
                 code: bad_request
-                message: "mintMode apikey needs apiKeyFile"
+                message: "mintMode oauth needs oauthClientFile"
                 doc_url: https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#bad_request
                 trace_id: 7f3a…
             badCursor:
@@ -3938,6 +4196,7 @@ components:
         | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
         | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
         | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+        | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
         | `too_many_secrets` | 400 | a workload already has 128 secrets |
         | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
         | `no_identity` | 401 | WhoIs failed for the connection |
@@ -3967,9 +4226,15 @@ components:
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
         | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
         | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+        | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+        | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+        | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+        | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
         | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
         | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
         | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+        | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+        | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
         | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
         | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
         | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -4006,6 +4271,7 @@ components:
         - bad_bundle
         - reserved_tag
         - immutable_field
+        - mint_mode_removed
         - too_many_secrets
         - d1_error
         - no_identity
@@ -4038,6 +4304,10 @@ components:
         - service_api_failed
         - profile_unsupported
         - replica_conflict
+        - preview_conflict
+        - preview_failed
+        - preview_unsupported
+        - unknown_preview
         - tier_unavailable
         - move_unconfirmed
         - lease_changed
@@ -4068,6 +4338,8 @@ components:
         - registry_unavailable
         - mirror_disabled
         - public_ingress_not_allowed
+        - public_name_owned
+        - public_name_in_use
         - unknown_workload
         - audit_key_required
         - audit_object_foreign
@@ -4139,6 +4411,82 @@ components:
       required: [approval]
       properties:
         approval: { $ref: "#/components/schemas/Approval" }
+    NotificationEventKind:
+      type: string
+      description: |
+        `approval_requested` (a Workflow instance started waiting for an approval),
+        `test` (`twd notify test`; never subscribed to).
+      enum:
+        - approval_requested
+        - test
+    WebhookView:
+      type: object
+      description: A tenant's notification webhook, without its secrets.
+      required: [origin, headerNames, events]
+      properties:
+        origin: { type: string, description: "The URL's scheme and host (`https://hooks.slack.com`); its path and query are never returned." }
+        headerNames: { type: array, items: { type: string } }
+        events: { type: array, items: { $ref: "#/components/schemas/NotificationEventKind" } }
+    NotificationConfig:
+      type: object
+      required: [tenantID]
+      properties:
+        tenantID: { type: string }
+        webhook: { $ref: "#/components/schemas/WebhookView" }
+        updatedAt: { type: integer, format: int64 }
+        updatedBy: { type: string }
+    WebhookPut:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri, maxLength: 2048, description: "http:// or https:// URL (no user info or fragment). Treated as a secret: a chat webhook's path is its credential.", writeOnly: true }
+        headers:
+          type: object
+          description: "Headers sent with every notification (at most 16; values at most 4 KiB). Never logged, audited or returned."
+          maxProperties: 16
+          additionalProperties: { type: string, maxLength: 4096, format: password, writeOnly: true }
+        events:
+          type: array
+          description: What to send. Default `[approval_requested]`.
+          items: { $ref: "#/components/schemas/NotificationEventKind" }
+      additionalProperties: false
+    NotificationsPut:
+      type: object
+      required: [webhook]
+      properties:
+        webhook: { $ref: "#/components/schemas/WebhookPut" }
+      additionalProperties: false
+      x-twd-secret: true
+    NotificationEvent:
+      type: object
+      description: |
+        The JSON body mgmt POSTs to a tenant's webhook. `text` is one line
+        for chat tools that read it (Slack, Mattermost, Google Chat
+        incoming webhooks). `link` opens the row in the admin UI's
+        approvals page; whoever opens it still decides with their own
+        tailnet identity and grants.
+      required: [event, tenantID, text, sentAt]
+      properties:
+        event: { $ref: "#/components/schemas/NotificationEventKind" }
+        tenantID: { type: string }
+        text: { type: string }
+        link: { type: string, description: "`https://<mgmt>/ui/approvals?tenant=<tenant>#<instance>`" }
+        cli: { type: string, description: "The `twd approve` command line." }
+        workload: { type: string }
+        workflow: { type: string }
+        instance: { type: string }
+        step: { type: string }
+        facts:
+          type: object
+          additionalProperties: { type: number }
+        sentAt: { type: string, format: date-time }
+    NotificationTestResult:
+      type: object
+      required: [delivered]
+      properties:
+        delivered: { type: boolean }
+        status: { type: integer, description: "The webhook's HTTP status, when it answered." }
+        error: { type: string }
     TombstoneError:
       description: "`410 Gone`: the error plus the kill record. `tombstone` is absent only when the 410 is `delegation_invalid` for a spawn whose parent is dead (the parent's record is then at `GET /v1/objects/{parent}`)."
       allOf:
@@ -4201,6 +4549,16 @@ components:
         - type: object
           properties:
             items: { type: array, items: { $ref: "#/components/schemas/Deployment" } }
+    DeploymentHistoryPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [bundleRetention]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/DeploymentRecord" } }
+            bundleRetention:
+              type: integer
+              description: How many of each workload's newest bundles mgmt keeps (0 = every bundle).
     ContainerReservationPage:
       allOf:
         - $ref: "#/components/schemas/Page"
@@ -4235,13 +4593,15 @@ components:
     # ------------------------------------------------------------- tenants
     MintMode:
       type: string
-      description: "`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key)."
+      description: "`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`."
       enum:
         - oauth
-        - wif
-        - apikey
         - headscale
         - static
+        # Removed (ADR-042): reported only for tenants an
+        # older twd created; mgmt refuses to set them (mint_mode_removed).
+        - apikey
+        - wif
     Tier:
       type: string
       enum: [process, microvm]
@@ -4255,16 +4615,13 @@ components:
         mintMode: { $ref: "#/components/schemas/MintMode" }
         apiKeyFile:
           type: string
-          description: "`apikey` and `headscale` modes: absolute path, read at use; the key is never stored or returned."
-        wifClientID: { type: string, description: Public client ID of the mint trust credential (`auth_keys`). }
-        wifLifecycleClientID: { type: string, description: "Public client ID of the lifecycle credential (`devices:core`, `policy_file:read`)." }
+          description: "`headscale` mode: absolute path of the Headscale API key file, read at use; the key is never stored or returned."
         oauthClientID:
           type: string
           description: "`oauth` mode: the OAuth client's public ID (`TS_OAUTH_CLIENT_ID`). The secret is never stored or returned."
         oauthClientFile:
           type: string
           description: "`oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused)."
-        wif: { $ref: "#/components/schemas/WIFInfo" }
         registrationsPerMinute: { type: integer, minimum: 1, default: 200 }
         maxObjects: { type: integer, minimum: 1, default: 1000 }
         maxContainers: { type: integer, minimum: 1, default: 10, description: "Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`." }
@@ -4278,14 +4635,6 @@ components:
         oboPublicKey: { type: string, description: base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. }
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
-    WIFInfo:
-      type: object
-      description: Present in wif mode.
-      required: [issuer, mintSubject, lifecycleSubject]
-      properties:
-        issuer: { type: string, format: uri, examples: ["https://twd-mgmt.tail7906d5.ts.net/t/tn_tail7906d5"] }
-        mintSubject: { type: string, examples: ["twd:tenant:tn_tail7906d5:mint"] }
-        lifecycleSubject: { type: string, examples: ["twd:tenant:tn_tail7906d5:lifecycle"] }
     TenantCreate:
       type: object
       required: [tailnet, mintMode]
@@ -4295,8 +4644,6 @@ components:
         controlURL: { type: string, format: uri }
         mintMode: { $ref: "#/components/schemas/MintMode" }
         apiKeyFile: { type: string }
-        wifClientID: { type: string }
-        wifLifecycleClientID: { type: string }
         oauthClientID: { type: string }
         oauthClientFile: { type: string }
         registrationsPerMinute: { type: integer, minimum: 1 }
@@ -4314,8 +4661,6 @@ components:
       properties:
         mintMode: { $ref: "#/components/schemas/MintMode" }
         apiKeyFile: { type: [string, "null"] }
-        wifClientID: { type: [string, "null"] }
-        wifLifecycleClientID: { type: [string, "null"] }
         oauthClientID: { type: [string, "null"] }
         oauthClientFile: { type: [string, "null"] }
         registrationsPerMinute: { type: integer, minimum: 1 }
@@ -4353,6 +4698,22 @@ components:
       properties:
         exposed: { type: boolean }
       additionalProperties: false
+    PublicNameClaim:
+      type: object
+      description: "A tenant's claim on a public name on its tailnet (red-team H10): `https://<name>.<tailnet>/` serves only this tenant."
+      required: [tailnet, name, tenantID, claimedAt]
+      properties:
+        tailnet: { type: string, description: "The tenant's tailnet, lower-cased, without a trailing dot." }
+        name: { type: string }
+        tenantID: { type: string }
+        claimedAt: { type: integer, format: int64 }
+        claimedBy: { type: string, description: "The actor whose deploy claimed it (see Conventions); `legacy` for a name a pre-upgrade deployment already served." }
+    PublicNamePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/PublicNameClaim" } }
     PublicLimits:
       type: object
       description: netd's limits on a public listener (ADR-029 D5); defaults filled in.
@@ -4365,6 +4726,8 @@ components:
         maxHeaderBytes: { type: integer }
         timeoutSeconds: { type: integer }
         maxConns: { type: integer }
+        maxConnsPerIp: { type: integer, description: "Concurrent connections per client address (an IPv6 client counts per /64)." }
+        upgradeLifetimeSeconds: { type: integer, description: "Longest an upgraded (WebSocket) connection stays open." }
     PublicAssignment:
       type: object
       description: |
@@ -4403,22 +4766,6 @@ components:
       properties:
         purged: { type: array, items: { type: string }, description: Object IDs forgotten. }
         warmKeysRevoked: { type: integer, description: "The tenant's unused pooled keys revoked with the purge." }
-    WIFCheckResult:
-      type: object
-      required: [mintMode, mint, lifecycle, policyRead, issuer]
-      properties:
-        mintMode: { $ref: "#/components/schemas/MintMode" }
-        mint: { type: boolean, description: The mint credential's token exchange succeeded (its `auth_keys` scope is only proven by the first real mint). }
-        mintError: { type: string }
-        lifecycle:
-          type: string
-          enum: [ok, absent, error]
-          description: "`absent`: no lifecycle client ID (kill tier 2, reaper device deletes, spawn checks and preflight are off)."
-        lifecycleError: { type: string }
-        policyRead: { type: boolean, description: "The lifecycle credential read the policy (`policy_file:read`)." }
-        policyReadError: { type: string }
-        issuer: { type: string, format: uri }
-
     # --------------------------------------------------------------- hosts
     HostStatusEnum:
       type: string
@@ -4813,7 +5160,28 @@ components:
     # --------------------------------------------------------- deployments
     DeploymentStatus:
       type: string
-      enum: [assigned, starting, active, draining, stopped, failed, superseded]
+      description: |
+        - `assigned`: mgmt placed it; the host has not reported yet.
+        - `starting`: the host is starting it.
+        - `active`: serving.
+        - `crashloop`: it served, then its workerd kept exiting; the host
+          keeps restarting it with exponential backoff (200 ms doubling to
+          5 min) and reports `active` again once it answers. `error` holds
+          the attempt count, the next delay and the last log lines.
+        - `draining`: being replaced or undeployed.
+        - `stopped`: stopped (undeployed, fenced or unassigned).
+        - `failed`: the deploy failed (bad bundle or config, or it never
+          became healthy); the host does not retry it. `error` says why.
+        - `superseded`: a newer deployment of the workload replaced it.
+      enum:
+        - assigned
+        - starting
+        - active
+        - crashloop
+        - draining
+        - stopped
+        - failed
+        - superseded
     ClassConfig:
       type: object
       description: One DO namespace from `twd.jsonc` `tailnet.objects`.
@@ -4835,6 +5203,11 @@ components:
             `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc`
             `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
         replicas: { type: integer, minimum: 2, description: "`_workload` only, the workload itself: its replica count when > 1." }
+        previewOf:
+          type: string
+          description: >-
+            `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview),
+            deployed as the workload `<workload>--preview-<alias>`.
     ReplicaRef:
       type: object
       description: One replica of a workload with `twd.jsonc` `replicas` > 1.
@@ -4917,12 +5290,105 @@ components:
           description: >-
             Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible
             host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
+        preview:
+          type: boolean
+          description: >-
+            Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own,
+            `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores,
+            the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is
+            not touched. A bundle with queue bindings is `400 preview_unsupported`.
+        previewAlias:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{0,19}$"
+          description: >-
+            The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's
+            SHA-256, so the same bundle is the same preview.
         namespaces:
           type: array
           description: Override the classes read from `twd.jsonc` (tests).
           items: { $ref: "#/components/schemas/ClassConfig" }
         containerImages: { $ref: "#/components/schemas/ContainerImages" }
       additionalProperties: false
+    DeploymentRecord:
+      type: object
+      description: One entry of a workload's deployment history (ADR-deploy-rollback).
+      required: [deploymentID, workload, host, epoch, status, createdAt, bundleSHA256, bundleRetained]
+      properties:
+        deploymentID: { type: string, examples: [dp_3f9a1c2b7d8e4f50] }
+        workload: { type: string }
+        host: { type: string }
+        epoch: { type: integer, format: int64 }
+        status: { $ref: "#/components/schemas/DeploymentStatus" }
+        error: { type: string, description: The host's last error for this deployment. }
+        hostStatus:
+          type: string
+          description: >-
+            The last status the host reported (or mgmt set) for this deployment, kept after it is superseded:
+            `active` means it was serving when it was replaced.
+        deployedBy: { type: string, description: The actor who deployed (see Conventions). }
+        createdAt: { type: integer, format: int64 }
+        activeAt:
+          type: integer
+          format: int64
+          description: When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history.
+        bundleSHA256: { type: string, description: "Hex SHA-256 of the bundle as uploaded (empty: deployed without a bundle)." }
+        bundleBytes: { type: integer, format: int64, description: Size of the retained bundle (0 once pruned). }
+        bundleRetained: { type: boolean, description: "mgmt still holds the bundle, so it can be rolled back to." }
+        rollbackOf: { type: string, description: "Set on a rollback: the deployment whose bundle it redeployed." }
+    RollbackCreate:
+      type: object
+      properties:
+        deploymentID:
+          type: string
+          description: The deployment to roll back to. Default the previous good one (see `CreateRollback`).
+        host: { type: string, description: "Pin a host, as for a deploy." }
+        replace: { type: boolean, description: "Re-place the workload, as `POST /v1/deployments` `replace`." }
+        forceTakeover: { type: boolean, description: "As `POST /v1/deployments` `forceTakeover`." }
+      additionalProperties: false
+    Rollback:
+      type: object
+      description: A started rollback.
+      required: [rollbackOf, target, deployment]
+      properties:
+        rollbackOf: { type: string, description: The deployment whose bundle was redeployed. }
+        target: { $ref: "#/components/schemas/DeploymentRecord" }
+        deployment: { $ref: "#/components/schemas/Deployment" }
+    Preview:
+      type: object
+      description: One running preview of a workload (ADR-deploy-preview).
+      required: [workload, alias, previewOf, deployment]
+      properties:
+        workload: { type: string, description: "The preview's own workload name.", examples: [web--preview-3f9a1c2b] }
+        alias: { type: string, examples: [3f9a1c2b] }
+        previewOf: { type: string, examples: [web] }
+        bundleSHA256: { type: string, description: Hex SHA-256 of the preview's bundle. }
+        deployment: { $ref: "#/components/schemas/Deployment" }
+    PreviewList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Preview" } }
+    PromotionCreate:
+      type: object
+      required: [preview]
+      properties:
+        preview:
+          type: string
+          description: The preview to promote, by alias (`3f9a1c2b`) or by its workload name (`web--preview-3f9a1c2b`).
+        host: { type: string, description: "Pin a host, as for a deploy." }
+        replace: { type: boolean, description: "Re-place the workload, as `POST /v1/deployments` `replace`." }
+        forceTakeover: { type: boolean, description: "As `POST /v1/deployments` `forceTakeover`." }
+        keepPreview: { type: boolean, description: "Leave the preview running after the promotion (default: undeploy it)." }
+      additionalProperties: false
+    Promotion:
+      type: object
+      description: A started promotion.
+      required: [preview, promotedFrom, deployment, previewStopped]
+      properties:
+        preview: { type: string, description: "The preview's workload name." }
+        promotedFrom: { type: string, description: The preview deployment whose bundle was deployed. }
+        deployment: { $ref: "#/components/schemas/Deployment" }
+        previewStopped: { type: boolean, description: The preview was undeployed. }
     Assignment:
       type: object
       description: What a host must run; `bundleURL` is `GET /v1/deployments/{id}/bundle`.
@@ -5182,7 +5648,8 @@ components:
         `principal`,
         `tenant_note` (source `tenant`, unverified),
         `container_start` (an object's container, ADR-032),
-        `container_stop` (an object's container, ADR-032).
+        `container_stop` (an object's container, ADR-032),
+        `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
         mgmt chain:
         `tenant_create`,
         `tenant_update`,
@@ -5201,6 +5668,7 @@ components:
         `upgrade_abort`,
         `deploy`,
         `undeploy`,
+        `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
         `create`,
         `mint`,
         `remint`,
@@ -5223,6 +5691,10 @@ components:
         `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
         `telemetry_delete`,
         `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
+        `notification_put` (the tenant's notification webhook set; its host and header names only),
+        `notification_delete`,
+        `notification_failed` (a notification was not delivered; the webhook's host and the error),
+        `notification_test` (`twd notify test`; the origin and the outcome),
         `reap`,
         `preflight` (optional; dryRun deploys),
         `host_add`,
@@ -5238,8 +5710,11 @@ components:
         `revoke` (an unused pooled key revoked).
         Public ingress (ADR-029), host chain:
         `public_request` (one per public request),
-        `public_rejected` (per-minute summary of requests the limits refused),
+        `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals),
         `public_object_created` (a name admitted for a public create).
+        Public ingress, mgmt chain:
+        `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+        `public_name_release` (a tenant gave a public name up).
         Workflow approvals (ADR-040), host chain:
         `approval_requested` (a Workflow instance waits for an approval),
         `approval_decision` (approved or rejected, with the approver's identity),
@@ -5257,6 +5732,7 @@ components:
         - tenant_note
         - container_start
         - container_stop
+        - audit_dropped
         - tenant_create
         - tenant_update
         - tenant_delete
@@ -5274,6 +5750,7 @@ components:
         - upgrade_abort
         - deploy
         - undeploy
+        - rollback
         - create
         - mint
         - remint
@@ -5295,6 +5772,10 @@ components:
         - telemetry_put
         - telemetry_delete
         - telemetry_release
+        - notification_put
+        - notification_delete
+        - notification_failed
+        - notification_test
         - reap
         - preflight
         - host_add
@@ -5311,6 +5792,8 @@ components:
         - public_request
         - public_rejected
         - public_object_created
+        - public_name_claim
+        - public_name_release
         - approval_requested
         - approval_decision
         - approval_denied
@@ -6008,7 +6491,7 @@ components:
         The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock.
         `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the
         store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall
-        clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
+        clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave.
       required: [source, ok, offsetMs, syncAgeMs]
       properties:
         source: { type: string, enum: [postgres, local], description: "`postgres`: the server clock, sampled every 5 s; `local`: SQLite, one replica." }
@@ -6023,7 +6506,6 @@ components:
         dnsName: { type: string, description: "`twd-mgmt.<tailnet>`" }
         tailnet: { type: string }
         https: { type: boolean }
-        issuer: { type: string, format: uri }
         transport: { $ref: "#/components/schemas/Transport" }
     WhoAmI:
       type: object
@@ -6033,33 +6515,61 @@ components:
         login: { type: string }
         nodeID: { type: string }
         tags: { type: array, items: { type: string } }
+        tailnet:
+          type: string
+          description: The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts.
+        tenants:
+          type: array
+          description: |
+            The tenants the caller can act in without knowing their IDs:
+            those whose `tailnet` is the caller's own tailnet. The local
+            operator gets every tenant; hosts get none. The admin UI's
+            approvals page and `twd approvals` / `twd approve` default to
+            these. A tailnet admin can still list every tenant
+            (`GET /v1/tenants`).
+          items: { $ref: "#/components/schemas/WhoAmITenant" }
+        approveGrants:
+          type: array
+          description: |
+            The values of the caller's `twd.dev/cap/approve` grants toward
+            `tag:twd-mgmt` (docs/approvals.md): what it may decide through
+            `twd approve` and the admin UI. Empty when it holds none.
+          items: { $ref: "#/components/schemas/ApproveGrant" }
         hostID: { type: string }
         admin: { type: boolean }
         actor: { type: string }
         mgmt: { $ref: "#/components/schemas/SelfInfo" }
+        caps:
+          type: array
+          items: { type: string }
+          description: The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+        approver:
+          type: boolean
+          description: The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+        mcpTools:
+          type: array
+          items: { type: string }
+          description: The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
+    WhoAmITenant:
+      type: object
+      required: [tenantID, tailnet]
+      properties:
+        tenantID: { type: string }
+        tailnet: { type: string }
+    ApproveGrant:
+      type: object
+      description: One value of a `twd.dev/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
+      properties:
+        workloads: { type: array, items: { type: string } }
+        workflows: { type: array, items: { type: string } }
+        steps: { type: array, items: { type: string } }
+        decisions: { type: array, items: { type: string } }
+        limits:
+          type: object
+          additionalProperties: { type: number }
     DeviceDeleteRun:
       type: object
       required: [deleted]
       properties:
         deleted: { type: array, items: { type: string }, description: Object IDs whose devices were deleted. }
         errors: { type: object, additionalProperties: { type: string } }
-
-    # ---------------------------------------------------------------- oidc
-    OIDCConfiguration:
-      type: object
-      required: [issuer, jwks_uri, response_types_supported, subject_types_supported, id_token_signing_alg_values_supported]
-      properties:
-        issuer: { type: string, format: uri }
-        jwks_uri: { type: string, format: uri }
-        response_types_supported: { type: array, items: { type: string } }
-        subject_types_supported: { type: array, items: { type: string } }
-        id_token_signing_alg_values_supported: { type: array, items: { type: string } }
-        claims_supported: { type: array, items: { type: string } }
-      additionalProperties: true
-    JWKS:
-      type: object
-      required: [keys]
-      properties:
-        keys:
-          type: array
-          items: { type: object, additionalProperties: true }

@@ -57,9 +57,21 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    writes `internal/catalog/releases/v0.2.0.json`, the catalog entry that
    twd-mgmt embeds for offline upgrade plans. The entry records the notes,
    the workerd pin, the newest migration, contract migrations and protocol
-   versions.
+   versions. Last, it re-renders the user-facing
+   [CHANGELOG.md](../CHANGELOG.md) from the catalog
+   (`go run ./internal/catalog/changes changelog`; a test fails when it is
+   stale).
 3. **Bump `VERSION`**, and the `@twd/*` and `create-twd` package versions,
    to `0.2.0`. Commit all of it as `Release v0.2.0`.
+
+   ```sh
+   echo 0.2.0 >VERSION && node scripts/npm-versions.mjs --set 0.2.0
+   ```
+
+   `npm-versions.mjs --set` moves every workspace package, their
+   dependencies on each other and the templates' `^0.2.0` ranges together.
+   `make test` (`TestNPMVersions`) fails if any of them differs from
+   `VERSION`.
 4. **Tag and push.**
 
    ```sh
@@ -83,8 +95,23 @@ scripts/release-notes.sh v0.1.0 v0.2.0
      publish, or from the draft's assets before.
 7. **Publish** the draft. `scripts/get.sh` and `twd upgrade` install the
    latest published release.
-8. **Publish npm.** Once the GitHub release is out, publish the `@twd/*`
-   packages and `create-twd` at the same version, from the same tag.
+8. **Publish npm.** Publishing the GitHub release starts
+   `.github/workflows/npm-publish.yml`. It runs `scripts/npm-publish.sh`
+   from the tag, which publishes `@twd/tailnet`, `@twd/node`, `@twd/mcp`
+   and `create-twd` at the release's version (a prerelease goes to the
+   `next` dist-tag), with provenance.
+   - It needs the repository secret `NPM_TOKEN`, a token that may publish
+     the `@twd` scope and `create-twd`. Without it the job only logs a
+     notice.
+   - Packages already on npm at that version are skipped, so after a partial
+     failure re-run it: `gh workflow run npm-publish.yml -f tag=v0.2.0`.
+   - By hand, from a checkout of the tag after `npm ci` and `npm login`:
+     `sh scripts/npm-publish.sh 0.2.0` (`--dry-run` to check first;
+     release.yml's gates already ran one).
+   - Before the first publish, check the templates against the packed
+     packages: `make templates-typecheck` (every template's
+     `twd init && npm install && npx tsc --noEmit`, with `@twd/*` from
+     `npm pack` tarballs).
 
 ## If a release is bad
 

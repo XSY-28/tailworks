@@ -67,7 +67,7 @@ func TestR2MoveBetweenHosts(t *testing.T) {
 	}}}
 
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeToken+"\n"), 0o600)
+	cliflow.WriteFakeOAuthFile(t, keyFile)
 	e.start("mgmt", nil, "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	for i := 0; ; i++ {
@@ -83,7 +83,7 @@ func TestR2MoveBetweenHosts(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	var tn struct{ TenantID string }
-	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	creds := []string{"TWD_R2_S3_ACCESS_KEY_ID=" + s3.Creds.AccessKeyID, "TWD_R2_S3_SECRET_ACCESS_KEY=" + s3.Creds.SecretAccessKey}
 	for _, id := range []string{"h1", "h2"} {
 		hd := filepath.Join(dir, id)

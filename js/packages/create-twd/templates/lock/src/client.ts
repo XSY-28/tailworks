@@ -192,7 +192,7 @@ export function lockClient(opts: LockClientOptions) {
       if (!ac.signal.aborted) ac.abort(e);
     };
     const arm = () => {
-      clearTimeout(expiry);
+      if (expiry !== undefined) clearTimeout(expiry);
       expiry = setTimeout(() => lose(new LockError("lease_expired", 0, "lease deadline passed without a successful renewal")), Math.max(0, cur.deadline - Date.now()));
     };
     const tick = async () => {
@@ -215,7 +215,7 @@ export function lockClient(opts: LockClientOptions) {
     } finally {
       stopped = true;
       clearTimeout(timer);
-      clearTimeout(expiry);
+      if (expiry !== undefined) clearTimeout(expiry);
       await release(cur).catch(() => {}); // a lease that is already gone is fine
     }
   }

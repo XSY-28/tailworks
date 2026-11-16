@@ -108,6 +108,13 @@ type Config struct {
 	// asks for, and the host registers the process tier only. Never set it
 	// on a host that serves real tenants (ADR-032 D5b).
 	ForceProcessTier bool
+
+	// WorkerdInspector (twd dev --inspector-port; only with
+	// ForceProcessTier) starts each workerd with its V8 inspector on a free
+	// 127.0.0.1 port (inspector.go). It gives full control of the isolate:
+	// never on a host serving tenants.
+	WorkerdInspector bool
+
 	// Capacity sets the capacity vector's VM dimensions (nil: measured; see
 	// capacity.go). Its nodes are always CapacityNodes; without a microVM
 	// backend every VM dimension is 0.
@@ -439,6 +446,9 @@ func New(cfg Config) (*Host, error) {
 	}
 	key := ed25519.NewKeyFromSeed(seed[:ed25519.SeedSize])
 	h.audit = newAuditLog(key)
+	if err := h.audit.openSpill(filepath.Join(cfg.DataDir, "audit-spill.jsonl"), h.log); err != nil {
+		return nil, err
+	}
 	if err := h.loadObjects(); err != nil {
 		return nil, err
 	}
@@ -667,7 +677,7 @@ func (h *Host) heartbeat(ctx context.Context) error {
 			continue
 		}
 		req.Deployments = append(req.Deployments, st)
-		if st.Status == "active" || st.Status == "starting" {
+		if liveStatus(st.Status) { // restart.go: a crash-looping workload keeps its lease
 			req.Leases = append(req.Leases, mgmtapi.Lease{Namespace: w.lease(), Epoch: w.epochNow()})
 		}
 	}
@@ -794,7 +804,7 @@ func (h *Host) syncAssignments(ctx context.Context) error {
 	}
 	h.mu.Unlock()
 	for _, w := range gone {
-		if w.statusSnapshot().Status == "active" {
+		if st := w.statusSnapshot().Status; st == "active" || st == statusCrashloop {
 			h.undeploy(w, "no longer assigned")
 		}
 	}

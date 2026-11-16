@@ -107,7 +107,6 @@ func TestSpecConventions(t *testing.T) {
 var unauditedOK = map[string]bool{
 	"ReportHostStatus": true, // 3 s heartbeat
 	"ReportHostPaths":  true, // placement telemetry (≤ 1/min); decisions are audited with the deploy
-	"CheckTenantWIF":   true, // diagnostic; creates nothing
 	// Platform store writes are high volume (one per KV put); creating a
 	// store and deleting one are audited.
 	"AppendStoreJournal": true,
@@ -154,9 +153,9 @@ func TestValidatorRejectsAndAccepts(t *testing.T) {
 		{"GET", "/v1/tenants/tn_abc123", "", false},
 		{"POST", "/v1/objects/agent-k3j5m7p9qa/credentials", "", true}, // epoch required
 		{"POST", "/v1/objects/agent-k3j5m7p9qa/credentials?epoch=3", "", false},
-		{"POST", "/v1/tenants", `{"tailnet":"x.ts.net","mintMode":"wif"}`, false},
+		{"POST", "/v1/tenants", `{"tailnet":"x.ts.net","mintMode":"oauth"}`, false},
 		{"POST", "/v1/tenants", `{"tailnet":"x.ts.net","mintMode":"magic"}`, true}, // enum
-		{"POST", "/v1/tenants", `{"tailnet":"x.ts.net","mintMode":"wif","bogus":1}`, true},
+		{"POST", "/v1/tenants", `{"tailnet":"x.ts.net","mintMode":"oauth","bogus":1}`, true},
 		{"PATCH", "/v1/tenants/tn_abc123", `{"maxObjects":10}`, false},
 		{"PATCH", "/v1/tenants/tn_abc123", `{"tailnet":"y"}`, true}, // additionalProperties: false
 		{"DELETE", "/v1/objects/agent-k3j5m7p9qa?cascade=true&reason=test", "", false},
@@ -229,8 +228,8 @@ func TestPageTypes(t *testing.T) {
 	}
 	// Merge-patch semantics: absent vs null are distinguishable.
 	var tp TenantPatch
-	_ = json.Unmarshal([]byte(`{"wifLifecycleClientID":null,"maxObjects":5}`), &tp)
-	if !tp.WifLifecycleClientID.IsNull() || tp.WifClientID.IsSpecified() || tp.MaxObjects == nil {
-		t.Fatalf("merge patch: lifecycle null=%v clientID specified=%v", tp.WifLifecycleClientID.IsNull(), tp.WifClientID.IsSpecified())
+	_ = json.Unmarshal([]byte(`{"pool":null,"maxObjects":5}`), &tp)
+	if !tp.Pool.IsNull() || tp.OauthClientID.IsSpecified() || tp.MaxObjects == nil {
+		t.Fatalf("merge patch: pool null=%v clientID specified=%v", tp.Pool.IsNull(), tp.OauthClientID.IsSpecified())
 	}
 }

@@ -34,13 +34,19 @@ var cliSurface = []struct {
 	{"up", []string{"up", "--yes"}},
 	{"down", []string{"down"}},
 	{"link", []string{"link", "--unlink"}},
-	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--api-key-file", "/nonexistent/api.env"}},
+	{"whoami", []string{"whoami"}},
+	{"tenant add", []string{"tenant", "add", "other.example.ts.net", "--oauth-client-file", "/nonexistent/oauth.env"}},
 	{"tenant ls", []string{"tenant", "ls"}},
 	{"tenant set", []string{"tenant", "set", "other.example.ts.net", "--max-objects", "5"}},
 	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net"}},
 	{"init", []string{"init", "{work}/app", "--template", "hello"}},
 	{"dev", []string{"dev", "{work}/empty", "--once"}},
+	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
+	{"deployments", []string{"deployments", "app"}},
+	{"previews", []string{"previews", "app"}},
+	{"promote", []string{"promote", "app", "3f9a1c2b"}},
+	{"rollback", []string{"rollback", "app"}},
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},
 	{"expose", []string{"expose", "off", "app"}},
@@ -64,6 +70,10 @@ var cliSurface = []struct {
 	{"kill", []string{"kill", "app"}},
 	{"approvals", []string{"approvals"}},
 	{"approve", []string{"approve", "app", "wf_1"}},
+	{"notify", []string{"notify"}},
+	{"notify", []string{"notify", "set", "--webhook", "https://hooks.example.com/x"}},
+	{"notify", []string{"notify", "test"}},
+	{"notify", []string{"notify", "rm"}},
 	{"audit", []string{"audit", "--all"}},
 	{"logs.line", []string{"logs", "app"}},
 	{"doctor", []string{"doctor"}},
@@ -74,6 +84,7 @@ var cliSurface = []struct {
 	{"docs ls", []string{"docs", "ls"}},
 	{"docs show", []string{"docs", "show", "errors.md#bad_request"}},
 	{"docs search", []string{"docs", "search", "tagOwners"}},
+	{"completion", []string{"completion", "bash"}},
 	{"agent setup", []string{"agent", "setup", "--dry-run"}},
 	{"agent remove", []string{"agent", "remove", "--dry-run"}},
 	{"agent ls", []string{"agent", "ls"}},
@@ -116,7 +127,7 @@ func TestCLIJSONContract(t *testing.T) {
 		Env: []string{"HOME=" + home, "TWD_STATE_DIR=" + state}}
 
 	// Every command and subcommand in `twd help` is in cliSurface.
-	hb, err := exec.Command(filepath.Join(bin, "twd"), "help").Output()
+	hb, err := exec.Command(filepath.Join(bin, "twd"), "help", "--all").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,6 +337,9 @@ func TestDevJSONEvents(t *testing.T) {
 	ready := next("ready")
 	if u, _ := ready["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") || ready["workload"] != "hello" {
 		t.Fatalf("ready event: %v", ready)
+	}
+	if u, _ := next("console")["url"].(string); !strings.HasPrefix(u, "http://127.0.0.1:") { // devconsole.go
+		t.Fatalf("console event url %q", u)
 	}
 	src := filepath.Join(app, "src", "index.ts")
 	b, _ := os.ReadFile(src)

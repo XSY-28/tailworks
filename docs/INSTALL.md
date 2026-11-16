@@ -2,79 +2,22 @@
 
 twd runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 ≥ 2.35)**. Each has a self-contained release tarball and the same
-`install.sh`; nothing needs root. [macOS](#macos) · [Linux](#linux) ·
-[Linux support matrix](#linux-support-matrix).
+`install.sh`; nothing needs root.
 
-## Try it without a tailnet
-
-You don't need a tailnet, a credential or `twd up` to run an app: `twd dev`
-starts the same twd-hostd, netd and workerd as production against an
-embedded control plane on 127.0.0.1 (Tailscale's testcontrol plus a local
-DERP/STUN) and an in-memory mgmt, and proxies a local port to the
-workload's node through a dev client node, so `getCaller()` sees a real
-(dev) caller.
-
-```sh
-twd init hello --template agent && cd hello
-twd dev                      # ready on http://127.0.0.1:8787 · edits reload · Ctrl-C to stop
-twd dev --once --json        # start, make one request, print it, exit (a smoke test)
-```
-
-`twd dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
-The `mcp` template serves on `/mcp` (its `/` answers 404); `twd dev` says
-so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
-policy evaluator (every dev node sees every other and gets the same test
-capabilities). Everything else below is for running apps on a real
-tailnet.
+The path through this page: install on [macOS](#macos) or [Linux](#linux),
+then your first deploy (the [README quick start](../README.md#quick-start-deploy-your-first-durable-object),
+and [troubleshooting](troubleshooting.md) if it doesn't answer), then
+[upgrade](#upgrade) and [uninstall](#uninstall) when the time comes. Also
+here: [trying an app without a tailnet](#try-it-without-a-tailnet), how
+workloads are [isolated](#isolation), and [tuning](#tuning-how-fast-a-new-objects-own-node-comes-up).
+The words (tenant, workload, tier, …) are explained in
+[concepts.md](concepts.md). Where each platform is tested, and what was
+measured there: [install-testing.md](install-testing.md).
 
 ## macOS
 
 These are the exact steps for an Apple-silicon Mac with nothing installed:
-no Go, no Node.js, no Homebrew packages. They were run on `mbp` (M2 Pro,
-macOS 26.6) by `make e2e-mbp`; measured numbers are in STATUS.md (M6).
-
-> **Isolation, honestly.** twd's default is the **process tier**: every app
-> runs in a workerd (or Node) process on your machine, and each Durable
-> Object gets its own tailnet node and identity. V8 isolates and twd's
-> egress guard are real boundaries, but this is **dev-grade isolation**:
-> there is no VM between tenants and your user account. On top of that,
-> twd-hostd runs every tenant's workerd **and Node app** in a per-workload
-> **process sandbox**, on by default (`twd-hostd -sandbox auto`):
->
-> - **macOS: Seatbelt** (`sandbox-exec`, generated profile).
-> - **Linux: Landlock + seccomp** (no root and no user namespaces needed;
->   kernel 5.13+ with Landlock enabled, e.g. Ubuntu 22.04+/24.04, Debian 12,
->   Fedora). A small launcher in twd-hostd applies the rules, then execs
->   workerd or node in place.
->
-> Either way a workload can write only its own instance and data dirs, read
-> only the OS, its runtime binary and its install prefix, and can't read
-> your home dir (including `~/.twd`), twd's state (node keys, mgmt custody,
-> other tenants' storage) or any tenant's API key file, and can't use
-> mgmt's or hostd's sockets. **Linux adds more:** with Landlock ABI ≥ 4
-> (kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) a workload may open TCP only
-> to its own app port and egress proxy, so a malicious Node app can't
-> bypass netd's proxy; a seccomp filter refuses ptrace and
-> `process_vm_readv/writev` (so no reading a sibling's memory), kexec,
-> mount, bpf, perf_event_open, keyctl, new namespaces, io_uring, and
-> UDP/ICMP/raw/MPTCP sockets; and other processes' `/proc` entries (their
-> environment, cmdline) are unreadable. Workloads get **no unix sockets**
-> (seccomp; workerd's listener is inherited and its services are
-> token-checked loopback TCP), so the host's tailscaled or docker socket is
-> out of reach, and they may signal only themselves. twd's own sockets
-> refuse sandboxed peers too. As defence in depth, if *your user* can reach
-> the system tailscaled's socket or a container engine (or is in the
-> docker/podman/lxd groups), `twd doctor` warns (`host_sockets`) and twd
-> serves one tenant only unless `twd up --insecure-shared-host`: run twd as
-> a dedicated user to share a host.
->
-> `twd doctor` checks that the sandbox enforces on your machine (Linux: the
-> Landlock ABI too), and while twd runs, that every workload is under it.
-> **Without a sandbox** (Linux without Landlock) `twd doctor` warns loudly,
-> and twd refuses to run a second tenant's process-tier workloads unless you
-> pass `twd up --insecure-shared-host`. **microVM isolation needs Linux with
-> KVM (Firecracker) or macOS (Virtualization.framework)**; see
-> [COMPAT.md](COMPAT.md#containers). Don't run code you don't trust on the process tier.
+no Go, no Node.js, no Homebrew packages.
 
 ### What you need
 
@@ -82,17 +25,14 @@ macOS 26.6) by `make e2e-mbp`; measured numbers are in STATUS.md (M6).
 - A tailnet you control, where you are an **admin** (`autogroup:admin`).
 - An **OAuth client** (admin console › Settings › OAuth clients; scope
   Auth Keys write with tag `tag:twd`) saved in a 0600 file:
-  [Recommended: OAuth client](#recommended-oauth-client). No browser
-  login, no Funnel, no HTTPS needed. Alternatives:
-  [workload identity federation](#alternative-workload-identity-federation-twd-up---wif)
-  (`twd up --wif`: browser login, HTTPS + Funnel, no secret anywhere) and
-  the [API-key mode](#last-resort-api-key-mode).
+  [The OAuth client](#the-oauth-client). No browser login, no Funnel, no
+  HTTPS needed.
 - A policy snippet in your tailnet policy (tagOwners: `tag:twd` owns
-  `tag:twd-mgmt` and `tag:twd-host`; [below](#recommended-oauth-client)).
+  `tag:twd-mgmt` and `tag:twd-host`; [below](#the-oauth-client)).
 
 twd **never uses your Mac's Tailscale app or tailscaled**, its login, its
 state, or its LocalAPI. Every twd node (mgmt's own node and every object
-node) is a separate in-process (tsnet) node of the tailnet you log in to.
+node) is a separate in-process (tsnet) node of the tailnet your OAuth client belongs to.
 If Tailscale.app is running on a different (personal) tailnet, it is left
 alone; `twd doctor` checks this. The one place your machine's own Tailscale
 *is* used is a **developer machine** running `twd link`: there the CLI is
@@ -150,26 +90,40 @@ It checks that workerd runs, that the built-in bundler can build every
 template offline, that `~/.twd` (and the state dir) are writable, that the
 process sandbox (Seatbelt on macOS, Landlock + seccomp on Linux) works and
 enforces, and that twd is not using the system tailscaled. Every line has
-a `fix:` if it fails. Once twd is up, the `mint_mode` row says which mode
-is active (`oauth`, `wif (keyless)` or `apikey`; it warns if the OAuth
-client file is readable by anyone but you) and `api_key` is `skip` unless
-you chose the API-key fallback.
+a `fix:` if it fails. Once twd is up, the `mint_mode` row shows the OAuth
+client twd mints with (it warns if the client file is readable by anyone
+but you, and fails if the state is in a mint mode an older twd used:
+[Upgrading from API-key or WIF mode](#upgrading-from-api-key-or-wif-mode)).
+`api_key` is `skip` except on the Headscale profile.
+
+Optional: tab completion for every command, subcommand and flag.
+
+```sh
+echo 'eval "$(twd completion bash)"' >> ~/.bashrc                  # bash
+twd completion zsh > "${fpath[1]}/_twd"                            # zsh (then restart it)
+twd completion fish > ~/.config/fish/completions/twd.fish          # fish
+```
+
+`twd version --check` says whether a newer release is out and whether the
+running `twd up` needs a restart. An interactive twd also prints a one-line
+notice when a newer release is out, at most once a day. `CI=1`, `--json` or
+`TWD_NO_UPDATE_CHECK=1` turns it off.
 
 twd mints a Tailscale auth key for every node it runs (mgmt's own node,
-this host's node, every object), so it needs **one** credential. Three
-choices, in order of preference; `twd up` with none of them prints the
-same list and exits (it never starts a browser flow on its own).
+this host's node, every object), so it needs **one** credential: an OAuth
+client of your tailnet. `twd up` without one prints how to create it and
+exits.
 
 Two machines appear below: the **host** (runs `twd up`: mgmt, the host
 agent, your apps' nodes) and a **developer machine** (your laptop: `twd
 link`, `twd deploy`). They can be the same machine; then skip `twd link`.
 
-### Recommended: OAuth client
+### The OAuth client
 
 An OAuth client scoped to auth keys for `tag:twd`: the same mechanism the
 Tailscale Kubernetes operator and GitHub Action use. Its secret never
 expires and stays in a 0600 file on the host. **No browser login, no
-Funnel, no HTTPS requirement, no public issuer.**
+Funnel, no HTTPS requirement.**
 
 1. **Policy first** (admin console › Access controls). `tag:twd` must own
    mgmt's and the host's tags, so the client can mint their keys:
@@ -186,7 +140,7 @@ Funnel, no HTTPS requirement, no public issuer.**
      // admins may use twd over the tailnet (twd link)
      {"src": ["autogroup:admin"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"twd.dev/cap/admin": [{}]}},
    ],
-   // no nodeAttrs: no Funnel in this mode
+   // no nodeAttrs: mgmt never uses Funnel
    ```
    `tag:twd` must exist before the console lets you tag a client with it.
 2. **Generate the client** (admin console › Settings › OAuth clients ›
@@ -240,89 +194,31 @@ one, overwrite the file (0600), run `twd up` again (it updates the
 tenant), then revoke the old client in the console. Revoking the client is
 also your kill switch for all future minting.
 
-### Alternative: workload identity federation (`twd up --wif`)
+#### Upgrading from API-key or WIF mode
 
-No secret exists anywhere, which suits a hosted / multi-tenant mgmt; the
-price is a browser login, Funnel and HTTPS on the tailnet, and a public
-OIDC issuer served by mgmt.
-
-#### On the host: `twd up --wif`
+twd used to mint with a Tailscale API key (`twd up --api-key-file`) or
+through workload identity federation (`twd up --wif`). Both modes are gone
+(ADR-042). A state dir set up in one of them still starts
+and its running nodes keep serving, but nothing new can be minted: `twd up` stops with **`mint_mode_removed`**
+and `twd doctor` fails its `mint_mode` row. To switch, create the OAuth
+client above (policy, client, 0600 file), then:
 
 ```sh
-twd up --wif              # add --service to install a LaunchAgent (starts at login)
+twd up --oauth-client-file ~/.config/twd/oauth.env --yes
 ```
 
-What happens, in order (each line is a step you'll see):
+This keeps the tenant, its deployments and mgmt's node; it only changes
+how keys are minted. A second tenant added with `twd tenant add` switches
+with `twd tenant set <tenant> --oauth-client-file <its client file>`.
+Afterwards:
 
-1. **Policy snippet.** `twd up` prints what your tailnet policy needs and,
-   in a terminal, asks you to confirm it is in place **before** it
-   requests a login URL (the login is refused with `requested tags
-   [tag:twd-mgmt] are invalid or not permitted` otherwise; that refusal
-   is reported as `policy_missing_tag_owners` with the snippet). In WIF
-   mode the issuer runs on its **own** node, `tag:twd-issuer`; mgmt's node,
-   which serves the API, is never Funnel-capable:
-   ```jsonc
-   "tagOwners": {
-     "tag:twd":      ["autogroup:admin"],
-     "tag:twd-mgmt": ["autogroup:admin", "tag:twd"],
-     "tag:twd-host": ["autogroup:admin", "tag:twd"],
-     "tag:twd-issuer": ["autogroup:admin", "tag:twd"],
-   },
-   "grants": [
-     {"src": ["tag:twd-host"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"]},
-     {"src": ["tag:twd-mgmt"], "dst": ["tag:twd-host"], "ip": ["tcp:7474"]},
-     // admins may use twd over the tailnet (twd link); ip: the API ports, app: the twd admin capability
-     {"src": ["autogroup:admin"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"twd.dev/cap/admin": [{}]}},
-   ],
-   "nodeAttrs": [
-     // Funnel publishes the OIDC issuer from its own node (discovery + JWKS
-     // only, no grants), so Tailscale can verify mgmt's tokens. Never on tag:twd-mgmt.
-     {"target": ["tag:twd-issuer"], "attr": ["funnel"]},
-   ],
-   ```
-   Your apps' tags (`tag:twd-wl-<name>`, object class tags) are added as
-   usual: `twd deploy` preflights them and prints the snippet.
-2. **Login URL.** mgmt's node `twd-mgmt` joins your tailnet with
-   `tag:twd-mgmt`. twd prints a `https://login.tailscale.com/a/…` URL;
-   open it and sign in as a tailnet admin. The node's state is kept under
-   `~/.twd/mgmt/tsnet`, so later `twd up` runs need no login. The tailnet
-   name is read from the login (no `--tailnet`). Then the issuer's node
-   `twd-issuer` (`tag:twd-issuer`) joins the same way: a **second** login
-   URL (or `--issuer-authkey-file` for unattended setups); its state is
-   kept under `~/.twd/mgmt/issuer-tsnet`. If the tailnet has no HTTPS
-   certificates, or `tag:twd-issuer` has no Funnel attribute, `twd up`
-   stops here and says exactly what to enable; the nodes stay joined.
-   Upgrading from a twd that served the issuer from mgmt's node: the issuer
-   URL changes, so `twd up` clears the stored client IDs and asks for a new
-   trust credential; remove the old `tag:twd-mgmt` funnel entry (twd
-   warns while it is there).
-3. **Trust credential.** mgmt starts and publishes its OIDC issuer over
-   Funnel, from the issuer's node, at `https://twd-issuer.<tailnet>.ts.net/t/tn_<tailnet>`. twd prints
-   the exact admin-console steps: Settings › Trust credentials › Add, with
-   the issuer URL, the subject `twd:tenant:tn_<tailnet>:mint`, scope
-   `auth_keys`, tag `tag:twd`; and an optional second **lifecycle**
-   credential (subject `…:lifecycle`, scopes `devices:core` and
-   `policy_file:read`) that enables kill tier 2 (device delete), the
-   reaper, spawn checks and deploy preflight. Paste each credential's
-   **client ID** at the prompt (they are public identifiers; twd stores
-   nothing else). Non-interactive: `twd up --wif-client-id <id>
-   [--wif-lifecycle-client-id <id>]` (implies `--wif`); without the IDs, `twd up --wif --yes`
-   prints the steps, leaves the stack running and exits with
-   `wif_credential_required`.
-4. **Ready.** twd waits until the issuer answers from the public internet
-   (the first HTTPS certificate for a new node name takes 1–2 minutes),
-   creates the tenant in mint mode `wif`, and verifies both credentials
-   with a real token exchange (`✓ trust … exchanges`). From now on every
-   object node's auth key is minted through the trust credential: single
-   use, pre-authorized, tagged, ≤ 5 min. Deleting the credential in the
-   console is your kill switch.
+- **API key:** revoke the key in the admin console (Settings › Keys);
+  twd no longer reads it.
+- **WIF:** delete the trust credentials (Settings › Trust credentials),
+  remove the `twd-issuer` machine, and remove `tag:twd-issuer` and its
+  `funnel` nodeAttrs from your policy.
 
-Why a console step at all: creating *new* devices needs a control-plane
-credential; a connection's identity can't do it. The trust credential is
-the keyless form of that credential: no secret exists anywhere, only a
-trust relationship with mgmt's issuer, scoped to `auth_keys` for `tag:twd`.
-Until Tailscale offers a "connect a platform" consent page, this is one
-paste per tailnet.
+### Running twd
 
 `twd up … --service` on macOS installs the LaunchAgent
 `~/Library/LaunchAgents/dev.twd.up.plist` (per user, no sudo) so the
@@ -366,8 +262,7 @@ Normal operation never uses a unix socket or a token. mgmt serves the
 `docs/contracts/mgmt-api.md`) on its own tailnet node `twd-mgmt`
 (`tag:twd-mgmt`), authenticated by WhoIs. twd-hostd runs its **own** node
 `twd-host-<hostID>` (`tag:twd-host`), joined once with a single-use key
-mgmt mints through the tenant's credential (OAuth client, trust credential
-or API key), and talks to mgmt
+mgmt mints through the tenant's OAuth client, and talks to mgmt
 over the tailnet; mgmt pushes kills to that node (port 7474). The `twd` CLI
 on the host machine reaches mgmt through the node's loopback proxy
 (`~/.twd/mgmt/loopback.json`, 0600), so it is the operator by WhoIs; a
@@ -404,7 +299,8 @@ start `twd-hostd -host-id <id> -mgmt http://twd-mgmt.<tailnet> -tsnet-control-ur
 
 #### Where a workload runs (placement, multi-host)
 
-With more than one host, mgmt picks the host at deploy (ADR-033 draft, Proposed):
+With more than one host, mgmt picks the host at deploy
+([ADR-033](design/adr/033-smart-placement.md)):
 
 1. **Eligible hosts** are live (a heartbeat in the last 10 s), in the tenant's
    pool (`twd tenant set --pool`), offer the workload's tier (`"tier":
@@ -456,29 +352,6 @@ host's disk. `twd ls` shows each workload's placement reason.
 `twd up --local-dev` keeps the old unix socket + per-host token for
 `twd dev` and hermetic tests only; `twd doctor` flags it.
 
-### Last resort: API-key mode
-
-For tests, or when you'd rather hand twd a Tailscale API access token
-(it expires within 90 days and can do anything its owner can; prefer an
-OAuth client): put it in a file as `TS_API_KEY=tskey-api-…`,
-mode `0600`, and name the tailnet explicitly (a key doesn't name its
-tailnet, and twd never bootstraps from your Mac's tailscaled):
-
-```sh
-twd doctor --tailnet <your-tailnet>.ts.net --api-key-file ~/path/to/api.env
-twd up --tailnet <your-tailnet>.ts.net --api-key-file ~/path/to/api.env --yes
-twd init support --template agent && cd support && twd deploy
-```
-
-The key is read when needed and never copied, logged or printed; `twd
-doctor` labels the mode `apikey`. `twd up` prints the `tag:twd` tagOwners
-snippet if it's missing (`--policy-apply` writes it, validated, with
-If-Match). `twd link` works in this mode too if you give mgmt a tailnet
-node: `twd up … --mgmt-hostname twd-mgmt` (the join is interactive unless
-`--mgmt-authkey-file` is given). A state dir is bound to one mode (`twd
-up` with no mode flag reuses it); switch with `twd down --purge` and a
-fresh `--state-dir`.
-
 ### Self-hosted control: Headscale
 
 twd also runs on a [Headscale](https://github.com/juanfont/headscale)
@@ -494,13 +367,18 @@ no Funnel and no posture. See [headscale.md](headscale.md).
 `~/.twd` (`--state-dir` to use another directory). `twd deploy` preflights
 the grants your app declares (`tailnet.connects`), bundles it, and waits
 until the workload node is on your tailnet, then prints its address:
-`http://twd-support-<id>.<tailnet>.ts.net/`. Day 2: `twd ls`, `twd logs
-support`, `twd kill <object> --cascade`, `twd audit <object>`, `twd status`.
+`http://twd-support-<id>.<tailnet>.ts.net/`. To call it, a grant must let
+you reach the workload's tag on port 80 (the
+[quick start](../README.md#quick-start-deploy-your-first-durable-object)
+shows it, and `twd deploy` prints it with the tagOwners for new tags). If
+the first deploy doesn't answer, see [troubleshooting.md](troubleshooting.md).
+Day 2: `twd ls`, `twd logs support`, `twd kill <object> --cascade`,
+`twd audit <object>`, `twd status`.
 
 #### A second tenant (another tailnet) on the same Mac
 
 ```sh
-twd tenant add <other-tailnet>.ts.net --api-key-file ~/path/to/other-api.env
+twd tenant add <other-tailnet>.ts.net --oauth-client-file ~/.config/twd/other-oauth.env   # that tailnet's own OAuth client
 twd deploy --tenant <other-tailnet>.ts.net      # also: ls, kill, audit, logs --tenant
 twd tenant ls
 ```
@@ -510,8 +388,9 @@ netmap only), its own workerd/Node processes, each in its own sandbox, 0700
 state dirs, throttles and audit chain. Objects of one tenant can't resolve
 or reach the other's (`peer_not_visible`). On a host without a process
 sandbox, `twd tenant add` refuses (`sandbox_unavailable`) unless twd was
-started with `twd up --insecure-shared-host`. (`twd tenant add` is apikey
-mode only for now; keyless second tenants are a follow-up.)
+started with `twd up --insecure-shared-host`. Each tenant needs its own
+OAuth client file (created in that tailnet's admin console); `twd tenant
+add` refuses one that already serves another tenant.
 
 ```sh
 twd down --purge           # kill every object and delete its devices, then stop
@@ -527,11 +406,13 @@ Installed with `get.sh`? It doesn't keep the release directory; see
 - `workerd does not run on this machine`: re-sign it (`codesign -f -s -
   ~/.twd/bin/workerd`) and clear quarantine (`xattr -d com.apple.quarantine
   ~/.twd/bin/workerd`), then `twd doctor`.
-- `mint_mode_required` from `twd up`: pick a credential (OAuth client
-  recommended); the error lists all three.
+- `mint_mode_required` from `twd up`: pass `--oauth-client-file`; the
+  error prints how to create the client.
+- `mint_mode_removed`: this state dir (or tenant) is in the API-key or WIF
+  mode an older twd used; switch it to an OAuth client
+  ([Upgrading from API-key or WIF mode](#upgrading-from-api-key-or-wif-mode)).
 - `policy_missing_tag_owners`: `tag:twd` must own `tag:twd-mgmt` and
-  `tag:twd-host` (and, in `--wif`, your login must own `tag:twd-mgmt`);
-  add the printed tagOwners and re-run. Nothing was minted.
+  `tag:twd-host`; add the printed tagOwners and re-run. Nothing was minted.
 - `credential_file_insecure`: `chmod 600` the OAuth client file.
 - `oauth_exchange_failed`: the client secret is wrong or the client was
   revoked; generate a new one (Settings › OAuth clients).
@@ -539,27 +420,21 @@ Installed with `get.sh`? It doesn't keep the release directory; see
   client has no Devices › Core scope; generate one with it, overwrite the
   file, `twd up`, revoke the old client; remove leftover devices in the
   console (Machines).
-- `https_required` / `funnel_required` from `twd up --wif`: enable HTTPS
-  certificates (admin console › DNS) or add the `nodeAttrs` funnel entry
-  for `tag:twd-issuer` (never `tag:twd-mgmt`); the nodes stay joined, re-run `twd up`.
-- `bootstrap_failed … not a tagOwner`: the account you logged in with may
-  not own `tag:twd-mgmt`; add the tagOwners snippet, remove the node in the
-  console, `twd up` again.
-- `issuer_unreachable`: the Funnel issuer never answered publicly. Check
-  the funnel attribute, and `twd logs --component mgmt`.
-- `wif_exchange_failed`: the credential's issuer or subject doesn't match
-  exactly what `twd up` printed (watch for a trailing slash or the wrong
-  tenant ID); fix it in the console and `twd up --wif-client-id <id>`.
+- `bootstrap_failed … without the tag:twd-mgmt tag`: control dropped the
+  tag because `tag:twd` doesn't own `tag:twd-mgmt`; add the tagOwners
+  snippet, remove the node in the console, `twd up` again.
 - `not_admin` from `twd link`: you need `twd.dev/cap/admin` from a grant
   to `tag:twd-mgmt`; the error prints the grant.
 - `mgmt_unreachable` from a linked machine: is your Tailscale connected to
   the tailnet that runs twd, and does a grant let you reach
   `tag:twd-mgmt` on tcp:443?
-- `tailnet_required`: apikey mode needs `--tailnet`; twd won't bootstrap
-  from your Mac's Tailscale login.
+- `tailnet_required`: twd couldn't name the tailnet (the OAuth client can't
+  list devices and mgmt's node hasn't joined yet); pass `--tailnet`. twd
+  won't bootstrap from your Mac's Tailscale login.
 - `acl_denied` on deploy: add the printed grant to your tailnet policy, or
-  deploy with `--allow-missing-grants`. `preflight skipped` means mgmt has
-  no lifecycle credential with `policy_file:read` to read the policy.
+  deploy with `--allow-missing-grants`. `preflight skipped` means the
+  OAuth client has no Policy File › Read scope, so mgmt can't read the
+  policy.
 - `twd doctor` says `sandbox` failed: Seatbelt (`/usr/bin/sandbox-exec`)
   or Landlock didn't start workerd or didn't enforce a deny on this OS
   version. Report it; tenants are not confined until it is fixed.
@@ -575,6 +450,77 @@ Installed with `get.sh`? It doesn't keep the release directory; see
   From a linked machine, `host_unavailable` means mgmt could not reach the
   workload's host on its push port (the policy grant `tag:twd-mgmt` →
   `tag:twd-host` `tcp:7474`, or the host is down).
+- `twd deploy` worked but the app doesn't answer, `identity_pending`,
+  `peer_not_visible`, or a deployment `failed` in `twd ls`: see
+  [troubleshooting.md](troubleshooting.md).
+
+## Try it without a tailnet
+
+You don't need a tailnet, a credential or `twd up` to run an app. `twd dev`
+runs it on your machine with the same host agent (twd-hostd, netd) and
+workerd as production. In place of your tailnet, it starts a test control
+plane and relay on 127.0.0.1, with an in-memory mgmt. A local port reaches
+the app through a dev client node, so `getCaller()` sees a real (dev)
+caller.
+
+```sh
+twd init hello --template agent && cd hello
+twd dev                      # ready on http://127.0.0.1:8787 · edits reload · Ctrl-C to stop
+twd dev --once --json        # start, make one request, print it, exit (a smoke test)
+```
+
+`twd dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
+The `mcp` template serves on `/mcp` (its `/` answers 404); `twd dev` says
+so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
+policy evaluator. Every dev node sees every other and gets the same test
+capabilities, so a call that works in dev can still need a grant on a
+tailnet.
+
+## Isolation
+
+twd's default is the **process tier**: every app runs in a workerd (or
+Node) process on your machine, and each Durable Object gets its own tailnet
+node and identity. V8 isolates and twd's egress guard are real boundaries,
+but this is **dev-grade isolation**: there is no VM between tenants and
+your user account. On top of that, twd-hostd runs every tenant's workerd
+**and Node app** in a per-workload **process sandbox**, on by default
+(`twd-hostd -sandbox auto`):
+
+- **macOS: Seatbelt** (`sandbox-exec`, generated profile).
+- **Linux: Landlock + seccomp** (no root and no user namespaces needed;
+  kernel 5.13+ with Landlock enabled, e.g. Ubuntu 22.04+/24.04, Debian 12,
+  Fedora). A small launcher in twd-hostd applies the rules, then execs
+  workerd or node in place.
+
+Either way a workload can write only its own instance and data dirs, read
+only the OS, its runtime binary and its install prefix, and can't read
+your home dir (including `~/.twd`), twd's state (node keys, mgmt custody,
+other tenants' storage) or any tenant's API key file, and can't use
+mgmt's or hostd's sockets. **Linux adds more:** with Landlock ABI ≥ 4
+(kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) a workload may open TCP only
+to its own app port and egress proxy, so a malicious Node app can't
+bypass netd's proxy; a seccomp filter refuses ptrace and
+`process_vm_readv/writev` (so no reading a sibling's memory), kexec,
+mount, bpf, perf_event_open, keyctl, new namespaces, io_uring, and
+UDP/ICMP/raw/MPTCP sockets; and other processes' `/proc` entries (their
+environment, cmdline) are unreadable. Workloads get **no unix sockets**
+(seccomp; workerd's listener is inherited and its services are
+token-checked loopback TCP), so the host's tailscaled or docker socket is
+out of reach, and they may signal only themselves. twd's own sockets
+refuse sandboxed peers too. As defence in depth, if *your user* can reach
+the system tailscaled's socket or a container engine (or is in the
+docker/podman/lxd groups), `twd doctor` warns (`host_sockets`) and twd
+serves one tenant only unless `twd up --insecure-shared-host`: run twd as
+a dedicated user to share a host.
+
+`twd doctor` checks that the sandbox enforces on your machine (Linux: the
+Landlock ABI too), and while twd runs, that every workload is under it.
+**Without a sandbox** (Linux without Landlock) `twd doctor` warns loudly,
+and twd refuses to run a second tenant's process-tier workloads unless you
+pass `twd up --insecure-shared-host`. **microVM isolation needs Linux with
+KVM (Firecracker) or macOS (Virtualization.framework)**; see
+[COMPAT.md](COMPAT.md#containers) and [the Linux microVM tier](#linux-the-microvm-tier-firecracker-kvm).
+Don't run code you don't trust on the process tier.
 
 ## Upgrade
 
@@ -609,7 +555,9 @@ To restore, `twd down`, put the directory back in the same place, and run
 `twd up`. Never run two copies of the same state at once: they share node
 identities. For one database, `twd d1 export <db> --output <file>` works
 while twd runs ([d1.md](d1.md)). Your OAuth client file
-(`~/.config/twd/oauth.env`) is not in the state dir.
+(`~/.config/twd/oauth.env`) is not in the state dir. `twd upgrade` takes
+its own backup before it installs, in `~/.twd/backups/`
+([upgrading.md](upgrading.md)).
 
 ## Uninstall
 
@@ -621,10 +569,9 @@ rm -rf ~/.twd                                  # or: <release dir>/install.sh --
 ```
 
 `twd down --purge` deletes the objects' devices (and revokes unused warm
-keys), but not twd's own nodes: remove `twd-mgmt` (and `twd-issuer` or
-`twd-host-<id>` if you had them) in the admin console › Machines. Then, if
-you're done with twd on this tailnet, revoke the OAuth client (or delete
-the trust credentials), delete `~/.config/twd/oauth.env`, remove the twd
+keys), but not twd's own nodes: remove `twd-mgmt` (and `twd-host-<id>`
+if you had one) in the admin console › Machines. Then, if you're done with
+twd on this tailnet, revoke the OAuth client, delete `~/.config/twd/oauth.env`, remove the twd
 tags and grants from your tailnet policy, and remove the `PATH` line from
 your shell profile.
 
@@ -644,18 +591,20 @@ defaults are on, and each `twd up` stores them for the service:
 
 Measured on a production tailnet, with all three at their defaults: a new
 object's first request on its own node arrives **~0.23 s** after it is
-created (p95 ~0.3 s), down from ~7 s. Details: STATUS.md, "Fast identity".
+created (p95 ~0.3 s), down from ~7 s
+([how it was measured](install-testing.md#fast-identity)).
 `--warm-keys 0 --pool-nodes 0` turns both pools off.
 
 ## Linux
 
 The same flow on a Linux host: one tarball per architecture, `install.sh`
-into `~/.twd` without root, `twd doctor`, `twd up`. Measured on fresh Lima
-VMs by `make e2e-linux` (see the [support matrix](#linux-support-matrix)).
+into `~/.twd` without root, `twd doctor`, `twd up`. Which distros it was
+tested on, and the measured timings, are in
+[install-testing.md](install-testing.md#linux-support-matrix).
 
 > **Isolation on Linux.** The **process tier** runs every tenant's workerd
 > and Node app under **Landlock + seccomp** (unprivileged; no user
-> namespaces needed), with the guarantees listed at the top of this file.
+> namespaces needed), with the guarantees listed under [Isolation](#isolation).
 > `twd doctor` reports the kernel's Landlock ABI and that the sandbox
 > enforces; without Landlock it warns loudly and twd refuses to host a
 > second tenant on the process tier. The **microVM tier** (Firecracker,
@@ -676,15 +625,12 @@ VMs by `make e2e-linux` (see the [support matrix](#linux-support-matrix)).
   6.7+, also restricts TCP; all the distros above have Landlock), cgroups v2 (the default), systemd (for `twd up --service`).
 - No Node.js, Go or npm. `curl`/`scp` and `tar` to get the tarball.
 - The same as on macOS: a tailnet where you are an admin and an
-  [OAuth client](#recommended-oauth-client) file (`twd up
-  --oauth-client-file …`; no HTTPS needed); or HTTPS + Funnel for
-  [workload identity federation](#alternative-workload-identity-federation-twd-up---wif);
-  or an API access token file for the [API-key mode](#last-resort-api-key-mode).
+  [OAuth client](#the-oauth-client) file (`twd up --oauth-client-file …`;
+  no HTTPS needed).
 
 twd **never uses the machine's tailscaled**. If a system Tailscale is
 installed and logged in to some other tailnet, it is left alone: every twd
-node is its own tsnet node of the tailnet you log in to (or pass with
-`--tailnet` in apikey mode).
+node is its own tsnet node of the tailnet your OAuth client belongs to.
 While twd runs, `twd doctor` checks that no twd process holds tailscaled's
 socket or state. It reads `/proc/<pid>/fd` and matches unix-socket peers with
 `ss -x`, and never connects to tailscaled.
@@ -726,9 +672,7 @@ Ubuntu would make bash skip `~/.profile`.
 ### Run twd as a systemd user service
 
 ```sh
-twd up --oauth-client-file ~/.config/twd/oauth.env --service --yes           # OAuth client (recommended), as on macOS
-twd up --wif --service                                                       # keyless (login URL + trust credential)
-twd up --tailnet <your-tailnet>.ts.net --api-key-file ~/path/to/api.env --yes --service   # apikey mode
+twd up --oauth-client-file ~/.config/twd/oauth.env --service --yes           # as on macOS
 systemctl --user status twd.service
 ```
 
@@ -764,22 +708,15 @@ their saved state with the same node IDs and IPs. **Ephemeral** nodes
 their saved state when they come back; twd notices (the backend sits in
 `NeedsLogin`), deletes the dead device, mints a fresh key and rejoins
 **under the same hostname**, so the MagicDNS name is stable but the node ID
-and IP change. Measured on Ubuntu 24.04 arm64: a spawned sub-agent was
-ready again 4.1 s after `systemctl --user restart twd` and answering a
-client on another machine after 9.5 s.
+and IP change.
 
-**Reboot** (measured, Ubuntu 24.04 arm64, lingering on): from the start of
-boot, ssh up at 6.6 s, `twd.service` active and twd healthy at 6.6 s, every
-object rejoined from saved state (same node IDs, nothing re-minted), and
-the workload answered a client on another machine at 8.6–17.1 s (two runs).
-The spread is on the **client's** side, not twd's: a persistent node comes
-back with the same node key but fresh WireGuard state, so a client that
-still holds a recent session to it keeps sending on that dead session and
-WireGuard only re-handshakes after ~15 s of silence; a client whose session
-had already gone idle, or a client that has never talked to the node,
-reaches it within 2–3 s of `twd up` (measured in STATUS.md, "Diagnosis: the
-12–17 s re-find delay"). The node is reachable over DERP the moment it is
-up.
+**After a reboot** (with lingering on), the service starts at boot and
+every object rejoins from its saved state: same node IDs, nothing
+re-minted. A client that talked to the workload just before the reboot can
+take up to about 15 s more to reach it, because it keeps sending on its old
+WireGuard session until that times out; other clients reach it within a few
+seconds. Measured times are in
+[install-testing.md](install-testing.md#restarts-and-reboots).
 
 ### Per-distro notes
 
@@ -793,71 +730,13 @@ up.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.twd`.
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
-  The matrix ran it under qemu x86-64 emulation on an Apple-silicon Mac, so its
-  timings are slower than a real x86 host's.
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
   because its ELF needs only `GLIBC_2.27`, but twd is not tested below 2.35.
-  Debian 11's kernel 5.10 also has no Landlock. Lima note: its
-  genericcloud image doesn't boot under `vmType: vz`; use qemu.
+  Debian 11's kernel 5.10 also has no Landlock.
 - **Alpine / musl**: refused. workerd can't even be exec'd: there is no glibc
   loader. The same goes for RHEL/Alma/Rocky 8–9 and Amazon Linux 2 (glibc too
-  old; not run in the matrix).
-
-### Linux support matrix
-
-`make e2e-linux`, 2026-11-08, release `0.1.0-bb3a3296`. Every VM was **fresh**:
-a Lima official template, 4 CPU / 6 GiB / 30 GiB, `--plain --mount-none`, and
-nothing mounted from the Mac. The tarball and the API key file (0600) were
-copied in with `limactl copy`. twd ran in the VM under `twd up --service`; the
-tag:ttest client and echo ran on the Mac (M5 Pro) over tailnet 1. Every row
-passed checks (a)–(f), `twd doctor` before and while running,
-`systemctl --user restart twd` (healthy again, the same workload IP answering
-the Mac), `twd down --purge --service`, and cleanup: zero leftover devices or
-keys. **Sandbox: none on every row in L1's run (made before the Landlock sandbox landed).** **microVM
-tier: unavailable on every row** (no `/dev/kvm` in these VMs, no
-firecracker, not root). Raw results: `e2e/real/results/l1-linux/`.
-With the sandbox on, the Ubuntu 24.04 arm64 row (reboot + ephemeral phases),
-Debian 12 and Ubuntu 24.04 amd64 were re-run during integration, and Ubuntu
-24.04 arm64 again on the final tree (`sandbox ok`, both workloads
-`process/landlock`, 410 after kill in ≤ 1 ms, reboot → answering 7.7 s;
-STATUS.md "Integration (Linux)" and "Final verification"). The microVM
-tier's own rows (`make e2e-linux-vm`, `make e2e-linux-reboot` on a
-nested-virt VM, from the shipped tarball) are there too.
-
-| | Ubuntu 24.04 arm64 | Debian 12 arm64 | Ubuntu 22.04 arm64 | Fedora 45 arm64 | Ubuntu 24.04 **amd64** (qemu, emulated) |
-|---|---|---|---|---|---|
-| result | **PASS** | **PASS** | **PASS** | **PASS** | **PASS** |
-| glibc · kernel · Landlock ABI | 2.39 · 6.8 · 4 | 2.36 · 6.1 · 2 | 2.35 · 5.15 · 1 | 2.44 · 7.2 · 10 | 2.39 · 6.8 · 4 |
-| `install.sh` | 0.41 s | 0.81 s | 0.84 s | 0.47 s | 9.1 s |
-| `twd up --service` → ready | 0.70 s | 0.65 s | 0.64 s | 0.68 s | 3.4 s |
-| `twd deploy` → ready (agent / mcp) | 2.78 / 1.57 s | 1.57 / 1.45 s | 1.50 / 1.46 s | 1.59 / 1.56 s | 4.70 / 5.55 s |
-| first request → object node ready | 1.64 s | 1.67 s | 1.62 s | 1.59 s | 3.95 s |
-| `twd kill --cascade` (CLI / push) | 66 / 56 ms | 72 / 63 ms | 65 / 59 ms | 69 / 56 ms | 319 / 133 ms |
-| request to a killed object → 410 | 1.7 ms | 1.3 ms | 0.9 ms | 0.9 ms | 10.9 ms |
-| Mac → VM path | **direct** after 0.19 s | **direct** after 0.18 s | **direct** after 0.18 s | **direct** after 0.20 s | **direct** after 0.47 s |
-| MCP `tools/list` direct · DERP-only (median) | 1.9 · 10.7 ms | 2.5 · 11.2 ms | 3.5 · 11.2 ms | 2.0 · 16.6 ms | 33.1 · 41.8 ms |
-| disco ping direct · DERP (median) | 0.41 · 7.8 ms | 0.57 · 9.2 ms | 0.67 · 8.5 ms | 0.42 · 14.1 ms | 1.47 · 13.4 ms |
-| `systemctl --user restart twd` → healthy / workload answers the Mac | 3.6 / 6.6 s | 3.6 / 6.7 s | 3.6 / 6.7 s | 0.7 / 3.8 s | 5.6 / 13.1 s |
-| `twd down --purge --service` | 0.62 s | 0.56 s | 0.60 s | 0.63 s | 4.0 s |
-| reboot (enable-linger, `limactl stop`/`start`) → service active / healthy / workload answers | 6.6 / 6.6 / 8.6–17.1 s | — | — | — | — |
-| `--ephemeral` sub-agent across `systemctl --user restart` → re-minted, ready / answers | 4.1 / 9.5 s | — | — | — | — |
-
-The direct path is the Mac ↔ Lima VM NAT (a private address); DERP-only
-numbers come from a second client with `TS_DEBUG_ALWAYS_USE_DERP=1`
-(region `sea`). The `systemctl --user restart` command itself returned in
-about 3.1 s on Ubuntu and Debian (the supervisor drains hostd, then mgmt,
-before systemd starts the new one), 0.17 s on Fedora 45, and 4.6 s on amd64.
-In every row, the first request after the restart that succeeded had waited
-about 3 s for the workload node to rejoin.
-
-Unsupported hosts (bonus rows; `TestUnsupportedHost`):
-
-| | Debian 11 arm64 (glibc 2.31, kernel 5.10) | Alpine 3.24 arm64 (musl) |
-|---|---|---|
-| `install.sh` | refused: `glibc 2.31 is too old: twd's workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10)` | refused: `this Linux uses musl libc (Alpine?); twd's workerd needs glibc >= 2.35 …` |
-| `bin/twd doctor` | `✗ glibc` (names the distro and the fix); `! kernel` (< 5.13); `! landlock` (ENOSYS) | `✗ glibc`: `this system uses musl libc (/lib/ld-musl-aarch64.so.1) …` |
-| would workerd start anyway? | yes (`workerd --version`; untested beyond that) | no (no glibc loader) |
+  old).
 
 ## Linux: the microVM tier (Firecracker, KVM)
 
@@ -885,18 +764,15 @@ arch on either. A guest of the wrong arch is refused (`twd doctor`:
 > (Landlock + seccomp) is unaffected. The GitHub release workflow builds every guest
 > on Linux runners and refuses to publish a tarball without one
 > (`RELEASE_VM_ASSETS=1`), so a GitHub release always has the tier;
-> `release.json` says `"microvm": true`. The red team's second pass found a
-> Mac-built tarball without the guest; the `make release` change above is
-> the fix, and the e2e-linux-vm row in STATUS.md says which tarball it ran.
+> `release.json` says `"microvm": true`.
 
 ### What you need
 
 - Linux arm64 or amd64 (x86_64) with `/dev/kvm` (bare metal, or a VM with
   nested virtualization), cgroups v2 and systemd. Tested end to end on
-  Ubuntu 24.04 arm64. amd64: the assets are built and the guest boots to
-  workerd, but the only x86 test host so far (nested KVM in a QEMU VM on an
-  AMD Zen 1 NAS, whose TSC it reports unstable) stalls its guests in an
-  interrupt storm, so the amd64 tier is not yet verified end to end.
+  Ubuntu 24.04 arm64. On amd64 the guest boots to workerd, but the tier is
+  not yet verified end to end
+  ([why](install-testing.md#the-microvm-tier)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
 
@@ -962,8 +838,8 @@ holds no tenant code and no keys (`-vm-snapshot`, on by default) instead of
 booting one. Use `-vm-snapshot-refill` to refill the pool by restoring too:
 refills are faster, but claims are slower. Each restored VM gets private
 copies of its memory pages; no page is shared between VMs. The base is
-rebuilt at every start and every hour (`-vm-snapshot-rotate`). See STATUS.md
-"FV" for the numbers.
+rebuilt at every start and every hour (`-vm-snapshot-rotate`). The numbers
+are in [install-testing.md](install-testing.md#the-microvm-tier).
 
 Check a running VM: `twd host vmcheck <workload> [--keyscan]` (guest memory,
 DO volume fsync latency, and a scan of the guest's disks, files and full RAM

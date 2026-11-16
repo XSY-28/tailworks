@@ -182,8 +182,8 @@ func cmdHostVMCheck(args []string) error {
 
 // cmdHostAdd is `twd host add <host-id> [--tenant …] [--out <file>]`:
 // mgmt records the host (status pending) and mints a single-use,
-// 10-minute tag:twd-host join key through the tenant's credential (WIF or
-// API key). The key goes to --out as a TS_AUTHKEY=… file (0600; default
+// 10-minute tag:twd-host join key through the tenant's credential (its
+// OAuth client, or the Headscale API key). The key goes to --out as a TS_AUTHKEY=… file (0600; default
 // <host-id>.join.env in the current directory), never to the terminal or
 // the log. On the new machine: `twd-hostd join --token-file <file>`, then
 // start twd-hostd (or twd up on that machine).

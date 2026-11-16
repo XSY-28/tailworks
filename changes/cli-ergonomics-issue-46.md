@@ -1,0 +1,5 @@
+---
+kind: feature
+upgrade: [protocol, cli-json, config-default]
+---
+`twd completion bash|zsh|fish` prints a tab-completion script for every command, subcommand (`kv key put`, `d1 migrations apply`) and flag, generated from the CLI's own command table. `twd whoami [--json]` shows who the CLI acts as (your tailnet login through `twd link`, or the local operator), the mgmt it talks to, the tenant, and what that identity may do: admin, approve and the MCP tools. `GET /v1/whoami` adds `caps`, `approver` and `mcpTools` for it. `twd help` groups the commands (Set up · Develop · Deploy · Data · Observe · Operate) with one short line each; `twd help --all` prints every usage line. `twd version --check` compares with the latest GitHub release, prints `twd upgrade`, and says whether the running `twd up` needs a restart; an interactive twd prints a newer-release notice at most once a day (off with `--json`, `CI`, or `TWD_NO_UPDATE_CHECK=1`). From a source checkout, `twd doctor` and a `build_failed` for an unresolved `@twd/*` import point at `make deps`.

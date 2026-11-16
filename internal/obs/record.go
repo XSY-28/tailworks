@@ -329,7 +329,7 @@ func (r *Record) Text() string {
 	}
 	for _, e := range r.Exceptions {
 		fmt.Fprintf(&b, "    error %s: %s\n", e.Name, e.Message)
-		for _, line := range strings.Split(strings.TrimRight(e.Stack, "\n"), "\n") {
+		for _, line := range strings.Split(strings.TrimRight(FoldRuntimeFrames(e.Stack), "\n"), "\n") { // stack.go
 			if strings.TrimSpace(line) != "" {
 				fmt.Fprintf(&b, "          %s\n", strings.TrimSpace(line))
 			}

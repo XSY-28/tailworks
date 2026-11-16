@@ -75,6 +75,18 @@ as for a changed var. A restart of twd-hostd also refetches secrets, since
 it redeploys from its assignments. A crash restart of the same instance
 (workerd or node exiting) reuses the same values.
 
+Secrets are not versioned with deployments. `twd rollback` redeploys an
+older bundle with the secrets the workload has **now**, so a secret you
+rotated stays rotated and a secret you deleted stays deleted.
+
+A preview (`twd deploy --preview`) runs with the workload's secrets, as a
+replica does: they are released to the host holding the preview's own
+lease, and the release is audited with `previewOf`. Set them on the
+workload, not on `<workload>--preview-<alias>`. A preview runs code that
+hasn't been promoted yet, with the same secrets as the workload; keep
+credentials that must not reach unreviewed code out of the workload's
+secrets.
+
 ## Local development: `.dev.vars`
 
 `twd dev` reads `.dev.vars` from the app directory, if there is one, the

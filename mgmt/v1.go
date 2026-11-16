@@ -297,8 +297,11 @@ func (a *v1api) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	if p.Kind == "local" {
 		self.Transport = "local-dev"
 	}
-	writeJSON(w, 200, WhoAmI{Kind: kind, Login: p.Login, NodeID: p.NodeID, Tags: p.Tags, HostID: p.HostID,
-		Admin: a.s.allowed(p, roleAdmin), Actor: p.Actor(r), Mgmt: self})
+	who := WhoAmI{Kind: kind, Login: p.Login, NodeID: p.NodeID, Tags: p.Tags, HostID: p.HostID,
+		Admin: a.s.allowed(p, roleAdmin), Actor: p.Actor(r), Mgmt: self,
+		Caps: twdCaps(p), Approver: p.Kind == "user" && isApprover(p), MCPTools: a.s.mcpToolNames(p)}
+	a.s.whoamiScope(r.Context(), p, &who) // whoami_tenants.go
+	writeJSON(w, 200, who)
 }
 
 func (a *v1api) GetStatus(w http.ResponseWriter, r *http.Request) {
@@ -327,30 +330,13 @@ func (a *v1api) CreateDeviceDeleteRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, map[string]any{"deleted": ids})
 }
 
-// ---- OIDC (served here too so the spec is complete; Funnel is the public path) ----
-
-func (a *v1api) oidc(w http.ResponseWriter, r *http.Request) {
-	if is := a.s.M.broker.Issuer; is != nil {
-		is.Handler().ServeHTTP(w, r)
-		return
-	}
-	writeErr(w, r, errf(404, "not_found", "no OIDC issuer configured"))
-}
-func (a *v1api) GetOIDCConfiguration(w http.ResponseWriter, r *http.Request) { a.oidc(w, r) }
-func (a *v1api) GetJWKS(w http.ResponseWriter, r *http.Request)              { a.oidc(w, r) }
-func (a *v1api) GetTenantOIDCConfiguration(w http.ResponseWriter, r *http.Request, _ v1.TenantPath) {
-	a.oidc(w, r)
-}
-func (a *v1api) GetTenantJWKS(w http.ResponseWriter, r *http.Request, _ v1.TenantPath) { a.oidc(w, r) }
-
 // ---- tenants ----
 
 type tenantView struct {
 	Tenant
-	WIF           map[string]any `json:"wif,omitempty"`
-	OBOPublicKey  string         `json:"oboPublicKey"`
-	MintQueue     int            `json:"mintQueue"`
-	EffectiveRate float64        `json:"effectiveRegistrationsPerMinute"`
+	OBOPublicKey  string  `json:"oboPublicKey"`
+	MintQueue     int     `json:"mintQueue"`
+	EffectiveRate float64 `json:"effectiveRegistrationsPerMinute"`
 }
 
 func (a *v1api) tenantView(r *http.Request, t Tenant) (tenantView, error) {
@@ -359,11 +345,7 @@ func (a *v1api) tenantView(r *http.Request, t Tenant) (tenantView, error) {
 	if err != nil {
 		return tenantView{}, err
 	}
-	v := tenantView{Tenant: t, OBOPublicKey: pub, MintQueue: m.QueueDepth(t.ID), EffectiveRate: m.throttle(t).Rate()}
-	if t.MintMode == MintWIF {
-		v.WIF = m.IssuerInfo(t)
-	}
-	return v, nil
+	return tenantView{Tenant: t, OBOPublicKey: pub, MintQueue: m.QueueDepth(t.ID), EffectiveRate: m.throttle(t).Rate()}, nil
 }
 
 func (a *v1api) CreateTenant(w http.ResponseWriter, r *http.Request) {
@@ -464,7 +446,7 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 		var sp *string
 		var ip *int
 		switch k {
-		case "mintMode", "apiKeyFile", "wifClientID", "wifLifecycleClientID", "oauthClientID", "oauthClientFile", "pool", "tier", "publicIngress":
+		case "mintMode", "apiKeyFile", "oauthClientID", "oauthClientFile", "pool", "tier", "publicIngress":
 			var s string
 			if !null {
 				if err := json.Unmarshal(raw, &s); err != nil {
@@ -496,7 +478,10 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 				return
 			}
 			ip = &n
-		case "tailnet", "controlURL", "tenantID", "createdAt", "updatedAt", "oboPublicKey", "wif":
+		case "wifClientID", "wifLifecycleClientID":
+			writeErr(w, r, errSetRemovedMintMode(mintRemovedWIF))
+			return
+		case "tailnet", "controlURL", "tenantID", "createdAt", "updatedAt", "oboPublicKey":
 			e := errf(400, "immutable_field", "%s cannot be changed; create a new tenant", k)
 			e.Missing = map[string]any{"field": k}
 			writeErr(w, r, e)
@@ -514,10 +499,6 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 			p.MintMode = sp
 		case "apiKeyFile":
 			p.APIKeyFile = sp
-		case "wifClientID":
-			p.WIFClientID = sp
-		case "wifLifecycleClientID":
-			p.WIFLifecycleClientID = sp
 		case "oauthClientID":
 			p.OAuthClientID = sp
 		case "oauthClientFile":
@@ -583,15 +564,6 @@ func (a *v1api) PurgeTenantObjects(w http.ResponseWriter, r *http.Request, id v1
 		}
 	}
 	res, err := a.s.M.Purge(r.Context(), id, states...)
-	if err != nil {
-		writeErr(w, r, err)
-		return
-	}
-	writeJSON(w, 200, res)
-}
-
-func (a *v1api) CheckTenantWIF(w http.ResponseWriter, r *http.Request, id v1.TenantID) {
-	res, err := a.s.M.WIFCheck(r.Context(), id)
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -1301,6 +1273,7 @@ func (a *v1api) ListAudit(w http.ResponseWriter, r *http.Request, params v1.List
 	}
 	f := AuditFilter{ObjectID: str(params.Object), ActingFor: str(params.Human), TraceID: str(params.Trace), TenantID: str(params.Tenant),
 		Chain: str(params.Chain), Since: normTS(str(params.Since)), Until: normTS(str(params.Until)), Page: pg}
+	f.Desc = params.Order != nil && *params.Order == v1.Desc
 	if params.Kind != nil {
 		for _, k := range *params.Kind {
 			f.Kinds = append(f.Kinds, string(k))

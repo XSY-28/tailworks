@@ -12,7 +12,7 @@ import (
 // node); scale-down and undeploy stop replicas; stateful bundles, too few
 // hosts and name clashes are refused.
 func TestWorkloadReplicas(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	e.ts.policy = svcPolicy
 	tn := v1Tenant(t, e, "ttest.ts.net", nil)
 	hosts := map[string]*apiClient{}

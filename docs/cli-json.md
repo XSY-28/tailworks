@@ -55,6 +55,29 @@ becomes a JSON-RPC error whose `data` is the error object above.
 `twd doctor` is the one command that prints a result *and* fails: its report
 is on stdout, then `doctor_failed` is on stderr if a check failed.
 
+## Identity and versions
+
+Run `twd whoami --json` first. It says who twd acts as and what that
+identity may do (`$defs/whoami`): `kind` and `actor` (your tailnet login
+through `twd link`, or `local` for the operator on the twd host), `mgmt`
+(where the CLI sends requests), `tenant`, the `twd.dev/cap/*` capabilities
+in `caps`, and `can`: `admin` (deploy, ls, logs and the rest), `approve`
+(`twd approve`) and `mcpTools` (what `/mcp` allows). `approve` and
+`mcpTools` are `null` when mgmt is older than the CLI and doesn't report
+them. `tenant` is `null` for an identity that isn't an admin, because it
+can't list tenants.
+
+`twd version --check --json` adds `latest`, `url`, `updateAvailable`,
+`upgrade` (the command that installs the newer release) and `daemons` to
+`twd version`'s fields. `daemons` is what the running `twd up` on this
+machine reports: `version` and `restartNeeded` (it runs an older binary than
+this CLI), or `null` when no `twd up` runs here. A failed lookup is
+`update_check_failed`. `--json` never prints the once-a-day update notice
+that an interactive twd prints on stderr.
+
+`twd completion <shell> --json` is `{"shell", "script"}`; without `--json`
+it prints the script.
+
 ## Event streams (NDJSON)
 
 Commands that take a while, or don't end on their own, print one compact JSON
@@ -79,6 +102,36 @@ in this order:
 
 A failure ends the stream with the usual `{"error": …}` line instead.
 
+### `twd rollback --json`: progress on stderr
+
+`twd rollback <workload> [<deployment>] --json` redeploys a stored bundle
+and waits like `twd deploy`. Its result (`$defs/rollback`) names the new
+`deploymentID`, the deployment it went back to (`rollbackOf`) and that
+deployment's history record (`target`). Progress goes to **stderr** as
+`$defs/deploy.event` lines: `start` (with `target`, empty for the default),
+`preflight`, `placed` (with `rollbackOf`), `status` and `ready`. There is no
+`build`: nothing is rebuilt.
+
+`twd deployments <workload> --json` (`$defs/deployments`) is one document:
+the history newest first, each entry a `$defs/deploymentRecord` with its
+`bundleSHA256` and `bundleRetained` (false once mgmt has pruned the bundle,
+so it can't be rolled back to), and `bundleRetention`, how many bundles
+mgmt keeps per workload.
+
+### Previews: `twd deploy --preview`, `twd previews`, `twd promote`
+
+`twd deploy --preview --json` is a deploy (`$defs/deploy`, the same
+events) whose result also has `preview`, the preview's own workload name
+(`<workload>--preview-<alias>`); `workload` stays the workload it
+previews. `twd previews <workload> --json` (`$defs/previews`) lists the
+running previews, newest first, each with its `alias`, `bundleSHA256` and
+`deployment`. `twd promote <workload> <preview> --json` (`$defs/promote`)
+waits like `twd rollback`: its result names the workload's new
+`deploymentID`, the preview (`preview`), the preview deployment whose
+bundle it deployed (`promotedFrom`) and whether the preview was undeployed
+(`previewStopped`). Its events are `start` (with `preview`), `preflight`,
+`placed` (with `promotedFrom`), `status` and `ready`.
+
 ### `twd dev --json`: events on stdout
 
 Without `--once`, `twd dev` runs until it is stopped, so its output is a
@@ -86,7 +139,9 @@ stream on **stdout**:
 
 | `event` | Fields |
 |---|---|
-| `ready` | `url`, `serves` (with the MCP route), `workload`, `node`, `as`, `tags`, `timingsMs` |
+| `ready` | `url`, `serves` (with the MCP route), `workload`, `node`, `as`, `tags`, `timingsMs`; with `--caller`, `callers` (`name`, `url`, `as` or `tags`, `nodeId`, `node`; see [testing.md](testing.md#black-box-tests-twd-dev---caller-and-startdev)) |
+| `inspector` | `addr`, `ws` (with `--inspector-port`: where a debugger attaches; [dev-debugging.md](dev-debugging.md)) |
+| `console` | `url` (the read-only data console: KV keys and D1 rows of the run; not with `--console-port -1`; [dev-debugging.md](dev-debugging.md#look-at-the-data-the-dev-console)) |
 | `reload` | `workload`, `node`, `ms` (after a file change) |
 | `request` | `record`: one request record, as in `twd logs --json` (`$defs/logs.record`), with its console lines and exceptions |
 | `error` | `error` (a rebuild failed; the last good version keeps running) |

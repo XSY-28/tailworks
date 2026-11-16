@@ -24,7 +24,7 @@ const server = () => {
   const s = new McpServer({ name: "payments", version: "1.0.0" });
   s.registerTool("whoami", { description: "Your verified tailnet identity, as this server sees it", inputSchema: {} }, async () => {
     const who = caller();
-    return { content: [{ type: "text", text: JSON.stringify({ nodeId: who.nodeId, node: who.node, tags: who.tags }) }] };
+    return { content: [{ type: "text" as const, text: JSON.stringify({ nodeId: who.nodeId, node: who.node, tags: who.tags }) }] };
   });
   s.registerTool("lookup_order", { description: "Look up an order", inputSchema: { order: z.string() } }, async ({ order }) => {
     authorizeTool(caller(), cap, { tool: "lookup_order" });

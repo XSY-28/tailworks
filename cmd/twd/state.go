@@ -29,37 +29,28 @@ type Config struct {
 	V        int    `json:"v"`
 	Tailnet  string `json:"tailnet"`
 	TenantID string `json:"tenantID,omitempty"`
-	// MintMode is "oauth" (the default since M12: a Tailscale OAuth client
-	// whose secret stays in a 0600 file; no browser, no Funnel), "wif"
-	// (keyless browser flow: the OIDC issuer on its own node over Funnel + a trust
-	// credential), "apikey" (--api-key-file) or "headscale" (--control=
-	// headscale: the API key file holds a Headscale API key; ADR-015). Empty
-	// means apikey (state written before M10).
+	// MintMode is "oauth" (a Tailscale OAuth client whose secret stays in
+	// a 0600 file) or "headscale" (--control=headscale: APIKeyFile holds a
+	// Headscale API key; ADR-015). State written by an older twd may say
+	// "apikey", "wif" or nothing (apikey, before M10): those modes were
+	// removed (removedMode), and twd up --oauth-client-file switches such a
+	// state to oauth.
 	MintMode   string `json:"mintMode,omitempty"`
-	APIKeyFile string `json:"apiKeyFile,omitempty"` // apikey mode: path only; the key itself is never copied
+	APIKeyFile string `json:"apiKeyFile,omitempty"` // headscale: path only; the key itself is never copied
 	// oauth mode: the client file's absolute path (read at use by the CLI
 	// and twd-mgmt; never copied) and the client's public ID.
 	OAuthClientFile string `json:"oauthClientFile,omitempty"`
 	OAuthClientID   string `json:"oauthClientID,omitempty"`
-	// Keyless mode: mgmt's own tailnet node (tag:twd-mgmt), joined by
-	// interactive login in `twd up`; the API is served on it (WhoIs auth)
-	// (never Funnel: the WIF issuer has its own node, Issuer* below).
+	// mgmt's own tailnet node (tag:twd-mgmt), joined by `twd up` with a key
+	// the tenant's credential mints; the API is served on it (WhoIs auth,
+	// never Funnel).
 	MgmtHostname string `json:"mgmtHostname,omitempty"` // tsnet hostname (default twd-mgmt)
 	MgmtDNSName  string `json:"mgmtDNSName,omitempty"`  // twd-mgmt.<tailnet>.ts.net
 	MgmtNodeID   string `json:"mgmtNodeID,omitempty"`   // stable node ID
 	MgmtIP       string `json:"mgmtIP,omitempty"`       // tailnet IPv4
-	HTTPS        bool   `json:"https,omitempty"`        // the tailnet has HTTPS certificates (Funnel + twd link need it)
-	IssuerURL    string `json:"issuerURL,omitempty"`    // https://<issuerDNSName> (Funnel, wif only)
-	// The WIF issuer's own node (tag:twd-issuer, wif only): the only node
-	// twd runs for mgmt that is Funnel-capable; mgmt's node never is.
-	IssuerHostname string `json:"issuerHostname,omitempty"`
-	IssuerDNSName  string `json:"issuerDNSName,omitempty"`
-	IssuerNodeID   string `json:"issuerNodeID,omitempty"`
-	// WIF trust credential client IDs (public identifiers, not secrets).
-	WIFClientID          string `json:"wifClientID,omitempty"`
-	WIFLifecycleClientID string `json:"wifLifecycleClientID,omitempty"`
-	ControlURL           string `json:"controlURL"`
-	TSAPIURL             string `json:"tsapiURL,omitempty"`
+	HTTPS        bool   `json:"https,omitempty"`        // the tailnet has HTTPS certificates (twd link uses :443 then)
+	ControlURL   string `json:"controlURL"`
+	TSAPIURL     string `json:"tsapiURL,omitempty"`
 	// LocalDev (twd up --local-dev): mgmt also serves a unix socket with
 	// the per-host token and hostd talks to it there (hermetic tests, twd
 	// dev). Normal operation is tsnet only: the CLI reaches mgmt through
@@ -128,9 +119,6 @@ func (c Config) modeLabel() string {
 	return ModeSeparate
 }
 
-// keyless reports whether this state runs in keyless (WIF) mint mode.
-func (c Config) keyless() bool { return c.MintMode == "wif" }
-
 // headscale reports whether this state runs the Headscale profile (ADR-015).
 func (c Config) headscale() bool { return c.MintMode == "headscale" }
 
@@ -146,16 +134,20 @@ func (c Config) modeName() string {
 }
 
 // mintMode names the mode for humans.
-func (c Config) mintMode() string {
-	switch {
-	case c.keyless():
-		return "wif (keyless)"
-	case c.oauth():
-		return "oauth"
-	case c.headscale():
-		return "headscale"
-	}
-	return "apikey"
+func (c Config) mintMode() string { return c.modeName() }
+
+// removedMode reports whether the state is in a mint mode twd no longer
+// supports (apikey, wif; ADR-042).
+func (c Config) removedMode() bool { return !c.oauth() && !c.headscale() }
+
+// errRemovedMode is the refusal for a state dir in a removed mint mode:
+// twd up --oauth-client-file switches it (tenant, tailnet and deployments
+// are kept).
+func (c Config) errRemovedMode(dir string) error {
+	return fail("mint_mode_removed", dir+" is in mint mode "+c.modeName()+", which twd no longer supports",
+		"Tailscale tailnets now mint with an OAuth client only; switching keeps the tenant, its deployments and mgmt's node").
+		withFix("create an OAuth client (admin console › Settings › OAuth clients: Auth Keys write, tag tag:twd; see docs/INSTALL.md), save it 0600, then:",
+			"twd up --oauth-client-file <file>")
 }
 
 func stateDirFrom(flagVal string) (string, error) {
@@ -225,7 +217,7 @@ func (s *state) requireUp() error {
 		return nil
 	}
 	if !s.configured() {
-		return fail("not_up", "twd is not set up in "+s.Dir).withFix("twd up   (on the host; keyless)", "twd link <twd-mgmt.<tailnet>.ts.net>   (on a developer machine)")
+		return fail("not_up", "twd is not set up in "+s.Dir).withFix("twd up --oauth-client-file <file>   (on the host)", "twd link <twd-mgmt.<tailnet>.ts.net>   (on a developer machine)")
 	}
 	if !s.supervisorAlive() {
 		return fail("not_running", "twd is set up in "+s.Dir+" but not running").withFix("twd up")
@@ -238,9 +230,6 @@ func (s *state) linkPath() string   { return filepath.Join(s.Dir, "link.json") }
 func (s *state) mgmtTsnetDir() string {
 	return filepath.Join(s.Dir, "mgmt", "tsnet") // twd-mgmt -state-dir <state>/mgmt, tsnet under it
 }
-
-// issuerTsnetDir is the WIF issuer node's state (wif mode), next to mgmt's.
-func (s *state) issuerTsnetDir() string { return filepath.Join(s.Dir, "mgmt", "issuer-tsnet") }
 
 func (s *state) save() error {
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {

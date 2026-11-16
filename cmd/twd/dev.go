@@ -54,6 +54,9 @@ type devResult struct {
 
 	// D1 databases and the migrations dev applied to them (dev_d1.go).
 	D1 []devD1 `json:"d1,omitempty"`
+
+	// Extra identities (--caller, dev_callers.go).
+	Callers []devCaller `json:"callers,omitempty"`
 }
 
 func cmdDev(args []string) error {
@@ -63,6 +66,10 @@ func cmdDev(args []string) error {
 	workerdFlag := f.String("workerd", "", "workerd binary")
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
+	inspectorPort := f.Int("inspector-port", 0, "serve workerd's V8 inspector on 127.0.0.1:<port> for Chrome DevTools or VS Code (devinspector.go)")
+	consolePort := f.Int("console-port", 0, "serve the read-only data console (KV keys, D1 rows) on 127.0.0.1:<port>; 0 picks a free port, -1 turns it off (devconsole.go)")
+	var callers callerFlags
+	f.Var(&callers, "caller", "an extra identity: its own dev node (tagged with =tag:a,tag:b) and local URL, listed in the result (repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	pos, err := f.parse(args)
 	if err != nil {
@@ -72,6 +79,7 @@ func cmdDev(args []string) error {
 	if len(pos) > 0 {
 		dir = pos[0]
 	}
+	ao.SourceMap = devSourceMapMode(*inspectorPort) // sourcemap.go
 	a, err := loadAppWith(dir, "", *ao)
 	if err != nil {
 		return err
@@ -96,6 +104,7 @@ func cmdDev(args []string) error {
 	}
 	defer os.RemoveAll(tmp)
 	os.Chmod(tmp, 0o700)
+	guardDevDir(tmp, wd) // devreap.go: a SIGKILL doesn't orphan workerd or leak tmp
 
 	quietStdLog() // devlog.go: no "STUN server listening" line
 	ctl, err := nettest.StartControl()
@@ -126,7 +135,9 @@ func cmdDev(args []string) error {
 		WorkerdBin: wd, HeartbeatEvery: 300 * time.Millisecond, Ephemeral: true, ControlURL: ctl.URL, Logger: log, HostnamePrefix: "dev-",
 		// twd dev is explicitly process-tier: a "tier": "microvm" app runs
 		// in a local process here (never on a host serving tenants).
-		ForceProcessTier: true})
+		ForceProcessTier: true,
+		// --inspector-port: each workerd gets an inspector (hostd/inspector.go).
+		WorkerdInspector: *inspectorPort > 0})
 	if err != nil {
 		return err
 	}
@@ -201,7 +212,10 @@ func cmdDev(args []string) error {
 		Transport: client.HTTPClient(0).Transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			ip := cur.Load().(string)
-			pr.Out.URL.Scheme, pr.Out.URL.Host, pr.Out.Host = "http", ip, ip
+			// Host stays the one the developer used (127.0.0.1:<port>), so
+			// req.url matches wrangler dev's; identity is WhoIs of this
+			// proxy's dev node, never the Host header (docs/COMPAT.md).
+			pr.Out.URL.Scheme, pr.Out.URL.Host, pr.Out.Host = "http", ip, pr.In.Host
 		},
 	}
 	pl, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
@@ -216,6 +230,12 @@ func cmdDev(args []string) error {
 	go psrv.Serve(pl)
 	defer psrv.Close()
 	res.URL = "http://" + pl.Addr().String()
+	extra, stopCallers, err := startDevCallers(ctx, ctl.URL, tmp, callers, func() string { return cur.Load().(string) })
+	if err != nil {
+		return err
+	}
+	defer stopCallers()
+	res.Callers = extra
 	route := mcpRoute(a)
 	res.Serves = res.URL + route
 	if *once {
@@ -229,6 +249,9 @@ func cmdDev(args []string) error {
 		emit(f, res, func() { fmt.Printf("twd dev · %s → %v\n", res.Serves, res.Smoke) })
 		return nil
 	}
+	// Snapshot before ready is announced: an edit made right after it
+	// (a test's, an agent's) must still trigger a reload.
+	last := snapshot(a.Dir)
 	// --json: NDJSON events on stdout (agentjson.go) instead of the text.
 	var hout io.Writer = os.Stdout
 	ev := newEvents(*f.json, os.Stdout)
@@ -241,11 +264,12 @@ func cmdDev(args []string) error {
 		fmt.Fprintf(hout, "  twd.jsonc asks for \"tier\": \"microvm\"; twd dev runs it in the process tier (deployed hosts refuse it without a microVM backend)\n")
 	}
 	fmt.Fprintf(hout, "  node %-28s %s\n", wl.Hostname, strings.Join(a.Cfg.Tailnet.Tags, ","))
+	printDevCallers(hout, res.Callers)
 	if len(devVars) > 0 {
 		fmt.Fprintf(hout, "  secrets %-25s from %s\n", strings.Join(devVars, ","), DevVarsFile)
 	}
 	for _, d := range devD1s {
-		fmt.Printf("  d1    %-27s %s (in memory for this run; %d migration(s) applied)\n", d.Binding, d.Database, len(d.Applied))
+		fmt.Fprintf(hout, "  d1    %-27s %s (in memory for this run; %d migration(s) applied)\n", d.Binding, d.Database, len(d.Applied))
 	}
 	for _, c := range a.Cfg.Classes() {
 		if c.Class != "_workload" {
@@ -268,11 +292,21 @@ func cmdDev(args []string) error {
 		where = res.Serves + "  (MCP server; / answers 404)"
 	}
 	fmt.Fprintf(hout, "ready on %s  (as user %s) in %.1fs · edits reload · Ctrl-C to stop\n", where, res.As, res.Timings["ready"]/1000)
+	con := newDevConsole(fm, h, tr.TenantID, a.Name, res.URL+route, devD1s)
+	consoleURL, stopConsole, err := startDevConsole(*consolePort, con) // devconsole.go
+	if err != nil {
+		return err
+	}
+	defer stopConsole()
+	quit, stopInteractive, err := devInteractive(*inspectorPort, func() string { return h.InspectorAddr(tr.TenantID, a.Name) }, res.URL+route, consoleURL, *f.json, hout, ev) // devhotkeys.go
+	if err != nil {
+		return err
+	}
+	defer stopInteractive()
 	go followDevRecords(ctx, h.RequestLogPath(tr.TenantID, a.Name), hout, ev) // devrecords.go
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	last := snapshot(a.Dir)
 	// 150 ms: a reload shows within ~0.2 s (500 ms added 0.25 s on average).
 	// snapshot skips node_modules, dist and dot dirs, so a poll is cheap.
 	tick := time.NewTicker(150 * time.Millisecond)
@@ -280,6 +314,10 @@ func cmdDev(args []string) error {
 	for {
 		select {
 		case <-sig:
+			ev.emit("stopping", nil)
+			fmt.Fprintln(hout, "\nstopping")
+			return nil
+		case <-quit: // x or q (devhotkeys.go)
 			ev.emit("stopping", nil)
 			fmt.Fprintln(hout, "\nstopping")
 			return nil
@@ -303,6 +341,7 @@ func cmdDev(args []string) error {
 				continue
 			}
 			cur.Store(o.IP)
+			con.setD1(devD1s)
 			ev.emit("reload", map[string]any{"workload": a.Name, "node": o.Hostname, "ms": ms(time.Since(rs))})
 			fmt.Fprintf(hout, "↻ reloaded in %.0f ms\n", ms(time.Since(rs)))
 		}

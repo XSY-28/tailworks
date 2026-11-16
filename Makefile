@@ -37,13 +37,24 @@ js-build: $(WORKERD)
 	npm run -w @twd/mcp build
 	npm run --workspaces --if-present build
 
+## templates-typecheck: every template's `twd init && npm install && npx tsc --noEmit`, with
+## @twd/* from npm-pack tarballs of this checkout (issue #41; needs the network for the rest).
+.PHONY: templates-typecheck
+templates-typecheck: js-build
+	sh scripts/templates-typecheck.sh
+
 ## test: hermetic unit + integration tests (testcontrol + local DERP/STUN + stock workerd).
 .PHONY: test
 test: deps test-go test-js
 
 .PHONY: test-go
+# GO_TEST_SKIP: a go test -skip regexp (CI quarantines known failures with it; see ci.yml).
+# Read from the environment as-is, so a regexp's "$" survives make.
+# -timeout 20m: cmd/twd alone takes ~9-10 min under -race on CI; the default 10m is too tight.
+GO_TEST_SKIP ?=
+export GO_TEST_SKIP
 test-go:
-	$(GO) test -race -count=1 ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
+	$(GO) test -race -count=1 -timeout 20m $(if $(GO_TEST_SKIP),-skip "$$GO_TEST_SKIP") ./netd/... ./internal/... ./cmd/... ./mgmt/... ./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/...
 
 .PHONY: test-js
 test-js:
@@ -344,17 +355,6 @@ e2e-multi: deps
 		TWD_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2emulti -count=1 -v -timeout 25m ./e2e/multi/...
 
-## e2e-keyless: M10 on tailnet 1: `twd up` keyless (WIF mint mode, mgmt gets NO API key; the key file
-## is used only to mint the mgmt node's auth key, since a browser login can't be automated, and to
-## create/delete the trust credentials), deploy, objects minted via WIF, `twd link` from a tsnet test
-## client (tag:ttest, admin cap) → remote deploy/ls/kill/audit, a non-admin (tag:ttest-noadmin) refused.
-.PHONY: e2e-keyless
-e2e-keyless: deps
-	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
-		echo "e2e-keyless: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
-	TWD_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TWD_E2E_TAILNET="$(TAILNET1)" \
-		$(GO) test -tags e2ekeyless -count=1 -v -timeout 35m ./e2e/keyless/...
-
 ## e2e-oauth: M12 on tailnet 1: `twd up --oauth-client-file` (mint mode oauth: an OAuth client with
 ## auth_keys + devices:core + policy_file:read, tag:twd; no browser, no Funnel, no API key given to twd)
 ## → checks (a)–(f), `twd link` over https and http, remote deploy/kill/audit, zero leftovers. The API
@@ -447,6 +447,12 @@ e2e-linux: release
 		TWD_E2E_TARBALL_amd64="$(CURDIR)/dist/twd-$(RELEASE_VERSION)-linux-amd64.tar.gz" \
 		sh scripts/e2e-linux.sh $(LINUX_DISTROS)
 
+## cli-docs: regenerate docs/cli.md (every command's --help output) from cmd/twd;
+## TestCLIReferenceUpToDate fails when it is stale.
+.PHONY: cli-docs
+cli-docs:
+	TWD_UPDATE_CLI_DOCS=1 $(GO) test ./cmd/twd -run '^TestCLIReferenceUpToDate$$' -count=1
+
 ## api: regenerate everything derived from api/openapi.yaml (the /v1 source of truth):
 ## Go server interfaces + types + embedded spec (mgmt/api/v1), the Go client
 ## (hostd/mgmtapi/v1) and docs/contracts/mgmt-api.md. oapi-codegen is pinned as a
@@ -508,7 +514,6 @@ lint: api-check compat-check changes-check
 	$(GO) vet -tags 'e2emultimgmt e2ereal' ./e2e/multimgmt/...
 	$(GO) vet -tags e2ereal ./internal/tssvc/...
 	$(GO) vet -tags e2emulti ./e2e/multi/...
-	$(GO) vet -tags e2ekeyless ./e2e/keyless/...
 	$(GO) vet -tags e2eoauth ./e2e/oauth/...
 	$(GO) vet -tags e2eheadscale ./e2e/headscale/...
 	$(GO) vet -tags e2epublic ./e2e/public/...
@@ -536,6 +541,13 @@ clean:
 gen-js: $(WORKERD)
 	node_modules/.bin/esbuild js/packages/tailnet/src/runtime.ts --bundle --format=esm --platform=neutral \
 		--target=es2022 --legal-comments=none --log-level=warning --external:node:async_hooks --outfile=hostd/gen/js/twd-rt.js
+
+## test-vitest: templates under @cloudflare/vitest-plugin with @twd/tailnet/testing (docs/testing.md;
+## npm ci of the pinned deps in e2e/vitest, which bring their own workerd via miniflare).
+.PHONY: test-vitest
+test-vitest: deps
+	cd e2e/vitest && npm ci --no-audit --no-fund --loglevel=error
+	cd e2e/vitest && npx vitest run
 
 ## test-node: the opt-in Node process tier + Vercel Workflow (hermetic; npm ci of the pinned deps in e2e/node).
 .PHONY: test-node

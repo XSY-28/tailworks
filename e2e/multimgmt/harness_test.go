@@ -27,6 +27,7 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
@@ -182,6 +183,10 @@ func newFakeTS(t *testing.T) *fakeTS {
 }
 
 func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/v2/oauth/token" { // the OAuth client's exchange (mint mode oauth)
+		json.NewEncoder(w).Encode(map[string]any{"access_token": fakeAPIToken, "token_type": "Bearer", "expires_in": 3600})
+		return
+	}
 	if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != fakeAPIToken {
 		w.WriteHeader(401)
 		w.Write([]byte(`{"message":"invalid token"}`))
@@ -628,14 +633,14 @@ type setup struct {
 	epoch    int64
 }
 
-// setupTenant creates a tenant (API-key mode against the fake TS API), host
+// setupTenant creates a tenant (OAuth mode against the fake TS API), host
 // h1, and a deployment of workload w, all through replica i.
 func (c *cluster) setupTenant(i int, rpm int) setup {
 	c.t.Helper()
-	keyFile := filepath.Join(c.r.dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeAPIToken+"\n"), 0o600)
+	keyFile := filepath.Join(c.r.dir, "oauth.env")
+	writeAPIKey(c.t, keyFile)
 	var tn struct{ TenantID string }
-	c.must(i, "", "POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": keyFile,
+	c.must(i, "", "POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": keyFile,
 		"registrationsPerMinute": rpm}, &tn)
 	c.must(i, "h1", "PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10000, "tiers": []string{"process"}}, nil)
 	var dep struct {
@@ -686,8 +691,7 @@ func objectStatuses(db *sql.DB) (map[string]string, error) {
 	return out, rows.Err()
 }
 
-func writeAPIKey(t *testing.T, path string) {
-	if err := os.WriteFile(path, []byte("TS_API_KEY="+fakeAPIToken+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
+// writeAPIKey writes the tenant's credential: an OAuth client file the
+// fake TS API exchanges for fakeAPIToken (twd mints only with OAuth
+// clients).
+func writeAPIKey(t testing.TB, path string) { cliflow.WriteFakeOAuthFile(t, path) }

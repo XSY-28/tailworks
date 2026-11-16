@@ -44,15 +44,19 @@ twd upgrade --from twd-0.3.1-linux-amd64.tar.gz   # an offline copy (SHA256SUMS 
 1. It downloads the release, or takes `--from`, and checks its SHA-256.
 2. It shows the plan from the release's catalog: breaking changes, operator
    actions, contract migrations and the workerd change.
-3. It backs up mgmt's store together with custody (and the issuer and ID
-   secrets, the node state and `twd.json`) into `~/.twd/backups/<time>-<from>`.
+3. It backs up mgmt's store together with custody (and the ID
+   secret, the node state and `twd.json`) into `~/.twd/backups/<time>-<from>`.
    The store and custody are only valid together, because platform store,
    queue and secret data is sealed by custody keys.
 4. It stops twd, installs the release (`install.sh` keeps the previous one
    as `bin.prev` and `share.prev`), and starts twd again. A `twd up --service`
    install is restarted through systemd or launchd.
 5. It waits for mgmt and the host to report the new version and for every
-   deployment to be `active`.
+   deployment that was `active` before the upgrade to be `active` again.
+   A deployment that was already failed (or pending) before the upgrade
+   isn't counted: `--plan` and the start of the run warn about it, and the
+   result lists it as "was failed before the upgrade". Run `twd deploy` on
+   it first if you want the upgrade to check it.
 6. If that doesn't happen within `--health-timeout` (3 minutes by default),
    it rolls back by itself:
    - stops twd;
@@ -66,6 +70,29 @@ There is no automatic rollback once a **contract migration** has run,
 because the previous twd-mgmt can't open the contracted store. In that case
 `twd upgrade` stops and prints the restore command. Run `twd upgrade --plan`
 to see contract migrations before you start.
+
+**Which install it upgrades.** `twd upgrade` replaces the install that
+runs the state dir (`--state-dir`, `~/.twd` by default): the binary the
+`twd up --service` unit or the running supervisor was started from, or else
+the state dir itself, which is where `install.sh` installs by default. If
+the `twd` you run lives somewhere else, `twd upgrade` refuses and names both
+places. Pass `--prefix <dir>` to say which install to replace.
+
+### The first upgrade from a release without `twd upgrade`
+
+A release that predates `twd upgrade` (0.1.0) can't upgrade itself, so run
+the new release's `twd` from the extracted tarball and point it at your
+install:
+
+```sh
+tar -xzf twd-0.2.0-darwin-arm64.tar.gz -C /tmp
+/tmp/twd-0.2.0-darwin-arm64/bin/twd upgrade --from twd-0.2.0-darwin-arm64.tar.gz --prefix ~/.twd --plan
+/tmp/twd-0.2.0-darwin-arm64/bin/twd upgrade --from twd-0.2.0-darwin-arm64.tar.gz --prefix ~/.twd
+```
+
+Without `--prefix` it stops with `prefix_mismatch` rather than treat the
+extracted directory as the install. From then on, run `twd upgrade` from
+the installed `twd`.
 
 To roll back by hand:
 
@@ -164,3 +191,23 @@ twd host uncordon h1
   node `object.json`, `twd.json`, and the KV, D1 and R2 journals. A twd reads
   every older format and refuses a newer one with "written by a newer twd;
   upgrade".
+
+## Versions, compatibility dates and the changelog
+
+- **What changed:** [CHANGELOG.md](../CHANGELOG.md), newest release first,
+  and the same notes on each
+  [GitHub release](https://github.com/rosskukulinski/twd/releases).
+  Breaking changes and the steps an operator must take are in each
+  release's "Breaking" and "Upgrade actions" sections.
+- **What a version promises:** before 1.0 a minor release may break things
+  (with a migration path and a "Breaking" note) and a patch only fixes
+  bugs; from 1.0 on, twd follows SemVer. Details:
+  [RELEASING.md](RELEASING.md#versions).
+- **Your app's `compatibility_date` and `compatibility_flags`** go to
+  workerd unchanged, so a Worker behaves as it would on Cloudflare at that
+  date, within the workerd version the release pins (CHANGELOG.md names
+  it). twd adds one flag, `nodejs_als`, unless you already set
+  `nodejs_als`, `nodejs_compat` or `nodejs_compat_v2`
+  (`hostd/gen/observe.go`). twd's own
+  platform worker has its own pinned date; a release that moves it, or
+  bumps workerd, says so under "Upgrade actions".

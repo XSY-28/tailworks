@@ -81,6 +81,9 @@ func TestE2EService(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
+	// twd mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-svc-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -98,7 +101,7 @@ func TestE2EService(t *testing.T) {
 	bin := cliflow.BuildBinaries(t)
 	state := filepath.Join("/tmp", "twd-e2e-svc-"+run)
 	work := t.TempDir()
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: tailnet, APIKeyFile: keyFile,
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: tailnet, OAuthClientFile: oauthFile,
 		ControlURL: prodControl, Prefix: prefix, Res: res, ClientTagged: true}
 	var client *nettest.Node
 	downDone := false
@@ -150,7 +153,7 @@ func TestE2EService(t *testing.T) {
 		TenantID   string `json:"tenantID"`
 		MgmtNodeID string `json:"mgmtNodeID"`
 	}
-	e.MustJSON(&up, "up", "--tailnet", tailnet, "--api-key-file", keyFile, "--yes", "--hostname-prefix", prefix,
+	e.MustJSON(&up, "up", "--oauth-client-file", oauthFile, "--tailnet", tailnet, "--yes", "--hostname-prefix", prefix,
 		"--control-url", prodControl, "--mgmt-hostname", prefix+"mgmt", "--host-id", strings.TrimSuffix(prefix, "-"), "--ephemeral")
 	e.TrackInfra(up.MgmtNodeID)
 

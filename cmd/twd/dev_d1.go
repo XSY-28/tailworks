@@ -40,25 +40,30 @@ func devD1Migrate(ctx context.Context, h *hostd.Host, tenantID string, a *app) (
 	}
 	var out []devD1
 	for _, db := range dbs {
-		exec := func(ctx context.Context, qs []d1mig.Query) ([]d1mig.Result, error) {
-			arg, _ := json.Marshal(map[string]any{"queries": qs})
-			b, err := h.StoreAdmin(ctx, tenantID, a.Name, "d1", db.DatabaseName, "query", arg)
-			if err != nil {
-				return nil, err
-			}
-			var rs []d1mig.Result
-			if json.Unmarshal(b, &rs) != nil {
-				var one d1mig.Result
-				json.Unmarshal(b, &one)
-				return nil, fmt.Errorf("D1_ERROR: %s", one.Error)
-			}
-			return rs, nil
-		}
-		done, err := d1mig.Apply(ctx, exec, filepath.Join(a.Dir, db.MigrationsDir), db.MigrationsTable)
+		done, err := d1mig.Apply(ctx, devD1Exec(h, tenantID, a.Name, db.DatabaseName), filepath.Join(a.Dir, db.MigrationsDir), db.MigrationsTable)
 		if err != nil {
 			return out, fmt.Errorf("d1 %s (%s): %w", db.Binding, db.DatabaseName, err)
 		}
 		out = append(out, devD1{Binding: db.Binding, Database: db.DatabaseName, Applied: done})
 	}
 	return out, nil
+}
+
+// devD1Exec runs batches on database of the dev workload, through the dev
+// host's store admin op (also the dev console's reads, devconsole.go).
+func devD1Exec(h *hostd.Host, tenantID, workload, database string) d1mig.Exec {
+	return func(ctx context.Context, qs []d1mig.Query) ([]d1mig.Result, error) {
+		arg, _ := json.Marshal(map[string]any{"queries": qs})
+		b, err := h.StoreAdmin(ctx, tenantID, workload, "d1", database, "query", arg)
+		if err != nil {
+			return nil, err
+		}
+		var rs []d1mig.Result
+		if json.Unmarshal(b, &rs) != nil {
+			var one d1mig.Result
+			json.Unmarshal(b, &one)
+			return nil, fmt.Errorf("D1_ERROR: %s", one.Error)
+		}
+		return rs, nil
+	}
 }

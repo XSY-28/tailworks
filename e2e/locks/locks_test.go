@@ -47,6 +47,10 @@ func fakeTS(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/oauth/token" { // the OAuth client's exchange (mint mode oauth)
+			json.NewEncoder(w).Encode(map[string]any{"access_token": fakeToken, "token_type": "Bearer", "expires_in": 3600})
+			return
+		}
 		if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != fakeToken {
 			w.WriteHeader(401)
 			return
@@ -392,7 +396,7 @@ func TestLocksFailover(t *testing.T) {
 	// mgmt (SQLite) and two hosts with default timings; each host reaches
 	// mgmt through its own proxy.
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeToken+"\n"), 0o600)
+	cliflow.WriteFakeOAuthFile(t, keyFile)
 	e.start("mgmt", "twd-mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	for i := 0; ; i++ {
@@ -408,7 +412,7 @@ func TestLocksFailover(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	var tn struct{ TenantID string }
-	if st, b := e.do("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn); st/100 != 2 {
+	if st, b := e.do("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn); st/100 != 2 {
 		t.Fatalf("tenant: %d %s", st, b)
 	}
 	proxies := map[string]*sockProxy{}

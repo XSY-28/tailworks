@@ -3,8 +3,10 @@
 **twd is a self-hosted, tailnet-native runtime for Cloudflare-style Workers and
 Durable Objects.** You run it on your own machines (macOS or Linux). It runs
 your Workers code on [workerd](https://github.com/cloudflare/workerd). Every
-workload, and **every Durable Object instance**, becomes its own node on your
-Tailscale tailnet, with its own MagicDNS name, tags and grants:
+[workload](docs/concepts.md#workload) (Cloudflare calls it a Worker), and
+**every Durable Object instance**, becomes its own node on your Tailscale
+tailnet, with its own MagicDNS name, tags and grants (the words are
+explained in [docs/concepts.md](docs/concepts.md)):
 - callers are identified by WireGuard identity (`getCaller`), not tokens;
 - outbound `fetch()` leaves from the object's own node, so your tailnet
   policy governs what each object can reach;
@@ -114,7 +116,24 @@ refuse a key they don't know. When it's done, it prints the workload's address,
 e.g. `http://twd-support-<id>.<tailnet>.ts.net/` (`<id>` is a short hash;
 copy the URL from the `✓ deployed` line).
 
-**5. Call it** from any device on your tailnet. Each name is a separate
+**5. Let people call it.** Nothing on your tailnet can reach a new workload
+until a grant allows it (unless your policy still allows everything). Add
+one for the workload's tag; workload nodes listen on port 80. When
+`twd deploy` prints the tagOwners for new tags, it prints this line too:
+
+```jsonc
+"grants": [
+  // everyone in the tailnet may call the support app
+  {"src": ["autogroup:member"], "dst": ["tag:twd-wl-support"], "ip": ["tcp:80"]},
+]
+```
+
+`autogroup:member` is every user of the tailnet. Name a user or group to
+narrow it, or a tag to let a tagged device (a server, another workload)
+call it. Without the grant, the `curl` below hangs or can't resolve the
+name.
+
+**6. Call it** from any device on your tailnet. Each name is a separate
 Durable Object instance. The JSON reply shows its verified `caller` (your
 tailnet identity) and its persisted `state.visits`:
 
@@ -125,6 +144,9 @@ twd ls                                         # deployments and objects (each w
 twd audit <object-id>                          # who created, called, spawned or killed it
 twd kill <object-id> --cascade                 # cut it (and its sub-agents) off the tailnet
 ```
+
+No answer, `identity_pending`, or a deployment `failed` in `twd ls`? See
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Using twd with a coding agent
 
@@ -212,21 +234,29 @@ prove every ✅ and ⚠️.
 | SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
 | Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
 | Tooling | [Coding-agent skills (`twd agent`)](docs/COMPAT.md#agent-skills) | ✅ | Claude Code, Codex, Cursor, Gemini CLI, OpenCode |
+| Tooling | [Testing: `@cloudflare/vitest-plugin`](docs/COMPAT.md#vitest-plugin) | ⚠️ | Worker and DO logic as on Cloudflare; callers and `ctx.tailnet` via `@twd/tailnet/testing` |
 | Tooling | [twd's MCP server (`/mcp`, `twd mcp`)](docs/COMPAT.md#twd-mcp) | ✅ | tools gated per tool by a tailnet grant |
 | Tooling | [Docs for agents (`llms.txt`, `twd docs`)](docs/COMPAT.md#docs-for-agents) | ✅ | offline search |
 
 ## More
 
 - **Docs map** (every doc by role and by task): [docs/README.md](docs/README.md).
-- **CLI reference:** `twd help` lists every command and its flags;
-  `twd <command> --help` shows one.
-- **Install details, other modes and troubleshooting:**
-  [docs/INSTALL.md](docs/INSTALL.md).
+- **CLI reference:** [docs/cli.md](docs/cli.md), every command and flag
+  (generated from `--help`); `twd help` groups the commands.
+- **What changed in each release:** [CHANGELOG.md](CHANGELOG.md).
+  Security reports: [SECURITY.md](SECURITY.md).
+- **The words twd uses** (tenant, workload, tier, facet mode, pool node,
+  …): [docs/concepts.md](docs/concepts.md).
+- **A first deploy that doesn't answer:**
+  [docs/troubleshooting.md](docs/troubleshooting.md).
+- **Install details and troubleshooting:**
+  [docs/INSTALL.md](docs/INSTALL.md); where each platform is tested, and
+  the measured timings: [docs/install-testing.md](docs/install-testing.md).
   - [Upgrade](docs/upgrading.md),
     [back up and restore](docs/INSTALL.md#back-up-and-restore) and
     [uninstall](docs/INSTALL.md#uninstall).
-  - Other ways to mint keys: workload identity federation (`twd up --wif`)
-    or an API key.
+  - Upgrading a twd that minted with an API key or WIF: switch it to an
+    [OAuth client](docs/INSTALL.md#upgrading-from-api-key-or-wif-mode).
   - A separate developer laptop: `twd link`.
   - Adding hosts: `twd host add`.
   - The Linux microVM tier (Firecracker).

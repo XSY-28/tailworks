@@ -8,18 +8,24 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 
 - [README](https://github.com/rosskukulinski/twd/blob/master/README.md): what twd is, the quick start, and the compatibility table
 - [Docs map](https://github.com/rosskukulinski/twd/blob/master/docs/README.md): every doc by role and by task (learn, do, look up, understand)
-- CLI reference: `twd help` lists every command with its flags; `twd <command> --help` shows one
+- CLI reference: docs/cli.md (below) has every command and flag; `twd help` groups the commands, `twd <command> --help` shows one
 - [Using twd with a coding agent](https://github.com/rosskukulinski/twd/blob/master/docs/agents.md): skills, `twd agent setup`, safety rules
 - [Agent skills](https://github.com/rosskukulinski/twd/blob/master/agent/skills/twd/SKILL.md): the core skill; the others are next to it in agent/skills/
+- [Concepts](https://github.com/rosskukulinski/twd/blob/master/docs/concepts.md): the words twd uses (tenant, workload, object, tiers, facet mode, pool nodes, warm keys)
 - [Installing twd](https://github.com/rosskukulinski/twd/blob/master/docs/INSTALL.md): macOS and Linux, OAuth client, `twd link`, hosts, troubleshooting
+- [My first deploy doesn't answer](https://github.com/rosskukulinski/twd/blob/master/docs/troubleshooting.md): the caller grant, `identity_pending`, tagOwners after a rename, `peer_not_visible`, a `failed` deployment
+- [Where the install is tested](https://github.com/rosskukulinski/twd/blob/master/docs/install-testing.md): the Linux support matrix and measured timings
 - [Upgrading twd](https://github.com/rosskukulinski/twd/blob/master/docs/upgrading.md): what may run together, `twd upgrade`, fleet upgrade runs, cordon and drain
+- [Changelog](https://github.com/rosskukulinski/twd/blob/master/CHANGELOG.md): what changed in each release, breaking changes and upgrade actions first
 - [Releasing twd](https://github.com/rosskukulinski/twd/blob/master/docs/RELEASING.md): versions, release-note fragments, the release gates
 - [Running twd on Headscale](https://github.com/rosskukulinski/twd/blob/master/docs/headscale.md): the Headscale profile, `twd up --control=headscale`, what's different from Tailscale
 
 ## Building apps
 
+- [Recipes](https://github.com/rosskukulinski/twd/blob/master/docs/recipes.md): short, runnable how-tos: tailnet gateways for internet APIs and LLMs, a Durable Object per user, a signed public webhook, cron into KV
 - [twd.jsonc reference](https://github.com/rosskukulinski/twd/blob/master/docs/twd-jsonc.md): every key, tags and `twd init`
 - [Using wrangler with twd](https://github.com/rosskukulinski/twd/blob/master/docs/wrangler.md): wrangler.toml/json/jsonc, `--env`, bundling, what's ignored
+- [Testing a twd app](https://github.com/rosskukulinski/twd/blob/master/docs/testing.md): `npm test` in the templates, `@twd/tailnet/testing` (`withCaller`, a fake `ctx.tailnet`), `@cloudflare/vitest-plugin`, `twd dev --caller` and `startDev`
 - [Cloudflare Workers compatibility](https://github.com/rosskukulinski/twd/blob/master/docs/COMPAT.md): what works, surface by surface, with the tests behind it
 - [Worker secrets](https://github.com/rosskukulinski/twd/blob/master/docs/secrets.md): `twd secret`, `.dev.vars`
 - [Workers KV](https://github.com/rosskukulinski/twd/blob/master/docs/kv.md): `kv_namespaces`, `twd kv`, consistency and limits
@@ -38,10 +44,13 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 
 ## Operating and debugging
 
+- [CLI reference](https://github.com/rosskukulinski/twd/blob/master/docs/cli.md): every command and subcommand with its flags and defaults (generated from --help)
 - [CLI --json output](https://github.com/rosskukulinski/twd/blob/master/docs/cli-json.md): result documents, NDJSON events, the error shape
 - [CLI --json schema](https://github.com/rosskukulinski/twd/blob/master/schema/cli.schema.json): JSON Schema of every command's output
+- [Debugging in twd dev](https://github.com/rosskukulinski/twd/blob/master/docs/dev-debugging.md): source-mapped stacks, `req.url`, `--inspector-port` (Chrome DevTools, VS Code), hotkeys
 - [Observability](https://github.com/rosskukulinski/twd/blob/master/docs/observability.md): request records (`twd logs`), Prometheus `/metrics`, OTLP export (`twd telemetry`), traces
 - [Error catalog](https://github.com/rosskukulinski/twd/blob/master/docs/errors.md): every error code and its fix
+- [Limits](https://github.com/rosskukulinski/twd/blob/master/docs/limits.md): every size, count, rate and timeout, with the flag or constant it comes from, and the limits that don't exist
 - [Admin UI](https://github.com/rosskukulinski/twd/blob/master/docs/ADMIN-UI.md): the operator console
 - [twd.jsonc JSON Schema](https://github.com/rosskukulinski/twd/blob/master/schema/twd.schema.json): for editor completion
 
@@ -56,4 +65,6 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 ## Optional
 
 - [Build status](https://github.com/rosskukulinski/twd/blob/master/status/README.md): one file per workstream, with measured results
+- [Security model](https://github.com/rosskukulinski/twd/blob/master/docs/security-model.md): identity, isolation tiers and trust boundaries on one page
+- [Security policy](https://github.com/rosskukulinski/twd/blob/master/SECURITY.md): how to report a vulnerability privately
 - [Threat model](https://github.com/rosskukulinski/twd/blob/master/security/THREAT-MODEL.md)

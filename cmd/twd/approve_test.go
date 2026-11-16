@@ -40,7 +40,7 @@ func TestApproveCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	m, err := mgmt.New(mgmt.Config{Store: st, Custody: cust, Broker: &mgmt.Broker{BaseURL: "http://tsapi.invalid"},
 		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Hour, PolicyMaxAge: time.Minute})
 	if err != nil {
@@ -50,7 +50,7 @@ func TestApproveCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(m.Close)
-	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: "tn_a", Tailnet: "a.ts.net", MintMode: mgmt.MintAPIKey, APIKeyFile: keyFile}); err != nil {
+	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: "tn_a", Tailnet: "a.ts.net", MintMode: mgmt.MintOAuth, OAuthClientFile: keyFile}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,10 +107,22 @@ func TestApproveCLI(t *testing.T) {
 		os.Stdout = w
 		done := make(chan string)
 		go func() { b, _ := io.ReadAll(r); done <- string(b) }()
-		err := cmd(append([]string{"--state-dir", devDir, "--tenant", "tn_a"}, args...))
+		err := cmd(append([]string{"--state-dir", devDir}, args...))
 		w.Close()
 		os.Stdout = old
 		return <-done, err
+	}
+	// Without --tenant (or with the tailnet's name): whoami's tenant, the
+	// one on this machine's tailnet, though the approver can't list tenants.
+	for _, extra := range [][]string{nil, {"--tenant", "a.ts.net"}, {"--tenant", "a"}} {
+		if out, err := run(cmdApprovals, extra...); err != nil || !strings.Contains(out, "wf_1") {
+			t.Fatalf("approvals %v: %q %v", extra, out, err)
+		}
+	}
+	plain := run
+	run = func(cmd func([]string) error, args ...string) (string, error) {
+		t.Helper()
+		return plain(cmd, append([]string{"--tenant", "tn_a"}, args...)...)
 	}
 
 	out, err := run(cmdApprovals)

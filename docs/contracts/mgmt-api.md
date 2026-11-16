@@ -14,8 +14,7 @@ pre-release and `/v1` is a breaking replacement with no compatibility shim.
 
 mgmt serves the API on **its own tsnet node** `twd-mgmt` (`tag:twd-mgmt`),
 on `:80` and, when the tailnet has HTTPS, on `:443` with the node's
-certificate (tailnet-only). The OIDC issuer (`/.well-known/...`, `/jwks`,
-`/t/{tenant}/...`) is the only thing served over Funnel.
+certificate (tailnet-only). mgmt serves nothing over Funnel.
 
 Every tailnet request is authenticated by **Tailscale WhoIs on the
 connection**, never by a bearer token or API key:
@@ -94,10 +93,9 @@ hostd's API, not this document's.
 - **Credentials and key grants are `POST`** (`…/credentials`,
   `…/keys`): each call *creates* a single-use grant (a fresh auth key, a
   fenced key release) and is audited, so a `GET` would be wrong.
-- The only other RPC-shaped operations are diagnostics that produce a
-  report: `POST /v1/tenants/{id}/wif-check` (a live token exchange) and
-  `POST /v1/device-delete-runs` (execute the scheduled device deletes
-  now). Both are documented as such.
+- The only other RPC-shaped operation is a diagnostic that produces a
+  report: `POST /v1/device-delete-runs` (execute the scheduled device
+  deletes now). It is documented as such.
 
 ## Route table
 
@@ -151,7 +149,13 @@ hostd's API, not this document's.
 | `PATCH` | `/v1/tenants/{id}` | admin | yes | `UpdateTenant` | Update a tenant (JSON Merge Patch) |
 | `DELETE` | `/v1/tenants/{id}` | admin | yes | `DeleteTenant` | Delete a tenant |
 | `GET` | `/v1/tenants/{id}/approvals` | admin\|approver | no | `ListApprovals` | The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI) |
+| `GET` | `/v1/tenants/{id}/notifications` | admin | no | `GetTenantNotifications` | Read the tenant's notification webhook (`twd notify`), without secrets |
+| `PUT` | `/v1/tenants/{id}/notifications` | admin | yes | `PutTenantNotifications` | Set the tenant's notification webhook (`twd notify set`) |
+| `DELETE` | `/v1/tenants/{id}/notifications` | admin | yes | `DeleteTenantNotifications` | Stop the tenant's notifications (`twd notify rm`) |
+| `POST` | `/v1/tenants/{id}/notifications/test` | admin | yes | `TestTenantNotifications` | Send a test notification now (`twd notify test`) |
 | `DELETE` | `/v1/tenants/{id}/objects` | admin | yes | `PurgeTenantObjects` | Purge terminal objects of a tenant |
+| `GET` | `/v1/tenants/{id}/public-names` | admin | no | `ListPublicNames` | List the public names a tenant owns |
+| `DELETE` | `/v1/tenants/{id}/public-names/{name}` | admin | yes | `ReleasePublicName` | Release a public name the tenant owns |
 | `GET` | `/v1/tenants/{id}/queues` | admin | no | `ListQueues` | List a tenant's queues |
 | `GET` | `/v1/tenants/{id}/queues/{queue}` | admin\|host | no | `GetQueue` | Get one queue and its backlog |
 | `PUT` | `/v1/tenants/{id}/queues/{queue}` | admin | yes | `PutQueue` | Create a queue (idempotent) |
@@ -164,13 +168,16 @@ hostd's API, not this document's.
 | `GET` | `/v1/tenants/{id}/telemetry` | admin | no | `GetTenantTelemetry` | Read the tenant's OTLP export (`twd telemetry`), without header values |
 | `PUT` | `/v1/tenants/{id}/telemetry` | admin | yes | `PutTenantTelemetry` | Set the tenant's OTLP export (`twd telemetry set`) |
 | `DELETE` | `/v1/tenants/{id}/telemetry` | admin | yes | `DeleteTenantTelemetry` | Stop the tenant's OTLP export (`twd telemetry rm`) |
-| `POST` | `/v1/tenants/{id}/wif-check` | admin | no | `CheckTenantWIF` | Verify a wif tenant's trust credentials (diagnostic) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` | admin\|approver | yes | `DecideApproval` | Approve or reject a waiting Workflow instance (`twd approve`, the admin UI) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/export` | admin | no | `ExportD1` | Export a D1 database as SQL (`twd d1 export`) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/query` | admin | yes | `QueryD1` | Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/deployments` | admin | no | `ListWorkloadDeployments` | A workload's deployment history, newest first (`twd deployments`) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/previews` | admin | no | `ListWorkloadPreviews` | A workload's running previews (`twd previews`) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/promotions` | admin | yes | `CreatePromotion` | Promote a preview to the workload (`twd promote`), or preflight it with dryRun |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
 | `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin | yes | `CreateRollback` | Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/secret-grants` | host | yes | `CreateWorkloadSecretGrant` | Release a workload's secret values to the lease holder |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
@@ -192,12 +199,8 @@ hostd's API, not this document's.
 | `POST` | `/v1/upgrades/{id}/actions` | admin | yes | `ActOnUpgrade` | Pause, resume or abort an upgrade run |
 | `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
-| `GET` | `/.well-known/openid-configuration` | public | no | `GetOIDCConfiguration` | OIDC discovery (base issuer) |
-| `GET` | `/jwks` | public | no | `GetJWKS` | Issuer signing keys |
 | `GET` | `/mcp` | admin\|mcp | no | `MCPStream` | Not supported (stateless server; no server-to-client stream) |
 | `POST` | `/mcp` | admin\|mcp | yes | `MCPRequest` | One MCP JSON-RPC request (initialize, ping, tools/list, tools/call) or notification |
-| `GET` | `/t/{tenant}/.well-known/openid-configuration` | public | no | `GetTenantOIDCConfiguration` | OIDC discovery (per-tenant issuer `…/t/{tenant}`) |
-| `GET` | `/t/{tenant}/jwks` | public | no | `GetTenantJWKS` | Per-tenant issuer signing keys (same key set) |
 | `GET` | `/v2/` | admin\|host | no | `RegistryBase` | OCI API version check |
 | `POST` | `/v2/{name}/blobs/uploads/` | admin | no | `RegistryStartUpload` | Start a blob upload (or a monolithic upload, or a mount) |
 | `GET` | `/v2/{name}/blobs/uploads/{uuid}` | admin | no | `RegistryUploadStatus` | Upload progress |
@@ -252,8 +255,8 @@ lease it holds); admins see every tenant.
 
 `GetTenant` · role **admin\|host** · audited: no
 
-Includes `oboPublicKey` (hostd pins it) and, in wif mode, `wif` (issuer
-and subjects). A host may read only tenants with a deployment assigned
+Includes `oboPublicKey` (hostd pins it). A host may read only
+tenants with a deployment assigned
 to it (any other tenant is `404 not_found` for it).
 
 | Parameter | In | Type | Required | Description |
@@ -273,10 +276,11 @@ to it (any other tenant is `404 not_found` for it).
 
 `UpdateTenant` · role **admin** · audited: yes
 
-Updatable: `mintMode`, `wifClientID`, `wifLifecycleClientID`,
-`apiKeyFile`, `oauthClientID`, `oauthClientFile`, `registrationsPerMinute`,
-`maxObjects`, `pool`, `tier`.
-Switching mode or changing a client ID / credential file drops cached tokens.
+Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
+`oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
+`tier`. Switching mode or changing a client ID / credential file drops
+cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
+can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 `tailnet` and `controlURL` are immutable (`400 immutable_field`).
 
 | Parameter | In | Type | Required | Description |
@@ -348,6 +352,96 @@ grants let it decide. A read, so not audited.
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
+### `GET /v1/tenants/{id}/notifications` — Read the tenant's notification webhook (`twd notify`), without secrets
+
+`GetTenantNotifications` · role **admin** · audited: no
+
+ADR-approval-notifications. The webhook URL is shown as its origin
+only (scheme and host): a chat webhook's path or query is its
+credential. Header names only. A tenant that sends nothing has no
+`webhook`. `404 unknown_tenant`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `NotificationConfig` | The tenant's notification config. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `PUT /v1/tenants/{id}/notifications` — Set the tenant's notification webhook (`twd notify set`)
+
+`PutTenantNotifications` · role **admin** · audited: yes
+
+ADR-approval-notifications. When one of `events` happens in the
+tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
+`Twd-Event`), with a deep link to the admin UI. `approval_requested`
+fires when a Workflow starts waiting for an approval (when mgmt
+receives the host's audit record, usually within seconds). mgmt
+dials the URL itself: a tailnet name, a `100.x` address or a
+`*.ts.net` name over mgmt's tailnet node, anything else over the
+host's network; loopback and link-local addresses are refused.
+Delivery is tried 3 times; a final failure is audited
+(`notification_failed`). The config is stored encrypted in mgmt
+custody (custody name `twd/<tenant>/notifications`); the URL's path
+and query and the header values are never logged, audited or
+returned. Audited (`kind: notification_put`, the URL's host and
+header names).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+**Request** `application/json`: `NotificationsPut`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `NotificationConfig` | The new config (origin and header names only). |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/tenants/{id}/notifications` — Stop the tenant's notifications (`twd notify rm`)
+
+`DeleteTenantNotifications` · role **admin** · audited: yes
+
+Idempotent. Audited (`kind: notification_delete`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 204 | — | Deleted (or there was nothing to delete). |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/notifications/test` — Send a test notification now (`twd notify test`)
+
+`TestTenantNotifications` · role **admin** · audited: yes
+
+POSTs a `NotificationEvent` with `event: test` to the configured
+webhook once, synchronously, and reports the outcome. Not retried.
+Audited (`kind: notification_test`, the origin and the outcome).
+`404 not_found` when no webhook is set.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `NotificationTestResult` | The delivery attempt. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
 ### `DELETE /v1/tenants/{id}/objects` — Purge terminal objects of a tenant
 
 `PurgeTenantObjects` · role **admin** · audited: yes
@@ -372,25 +466,56 @@ Replaces `POST /v0/tenants/{id}/purge`.
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/wif-check` — Verify a wif tenant's trust credentials (diagnostic)
+### `GET /v1/tenants/{id}/public-names` — List the public names a tenant owns
 
-`CheckTenantWIF` · role **admin** · audited: no
+`ListPublicNames` · role **admin** · audited: no
 
-A live diagnostic, not a state change: one fresh token exchange per
-credential and a policy read with the lifecycle one
-(`policy_file:read`). It is a `POST` because it performs work on the
-control plane; it creates nothing. `400 bad_request` for non-wif tenants.
+ADR-029, red-team H10. A public workload is served at
+`https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+tailnet, not per tenant. The first tenant to deploy public routes
+under a name owns it on that tailnet, across undeploys and
+redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+the tenant is deleted. A deploy (or dry run) by another tenant on the
+same tailnet is refused with `409 public_name_owned`. Ordered by
+`(claimedAt, name)`.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
 | `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `limit` | query | integer | no | Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`. |
+| `cursor` | query | string | no | Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged. |
 
 | Status | Body | Description |
 |---|---|---|
-| 200 | `WIFCheckResult` | The check report. |
+| 200 | `PublicNamePage` | One page of the tenant's public names, ordered by `(claimedAt, name)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `DELETE /v1/tenants/{id}/public-names/{name}` — Release a public name the tenant owns
+
+`ReleasePublicName` · role **admin** · audited: yes
+
+Red-team H10. Gives up the tenant's claim on a public name, so any
+tenant on the tailnet can deploy public routes under it next. Only
+a name nothing serves can be released: `409 public_name_in_use`
+while the workload's latest deployment declares public routes or
+its public node is live (undeploy it, or remove `"public"` from its
+`twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+does not own the name. Audited (`kind: public_name_release`).
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `name` | path | string | yes | A public name (the workload name of a public workload; a DNS label). |
+
+| Status | Body | Description |
+|---|---|---|
+| 204 | — | Released. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The request conflicts with the resource's current state. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` — Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
@@ -555,8 +680,8 @@ twd-hostd instances. A host writes its own record; admins read.
 and a one-time `registrationSecret` (32 random bytes, base64url; only
 its SHA-256 is stored) that the host must present on its first
 `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
-through the operator tenant's trust credential (wif) or API key
-(apikey). `twd-hostd join --token <key>` joins the operator tailnet
+through the operator tenant's credential (its OAuth client, or the
+Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
 with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 node to the record. Calling it again for a host that has not bound a
 node yet mints a fresh key (`200`); a bound host is `409 exists`
@@ -898,7 +1023,7 @@ each `tailnet.connects` entry that is a tag (or `*`) needs a grant
 with an `ip` part whose `src` matches every src tag. Names are
 reported `unchecked`. Nothing is written, no lease is taken, and the
 answer is `200 PreflightResult`. `503 policy_unavailable` when mgmt
-cannot read the policy (wif tenant without a lifecycle credential);
+cannot read the policy (an OAuth client without `policy_file:read`);
 the CLI then prints `preflight skipped` and deploys.
 
 | Parameter | In | Type | Required | Description |
@@ -975,6 +1100,149 @@ Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (o
 | 200 | string (binary) | The bundle bytes (tar, optionally gzipped) exactly as uploaded. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/deployments` — A workload's deployment history, newest first (`twd deployments`)
+
+`ListWorkloadDeployments` · role **admin** · audited: no
+
+ADR-deploy-rollback. Every deployment of the workload, newest first:
+who deployed it, when, the bundle's SHA-256, its status (the current
+one is `assigned`, `starting`, `active` or `failed`; older ones are
+`superseded` or `stopped`), the host's last report (`hostStatus`)
+and whether mgmt still holds the bundle (`bundleRetained`). mgmt
+keeps the bundles of the newest `bundleRetention` deployments of
+each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+their records stay, without the bundle, so they can't be rolled back
+to. `rollbackOf` names the deployment a rollback redeployed. A
+workload with no deployment is `404 unknown_workload`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `limit` | query | integer | no | Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`. |
+| `cursor` | query | string | no | Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged. |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `DeploymentHistoryPage` | One page of the workload's deployments, ordered by `(createdAt, deploymentID)` descending. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `GET /v1/tenants/{id}/workloads/{workload}/previews` — A workload's running previews (`twd previews`)
+
+`ListWorkloadPreviews` · role **admin** · audited: no
+
+ADR-deploy-preview. The previews of the workload that are not
+stopped, newest first. A preview is created by
+`POST /v1/deployments` with `preview: true`: it runs as a workload
+of its own, `<workload>--preview-<alias>`, with its own lease,
+Durable Object storage and stores, and never joins the workload's
+Tailscale Service or public routes. A workload without previews
+answers an empty list.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `PreviewList` | The running previews. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/workloads/{workload}/promotions` — Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+
+`CreatePromotion` · role **admin** · audited: yes
+
+ADR-deploy-preview. Deploys the bundle the preview runs to the
+workload itself, as a **new** deployment, through the same code
+path as `POST /v1/deployments`: the same validation, placement
+(sticky), lease at `epoch+1`, host fencing and refusals, and the
+workload's own `replicas`, Tailscale Service and public routes.
+Container images the preview's deploy built are reused by digest.
+The preview's data does not move: the workload keeps its own
+Durable Object storage, stores and secrets.
+
+Then the preview is undeployed, unless `keepPreview`. An unknown
+preview, or one that is stopped, is `404 unknown_preview`; a preview
+whose host reported it `failed` is `409 preview_failed`.
+
+Audited as `kind: promote` (in place of `deploy`), with
+`promotedFrom` (the preview's deployment) and `preview`.
+`dryRun=true` preflights the preview's bundle against the current
+policy.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `dryRun` | query | boolean | no | Preflight only (`200 PreflightResult`); nothing is deployed. |
+
+**Request** `application/json`: `PromotionCreate`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `PreflightResult` | `dryRun=true`: the preflight report of the preview's bundle. Nothing was deployed. |
+| 202 | `Promotion` | Accepted; the host is starting the promoted deployment. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The request conflicts with the resource's current state. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+
+### `POST /v1/tenants/{id}/workloads/{workload}/rollbacks` — Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+
+`CreateRollback` · role **admin** · audited: yes
+
+ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+as a **new** deployment, through the same code path as
+`POST /v1/deployments`: the same validation, placement, lease at
+`epoch+1` and host fencing, and the same `409 lease_held`,
+`move_unconfirmed` and `takeover_unconfirmed` refusals. Placement
+is sticky as for any deploy (the workload stays on its host unless
+`replace` or `host` say otherwise), so Durable Object storage stays
+where it is. Container images the original deploy built and pushed
+to twd's registry are reused by digest.
+
+Without `deploymentID`, the target is the newest earlier deployment
+that ran (the host reported it `active` and it did not fail), whose
+bundle is retained and differs from the current one's;
+`409 no_rollback_target` if there is none. A target whose bundle was
+pruned is `409 bundle_pruned`. Naming the current deployment is
+`409 no_rollback_target`.
+
+A rollback changes code and configuration only. Durable Object
+storage, D1 databases (migrations are forward-only), KV, R2 and
+queues keep their current data, and the workload gets the secrets
+it has **now**: secrets are not versioned with bundles.
+
+Audited as `kind: rollback` (in place of `deploy`), with
+`rollbackOf`. `dryRun=true` preflights the stored bundle against the
+current policy, like `POST /v1/deployments?dryRun=true`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `dryRun` | query | boolean | no | Preflight only (`200 PreflightResult`); nothing is deployed. |
+
+**Request** `application/json`: `RollbackCreate`
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `PreflightResult` | `dryRun=true`: the preflight report of the target's bundle. Nothing was deployed. |
+| 202 | `Rollback` | Accepted; the host is starting the rolled-back deployment. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The request conflicts with the resource's current state. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
 ## Objects
@@ -2045,10 +2313,11 @@ Hash-chained, append-only audit log.
 | `kind` | query | array of `AuditKind` | no |  |
 | `since` | query | string | no | Records at or after this time (RFC 3339 or unix ms). |
 | `until` | query | string | no |  |
+| `order` | query | string: `asc` \| `desc` | no | `asc` (default): oldest first. `desc`: newest first, as the admin UI shows activity. A cursor continues in the order of the page that returned it, so repeat `order` with the cursor. |
 
 | Status | Body | Description |
 |---|---|---|
-| 200 | `AuditPage` | One page, ordered by `(ts, chain, seq)`, with per-chain verification of the records returned. |
+| 200 | `AuditPage` | One page, ordered by `(ts, chain, seq)` (reversed with `order=desc`), with per-chain verification of the records returned. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
@@ -2707,54 +2976,6 @@ Any authenticated principal (hosts included). On the local-dev socket the host t
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
 
-## Oidc
-
-The WIF issuer, served over Funnel. Public, unauthenticated.
-
-### `GET /.well-known/openid-configuration` — OIDC discovery (base issuer)
-
-`GetOIDCConfiguration` · role **public** · audited: no
-
-| Status | Body | Description |
-|---|---|---|
-| 200 | `OIDCConfiguration` | The discovery document. |
-| 404 | `Error` | No such resource (or none the caller may see). |
-
-### `GET /jwks` — Issuer signing keys
-
-`GetJWKS` · role **public** · audited: no
-
-| Status | Body | Description |
-|---|---|---|
-| 200 | `JWKS` | The JWK set. |
-| 404 | `Error` | No such resource (or none the caller may see). |
-
-### `GET /t/{tenant}/.well-known/openid-configuration` — OIDC discovery (per-tenant issuer `…/t/{tenant}`)
-
-`GetTenantOIDCConfiguration` · role **public** · audited: no
-
-| Parameter | In | Type | Required | Description |
-|---|---|---|---|---|
-| `tenant` | path | string | yes |  |
-
-| Status | Body | Description |
-|---|---|---|
-| 200 | `OIDCConfiguration` | The discovery document with `issuer = <base>/t/{tenant}`. |
-| 404 | `Error` | No such resource (or none the caller may see). |
-
-### `GET /t/{tenant}/jwks` — Per-tenant issuer signing keys (same key set)
-
-`GetTenantJWKS` · role **public** · audited: no
-
-| Parameter | In | Type | Required | Description |
-|---|---|---|---|---|
-| `tenant` | path | string | yes |  |
-
-| Status | Body | Description |
-|---|---|---|
-| 200 | `JWKS` | The JWK set. |
-| 404 | `Error` | No such resource (or none the caller may see). |
-
 ## Components
 
 ### Security schemes
@@ -2823,6 +3044,18 @@ One approval wait of one Workflow instance, as the host running it records it.
 |---|---|---|---|
 | `approvals` | array of `Approval` | yes |  |
 | `unreachable` | array of string | no | Hosts that did not answer (their approvals are missing). |
+
+#### `ApproveGrant`
+
+One value of a `twd.dev/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `decisions` | array of string | no |  |
+| `limits` | object | no |  |
+| `steps` | array of string | no |  |
+| `workflows` | array of string | no |  |
+| `workloads` | array of string | no |  |
 
 #### `Approver`
 
@@ -2900,7 +3133,8 @@ Host chain (netd/hostd):
 `principal`,
 `tenant_note` (source `tenant`, unverified),
 `container_start` (an object's container, ADR-032),
-`container_stop` (an object's container, ADR-032).
+`container_stop` (an object's container, ADR-032),
+`audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 mgmt chain:
 `tenant_create`,
 `tenant_update`,
@@ -2919,6 +3153,7 @@ mgmt chain:
 `upgrade_abort`,
 `deploy`,
 `undeploy`,
+`rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
 `create`,
 `mint`,
 `remint`,
@@ -2941,6 +3176,10 @@ mgmt chain:
 `telemetry_put` (the tenant's OTLP export set; endpoint and header names only),
 `telemetry_delete`,
 `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version),
+`notification_put` (the tenant's notification webhook set; its host and header names only),
+`notification_delete`,
+`notification_failed` (a notification was not delivered; the webhook's host and the error),
+`notification_test` (`twd notify test`; the origin and the outcome),
 `reap`,
 `preflight` (optional; dryRun deploys),
 `host_add`,
@@ -2956,8 +3195,11 @@ mgmt chain:
 `revoke` (an unused pooled key revoked).
 Public ingress (ADR-029), host chain:
 `public_request` (one per public request),
-`public_rejected` (per-minute summary of requests the limits refused),
+`public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals),
 `public_object_created` (a name admitted for a public create).
+Public ingress, mgmt chain:
+`public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+`public_name_release` (a tenant gave a public name up).
 Workflow approvals (ADR-040), host chain:
 `approval_requested` (a Workflow instance waits for an approval),
 `approval_decision` (approved or rejected, with the approver's identity),
@@ -2966,7 +3208,7 @@ Workflow approvals (ADR-040), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `approval_requested`, `approval_decision`, `approval_denied`, `approval_timeout`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `audit_dropped`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `notification_put`, `notification_delete`, `notification_failed`, `notification_test`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `public_name_claim`, `public_name_release`, `approval_requested`, `approval_decision`, `approval_denied`, `approval_timeout`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -2994,7 +3236,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused), `public_object_created` (a name admitted for a public create). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`twd notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -3039,6 +3281,7 @@ One DO namespace from `twd.jsonc` `tailnet.objects`.
 |---|---|---|---|
 | `agent` | boolean | no |  |
 | `class` | string | yes |  |
+| `previewOf` | string | no | `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`. |
 | `replicaOf` | string | no | `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`. |
 | `replicas` | integer | no | `_workload` only, the workload itself: its replica count when > 1. |
 | `service` | string | no | `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc` `tailnet.service`). |
@@ -3175,7 +3418,7 @@ One statement's result, as D1's wire protocol has it.
 | `placement` | `PlacementDecision` | no | Why a deployment is on its host (smart placement, ADR-033). |
 | `public` | `DeploymentPublic` | no | The deployment's public routes (ADR-029); absent when tailnet-only. |
 | `replicas` | array of `ReplicaRef` | no | A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas. |
-| `status` | `DeploymentStatus` | yes |  |
+| `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
 | `updatedAt` | integer (int64) | no |  |
@@ -3191,9 +3434,20 @@ One statement's result, as D1's wire protocol has it.
 | `forceTakeover` | boolean | no | Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there). |
 | `host` | string | no | Pin a host. |
 | `namespaces` | array of `ClassConfig` | no | Override the classes read from `twd.jsonc` (tests). |
+| `preview` | boolean | no | Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`. |
+| `previewAlias` | string | no | The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview. |
 | `replace` | boolean | no | Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`). |
 | `tenantID` | string | yes |  |
 | `workload` | string | yes |  |
+
+#### `DeploymentHistoryPage`
+
+Extends `Page`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bundleRetention` | integer | yes | How many of each workload's newest bundles mgmt keeps (0 = every bundle). |
+| `items` | array of `DeploymentRecord` | no |  |
 
 #### `DeploymentPage`
 
@@ -3214,17 +3468,51 @@ The deployment's public routes (ADR-029); absent when tailnet-only.
 | `routes` | array of string | yes |  |
 | `url` | string (uri) | yes |  |
 
+#### `DeploymentRecord`
+
+One entry of a workload's deployment history (ADR-deploy-rollback).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `activeAt` | integer (int64) | no | When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history. |
+| `bundleBytes` | integer (int64) | no | Size of the retained bundle (0 once pruned). |
+| `bundleRetained` | boolean | yes | mgmt still holds the bundle, so it can be rolled back to. |
+| `bundleSHA256` | string | yes | Hex SHA-256 of the bundle as uploaded (empty: deployed without a bundle). |
+| `createdAt` | integer (int64) | yes |  |
+| `deployedBy` | string | no | The actor who deployed (see Conventions). |
+| `deploymentID` | string | yes |  |
+| `epoch` | integer (int64) | yes |  |
+| `error` | string | no | The host's last error for this deployment. |
+| `host` | string | yes |  |
+| `hostStatus` | string | no | The last status the host reported (or mgmt set) for this deployment, kept after it is superseded: `active` means it was serving when it was replaced. |
+| `rollbackOf` | string | no | Set on a rollback: the deployment whose bundle it redeployed. |
+| `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
+| `workload` | string | yes |  |
+
 #### `DeploymentReport`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `deploymentID` | string | yes |  |
 | `error` | string | no |  |
-| `status` | `DeploymentStatus` | yes |  |
+| `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 
 #### `DeploymentStatus`
 
-Enum: `assigned`, `starting`, `active`, `draining`, `stopped`, `failed`, `superseded`
+- `assigned`: mgmt placed it; the host has not reported yet.
+- `starting`: the host is starting it.
+- `active`: serving.
+- `crashloop`: it served, then its workerd kept exiting; the host
+  keeps restarting it with exponential backoff (200 ms doubling to
+  5 min) and reports `active` again once it answers. `error` holds
+  the attempt count, the next delay and the last log lines.
+- `draining`: being replaced or undeployed.
+- `stopped`: stopped (undeployed, fenced or unassigned).
+- `failed`: the deploy failed (bad bundle or config, or it never
+  became healthy); the host does not retry it. `error` says why.
+- `superseded`: a newer deployment of the workload replaced it.
+
+Enum: `assigned`, `starting`, `active`, `crashloop`, `draining`, `stopped`, `failed`, `superseded`
 
 #### `DeviceDeleteRun`
 
@@ -3255,7 +3543,7 @@ code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `cap_missing` \| 403 \| an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `profile_unsupported` \| 400 \| the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) \| \| `upgrade_blocked` \| 409 \| an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) \| \| `upgrade_state` \| 409 \| pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs, approvals) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `approval_not_pending` \| 409 \| no approval of that Workflow instance is waiting (decided, timed out, or never asked) \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `mint_mode_removed` \| 400 \| a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `cap_missing` \| 403 \| an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `preview_conflict` \| 409 \| a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one \| \| `preview_failed` \| 409 \| promote of a preview its host reported `failed` \| \| `preview_unsupported` \| 400 \| `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica \| \| `unknown_preview` \| 404 \| promote of a preview that doesn't exist or is stopped \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `profile_unsupported` \| 400 \| the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) \| \| `public_name_owned` \| 409 \| a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) \| \| `public_name_in_use` \| 409 \| release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) \| \| `upgrade_blocked` \| 409 \| an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) \| \| `upgrade_state` \| 409 \| pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs, approvals) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `approval_not_pending` \| 409 \| no approval of that Workflow instance is waiting (decided, timed out, or never asked) \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -3273,6 +3561,7 @@ The catalog. Status in parentheses.
 | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
 | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
 | `immutable_field` | 400 | PATCH touches a field the caller may not change |
+| `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 | `too_many_secrets` | 400 | a workload already has 128 secrets |
 | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 | `no_identity` | 401 | WhoIs failed for the connection |
@@ -3302,9 +3591,15 @@ The catalog. Status in parentheses.
 | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+| `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+| `preview_failed` | 409 | promote of a preview its host reported `failed` |
+| `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+| `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+| `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+| `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -3336,7 +3631,7 @@ The catalog. Status in parentheses.
 | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 | `internal` | 500 | — |
 
-Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `too_many_secrets`, `d1_error`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `cap_missing`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `unknown_queue`, `exists`, `lease_lost`, `lease_held`, `approval_not_pending`, `store_conflict`, `store_limit`, `queue_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `profile_unsupported`, `replica_conflict`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `version_skew`, `feature_unavailable`, `upgrade_blocked`, `upgrade_state`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
+Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_field`, `mint_mode_removed`, `too_many_secrets`, `d1_error`, `no_identity`, `host_token_required`, `host_token_invalid`, `not_admin`, `cap_missing`, `forbidden`, `host_not_registered`, `host_identity_mismatch`, `delegation_invalid`, `delegation_exceeds_parent`, `policy_missing_tag_owners`, `not_found`, `unknown_tenant`, `unknown_namespace`, `no_logs`, `unknown_secret`, `unknown_store`, `unknown_queue`, `exists`, `lease_lost`, `lease_held`, `approval_not_pending`, `store_conflict`, `store_limit`, `queue_limit`, `takeover_unconfirmed`, `service_conflict`, `service_api_failed`, `profile_unsupported`, `replica_conflict`, `preview_conflict`, `preview_failed`, `preview_unsupported`, `unknown_preview`, `tier_unavailable`, `move_unconfirmed`, `lease_changed`, `store_unavailable`, `already_joined`, `identity_conflict`, `namespace_ambiguous`, `not_ready`, `superseded`, `tenant_has_live_objects`, `host_holds_leases`, `version_skew`, `feature_unavailable`, `upgrade_blocked`, `upgrade_state`, `killed`, `precondition_failed`, `object_quota_exceeded`, `spawn_budget_exceeded`, `container_quota_exceeded`, `bootstrap_failed`, `host_unavailable`, `host_token_unconfigured`, `identity_pending`, `no_host`, `policy_unavailable`, `image_unavailable`, `registry_unavailable`, `mirror_disabled`, `public_ingress_not_allowed`, `public_name_owned`, `public_name_in_use`, `unknown_workload`, `audit_key_required`, `audit_object_foreign`, `bad_host_sig`, `internal`
 
 #### `Health`
 
@@ -3545,12 +3840,6 @@ Live usage against `HostCapacity`, reported with every heartbeat. `containers` i
 |---|---|---|---|
 | `items` | array of `ImageAlias` | yes |  |
 
-#### `JWKS`
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `keys` | array of object | yes |  |
-
 #### `KVKey`
 
 A Workers KV key as `list()` returns it (ADR-037).
@@ -3618,9 +3907,9 @@ A Workers KV key as `list()` returns it (ADR-037).
 
 #### `MintMode`
 
-`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key).
+`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
 
-Enum: `oauth`, `wif`, `apikey`, `headscale`, `static`
+Enum: `oauth`, `headscale`, `static`, `apikey`, `wif`
 
 #### `NodeCertificate`
 
@@ -3651,16 +3940,57 @@ Enum: `oauth`, `wif`, `apikey`, `headscale`, `static`
 | `tenant` | string | yes |  |
 | `v` | integer | yes |  |
 
-#### `OIDCConfiguration`
+#### `NotificationConfig`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `claims_supported` | array of string | no |  |
-| `id_token_signing_alg_values_supported` | array of string | yes |  |
-| `issuer` | string (uri) | yes |  |
-| `jwks_uri` | string (uri) | yes |  |
-| `response_types_supported` | array of string | yes |  |
-| `subject_types_supported` | array of string | yes |  |
+| `tenantID` | string | yes |  |
+| `updatedAt` | integer (int64) | no |  |
+| `updatedBy` | string | no |  |
+| `webhook` | `WebhookView` | no | A tenant's notification webhook, without its secrets. |
+
+#### `NotificationEvent`
+
+The JSON body mgmt POSTs to a tenant's webhook. `text` is one line
+for chat tools that read it (Slack, Mattermost, Google Chat
+incoming webhooks). `link` opens the row in the admin UI's
+approvals page; whoever opens it still decides with their own
+tailnet identity and grants.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cli` | string | no | The `twd approve` command line. |
+| `event` | `NotificationEventKind` | yes | `approval_requested` (a Workflow instance started waiting for an approval), `test` (`twd notify test`; never subscribed to). |
+| `facts` | object | no |  |
+| `instance` | string | no |  |
+| `link` | string | no | `https://<mgmt>/ui/approvals?tenant=<tenant>#<instance>` |
+| `sentAt` | string (date-time) | yes |  |
+| `step` | string | no |  |
+| `tenantID` | string | yes |  |
+| `text` | string | yes |  |
+| `workflow` | string | no |  |
+| `workload` | string | no |  |
+
+#### `NotificationEventKind`
+
+`approval_requested` (a Workflow instance started waiting for an approval),
+`test` (`twd notify test`; never subscribed to).
+
+Enum: `approval_requested`, `test`
+
+#### `NotificationTestResult`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `delivered` | boolean | yes |  |
+| `error` | string | no |  |
+| `status` | integer | no | The webhook's HTTP status, when it answered. |
+
+#### `NotificationsPut`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `webhook` | `WebhookPut` | yes |  |
 
 #### `OTLPExport`
 
@@ -3848,6 +4178,45 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `tagOwnersSnippet` | string | no |  |
 | `unchecked` | array of string | no | `tailnet.connects` entries that are names, not tags. |
 
+#### `Preview`
+
+One running preview of a workload (ADR-deploy-preview).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `alias` | string | yes |  |
+| `bundleSHA256` | string | no | Hex SHA-256 of the preview's bundle. |
+| `deployment` | `Deployment` | yes |  |
+| `previewOf` | string | yes |  |
+| `workload` | string | yes | The preview's own workload name. |
+
+#### `PreviewList`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array of `Preview` | yes |  |
+
+#### `Promotion`
+
+A started promotion.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deployment` | `Deployment` | yes |  |
+| `preview` | string | yes | The preview's workload name. |
+| `previewStopped` | boolean | yes | The preview was undeployed. |
+| `promotedFrom` | string | yes | The preview deployment whose bundle was deployed. |
+
+#### `PromotionCreate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `forceTakeover` | boolean | no | As `POST /v1/deployments` `forceTakeover`. |
+| `host` | string | no | Pin a host, as for a deploy. |
+| `keepPreview` | boolean | no | Leave the preview running after the promotion (default: undeploy it). |
+| `preview` | string | yes | The preview to promote, by alias (`3f9a1c2b`) or by its workload name (`web--preview-3f9a1c2b`). |
+| `replace` | boolean | no | Re-place the workload, as `POST /v1/deployments` `replace`. |
+
 #### `Protocols`
 
 Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
@@ -3922,9 +4291,31 @@ netd's limits on a public listener (ADR-029 D5); defaults filled in.
 | `ipRps` | number | no | Requests per second, per client IP. |
 | `maxBodyBytes` | integer (int64) | no |  |
 | `maxConns` | integer | no |  |
+| `maxConnsPerIp` | integer | no | Concurrent connections per client address (an IPv6 client counts per /64). |
 | `maxHeaderBytes` | integer | no |  |
 | `rps` | number | no | Requests per second, per workload. |
 | `timeoutSeconds` | integer | no |  |
+| `upgradeLifetimeSeconds` | integer | no | Longest an upgraded (WebSocket) connection stays open. |
+
+#### `PublicNameClaim`
+
+A tenant's claim on a public name on its tailnet (red-team H10): `https://<name>.<tailnet>/` serves only this tenant.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `claimedAt` | integer (int64) | yes |  |
+| `claimedBy` | string | no | The actor whose deploy claimed it (see Conventions); `legacy` for a name a pre-upgrade deployment already served. |
+| `name` | string | yes |  |
+| `tailnet` | string | yes | The tenant's tailnet, lower-cased, without a trailing dot. |
+| `tenantID` | string | yes |  |
+
+#### `PublicNamePage`
+
+Extends `Page`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array of `PublicNameClaim` | no |  |
 
 #### `PurgeResult`
 
@@ -4116,7 +4507,7 @@ One replica of a workload with `twd.jsonc` `replicas` > 1.
 |---|---|---|---|
 | `deploymentID` | string | yes |  |
 | `host` | string | yes |  |
-| `status` | `DeploymentStatus` | no |  |
+| `status` | `DeploymentStatus` | no | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 | `workload` | string | yes |  |
 
 #### `RequestRecord`
@@ -4157,6 +4548,25 @@ query strings, request headers or secret values.
 | `traceId` | string | no |  |
 | `truncated` | boolean | no |  |
 | `workload` | string | no |  |
+
+#### `Rollback`
+
+A started rollback.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deployment` | `Deployment` | yes |  |
+| `rollbackOf` | string | yes | The deployment whose bundle was redeployed. |
+| `target` | `DeploymentRecord` | yes | One entry of a workload's deployment history (ADR-deploy-rollback). |
+
+#### `RollbackCreate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deploymentID` | string | no | The deployment to roll back to. Default the previous good one (see `CreateRollback`). |
+| `forceTakeover` | boolean | no | As `POST /v1/deployments` `forceTakeover`. |
+| `host` | string | no | Pin a host, as for a deploy. |
+| `replace` | boolean | no | Re-place the workload, as `POST /v1/deployments` `replace`. |
 
 #### `RunningContainer`
 
@@ -4228,7 +4638,6 @@ Extends `Page`.
 |---|---|---|---|
 | `dnsName` | string | no | `twd-mgmt.<tailnet>` |
 | `https` | boolean | yes |  |
-| `issuer` | string (uri) | no |  |
 | `tailnet` | string | no |  |
 | `transport` | `Transport` | no | `tsnet` in normal operation; `local-dev` when the unix socket is serving. |
 
@@ -4246,7 +4655,7 @@ A workload's Tailscale Service: a stable name and VIPs that survive the workload
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `clock` | `StatusClock` | no | The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave. |
+| `clock` | `StatusClock` | no | The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave. |
 | `hosts` | object | yes |  |
 | `listeners` | array of string | no | e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.twd/run/mgmt.sock`. |
 | `objects` | object | yes | Count per `ObjectStatus`. |
@@ -4260,7 +4669,7 @@ A workload's Tailscale Service: a stable name and VIPs that survive the workload
 
 #### `StatusClock`
 
-The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (WIF issuer tokens, throttles) may misbehave.
+The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -4396,14 +4805,14 @@ Enum: `logs`, `metrics`, `traces`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `apiKeyFile` | string | no | `apikey` and `headscale` modes: absolute path, read at use; the key is never stored or returned. |
+| `apiKeyFile` | string | no | `headscale` mode: absolute path of the Headscale API key file, read at use; the key is never stored or returned. |
 | `controlURL` | string (uri) | no | Non-default control plane (testcontrol, headscale). |
 | `createdAt` | integer (int64) | yes |  |
 | `maxContainerMemMiB` | integer | no | Total guest memory of the tenant's running containers. |
 | `maxContainerVCPU` | number | no | Total vCPUs of the tenant's running containers (fractional: `lite` is 1/16). |
 | `maxContainers` | integer | no | Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`. |
 | `maxObjects` | integer | yes |  |
-| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). |
+| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
 | `oauthClientFile` | string | no | `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused). |
 | `oauthClientID` | string | no | `oauth` mode: the OAuth client's public ID (`TS_OAUTH_CLIENT_ID`). The secret is never stored or returned. |
 | `oboPublicKey` | string | no | base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. |
@@ -4414,9 +4823,6 @@ Enum: `logs`, `metrics`, `traces`
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
 | `updatedAt` | integer (int64) | yes |  |
-| `wif` | `WIFInfo` | no | Present in wif mode. |
-| `wifClientID` | string | no | Public client ID of the mint trust credential (`auth_keys`). |
-| `wifLifecycleClientID` | string | no | Public client ID of the lifecycle credential (`devices:core`, `policy_file:read`). |
 
 #### `TenantCreate`
 
@@ -4428,7 +4834,7 @@ Enum: `logs`, `metrics`, `traces`
 | `maxContainerVCPU` | number | no |  |
 | `maxContainers` | integer | no |  |
 | `maxObjects` | integer | no |  |
-| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). |
+| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
 | `oauthClientFile` | string | no |  |
 | `oauthClientID` | string | no |  |
 | `pool` | string | no |  |
@@ -4437,8 +4843,6 @@ Enum: `logs`, `metrics`, `traces`
 | `tailnet` | string | yes |  |
 | `tenantID` | string | no | Optional; generated (`tn_…`) when absent. |
 | `tier` | `Tier` | no |  |
-| `wifClientID` | string | no |  |
-| `wifLifecycleClientID` | string | no |  |
 
 #### `TenantDeleteResult`
 
@@ -4469,15 +4873,13 @@ JSON Merge Patch over the updatable fields. `null` clears an optional field.
 | `maxContainerVCPU` | number | no |  |
 | `maxContainers` | integer | no |  |
 | `maxObjects` | integer | no |  |
-| `mintMode` | `MintMode` | no | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). |
+| `mintMode` | `MintMode` | no | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
 | `oauthClientFile` | string \| null | no |  |
 | `oauthClientID` | string \| null | no |  |
 | `pool` | string \| null | no |  |
 | `publicIngress` | string \| null | no | The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`). |
 | `registrationsPerMinute` | integer | no |  |
 | `tier` | `Tier` | no |  |
-| `wifClientID` | string \| null | no |  |
-| `wifLifecycleClientID` | string \| null | no |  |
 
 #### `Tier`
 
@@ -4584,28 +4986,23 @@ A fenced release of a volume's data key. Never logged.
 | `volumeID` | string | yes |  |
 | `workload` | string | yes |  |
 
-#### `WIFCheckResult`
+#### `WebhookPut`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `issuer` | string (uri) | yes |  |
-| `lifecycle` | string: `ok` \| `absent` \| `error` | yes | `absent`: no lifecycle client ID (kill tier 2, reaper device deletes, spawn checks and preflight are off). |
-| `lifecycleError` | string | no |  |
-| `mint` | boolean | yes | The mint credential's token exchange succeeded (its `auth_keys` scope is only proven by the first real mint). |
-| `mintError` | string | no |  |
-| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host (the default for self-hosted installs). `wif`: keyless, mints through a WIF trust credential (mgmt's OIDC issuer over Funnel; hosted / multi-tenant). `apikey`: a Tailscale API key file (explicit fallback, tests). `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). |
-| `policyRead` | boolean | yes | The lifecycle credential read the policy (`policy_file:read`). |
-| `policyReadError` | string | no |  |
+| `events` | array of `NotificationEventKind` | no | What to send. Default `[approval_requested]`. |
+| `headers` | object | no | Headers sent with every notification (at most 16; values at most 4 KiB). Never logged, audited or returned. |
+| `url` | string (uri) | yes | http:// or https:// URL (no user info or fragment). Treated as a secret: a chat webhook's path is its credential. |
 
-#### `WIFInfo`
+#### `WebhookView`
 
-Present in wif mode.
+A tenant's notification webhook, without its secrets.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `issuer` | string (uri) | yes |  |
-| `lifecycleSubject` | string | yes |  |
-| `mintSubject` | string | yes |  |
+| `events` | array of `NotificationEventKind` | yes |  |
+| `headerNames` | array of string | yes |  |
+| `origin` | string | yes | The URL's scheme and host (`https://hooks.slack.com`); its path and query are never returned. |
 
 #### `WhoAmI`
 
@@ -4613,12 +5010,25 @@ Present in wif mode.
 |---|---|---|---|
 | `actor` | string | yes |  |
 | `admin` | boolean | yes |  |
+| `approveGrants` | array of `ApproveGrant` | no | The values of the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt` (docs/approvals.md): what it may decide through `twd approve` and the admin UI. Empty when it holds none. |
+| `approver` | boolean | no | The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity. |
+| `caps` | array of string | no | The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts. |
 | `hostID` | string | no |  |
 | `kind` | string: `user` \| `node` \| `host` \| `local` | yes |  |
 | `login` | string | no |  |
+| `mcpTools` | array of string | no | The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order. |
 | `mgmt` | `SelfInfo` | yes |  |
 | `nodeID` | string | no |  |
 | `tags` | array of string | no |  |
+| `tailnet` | string | no | The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts. |
+| `tenants` | array of `WhoAmITenant` | no | The tenants the caller can act in without knowing their IDs: those whose `tailnet` is the caller's own tailnet. The local operator gets every tenant; hosts get none. The admin UI's approvals page and `twd approvals` / `twd approve` default to these. A tailnet admin can still list every tenant (`GET /v1/tenants`). |
+
+#### `WhoAmITenant`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `tailnet` | string | yes |  |
+| `tenantID` | string | yes |  |
 
 #### `WorkloadPublic`
 

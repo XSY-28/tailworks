@@ -40,10 +40,10 @@ func TestBundleCrons(t *testing.T) {
 // TestAPIDeployRejectsBadCrons: an invalid cron trigger fails the deploy
 // (and its preflight) with 400 bad_bundle before anything is written.
 func TestAPIDeployRejectsBadCrons(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	bad := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}",
 		"wrangler.jsonc": `{"main":"dist/index.js","triggers":{"crons":["*/5 * * * * *"]}}`})

@@ -257,7 +257,10 @@ func TestE2EMulti(t *testing.T) {
 
 	bin := cliflow.BuildBinaries(t)
 	mk := func(s *side) *cliflow.Tenant {
-		return &cliflow.Tenant{Tailnet: s.tailnet, APIKeyFile: s.keyFile, ControlURL: prodControl, Res: s.res,
+		// Each tailnet's OAuth client, created for this run with that
+		// tailnet's API key (twd itself never sees the key).
+		oauthFile := cliflow.RealOAuthClient(t, s.keyFile, s.tailnet, t.TempDir(), "twd-e2e-multi-"+s.key+"-oauth")
+		return &cliflow.Tenant{Tailnet: s.tailnet, OAuthClientFile: oauthFile, ControlURL: prodControl, Res: s.res,
 			NewNode: func(role string) *nettest.Node {
 				if n := s.pre[role]; n != nil {
 					return n
