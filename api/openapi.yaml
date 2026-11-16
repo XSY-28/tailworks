@@ -735,6 +735,63 @@ paths:
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/public-names:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [tenants, deployments]
+      operationId: ListPublicNames
+      summary: List the public names a tenant owns
+      description: |
+        ADR-029, red-team H10. A public workload is served at
+        `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+        tailnet, not per tenant. The first tenant to deploy public routes
+        under a name owns it on that tailnet, across undeploys and
+        redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+        the tenant is deleted. A deploy (or dry run) by another tenant on the
+        same tailnet is refused with `409 public_name_owned`. Ordered by
+        `(claimedAt, name)`.
+      x-twd-role: admin
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: One page of the tenant's public names, ordered by `(claimedAt, name)`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicNamePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/public-names/{name}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/publicName"
+    delete:
+      tags: [tenants, deployments]
+      operationId: ReleasePublicName
+      summary: Release a public name the tenant owns
+      description: |
+        Red-team H10. Gives up the tenant's claim on a public name, so any
+        tenant on the tailnet can deploy public routes under it next. Only
+        a name nothing serves can be released: `409 public_name_in_use`
+        while the workload's latest deployment declares public routes or
+        its public node is live (undeploy it, or remove `"public"` from its
+        `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+        does not own the name. Audited (`kind: public_name_release`).
+      x-twd-role: admin
+      x-twd-audit: true
+      responses:
+        "204":
+          description: Released.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/workloads/{workload}/secrets:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -3622,6 +3679,12 @@ components:
       required: true
       description: Workload name (a DNS label).
       schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+    publicName:
+      name: name
+      in: path
+      required: true
+      description: A public name (the workload name of a public workload; a DNS label).
+      schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
     secretName:
       name: name
       in: path
@@ -3970,6 +4033,8 @@ components:
         | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
         | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
         | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+        | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+        | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
         | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
         | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
         | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -4069,6 +4134,8 @@ components:
         - registry_unavailable
         - mirror_disabled
         - public_ingress_not_allowed
+        - public_name_owned
+        - public_name_in_use
         - unknown_workload
         - audit_key_required
         - audit_object_foreign
@@ -4351,6 +4418,22 @@ components:
       properties:
         exposed: { type: boolean }
       additionalProperties: false
+    PublicNameClaim:
+      type: object
+      description: "A tenant's claim on a public name on its tailnet (red-team H10): `https://<name>.<tailnet>/` serves only this tenant."
+      required: [tailnet, name, tenantID, claimedAt]
+      properties:
+        tailnet: { type: string, description: "The tenant's tailnet, lower-cased, without a trailing dot." }
+        name: { type: string }
+        tenantID: { type: string }
+        claimedAt: { type: integer, format: int64 }
+        claimedBy: { type: string, description: "The actor whose deploy claimed it (see Conventions); `legacy` for a name a pre-upgrade deployment already served." }
+    PublicNamePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/PublicNameClaim" } }
     PublicLimits:
       type: object
       description: netd's limits on a public listener (ADR-029 D5); defaults filled in.
@@ -5290,6 +5373,9 @@ components:
         `public_request` (one per public request),
         `public_rejected` (per-minute summary of requests the limits refused),
         `public_object_created` (a name admitted for a public create).
+        Public ingress, mgmt chain:
+        `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+        `public_name_release` (a tenant gave a public name up).
         Workflow approvals (ADR-040), host chain:
         `approval_requested` (a Workflow instance waits for an approval),
         `approval_decision` (approved or rejected, with the approver's identity),
@@ -5362,6 +5448,8 @@ components:
         - public_request
         - public_rejected
         - public_object_created
+        - public_name_claim
+        - public_name_release
         - approval_requested
         - approval_decision
         - approval_denied

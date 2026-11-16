@@ -576,6 +576,11 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 			if err := checkPublicDeploy(t, r.Workload, pub); err != nil {
 				return res, err
 			}
+			if pub != nil {
+				if err := m.checkPublicName(ctx, t, r.Workload); err != nil { // publicnames.go (H10)
+					return res, err
+				}
+			}
 			if len(classes) == 0 {
 				classes = cfg.Classes()
 			}

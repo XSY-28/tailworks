@@ -830,6 +830,11 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			if err := checkPublicDeploy(t, r.Workload, pub); err != nil {
 				return resp, err
 			}
+			if pub != nil {
+				if err := m.claimPublicName(ctx, t, r.Workload, r.By); err != nil { // publicnames.go (H10)
+					return resp, err
+				}
+			}
 			bcfg = cfg
 			bundlePlacement(r.Bundle, cfg)
 			if len(classes) == 0 {

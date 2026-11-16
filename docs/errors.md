@@ -289,6 +289,12 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### profile_unsupported
 400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or an OAuth client (`--oauth-client-file`: Headscale mints with its API key). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
 
+### public_name_in_use
+409 · mgmt. **When:** a release of a public name (`DELETE /v1/tenants/{id}/public-names/{name}`) while the workload still serves it: its latest deployment declares `"public"` routes, or its public node is live. **Fix:** `twd undeploy <workload>`, or remove `"public"` from its `twd.jsonc` and redeploy, then release the name ([public-ingress](public-ingress.md#name-ownership)).
+
+### public_name_owned
+409 · mgmt, cli. **When:** a deploy (or `--dry-run`) declares `"public"` routes under a workload name that another tenant on the same tailnet owns as its public name. The first tenant to deploy public routes under a name keeps `https://<name>.<tailnet>.ts.net/` across undeploys, until it releases the name, so its public traffic (webhooks, OAuth callbacks) can't move to someone else. **Fix:** deploy under another workload name, or ask the operator to have the owning tenant release the name ([public-ingress](public-ingress.md#name-ownership)).
+
 ### public_unreachable
 1 · cli. **When:** `twd deploy --wait-public` waited for the workload's public URL and it didn't answer from the public internet in time. The deploy itself succeeded. **Fix:** a new public name's certificate and DNS can take minutes; retry with a longer `--wait-public`, check the tailnet has HTTPS certificates on, and see [docs/public-ingress.md](public-ingress.md).
 

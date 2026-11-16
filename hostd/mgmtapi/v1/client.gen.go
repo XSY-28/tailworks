@@ -133,6 +133,8 @@ const (
 	AuditKindOboRoot             AuditKind = "obo_root"
 	AuditKindPreflight           AuditKind = "preflight"
 	AuditKindPrincipal           AuditKind = "principal"
+	AuditKindPublicNameClaim     AuditKind = "public_name_claim"
+	AuditKindPublicNameRelease   AuditKind = "public_name_release"
 	AuditKindPublicObjectCreated AuditKind = "public_object_created"
 	AuditKindPublicRejected      AuditKind = "public_rejected"
 	AuditKindPublicRequest       AuditKind = "public_request"
@@ -242,6 +244,10 @@ func (e AuditKind) Valid() bool {
 	case AuditKindPreflight:
 		return true
 	case AuditKindPrincipal:
+		return true
+	case AuditKindPublicNameClaim:
+		return true
+	case AuditKindPublicNameRelease:
 		return true
 	case AuditKindPublicObjectCreated:
 		return true
@@ -462,6 +468,8 @@ const (
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodeProfileUnsupported      ErrorCode = "profile_unsupported"
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
+	ErrorCodePublicNameInUse         ErrorCode = "public_name_in_use"
+	ErrorCodePublicNameOwned         ErrorCode = "public_name_owned"
 	ErrorCodeQueueLimit              ErrorCode = "queue_limit"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
@@ -588,6 +596,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeProfileUnsupported:
 		return true
 	case ErrorCodePublicIngressNotAllowed:
+		return true
+	case ErrorCodePublicNameInUse:
+		return true
+	case ErrorCodePublicNameOwned:
 		return true
 	case ErrorCodeQueueLimit:
 		return true
@@ -1538,6 +1550,9 @@ type AuditBatch struct {
 // `public_request` (one per public request),
 // `public_rejected` (per-minute summary of requests the limits refused),
 // `public_object_created` (a name admitted for a public create).
+// Public ingress, mgmt chain:
+// `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+// `public_name_release` (a tenant gave a public name up).
 // Workflow approvals (ADR-040), host chain:
 // `approval_requested` (a Workflow instance waits for an approval),
 // `approval_decision` (approved or rejected, with the approver's identity),
@@ -1647,6 +1662,9 @@ type AuditRecord struct {
 	// `public_request` (one per public request),
 	// `public_rejected` (per-minute summary of requests the limits refused),
 	// `public_object_created` (a name admitted for a public create).
+	// Public ingress, mgmt chain:
+	// `public_name_claim` (a tenant took a public name on its tailnet, red-team H10),
+	// `public_name_release` (a tenant gave a public name up).
 	// Workflow approvals (ADR-040), host chain:
 	// `approval_requested` (a Workflow instance waits for an approval),
 	// `approval_decision` (approved or rejected, with the approver's identity),
@@ -2137,6 +2155,8 @@ type Error struct {
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -2221,6 +2241,8 @@ type Error struct {
 // | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 // | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 // | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 // | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -2424,6 +2446,8 @@ type HostDrainResult struct {
 		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 		// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 		// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+		// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+		// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 		// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 		// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -3130,6 +3154,27 @@ type PublicLimits struct {
 
 	// UpgradeLifetimeSeconds Longest an upgraded (WebSocket) connection stays open.
 	UpgradeLifetimeSeconds *int `json:"upgradeLifetimeSeconds,omitempty"`
+}
+
+// PublicNameClaim A tenant's claim on a public name on its tailnet (red-team H10): `https://<name>.<tailnet>/` serves only this tenant.
+type PublicNameClaim struct {
+	ClaimedAt int64 `json:"claimedAt"`
+
+	// ClaimedBy The actor whose deploy claimed it (see Conventions); `legacy` for a name a pre-upgrade deployment already served.
+	ClaimedBy *string `json:"claimedBy,omitempty"`
+	Name      string  `json:"name"`
+
+	// Tailnet The tenant's tailnet, lower-cased, without a trailing dot.
+	Tailnet  string `json:"tailnet"`
+	TenantID string `json:"tenantID"`
+}
+
+// PublicNamePage defines model for PublicNamePage.
+type PublicNamePage struct {
+	Items []PublicNameClaim `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
 
 // PurgeResult defines model for PurgeResult.
@@ -3935,6 +3980,8 @@ type TombstoneError struct {
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
+	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
+	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
 	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
@@ -4146,6 +4193,9 @@ type Limit = int
 
 // ObjectID defines model for objectID.
 type ObjectID = string
+
+// PublicName defines model for publicName.
+type PublicName = string
 
 // QueueEpoch defines model for queueEpoch.
 type QueueEpoch = int64
@@ -4475,6 +4525,15 @@ type PurgeTenantObjectsParams struct {
 
 // PurgeTenantObjectsParamsState defines parameters for PurgeTenantObjects.
 type PurgeTenantObjectsParamsState string
+
+// ListPublicNamesParams defines parameters for ListPublicNames.
+type ListPublicNamesParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
 
 // ListQueuesParams defines parameters for ListQueues.
 type ListQueuesParams struct {
@@ -5968,6 +6027,33 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 	PurgeTenantObjects(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPublicNames List the public names a tenant owns
+	//
+	// ADR-029, red-team H10. A public workload is served at
+	// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+	// tailnet, not per tenant. The first tenant to deploy public routes
+	// under a name owns it on that tailnet, across undeploys and
+	// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+	// the tenant is deleted. A deploy (or dry run) by another tenant on the
+	// same tailnet is refused with `409 public_name_owned`. Ordered by
+	// `(claimedAt, name)`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+	ListPublicNames(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReleasePublicName Release a public name the tenant owns
+	//
+	// Red-team H10. Gives up the tenant's claim on a public name, so any
+	// tenant on the tailnet can deploy public routes under it next. Only
+	// a name nothing serves can be released: `409 public_name_in_use`
+	// while the workload's latest deployment declares public routes or
+	// its public node is live (undeploy it, or remove `"public"` from its
+	// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+	// does not own the name. Audited (`kind: public_name_release`).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+	ReleasePublicName(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListQueues List a tenant's queues
 	//
@@ -8434,6 +8520,53 @@ func (c *Client) ListApprovals(ctx context.Context, id TenantID, params *ListApp
 // Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 func (c *Client) PurgeTenantObjects(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPurgeTenantObjectsRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPublicNames List the public names a tenant owns
+//
+// ADR-029, red-team H10. A public workload is served at
+// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+// tailnet, not per tenant. The first tenant to deploy public routes
+// under a name owns it on that tailnet, across undeploys and
+// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+// the tenant is deleted. A deploy (or dry run) by another tenant on the
+// same tailnet is refused with `409 public_name_owned`. Ordered by
+// `(claimedAt, name)`.
+//
+// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+func (c *Client) ListPublicNames(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPublicNamesRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReleasePublicName Release a public name the tenant owns
+//
+// Red-team H10. Gives up the tenant's claim on a public name, so any
+// tenant on the tailnet can deploy public routes under it next. Only
+// a name nothing serves can be released: `409 public_name_in_use`
+// while the workload's latest deployment declares public routes or
+// its public node is live (undeploy it, or remove `"public"` from its
+// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+// does not own the name. Audited (`kind: public_name_release`).
+//
+// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+func (c *Client) ReleasePublicName(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReleasePublicNameRequest(c.Server, id, name)
 	if err != nil {
 		return nil, err
 	}
@@ -12552,6 +12685,120 @@ func NewPurgeTenantObjectsRequest(server string, id TenantID, params *PurgeTenan
 	return req, nil
 }
 
+// NewListPublicNamesRequest constructs an http.Request for the ListPublicNames method
+func NewListPublicNamesRequest(server string, id TenantID, params *ListPublicNamesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/public-names", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReleasePublicNameRequest constructs an http.Request for the ReleasePublicName method
+func NewReleasePublicNameRequest(server string, id TenantID, name PublicName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/public-names/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListQueuesRequest constructs an http.Request for the ListQueues method
 func NewListQueuesRequest(server string, id TenantID, params *ListQueuesParams) (*http.Request, error) {
 	var err error
@@ -16368,6 +16615,37 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/objects (the `PurgeTenantObjects` operationId).
 	PurgeTenantObjectsWithResponse(ctx context.Context, id TenantID, params *PurgeTenantObjectsParams, reqEditors ...RequestEditorFn) (*PurgeTenantObjectsResponse, error)
+
+	// ListPublicNamesWithResponse List the public names a tenant owns
+	//
+	// ADR-029, red-team H10. A public workload is served at
+	// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+	// tailnet, not per tenant. The first tenant to deploy public routes
+	// under a name owns it on that tailnet, across undeploys and
+	// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+	// the tenant is deleted. A deploy (or dry run) by another tenant on the
+	// same tailnet is refused with `409 public_name_owned`. Ordered by
+	// `(claimedAt, name)`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+	ListPublicNamesWithResponse(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*ListPublicNamesResponse, error)
+
+	// ReleasePublicNameWithResponse Release a public name the tenant owns
+	//
+	// Red-team H10. Gives up the tenant's claim on a public name, so any
+	// tenant on the tailnet can deploy public routes under it next. Only
+	// a name nothing serves can be released: `409 public_name_in_use`
+	// while the workload's latest deployment declares public routes or
+	// its public node is live (undeploy it, or remove `"public"` from its
+	// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+	// does not own the name. Audited (`kind: public_name_release`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+	ReleasePublicNameWithResponse(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*ReleasePublicNameResponse, error)
 
 	// ListQueuesWithResponse List a tenant's queues
 	//
@@ -21859,6 +22137,193 @@ func (r PurgeTenantObjectsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PurgeTenantObjectsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListPublicNamesResponse400Headers the declared response headers of an HTTP 400 response for ListPublicNames
+type ListPublicNamesResponse400Headers struct {
+	TwdError *string
+}
+
+// ListPublicNamesResponse403Headers the declared response headers of an HTTP 403 response for ListPublicNames
+type ListPublicNamesResponse403Headers struct {
+	TwdError *string
+}
+
+// ListPublicNamesResponse404Headers the declared response headers of an HTTP 404 response for ListPublicNames
+type ListPublicNamesResponse404Headers struct {
+	TwdError *string
+}
+
+// ListPublicNamesResponseDefaultHeaders the declared response headers of an HTTP default response for ListPublicNames
+type ListPublicNamesResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListPublicNamesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PublicNamePage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListPublicNamesResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListPublicNamesResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListPublicNamesResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListPublicNamesResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPublicNamesResponse) GetJSON200() *PublicNamePage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListPublicNamesResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListPublicNamesResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListPublicNamesResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListPublicNamesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPublicNamesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPublicNamesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPublicNamesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPublicNamesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ReleasePublicNameResponse403Headers the declared response headers of an HTTP 403 response for ReleasePublicName
+type ReleasePublicNameResponse403Headers struct {
+	TwdError *string
+}
+
+// ReleasePublicNameResponse404Headers the declared response headers of an HTTP 404 response for ReleasePublicName
+type ReleasePublicNameResponse404Headers struct {
+	TwdError *string
+}
+
+// ReleasePublicNameResponse409Headers the declared response headers of an HTTP 409 response for ReleasePublicName
+type ReleasePublicNameResponse409Headers struct {
+	TwdError *string
+}
+
+// ReleasePublicNameResponseDefaultHeaders the declared response headers of an HTTP default response for ReleasePublicName
+type ReleasePublicNameResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ReleasePublicNameResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ReleasePublicNameResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ReleasePublicNameResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ReleasePublicNameResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ReleasePublicNameResponseDefaultHeaders
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReleasePublicNameResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReleasePublicNameResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ReleasePublicNameResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ReleasePublicNameResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReleasePublicNameResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReleasePublicNameResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReleasePublicNameResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReleasePublicNameResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -27396,6 +27861,49 @@ func (c *ClientWithResponses) PurgeTenantObjectsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParsePurgeTenantObjectsResponse(rsp)
+}
+
+// ListPublicNamesWithResponse List the public names a tenant owns
+//
+// ADR-029, red-team H10. A public workload is served at
+// `https://<workload>.<tailnet>.ts.net/`, so its name is unique per
+// tailnet, not per tenant. The first tenant to deploy public routes
+// under a name owns it on that tailnet, across undeploys and
+// redeploys, until it releases it (`DELETE …/public-names/{name}`) or
+// the tenant is deleted. A deploy (or dry run) by another tenant on the
+// same tailnet is refused with `409 public_name_owned`. Ordered by
+// `(claimedAt, name)`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/public-names (the `ListPublicNames` operationId).
+func (c *ClientWithResponses) ListPublicNamesWithResponse(ctx context.Context, id TenantID, params *ListPublicNamesParams, reqEditors ...RequestEditorFn) (*ListPublicNamesResponse, error) {
+	rsp, err := c.ListPublicNames(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPublicNamesResponse(rsp)
+}
+
+// ReleasePublicNameWithResponse Release a public name the tenant owns
+//
+// Red-team H10. Gives up the tenant's claim on a public name, so any
+// tenant on the tailnet can deploy public routes under it next. Only
+// a name nothing serves can be released: `409 public_name_in_use`
+// while the workload's latest deployment declares public routes or
+// its public node is live (undeploy it, or remove `"public"` from its
+// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+// does not own the name. Audited (`kind: public_name_release`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
+func (c *ClientWithResponses) ReleasePublicNameWithResponse(ctx context.Context, id TenantID, name PublicName, reqEditors ...RequestEditorFn) (*ReleasePublicNameResponse, error) {
+	rsp, err := c.ReleasePublicName(ctx, id, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReleasePublicNameResponse(rsp)
 }
 
 // ListQueuesWithResponse List a tenant's queues
@@ -33244,6 +33752,196 @@ func ParsePurgeTenantObjectsResponse(rsp *http.Response) (*PurgeTenantObjectsRes
 		response.Headers404 = &headers
 	case true:
 		var headers PurgeTenantObjectsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListPublicNamesResponse parses an HTTP response from a ListPublicNamesWithResponse call
+func ParseListPublicNamesResponse(rsp *http.Response) (*ListPublicNamesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPublicNamesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PublicNamePage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListPublicNamesResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListPublicNamesResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListPublicNamesResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListPublicNamesResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseReleasePublicNameResponse parses an HTTP response from a ReleasePublicNameWithResponse call
+func ParseReleasePublicNameResponse(rsp *http.Response) (*ReleasePublicNameResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReleasePublicNameResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers ReleasePublicNameResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ReleasePublicNameResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ReleasePublicNameResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ReleasePublicNameResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
