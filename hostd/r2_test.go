@@ -387,6 +387,10 @@ func TestR2Streaming(t *testing.T) {
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, func(o *hostdtest.Options) {
 		o.R2 = &r2.FS{Root: blobDir}
 	})
+	// This test measures memory, not speed: moving 1 GiB through workerd
+	// can take well over the suite's 30 s request timeout on a loaded CI
+	// runner (issue #75).
+	s.hc = s.client.HTTPClient(5 * time.Minute)
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("r2probe"), "r2probe", nil)
 	wl := e.WaitActive("r2probe", dep, 60*time.Second)
@@ -501,6 +505,10 @@ func TestR2IndexSurvivesMove(t *testing.T) {
 	r2op(t, s, base, map[string]any{"op": "mpu", "key": "b", "parts": []int{5 << 20, 7}})
 	r2op(t, s, base, map[string]any{"op": "put", "key": "gone", "value": "x"})
 	r2op(t, s, base, map[string]any{"op": "delete", "key": "gone"})
+	// The deleted put's blob goes a moment after the delete returns.
+	for deadline := time.Now().Add(10 * time.Second); len(fake.Keys()) != 3 && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+	}
 	if n := len(fake.Keys()); n != 3 {
 		t.Fatalf("blobs after a put, a 2-part upload and a deleted put: %d, want 3 (%v)", n, fake.Keys())
 	}
