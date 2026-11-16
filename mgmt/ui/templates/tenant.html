@@ -10,10 +10,8 @@
       <dt>Tailnet</dt><dd class="mono">{{.Tenant.Tailnet}}</dd>
       {{if .Tenant.ControlURL}}<dt>Control URL</dt><dd class="mono">{{.Tenant.ControlURL}}</dd>{{end}}
       <dt>Auth mode</dt><dd class="mono">{{.Tenant.MintMode}}</dd>
-      {{if .Tenant.APIKeyFile}}<dt>API key file</dt><dd class="mono">{{.Tenant.APIKeyFile}}</dd>{{end}}
+      {{if .Tenant.APIKeyFile}}<dt>Headscale API key file</dt><dd class="mono">{{.Tenant.APIKeyFile}}</dd>{{end}}
       {{if .Tenant.OAuthClientID}}<dt>OAuth client</dt><dd class="mono">{{.Tenant.OAuthClientID}}{{if .Tenant.OAuthClientFile}} <span class="muted">{{.Tenant.OAuthClientFile}}</span>{{end}}</dd>{{end}}
-      {{if .Tenant.WIFClientID}}<dt>WIF client</dt><dd class="mono">{{.Tenant.WIFClientID}}</dd>{{end}}
-      {{if .Tenant.WIFLifecycleClientID}}<dt>WIF lifecycle client</dt><dd class="mono">{{.Tenant.WIFLifecycleClientID}}</dd>{{end}}
       <dt>Max objects</dt><dd class="mono">{{.Tenant.MaxObjects}}</dd>
       <dt>Registrations / min</dt><dd class="mono">{{.Tenant.RegistrationsPerMinute}} <span class="muted">(effective {{printf "%.1f" .Tenant.EffectiveRegistrationsPerMinute}})</span></dd>
       <dt>Waiting to join</dt><dd class="mono">{{.Tenant.MintQueue}}</dd>
@@ -21,7 +19,6 @@
       <dt>OBO public key</dt><dd class="mono">{{or .Tenant.OBOPublicKey "—"}}</dd>
       <dt>Created</dt><dd class="mono">{{stamp .Tenant.CreatedAt}}</dd>
     </dl>
-    {{if .Tenant.WIF}}<details class="more"><summary>WIF settings</summary><pre class="mono">{{anyJSON .Tenant.WIF}}</pre></details>{{end}}
   </div>
   <div class="card">
     <h2>Objects by status</h2>

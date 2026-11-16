@@ -153,6 +153,9 @@ type Mgmt struct {
 	wg            sync.WaitGroup
 
 	upgradeKick chan struct{} // wakes the upgrade-run driver (upgrades.go)
+
+	// notify.go: the tenants' notification webhooks.
+	notifs notifyState
 }
 
 // New returns a Mgmt; call Start to run the mint workers and reaper.
@@ -326,9 +329,7 @@ type TenantRequest struct {
 	Tailnet                string `json:"tailnet"`
 	ControlURL             string `json:"controlURL,omitempty"`
 	MintMode               string `json:"mintMode"`
-	APIKeyFile             string `json:"apiKeyFile,omitempty"`
-	WIFClientID            string `json:"wifClientID,omitempty"`
-	WIFLifecycleClientID   string `json:"wifLifecycleClientID,omitempty"`
+	APIKeyFile             string `json:"apiKeyFile,omitempty"` // headscale
 	OAuthClientID          string `json:"oauthClientID,omitempty"`
 	OAuthClientFile        string `json:"oauthClientFile,omitempty"`
 	RegistrationsPerMinute int    `json:"registrationsPerMinute,omitempty"`
@@ -349,26 +350,6 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 		return Tenant{}, err
 	}
 	switch r.MintMode {
-	case MintAPIKey:
-		if r.APIKeyFile == "" {
-			return Tenant{}, errf(400, "bad_request", "mintMode apikey needs apiKeyFile")
-		}
-		if !filepath.IsAbs(r.APIKeyFile) {
-			return Tenant{}, errf(400, "bad_request", "apiKeyFile must be an absolute path")
-		}
-		// Same rule as the OAuth client file: a regular 0600 file, no symlink.
-		if f, err := tsapi.OpenSecretFile(r.APIKeyFile); err != nil {
-			return Tenant{}, errf(400, "bad_request", "apiKeyFile: %v", err)
-		} else {
-			f.Close()
-		}
-	case MintWIF:
-		if r.WIFClientID == "" {
-			return Tenant{}, errf(400, "bad_request", "mintMode wif needs wifClientID")
-		}
-		if m.broker.Issuer == nil {
-			return Tenant{}, errf(400, "bad_request", "mintMode wif needs twd-mgmt to run with an issuer (-issuer-url)")
-		}
 	case MintOAuth:
 		id, err := checkOAuthFile(r.OAuthClientFile, r.OAuthClientID)
 		if err != nil {
@@ -380,10 +361,13 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 			return Tenant{}, err
 		}
 	default:
-		return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey, wif or headscale")
+		if removedMintMode(r.MintMode) {
+			return Tenant{}, errSetRemovedMintMode(r.MintMode)
+		}
+		return Tenant{}, errf(400, "bad_request", "mintMode must be oauth or headscale")
 	}
 	t := Tenant{ID: r.ID, Tailnet: r.Tailnet, ControlURL: r.ControlURL, MintMode: r.MintMode, APIKeyFile: r.APIKeyFile,
-		WIFClientID: r.WIFClientID, WIFLifecycleClientID: r.WIFLifecycleClientID, OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
+		OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
 		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, PublicIngress: r.PublicIngress, CreatedAt: m.now().UnixMilli(),
 		MaxContainers: r.MaxContainers, MaxContainerMemMiB: r.MaxContainerMemMiB, MaxContainerVCPU: r.MaxContainerVCPU}
 	t.containerDefaults()
@@ -404,99 +388,6 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	}
 	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "publicIngress": t.PublicIngress})
 	return t, nil
-}
-
-// IssuerInfo is what a tenant admin needs to create the WIF trust credentials.
-func (m *Mgmt) IssuerInfo(t Tenant) map[string]any {
-	if m.broker.Issuer == nil {
-		return nil
-	}
-	return map[string]any{"issuer": m.broker.Issuer.TenantIssuer(t.ID), "mintSubject": MintSubject(t.ID),
-		"lifecycleSubject": LifecycleSubject(t.ID)}
-}
-
-// WIFUpdate is PUT /v0/tenants/{id}/wif: switch a tenant to (or re-key)
-// WIF mint mode with new public client IDs. Only client IDs are stored.
-type WIFUpdate struct {
-	WIFClientID          string `json:"wifClientID"`
-	WIFLifecycleClientID string `json:"wifLifecycleClientID,omitempty"`
-}
-
-// UpdateTenantWIF sets the tenant's WIF client IDs and makes wif the mint
-// mode. The cached access tokens of the old IDs are dropped.
-func (m *Mgmt) UpdateTenantWIF(ctx context.Context, tenantID string, u WIFUpdate) (Tenant, error) {
-	t, err := m.store.GetTenant(ctx, tenantID)
-	if err != nil {
-		return Tenant{}, err
-	}
-	if u.WIFClientID == "" {
-		return Tenant{}, errf(400, "bad_request", "wifClientID required")
-	}
-	if m.broker.Issuer == nil {
-		return Tenant{}, errf(400, "bad_request", "mintMode wif needs twd-mgmt to run with an issuer (-issuer-url)")
-	}
-	t.MintMode, t.WIFClientID, t.WIFLifecycleClientID = MintWIF, u.WIFClientID, u.WIFLifecycleClientID
-	if err := m.store.UpdateTenant(ctx, t); err != nil {
-		return Tenant{}, err
-	}
-	m.broker.Forget(t.ID)
-	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_update"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "wifUpdated": true,
-		"lifecycle": t.WIFLifecycleClientID != ""})
-	return t, nil
-}
-
-// WIFCheckResult is POST /v0/tenants/{id}/wif-check: does each trust
-// credential exchange, and can the lifecycle one read the policy.
-type WIFCheckResult struct {
-	MintMode string `json:"mintMode"`
-	// Mint: the mint credential's token exchange succeeded (its auth_keys
-	// scope is only proven by the first real mint).
-	Mint      bool   `json:"mint"`
-	MintError string `json:"mintError,omitempty"`
-	// Lifecycle: "ok", "absent" (no lifecycle client ID: kill tier 2, the
-	// reaper's device deletes, spawn checks and deploy preflight are off)
-	// or "error".
-	Lifecycle      string `json:"lifecycle"`
-	LifecycleError string `json:"lifecycleError,omitempty"`
-	// PolicyRead: the lifecycle credential read the tailnet policy
-	// (policy_file:read), which preflight and spawn checks need.
-	PolicyRead      bool   `json:"policyRead"`
-	PolicyReadError string `json:"policyReadError,omitempty"`
-	Issuer          string `json:"issuer,omitempty"`
-}
-
-// WIFCheck exercises a wif tenant's trust credentials without minting.
-func (m *Mgmt) WIFCheck(ctx context.Context, tenantID string) (WIFCheckResult, error) {
-	t, err := m.store.GetTenant(ctx, tenantID)
-	if err != nil {
-		return WIFCheckResult{}, err
-	}
-	res := WIFCheckResult{MintMode: t.MintMode, Lifecycle: "absent"}
-	if t.MintMode != MintWIF {
-		return res, errf(400, "bad_request", "tenant %s is in mint mode %s, not wif", t.ID, t.MintMode)
-	}
-	res.Issuer = m.broker.Issuer.TenantIssuer(t.ID)
-	m.broker.Forget(t.ID) // a fresh exchange, not a cached token
-	if _, err := m.broker.API(ctx, t, purposeMint); err != nil {
-		res.MintError = err.Error()
-	} else {
-		res.Mint = true
-	}
-	if t.WIFLifecycleClientID != "" {
-		api, err := m.broker.API(ctx, t, purposeLifecycle)
-		if err != nil {
-			res.Lifecycle, res.LifecycleError = "error", err.Error()
-		} else {
-			res.Lifecycle = "ok"
-			if _, _, _, err := api.GetPolicy(ctx, ""); err != nil {
-				res.PolicyReadError = err.Error()
-			} else {
-				res.PolicyRead = true
-				m.policies.Invalidate(t.ID)
-			}
-		}
-	}
-	return res, nil
 }
 
 // ---- hosts ----
@@ -828,6 +719,12 @@ type DeployRequest struct {
 	// rollbackOf is set by Rollback (rollback.go): the deployment whose
 	// stored bundle this deploy redeploys (audited as kind "rollback").
 	rollbackOf string
+
+	// Preview / PreviewAlias: deploy as a preview workload (twd deploy
+	// --preview, ADR-deploy-preview); preview is set by preview.go.
+	Preview      bool   `json:"preview,omitempty"`
+	PreviewAlias string `json:"previewAlias,omitempty"`
+	preview      *previewCtx
 }
 
 // DeployResponse is the deploy reply.
@@ -907,6 +804,11 @@ func validateObjectTag(class, tag string) *Error {
 }
 
 func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, error) {
+	if r.replica == nil && r.preview == nil {
+		if ok, resp, err := m.deployPreview(ctx, r); ok { // previews: preview.go
+			return resp, err
+		}
+	}
 	if r.replica == nil {
 		return m.deployGroup(ctx, r) // replicas: workload_replicas.go
 	}
@@ -931,6 +833,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
 		cfg, err := BundleConfig(r.Bundle)
+		r.preview.strip(cfg) // a preview takes no Service or public routes
 		svcCfg = cfg
 		if err != nil && len(classes) == 0 {
 			return resp, errf(400, "bad_bundle", "%v", err)
@@ -941,6 +844,11 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			}
 			if err := checkPublicDeploy(t, r.Workload, pub); err != nil {
 				return resp, err
+			}
+			if pub != nil {
+				if err := m.claimPublicName(ctx, t, r.Workload, r.By); err != nil { // publicnames.go (H10)
+					return resp, err
+				}
 			}
 			bcfg = cfg
 			bundlePlacement(r.Bundle, cfg)
@@ -976,6 +884,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		return resp, errf(400, "bad_bundle", "%v", err)
 	}
 	r.replica.mark(classes)
+	r.preview.mark(classes)
 	need := placementNeed{}
 	var ctrs []container.Class
 	if len(r.Bundle) > 0 {
@@ -2982,6 +2891,9 @@ var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": tru
 	"tenant": true, "deploy": true, "obo_root": true, "container_start": true, "container_stop": true,
 	"image_push": true, "image_pin": true, "image_public": true,
 	"rollback": true, // ADR-deploy-rollback: a deploy, from mgmt only
+	"promote":  true, // ADR-deploy-preview: a deploy, from mgmt only
+	// RT3-03: hostd reports records it refused before chaining them.
+	"audit_dropped": true,
 	// ADR-029: public ingress records come from netd/hostd only.
 	"public_request": true, "public_rejected": true, "public_object_created": true, "expose_on": true, "expose_off": true,
 	// Workflow approvals (hostd/approvals.go): decisions are hostd's.
@@ -3124,17 +3036,19 @@ func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMe
 	for i := start; i < len(parsed); i++ {
 		r := parsed[i]
 		tenant := ""
+		var obj *Object
 		if o, err := m.store.GetObject(ctx, r.ObjectID); err == nil {
 			if !servedBy(o) {
 				return i, ChainStatus{}, errf(403, "audit_object_foreign", "record %d: object %s belongs to workload %s/%s, which host %s has never served", i, o.ID, o.TenantID, o.Workload, hostID)
 			}
-			tenant = o.TenantID
+			tenant, obj = o.TenantID, &o
 		}
 		if _, err := m.store.AppendAudit(ctx, AuditRecord{Chain: chain, TS: fmt.Sprint(r.TS), TenantID: tenant, ObjectID: r.ObjectID,
 			Kind: r.Kind, TraceID: r.TraceID, ActingFor: r.ActingFor, PrevHash: r.PrevHash, Hash: r.Hash, HostSig: r.HostSig,
 			Raw: canons[i]}); err != nil {
 			return i, ChainStatus{}, err
 		}
+		m.notifyHostRecord(obj, r.Kind, recs[i]) // notify.go
 	}
 	return len(recs), m.VerifyChain(ctx, chain), nil
 }

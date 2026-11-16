@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
 	"github.com/rosskukulinski/twd/netd"
@@ -95,6 +96,11 @@ func TestMgmtRealMintJoinKill(t *testing.T) {
 
 	var logBuf bytes.Buffer
 	log := slog.New(netd.NewRedactingHandler(slog.NewTextHandler(&logBuf, nil)))
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("mgmt log (redacted):\n%s", logBuf.String())
+		}
+	})
 	store, err := mgmt.OpenStore(ctx, filepath.Join(dir, "mgmt.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +225,9 @@ func TestMgmtRealMintJoinKill(t *testing.T) {
 		return resp.StatusCode
 	}
 	var tn struct{ TenantID string }
-	if call("POST", "/v1/tenants", map[string]any{"tailnet": tailnet, "controlURL": prodControl, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn) != 200 {
+	// mgmt mints with this run's OAuth client (it may tag tag:ttest).
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), prefix+"oauth", "tag:ttest")
+	if call("POST", "/v1/tenants", map[string]any{"tailnet": tailnet, "controlURL": prodControl, "mintMode": "oauth", "oauthClientFile": oauthFile}, &tn) != 200 {
 		t.Fatal("tenant")
 	}
 	call("PUT", "/v1/hosts/"+hostID, map[string]any{"capacityNodes": 4, "tiers": []string{"process"}}, nil)

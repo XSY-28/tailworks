@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/netd"
 )
@@ -49,7 +50,9 @@ func TestColdIdentityReal(t *testing.T) {
 	if n <= 0 {
 		n = 20
 	}
-	e := env{name: "real", controlURL: prodControl, tailnet: tailnet, apiKeyFile: keyFile, tags: []string{"tag:ttest"},
+	// mgmt mints with an OAuth client (the run's own; it may tag tag:ttest).
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), prefix+"-oauth", "tag:ttest")
+	e := env{name: "real", controlURL: prodControl, tailnet: tailnet, oauthFile: oauthFile, tags: []string{"tag:ttest"},
 		prefix: prefix, n: n, gap: 2 * time.Second, track: tracker.Track, dial: os.Getenv("TWD_COLDID_DIAL"),
 		callerKey: func(ctx context.Context) (string, error) {
 			return minter.AuthKey(ctx, netd.KeyRequest{ObjectID: "caller", Hostname: prefix + "-caller", Tags: []string{"tag:ttest"}, Ephemeral: true})

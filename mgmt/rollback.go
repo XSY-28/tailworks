@@ -36,10 +36,14 @@ type RollbackResult struct {
 	Deployment deploymentView   `json:"deployment"`
 }
 
-// auditKind is the deploy's audit kind: "rollback" for a rollback.
+// auditKind is the deploy's audit kind: "rollback" for a rollback,
+// "promote" for a promotion (preview.go).
 func (r DeployRequest) auditKind() string {
 	if r.rollbackOf != "" {
 		return "rollback"
+	}
+	if r.preview != nil && r.preview.promotedFrom != "" {
+		return "promote"
 	}
 	return "deploy"
 }
@@ -49,6 +53,7 @@ func (r DeployRequest) auditDetail(detail map[string]any) map[string]any {
 	if r.rollbackOf != "" {
 		detail["rollbackOf"] = r.rollbackOf
 	}
+	r.preview.auditDetail(detail) // preview.go
 	return detail
 }
 

@@ -329,94 +329,11 @@ type TokenResponse struct {
 
 func (t TokenResponse) String() string { return "tsapi.TokenResponse{[REDACTED]}" }
 
-// ExchangeToken exchanges a workload-identity JWT for an API access token
-// (POST /api/v2/oauth/token-exchange, form client_id + jwt).
-func ExchangeToken(ctx context.Context, hc *http.Client, baseURL, clientID, idToken string) (TokenResponse, error) {
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-	}
-	if hc == nil {
-		hc = &http.Client{Timeout: 30 * time.Second}
-	}
-	form := url.Values{"client_id": {clientID}, "jwt": {idToken}}
-	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v2/oauth/token-exchange", strings.NewReader(form.Encode()))
-	if err != nil {
-		return TokenResponse{}, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := hc.Do(req)
-	if err != nil {
-		return TokenResponse{}, fmt.Errorf("token exchange: %w", err)
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode/100 != 2 {
-		var m struct {
-			Message string `json:"message"`
-			Error   string `json:"error"`
-		}
-		json.Unmarshal(b, &m)
-		msg := m.Message
-		if msg == "" {
-			msg = m.Error
-		}
-		if msg == "" {
-			msg = http.StatusText(resp.StatusCode)
-		}
-		return TokenResponse{}, &APIError{Status: resp.StatusCode, Message: "token exchange: " + msg, RetryAfter: retryAfter(resp.Header)}
-	}
-	var tr TokenResponse
-	if err := json.Unmarshal(b, &tr); err != nil {
-		return TokenResponse{}, err
-	}
-	if tr.AccessToken == "" {
-		return TokenResponse{}, errors.New("token exchange: no access_token")
-	}
-	return tr, nil
-}
-
 // GetDevice fetches one device by ID / stable node ID.
 func (c *Client) GetDevice(ctx context.Context, id string) (Device, error) {
 	var d Device
 	err := c.do(ctx, "GET", "/api/v2/device/"+url.PathEscape(id), nil, &d)
 	return d, err
-}
-
-// FederatedOptions describes a workload-identity-federation trust credential
-// (POST /keys with keyType "federated"; needs the federated_keys scope).
-type FederatedOptions struct {
-	Scopes      []string
-	Tags        []string
-	Issuer      string
-	Subject     string
-	Audience    string // optional; Tailscale generates api.tailscale.com/<clientID>
-	Description string
-}
-
-// FederatedCredential is a created trust credential. ID is the client ID
-// used at token exchange.
-type FederatedCredential struct {
-	ID       string `json:"id"`
-	Audience string `json:"audience"`
-}
-
-// CreateFederated creates a trust credential. It holds no secret.
-func (c *Client) CreateFederated(ctx context.Context, o FederatedOptions) (FederatedCredential, error) {
-	body := map[string]any{"keyType": "federated", "scopes": o.Scopes, "tags": o.Tags, "issuer": o.Issuer, "subject": o.Subject}
-	if o.Audience != "" {
-		body["audience"] = o.Audience
-	}
-	if o.Description != "" {
-		body["description"] = o.Description
-	}
-	var fc FederatedCredential
-	if err := c.do(ctx, "POST", c.tailnetPath("/keys"), body, &fc); err != nil {
-		return fc, err
-	}
-	if fc.ID == "" {
-		return fc, errors.New("tsapi: federated credential response missing id")
-	}
-	return fc, nil
 }
 
 // RawBody is a request body sent as-is (e.g. a HuJSON policy file).

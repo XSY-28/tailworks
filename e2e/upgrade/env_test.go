@@ -47,6 +47,10 @@ func fakeTS(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/oauth/token" { // the OAuth client's exchange (mint mode oauth)
+			json.NewEncoder(w).Encode(map[string]any{"access_token": fakeToken, "token_type": "Bearer", "expires_in": 3600})
+			return
+		}
 		if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != fakeToken {
 			w.WriteHeader(401)
 			return

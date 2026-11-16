@@ -13,7 +13,7 @@ import (
 // TestOperatorSnippet: the oauth-mode snippet is exactly what INSTALL.md
 // prints (tag:twd owns tag:twd-mgmt and tag:twd-host; host ⇄ mgmt grants;
 // autogroup:admin's admin cap; no nodeAttrs), passes the RT-06 checker with
-// the keyless allowance for autogroup:admin, and merges additively into a
+// the allowance for autogroup:admin, and merges additively into a
 // policy that already has rules (existing owners kept, nothing removed).
 func TestOperatorSnippet(t *testing.T) {
 	s := operatorSnippet()
@@ -38,32 +38,11 @@ func TestOperatorSnippet(t *testing.T) {
 	if len(s.Grants) != 3 || len(s.NodeAttrs) != 0 {
 		t.Fatalf("oauth snippet: %d grants, nodeAttrs %v (no Funnel in oauth mode)", len(s.Grants), s.NodeAttrs)
 	}
-	// wif: the operator snippet plus the issuer's own node, and Funnel on
-	// that node only; mgmt's node is never Funnel-capable.
-	k := keylessSnippet()
-	wantK := map[string][]string{mgmt.IssuerTag: {"autogroup:admin", "tag:twd"}}
-	for t, o := range s.TagOwners {
-		wantK[t] = o
-	}
-	if !reflect.DeepEqual(k.TagOwners, wantK) {
-		t.Fatalf("wif tagOwners %v, want %v", k.TagOwners, wantK)
-	}
-	if kj, _ := json.Marshal(k.NodeAttrs); len(k.NodeAttrs) != 1 || string(kj) != `[{"attr":["funnel"],"target":["`+mgmt.IssuerTag+`"]}]` || strings.Contains(string(kj), mgmt.MgmtTag) {
-		t.Fatalf("wif snippet must put funnel on %s only: %s", mgmt.IssuerTag, kj)
-	}
-	if _, ok := s.TagOwners[mgmt.IssuerTag]; ok {
-		t.Fatal("operatorSnippet must not be mutated by keylessSnippet")
-	}
-	if mgmt.IssuerTag != policy.IssuerTag {
-		t.Fatalf("mgmt.IssuerTag %q != policy.IssuerTag %q", mgmt.IssuerTag, policy.IssuerTag)
-	}
-	if err := policy.Check(policy.Snippet{NodeAttrs: []map[string]any{{"target": []string{mgmt.MgmtTag}, "attr": []string{"funnel"}}}}, keylessPolicyOptions()); err == nil {
+	if err := policy.Check(policy.Snippet{NodeAttrs: []map[string]any{{"target": []string{mgmt.MgmtTag}, "attr": []string{"funnel"}}}}, adminSrcOptions); err == nil {
 		t.Fatal("policy.Check must refuse funnel on " + mgmt.MgmtTag)
 	}
-	for _, sn := range []policy.Snippet{s, keylessSnippet()} {
-		if err := policy.Check(sn, keylessPolicyOptions()); err != nil {
-			t.Fatalf("RT-06 check: %v", err)
-		}
+	if err := policy.Check(s, adminSrcOptions); err != nil {
+		t.Fatalf("RT-06 check: %v", err)
 	}
 	if err := policy.Check(s, policy.Options{}); err == nil {
 		t.Fatal("autogroup:admin as a grant source must need the explicit allowance")
@@ -78,7 +57,7 @@ func TestOperatorSnippet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := policy.MergeWith(before, s, keylessPolicyOptions())
+	after, err := policy.MergeWith(before, s, adminSrcOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,13 +75,18 @@ func TestOperatorSnippet(t *testing.T) {
 	}
 }
 
-// TestModeChoiceAndTypedErrors: no mode → the three options, OAuth
-// first; policy_missing_tag_owners carries the exact tagOwners snippet.
+// adminSrcOptions lets the operator snippet's autogroup:admin grant source
+// through Check (RT-06).
+var adminSrcOptions = policy.Options{AllowSrcs: []string{"autogroup:admin"}}
+
+// TestModeChoiceAndTypedErrors: no credential → how to create the OAuth
+// client (no removed mode offered); policy_missing_tag_owners carries the
+// exact tagOwners snippet.
 func TestModeChoiceAndTypedErrors(t *testing.T) {
 	e := mintModeRequired()
 	text := strings.Join(e.Lines, "\n")
-	o, w, a := strings.Index(text, "--oauth-client-file"), strings.Index(text, "twd up --wif"), strings.Index(text, "--api-key-file")
-	if e.Code != "mint_mode_required" || o < 0 || w < o || a < w || !strings.Contains(text, "Auth Keys") || !strings.Contains(text, "tag:twd") {
+	if e.Code != "mint_mode_required" || !strings.Contains(text, "--oauth-client-file") || !strings.Contains(text, "Auth Keys") || !strings.Contains(text, "tag:twd") ||
+		strings.Contains(text, "--wif") || strings.Contains(text, "TS_API_KEY") {
 		t.Fatalf("mode choice order/content:\n%s", text)
 	}
 	pe := policyMissingTagOwners("why", nil)

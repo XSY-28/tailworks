@@ -215,7 +215,11 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 		return nil, gateErr
 	}
 	defer gateDone()
-	if w.tenant == nil {
+	// deploy sets w.tenant under w.mu from another syncAssignments goroutine.
+	w.mu.Lock()
+	deployed := w.tenant != nil
+	w.mu.Unlock()
+	if !deployed {
 		return nil, &apiError{Code: "upstream_unavailable", Detail: "workload " + w.name + " is not deployed"}
 	}
 	hn := h.hostnameFor(w.name, class, name)

@@ -139,6 +139,9 @@ func TestE2ELinuxVM(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
+	// twd mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-linuxvm-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -166,7 +169,7 @@ func TestE2ELinuxVM(t *testing.T) {
 		t.Fatalf("%s $HOME = %q", vm, rhome)
 	}
 	R := rhome + "/.twd-e2e"
-	rKey, rState, rWork := R+"/tailnet1_api.env", R+"/state", R+"/work"
+	rKey, rState, rWork := R+"/oauth.env", R+"/state", R+"/work"
 	rTwd := rhome + "/.twd/bin/twd"
 	if so := r.must(`[ -e ~/.twd ] && echo twd; [ -e ~/.twd-e2e ] && echo e2e; [ -e /etc/twd ] && echo etc-twd; systemctl cat twd-vmhelper >/dev/null 2>&1 && echo unit; true`); strings.TrimSpace(so) != "" {
 		t.Fatalf("%s is not clean (%s)", vm, strings.TrimSpace(so))
@@ -181,7 +184,7 @@ func TestE2ELinuxVM(t *testing.T) {
 	downDone, setupDone := false, false
 	var agentDir string
 
-	e := &cliflow.Env{T: t, BinDir: "(" + vm + ")", StateDir: rState, WorkDir: rWork, Tailnet: tailnet, APIKeyFile: rKey,
+	e := &cliflow.Env{T: t, BinDir: "(" + vm + ")", StateDir: rState, WorkDir: rWork, Tailnet: tailnet, OAuthClientFile: rKey,
 		ControlURL: prodControl, Prefix: twdPrefix, Res: res, ClientTagged: true, Tier: "microvm",
 		Exec: func(args []string) (string, string, time.Duration, error) {
 			return r.timed(rWork, append([]string{rTwd}, args...)...)
@@ -354,11 +357,11 @@ func TestE2ELinuxVM(t *testing.T) {
 		t.Fatalf("limactl copy tarball: %v %s", err, out)
 	}
 	res.Numbers["copy_tarball_ms"] = msOf(time.Since(st))
-	if out, err := exec.Command("limactl", "copy", keyFile, vm+":"+rKey).CombinedOutput(); err != nil {
+	if out, err := exec.Command("limactl", "copy", oauthFile, vm+":"+rKey).CombinedOutput(); err != nil {
 		t.Fatalf("limactl copy key file: %v %s", err, netd.Redact(string(out)))
 	}
-	r.must(`chmod 600 ~/.twd-e2e/tailnet1_api.env`)
-	if m := strings.TrimSpace(r.must(`stat -c %a ~/.twd-e2e/tailnet1_api.env`)); m != "600" {
+	r.must(`chmod 600 ~/.twd-e2e/oauth.env`)
+	if m := strings.TrimSpace(r.must(`stat -c %a ~/.twd-e2e/oauth.env`)); m != "600" {
 		t.Fatalf("key file mode in the VM: %s", m)
 	}
 	res.Checks["copy"] = "PASS tarball + key file (0600) in ~/.twd-e2e via limactl copy"
@@ -398,7 +401,7 @@ func TestE2ELinuxVM(t *testing.T) {
 		}
 		return "", "", ""
 	}
-	doc := doctor("--tailnet", tailnet, "--api-key-file", rKey)
+	doc := doctor()
 	if s, dd, fx := checkOf(doc, "microvm_tier"); s != "warn" || !strings.Contains(dd, "not installed") || !strings.Contains(fx, "host setup --microvm") {
 		t.Fatalf("doctor microvm before setup: %s %s (fix %s)", s, dd, fx)
 	} else {

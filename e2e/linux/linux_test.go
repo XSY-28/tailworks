@@ -156,6 +156,9 @@ func TestE2ELinux(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
+	// twd mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-linux-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -187,7 +190,7 @@ func TestE2ELinux(t *testing.T) {
 		t.Fatalf("VM $HOME = %q", vhome)
 	}
 	R := vhome + "/.twd-e2e"
-	rKey, rState, rWork := R+"/tailnet1_api.env", R+"/state", R+"/work"
+	rKey, rState, rWork := R+"/oauth.env", R+"/state", R+"/work"
 	rTwd := vhome + "/.twd/bin/twd"
 
 	if so := v.must(`[ -e ~/.twd ] && echo twd; [ -e ~/.twd-e2e ] && echo e2e; [ -e ~/.config/systemd/user/twd.service ] && echo unit; true`); strings.TrimSpace(so) != "" {
@@ -216,7 +219,7 @@ func TestE2ELinux(t *testing.T) {
 	var client *nettest.Node
 	var mcpIP string
 
-	e := &cliflow.Env{T: t, BinDir: "(" + vmName + ")", StateDir: rState, WorkDir: rWork, Tailnet: tailnet, APIKeyFile: rKey,
+	e := &cliflow.Env{T: t, BinDir: "(" + vmName + ")", StateDir: rState, WorkDir: rWork, Tailnet: tailnet, OAuthClientFile: rKey,
 		ControlURL: prodControl, Prefix: twdPrefix, Res: res, ClientTagged: true, Slow: slow,
 		// twd up's defaults (persistent nodes, as a real install) under
 		// --service: an --ephemeral node that goes offline for a restart
@@ -350,7 +353,7 @@ func TestE2ELinux(t *testing.T) {
 		t.Fatalf("limactl copy tarball: %v %s", err, out)
 	}
 	res.Numbers["copy_tarball_ms"] = msOf(time.Since(st))
-	if out, err := exec.Command("limactl", "copy", keyFile, vmName+":"+rKey).CombinedOutput(); err != nil {
+	if out, err := exec.Command("limactl", "copy", oauthFile, vmName+":"+rKey).CombinedOutput(); err != nil {
 		t.Fatalf("limactl copy key file: %v %s", err, netd.Redact(string(out)))
 	}
 	v.must("chmod 600 " + shq(rKey))
@@ -387,12 +390,12 @@ func TestE2ELinux(t *testing.T) {
 	// twd doctor before up: no check may fail. The Linux checks must be ok
 	// (the microVM pieces may be skip: they're optional).
 	var doc doctorOut
-	so, se, d, err = e.Twd("doctor", "--tailnet", tailnet, "--api-key-file", rKey, "--json")
+	so, se, d, err = e.Twd("doctor", "--json")
 	if err != nil || json.Unmarshal([]byte(so), &doc) != nil || !doc.OK {
 		t.Fatalf("twd doctor in the VM: %v\n%s\n%s", err, so, netd.Redact(se))
 	}
 	res.Numbers["doctor_ms"] = msOf(d)
-	mustOK := []string{"binaries", "glibc", "workerd", "bundler", "twd_home_writable", "state_dir_writable", "api_key", "kernel", "cgroups_v2", "systemd", "system_tailscaled_not_used"}
+	mustOK := []string{"binaries", "glibc", "workerd", "bundler", "twd_home_writable", "state_dir_writable", "kernel", "cgroups_v2", "systemd", "system_tailscaled_not_used"}
 	var summary []string
 	for _, c := range doc.Checks {
 		summary = append(summary, c.Name+"="+c.Status)
@@ -681,7 +684,7 @@ func TestE2ELinux(t *testing.T) {
 		// that fix this phase needed a fresh state dir (bootstrap_failed
 		// "the workload node for agent is killed").
 		ephLog := "~/.twd-e2e/state/logs/hostd.log"
-		e.MustJSON(nil, "up", "--tailnet", tailnet, "--api-key-file", rKey, "--yes", "--ephemeral",
+		e.MustJSON(nil, "up", "--oauth-client-file", rKey, "--tailnet", tailnet, "--yes", "--ephemeral",
 			"--hostname-prefix", twdPrefix, "--control-url", prodControl, "--service")
 		var dep struct {
 			Endpoint struct{ MagicDNS string } `json:"endpoint"`

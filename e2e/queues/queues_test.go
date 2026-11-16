@@ -46,6 +46,10 @@ func fakeTS(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/oauth/token" { // the OAuth client's exchange (mint mode oauth)
+			json.NewEncoder(w).Encode(map[string]any{"access_token": fakeToken, "token_type": "Bearer", "expires_in": 3600})
+			return
+		}
 		if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != fakeToken {
 			w.WriteHeader(401)
 			return
@@ -340,7 +344,7 @@ func TestQueuesMultiHost(t *testing.T) {
 	recURL := "http://" + st.TailscaleIPs[0].String() + "/rec"
 
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeToken+"\n"), 0o600)
+	cliflow.WriteFakeOAuthFile(t, keyFile)
 	e.start("mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	for i := 0; ; i++ {
@@ -356,7 +360,7 @@ func TestQueuesMultiHost(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	var tn struct{ TenantID string }
-	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	e.startHost("h1")
 	e.startHost("h2")
 	e.waitHosts("h1", "h2")

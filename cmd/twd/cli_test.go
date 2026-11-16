@@ -55,7 +55,8 @@ func newFakeTS(t *testing.T) *fakeTS {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &fakeTS{policy: p, keys: map[string]bool{}, devDel: map[string]bool{}, oauthTokens: map[string]bool{}, bearers: map[string]int{}}
+	return &fakeTS{policy: p, keys: map[string]bool{}, devDel: map[string]bool{}, oauthTokens: map[string]bool{}, bearers: map[string]int{},
+		oauthID: fakeOAuthID, oauthSecret: fakeOAuthSecret}
 }
 
 func (f *fakeTS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -153,10 +154,10 @@ func TestCLIEndToEnd(t *testing.T) {
 	state, _ := hostdtest.ShortDir("twd-cli-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	res := cliflow.NewResults("hermetic", "ttest.ts.net")
 	var nodes []*nettest.Node
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-t-", Res: res,
 		NewNode: func(role string) *nettest.Node {
 			n, err := nettest.NewNode(context.Background(), ctl.URL, nettest.DummyKey, "ttest-"+role, filepath.Join(work, role))
@@ -202,7 +203,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	t.Logf("results:\n%s", b)
 }
 
-// TestCLILink is M10 hermetically: `twd up` in apikey mode with mgmt's own
+// TestCLILink is M10 hermetically: `twd up` in oauth mode with mgmt's own
 // tsnet node on testcontrol (unattended join), then a second state dir on
 // the same machine acts as a developer box: `twd link` through its own
 // tsnet node (the test transport), remote deploy / ls / kill / audit with
@@ -238,10 +239,10 @@ func TestCLILink(t *testing.T) {
 	state, _ := hostdtest.ShortDir("twd-lk-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	authFile := filepath.Join(work, "auth.env")
 	os.WriteFile(authFile, []byte("TS_AUTHKEY="+nettest.DummyKey+"\n"), 0o600)
-	host := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	host := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-l-", Res: cliflow.NewResults("hermetic-link", "ttest.ts.net")}
 	devState := filepath.Join(work, "dev-state")
 	dev := &cliflow.Env{T: t, BinDir: bin, StateDir: devState, WorkDir: work, Res: host.Res}
@@ -259,16 +260,16 @@ func TestCLILink(t *testing.T) {
 		MgmtNode, MgmtIP, MintMode string
 		Timings                    map[string]float64 `json:"timingsMs"`
 	}
-	host.MustJSON(&up, "up", "--tailnet", "ttest.ts.net", "--api-key-file", keyFile, "--yes", "--ephemeral", "--control-url", ctl.URL,
+	host.MustJSON(&up, "up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--ephemeral", "--control-url", ctl.URL,
 		"--tsapi-url", api.URL, "--hostname-prefix", "twd-l-", "--mgmt-hostname", "twd-mgmt", "--mgmt-authkey-file", authFile)
-	if up.MgmtIP == "" || up.MgmtNode == "" || up.MintMode != "apikey" {
+	if up.MgmtIP == "" || up.MgmtNode == "" || up.MintMode != "oauth" {
 		t.Fatalf("twd up with a mgmt node: %+v", up)
 	}
-	if _, se, _, err := host.Twd("up", "--wif", "--yes", "--control-url", ctl.URL); err == nil || !strings.Contains(se, "state_conflict") {
-		t.Fatalf("keyless twd up on an apikey state dir should be state_conflict: %v %s", err, se)
+	if _, se, _, err := host.Twd("up", "--api-key-file", keyFile, "--yes", "--control-url", ctl.URL); err == nil || !strings.Contains(se, "mint_mode_removed") {
+		t.Fatalf("twd up --api-key-file (Tailscale) should be mint_mode_removed: %v %s", err, se)
 	}
 	// A second twd up (supervisor running) must not touch the node.
-	host.MustJSON(nil, "up", "--tailnet", "ttest.ts.net", "--api-key-file", keyFile, "--yes", "--ephemeral", "--control-url", ctl.URL,
+	host.MustJSON(nil, "up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--ephemeral", "--control-url", ctl.URL,
 		"--tsapi-url", api.URL, "--hostname-prefix", "twd-l-", "--mgmt-hostname", "twd-mgmt")
 
 	// The developer box: linked through its own tsnet node (test transport;
@@ -287,14 +288,14 @@ func TestCLILink(t *testing.T) {
 		Tenants                []struct{ TenantID, MintMode string }
 	}
 	d := dev.MustJSON(&lk, "link", ep, "--tsnet", "--tsnet-dir", filepath.Join(work, "dev-node"), "--tsnet-hostname", "ttest-dev", "--control-url", ctl.URL, "--tsnet-authkey-file", authFile)
-	if !lk.Admin || lk.Endpoint != ep || len(lk.Tenants) != 1 || lk.Tenants[0].MintMode != "apikey" || lk.Actor == "" {
+	if !lk.Admin || lk.Endpoint != ep || len(lk.Tenants) != 1 || lk.Tenants[0].MintMode != "oauth" || lk.Actor == "" {
 		t.Fatalf("twd link: %+v", lk)
 	}
 	host.Res.Numbers["link_ms"] = float64(d.Milliseconds())
 	if _, se, _, err := dev.Twd("logs", "--component", "mgmt"); err == nil || !strings.Contains(se, "remote_unsupported") {
 		t.Fatalf("remote logs: %v %s", err, se)
 	}
-	if _, se, _, err := dev.Twd("tenant", "add", "x.ts.net", "--api-key-file", keyFile); err == nil || !strings.Contains(se, "remote_unsupported") {
+	if _, se, _, err := dev.Twd("tenant", "add", "x.ts.net", "--oauth-client-file", keyFile); err == nil || !strings.Contains(se, "remote_unsupported") {
 		t.Fatalf("remote tenant add: %v %s", err, se)
 	}
 	// Remote deploy (bundled locally, uploaded), ls with deployedBy, kill, audit.
@@ -433,9 +434,8 @@ func TestCLIMultiTenant(t *testing.T) {
 	work := t.TempDir()
 	var nodes []*nettest.Node
 	tenant := func(k string) *cliflow.Tenant {
-		kf := filepath.Join(work, k+"-api.env")
-		os.WriteFile(kf, []byte("TS_API_KEY=fake-not-a-key-"+k+"\n"), 0o600)
-		return &cliflow.Tenant{Tailnet: k + ".ttest.ts.net", APIKeyFile: kf, ControlURL: ctls[k].URL,
+		kf := writeFakeOAuthFile(t, filepath.Join(work, k+"-oauth.env"))
+		return &cliflow.Tenant{Tailnet: k + ".ttest.ts.net", OAuthClientFile: kf, ControlURL: ctls[k].URL,
 			Res: cliflow.NewResults("hermetic-"+k, k+".ttest.ts.net"),
 			NewNode: func(role string) *nettest.Node {
 				n, err := nettest.NewNode(context.Background(), ctls[k].URL, nettest.DummyKey, "ttest-"+role, filepath.Join(work, role))
@@ -536,12 +536,6 @@ func TestDoctor(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(work, "state")); !os.IsNotExist(err) {
 		t.Fatalf("doctor created the state dir")
-	}
-	// A key file without TS_API_KEY fails the api_key check (and the command).
-	bad := filepath.Join(work, "bad.env")
-	os.WriteFile(bad, []byte("NOPE=1\n"), 0o600)
-	if _, se, _, err := e.Twd("doctor", "--tailnet", "example.ts.net", "--api-key-file", bad); err == nil || !strings.Contains(se, "doctor_failed") {
-		t.Fatalf("doctor with a bad key file: %v %s", err, se)
 	}
 }
 
@@ -716,16 +710,24 @@ func TestCLISingleProcess(t *testing.T) {
 		cliflow.MCPCap:  []tailcfg.RawMessage{`{"tools":["lookup_order"]}`},
 	})
 	fts := newFakeTS(t)
+	// The policy an OAuth-mode twd up checks for: the fixture plus the
+	// grant that makes autogroup:admin twd admins over the tailnet.
+	withAdmin, err := policy.MergeWith(fts.policy, policy.Snippet{Grants: []map[string]any{policy.AdminGrant("autogroup:admin", mgmt.MgmtTag, mgmt.AdminCap)}},
+		policy.Options{AllowSrcs: []string{"autogroup:admin"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fts.policy = withAdmin
 	api := httptest.NewServer(fts)
 	defer api.Close()
 	bin := cliflow.BuildBinaries(t)
 	state, _ := hostdtest.ShortDir("twd-sp-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	res := cliflow.NewResults("hermetic-single", "ttest.ts.net")
 	var nodes []*nettest.Node
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-s-", Res: res, SingleProcess: true,
 		NewNode: func(role string) *nettest.Node {
 			n, err := nettest.NewNode(context.Background(), ctl.URL, nettest.DummyKey, "ttest-"+role, filepath.Join(work, role))
@@ -777,7 +779,7 @@ func TestCLISingleProcess(t *testing.T) {
 	if err != nil || !strings.Contains(so, "embedded in the mgmt process") {
 		t.Fatalf("status text: %v\n%s", err, so)
 	}
-	again := []string{"up", "--tailnet", "ttest.ts.net", "--api-key-file", keyFile, "--yes", "--control-url", ctl.URL, "--tsapi-url", api.URL,
+	again := []string{"up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--control-url", ctl.URL, "--tsapi-url", api.URL,
 		"--hostname-prefix", "twd-s-", "--mgmt-hostname", "twd-s-mgmt", "--host-id", "twd-s", "--ephemeral", "--allow-sibling-egress"}
 	so, se, _, err := e.Twd(again...)
 	if err != nil || !strings.Contains(so, "embedded in twd-mgmt (single process") || !strings.Contains(so, "one process: mgmt + embedded host") || !strings.Contains(so, "✓ policy") {

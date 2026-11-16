@@ -135,7 +135,6 @@
     <dt>Version</dt><dd class="mono">{{or .Status.Version "—"}}</dd>
     <dt>Listeners</dt><dd class="mono">{{if .Status.Listeners}}{{join .Status.Listeners}}{{else}}—{{end}}</dd>
     <dt>Transport</dt><dd class="mono">{{.Status.Transport}}{{if .Who.Mgmt.HTTPS}} · https{{end}}</dd>
-    {{if .Who.Mgmt.Issuer}}<dt>WIF issuer</dt><dd class="mono">{{.Who.Mgmt.Issuer}}</dd>{{end}}
     <dt>Tenant auth modes</dt><dd class="mono">{{if .MintModes}}{{join .MintModes}}{{else}}<span class="muted">no tenants</span>{{end}}</dd>
     <dt>Your connection</dt><dd><span class="mono">{{.Who.Actor}}</span> · {{.Who.Kind}}{{if .Who.Admin}} · admin{{end}}</dd>
   </dl>

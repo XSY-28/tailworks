@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -113,12 +112,12 @@ func newRegEnv(t *testing.T) *regEnv {
 	}
 	t.Cleanup(func() { m.Close() })
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
+	writeTestOAuthFile(t, kf)
 	e := &regEnv{m: m, upstream: up}
-	if e.a, err = m.CreateTenant(ctx, TenantRequest{ID: "tna", Tailnet: "a.ts.net", MintMode: "apikey", APIKeyFile: kf}); err != nil {
+	if e.a, err = m.CreateTenant(ctx, TenantRequest{ID: "tna", Tailnet: "a.ts.net", MintMode: MintOAuth, OAuthClientFile: kf}); err != nil {
 		t.Fatal(err)
 	}
-	if e.b, err = m.CreateTenant(ctx, TenantRequest{ID: "tnb", Tailnet: "b.ts.net", MintMode: "apikey", APIKeyFile: kf}); err != nil {
+	if e.b, err = m.CreateTenant(ctx, TenantRequest{ID: "tnb", Tailnet: "b.ts.net", MintMode: MintOAuth, OAuthClientFile: kf}); err != nil {
 		t.Fatal(err)
 	}
 	for id, node := range map[string]string{"h1": "nH1", "h2": "nH2"} {

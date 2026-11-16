@@ -810,12 +810,16 @@ func jsonStr(v any) string {
 
 // ---- tenants ----
 
-const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, wif_client_id, wif_lifecycle_client_id, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress"
+// tenantCols leaves out wif_client_id and wif_lifecycle_client_id: the
+// columns stay in the schema (rows written by older twd versions; no
+// migration needed) but nothing reads them since the wif mint mode was
+// removed, and UpdateTenant clears them.
+const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress"
 
 func scanTenant(sc interface{ Scan(...any) error }) (Tenant, error) {
 	var t Tenant
 	var rpm, mo, mc, mm, mv int64
-	err := sc.Scan(&t.ID, &t.Tailnet, &t.ControlURL, &t.MintMode, &t.APIKeyFile, &t.WIFClientID, &t.WIFLifecycleClientID, &rpm, &mo, &t.CreatedAt, &t.Pool, &t.Tier, &t.UpdatedAt, &t.OAuthClientID, &t.OAuthClientFile,
+	err := sc.Scan(&t.ID, &t.Tailnet, &t.ControlURL, &t.MintMode, &t.APIKeyFile, &rpm, &mo, &t.CreatedAt, &t.Pool, &t.Tier, &t.UpdatedAt, &t.OAuthClientID, &t.OAuthClientFile,
 		&mc, &mm, &mv, &t.PublicIngress)
 	t.RegistrationsPerMinute, t.MaxObjects = int(rpm), int(mo)
 	t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU = int(mc), int(mm), float64(mv)/1e6
@@ -836,8 +840,8 @@ func (s *SQLStore) CreateTenant(ctx context.Context, t Tenant) error {
 	if t.UpdatedAt == 0 {
 		t.UpdatedAt = t.CreatedAt
 	}
-	_, err := s.db.ExecContext(ctx, s.q("INSERT INTO tenants ("+tenantCols+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
-		t.ID, t.Tailnet, t.ControlURL, t.MintMode, t.APIKeyFile, t.WIFClientID, t.WIFLifecycleClientID,
+	_, err := s.db.ExecContext(ctx, s.q("INSERT INTO tenants ("+tenantCols+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
+		t.ID, t.Tailnet, t.ControlURL, t.MintMode, t.APIKeyFile,
 		t.RegistrationsPerMinute, t.MaxObjects, t.CreatedAt, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
 		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress)
 	if isUnique(err) {
@@ -846,11 +850,11 @@ func (s *SQLStore) CreateTenant(ctx context.Context, t Tenant) error {
 	return err
 }
 
-// UpdateTenant rewrites a tenant's mint configuration (mode, key file,
-// WIF client IDs) and limits; ID, tailnet and createdAt are immutable.
+// UpdateTenant rewrites a tenant's mint configuration (mode, credential
+// files) and limits; ID, tailnet and createdAt are immutable.
 func (s *SQLStore) UpdateTenant(ctx context.Context, t Tenant) error {
-	res, err := s.db.ExecContext(ctx, s.q("UPDATE tenants SET control_url=?, mint_mode=?, api_key_file=?, wif_client_id=?, wif_lifecycle_client_id=?, rpm=?, max_objects=?, pool=?, tier=?, updated_at=?, oauth_client_id=?, oauth_client_file=?, max_containers=?, max_container_mem=?, max_container_uvcpu=?, public_ingress=? WHERE id=?"),
-		t.ControlURL, t.MintMode, t.APIKeyFile, t.WIFClientID, t.WIFLifecycleClientID, t.RegistrationsPerMinute, t.MaxObjects, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
+	res, err := s.db.ExecContext(ctx, s.q("UPDATE tenants SET control_url=?, mint_mode=?, api_key_file=?, wif_client_id='', wif_lifecycle_client_id='', rpm=?, max_objects=?, pool=?, tier=?, updated_at=?, oauth_client_id=?, oauth_client_file=?, max_containers=?, max_container_mem=?, max_container_uvcpu=?, public_ingress=? WHERE id=?"),
+		t.ControlURL, t.MintMode, t.APIKeyFile, t.RegistrationsPerMinute, t.MaxObjects, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
 		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.ID)
 	if err != nil {
 		return err
@@ -868,6 +872,7 @@ func (s *SQLStore) GetTenant(ctx context.Context, id string) (Tenant, error) {
 func (s *SQLStore) DeleteTenant(ctx context.Context, id string) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		for _, q := range []string{"DELETE FROM objects WHERE tenant_id=?", "DELETE FROM deployments WHERE tenant_id=?", "DELETE FROM workload_public WHERE tenant_id=?",
+			"DELETE FROM public_names WHERE tenant_id=?", // publicnames.go: a deleted tenant releases its names
 			"DELETE FROM leases WHERE name LIKE ? || '/%'", "DELETE FROM container_reservations WHERE tenant_id=?"} {
 			if _, err := tx.ExecContext(ctx, s.q(q), id); err != nil {
 				return err
@@ -1778,9 +1783,19 @@ func (s *SQLStore) ListAudit(ctx context.Context, f AuditFilter) ([]AuditRecord,
 	if f.Chain != "" && f.Page.After == nil {
 		order = " ORDER BY chain, seq"
 	}
-	if k := f.Page.After; k != nil {
+	if k := f.Page.After; k != nil && !f.Desc {
 		where = append(where, "(ts > ? OR (ts = ? AND chain > ?) OR (ts = ? AND chain = ? AND seq > ?))")
 		args = append(args, k.TS, k.TS, k.Chain, k.TS, k.Chain, k.Seq)
+	}
+	if f.Desc { // newest first; the cursor is an upper bound
+		order = " ORDER BY ts DESC, chain DESC, seq DESC"
+		if f.Chain != "" && f.Page.After == nil {
+			order = " ORDER BY chain DESC, seq DESC"
+		}
+		if k := f.Page.After; k != nil {
+			where = append(where, "(ts < ? OR (ts = ? AND chain < ?) OR (ts = ? AND chain = ? AND seq < ?))")
+			args = append(args, k.TS, k.TS, k.Chain, k.TS, k.Chain, k.Seq)
+		}
 	}
 	q := "SELECT chain, seq, ts, tenant_id, object_id, kind, trace_id, acting_for, prev_hash, hash, host_sig, raw FROM audit"
 	if len(where) > 0 {

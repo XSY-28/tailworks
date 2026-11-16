@@ -84,3 +84,49 @@ position.
   public-ingress merge was one.
 - Never use bare `git stash` / `git stash pop`. The stash stack is shared with
   every other worktree. Use a WIP commit instead.
+
+## Definition of done (before you open or merge a PR)
+
+CI (`.github/workflows/ci.yml`) runs `make lint test` on every PR, and
+master accepts a PR only when its `ci-ok` check passes on a branch that is
+up to date with master. When another PR lands first, merge `origin/master`
+again and let CI rerun. That rerun is what catches two PRs that pass alone
+and break master together (as #54, #55 and #57 did).
+
+1. **Merge `origin/master`, then `make lint test`** locally (rule 6). Don't
+   push to find out whether CI passes.
+2. **Run the extra suites for what you touched.** CI doesn't run these:
+
+   | You changed | Also run |
+   | --- | --- |
+   | `mgmt` store or `mgmt/migrations/` | `make test-pg` |
+   | placement, leases, D1 across moves | `make e2e-placement` |
+   | locks / leader election | `make e2e-locks` |
+   | Queues | `make e2e-queues` |
+   | logs, metrics, traces | `make e2e-observability` |
+   | templates, `js/packages`, SDK compat | `make templates-typecheck test-sdk` |
+   | wrangler config or bundling | `make e2e-wrangler` |
+   | anything `make changes-check` calls upgrade-relevant | `make e2e-upgrade` |
+   | `install.sh` / `get.sh` | `make install-test` |
+
+   The suites that need credentials, a real tailnet, Docker, KVM or a Mac's
+   virtualization (`e2e-real`, `e2e-public`, `e2e-vm`, `e2e-vz`,
+   `e2e-headscale`, …) are fine to skip if you can't run them. Say so in the
+   PR.
+3. **Generated and registered things:**
+   - API: edit `api/openapi.yaml`, run `make api`, commit the output (rule 2).
+   - Release notes: when `make changes-check` asks for one, add a
+     `changes/<branch>.md` fragment.
+   - New CLI command: one entry in `commands` (`cmd/twd/main.go`) with its
+     `group:` and `short:` (≤ 60 characters). There is nothing else to
+     register.
+   - Command, flag or help text change: run `make cli-docs` and commit
+     `docs/cli.md` (`TestCLIReferenceUpToDate` fails when it is stale).
+   - New error code: add it to `docs/errors.md` with "When" and "Fix".
+   - Template or binding change: run `twd types` and commit the template's
+     `worker-configuration.d.ts`.
+4. **Status:** update `status/<branch>.md` (rule 1) with the commands you
+   ran and their results.
+5. **PR body:** what changed and why, and a **Tests** section listing the
+   commands you actually ran and their results. List anything you skipped,
+   and why.

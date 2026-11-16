@@ -30,10 +30,10 @@ type queueEnv struct {
 }
 
 func newQueueEnv(t *testing.T) *queueEnv {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "wrangler.jsonc": queueWrangler, "dist/index.js": "export default {}"})
 	var dep DeployResponse

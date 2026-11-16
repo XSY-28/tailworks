@@ -110,7 +110,7 @@ func auditKinds(t *testing.T, e *testEnv, tenant string, kinds ...string) []Audi
 }
 
 func TestPublicGateAndAssignment(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	push := publicHost(t, e)
 	tn := v1Tenant(t, e, "t.ts.net", nil)
@@ -197,7 +197,7 @@ func TestPublicGateAndAssignment(t *testing.T) {
 }
 
 func TestPublicNodeObject(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	publicHost(t, e)
 	tn := v1Tenant(t, e, "t.ts.net", map[string]any{"publicIngress": "allow"})
@@ -258,7 +258,7 @@ func mustJSON(v any) []byte {
 }
 
 func TestPublicExpose(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	push := publicHost(t, e)
 	tn := v1Tenant(t, e, "t.ts.net", map[string]any{"publicIngress": "allow"})
@@ -320,7 +320,7 @@ func TestPublicExpose(t *testing.T) {
 
 func TestPublicPreflight(t *testing.T) {
 	run := func(t *testing.T, policy string) PreflightResult {
-		e := newTestEnv(t, nil)
+		e := newTestEnv(t)
 		e.ts.policy = policy
 		publicHost(t, e)
 		tn := v1Tenant(t, e, "t.ts.net", map[string]any{"publicIngress": "allow"})

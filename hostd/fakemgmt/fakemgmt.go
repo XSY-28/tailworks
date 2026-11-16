@@ -6,8 +6,9 @@
 //
 // Mint modes per tenant:
 //   - "static": every credential is Config.StaticKey (testcontrol accepts any key);
-//   - "apikey": single-use, pre-authorized, 5-minute tagged keys minted via
-//     the Tailscale API (internal/tsapi) with the key in Tenant.APIKeyFile.
+//   - "oauth": single-use, pre-authorized, 5-minute tagged keys minted via
+//     the Tailscale API (internal/tsapi) with the OAuth client in
+//     Tenant.OAuthClientFile.
 package fakemgmt
 
 import (
@@ -327,17 +328,18 @@ func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 400, "bad_request", "static mint mode needs Config.StaticKey")
 			return
 		}
-	case "apikey":
-		if t.APIKeyFile == "" {
-			writeErr(w, 400, "bad_request", "apikey mode needs apiKeyFile")
+	case "oauth":
+		if t.OAuthClientFile == "" {
+			writeErr(w, 400, "bad_request", "mintMode oauth needs oauthClientFile")
 			return
 		}
-		key, err := tsapi.LoadEnvFile(t.APIKeyFile, "TS_API_KEY")
-		if err != nil {
-			writeErr(w, 400, "bad_request", "apiKeyFile: "+err.Error())
+		file := t.OAuthClientFile
+		if _, err := tsapi.LoadOAuthFile(file); err != nil {
+			writeErr(w, 400, "bad_request", "oauthClientFile: "+err.Error())
 			return
 		}
-		tn.api = &tsapi.Client{Tailnet: t.Tailnet, APIKey: key, BaseURL: s.cfg.APIBaseURL}
+		src := &tsapi.OAuthSource{BaseURL: s.cfg.APIBaseURL, Load: func() (tsapi.OAuthCredentials, error) { return tsapi.LoadOAuthFile(file) }}
+		tn.api = &tsapi.Client{Tailnet: t.Tailnet, Tokens: src, BaseURL: s.cfg.APIBaseURL}
 		tn.minter = tsapi.MintSource(tn.api, s.log)
 	default:
 		writeErr(w, 400, "bad_request", "mintMode "+t.MintMode+" is not supported by fakemgmt")
@@ -362,7 +364,7 @@ func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) public(t *tenant) mgmtapi.Tenant {
 	p := t.Tenant
-	p.APIKeyFile = ""
+	p.APIKeyFile, p.OAuthClientFile = "", ""
 	p.OBOPublicKey = base64.StdEncoding.EncodeToString(s.oboKey.Public().(ed25519.PublicKey))
 	return p
 }
@@ -1221,7 +1223,7 @@ func (s *Server) credential(w http.ResponseWriter, r *http.Request) {
 	switch t.MintMode {
 	case "static":
 		cred.AuthKey = s.cfg.StaticKey
-	case "apikey":
+	case "oauth":
 		k, err := t.minter.AuthKey(r.Context(), netd.KeyRequest{ObjectID: id, Tags: tags, Ephemeral: !s.cfg.NonEphemeral})
 		if err != nil {
 			writeErr(w, 502, "bootstrap_failed", "mint: "+err.Error())

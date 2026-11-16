@@ -68,9 +68,8 @@ other flow.
   - A name that would share its MagicDNS name with an existing device is
     also refused, because MagicDNS answers the device first. This check is
     best effort: it's skipped if the credential can't list devices.
-- **Credential:** apikey mode needs nothing extra. An OAuth client needs
-  **Services › Write**; without it the deploy fails with
-  `502 service_api_failed` and says so. WIF uses the lifecycle credential.
+- **Credential:** the OAuth client needs **Services › Write**; without it
+  the deploy fails with `502 service_api_failed` and says so.
 - **Output:** the deploy prints
   `✓ service svc:support · http://support.<tailnet>/`, and
   `GET /v1/deployments/{id}` has `endpoint.service`.

@@ -3,7 +3,6 @@ package mgmt
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,8 +57,8 @@ func TestMM_F4_GuardedTakeover(t *testing.T) {
 			}
 			defer m.Close()
 			kf := filepath.Join(dir, "api.env")
-			os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-			tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+			writeTestOAuthFile(t, kf)
+			tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 			for _, h := range []string{"h1", "h2"} {
 				m.RegisterHost(ctx, RegisterRequest{HostID: h, CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 			}
@@ -167,8 +166,8 @@ func TestMM_F9_AssignmentFence(t *testing.T) {
 	}
 	defer m.Close()
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	m.RegisterHost(ctx, RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 	for _, tc := range []struct {
 		workload, jsonc string
@@ -214,8 +213,8 @@ func TestMM_F12_IdentityConflictStillRefused(t *testing.T) {
 	}
 	defer m.Close()
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	m.RegisterHost(ctx, RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 	if _, err := m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w",
 		Bundle: makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})}); err != nil {
@@ -253,8 +252,8 @@ func TestMM_F13_DeploymentStatusShared(t *testing.T) {
 	}
 	a, b := mk(), mk()
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := a.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := a.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	a.RegisterHost(ctx, RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 	d, err := a.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w",
 		Bundle: makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})})

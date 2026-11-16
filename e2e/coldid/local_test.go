@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/twd/e2e/cliflow"
 	"github.com/rosskukulinski/twd/netd/nettest"
 )
 
@@ -25,6 +26,8 @@ func fakeKeys(t *testing.T, latency time.Duration) *httptest.Server {
 	var n atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/api/v2/oauth/token": // the OAuth client's exchange (mint mode oauth)
+			w.Write([]byte(`{"access_token":"fake","token_type":"Bearer","expires_in":3600}`))
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/keys"):
 			time.Sleep(latency)
 			id := fmt.Sprintf("k%06d", n.Add(1))
@@ -53,9 +56,8 @@ func TestColdIdentityLocal(t *testing.T) {
 	defer ctl.Close()
 	lat, _ := time.ParseDuration(os.Getenv("TWD_COLDID_API_LATENCY"))
 	api := fakeKeys(t, lat)
-	kf := filepath.Join(t.TempDir(), "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=fake\n"), 0o600)
-	e := env{name: "local", controlURL: ctl.URL, tailnet: "ttest.example", apiBase: api.URL, apiKeyFile: kf,
+	kf := cliflow.WriteFakeOAuthFile(t, filepath.Join(t.TempDir(), "oauth.env"))
+	e := env{name: "local", controlURL: ctl.URL, tailnet: "ttest.example", apiBase: api.URL, oauthFile: kf,
 		tags: []string{"tag:ttest"}, prefix: "ttest-fi-local", n: envInt("TWD_COLDID_N", 30),
 		callerKey: func(context.Context) (string, error) { return nettest.DummyKey, nil },
 		dial:      os.Getenv("TWD_COLDID_DIAL")}

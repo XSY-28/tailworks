@@ -3,7 +3,6 @@ package mgmt
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -121,8 +120,8 @@ func tierTestMgmt(t *testing.T) (*Mgmt, Tenant) {
 	}
 	t.Cleanup(func() { m.Close() })
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, err := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, err := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	if err != nil {
 		t.Fatal(err)
 	}

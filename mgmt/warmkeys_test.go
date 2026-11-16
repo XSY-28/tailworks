@@ -98,7 +98,7 @@ type poolEnv struct {
 }
 
 func newPoolEnv(t *testing.T, rpm int, mutate func(*Config)) *poolEnv {
-	e := newTestEnvWith(t, nil, func(c *Config) {
+	e := newTestEnvWith(t, func(c *Config) {
 		c.WarmKeys, c.WarmPoolInterval = 3, 50*time.Millisecond
 		if mutate != nil {
 			mutate(c)
@@ -106,7 +106,7 @@ func newPoolEnv(t *testing.T, rpm int, mutate func(*Config)) *poolEnv {
 	})
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	body := map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}
+	body := map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}
 	if rpm > 0 {
 		body["registrationsPerMinute"] = rpm
 	}

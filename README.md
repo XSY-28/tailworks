@@ -241,20 +241,22 @@ prove every ✅ and ⚠️.
 ## More
 
 - **Docs map** (every doc by role and by task): [docs/README.md](docs/README.md).
-- **CLI reference:** `twd help` lists every command and its flags;
-  `twd <command> --help` shows one.
+- **CLI reference:** [docs/cli.md](docs/cli.md), every command and flag
+  (generated from `--help`); `twd help` groups the commands.
+- **What changed in each release:** [CHANGELOG.md](CHANGELOG.md).
+  Security reports: [SECURITY.md](SECURITY.md).
 - **The words twd uses** (tenant, workload, tier, facet mode, pool node,
   …): [docs/concepts.md](docs/concepts.md).
 - **A first deploy that doesn't answer:**
   [docs/troubleshooting.md](docs/troubleshooting.md).
-- **Install details, other modes and troubleshooting:**
+- **Install details and troubleshooting:**
   [docs/INSTALL.md](docs/INSTALL.md); where each platform is tested, and
   the measured timings: [docs/install-testing.md](docs/install-testing.md).
   - [Upgrade](docs/upgrading.md),
     [back up and restore](docs/INSTALL.md#back-up-and-restore) and
     [uninstall](docs/INSTALL.md#uninstall).
-  - Other ways to mint keys: workload identity federation (`twd up --wif`)
-    or an API key.
+  - Upgrading a twd that minted with an API key or WIF: switch it to an
+    [OAuth client](docs/INSTALL.md#upgrading-from-api-key-or-wif-mode).
   - A separate developer laptop: `twd link`.
   - Adding hosts: `twd host add`.
   - The Linux microVM tier (Firecracker).

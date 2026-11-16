@@ -407,7 +407,7 @@ func (h *Host) onPublicRequest(rec netd.PublicRequestRecord) {
 		d["code"] = rec.Code
 	}
 	b, _ := json.Marshal(d)
-	h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "public_request", ActingFor: OriginPublic, Code: rec.Code, Detail: b, TraceID: newTraceID()})
+	h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: kindPublicRequest, ActingFor: OriginPublic, Code: rec.Code, Detail: b, TraceID: newTraceID()})
 }
 
 // onPublicRejected records the per-minute summary of refused requests.
@@ -421,7 +421,10 @@ func (h *Host) onPublicRejected(s netd.PublicRejectSummary) {
 	top := append([]netd.IPCount(nil), s.TopIPs...)
 	sort.Slice(top, func(i, j int) bool { return top[i].Count > top[j].Count })
 	b, _ := json.Marshal(map[string]any{"from": s.From.UTC().Format(time.RFC3339), "to": s.To.UTC().Format(time.RFC3339),
-		"rateLimited": s.RateLimited, "tooLarge": s.TooLarge, "connsRefused": s.ConnsRefused, "topIPs": top, "uniqueIPApprox": s.UniqueIPApprox})
+		"rateLimited": s.RateLimited, "tooLarge": s.TooLarge, "connsRefused": s.ConnsRefused, "notPublic": s.NotPublic, "badRequest": s.BadRequest, "topIPs": top, "uniqueIPApprox": s.UniqueIPApprox,
+		"ipConnsRefused": s.IPConnsRefused,
+	})
+	h.countPublicRejected(o, s)
 	h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "public_rejected", ActingFor: OriginPublic, Detail: b, TraceID: newTraceID()})
 }
 

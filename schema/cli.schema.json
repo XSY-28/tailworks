@@ -871,9 +871,6 @@
         "https": {
           "type": "boolean"
         },
-        "funnel": {
-          "type": "boolean"
-        },
         "policyOK": {
           "type": "boolean"
         },
@@ -1237,13 +1234,14 @@
     },
     "dev.event": {
       "type": "object",
-      "description": "twd dev --json without --once: one per line on stdout. ready (first, with url, serves, workload, node, as, tags), inspector (with --inspector-port: addr, ws), then reload or error on each change, request (record) for each request the app serves, stopping on Ctrl-C",
+      "description": "twd dev --json without --once: one per line on stdout. ready (first, with url, serves, workload, node, as, tags), inspector (with --inspector-port: addr, ws), console (url of the read-only data console, unless --console-port -1), then reload or error on each change, request (record) for each request the app serves, stopping on Ctrl-C",
       "properties": {
         "event": {
           "type": "string",
           "enum": [
             "ready",
             "inspector",
+            "console",
             "reload",
             "request",
             "error",
@@ -1424,6 +1422,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "preview": {
+          "type": "string",
+          "description": "--preview: the preview's own workload name (<workload>--preview-<alias>); workload is the workload it previews"
         },
         "bundleBytes": {
           "type": "integer"
@@ -1651,6 +1653,122 @@
         "tenantID",
         "rollbackOf",
         "target",
+        "deploymentID",
+        "host",
+        "status",
+        "timingsMs"
+      ]
+    },
+    "previews": {
+      "type": "object",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "previews": {
+          "type": "array",
+          "description": "the running previews, newest first",
+          "items": {
+            "type": "object",
+            "properties": {
+              "workload": {
+                "type": "string",
+                "description": "the preview's own workload name"
+              },
+              "alias": {
+                "type": "string"
+              },
+              "previewOf": {
+                "type": "string"
+              },
+              "bundleSHA256": {
+                "type": "string"
+              },
+              "deployment": {
+                "$ref": "#/$defs/deployment"
+              }
+            },
+            "required": [
+              "workload",
+              "alias",
+              "previewOf",
+              "deployment"
+            ]
+          }
+        }
+      },
+      "required": [
+        "workload",
+        "tenant",
+        "tenantID",
+        "previews"
+      ]
+    },
+    "promote": {
+      "type": "object",
+      "description": "the result, on stdout; progress is deploy.event lines on stderr (start, preflight, placed, status, ready)",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string",
+          "description": "the preview's workload name"
+        },
+        "promotedFrom": {
+          "type": "string",
+          "description": "the preview deployment whose bundle was deployed"
+        },
+        "previewStopped": {
+          "type": "boolean",
+          "description": "the preview was undeployed (false with --keep-preview)"
+        },
+        "deploymentID": {
+          "type": "string",
+          "description": "the workload's new deployment"
+        },
+        "host": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "active, or assigned with --no-wait"
+        },
+        "preflight": {
+          "type": "object"
+        },
+        "endpoint": {
+          "type": "object"
+        },
+        "placement": {
+          "type": "object"
+        },
+        "public": {
+          "type": "object"
+        },
+        "timingsMs": {
+          "$ref": "#/$defs/timings"
+        }
+      },
+      "required": [
+        "workload",
+        "tenant",
+        "tenantID",
+        "preview",
+        "promotedFrom",
+        "previewStopped",
         "deploymentID",
         "host",
         "status",
@@ -2426,6 +2544,58 @@
         "approval"
       ]
     },
+    "notify": {
+      "description": "twd notify [show], set, test and rm: the tenant's notification webhook (only its origin and header names are shown; test adds the delivery outcome; rm prints only tenantID)",
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "webhook": {
+          "type": "object",
+          "properties": {
+            "origin": {
+              "type": "string"
+            },
+            "headerNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "origin",
+            "headerNames",
+            "events"
+          ]
+        },
+        "updatedAt": {
+          "type": "integer"
+        },
+        "updatedBy": {
+          "type": "string"
+        },
+        "delivered": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenantID"
+      ]
+    },
     "audit": {
       "$ref": "#/$defs/auditRecords"
     },
@@ -2867,7 +3037,7 @@
     },
     "upgrade": {
       "type": "object",
-      "description": "twd upgrade: on a twd up machine {plan, upgraded, backup?, rolledBack?, health?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; twd upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
+      "description": "twd upgrade: on a twd up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; twd upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
       "properties": {
         "plan": {
           "type": "object"
@@ -2883,6 +3053,13 @@
         },
         "health": {
           "type": "string"
+        },
+        "notActiveBefore": {
+          "type": "array",
+          "description": "deployments that weren't active before the upgrade; the health check didn't count them",
+          "items": {
+            "type": "string"
+          }
         },
         "id": {
           "type": "string"

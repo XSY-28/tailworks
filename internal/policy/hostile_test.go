@@ -33,9 +33,10 @@ func TestHostileSnippetsRefused(t *testing.T) {
 		"tagOwners twd owned by user":   {TagOwners: map[string][]string{"tag:twd-wl-x": {"alice@example.com"}}},
 		"tagOwners twd owned by group":  {TagOwners: map[string][]string{"tag:twd-wl-x": {"group:eng"}}},
 		"tagOwners empty owners":        {TagOwners: map[string][]string{"tag:twd-wl-x": {}}},
-		// ADR-029 D6: funnel only on tag:twd-public and tag:twd-issuer, never mgmt.
+		// ADR-029 D6: funnel only on tag:twd-public, never mgmt.
 		"funnel on tag:twd-mgmt":     {NodeAttrs: []map[string]any{{"target": []string{"tag:twd-mgmt"}, "attr": []string{"funnel"}}}},
-		"funnel issuer + mgmt":       {NodeAttrs: []map[string]any{{"target": []string{"tag:twd-issuer", "tag:twd-mgmt"}, "attr": []string{"funnel"}}}},
+		"funnel public + mgmt":       {NodeAttrs: []map[string]any{{"target": []string{"tag:twd-public", "tag:twd-mgmt"}, "attr": []string{"funnel"}}}},
+		"funnel on tag:twd-issuer":   {NodeAttrs: []map[string]any{{"target": []string{"tag:twd-issuer"}, "attr": []string{"funnel"}}}},
 		"funnel on tag:twd":          {NodeAttrs: []map[string]any{{"target": []string{"tag:twd"}, "attr": []string{"funnel"}}}},
 		"funnel on object tag":       {NodeAttrs: []map[string]any{{"target": []string{"tag:twd-do-x"}, "attr": []string{"funnel"}}}},
 		"funnel on workload tag":     {NodeAttrs: []map[string]any{{"target": []string{"tag:twd-wl-support"}, "attr": []string{"funnel"}}}},

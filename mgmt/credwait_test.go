@@ -2,7 +2,6 @@ package mgmt
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,8 +23,8 @@ func TestMM_H05_CredentialWaitSeesOtherReplicasMint(t *testing.T) {
 	}
 	defer b.Close()
 	kf := filepath.Join(dir, "api.env")
-	os.WriteFile(kf, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, _ := b.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: "apikey", APIKeyFile: kf})
+	writeTestOAuthFile(t, kf)
+	tn, _ := b.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	l, err := st.AcquireLease(ctx, LeaseName(tn.ID, "w"), "h1", NamespaceLeaseTTL, st.Now())
 	if err != nil {
 		t.Fatal(err)

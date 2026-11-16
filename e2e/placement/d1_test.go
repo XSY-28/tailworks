@@ -62,7 +62,7 @@ func TestD1SurvivesRestartAndMove(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", e.sock)
 	}}}
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeToken+"\n"), 0o600)
+	cliflow.WriteFakeOAuthFile(t, keyFile)
 	e.start("mgmt", nil, "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	for i := 0; ; i++ {
@@ -78,7 +78,7 @@ func TestD1SurvivesRestartAndMove(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	var tn struct{ TenantID string }
-	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	e.startHost("h1", false)
 	e.startHost("h2", false)
 	for i := 0; ; i++ {

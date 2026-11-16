@@ -43,6 +43,10 @@ func fakeTS(t *testing.T) *httptest.Server {
 	var mu sync.Mutex
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/oauth/token" { // the OAuth client's exchange (mint mode oauth)
+			json.NewEncoder(w).Encode(map[string]any{"access_token": fakeToken, "token_type": "Bearer", "expires_in": 3600})
+			return
+		}
 		if strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") != fakeToken {
 			w.WriteHeader(401)
 			return
@@ -275,7 +279,7 @@ func TestObservabilityHermetic(t *testing.T) {
 
 	// mgmt and one host, as separate processes.
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY="+fakeToken+"\n"), 0o600)
+	cliflow.WriteFakeOAuthFile(t, keyFile)
 	e.start("mgmt", "twd-mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	waitFor(t, e, "mgmt", 15*time.Second, func() bool {
@@ -287,7 +291,7 @@ func TestObservabilityHermetic(t *testing.T) {
 		return false
 	})
 	var tn struct{ TenantID string }
-	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	// The tenant's OTLP export, collector credential included (custody).
 	e.must("PUT", "/v1/tenants/"+tn.TenantID+"/telemetry", map[string]any{"otlp": map[string]any{"endpoint": "http://ttest-otel:4318",
 		"headers": map[string]string{"authorization": "Bearer e2e-t0ken"}}}, nil)

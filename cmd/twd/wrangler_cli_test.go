@@ -46,9 +46,9 @@ func TestCLIDeployWranglerTOML(t *testing.T) {
 	state, _ := hostdtest.ShortDir("twd-wr-")
 	work := t.TempDir()
 	keyFile := filepath.Join(work, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	var client *nettest.Node
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", APIKeyFile: keyFile,
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: "ttest.ts.net", OAuthClientFile: keyFile,
 		ControlURL: ctl.URL, TSAPIURL: api.URL, Prefix: "twd-w-", Res: cliflow.NewResults("hermetic-wrangler", "ttest.ts.net"), SingleProcess: true}
 	t.Cleanup(func() {
 		if t.Failed() {

@@ -164,7 +164,7 @@ func TestStoreTenantQuota(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
 		ctx := context.Background()
 		tid := "tnq-" + strings.ReplaceAll(t.Name(), "/", "-")
-		if err := s.CreateTenant(ctx, Tenant{ID: tid, Tailnet: tid + ".ts.net", MintMode: "apikey", MaxObjects: 7, CreatedAt: 1}); err != nil {
+		if err := s.CreateTenant(ctx, Tenant{ID: tid, Tailnet: tid + ".ts.net", MintMode: MintOAuth, MaxObjects: 7, CreatedAt: 1}); err != nil {
 			t.Fatal(err)
 		}
 		var wg sync.WaitGroup
