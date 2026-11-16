@@ -112,6 +112,12 @@ deployment's history record (`target`). Progress goes to **stderr** as
 `preflight`, `placed` (with `rollbackOf`), `status` and `ready`. There is no
 `build`: nothing is rebuilt.
 
+`twd policy --json` (`$defs/policy`) is one document: `ok`, `checked`
+(false when mgmt can't read the policy), the dry-run `preflight`, the
+`callerGrant` twd can't check, and `snippet`, everything to add in one
+block. When a checked part is missing, it is an `acl_denied` (or
+`funnel_required`) error instead, and the snippet is in its `fix`.
+
 `twd deployments <workload> --json` (`$defs/deployments`) is one document:
 the history newest first, each entry a `$defs/deploymentRecord` with its
 `bundleSHA256` and `bundleRetained` (false once mgmt has pruned the bundle,

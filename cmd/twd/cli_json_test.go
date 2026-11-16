@@ -44,6 +44,7 @@ var cliSurface = []struct {
 	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
 	{"deployments", []string{"deployments", "app"}},
+	{"policy", []string{"policy", "{work}/app"}},
 	{"previews", []string{"previews", "app"}},
 	{"promote", []string{"promote", "app", "3f9a1c2b"}},
 	{"rollback", []string{"rollback", "app"}},

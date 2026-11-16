@@ -119,7 +119,7 @@ func cmdInit(args []string) error {
 	emit(f, res, func() {
 		fmt.Printf("✓ created %s from template %s (workload %q)\n", dir, *tmpl, wl)
 		if tags := initTags(dir); len(tags) > 0 {
-			fmt.Printf("  tags: %s (twd deploy prints the tagOwners to add)\n", strings.Join(tags, ", "))
+			fmt.Printf("  tags: %s (twd policy prints what to add to your tailnet policy for them)\n", strings.Join(tags, ", "))
 		}
 		if *tmpl == "node-workflow" {
 			// The Node tier bundles the app's own dependencies with the
@@ -128,7 +128,7 @@ func cmdInit(args []string) error {
 			fmt.Printf("  needs Node.js ≥ 24 and npm on this machine; `npm install` fetches the template's dependencies, so this one can't be built or deployed offline\n")
 			return
 		}
-		fmt.Printf("  cd %s && twd deploy        # or `twd dev` for a local run with no tailnet\n", pos[0])
+		fmt.Printf("  cd %s && twd policy && twd deploy   # or `twd dev` for a local run with no tailnet\n", pos[0])
 	})
 	return nil
 }

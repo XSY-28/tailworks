@@ -13,6 +13,13 @@ Check twd is up first: `twd status --json` must say `"healthy": true`. If
 it fails with `not_up`, ask the user to start or link twd (see the `twd`
 skill).
 
+Before an app's first deploy, run `twd policy --json`. It checks the
+tailnet policy for everything the app needs and deploys nothing.
+- On success, `callerGrant` is the grant that lets people call the app.
+  twd can't check it, so ask the user whether they have one like it.
+- If something is missing, it fails with `acl_denied`, and the error's
+  `hint` is one snippet with every line to add. Handle it as below.
+
 <!-- twd-eval: deploy -->
 ```sh
 twd deploy --json
@@ -43,7 +50,7 @@ exact policy lines to add.
 1. Show the user the lines from `hint` and ask them to add them in the
    Tailscale admin console (Access controls). Don't edit the policy
    yourself (see `twd-policy`).
-2. When they say it's done, run `twd deploy --json` again. twd re-reads
+2. When they say it's done, run `twd policy --json` (or `twd deploy --json`) again. twd re-reads
    the policy every few seconds, so if the same `acl_denied` comes back
    right after they saved it, wait about 10 seconds and retry once more
    before asking them to check it.

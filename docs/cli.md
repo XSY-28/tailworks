@@ -621,6 +621,34 @@ flags:
     	bundle with the wrangler CLI (wrangler deploy --dry-run --outdir; nothing is sent to Cloudflare) instead of the built-in esbuild
 ```
 
+### twd policy
+
+the tailnet policy an app needs, before deploying
+
+```text
+twd policy: print everything an app needs in the tailnet policy as one snippet: missing tagOwners, tailnet.connects grants, service auto-approval and public nodeAttrs (checked against the live policy, like twd deploy's preflight; nothing is deployed), plus the grant that lets people call it; exits acl_denied when a checked part is missing
+
+usage: twd policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>]
+
+flags:
+  -env string
+    	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
+  -from-wrangler-out string
+    	deploy a bundle wrangler already built (the --outdir of 'wrangler deploy --dry-run')
+  -json
+    	machine-readable output
+  -name string
+    	workload name (default: twd.jsonc name)
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -var value
+    	override a wrangler var (KEY=VALUE, repeatable)
+  -wrangler
+    	bundle with the wrangler CLI (wrangler deploy --dry-run --outdir; nothing is sent to Cloudflare) instead of the built-in esbuild
+```
+
 ### twd deployments
 
 a workload's deployment history
