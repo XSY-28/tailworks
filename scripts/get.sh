@@ -5,16 +5,27 @@
 #   sh get.sh v0.1.0             a given release
 #   TWD_HOME=DIR sh get.sh       install into DIR
 #   TWD_RELEASE_BASE=URL sh get.sh v0.1.0   download from a mirror instead of GitHub
+#   TWD_ALLOW_UNSIGNED=1 sh get.sh v0.3.0   skip the signature check (not recommended)
 #
-# It downloads twd-<version>-<os>-<arch>.tar.gz and SHA256SUMS, checks the
-# tarball's hash, extracts it into a fresh temporary directory, and runs
-# its install.sh (no sudo; touches nothing outside ~/.twd, your shell
-# profile included). Read it first: it's short.
+# It downloads twd-<version>-<os>-<arch>.tar.gz, SHA256SUMS and
+# SHA256SUMS.sig, checks that SHA256SUMS is signed by a twd release key
+# pinned below (ssh-keygen -Y verify; releases before v0.3.0 are unsigned
+# and get the checksum only), checks the tarball's hash, extracts it into a
+# fresh temporary directory, and runs its install.sh (no sudo; touches
+# nothing outside ~/.twd, your shell profile included). Read it first:
+# it's short.
 set -eu
 REPO=${TWD_REPO:-rosskukulinski/twd}
 TAG=${1:-latest}
+# The release signing keys (allowed_signers lines; TWD_RELEASE_SIGNERS=FILE
+# overrides, for tests and mirrors of private builds).
+# BEGIN twd release signers (copied from internal/releasesig/allowed_signers by scripts/release-keygen.sh --sync)
+SIGNERS='
+'
+# END twd release signers
 
 die() { printf 'get.sh: %s\n' "$*" >&2; exit 1; }
+warn() { printf 'get.sh: WARNING: %s\n' "$*" >&2; }
 [ "$(id -u)" != 0 ] || die "don't run as root (twd installs per user and needs no sudo)"
 command -v curl >/dev/null || die "needs curl"
 command -v tar >/dev/null || die "needs tar"
@@ -45,6 +56,23 @@ trap 'rm -rf "$TMP"' EXIT
 printf 'downloading %s (%s)…\n' "$NAME" "$TAG"
 curl -fsSL -o "$TMP/$NAME" "$BASE/$NAME" || die "no $NAME in release $TAG"
 curl -fsSL -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS" || die "no SHA256SUMS in release $TAG"
+
+# Authenticity: SHA256SUMS is signed by a pinned key (before the hashes in it are trusted).
+if [ "${TWD_ALLOW_UNSIGNED:-0}" = 1 ]; then
+	warn "not checking the release signature (TWD_ALLOW_UNSIGNED=1)"
+elif ! curl -fsSL -o "$TMP/SHA256SUMS.sig" "$BASE/SHA256SUMS.sig" 2>/dev/null; then
+	# Every published release is signed (no unsigned one was ever
+	# published), so there is no "old release" exception: one would let
+	# whoever can publish a release pick a tag that skips this check.
+	die "release $TAG has no SHA256SUMS.sig: refusing an unsigned release (TWD_ALLOW_UNSIGNED=1 to install it anyway)"
+else
+	command -v ssh-keygen >/dev/null || die "needs ssh-keygen (OpenSSH) to check the release signature"
+	if [ -n "${TWD_RELEASE_SIGNERS:-}" ]; then cat "$TWD_RELEASE_SIGNERS" >"$TMP/allowed_signers"; else printf '%s\n' "$SIGNERS" >"$TMP/allowed_signers"; fi
+	grep -q '^twd-release ' "$TMP/allowed_signers" || die "this get.sh pins no release signing key; get a newer one"
+	ssh-keygen -Y verify -f "$TMP/allowed_signers" -I twd-release -n twd-release -s "$TMP/SHA256SUMS.sig" <"$TMP/SHA256SUMS" >/dev/null 2>&1 ||
+		die "SHA256SUMS.sig in release $TAG is not a valid signature by a twd release key: refusing to install"
+	printf 'signed by a twd release key\n'
+fi
 
 want=$(awk -v n="$NAME" '$2 == n || $2 == "*"n { print $1 }' "$TMP/SHA256SUMS")
 [ -n "$want" ] || die "SHA256SUMS has no entry for $NAME"
