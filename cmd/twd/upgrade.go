@@ -60,6 +60,7 @@ func cmdUpgrade(args []string) error {
 	noWait := f.Bool("no-wait", false, "fleet: start the run and return (twd upgrade status follows it)")
 	health := f.Duration("health-timeout", 3*time.Minute, "homelab: how long the upgraded twd may take to report healthy before it is rolled back")
 	noRollback := f.Bool("no-rollback", false, "homelab: keep the new release even if the health check fails")
+	prefixFlag := f.String("prefix", "", "homelab: the install.sh prefix to upgrade (default: the one that owns --state-dir)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -85,7 +86,7 @@ func cmdUpgrade(args []string) error {
 		req.SoakSeconds, req.SettleSeconds = &so, &se
 		return fleetUpgrade(f, s, req, *planOnly, *yes, *noWait)
 	}
-	return homelabUpgrade(f, s, want, *from, *planOnly, *yes, *health, *noRollback)
+	return homelabUpgrade(f, s, want, *from, *prefixFlag, *planOnly, *yes, *health, *noRollback)
 }
 
 func splitComma(s string) []string {
@@ -365,13 +366,26 @@ type localResult struct {
 	Backup     string    `json:"backup,omitempty"`
 	RolledBack bool      `json:"rolledBack,omitempty"`
 	Health     string    `json:"health,omitempty"`
+	// NotActiveBefore are deployments that weren't active before the
+	// upgrade: the health check didn't count them (issue #63).
+	NotActiveBefore []string `json:"notActiveBefore,omitempty"`
 }
 
-func homelabUpgrade(f *flags, s *state, want, from string, planOnly, yes bool, healthTimeout time.Duration, noRollback bool) error {
-	prefix := installPrefixOf()
+func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly, yes bool, healthTimeout time.Duration, noRollback bool) error {
+	pc, err := resolvePrefix(prefixFlag, installPrefixOf(), statePrefixCandidates(s))
+	if err != nil {
+		return err
+	}
+	prefix := pc.Prefix
 	if prefix == "" && !planOnly {
 		return fail("bad_request", "this twd doesn't run from an install.sh prefix (bin/, share/twd, VERSION), so it can't upgrade itself in place").
-			withFix("install a release with scripts/get.sh, or upgrade by hand: tar -xzf twd-<v>-…tar.gz && ./twd-<v>-…/install.sh")
+			withFix("install a release with scripts/get.sh, or upgrade by hand: tar -xzf twd-<v>-…tar.gz && ./twd-<v>-…/install.sh",
+				"or name the install to upgrade: twd upgrade --prefix <dir>")
+	}
+	if pc.Mismatch != "" && !planOnly {
+		return fail("prefix_mismatch", pc.Mismatch+": twd upgrade won't guess which one to replace").
+			withFix("twd upgrade --prefix "+prefix+" …   (upgrade the install that runs the state dir)",
+				"or run the twd installed there: "+filepath.Join(prefix, "bin", "twd")+" upgrade …")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -394,6 +408,12 @@ func homelabUpgrade(f *flags, s *state, want, from string, planOnly, yes bool, h
 	}
 	cur := installedVersion(prefix)
 	plan := localPlanFor(cur, meta, rel, source, s)
+	if pc.Mismatch != "" {
+		plan.Warnings = append(plan.Warnings, pc.Mismatch+": the run needs --prefix "+prefix)
+	}
+	if s.supervisorAlive() {
+		plan.Warnings = append(plan.Warnings, notActiveWarnings(snapshotDeployments(s))...)
+	}
 	res := localResult{Plan: plan}
 	if planOnly {
 		emit(f, res, func() { printLocalPlan(plan) })
@@ -426,8 +446,17 @@ func homelabUpgrade(f *flags, s *state, want, from string, planOnly, yes bool, h
 	res.Backup = backup
 	say("✓ backup   %s", backup)
 
-	// 2. Stop, install, start.
+	// 2. Stop, install, start. What was broken before isn't held against
+	// the new release by the health check.
 	wasService, wasRunning := restartMode(s)
+	var prior deploymentsSnapshot
+	if wasService || wasRunning {
+		prior = snapshotDeployments(s)
+		res.NotActiveBefore = wasFailedBefore(prior)
+		for _, l := range res.NotActiveBefore {
+			say("! %s: the health check won't count it", l)
+		}
+	}
 	if err := stopTwd(s, prefix, wasService, wasRunning); err != nil {
 		return err
 	}
@@ -443,12 +472,15 @@ func homelabUpgrade(f *flags, s *state, want, from string, planOnly, yes bool, h
 
 	// 3. Health check.
 	if wasService || wasRunning {
-		err = waitHealthy(s, meta.Version, healthTimeout)
+		err = waitHealthy(s, meta.Version, healthTimeout, prior)
 	}
 	if err == nil {
 		res.Upgraded, res.Health = true, "ok"
 		emit(f, res, func() {
 			fmt.Printf("✓ twd %s is up and healthy\n", meta.Version)
+			for _, l := range res.NotActiveBefore {
+				fmt.Println("  ! " + l + " (not checked; `twd deploy` it again)")
+			}
 			fmt.Println("  installed agent skills are stamped with the old version: re-run `twd agent setup` if you use them")
 		})
 		return nil
@@ -478,15 +510,13 @@ func homelabUpgrade(f *flags, s *state, want, from string, planOnly, yes bool, h
 		withFix("twd logs --component mgmt   (why the new release failed)")
 }
 
-// installPrefixOf is the install.sh prefix this twd runs from, or "".
+// installPrefixOf is the install.sh prefix this twd binary runs from, or
+// "". It is not necessarily the install twd upgrade replaces (resolvePrefix).
 func installPrefixOf() string {
-	p := filepath.Dir(exeDir())
-	for _, f := range []string{"VERSION", filepath.Join("share", "twd")} {
-		if _, err := os.Stat(filepath.Join(p, f)); err != nil {
-			return ""
-		}
+	if p := filepath.Dir(exeDir()); isInstallPrefix(p) {
+		return p
 	}
-	return p
+	return ""
 }
 
 func installedVersion(prefix string) string {
@@ -898,8 +928,8 @@ func startTwd(s *state, prefix string, service, running bool) error {
 }
 
 // waitHealthy waits for mgmt to answer with every replica and host on want
-// and every deployment active.
-func waitHealthy(s0 *state, want string, timeout time.Duration) error {
+// and every deployment that was active before (before) active again.
+func waitHealthy(s0 *state, want string, timeout time.Duration, before deploymentsSnapshot) error {
 	deadline := time.Now().Add(timeout)
 	last := "not answering"
 	for time.Now().Before(deadline) {
@@ -928,7 +958,7 @@ func waitHealthy(s0 *state, want string, timeout time.Duration) error {
 			last = "GET /v1/status is not ok"
 			continue
 		}
-		if why := deploymentsActive(s); why != "" {
+		if why := deploymentsActive(s, before); why != "" {
 			last = why
 			continue
 		}
@@ -950,29 +980,6 @@ func versionsAt(vs mgmt.VersionStatus, want string) string {
 	for v, n := range vs.Hosts {
 		if sv, err := twdversion.Parse(v); err != nil || sv.Compare(wv) != 0 {
 			return fmt.Sprintf("%d host(s) run %q", n, v)
-		}
-	}
-	return ""
-}
-
-func deploymentsActive(s *state) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	var page struct {
-		Items []struct {
-			Workload string `json:"workload"`
-			Status   string `json:"status"`
-			Error    string `json:"error"`
-		} `json:"items"`
-	}
-	if err := s.mgmt().Do(ctx, "GET", "/v1/deployments?limit=200", nil, &page); err != nil {
-		return "deployments: " + err.Error()
-	}
-	for _, d := range page.Items {
-		switch d.Status {
-		case "active", "stopped", "superseded":
-		default:
-			return "workload " + d.Workload + " is " + d.Status + " " + d.Error
 		}
 	}
 	return ""

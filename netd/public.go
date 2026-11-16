@@ -13,7 +13,9 @@ package netd
 //     is not a FunnelConn is closed at once (fail closed: nothing on this
 //     listener is ever treated as a tailnet caller).
 //   - Per request, in this order:
-//     1. limits: MaxConns (excess connections are closed), MaxHeaderBytes
+//     1. limits: MaxConns and MaxConnsPerIP (excess connections are
+//     closed; a new connection has publicFirstRequestTimeout to send its
+//     first request; an upgrade lasts at most UpgradeLifetime), MaxHeaderBytes
 //     (431), per-workload token bucket RPS/Burst and per-IP bucket
 //     IPRPS/IPBurst keyed by FunnelConn.Src's address (429 with
 //     Retry-After, code rate_limited), MaxBodyBytes (413
@@ -97,6 +99,7 @@ type PublicRejectSummary struct {
 	RateLimited    int // 429
 	TooLarge       int // 413 + 431
 	ConnsRefused   int // over MaxConns
+	IPConnsRefused int // over MaxConnsPerIP
 	TopIPs         []IPCount
 	UniqueIPApprox int
 }

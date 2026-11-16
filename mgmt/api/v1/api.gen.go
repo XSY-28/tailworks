@@ -381,6 +381,7 @@ func (e ContainerImagePinArch) Valid() bool {
 const (
 	DeploymentStatusActive     DeploymentStatus = "active"
 	DeploymentStatusAssigned   DeploymentStatus = "assigned"
+	DeploymentStatusCrashloop  DeploymentStatus = "crashloop"
 	DeploymentStatusDraining   DeploymentStatus = "draining"
 	DeploymentStatusFailed     DeploymentStatus = "failed"
 	DeploymentStatusStarting   DeploymentStatus = "starting"
@@ -394,6 +395,8 @@ func (e DeploymentStatus) Valid() bool {
 	case DeploymentStatusActive:
 		return true
 	case DeploymentStatusAssigned:
+		return true
+	case DeploymentStatusCrashloop:
 		return true
 	case DeploymentStatusDraining:
 		return true
@@ -1903,7 +1906,20 @@ type Deployment struct {
 	Public *DeploymentPublic `json:"public,omitempty"`
 
 	// Replicas A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
-	Replicas     *[]ReplicaRef    `json:"replicas,omitempty"`
+	Replicas *[]ReplicaRef `json:"replicas,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
 	Status       DeploymentStatus `json:"status"`
 	TenantID     string           `json:"tenantID"`
 	Tier         *Tier            `json:"tier,omitempty"`
@@ -1998,19 +2014,56 @@ type DeploymentRecord struct {
 	HostStatus *string `json:"hostStatus,omitempty"`
 
 	// RollbackOf Set on a rollback: the deployment whose bundle it redeployed.
-	RollbackOf *string          `json:"rollbackOf,omitempty"`
-	Status     DeploymentStatus `json:"status"`
-	Workload   string           `json:"workload"`
+	RollbackOf *string `json:"rollbackOf,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status   DeploymentStatus `json:"status"`
+	Workload string           `json:"workload"`
 }
 
 // DeploymentReport defines model for DeploymentReport.
 type DeploymentReport struct {
-	DeploymentID string           `json:"deploymentID"`
-	Error        *string          `json:"error,omitempty"`
-	Status       DeploymentStatus `json:"status"`
+	DeploymentID string  `json:"deploymentID"`
+	Error        *string `json:"error,omitempty"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status DeploymentStatus `json:"status"`
 }
 
-// DeploymentStatus defines model for DeploymentStatus.
+// DeploymentStatus - `assigned`: mgmt placed it; the host has not reported yet.
+//   - `starting`: the host is starting it.
+//   - `active`: serving.
+//   - `crashloop`: it served, then its workerd kept exiting; the host
+//     keeps restarting it with exponential backoff (200 ms doubling to
+//     5 min) and reports `active` again once it answers. `error` holds
+//     the attempt count, the next delay and the last log lines.
+//   - `draining`: being replaced or undeployed.
+//   - `stopped`: stopped (undeployed, fenced or unassigned).
+//   - `failed`: the deploy failed (bad bundle or config, or it never
+//     became healthy); the host does not retry it. `error` says why.
+//   - `superseded`: a newer deployment of the workload replaced it.
 type DeploymentStatus string
 
 // DeviceDeleteRun defines model for DeviceDeleteRun.
@@ -3065,14 +3118,20 @@ type PublicLimits struct {
 	IPBurst *int `json:"ipBurst,omitempty"`
 
 	// IPRps Requests per second, per client IP.
-	IPRps          *float32 `json:"ipRps,omitempty"`
-	MaxBodyBytes   *int64   `json:"maxBodyBytes,omitempty"`
-	MaxConns       *int     `json:"maxConns,omitempty"`
-	MaxHeaderBytes *int     `json:"maxHeaderBytes,omitempty"`
+	IPRps        *float32 `json:"ipRps,omitempty"`
+	MaxBodyBytes *int64   `json:"maxBodyBytes,omitempty"`
+	MaxConns     *int     `json:"maxConns,omitempty"`
+
+	// MaxConnsPerIP Concurrent connections per client address (an IPv6 client counts per /64).
+	MaxConnsPerIP  *int `json:"maxConnsPerIp,omitempty"`
+	MaxHeaderBytes *int `json:"maxHeaderBytes,omitempty"`
 
 	// Rps Requests per second, per workload.
 	Rps            *float32 `json:"rps,omitempty"`
 	TimeoutSeconds *int     `json:"timeoutSeconds,omitempty"`
+
+	// UpgradeLifetimeSeconds Longest an upgraded (WebSocket) connection stays open.
+	UpgradeLifetimeSeconds *int `json:"upgradeLifetimeSeconds,omitempty"`
 }
 
 // PurgeResult defines model for PurgeResult.
@@ -3305,9 +3364,22 @@ type ReleaseNoteKind string
 
 // ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
 type ReplicaRef struct {
-	DeploymentID string            `json:"deploymentID"`
-	Host         string            `json:"host"`
-	Status       *DeploymentStatus `json:"status,omitempty"`
+	DeploymentID string `json:"deploymentID"`
+	Host         string `json:"host"`
+
+	// Status - `assigned`: mgmt placed it; the host has not reported yet.
+	// - `starting`: the host is starting it.
+	// - `active`: serving.
+	// - `crashloop`: it served, then its workerd kept exiting; the host
+	//   keeps restarting it with exponential backoff (200 ms doubling to
+	//   5 min) and reports `active` again once it answers. `error` holds
+	//   the attempt count, the next delay and the last log lines.
+	// - `draining`: being replaced or undeployed.
+	// - `stopped`: stopped (undeployed, fenced or unassigned).
+	// - `failed`: the deploy failed (bad bundle or config, or it never
+	//   became healthy); the host does not retry it. `error` says why.
+	// - `superseded`: a newer deployment of the workload replaced it.
+	Status *DeploymentStatus `json:"status,omitempty"`
 
 	// Workload Examples: web--r2
 	Workload string `json:"workload"`
