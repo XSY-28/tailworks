@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/twd/internal/policy"
-	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
@@ -225,7 +224,7 @@ func probePublicHost(ctx context.Context, host string) publicProbe {
 // what twd up recorded), public_ingress (the tenant gate) and, per workload
 // with public routes, funnel_attr (from the tailnet policy when this
 // machine can read it) and public_probe (public DNS + TLS from here).
-func doctorPublic(run func(string, func() (string, string, string)), s *state, apiKeyFile string) {
+func doctorPublic(run func(string, func() (string, string, string)), s *state) {
 	if s == nil || !s.configured() || !s.supervisorAlive() {
 		run("https_certs", func() (string, string, string) { return "skip", "twd is not running here", "" })
 		return
@@ -274,14 +273,11 @@ func doctorPublic(run func(string, func() (string, string, string)), s *state, a
 	}
 	var pol *mgmt.Policy
 	polWhy := "this machine cannot read the tailnet policy (twd deploy preflights it through mgmt)"
-	if apiKeyFile != "" {
-		if key, err := tsapi.LoadEnvFile(apiKeyFile, "TS_API_KEY"); err == nil {
-			api := &tsapi.Client{Tailnet: s.Cfg.Tailnet, APIKey: key, BaseURL: s.Cfg.TSAPIURL}
-			if b, _, err := api.GetPolicyHuJSON(ctx); err == nil {
-				pol, _ = mgmt.ParsePolicy(b)
-			} else {
-				polWhy = "policy read failed: " + firstLine(err.Error())
-			}
+	if api := s.oauthAPI(); api != nil {
+		if b, _, err := api.GetPolicyHuJSON(ctx); err == nil {
+			pol, _ = mgmt.ParsePolicy(b)
+		} else {
+			polWhy = "policy read failed (the OAuth client needs policy_file:read): " + firstLine(err.Error())
 		}
 	}
 	for _, d := range pub {

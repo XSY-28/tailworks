@@ -83,7 +83,7 @@ func getLogs(t *testing.T, e *testEnv, path string) (int, string) {
 }
 
 func TestWorkloadLogs(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	ctx := context.Background()
 	h1 := logHost(t, e, "h1")
 	tnA := v1Tenant(t, e, "a.ts.net", nil)
@@ -171,7 +171,7 @@ func TestWorkloadLogs(t *testing.T) {
 // A workload with replicas reads every replica's host, each line prefixed
 // with the host; ?host= picks one.
 func TestWorkloadLogsReplicas(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	e.ts.policy = svcPolicy
 	tn := v1Tenant(t, e, "ttest.ts.net", nil)
 	logHost(t, e, "h1")

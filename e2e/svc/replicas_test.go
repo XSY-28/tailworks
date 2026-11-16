@@ -61,6 +61,9 @@ func TestE2EReplicas(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
+	// twd mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-replicas-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -80,7 +83,7 @@ func TestE2EReplicas(t *testing.T) {
 	hostB := strings.TrimSuffix(prefix, "-") + "-b"
 	hostBDir := filepath.Join("/tmp", "twd-e2e-repb-"+run)
 	hostBRun := filepath.Join("/tmp", "twd-rb-"+run) // short: unix socket paths
-	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: tailnet, APIKeyFile: keyFile,
+	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: tailnet, OAuthClientFile: oauthFile,
 		ControlURL: prodControl, Prefix: prefix, Res: res, ClientTagged: true}
 	var nodes []*nettest.Node
 	var hostdB *exec.Cmd
@@ -142,7 +145,7 @@ func TestE2EReplicas(t *testing.T) {
 	var up struct {
 		MgmtNodeID string `json:"mgmtNodeID"`
 	}
-	e.MustJSON(&up, "up", "--tailnet", tailnet, "--api-key-file", keyFile, "--yes", "--hostname-prefix", prefix,
+	e.MustJSON(&up, "up", "--oauth-client-file", oauthFile, "--tailnet", tailnet, "--yes", "--hostname-prefix", prefix,
 		"--control-url", prodControl, "--mgmt-hostname", prefix+"mgmt", "--host-id", strings.TrimSuffix(prefix, "-"), "--ephemeral")
 
 	// Host B: a second twd-hostd on this machine, joined via `twd host add`.

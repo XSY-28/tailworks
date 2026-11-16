@@ -30,7 +30,7 @@ func TestMM_S11_HostFailover(t *testing.T) {
 	keyFile := r.dir + "/api.env"
 	writeAPIKey(t, keyFile)
 	var tn struct{ TenantID string }
-	c.must(0, "", "POST", "/v1/tenants", map[string]any{"tailnet": "f.ts.net", "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	c.must(0, "", "POST", "/v1/tenants", map[string]any{"tailnet": "f.ts.net", "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	for _, h := range []string{"h1", "h2"} {
 		c.must(0, h, "PUT", "/v1/hosts/"+h, map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	}

@@ -51,7 +51,6 @@ type whoAmI struct {
 		DNSName   string `json:"dnsName"`
 		Tailnet   string `json:"tailnet"`
 		HTTPS     bool   `json:"https"`
-		Issuer    string `json:"issuer"`
 		Transport string `json:"transport"`
 		IP        string `json:"ip"`
 	} `json:"mgmt"`
@@ -97,25 +96,22 @@ func (h host) PushTransport() string {
 }
 
 type tenant struct {
-	TenantID                        string         `json:"tenantID"`
-	Tailnet                         string         `json:"tailnet"`
-	ControlURL                      string         `json:"controlURL"`
-	MintMode                        string         `json:"mintMode"`
-	APIKeyFile                      string         `json:"apiKeyFile"`
-	WIFClientID                     string         `json:"wifClientID"`
-	WIFLifecycleClientID            string         `json:"wifLifecycleClientID"`
-	OAuthClientID                   string         `json:"oauthClientID"`
-	OAuthClientFile                 string         `json:"oauthClientFile"`
-	RegistrationsPerMinute          int            `json:"registrationsPerMinute"`
-	MaxObjects                      int            `json:"maxObjects"`
-	Pool                            string         `json:"pool"`
-	Tier                            string         `json:"tier"`
-	CreatedAt                       int64          `json:"createdAt"`
-	UpdatedAt                       int64          `json:"updatedAt"`
-	MintQueue                       int            `json:"mintQueue"`
-	EffectiveRegistrationsPerMinute float64        `json:"effectiveRegistrationsPerMinute"`
-	OBOPublicKey                    string         `json:"oboPublicKey"`
-	WIF                             map[string]any `json:"wif"`
+	TenantID                        string  `json:"tenantID"`
+	Tailnet                         string  `json:"tailnet"`
+	ControlURL                      string  `json:"controlURL"`
+	MintMode                        string  `json:"mintMode"`
+	APIKeyFile                      string  `json:"apiKeyFile"`
+	OAuthClientID                   string  `json:"oauthClientID"`
+	OAuthClientFile                 string  `json:"oauthClientFile"`
+	RegistrationsPerMinute          int     `json:"registrationsPerMinute"`
+	MaxObjects                      int     `json:"maxObjects"`
+	Pool                            string  `json:"pool"`
+	Tier                            string  `json:"tier"`
+	CreatedAt                       int64   `json:"createdAt"`
+	UpdatedAt                       int64   `json:"updatedAt"`
+	MintQueue                       int     `json:"mintQueue"`
+	EffectiveRegistrationsPerMinute float64 `json:"effectiveRegistrationsPerMinute"`
+	OBOPublicKey                    string  `json:"oboPublicKey"`
 }
 
 type classConfig struct {

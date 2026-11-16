@@ -24,8 +24,6 @@ import (
 type TenantPatch struct {
 	MintMode               *string
 	APIKeyFile             *string
-	WIFClientID            *string
-	WIFLifecycleClientID   *string
 	OAuthClientID          *string
 	OAuthClientFile        *string
 	RegistrationsPerMinute *int
@@ -40,9 +38,10 @@ type TenantPatch struct {
 	By            string
 }
 
-// UpdateTenant applies a merge patch. Switching to wif (or changing a WIF
-// client ID) drops cached tokens; apikey needs an absolute, existing key
-// file.
+// UpdateTenant applies a merge patch. Changing the mode, client ID or
+// credential file drops cached tokens. A tenant an older twd left in a
+// removed mint mode (mintmodes.go) can still be patched, and switching it
+// to oauth is how it gets minting again.
 func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tenant, error) {
 	t, err := m.store.GetTenant(ctx, id)
 	if err != nil {
@@ -51,9 +50,12 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 	changed := map[string]any{}
 	if p.MintMode != nil {
 		switch *p.MintMode {
-		case MintAPIKey, MintWIF, MintOAuth, MintHeadscale:
+		case MintOAuth, MintHeadscale:
 		default:
-			return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey, wif or headscale")
+			if removedMintMode(*p.MintMode) {
+				return Tenant{}, errSetRemovedMintMode(*p.MintMode)
+			}
+			return Tenant{}, errf(400, "bad_request", "mintMode must be oauth or headscale")
 		}
 		t.MintMode = *p.MintMode
 		changed["mintMode"] = t.MintMode
@@ -61,14 +63,6 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 	if p.APIKeyFile != nil {
 		t.APIKeyFile = *p.APIKeyFile
 		changed["apiKeyFile"] = t.APIKeyFile != ""
-	}
-	if p.WIFClientID != nil {
-		t.WIFClientID = *p.WIFClientID
-		changed["wifClientID"] = t.WIFClientID
-	}
-	if p.WIFLifecycleClientID != nil {
-		t.WIFLifecycleClientID = *p.WIFLifecycleClientID
-		changed["lifecycle"] = t.WIFLifecycleClientID != ""
 	}
 	if p.OAuthClientID != nil {
 		t.OAuthClientID = *p.OAuthClientID
@@ -134,20 +128,9 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 		changed["publicIngress"] = t.PublicIngress
 	}
 	switch t.MintMode {
-	case MintAPIKey:
-		if t.APIKeyFile == "" {
-			return Tenant{}, errf(400, "bad_request", "mintMode apikey needs apiKeyFile")
-		}
 	case MintHeadscale:
 		if err := checkHeadscaleTenant(t.APIKeyFile, t.ControlURL, t.PublicIngress); err != nil {
 			return Tenant{}, err
-		}
-	case MintWIF:
-		if t.WIFClientID == "" {
-			return Tenant{}, errf(400, "bad_request", "mintMode wif needs wifClientID")
-		}
-		if m.broker.Issuer == nil {
-			return Tenant{}, errf(400, "bad_request", "mintMode wif needs twd-mgmt to run with an issuer (-issuer-url)")
 		}
 	case MintOAuth:
 		id, err := checkOAuthFile(t.OAuthClientFile, t.OAuthClientID)
@@ -155,6 +138,9 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 			return Tenant{}, err
 		}
 		t.OAuthClientID = id
+		// A tenant switched from the removed apikey mode drops its old key
+		// file path (sandboxes no longer need it denied).
+		t.APIKeyFile = ""
 	}
 	t.UpdatedAt = m.now().UnixMilli()
 	if err := m.store.UpdateTenant(ctx, t); err != nil {

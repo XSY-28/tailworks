@@ -14,13 +14,12 @@ import (
 	"github.com/rosskukulinski/twd/netd"
 )
 
-// OAuth mint mode (M12, the default for self-hosted installs): a Tailscale
+// OAuth mint mode (M12; the only one for Tailscale tailnets): a Tailscale
 // OAuth client scoped to auth_keys with tag tag:twd (the same mechanism as
 // the Kubernetes operator and the GitHub Action). Its secret never expires
 // and stays in a 0600 file on the host; `twd up` and twd-mgmt read it at
 // use and exchange it for short-lived access tokens. There is no browser
-// login, no Funnel, no public issuer and no HTTPS requirement: the OAuth
-// client mints mgmt's own node key (tag:twd-mgmt), the host's node key
+// login and no Funnel or HTTPS requirement: the OAuth client mints mgmt's own node key (tag:twd-mgmt), the host's node key
 // (tag:twd-host) and every object's key, all tags tag:twd owns.
 
 const consoleOAuthURL = "https://login.tailscale.com/admin/settings/oauth"
@@ -60,7 +59,7 @@ func snippetLines(s policy.Snippet) []string {
 
 // policyMissingTagOwners is the typed error for "the control plane refused
 // (or would refuse) to mint keys for twd's own tags": before any login URL
-// or mint, with the exact snippet.
+// is minted, with the exact snippet.
 func policyMissingTagOwners(why string, cause error) *cliErr {
 	lines := []string{why}
 	if cause != nil {
@@ -70,30 +69,24 @@ func policyMissingTagOwners(why string, cause error) *cliErr {
 	return fail("policy_missing_tag_owners", "the tailnet policy does not let tag:twd own "+mgmt.MgmtTag+" and "+mgmt.HostTag, lines...).withFix(fix...)
 }
 
-// mintModeRequired is `twd up` with no mint mode on a fresh state dir: the
-// three options, recommended first, instead of starting a browser flow.
+// mintModeRequired is `twd up` with no credential on a fresh state dir:
+// how to create the OAuth client (or, on Headscale, which flags to use).
 func mintModeRequired() *cliErr {
 	lines := []string{
-		"twd mints a Tailscale auth key for every node it runs (mgmt, this host, each object), so it needs one credential. Pick one:",
-		"",
-		"  1. OAuth client (recommended): no browser, no Funnel, no HTTPS needed; the secret stays in a 0600 file on this machine",
+		"twd mints a Tailscale auth key for every node it runs (mgmt, this host, each object) with an OAuth client of your tailnet;",
+		"the secret stays in a 0600 file on this machine. Create one:",
 	}
 	for _, s := range oauthConsoleSteps() {
-		lines = append(lines, "       "+s)
+		lines = append(lines, "  "+s)
 	}
-	lines = append(lines, "     twd up --oauth-client-file ~/.config/twd/oauth.env [--service] [--yes]",
+	lines = append(lines, "then:  twd up --oauth-client-file ~/.config/twd/oauth.env [--service] [--yes]",
 		"",
-		"  2. Workload identity federation (no secret at all, for hosted / multi-tenant mgmt): browser login, Funnel + HTTPS,",
-		"     mgmt serves a public OIDC issuer and you create a trust credential for it:",
-		"     twd up --wif",
+		"Headscale instead of Tailscale: twd up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>",
 		"",
-		"  3. API key (explicit fallback; it expires within 90 days and can do everything the key's owner can):",
-		"     twd up --tailnet <tailnet>.ts.net --api-key-file <file with TS_API_KEY=…>",
-		"",
-		"policy for 1 (and 2, plus nodeAttrs funnel on "+mgmt.MgmtTag+"):")
+		"policy:")
 	lines = append(lines, snippetLines(operatorSnippet())...)
-	return fail("mint_mode_required", "choose how twd mints node keys", lines...).
-		withFix("twd up --oauth-client-file <file>   (recommended)", "twd up --wif", "twd up --tailnet <tailnet> --api-key-file <file>")
+	return fail("mint_mode_required", "twd up needs an OAuth client (--oauth-client-file)", lines...).
+		withFix("twd up --oauth-client-file <file>")
 }
 
 // oauthPreflight runs before anything is minted: the client exchanges, the
@@ -130,7 +123,7 @@ func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSour
 }
 
 // mintNodeKey mints a single-use, pre-authorized node key for twd's own
-// nodes with the OAuth client or API key, translating a tag refusal.
+// nodes with the OAuth client (or Headscale API key), translating a tag refusal.
 func mintNodeKey(ctx context.Context, api controlAPI, tag, desc string) (string, error) {
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{tag}, Preauthorized: true, ExpirySeconds: 300, Description: desc})
 	if err != nil {

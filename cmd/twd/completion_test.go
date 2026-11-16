@@ -72,7 +72,7 @@ func TestCompletionTree(t *testing.T) {
 		"kv key put":          {"--ttl", "--metadata", "--binding", "--workload"},
 		"d1 migrations apply": {"--workload", "--tenant"},
 		"logs":                {"-n", "-f", "--status"},
-		"tenant add":          {"--api-key-file", "--policy-apply", "--control"},
+		"tenant add":          {"--oauth-client-file", "--api-key-file", "--policy-apply", "--control"},
 		"host setup":          {"--microvm", "--undo", "--hugepages"},
 		"version":             {"--check"},
 	} {

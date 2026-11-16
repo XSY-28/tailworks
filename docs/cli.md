@@ -15,15 +15,15 @@ takes `--state-dir` (default `$TWD_STATE_DIR` or `~/.twd`) and `--json`
 start twd on this machine
 
 ```text
-twd up: start twd on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); recommended: an OAuth client (no browser, no Funnel); --wif for the keyless browser flow, --api-key-file as the fallback
+twd up: start twd on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); an OAuth client of your tailnet mints every node key (Headscale: its API key)
 
-usage: twd up --oauth-client-file <file> [--service] [--yes]  |  up --wif [--wif-client-id <id>]  |  up --tailnet <tailnet> --api-key-file <file> [--policy-apply]
+usage: twd up --oauth-client-file <file> [--service] [--yes]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--policy-apply]
 
 flags:
   -allow-sibling-egress
     	let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)
   -api-key-file string
-    	FALLBACK mint mode "apikey": file with TS_API_KEY=… (read at use, never copied); needs --tailnet
+    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain) (default "tailscale")
   -control-url string
@@ -40,24 +40,20 @@ flags:
     	prefix for every object node hostname (default "twd-")
   -insecure-shared-host
     	on a host without a process sandbox (Linux without Landlock), still serve process-tier workloads of more than one tenant; tenants are then NOT isolated from each other
-  -issuer-authkey-file string
-    	wif: TS_AUTHKEY=… file for the WIF issuer's own node (tag tag:twd-issuer; unattended join: tests, automation); default: interactive login
   -json
     	machine-readable output
   -kill-tombstone duration
     	keep a killed node answering object_killed this long (default 12s)
   -local-dev
     	DEVELOPMENT ONLY: hostd and the CLI use mgmt's unix socket with the per-host token instead of the tailnet (hermetic tests). Normal operation is tsnet only
-  -login-timeout duration
-    	wif: how long to wait for the browser login (default 5m0s)
   -mgmt-authkey-file string
-    	TS_AUTHKEY=… file for mgmt's node (unattended join: tests, automation); default: oauth/apikey mint it, wif logs in interactively
+    	TS_AUTHKEY=… file for mgmt's node (unattended join: tests, automation); default: the tenant's credential mints it
   -mgmt-hostname string
     	mgmt's own tailnet node name (default twd-mgmt)
   -oauth-client-file string
-    	RECOMMENDED mint mode "oauth": 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:twd). No browser, no Funnel
+    	mint mode "oauth" (Tailscale): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:twd). No browser, no Funnel
   -policy-apply
-    	apikey mode: apply the policy snippet (validated first, written with If-Match); default: print it
+    	headscale: apply the policy snippet (validated first, written with If-Match); default: print it
   -pool-nodes int
     	pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off) (default 1)
   -port-mapping
@@ -71,17 +67,11 @@ flags:
   -state-dir string
     	state directory (default $TWD_STATE_DIR or ~/.twd)
   -tailnet string
-    	the tailnet to serve (apikey mode: required; oauth: read from the client's devices or mgmt's node; wif: read from the login). Overrides discovery
+    	the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery
   -tsapi-url string
     	Tailscale API base URL (testing)
   -warm-keys int
     	pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off) (default 5)
-  -wif
-    	mint mode "wif": keyless browser flow (tailnet login, an OIDC issuer on its own tag:twd-issuer node over Funnel + HTTPS, a WIF trust credential); for hosted / multi-tenant mgmt
-  -wif-client-id string
-    	wif: the mint trust credential's client ID (default: prompt after printing the console steps)
-  -wif-lifecycle-client-id string
-    	wif: the lifecycle trust credential's client ID (optional)
   -workerd string
     	workerd binary
   -yes
@@ -147,7 +137,7 @@ serve, list, update or remove tenants
 ```text
 twd tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
-usage: twd tenant add <tailnet> --api-key-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--wif-client-id ID] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
+usage: twd tenant add <tailnet> --oauth-client-file <file> [--policy-apply] | tenant ls | tenant set <tenant> [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
   (every command takes --state-dir, default ~/.twd, and --json)
 ```
 
@@ -156,13 +146,15 @@ usage: twd tenant add <tailnet> --api-key-file <file> [--policy-apply] | tenant 
 ```text
 flags:
   -api-key-file string
-    	file with TS_API_KEY=… for this tailnet (mint mode "apikey"), or HEADSCALE_API_KEY=… with --control=headscale; read at use, never copied
+    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
   -control-url string
     	coordination server for this tailnet's nodes (default "https://controlplane.tailscale.com")
   -json
     	machine-readable output
+  -oauth-client-file string
+    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:twd); read at use, never copied
   -policy-apply
     	apply the base policy snippet (validated first, written with If-Match); default: print it
   -registrations-per-minute int
@@ -207,6 +199,8 @@ flags:
     	containers (ADR-032): running containers quota
   -max-objects int
     	object quota
+  -oauth-client-file string
+    	switch the tenant to mint mode oauth with this 0600 OAuth client file (on this host; read at use, never copied)
   -pool string
     	host pool the tenant's deployments are placed on ("-" = any host)
   -public-ingress string
@@ -217,10 +211,6 @@ flags:
     	state directory (default $TWD_STATE_DIR or ~/.twd)
   -tier string
     	default isolation tier: process | microvm ("-" = unset)
-  -wif-client-id string
-    	switch to mint mode wif with this mint trust credential
-  -wif-lifecycle-client-id string
-    	lifecycle trust credential ("-" = clear)
 ```
 
 ### twd doctor
@@ -228,19 +218,15 @@ flags:
 check this machine can run twd
 
 ```text
-twd doctor: check this machine: workerd runs, bundler offline, ~/.twd writable, API key works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier
+twd doctor: check this machine: workerd runs, bundler offline, ~/.twd writable, the mint credential works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier
 
-usage: twd doctor [--tailnet <tailnet> --api-key-file <file>]
+usage: twd doctor
 
 flags:
-  -api-key-file string
-    	API key file to check (default: from twd up)
   -json
     	machine-readable output
   -state-dir string
     	state directory (default $TWD_STATE_DIR or ~/.twd)
-  -tailnet string
-    	tailnet to check the API key against (default: from twd up)
 ```
 
 ### twd host

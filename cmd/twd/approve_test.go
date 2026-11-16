@@ -40,7 +40,7 @@ func TestApproveCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 	m, err := mgmt.New(mgmt.Config{Store: st, Custody: cust, Broker: &mgmt.Broker{BaseURL: "http://tsapi.invalid"},
 		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Hour, PolicyMaxAge: time.Minute})
 	if err != nil {
@@ -50,7 +50,7 @@ func TestApproveCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(m.Close)
-	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: "tn_a", Tailnet: "a.ts.net", MintMode: mgmt.MintAPIKey, APIKeyFile: keyFile}); err != nil {
+	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: "tn_a", Tailnet: "a.ts.net", MintMode: mgmt.MintOAuth, OAuthClientFile: keyFile}); err != nil {
 		t.Fatal(err)
 	}
 

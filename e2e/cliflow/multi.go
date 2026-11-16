@@ -29,10 +29,10 @@ func MultiPolicy() policy.Snippet { return Policy() }
 
 // Tenant is one side of E2E-MULTI.
 type Tenant struct {
-	Key        string // "A" | "B"
-	Tailnet    string
-	APIKeyFile string
-	ControlURL string
+	Key             string // "A" | "B"
+	Tailnet         string
+	OAuthClientFile string // this tailnet's OAuth client (0600)
+	ControlURL      string
 	// NewNode starts a tsnet test node in this tenant's tailnet named
 	// <prefix><role> (tag:ttest on production control).
 	NewNode func(role string) *nettest.Node
@@ -130,7 +130,7 @@ func (m *MultiEnv) Run() {
 	m.A.Key, m.B.Key = "A", "B"
 
 	// twd up: the operator tailnet is tenant A.
-	upArgs := []string{"up", "--tailnet", m.A.Tailnet, "--api-key-file", m.A.APIKeyFile, "--yes", "--ephemeral",
+	upArgs := []string{"up", "--tailnet", m.A.Tailnet, "--oauth-client-file", m.A.OAuthClientFile, "--yes", "--ephemeral",
 		"--hostname-prefix", m.Prefix, "--control-url", m.A.ControlURL, "--allow-sibling-egress",
 		"--mgmt-hostname", m.Prefix + "mgmt", "--host-id", strings.TrimSuffix(m.Prefix, "-")}
 	if m.TSAPIURL != "" {
@@ -172,15 +172,15 @@ func (m *MultiEnv) Run() {
 		PolicyOK bool               `json:"policyOK"`
 		Timings  map[string]float64 `json:"timingsMs"`
 	}
-	d = m.MustJSON(&ta, "tenant", "add", m.B.Tailnet, "--api-key-file", m.B.APIKeyFile, "--control-url", m.B.ControlURL)
+	d = m.MustJSON(&ta, "tenant", "add", m.B.Tailnet, "--oauth-client-file", m.B.OAuthClientFile, "--control-url", m.B.ControlURL)
 	m.B.TenantID = ta.TenantID
 	res.Numbers["tenant_add_ms"] = msOf(d)
 	if m.B.TenantID == "" || m.B.TenantID == m.A.TenantID || !ta.PolicyOK {
 		t.Fatalf("tenant add: %+v (tenant A %s)", ta, m.A.TenantID)
 	}
-	// The same key file can't serve a second tailnet.
-	if _, se, _, err := m.Twd("tenant", "add", "other.example.ts.net", "--api-key-file", m.A.APIKeyFile); err == nil || !strings.Contains(se, "state_conflict") {
-		t.Fatalf("tenant add with tenant A's key file for another tailnet: %v %s", err, se)
+	// The same credential file can't serve a second tailnet.
+	if _, se, _, err := m.Twd("tenant", "add", "other.example.ts.net", "--oauth-client-file", m.A.OAuthClientFile); err == nil || !strings.Contains(se, "state_conflict") {
+		t.Fatalf("tenant add with tenant A's OAuth client file for another tailnet: %v %s", err, se)
 	}
 	var tl []struct {
 		Tailnet  string `json:"tailnet"`
@@ -412,7 +412,7 @@ func (m *MultiEnv) Run() {
 				{"tenant " + dst.Key + " state dir", "/bin/ls", dstState},
 				{"tenant " + dst.Key + " node state", "/bin/cat", nodeFile},
 				{"tenant " + dst.Key + " DO storage", "/bin/ls", dst.hostDOStorage},
-				{"tenant " + dst.Key + " API key file", "/bin/cat", dst.APIKeyFile},
+				{"tenant " + dst.Key + " OAuth client file", "/bin/cat", dst.OAuthClientFile},
 				{"its own tenant's node keys", "/bin/ls", filepath.Join(hostData, "tenants", src.TenantID, "nodes")},
 			}
 			var got []string

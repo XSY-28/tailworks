@@ -39,6 +39,10 @@ func newPubEnv(t *testing.T) *pubEnv {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	e := &pubEnv{dir: dir, tenantID: "tn_pubtest"}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/oauth/token" {
+			w.Write([]byte(`{"access_token":"oauth-access-1","token_type":"Bearer","expires_in":3600}`))
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/acl") {
 			e.mu.Lock()
 			p := e.policy
@@ -51,7 +55,7 @@ func newPubEnv(t *testing.T) *pubEnv {
 	}))
 	t.Cleanup(ts.Close)
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=fake-not-a-key\n"), 0o600)
+	writeFakeOAuthFile(t, keyFile)
 
 	ctx := context.Background()
 	st, err := mgmt.OpenStore(ctx, filepath.Join(dir, "mgmt.db"))
@@ -75,7 +79,7 @@ func newPubEnv(t *testing.T) *pubEnv {
 	e.m, e.st = m, st
 
 	s := &state{Dir: dir}
-	s.Cfg.Tailnet, s.Cfg.TenantID, s.Cfg.MintMode, s.Cfg.APIKeyFile = "t.ts.net", e.tenantID, "apikey", keyFile
+	s.Cfg.Tailnet, s.Cfg.TenantID, s.Cfg.MintMode, s.Cfg.OAuthClientFile = "t.ts.net", e.tenantID, "oauth", keyFile
 	s.Cfg.ControlURL, s.Cfg.HostID, s.Cfg.LocalDev = "http://control.invalid", "h1", true
 	if err := s.save(); err != nil {
 		t.Fatal(err)
@@ -92,7 +96,7 @@ func newPubEnv(t *testing.T) *pubEnv {
 	t.Cleanup(func() { srv.Close() })
 	os.WriteFile(s.pidFile(), []byte(strconv.Itoa(os.Getpid())), 0o600) // "running"
 
-	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: e.tenantID, Tailnet: "t.ts.net", MintMode: mgmt.MintAPIKey, APIKeyFile: keyFile}); err != nil {
+	if _, err := m.CreateTenant(ctx, mgmt.TenantRequest{ID: e.tenantID, Tailnet: "t.ts.net", MintMode: mgmt.MintOAuth, OAuthClientFile: keyFile}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := m.RegisterHost(ctx, mgmt.RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}, Features: features.Host()}, "", ""); err != nil {

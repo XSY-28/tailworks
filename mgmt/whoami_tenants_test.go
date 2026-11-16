@@ -16,7 +16,7 @@ import (
 // the tenants on it and its approve grants, so an approver who is not an
 // admin never needs a tenant ID; the approvals page defaults to them.
 func TestWhoAmITenants(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	tnA := v1Tenant(t, e, "a.ts.net", nil)
 	v1Tenant(t, e, "b.ts.net", nil)
 	approvalHost(t, e, "h1", tnA)
@@ -77,7 +77,7 @@ func TestWhoAmITenants(t *testing.T) {
 // TestAuditOrderDesc: GET /v1/audit?order=desc lists newest first and
 // pages backwards with the cursor.
 func TestAuditOrderDesc(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	for _, tn := range []string{"a.ts.net", "b.ts.net", "c.ts.net"} {
 		v1Tenant(t, e, tn, nil)
 	}

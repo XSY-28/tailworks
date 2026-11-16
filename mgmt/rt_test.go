@@ -19,10 +19,10 @@ import (
 // and serves it by stable node ID for receivers; the tenant's OBO public
 // key verifies it.
 func TestNodeCertificates(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, nil)
@@ -90,7 +90,7 @@ func TestNodeCertificates(t *testing.T) {
 // RT-03: the unix socket admits nobody without the per-host token, not even
 // for /v1/healthz, and the token file is minted 0600 and rotatable.
 func TestHostTokenOnUnixSocket(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	hc := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", e.sock)
 	}}}
@@ -141,9 +141,9 @@ func TestHostTokenOnUnixSocket(t *testing.T) {
 // RT-02: host-submitted records carry their provenance; a tenant source
 // may only be a tenant_note and is reported as such.
 func TestAuditIngestProvenance(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	h1 := e.asHost("h1")
-	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, nil) // a mgmt-chain record
+	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, nil) // a mgmt-chain record
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}, "auditPubKey": base64.StdEncoding.EncodeToString(pub)}, nil)
 	prev := ""

@@ -12,10 +12,10 @@ import (
 // moves the lease at epoch+1, the stateful-move guard, and tier
 // eligibility.
 func TestAPIPlacement(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	var tn struct{ TenantID string }
-	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": e.keyFile}, &tn)
+	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	hosts := map[string]*apiClient{}
 	for _, h := range []struct {
 		id    string

@@ -329,9 +329,7 @@ type TenantRequest struct {
 	Tailnet                string `json:"tailnet"`
 	ControlURL             string `json:"controlURL,omitempty"`
 	MintMode               string `json:"mintMode"`
-	APIKeyFile             string `json:"apiKeyFile,omitempty"`
-	WIFClientID            string `json:"wifClientID,omitempty"`
-	WIFLifecycleClientID   string `json:"wifLifecycleClientID,omitempty"`
+	APIKeyFile             string `json:"apiKeyFile,omitempty"` // headscale
 	OAuthClientID          string `json:"oauthClientID,omitempty"`
 	OAuthClientFile        string `json:"oauthClientFile,omitempty"`
 	RegistrationsPerMinute int    `json:"registrationsPerMinute,omitempty"`
@@ -352,26 +350,6 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 		return Tenant{}, err
 	}
 	switch r.MintMode {
-	case MintAPIKey:
-		if r.APIKeyFile == "" {
-			return Tenant{}, errf(400, "bad_request", "mintMode apikey needs apiKeyFile")
-		}
-		if !filepath.IsAbs(r.APIKeyFile) {
-			return Tenant{}, errf(400, "bad_request", "apiKeyFile must be an absolute path")
-		}
-		// Same rule as the OAuth client file: a regular 0600 file, no symlink.
-		if f, err := tsapi.OpenSecretFile(r.APIKeyFile); err != nil {
-			return Tenant{}, errf(400, "bad_request", "apiKeyFile: %v", err)
-		} else {
-			f.Close()
-		}
-	case MintWIF:
-		if r.WIFClientID == "" {
-			return Tenant{}, errf(400, "bad_request", "mintMode wif needs wifClientID")
-		}
-		if m.broker.Issuer == nil {
-			return Tenant{}, errf(400, "bad_request", "mintMode wif needs twd-mgmt to run with an issuer (-issuer-url)")
-		}
 	case MintOAuth:
 		id, err := checkOAuthFile(r.OAuthClientFile, r.OAuthClientID)
 		if err != nil {
@@ -383,10 +361,13 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 			return Tenant{}, err
 		}
 	default:
-		return Tenant{}, errf(400, "bad_request", "mintMode must be oauth, apikey, wif or headscale")
+		if removedMintMode(r.MintMode) {
+			return Tenant{}, errSetRemovedMintMode(r.MintMode)
+		}
+		return Tenant{}, errf(400, "bad_request", "mintMode must be oauth or headscale")
 	}
 	t := Tenant{ID: r.ID, Tailnet: r.Tailnet, ControlURL: r.ControlURL, MintMode: r.MintMode, APIKeyFile: r.APIKeyFile,
-		WIFClientID: r.WIFClientID, WIFLifecycleClientID: r.WIFLifecycleClientID, OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
+		OAuthClientID: r.OAuthClientID, OAuthClientFile: r.OAuthClientFile,
 		RegistrationsPerMinute: r.RegistrationsPerMinute, MaxObjects: r.MaxObjects, PublicIngress: r.PublicIngress, CreatedAt: m.now().UnixMilli(),
 		MaxContainers: r.MaxContainers, MaxContainerMemMiB: r.MaxContainerMemMiB, MaxContainerVCPU: r.MaxContainerVCPU}
 	t.containerDefaults()
@@ -407,99 +388,6 @@ func (m *Mgmt) CreateTenant(ctx context.Context, r TenantRequest) (Tenant, error
 	}
 	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_create"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "publicIngress": t.PublicIngress})
 	return t, nil
-}
-
-// IssuerInfo is what a tenant admin needs to create the WIF trust credentials.
-func (m *Mgmt) IssuerInfo(t Tenant) map[string]any {
-	if m.broker.Issuer == nil {
-		return nil
-	}
-	return map[string]any{"issuer": m.broker.Issuer.TenantIssuer(t.ID), "mintSubject": MintSubject(t.ID),
-		"lifecycleSubject": LifecycleSubject(t.ID)}
-}
-
-// WIFUpdate is PUT /v0/tenants/{id}/wif: switch a tenant to (or re-key)
-// WIF mint mode with new public client IDs. Only client IDs are stored.
-type WIFUpdate struct {
-	WIFClientID          string `json:"wifClientID"`
-	WIFLifecycleClientID string `json:"wifLifecycleClientID,omitempty"`
-}
-
-// UpdateTenantWIF sets the tenant's WIF client IDs and makes wif the mint
-// mode. The cached access tokens of the old IDs are dropped.
-func (m *Mgmt) UpdateTenantWIF(ctx context.Context, tenantID string, u WIFUpdate) (Tenant, error) {
-	t, err := m.store.GetTenant(ctx, tenantID)
-	if err != nil {
-		return Tenant{}, err
-	}
-	if u.WIFClientID == "" {
-		return Tenant{}, errf(400, "bad_request", "wifClientID required")
-	}
-	if m.broker.Issuer == nil {
-		return Tenant{}, errf(400, "bad_request", "mintMode wif needs twd-mgmt to run with an issuer (-issuer-url)")
-	}
-	t.MintMode, t.WIFClientID, t.WIFLifecycleClientID = MintWIF, u.WIFClientID, u.WIFLifecycleClientID
-	if err := m.store.UpdateTenant(ctx, t); err != nil {
-		return Tenant{}, err
-	}
-	m.broker.Forget(t.ID)
-	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "tenant_update"}, map[string]any{"tailnet": t.Tailnet, "mintMode": t.MintMode, "wifUpdated": true,
-		"lifecycle": t.WIFLifecycleClientID != ""})
-	return t, nil
-}
-
-// WIFCheckResult is POST /v0/tenants/{id}/wif-check: does each trust
-// credential exchange, and can the lifecycle one read the policy.
-type WIFCheckResult struct {
-	MintMode string `json:"mintMode"`
-	// Mint: the mint credential's token exchange succeeded (its auth_keys
-	// scope is only proven by the first real mint).
-	Mint      bool   `json:"mint"`
-	MintError string `json:"mintError,omitempty"`
-	// Lifecycle: "ok", "absent" (no lifecycle client ID: kill tier 2, the
-	// reaper's device deletes, spawn checks and deploy preflight are off)
-	// or "error".
-	Lifecycle      string `json:"lifecycle"`
-	LifecycleError string `json:"lifecycleError,omitempty"`
-	// PolicyRead: the lifecycle credential read the tailnet policy
-	// (policy_file:read), which preflight and spawn checks need.
-	PolicyRead      bool   `json:"policyRead"`
-	PolicyReadError string `json:"policyReadError,omitempty"`
-	Issuer          string `json:"issuer,omitempty"`
-}
-
-// WIFCheck exercises a wif tenant's trust credentials without minting.
-func (m *Mgmt) WIFCheck(ctx context.Context, tenantID string) (WIFCheckResult, error) {
-	t, err := m.store.GetTenant(ctx, tenantID)
-	if err != nil {
-		return WIFCheckResult{}, err
-	}
-	res := WIFCheckResult{MintMode: t.MintMode, Lifecycle: "absent"}
-	if t.MintMode != MintWIF {
-		return res, errf(400, "bad_request", "tenant %s is in mint mode %s, not wif", t.ID, t.MintMode)
-	}
-	res.Issuer = m.broker.Issuer.TenantIssuer(t.ID)
-	m.broker.Forget(t.ID) // a fresh exchange, not a cached token
-	if _, err := m.broker.API(ctx, t, purposeMint); err != nil {
-		res.MintError = err.Error()
-	} else {
-		res.Mint = true
-	}
-	if t.WIFLifecycleClientID != "" {
-		api, err := m.broker.API(ctx, t, purposeLifecycle)
-		if err != nil {
-			res.Lifecycle, res.LifecycleError = "error", err.Error()
-		} else {
-			res.Lifecycle = "ok"
-			if _, _, _, err := api.GetPolicy(ctx, ""); err != nil {
-				res.PolicyReadError = err.Error()
-			} else {
-				res.PolicyRead = true
-				m.policies.Invalidate(t.ID)
-			}
-		}
-	}
-	return res, nil
 }
 
 // ---- hosts ----

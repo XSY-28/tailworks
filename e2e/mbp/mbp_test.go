@@ -150,6 +150,9 @@ func TestE2EMbp(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
+	// twd mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-mbp-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -178,7 +181,7 @@ func TestE2EMbp(t *testing.T) {
 		t.Fatalf("mbp $HOME = %q", rhome)
 	}
 	R := rhome + "/.twd-e2e"
-	rKey, rState, rWork := R+"/tailnet1_api.env", R+"/state", R+"/work"
+	rKey, rState, rWork := R+"/oauth.env", R+"/state", R+"/work"
 	rTwd := rhome + "/.twd/bin/twd"
 
 	// mbp must be clean of twd state (an earlier crashed run is cleaned by
@@ -200,7 +203,7 @@ func TestE2EMbp(t *testing.T) {
 	var nodes []*nettest.Node
 	downDone := false
 
-	e := &cliflow.Env{T: t, BinDir: "(mbp)", StateDir: rState, WorkDir: rWork, Tailnet: tailnet, APIKeyFile: rKey,
+	e := &cliflow.Env{T: t, BinDir: "(mbp)", StateDir: rState, WorkDir: rWork, Tailnet: tailnet, OAuthClientFile: rKey,
 		ControlURL: prodControl, Prefix: twdPrefix, Res: res, ClientTagged: true,
 		Exec: func(args []string) (string, string, time.Duration, error) {
 			return r.timed(rWork, append([]string{rTwd}, args...)...)
@@ -331,16 +334,16 @@ func TestE2EMbp(t *testing.T) {
 		t.Fatalf("scp tarball: %v %s", err, out)
 	}
 	res.Numbers["scp_tarball_ms"] = msOf(time.Since(st))
-	kf, err := os.Open(keyFile)
+	kf, err := os.Open(oauthFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, se, err := r.run(`umask 077; cat > ~/.twd-e2e/tailnet1_api.env && chmod 600 ~/.twd-e2e/tailnet1_api.env`, kf)
+	_, se, err := r.run(`umask 077; cat > ~/.twd-e2e/oauth.env && chmod 600 ~/.twd-e2e/oauth.env`, kf)
 	kf.Close()
 	if err != nil {
 		t.Fatalf("copy key file: %v %s", err, se)
 	}
-	if m := strings.TrimSpace(r.must(`stat -f %Lp ~/.twd-e2e/tailnet1_api.env`)); m != "600" {
+	if m := strings.TrimSpace(r.must(`stat -f %Lp ~/.twd-e2e/oauth.env`)); m != "600" {
 		t.Fatalf("key file mode on mbp: %s", m)
 	}
 	if q := strings.TrimSpace(r.must(`xattr ~/.twd-e2e/*.tar.gz`)); q != "" {
@@ -378,13 +381,13 @@ func TestE2EMbp(t *testing.T) {
 
 	// twd doctor before up (no state yet: the key check uses the flags).
 	var doc doctorOut
-	so, se, d, err = e.Twd("doctor", "--tailnet", tailnet, "--api-key-file", rKey, "--json")
+	so, se, d, err = e.Twd("doctor", "--json")
 	if err != nil || json.Unmarshal([]byte(so), &doc) != nil || !doc.OK {
 		t.Fatalf("twd doctor on mbp: %v\n%s\n%s", err, so, netd.Redact(se))
 	}
 	// No check may fail, and these must be ok. host_sockets is a Linux-only
 	// check (skip on macOS) and node_egress is skip until twd runs.
-	mustOK := []string{"binaries", "workerd", "bundler", "twd_home_writable", "state_dir_writable", "api_key", "sandbox", "system_tailscaled_not_used"}
+	mustOK := []string{"binaries", "workerd", "bundler", "twd_home_writable", "state_dir_writable", "sandbox", "system_tailscaled_not_used"}
 	var summary []string
 	for _, c := range doc.Checks {
 		summary = append(summary, c.Name+"="+c.Status)

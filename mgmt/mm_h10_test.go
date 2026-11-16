@@ -72,8 +72,8 @@ func newH10World(t *testing.T, skewB time.Duration) *h10World {
 	}
 	w := &h10World{a: mk(0), b: mk(skewB), base: base}
 	keyFile := filepath.Join(dir, "api.env")
-	os.WriteFile(keyFile, []byte("TS_API_KEY=x\n"), 0o600)
-	tn, err := w.a.CreateTenant(ctx, TenantRequest{Tailnet: fmt.Sprintf("t%d.ts.net", time.Now().UnixNano()), MintMode: "apikey", APIKeyFile: keyFile})
+	writeTestOAuthFile(t, keyFile)
+	tn, err := w.a.CreateTenant(ctx, TenantRequest{Tailnet: fmt.Sprintf("t%d.ts.net", time.Now().UnixNano()), MintMode: MintOAuth, OAuthClientFile: keyFile})
 	if err != nil {
 		t.Fatal(err)
 	}

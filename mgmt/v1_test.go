@@ -23,7 +23,7 @@ import (
 
 func v1Tenant(t *testing.T, e *testEnv, tailnet string, extra map[string]any) string {
 	t.Helper()
-	body := map[string]any{"tailnet": tailnet, "mintMode": "apikey", "apiKeyFile": e.keyFile}
+	body := map[string]any{"tailnet": tailnet, "mintMode": "oauth", "oauthClientFile": e.keyFile}
 	for k, v := range extra {
 		body[k] = v
 	}
@@ -42,7 +42,7 @@ func v1Host(t *testing.T, e *testEnv, id string) *apiClient {
 }
 
 func TestV1Pagination(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	var ids []string
 	for i := range 5 {
@@ -154,7 +154,7 @@ func TestV1Pagination(t *testing.T) {
 }
 
 func TestV1TenantPatchAndETag(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	tn := v1Tenant(t, e, "t.ts.net", map[string]any{"maxObjects": 10})
 	// GET carries an ETag; If-None-Match answers 304.
@@ -171,13 +171,13 @@ func TestV1TenantPatchAndETag(t *testing.T) {
 	c.hdr = nil
 	// Merge patch: absent fields untouched, null clears, immutables refused.
 	var after Tenant
-	c.ok("PATCH", "/v1/tenants/"+tn, map[string]any{"registrationsPerMinute": 7, "wifLifecycleClientID": "life"}, &after)
-	if after.RegistrationsPerMinute != 7 || after.MaxObjects != 10 || after.WIFLifecycleClientID != "life" || after.MintMode != MintAPIKey {
+	c.ok("PATCH", "/v1/tenants/"+tn, map[string]any{"registrationsPerMinute": 7, "pool": "p1"}, &after)
+	if after.RegistrationsPerMinute != 7 || after.MaxObjects != 10 || after.Pool != "p1" || after.MintMode != MintOAuth {
 		t.Fatalf("after patch: %+v", after)
 	}
 	var cleared Tenant // a fresh value: omitted fields must not linger from a previous decode
-	c.ok("PATCH", "/v1/tenants/"+tn, map[string]any{"wifLifecycleClientID": nil}, &cleared)
-	if cleared.WIFLifecycleClientID != "" || cleared.RegistrationsPerMinute != 7 || cleared.MaxObjects != 10 {
+	c.ok("PATCH", "/v1/tenants/"+tn, map[string]any{"pool": nil}, &cleared)
+	if cleared.Pool != "" || cleared.RegistrationsPerMinute != 7 || cleared.MaxObjects != 10 {
 		t.Fatalf("null did not clear: %+v", cleared)
 	}
 	// Inputs the spec itself forbids (so the validator would flag the
@@ -211,7 +211,7 @@ func TestV1TenantPatchAndETag(t *testing.T) {
 }
 
 func TestV1DeleteSemantics(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	tn := v1Tenant(t, e, "t.ts.net", nil)
 	h1 := v1Host(t, e, "h1")
@@ -325,7 +325,7 @@ func TestV1DeleteSemantics(t *testing.T) {
 // gate as a host, an admin and a non-admin, so a route can't be added
 // without its x-twd-role being enforced.
 func TestV1RoleMatrix(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
@@ -429,7 +429,7 @@ func TestV1RoleMatrix(t *testing.T) {
 }
 
 func TestV1HostJoinKey(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	tn := v1Tenant(t, e, "op.ts.net", nil)
 	var hj struct {
@@ -484,7 +484,7 @@ func TestV1HostJoinKey(t *testing.T) {
 
 // TestV1Status: the operational counters and the transport label.
 func TestV1Status(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	v1Tenant(t, e, "t.ts.net", nil)
 	v1Host(t, e, "h1")
 	var st struct {

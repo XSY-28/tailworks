@@ -47,6 +47,9 @@ func TestE2ELinuxReboot(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
+	// twd mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-reboot-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -61,7 +64,7 @@ func TestE2ELinuxReboot(t *testing.T) {
 	r := &remote{t: t, vm: vm, cfg: filepath.Join(home, ".lima", vm, "ssh.config")}
 	rhome := strings.TrimSpace(r.must(`printf %s "$HOME"`))
 	R := rhome + "/.twd-e2e"
-	rKey, rState, rWork := R+"/tailnet1_api.env", R+"/state", R+"/work"
+	rKey, rState, rWork := R+"/oauth.env", R+"/state", R+"/work"
 	rTwd := rhome + "/.twd/bin/twd"
 	if so := r.must(`[ -e ~/.twd ] && echo twd; [ -e ~/.twd-e2e ] && echo e2e; [ -e /etc/twd ] && echo etc-twd; true`); strings.TrimSpace(so) != "" {
 		t.Fatalf("%s is not clean (%s)", vm, strings.TrimSpace(so))
@@ -71,7 +74,7 @@ func TestE2ELinuxReboot(t *testing.T) {
 	tracker := tsapi.NewTracker(api)
 	work := t.TempDir()
 	var nodes []*nettest.Node
-	e := &cliflow.Env{T: t, StateDir: rState, WorkDir: rWork, Tailnet: tailnet, APIKeyFile: rKey, ControlURL: prodControl,
+	e := &cliflow.Env{T: t, StateDir: rState, WorkDir: rWork, Tailnet: tailnet, OAuthClientFile: rKey, ControlURL: prodControl,
 		Prefix: twdPrefix, Res: res, ClientTagged: true,
 		Exec: func(args []string) (string, string, time.Duration, error) {
 			return r.timed(rWork, append([]string{rTwd}, args...)...)
@@ -132,17 +135,17 @@ func TestE2ELinuxReboot(t *testing.T) {
 	if out, err := exec.Command("limactl", "copy", tarball, vm+":"+R+"/").CombinedOutput(); err != nil {
 		t.Fatalf("limactl copy tarball: %v %s", err, out)
 	}
-	if out, err := exec.Command("limactl", "copy", keyFile, vm+":"+rKey).CombinedOutput(); err != nil {
+	if out, err := exec.Command("limactl", "copy", oauthFile, vm+":"+rKey).CombinedOutput(); err != nil {
 		t.Fatalf("limactl copy key: %v %s", err, netd.Redact(string(out)))
 	}
-	r.must(`chmod 600 ~/.twd-e2e/tailnet1_api.env`)
+	r.must(`chmod 600 ~/.twd-e2e/oauth.env`)
 	tgz := filepath.Base(tarball)
 	r.must("cd ~/.twd-e2e && tar -xzf " + shq(tgz) + " && ./" + shq(strings.TrimSuffix(tgz, ".tar.gz")) + "/install.sh >/dev/null")
 	r.must("sudo " + rTwd + " host setup --microvm >/dev/null")
 
 	// Not --ephemeral: these nodes must outlive the reboots.
 	up := func() time.Duration {
-		return e.MustJSON(nil, "up", "--tailnet", tailnet, "--api-key-file", rKey, "--yes", "--hostname-prefix", twdPrefix, "--control-url", prodControl)
+		return e.MustJSON(nil, "up", "--oauth-client-file", rKey, "--tailnet", tailnet, "--yes", "--hostname-prefix", twdPrefix, "--control-url", prodControl)
 	}
 	res.Numbers["up_first_ms"] = msOf(up())
 	agentDir := rWork + "/agent"

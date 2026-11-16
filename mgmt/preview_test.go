@@ -14,7 +14,7 @@ import (
 // takes no Service or replicas, gets the workload's secrets, and promote
 // deploys its bundle to the workload through Deploy, then undeploys it.
 func TestV1PreviewPromote(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	e.ts.policy = svcPolicy
 	tn := v1Tenant(t, e, "ttest.ts.net", nil)
 	h1 := v1Host(t, e, "h1")

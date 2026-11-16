@@ -871,9 +871,6 @@
         "https": {
           "type": "boolean"
         },
-        "funnel": {
-          "type": "boolean"
-        },
         "policyOK": {
           "type": "boolean"
         },

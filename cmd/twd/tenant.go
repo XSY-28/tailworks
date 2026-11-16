@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"fmt"
@@ -18,19 +17,22 @@ import (
 	"github.com/rosskukulinski/twd/internal/procsb"
 	"github.com/rosskukulinski/twd/internal/tsapi"
 	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/twd/netd"
 )
 
 // TenantRef is one tenant this twd serves: the operator tenant (`twd up`)
-// or one added with `twd tenant add`. Each has its own tailnet, API key
-// file (path only), control URL, netd registry, workerd processes, state
+// or one added with `twd tenant add`. Each has its own tailnet, credential
+// file (path only: an OAuth client, or a Headscale API key), control URL, netd registry, workerd processes, state
 // dir and registration throttle; nothing is shared between them.
 type TenantRef struct {
 	Tailnet    string `json:"tailnet"`
 	TenantID   string `json:"tenantID"`
-	MintMode   string `json:"mintMode,omitempty"` // apikey | wif ("" = apikey)
-	APIKeyFile string `json:"apiKeyFile,omitempty"`
+	MintMode   string `json:"mintMode,omitempty"`   // oauth | headscale (older state: apikey, wif or "")
+	APIKeyFile string `json:"apiKeyFile,omitempty"` // headscale
 	ControlURL string `json:"controlURL"`
 	AddedAt    string `json:"addedAt,omitempty"`
+	// OAuthClientFile is an oauth tenant's client file (path only).
+	OAuthClientFile string `json:"oauthClientFile,omitempty"`
 }
 
 // tenants lists the operator tenant first, then the added ones. Linked
@@ -50,7 +52,8 @@ func (s *state) tenants() []TenantRef {
 	}
 	out := []TenantRef{}
 	if s.Cfg.TenantID != "" {
-		out = append(out, TenantRef{Tailnet: s.Cfg.Tailnet, TenantID: s.Cfg.TenantID, MintMode: s.Cfg.MintMode, APIKeyFile: s.Cfg.APIKeyFile, ControlURL: s.Cfg.ControlURL})
+		out = append(out, TenantRef{Tailnet: s.Cfg.Tailnet, TenantID: s.Cfg.TenantID, MintMode: s.Cfg.MintMode, APIKeyFile: s.Cfg.APIKeyFile, ControlURL: s.Cfg.ControlURL,
+			OAuthClientFile: s.Cfg.OAuthClientFile})
 	}
 	return append(out, s.Cfg.Tenants...)
 }
@@ -80,7 +83,7 @@ func (s *state) tenant(ref string) (TenantRef, error) {
 		names = append(names, t.Tailnet)
 	}
 	return TenantRef{}, fail("unknown_tenant", fmt.Sprintf("no tenant %q", ref), "tenants: "+strings.Join(names, ", ")).
-		withFix("twd tenant ls", "twd tenant add <tailnet> --api-key-file <file>   (on the host)")
+		withFix("twd tenant ls", "twd tenant add <tailnet> --oauth-client-file <file>   (on the host)")
 }
 
 func tenantFlag(f *flags) *string {
@@ -137,13 +140,15 @@ type tenantAddResult struct {
 	Timings    map[string]float64 `json:"timingsMs"`
 }
 
-// cmdTenantAdd is the CLI equivalent of `twd connect` in apikey mode: it
-// checks the key can read the tailnet's policy, registers the tenant with
-// mgmt (its own throttle and mint queue) and records it in twd.json. The
-// key file path is stored, never the key.
+// cmdTenantAdd adds a second (third, …) tenant to this host: it checks
+// the tailnet's credential (an OAuth client, or a Headscale API key) works,
+// registers the tenant with mgmt (its own throttle and mint queue) and
+// records it in twd.json. The credential file's path is stored, never the
+// secret.
 func cmdTenantAdd(args []string) error {
 	f := newFlags("tenant add")
-	keyFile := f.String("api-key-file", "", "file with TS_API_KEY=… for this tailnet (mint mode \"apikey\"), or HEADSCALE_API_KEY=… with --control=headscale; read at use, never copied")
+	oauthFile := f.String("oauth-client-file", "", "this tailnet's OAuth client (mint mode \"oauth\"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:twd); read at use, never copied")
+	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied")
 	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
 	apply := f.Bool("policy-apply", false, "apply the base policy snippet (validated first, written with If-Match); default: print it")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
@@ -159,14 +164,20 @@ func cmdTenantAdd(args []string) error {
 	if err := checkControlProfile(*profile, *control, "tenant add"); err != nil {
 		return err
 	}
-	if *keyFile == "" && *profile == controlHeadscale {
+	hs := *profile == controlHeadscale
+	switch {
+	case hs && *oauthFile != "":
+		return fail("profile_unsupported", "the Headscale profile mints with a Headscale API key: OAuth clients are a Tailscale feature").
+			withFix("twd tenant add " + tailnet + " --control=headscale --control-url <server_url> --api-key-file <file with HEADSCALE_API_KEY=…>")
+	case hs && *keyFile == "":
 		_, err := headscaleKeyFile("")
 		return err
-	}
-	if *keyFile == "" {
-		return fail("bad_request", "twd tenant add needs --api-key-file (mint mode \"apikey\")",
-			"WIF trust credentials (no stored secret) need `twd connect`, which is not built yet").
-			withFix("twd tenant add " + tailnet + " --api-key-file <file with TS_API_KEY=…>")
+	case !hs && *keyFile != "":
+		return fail("mint_mode_removed", "twd no longer mints with a Tailscale API key (--api-key-file is for --control=headscale only)").
+			withFix("twd tenant add " + tailnet + " --oauth-client-file <file>   (an OAuth client of that tailnet: Auth Keys write, tag tag:twd)")
+	case !hs && *oauthFile == "":
+		return fail("bad_request", "twd tenant add needs --oauth-client-file (an OAuth client of "+tailnet+")").
+			withFix("twd tenant add " + tailnet + " --oauth-client-file <file>")
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
@@ -208,36 +219,50 @@ func cmdTenantAdd(args []string) error {
 	t0 := time.Now()
 	res := tenantAddResult{Tailnet: tailnet, ControlURL: *control, Timings: map[string]float64{}}
 	absKey, _ := filepath.Abs(*keyFile)
-	var apiKey string
-	if *profile == controlTailscale {
-		if apiKey, err = tsapi.LoadSecretEnvFile(absKey, "TS_API_KEY"); err != nil {
-			var ins *tsapi.InsecureFileError
-			if errors.As(err, &ins) {
-				return fail("credential_file_insecure", absKey+" is readable by other users", err.Error()).withFix("chmod 600 " + absKey + "   then twd tenant add again")
+	absOAuth, _ := filepath.Abs(*oauthFile)
+	var creds tsapi.OAuthCredentials
+	if !hs {
+		absKey = ""
+		if creds, err = tsapi.LoadOAuthFile(absOAuth); err != nil {
+			if tsapi.IsInsecureFile(err) {
+				return fail("credential_file_insecure", absOAuth+" is readable by other users", err.Error()).withFix("chmod 600 " + absOAuth + "   then twd tenant add again")
 			}
-			return fail("bad_request", "can't read TS_API_KEY from "+absKey, err.Error())
+			return fail("bad_request", "can't read the OAuth client from "+absOAuth, netd.Redact(err.Error())).
+				withFix("the file needs TS_OAUTH_CLIENT_ID=<id> and TS_OAUTH_CLIENT_SECRET=tskey-client-… (mode 0600)")
 		}
+	} else {
+		absOAuth = ""
+	}
+	cred, mode := absOAuth, mgmt.MintOAuth
+	if hs {
+		cred, mode = absKey, mgmt.MintHeadscale
 	}
 	for _, t := range s.tenants() {
-		if t.APIKeyFile == absKey && t.Tailnet != tailnet {
-			return fail("state_conflict", "that API key file already serves tenant "+t.Tailnet,
-				"a key belongs to one tailnet; each tenant needs its own").withFix("twd tenant add " + tailnet + " --api-key-file <this tailnet's key file>")
+		if (t.APIKeyFile == cred || t.OAuthClientFile == cred) && t.Tailnet != tailnet {
+			return fail("state_conflict", "that credential file already serves tenant "+t.Tailnet,
+				"a credential belongs to one tailnet; each tenant needs its own").withFix("twd tenant add " + tailnet + " --oauth-client-file <this tailnet's OAuth client file>")
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	var api controlAPI
 	var pol []byte
-	if *profile == controlHeadscale {
+	policyReadable := true
+	if hs {
 		if api, pol, err = headscaleClient(ctx, absKey, *control, tailnet); err != nil {
 			return err
 		}
 	} else {
-		tc := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey, BaseURL: s.Cfg.TSAPIURL}
+		src := &tsapi.OAuthSource{BaseURL: s.Cfg.TSAPIURL, Load: func() (tsapi.OAuthCredentials, error) { return tsapi.LoadOAuthFile(absOAuth) }}
+		tc := &tsapi.Client{Tailnet: tailnet, Tokens: src, BaseURL: s.Cfg.TSAPIURL}
+		if _, err := src.Token(ctx); err != nil {
+			return fail("oauth_exchange_failed", "the OAuth client "+creds.ClientID+" can't get an access token", netd.Redact(err.Error())).
+				withFix("check the client secret in " + absOAuth + " (a deleted or regenerated client fails here)")
+		}
 		if pol, _, err = tc.GetPolicyHuJSON(ctx); err != nil {
-			return fail("bootstrap_failed", "the Tailscale API rejected the key for "+tailnet,
-				"step:  GET /api/v2/tailnet/"+tailnet+"/acl → "+err.Error()).
-				withFix("check the tailnet name and that the key in " + absKey + " is valid and can read the policy")
+			// Reading the policy needs policy_file:read; without it the
+			// tag ownership is proven by the first mint instead.
+			pol, policyReadable = nil, false
 		}
 		api = tc
 	}
@@ -251,7 +276,10 @@ func cmdTenantAdd(args []string) error {
 		}
 		res.Existing = true
 	} else {
-		body := map[string]any{"tenantID": tid, "tailnet": tailnet, "controlURL": *control, "mintMode": mintModeFor(*profile), "apiKeyFile": absKey}
+		body := map[string]any{"tenantID": tid, "tailnet": tailnet, "controlURL": *control, "mintMode": mgmt.MintHeadscale, "apiKeyFile": absKey}
+		if !hs {
+			body = map[string]any{"tenantID": tid, "tailnet": tailnet, "controlURL": *control, "mintMode": mgmt.MintOAuth, "oauthClientFile": absOAuth, "oauthClientID": creds.ClientID}
+		}
 		if *rpm > 0 {
 			body["registrationsPerMinute"] = *rpm
 		}
@@ -268,12 +296,13 @@ func cmdTenantAdd(args []string) error {
 		found := false
 		for i, t := range s.Cfg.Tenants {
 			if t.TenantID == tid {
-				s.Cfg.Tenants[i].APIKeyFile, s.Cfg.Tenants[i].ControlURL, found = absKey, *control, true
+				s.Cfg.Tenants[i].APIKeyFile, s.Cfg.Tenants[i].OAuthClientFile, s.Cfg.Tenants[i].ControlURL, found = absKey, absOAuth, *control, true
+				s.Cfg.Tenants[i].MintMode = mode
 			}
 		}
 		if !found {
-			s.Cfg.Tenants = append(s.Cfg.Tenants, TenantRef{Tailnet: tailnet, TenantID: tid, APIKeyFile: absKey, ControlURL: *control,
-				AddedAt: time.Now().UTC().Format(time.RFC3339)})
+			s.Cfg.Tenants = append(s.Cfg.Tenants, TenantRef{Tailnet: tailnet, TenantID: tid, MintMode: mode,
+				APIKeyFile: absKey, OAuthClientFile: absOAuth, ControlURL: *control, AddedAt: time.Now().UTC().Format(time.RFC3339)})
 		}
 		if err := s.save(); err != nil {
 			return err
@@ -286,7 +315,7 @@ func cmdTenantAdd(args []string) error {
 	if err != nil {
 		return err
 	}
-	res.PolicyOK = miss.Empty()
+	res.PolicyOK = miss.Empty() || !policyReadable
 	if !res.PolicyOK {
 		res.PolicyDiff = miss.HuJSON()
 		if *apply {
@@ -303,11 +332,17 @@ func cmdTenantAdd(args []string) error {
 		if res.Existing {
 			verb = "already served"
 		}
-		fmt.Printf("✓ tenant   %s %s (tenant %s, API key, mint mode %s) · control %s\n", tailnet, verb, tid, mintModeFor(*profile), *control)
+		how := "OAuth client " + creds.ClientID + ", mint mode oauth"
+		if hs {
+			how = "Headscale API key, mint mode headscale"
+		}
+		fmt.Printf("✓ tenant   %s %s (tenant %s, %s) · control %s\n", tailnet, verb, tid, how, *control)
 		fmt.Printf("  isolated: its own netd registry, workerd processes, state dir (0700) and registration throttle\n")
 		switch {
 		case res.Applied:
 			fmt.Printf("✓ policy   applied tag:twd tagOwners (validated, If-Match)\n")
+		case res.PolicyOK && !policyReadable:
+			fmt.Printf("✓ policy   not checked (the OAuth client can't read the policy); the first mint proves tag:twd ownership\n")
 		case res.PolicyOK:
 			fmt.Printf("✓ policy   tag:twd tagOwners present\n")
 		default:
@@ -406,16 +441,17 @@ func tailscaledExposed(s *state, sock string) string {
 }
 
 // cmdTenantSet is `twd tenant set <tenant> [--max-objects N] [--registrations-per-minute N]
-// [--pool P] [--tier process|microvm] [--wif-client-id ID] [--wif-lifecycle-client-id ID|-]`:
+// [--pool P] [--tier process|microvm] [--oauth-client-file FILE] …`:
 // a JSON Merge Patch (PATCH /v1/tenants/{id}); "-" clears a field.
+// --oauth-client-file switches the tenant to mint mode oauth (how a tenant
+// an older twd left in apikey or wif mode mints again).
 func cmdTenantSet(args []string) error {
 	f := newFlags("tenant set")
 	maxObj := f.Int("max-objects", 0, "object quota")
 	rpm := f.Int("registrations-per-minute", 0, "node registration throttle")
 	pool := f.String("pool", "", "host pool the tenant's deployments are placed on (\"-\" = any host)")
 	tier := f.String("tier", "", "default isolation tier: process | microvm (\"-\" = unset)")
-	wifID := f.String("wif-client-id", "", "switch to mint mode wif with this mint trust credential")
-	wifLife := f.String("wif-lifecycle-client-id", "", "lifecycle trust credential (\"-\" = clear)")
+	oauthFile := f.String("oauth-client-file", "", "switch the tenant to mint mode oauth with this 0600 OAuth client file (on this host; read at use, never copied)")
 	maxCtr := f.Int("max-containers", 0, "containers (ADR-032): running containers quota")
 	maxCtrMem := f.Int("max-container-mem-mib", 0, "containers: total guest memory quota (MiB)")
 	maxCtrCPU := f.Float64("max-container-vcpu", 0, "containers: total vCPU quota (fractional, e.g. 2.5)")
@@ -457,11 +493,19 @@ func cmdTenantSet(args []string) error {
 	if *tier != "" {
 		patch["tier"] = val(*tier)
 	}
-	if *wifID != "" {
-		patch["mintMode"], patch["wifClientID"] = "wif", *wifID
-	}
-	if *wifLife != "" {
-		patch["wifLifecycleClientID"] = val(*wifLife)
+	absOAuth := ""
+	if *oauthFile != "" {
+		if s.remote() {
+			return fail("remote_unsupported", "--oauth-client-file names a file on the host: run twd tenant set there (this machine is linked to "+s.Link.Endpoint+")")
+		}
+		absOAuth, _ = filepath.Abs(*oauthFile)
+		if _, err := tsapi.LoadOAuthFile(absOAuth); err != nil {
+			if tsapi.IsInsecureFile(err) {
+				return fail("credential_file_insecure", absOAuth+" is readable by other users", err.Error()).withFix("chmod 600 " + absOAuth)
+			}
+			return fail("bad_request", "can't read the OAuth client from "+absOAuth, netd.Redact(err.Error()))
+		}
+		patch["mintMode"], patch["oauthClientFile"], patch["oauthClientID"] = mgmt.MintOAuth, absOAuth, nil
 	}
 	if *maxCtr > 0 {
 		patch["maxContainers"] = *maxCtr
@@ -488,6 +532,21 @@ func cmdTenantSet(args []string) error {
 	if err := s.mgmt().DoHeaders(ctx, "PATCH", "/v1/tenants/"+tn.TenantID, patch, &t,
 		map[string]string{"Content-Type": "application/merge-patch+json", "Twd-Actor": actor()}); err != nil {
 		return err
+	}
+	if absOAuth != "" && !s.remote() {
+		// Keep twd.json in step: the supervisor denies the client file to
+		// every sandbox, and twd up reads the mode from here.
+		if tn.TenantID == s.Cfg.TenantID {
+			s.Cfg.MintMode, s.Cfg.OAuthClientFile, s.Cfg.OAuthClientID, s.Cfg.APIKeyFile = mgmt.MintOAuth, absOAuth, t.OAuthClientID, ""
+		}
+		for i := range s.Cfg.Tenants {
+			if s.Cfg.Tenants[i].TenantID == tn.TenantID {
+				s.Cfg.Tenants[i].MintMode, s.Cfg.Tenants[i].OAuthClientFile, s.Cfg.Tenants[i].APIKeyFile = mgmt.MintOAuth, absOAuth, ""
+			}
+		}
+		if err := s.save(); err != nil {
+			return err
+		}
 	}
 	emit(f, t, func() {
 		gate := t.PublicIngress

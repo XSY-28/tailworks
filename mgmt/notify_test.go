@@ -56,7 +56,7 @@ func allowLoopbackNotify(t *testing.T) {
 // a tenant's webhook. The URL's path and the header values are secrets:
 // never returned, audited or logged.
 func TestNotificationsConfig(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c := e.c
 	tn := v1Tenant(t, e, "t.ts.net", nil)
 	path := "/v1/tenants/" + tn + "/notifications"
@@ -107,7 +107,7 @@ func TestNotificationsConfig(t *testing.T) {
 // a failing webhook is retried and then audited, without the secret path.
 func TestApprovalRequestedNotification(t *testing.T) {
 	allowLoopbackNotify(t)
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	tn := v1Tenant(t, e, "t.ts.net", nil)
 	e.m.SetConsoleURL(SelfInfo{DNSName: "twd-mgmt.t.ts.net.", HTTPS: true}.ConsoleURL())
 	sink, srv := newSink(t)
@@ -168,7 +168,7 @@ func TestApprovalRequestedNotification(t *testing.T) {
 // TestNotifyDialPolicy: loopback and link-local targets are refused on the
 // host's network; tailnet names go over the tailnet dialer.
 func TestNotifyDialPolicy(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	for _, u := range []string{"http://127.0.0.1:9/x", "http://169.254.169.254/latest", "http://[::1]:9/"} {
 		res := e.m.deliver(context.Background(), Webhook{URL: u}, NotificationEvent{Event: "test"})
 		if res.Delivered || !strings.Contains(res.Error, "not allowed") {

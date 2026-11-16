@@ -395,8 +395,8 @@ func cmdDeploy(args []string) error {
 		if !ok || me.Code != "policy_unavailable" {
 			return err
 		}
-		// Keyless mode without a lifecycle credential (policy_file:read):
-		// mgmt can't read the policy, so grants are not preflighted here;
+		// An OAuth client without policy_file:read: mgmt can't read the
+		// policy, so grants are not preflighted here;
 		// a missing tagOwners entry still fails at mint (Tailscale checks).
 		policyUnavailable = me.Message
 		pf = mgmt.PreflightResult{OK: true, Unchecked: append([]string{}, a.Cfg.Tailnet.Connects...)}
@@ -406,7 +406,7 @@ func cmdDeploy(args []string) error {
 	ev.emit("preflight", map[string]any{"ok": pf.OK, "skipped": policyUnavailable != "", "preflight": pf})
 	if !*f.json {
 		if policyUnavailable != "" {
-			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n             add a lifecycle trust credential with scope policy_file:read (twd up --wif-lifecycle-client-id) to preflight grants; tags are still checked by Tailscale at mint\n", firstLine(policyUnavailable))
+			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n             give the OAuth client the Policy File › Read scope to preflight grants; tags are still checked by Tailscale at mint\n", firstLine(policyUnavailable))
 		} else {
 			printPreflight(a, pf)
 			printPublicPreflight(pf)

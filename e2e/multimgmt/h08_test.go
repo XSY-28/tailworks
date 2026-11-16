@@ -26,7 +26,7 @@ func TestMM_H08_DeploymentStatusPerReplica(t *testing.T) {
 	var tn struct{ TenantID string }
 	keyFile := r.dir + "/api.env"
 	writeAPIKey(t, keyFile)
-	c.must(0, "", "POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "apikey", "apiKeyFile": keyFile}, &tn)
+	c.must(0, "", "POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
 	c.must(0, "h1", "PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	var dep struct {
 		DeploymentID string

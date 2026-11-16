@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+// secretChooser is the part of Store that arbitrates shared secrets.
+type secretChooser interface {
+	ChooseSecret(ctx context.Context, name, keyID string, now int64) (string, error)
+	SecretChoice(ctx context.Context, name string) (string, error)
+}
+
 // LoadSharedIDSecret returns the object-ID HMAC key (RFC §4.3) shared by
 // every mgmt replica of the store (mm-loop F12, H14), so an object's ID and
 // hostname don't depend on which replica created it. The first replica to
