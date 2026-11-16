@@ -61,6 +61,7 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 - Run a Node.js app: [node-tier.md](node-tier.md)
 - Read logs, metrics and traces: [observability.md](observability.md)
 - Use the admin console: [ADMIN-UI.md](ADMIN-UI.md)
+- Let a team manage only its own tenant: [teams.md](teams.md)
 - Upgrade twd: [upgrading.md](upgrading.md)
 - Run on Headscale: [headscale.md](headscale.md)
 

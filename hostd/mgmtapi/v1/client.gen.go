@@ -500,6 +500,7 @@ const (
 	ErrorCodeStoreUnavailable        ErrorCode = "store_unavailable"
 	ErrorCodeSuperseded              ErrorCode = "superseded"
 	ErrorCodeTakeoverUnconfirmed     ErrorCode = "takeover_unconfirmed"
+	ErrorCodeTenantForbidden         ErrorCode = "tenant_forbidden"
 	ErrorCodeTenantHasLiveObjects    ErrorCode = "tenant_has_live_objects"
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
 	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
@@ -649,6 +650,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSuperseded:
 		return true
 	case ErrorCodeTakeoverUnconfirmed:
+		return true
+	case ErrorCodeTenantForbidden:
 		return true
 	case ErrorCodeTenantHasLiveObjects:
 		return true
@@ -1146,6 +1149,33 @@ func (e TelemetrySignal) Valid() bool {
 	case Metrics:
 		return true
 	case Traces:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TenantGrantActions.
+const (
+	TenantGrantActionsData    TenantGrantActions = "data"
+	TenantGrantActionsDeploy  TenantGrantActions = "deploy"
+	TenantGrantActionsKill    TenantGrantActions = "kill"
+	TenantGrantActionsRead    TenantGrantActions = "read"
+	TenantGrantActionsSecrets TenantGrantActions = "secrets"
+)
+
+// Valid indicates whether the value is a known member of the TenantGrantActions enum.
+func (e TenantGrantActions) Valid() bool {
+	switch e {
+	case TenantGrantActionsData:
+		return true
+	case TenantGrantActionsDeploy:
+		return true
+	case TenantGrantActionsKill:
+		return true
+	case TenantGrantActionsRead:
+		return true
+	case TenantGrantActionsSecrets:
 		return true
 	default:
 		return false
@@ -2220,6 +2250,7 @@ type Error struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
@@ -2310,6 +2341,7 @@ type Error struct {
 // | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
 // | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 // | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 // | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
@@ -2519,6 +2551,7 @@ type HostDrainResult struct {
 		// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 		// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 		// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+		// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 		// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 		// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 		// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
@@ -4064,6 +4097,15 @@ type TenantDeleteResult struct {
 	TenantID           string    `json:"tenantID"`
 }
 
+// TenantGrant One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it names.
+type TenantGrant struct {
+	Actions []TenantGrantActions `json:"actions"`
+	Tenants []string             `json:"tenants"`
+}
+
+// TenantGrantActions defines model for TenantGrant.Actions.
+type TenantGrantActions string
+
 // TenantPage defines model for TenantPage.
 type TenantPage struct {
 	Items []Tenant `json:"items"`
@@ -4140,6 +4182,7 @@ type TombstoneError struct {
 	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
 	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
 	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
@@ -4354,10 +4397,13 @@ type WhoAmI struct {
 	Approver *bool `json:"approver,omitempty"`
 
 	// Caps The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
-	Caps   *[]string  `json:"caps,omitempty"`
-	HostID *string    `json:"hostID,omitempty"`
-	Kind   WhoAmIKind `json:"kind"`
-	Login  *string    `json:"login,omitempty"`
+	Caps   *[]string `json:"caps,omitempty"`
+	HostID *string   `json:"hostID,omitempty"`
+
+	// InvalidTenantGrants The caller's `twd.dev/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard).
+	InvalidTenantGrants *[]string  `json:"invalidTenantGrants,omitempty"`
+	Kind                WhoAmIKind `json:"kind"`
+	Login               *string    `json:"login,omitempty"`
 
 	// McpTools The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
 	McpTools *[]string `json:"mcpTools,omitempty"`
@@ -4367,6 +4413,11 @@ type WhoAmI struct {
 
 	// Tailnet The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts.
 	Tailnet *string `json:"tailnet,omitempty"`
+
+	// TenantGrants The caller's valid `twd.dev/cap/tenant-admin` values: the tenants
+	// it may act in, and how. Empty when it holds none. An admin's
+	// values are listed too but don't narrow it.
+	TenantGrants *[]TenantGrant `json:"tenantGrants,omitempty"`
 
 	// Tenants The tenants the caller can act in without knowing their IDs:
 	// those whose `tailnet` is the caller's own tailnet. The local

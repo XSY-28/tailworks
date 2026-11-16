@@ -376,6 +376,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### tailnet_required
 400 · cli. **When:** the tailnet could not be determined from the OAuth client, or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). twd never bootstraps from the machine's own Tailscale login. **Fix:** `twd up --tailnet <name> …`.
 
+### tenant_forbidden
+403 · mgmt, cli. **When:** a tenant admin (`twd.dev/cap/tenant-admin`) asked for a tenant or action that no single grant value names, called an admin-only route (hosts, tenant settings, releases, upgrades, status), or holds the capability but every value is invalid (missing `tenants` or `actions`, a wildcard, an unknown action or field). **Fix:** add the printed grant (`snippet`) to the tailnet policy, or ask an admin; `twd whoami` lists what your values allow and why any grant nothing ([teams.md](teams.md)).
+
 ### tenant_has_live_objects
 409 · mgmt, cli. **When:** `twd tenant rm` of a tenant with live objects. **Fix:** `twd tenant rm <tenant> --force` (kills and purges first).
 

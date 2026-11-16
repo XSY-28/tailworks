@@ -264,7 +264,8 @@ connection. mgmt identifies the caller by **WhoIs** (your login, or your
 node's tags) and admits admins by the `twd.dev/cap/admin` capability; it
 stores only the endpoint in `~/.twd/link.json`. No key, no token, nothing
 to rotate. If you are not an admin, `twd link` fails with `not_admin` and
-prints the grant to add. `twd ls` shows `by <login>` on each deployment
+prints the grant to add. A team member granted `twd.dev/cap/tenant-admin`
+links too, limited to the tenants that grant names ([teams.md](teams.md)). `twd ls` shows `by <login>` on each deployment
 and `twd audit` carries your login on the deploy record. `twd logs
 <workload> [-n N] [-f]` works from here too: mgmt reads the workerd (or
 node) log from the host that holds the workload, over the same mgmt → host

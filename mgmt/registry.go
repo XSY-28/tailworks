@@ -23,7 +23,11 @@ import (
 //     namespace: a tenant's ("<tenantID>/…") and the operator's "public/…";
 //   - hosts (tag:twd-host) pull only: "public/…" and the namespaces of
 //     tenants they hold a deployment of. A host never pushes;
-//   - everyone else was already refused by TailnetHandler (403 not_admin).
+//   - tenant admins (TenantAdminCap) pull their tenants' namespaces with
+//     "read" and "public/…" with "read" in any tenant, and push their
+//     tenants' namespaces with "deploy" (tenantscope_registry.go);
+//   - everyone else is refused (TailnetHandler's 403 not_admin, or
+//     Handler's 403 for approvers and MCP-only callers).
 //
 // Blobs are content-addressed files under Config.RegistryDir (shared by
 // every replica that serves the registry: put it on shared storage, or run
@@ -90,7 +94,10 @@ func (m *Mgmt) registryAuthorize(r *http.Request, ns string, push bool) error {
 	case "local":
 		host = r.Header.Get("Twd-Host-ID") // hostd on the local-dev socket: host rules
 	case "user":
-		// TailnetHandler admits a user principal only as an admin.
+		if scoped, _ := r.Context().Value(registryTenantScopeKey{}).(bool); scoped {
+			return registryTenantAuthorize(p, ns, push) // tenantscope_registry.go
+		}
+		// Otherwise an admin: Handler refuses every other user.
 	default:
 		return &registry.Denied{Reason: "unauthenticated"}
 	}

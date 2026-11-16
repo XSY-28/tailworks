@@ -52,6 +52,7 @@ Coding agents: start with the skills. `twd agent setup` installs them for Claude
 - [Error catalog](https://github.com/rosskukulinski/twd/blob/master/docs/errors.md): every error code and its fix
 - [Limits](https://github.com/rosskukulinski/twd/blob/master/docs/limits.md): every size, count, rate and timeout, with the flag or constant it comes from, and the limits that don't exist
 - [Admin UI](https://github.com/rosskukulinski/twd/blob/master/docs/ADMIN-UI.md): the operator console
+- [Teams](https://github.com/rosskukulinski/twd/blob/master/docs/teams.md): tenant admins under `twd.dev/cap/tenant-admin`, one team per tenant
 - [twd.jsonc JSON Schema](https://github.com/rosskukulinski/twd/blob/master/schema/twd.schema.json): for editor completion
 
 ## API and design

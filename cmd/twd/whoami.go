@@ -50,6 +50,11 @@ type whoamiCanFlags struct {
 	Admin    bool     `json:"admin"`
 	Approve  *bool    `json:"approve"`
 	MCPTools []string `json:"mcpTools"`
+
+	// Tenant admin (mgmt.TenantAdminCap): the tenants and actions its
+	// grants allow, and why any other value grants nothing.
+	TenantAdmin        []mgmt.TenantGrant `json:"tenantAdmin"`
+	InvalidTenantAdmin []string           `json:"invalidTenantAdmin,omitempty"`
 }
 
 // whoamiWire is GET /v1/whoami, with the fields newer mgmts add as
@@ -99,7 +104,11 @@ func whoamiFrom(s *state, w whoamiWire) whoamiResult {
 	if w.MCPTools != nil {
 		res.Can.MCPTools = orEmpty(*w.MCPTools)
 	}
-	if w.Admin || !s.remote() {
+	res.Can.TenantAdmin, res.Can.InvalidTenantAdmin = w.TenantGrants, w.InvalidTenantGrants
+	if res.Can.TenantAdmin == nil {
+		res.Can.TenantAdmin = []mgmt.TenantGrant{}
+	}
+	if w.Admin || !s.remote() || len(w.TenantGrants) > 0 {
 		for _, t := range s.tenants() {
 			res.Tenants = append(res.Tenants, t.Tailnet)
 		}
@@ -156,12 +165,20 @@ func printWhoami(r whoamiResult) {
 			more = fmt.Sprintf(" · %d tenants: %s", len(r.Tenants), strings.Join(r.Tenants, ", "))
 		}
 		fmt.Printf("tenant    %s (%s)%s\n", r.Tenant.Tailnet, r.Tenant.TenantID, more)
-	case !r.Can.Admin:
+	case !r.Can.Admin && len(r.Can.TenantAdmin) == 0:
 		fmt.Printf("tenant    (not shown: listing tenants needs admin)\n")
 	default:
 		fmt.Printf("tenant    none yet\n")
 	}
 	fmt.Printf("can       admin %s · approve %s · MCP tools %s\n", yesNo(&r.Can.Admin), yesNo(r.Can.Approve), mcpList(r.Can.MCPTools))
+	if !r.Can.Admin {
+		for _, g := range r.Can.TenantAdmin {
+			fmt.Printf("tenant admin  %s in %s\n", strings.Join(g.Actions, ", "), strings.Join(g.Tenants, ", "))
+		}
+	}
+	for _, bad := range r.Can.InvalidTenantAdmin {
+		fmt.Printf("tenant admin  ✗ grants nothing: %s\n", bad)
+	}
 	if len(r.Caps) > 0 {
 		fmt.Printf("caps      %s\n", strings.Join(r.Caps, ", "))
 	}
@@ -193,8 +210,9 @@ func mcpList(ts []string) string {
 // whoamiHints say how to get what this identity lacks.
 func whoamiHints(r whoamiResult) []string {
 	var out []string
-	if !r.Can.Admin {
-		out = append(out, "not a twd admin: deploy, ls, logs and the rest need the "+mgmt.AdminCap+" grant to "+mgmt.MgmtTag)
+	if !r.Can.Admin && len(r.Can.TenantAdmin) == 0 {
+		out = append(out, "not a twd admin: deploy, ls, logs and the rest need the "+mgmt.AdminCap+" grant to "+mgmt.MgmtTag+
+			" (or, for your team's tenants only, a "+mgmt.TenantAdminCap+" grant naming them: docs/teams.md)")
 	}
 	if r.Kind == "local" {
 		out = append(out, "approve: the operator console has no personal identity; approve from a `twd link`ed machine with a "+approvecap.Cap+" grant")

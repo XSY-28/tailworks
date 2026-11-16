@@ -246,6 +246,11 @@ type WhoAmI struct {
 	Caps     []string `json:"caps"`
 	Approver bool     `json:"approver"`
 	MCPTools []string `json:"mcpTools"`
+
+	// tenantscope.go: the caller's valid twd.dev/cap/tenant-admin values,
+	// and why any others grant nothing.
+	TenantGrants        []TenantGrant `json:"tenantGrants"`
+	InvalidTenantGrants []string      `json:"invalidTenantGrants,omitempty"`
 }
 
 // ---- listeners ----
@@ -483,7 +488,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 			}
 			if !s.allowed(p, roleAdmin) && r.URL.Path == MCPPath && slices.Contains(wi.Caps, MCPCap) {
 				p.Kind = "mcp" // MCPCap without AdminCap: /mcp only (mcp.go)
-			} else if !s.allowed(p, roleAdmin|roleApprover) {
+			} else if !s.allowed(p, roleAdmin|roleApprover) && !s.holdsTenantAdminCap(p) { // tenantscope.go
 				who := wi.Login
 				src := wi.Login
 				if len(wi.Tags) > 0 {
