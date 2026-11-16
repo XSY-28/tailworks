@@ -3256,7 +3256,7 @@ One statement's result, as D1's wire protocol has it.
 | `placement` | `PlacementDecision` | no | Why a deployment is on its host (smart placement, ADR-033). |
 | `public` | `DeploymentPublic` | no | The deployment's public routes (ADR-029); absent when tailnet-only. |
 | `replicas` | array of `ReplicaRef` | no | A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas. |
-| `status` | `DeploymentStatus` | yes |  |
+| `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
 | `updatedAt` | integer (int64) | no |  |
@@ -3322,7 +3322,7 @@ One entry of a workload's deployment history (ADR-deploy-rollback).
 | `host` | string | yes |  |
 | `hostStatus` | string | no | The last status the host reported (or mgmt set) for this deployment, kept after it is superseded: `active` means it was serving when it was replaced. |
 | `rollbackOf` | string | no | Set on a rollback: the deployment whose bundle it redeployed. |
-| `status` | `DeploymentStatus` | yes |  |
+| `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 | `workload` | string | yes |  |
 
 #### `DeploymentReport`
@@ -3331,11 +3331,24 @@ One entry of a workload's deployment history (ADR-deploy-rollback).
 |---|---|---|---|
 | `deploymentID` | string | yes |  |
 | `error` | string | no |  |
-| `status` | `DeploymentStatus` | yes |  |
+| `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 
 #### `DeploymentStatus`
 
-Enum: `assigned`, `starting`, `active`, `draining`, `stopped`, `failed`, `superseded`
+- `assigned`: mgmt placed it; the host has not reported yet.
+- `starting`: the host is starting it.
+- `active`: serving.
+- `crashloop`: it served, then its workerd kept exiting; the host
+  keeps restarting it with exponential backoff (200 ms doubling to
+  5 min) and reports `active` again once it answers. `error` holds
+  the attempt count, the next delay and the last log lines.
+- `draining`: being replaced or undeployed.
+- `stopped`: stopped (undeployed, fenced or unassigned).
+- `failed`: the deploy failed (bad bundle or config, or it never
+  became healthy); the host does not retry it. `error` says why.
+- `superseded`: a newer deployment of the workload replaced it.
+
+Enum: `assigned`, `starting`, `active`, `crashloop`, `draining`, `stopped`, `failed`, `superseded`
 
 #### `DeviceDeleteRun`
 
@@ -4229,7 +4242,7 @@ One replica of a workload with `twd.jsonc` `replicas` > 1.
 |---|---|---|---|
 | `deploymentID` | string | yes |  |
 | `host` | string | yes |  |
-| `status` | `DeploymentStatus` | no |  |
+| `status` | `DeploymentStatus` | no | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 | `workload` | string | yes |  |
 
 #### `RequestRecord`
