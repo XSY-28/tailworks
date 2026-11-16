@@ -218,13 +218,14 @@ func (m *Mgmt) ReleaseSecrets(ctx context.Context, tenantID, workload, hostID st
 			map[string]any{"host": hostID, "epoch": epoch, "secrets": workload})
 		return nil, errf(409, "lease_lost", "the lease on %s/%s is not held by %q at epoch %d", tenantID, workload, hostID, epoch)
 	}
-	// A replica ("<workload>--r2", its own lease) gets its group's secrets:
-	// they are set on the workload the user deploys.
-	src := workload
-	if g, err := m.replicaGroupOf(ctx, tenantID, workload); err != nil {
+	// A replica ("<workload>--r2", its own lease) gets its group's secrets,
+	// and a preview its workload's (preview.go): they are set on the
+	// workload the user deploys.
+	src, rel := workload, ""
+	if g, k, err := m.secretsOwnerOf(ctx, tenantID, workload); err != nil {
 		return nil, err
 	} else if g != "" {
-		src = g
+		src, rel = g, k
 	}
 	set, err := m.loadSecrets(ctx, tenantID, src)
 	if err != nil {
@@ -240,7 +241,7 @@ func (m *Mgmt) ReleaseSecrets(ctx context.Context, tenantID, workload, hostID st
 		slices.Sort(names)
 		detail := map[string]any{"host": hostID, "epoch": epoch, "workload": workload, "names": names}
 		if src != workload {
-			detail["replicaOf"] = src
+			detail[rel] = src
 		}
 		m.audit(ctx, AuditRecord{TenantID: tenantID, Kind: "secret_release"}, detail)
 	}

@@ -831,6 +831,12 @@ type DeployRequest struct {
 	// rollbackOf is set by Rollback (rollback.go): the deployment whose
 	// stored bundle this deploy redeploys (audited as kind "rollback").
 	rollbackOf string
+
+	// Preview / PreviewAlias: deploy as a preview workload (twd deploy
+	// --preview, ADR-deploy-preview); preview is set by preview.go.
+	Preview      bool   `json:"preview,omitempty"`
+	PreviewAlias string `json:"previewAlias,omitempty"`
+	preview      *previewCtx
 }
 
 // DeployResponse is the deploy reply.
@@ -910,6 +916,11 @@ func validateObjectTag(class, tag string) *Error {
 }
 
 func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, error) {
+	if r.replica == nil && r.preview == nil {
+		if ok, resp, err := m.deployPreview(ctx, r); ok { // previews: preview.go
+			return resp, err
+		}
+	}
 	if r.replica == nil {
 		return m.deployGroup(ctx, r) // replicas: workload_replicas.go
 	}
@@ -934,6 +945,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, errf(400, "bad_bundle", "%v", err)
 		}
 		cfg, err := BundleConfig(r.Bundle)
+		r.preview.strip(cfg) // a preview takes no Service or public routes
 		svcCfg = cfg
 		if err != nil && len(classes) == 0 {
 			return resp, errf(400, "bad_bundle", "%v", err)
@@ -984,6 +996,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		return resp, errf(400, "bad_bundle", "%v", err)
 	}
 	r.replica.mark(classes)
+	r.preview.mark(classes)
 	need := placementNeed{}
 	var ctrs []container.Class
 	if len(r.Bundle) > 0 {
@@ -2990,6 +3003,7 @@ var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": tru
 	"tenant": true, "deploy": true, "obo_root": true, "container_start": true, "container_stop": true,
 	"image_push": true, "image_pin": true, "image_public": true,
 	"rollback": true, // ADR-deploy-rollback: a deploy, from mgmt only
+	"promote":  true, // ADR-deploy-preview: a deploy, from mgmt only
 	// RT3-03: hostd reports records it refused before chaining them.
 	"audit_dropped": true,
 	// ADR-029: public ingress records come from netd/hostd only.

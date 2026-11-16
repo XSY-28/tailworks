@@ -480,6 +480,9 @@ const (
 	ErrorCodePolicyMissingTagOwners  ErrorCode = "policy_missing_tag_owners"
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
+	ErrorCodePreviewConflict         ErrorCode = "preview_conflict"
+	ErrorCodePreviewFailed           ErrorCode = "preview_failed"
+	ErrorCodePreviewUnsupported      ErrorCode = "preview_unsupported"
 	ErrorCodeProfileUnsupported      ErrorCode = "profile_unsupported"
 	ErrorCodePublicIngressNotAllowed ErrorCode = "public_ingress_not_allowed"
 	ErrorCodePublicNameInUse         ErrorCode = "public_name_in_use"
@@ -500,6 +503,7 @@ const (
 	ErrorCodeTierUnavailable         ErrorCode = "tier_unavailable"
 	ErrorCodeTooManySecrets          ErrorCode = "too_many_secrets"
 	ErrorCodeUnknownNamespace        ErrorCode = "unknown_namespace"
+	ErrorCodeUnknownPreview          ErrorCode = "unknown_preview"
 	ErrorCodeUnknownQueue            ErrorCode = "unknown_queue"
 	ErrorCodeUnknownSecret           ErrorCode = "unknown_secret"
 	ErrorCodeUnknownStore            ErrorCode = "unknown_store"
@@ -605,6 +609,12 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodePreconditionFailed:
 		return true
+	case ErrorCodePreviewConflict:
+		return true
+	case ErrorCodePreviewFailed:
+		return true
+	case ErrorCodePreviewUnsupported:
+		return true
 	case ErrorCodeProfileUnsupported:
 		return true
 	case ErrorCodePublicIngressNotAllowed:
@@ -644,6 +654,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTooManySecrets:
 		return true
 	case ErrorCodeUnknownNamespace:
+		return true
+	case ErrorCodeUnknownPreview:
 		return true
 	case ErrorCodeUnknownQueue:
 		return true
@@ -1813,6 +1825,9 @@ type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
+	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`.
+	PreviewOf *string `json:"previewOf,omitempty"`
+
 	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
 	ReplicaOf *string `json:"replicaOf,omitempty"`
 
@@ -2051,6 +2066,12 @@ type DeploymentCreate struct {
 	// Namespaces Override the classes read from `twd.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 
+	// Preview Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
+	Preview *bool `json:"preview,omitempty"`
+
+	// PreviewAlias The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview.
+	PreviewAlias *string `json:"previewAlias,omitempty"`
+
 	// Replace Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`).
 	Replace  *bool  `json:"replace,omitempty"`
 	TenantID string `json:"tenantID"`
@@ -2239,6 +2260,10 @@ type Error struct {
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+	// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
@@ -2324,6 +2349,10 @@ type Error struct {
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 // | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 // | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
@@ -2528,6 +2557,10 @@ type HostDrainResult struct {
 		// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 		// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 		// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+		// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+		// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+		// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+		// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 		// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 		// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
@@ -3183,6 +3216,61 @@ type PreflightResult struct {
 
 	// Unchecked `tailnet.connects` entries that are names, not tags.
 	Unchecked *[]string `json:"unchecked,omitempty"`
+}
+
+// Preview One running preview of a workload (ADR-deploy-preview).
+type Preview struct {
+	// Alias Examples: 3f9a1c2b
+	Alias string `json:"alias"`
+
+	// BundleSHA256 Hex SHA-256 of the preview's bundle.
+	BundleSHA256 *string    `json:"bundleSHA256,omitempty"`
+	Deployment   Deployment `json:"deployment"`
+
+	// PreviewOf Examples: web
+	PreviewOf string `json:"previewOf"`
+
+	// Workload The preview's own workload name.
+	//
+	// Examples: web--preview-3f9a1c2b
+	Workload string `json:"workload"`
+}
+
+// PreviewList defines model for PreviewList.
+type PreviewList struct {
+	Items []Preview `json:"items"`
+}
+
+// Promotion A started promotion.
+type Promotion struct {
+	Deployment Deployment `json:"deployment"`
+
+	// Preview The preview's workload name.
+	Preview string `json:"preview"`
+
+	// PreviewStopped The preview was undeployed.
+	PreviewStopped bool `json:"previewStopped"`
+
+	// PromotedFrom The preview deployment whose bundle was deployed.
+	PromotedFrom string `json:"promotedFrom"`
+}
+
+// PromotionCreate defines model for PromotionCreate.
+type PromotionCreate struct {
+	// ForceTakeover As `POST /v1/deployments` `forceTakeover`.
+	ForceTakeover *bool `json:"forceTakeover,omitempty"`
+
+	// Host Pin a host, as for a deploy.
+	Host *string `json:"host,omitempty"`
+
+	// KeepPreview Leave the preview running after the promotion (default: undeploy it).
+	KeepPreview *bool `json:"keepPreview,omitempty"`
+
+	// Preview The preview to promote, by alias (`3f9a1c2b`) or by its workload name (`web--preview-3f9a1c2b`).
+	Preview string `json:"preview"`
+
+	// Replace Re-place the workload, as `POST /v1/deployments` `replace`.
+	Replace *bool `json:"replace,omitempty"`
 }
 
 // Protocols Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`.
@@ -4119,6 +4207,10 @@ type TombstoneError struct {
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
 	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+	// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
+	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
+	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
+	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
 	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
@@ -4866,6 +4958,12 @@ type GetWorkloadLogsParams struct {
 // GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParamsSource string
 
+// CreatePromotionParams defines parameters for CreatePromotion.
+type CreatePromotionParams struct {
+	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
+}
+
 // UpdateWorkloadPublicParams defines parameters for UpdateWorkloadPublic.
 type UpdateWorkloadPublicParams struct {
 	// IfMatch Only apply if the resource's current `ETag` matches; otherwise `412 precondition_failed`.
@@ -5039,6 +5137,9 @@ type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
 type QueryD1JSONRequestBody = D1Query
+
+// CreatePromotionJSONRequestBody defines body for CreatePromotion for application/json ContentType.
+type CreatePromotionJSONRequestBody = PromotionCreate
 
 // UpdateWorkloadPublicJSONRequestBody defines body for UpdateWorkloadPublic for application/json ContentType.
 type UpdateWorkloadPublicJSONRequestBody = WorkloadPublicPatch
@@ -6893,6 +6994,69 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkloadPreviews A workload's running previews (`twd previews`)
+	//
+	// ADR-deploy-preview. The previews of the workload that are not
+	// stopped, newest first. A preview is created by
+	// `POST /v1/deployments` with `preview: true`: it runs as a workload
+	// of its own, `<workload>--preview-<alias>`, with its own lease,
+	// Durable Object storage and stores, and never joins the workload's
+	// Tailscale Service or public routes. A workload without previews
+	// answers an empty list.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+	ListWorkloadPreviews(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePromotionWithBody Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotion(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
 	//
@@ -9834,6 +9998,99 @@ func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workl
 // Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetWorkloadLogsRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkloadPreviews A workload's running previews (`twd previews`)
+//
+// ADR-deploy-preview. The previews of the workload that are not
+// stopped, newest first. A preview is created by
+// `POST /v1/deployments` with `preview: true`: it runs as a workload
+// of its own, `<workload>--preview-<alias>`, with its own lease,
+// Durable Object storage and stores, and never joins the workload's
+// Tailscale Service or public routes. A workload without previews
+// answers an empty list.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+func (c *Client) ListWorkloadPreviews(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkloadPreviewsRequest(c.Server, id, workload)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePromotionWithBody Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *Client) CreatePromotionWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePromotionRequestWithBody(c.Server, id, workload, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *Client) CreatePromotion(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePromotionRequest(c.Server, id, workload, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -14956,6 +15213,128 @@ func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName
 	return req, nil
 }
 
+// NewListWorkloadPreviewsRequest constructs an http.Request for the ListWorkloadPreviews method
+func NewListWorkloadPreviewsRequest(server string, id TenantID, workload WorkloadName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/previews", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePromotionRequest calls the generic CreatePromotion builder with application/json body
+func NewCreatePromotionRequest(server string, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePromotionRequestWithBody(server, id, workload, params, "application/json", bodyReader)
+}
+
+// NewCreatePromotionRequestWithBody constructs an http.Request for the CreatePromotion method, with any body, and a specified content type
+func NewCreatePromotionRequestWithBody(server string, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/promotions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.DryRun != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "dryRun", *params.DryRun, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetWorkloadPublicRequest constructs an http.Request for the GetWorkloadPublic method
 func NewGetWorkloadPublicRequest(server string, id TenantID, workload WorkloadName) (*http.Request, error) {
 	var err error
@@ -18136,6 +18515,71 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error)
+
+	// ListWorkloadPreviewsWithResponse A workload's running previews (`twd previews`)
+	//
+	// ADR-deploy-preview. The previews of the workload that are not
+	// stopped, newest first. A preview is created by
+	// `POST /v1/deployments` with `preview: true`: it runs as a workload
+	// of its own, `<workload>--preview-<alias>`, with its own lease,
+	// Durable Object storage and stores, and never joins the workload's
+	// Tailscale Service or public routes. A workload without previews
+	// answers an empty list.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+	ListWorkloadPreviewsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*ListWorkloadPreviewsResponse, error)
+
+	// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
+
+	// CreatePromotionWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	//
+	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// workload itself, as a **new** deployment, through the same code
+	// path as `POST /v1/deployments`: the same validation, placement
+	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+	// workload's own `replicas`, Tailscale Service and public routes.
+	// Container images the preview's deploy built are reused by digest.
+	// The preview's data does not move: the workload keeps its own
+	// Durable Object storage, stores and secrets.
+	//
+	// Then the preview is undeployed, unless `keepPreview`. An unknown
+	// preview, or one that is stopped, is `404 unknown_preview`; a preview
+	// whose host reported it `failed` is `409 preview_failed`.
+	//
+	// Audited as `kind: promote` (in place of `deploy`), with
+	// `promotedFrom` (the preview's deployment) and `preview`.
+	// `dryRun=true` preflights the preview's bundle against the current
+	// policy.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
 
 	// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
 	//
@@ -25756,6 +26200,228 @@ func (r GetWorkloadLogsResponse) ContentType() string {
 	return ""
 }
 
+// ListWorkloadPreviewsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponse400Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadPreviewsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponse403Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadPreviewsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponse404Headers struct {
+	TwdError *string
+}
+
+// ListWorkloadPreviewsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadPreviews
+type ListWorkloadPreviewsResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type ListWorkloadPreviewsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreviewList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListWorkloadPreviewsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListWorkloadPreviewsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListWorkloadPreviewsResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListWorkloadPreviewsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON200() *PreviewList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListWorkloadPreviewsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWorkloadPreviewsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkloadPreviewsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkloadPreviewsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWorkloadPreviewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreatePromotionResponse202Headers the declared response headers of an HTTP 202 response for CreatePromotion
+type CreatePromotionResponse202Headers struct {
+	Location *string
+}
+
+// CreatePromotionResponse400Headers the declared response headers of an HTTP 400 response for CreatePromotion
+type CreatePromotionResponse400Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponse403Headers the declared response headers of an HTTP 403 response for CreatePromotion
+type CreatePromotionResponse403Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponse404Headers the declared response headers of an HTTP 404 response for CreatePromotion
+type CreatePromotionResponse404Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponse409Headers the declared response headers of an HTTP 409 response for CreatePromotion
+type CreatePromotionResponse409Headers struct {
+	TwdError *string
+}
+
+// CreatePromotionResponseDefaultHeaders the declared response headers of an HTTP default response for CreatePromotion
+type CreatePromotionResponseDefaultHeaders struct {
+	TwdError *string
+}
+
+type CreatePromotionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PreflightResult
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Promotion
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers202 the parsed response headers for an HTTP 202 response
+	Headers202 *CreatePromotionResponse202Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *CreatePromotionResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *CreatePromotionResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *CreatePromotionResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *CreatePromotionResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *CreatePromotionResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreatePromotionResponse) GetJSON200() *PreflightResult {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r CreatePromotionResponse) GetJSON202() *Promotion {
+	return r.JSON202
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreatePromotionResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreatePromotionResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreatePromotionResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreatePromotionResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreatePromotionResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreatePromotionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePromotionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePromotionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreatePromotionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetWorkloadPublicResponse200Headers the declared response headers of an HTTP 200 response for GetWorkloadPublic
 type GetWorkloadPublicResponse200Headers struct {
 	ETag *string
@@ -30362,6 +31028,89 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseGetWorkloadLogsResponse(rsp)
+}
+
+// ListWorkloadPreviewsWithResponse A workload's running previews (`twd previews`)
+//
+// ADR-deploy-preview. The previews of the workload that are not
+// stopped, newest first. A preview is created by
+// `POST /v1/deployments` with `preview: true`: it runs as a workload
+// of its own, `<workload>--preview-<alias>`, with its own lease,
+// Durable Object storage and stores, and never joins the workload's
+// Tailscale Service or public routes. A workload without previews
+// answers an empty list.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
+func (c *ClientWithResponses) ListWorkloadPreviewsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*ListWorkloadPreviewsResponse, error) {
+	rsp, err := c.ListWorkloadPreviews(ctx, id, workload, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkloadPreviewsResponse(rsp)
+}
+
+// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *ClientWithResponses) CreatePromotionWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error) {
+	rsp, err := c.CreatePromotionWithBody(ctx, id, workload, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePromotionResponse(rsp)
+}
+
+// CreatePromotionWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+//
+// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// workload itself, as a **new** deployment, through the same code
+// path as `POST /v1/deployments`: the same validation, placement
+// (sticky), lease at `epoch+1`, host fencing and refusals, and the
+// workload's own `replicas`, Tailscale Service and public routes.
+// Container images the preview's deploy built are reused by digest.
+// The preview's data does not move: the workload keeps its own
+// Durable Object storage, stores and secrets.
+//
+// Then the preview is undeployed, unless `keepPreview`. An unknown
+// preview, or one that is stopped, is `404 unknown_preview`; a preview
+// whose host reported it `failed` is `409 preview_failed`.
+//
+// Audited as `kind: promote` (in place of `deploy`), with
+// `promotedFrom` (the preview's deployment) and `preview`.
+// `dryRun=true` preflights the preview's bundle against the current
+// policy.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
+func (c *ClientWithResponses) CreatePromotionWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error) {
+	rsp, err := c.CreatePromotion(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePromotionResponse(rsp)
 }
 
 // GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
@@ -38177,6 +38926,234 @@ func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse,
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadLogsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListWorkloadPreviewsResponse parses an HTTP response from a ListWorkloadPreviewsWithResponse call
+func ParseListWorkloadPreviewsResponse(rsp *http.Response) (*ListWorkloadPreviewsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkloadPreviewsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreviewList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ListWorkloadPreviewsResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListWorkloadPreviewsResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListWorkloadPreviewsResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers ListWorkloadPreviewsResponseDefaultHeaders
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreatePromotionResponse parses an HTTP response from a CreatePromotionWithResponse call
+func ParseCreatePromotionResponse(rsp *http.Response) (*CreatePromotionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePromotionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PreflightResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Promotion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 202:
+		var headers CreatePromotionResponse202Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: "uri-reference"}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers202 = &headers
+	case rsp.StatusCode == 400:
+		var headers CreatePromotionResponse400Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers CreatePromotionResponse403Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers CreatePromotionResponse404Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers CreatePromotionResponse409Headers
+		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwdError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers CreatePromotionResponseDefaultHeaders
 		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
