@@ -44,10 +44,10 @@ func TestCLIQueues(t *testing.T) {
 	if out, err := e.call(t, cmdQueues, "info", "later"); err != nil || !strings.Contains(out, "1 delayed") {
 		t.Fatalf("info: %v\n%s", err, out)
 	}
-	if out, err := e.call(t, cmdQueues, "purge", "jobs"); err != nil || !strings.Contains(out, "purged 2 messages") {
+	if out, err := e.call(t, cmdQueues, "purge", "jobs", "--yes"); err != nil || !strings.Contains(out, "purged 2 messages") {
 		t.Fatalf("purge: %v\n%s", err, out)
 	}
-	if out, err := e.call(t, cmdQueues, "rm", "later"); err != nil || !strings.Contains(out, "deleted") {
+	if out, err := e.call(t, cmdQueues, "rm", "later", "--yes"); err != nil || !strings.Contains(out, "deleted") {
 		t.Fatalf("rm: %v\n%s", err, out)
 	}
 	if _, err := e.call(t, cmdQueues, "info", "later"); cliCode(err) != "unknown_queue" {

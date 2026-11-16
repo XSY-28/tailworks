@@ -301,12 +301,16 @@ func cmdHostLs(args []string) error {
 func cmdHostRm(args []string) error {
 	f := newFlags("host rm")
 	drain := f.Bool("drain", false, "kill the host's objects and release its leases first")
+	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 {
 		return fail("bad_request", "twd host rm needs one host ID", "usage: twd "+usageOf("host"))
+	}
+	if err := confirmDestroy(f, *yes, "removing host "+pos[0]+" deregisters it (it must be added again to serve)", pos[0], "twd host rm "+pos[0]); err != nil {
+		return err
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
@@ -329,7 +333,7 @@ func cmdHostRm(args []string) error {
 	}
 	if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/hosts/"+pos[0]+q, nil, &res, map[string]string{"Twd-Actor": actor()}); err != nil {
 		if me, ok := mgmtapi.AsError(err); ok && me.Code == "host_holds_leases" {
-			return fail("host_holds_leases", me.Message).withFix("twd host rm " + pos[0] + " --drain")
+			return fail("host_holds_leases", me.Message).withFix("twd host rm " + pos[0] + " --drain --yes")
 		}
 		return err
 	}

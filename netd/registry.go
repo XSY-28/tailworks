@@ -131,7 +131,7 @@ type ObjectOptions struct {
 type Registry struct {
 	cfg  Config
 	log  *slog.Logger
-	sem  chan struct{}
+	sem  *joinSlots
 	ctx  context.Context
 	stop context.CancelFunc
 
@@ -189,7 +189,7 @@ func New(cfg Config) (*Registry, error) {
 	r := &Registry{
 		cfg:      cfg,
 		log:      slog.New(NewRedactingHandler(h)),
-		sem:      make(chan struct{}, cfg.JoinParallel),
+		sem:      newJoinSlots(cfg.JoinParallel),
 		ctx:      ctx,
 		stop:     cancel,
 		objects:  map[string]*Object{},
@@ -362,9 +362,10 @@ func (r *Registry) Create(id string, opts ObjectOptions) (*Object, error) {
 	}
 	r.objects[id] = o
 	r.joins.Add(1)
+	slot := r.sem.enqueue() // in line now, so objects join in Create order
 	go func() {
 		defer r.joins.Done()
-		r.join(o)
+		r.join(o, slot)
 	}()
 	return o, nil
 }
@@ -418,14 +419,12 @@ func decodeMeta(b []byte) (*objectMeta, error) {
 	return &m, nil
 }
 
-func (r *Registry) join(o *Object) {
-	select {
-	case r.sem <- struct{}{}:
-	case <-r.ctx.Done():
+func (r *Registry) join(o *Object, slot *slotTicket) {
+	if r.sem.wait(r.ctx, slot) != nil {
 		o.fail(ErrClosed)
 		return
 	}
-	defer func() { <-r.sem }()
+	defer r.sem.release()
 	if o.State() != StatePending {
 		return // killed while queued
 	}
@@ -448,11 +447,12 @@ func (r *Registry) join(o *Object) {
 }
 
 // errSavedStateRejected: a rejoin from saved node state left the backend in
-// NeedsLogin (control expired or removed the device).
-var errSavedStateRejected = errors.New("saved node state rejected by control (NeedsLogin)")
+// NeedsLogin, or failing to log in (control expired or removed the device).
+var errSavedStateRejected = errors.New("saved node state rejected by control (NeedsLogin or a login error)")
 
-// needsLoginGrace is how long NeedsLogin must persist during a rejoin before
-// it counts as a rejection (the backend may pass through it briefly).
+// needsLoginGrace is how long NeedsLogin, or a login error, must persist
+// during a rejoin before it counts as a rejection (the backend may pass
+// through either briefly).
 var needsLoginGrace = 2 * time.Second
 
 func (o *Object) start(ctx context.Context) error {
@@ -673,8 +673,13 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 	return lc, sst, nil
 }
 
-// watchNeedsLogin calls onRejected once the backend has sat in NeedsLogin
-// for needsLoginGrace without reaching Starting/Running.
+// watchNeedsLogin calls onRejected once the backend has sat in NeedsLogin,
+// or kept reporting a login error, for needsLoginGrace without reaching
+// Starting/Running. A node whose saved key control has expired doesn't
+// always reach NeedsLogin: it can stay in NoState, retrying its login and
+// reporting "NodeKeyExpired" errors, forever. Without the error case that
+// rejoin never ends, and it holds a join slot (JoinParallel) while it waits
+// (issue #75).
 func watchNeedsLogin(ctx context.Context, lc *local.Client, onRejected func()) {
 	w, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState)
 	if err != nil {
@@ -682,6 +687,7 @@ func watchNeedsLogin(ctx context.Context, lc *local.Client, onRejected func()) {
 	}
 	defer w.Close()
 	var timer *time.Timer
+	up := false // reached Starting/Running: errors after that aren't a rejection
 	defer func() {
 		if timer != nil {
 			timer.Stop()
@@ -692,6 +698,9 @@ func watchNeedsLogin(ctx context.Context, lc *local.Client, onRejected func()) {
 		if err != nil {
 			return
 		}
+		if n.ErrMessage != nil && *n.ErrMessage != "" && !up && timer == nil {
+			timer = time.AfterFunc(needsLoginGrace, onRejected)
+		}
 		if n.State == nil {
 			continue
 		}
@@ -701,6 +710,7 @@ func watchNeedsLogin(ctx context.Context, lc *local.Client, onRejected func()) {
 				timer = time.AfterFunc(needsLoginGrace, onRejected)
 			}
 		case ipn.Starting, ipn.Running:
+			up = true
 			if timer != nil {
 				timer.Stop()
 				timer = nil

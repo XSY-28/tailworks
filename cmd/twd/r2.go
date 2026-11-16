@@ -79,6 +79,7 @@ func cmdR2(args []string) error {
 	tenantF := tenantFlag(f)
 	workloadF := f.String("workload", "", "workload (default: the app in the current directory, as twd deploy names it)")
 	prefixF := f.String("prefix", "", "object ls: only keys starting with this")
+	yes := yesFlag(f)
 	p, err := f.parse(rest)
 	if err != nil {
 		return err
@@ -111,6 +112,12 @@ func cmdR2(args []string) error {
 	}
 	if workloadLabel(workload) != workload {
 		return fail("bad_request", fmt.Sprintf("workload %q is not a DNS label", workload))
+	}
+	if what == "bucket" && sub == "rm" {
+		if err := confirmDestroy(f, *yes, "deleting bucket "+bucket+" of workload "+workload+" deletes every object in it", bucket,
+			"twd r2 bucket rm "+bucket+" --workload "+workload); err != nil {
+			return err
+		}
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
