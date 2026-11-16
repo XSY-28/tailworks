@@ -55,9 +55,12 @@ Not implemented; tracked in issue #80. The implementation plan is at the end.
    This duplicates the tailnet policy, and it contradicts the RFC's "grants
    are the source of truth". Who may do what would then live in two places.
    Rejected.
-4. **Several tenants in one tailnet, one per team, scoped by grant values.**
-   This reuses every existing per-tenant boundary, and authorization stays
-   in the tailnet policy. Chosen.
+4. **Several tenants in one tailnet, one per team, with access granted by
+   a new tenant-scoped capability.** This reuses every existing per-tenant
+   boundary, and authorization stays in the tailnet policy. Chosen.
+5. **The same, but scoped by adding values to `twd.dev/cap/admin`.**
+   Rejected: mgmt today ignores that cap's values, so on any older version
+   a scoped grant would mean full admin (D2).
 
 **Decision.**
 
@@ -67,18 +70,42 @@ Not implemented; tracked in issue #80. The implementation plan is at the end.
    credentials and owner tag". One tenant per tailnet remains the default.
    When there's only one tenant, nothing below changes for it (D7).
 
-2. **`twd.dev/cap/admin` values can name tenants and actions.**
+2. **Team access is a new capability, `twd.dev/cap/tenant-admin`. The
+   existing `twd.dev/cap/admin` stays operator-only.**
 
    ```jsonc
    {"src": ["group:payments"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443"],
-    "app": {"twd.dev/cap/admin": [
+    "app": {"twd.dev/cap/tenant-admin": [
       {"tenants": ["payments"], "actions": ["read", "deploy", "kill", "secrets"]}
     ]}}
    ```
 
-   - `tenants` absent means all tenants. `actions` absent means all
-     actions. So the existing `[{}]` keeps meaning a full operator admin,
-     and existing policies keep working.
+   - **Why a new cap instead of values on `twd.dev/cap/admin`.** Today's
+     gate (`allowed` in `mgmt/server.go`) treats *holding*
+     `twd.dev/cap/admin` as full admin and ignores its values. If team
+     scope were a value on that cap, any mgmt that predates this ADR would
+     read `{"tenants": ["payments"]}` as full operator admin, over every
+     tenant and every host. That happens when an admin writes the grant
+     before upgrading, and on old replicas during a rolling upgrade
+     (ADR-041). A cap that old versions don't know is refused by them, so
+     it fails closed. The rule generalizes: **never narrow an existing
+     capability by adding a field to its values. Older readers ignore the
+     field and widen the access.**
+   - `twd.dev/cap/admin` keeps its current meaning: an operator, with
+     every value ignored as today. The `-admins` override and the `local`
+     principal (mgmt's own node and the local-dev socket) stay
+     operator-wide. `host` principals are unchanged.
+   - **Who manages hosts:** only operators. Hosts, pools, releases,
+     upgrades, public images, device-delete runs, creating tenants, and
+     changing a tenant's limits, pool, tier or credentials keep
+     `x-twd-role: admin` (D3). A tenant-admin can't reach them, so a team
+     can't raise its own quota, put itself on another pool, or cordon or
+     drain a host.
+   - Both `tenants` and `actions` are **required and non-empty** in every
+     value. A value that is missing either one, or that names an unknown
+     action, matches nothing, and mgmt reports it in `GET /v1/whoami` and
+     `twd policy lint`. There is no "all tenants" wildcard. Operator-wide
+     access is `twd.dev/cap/admin`.
    - A request is allowed if **one single value** permits both the tenant
      and the action. Values aren't merged: `{tenants:[a], actions:[read]}`
      plus `{tenants:[b], actions:[deploy]}` doesn't give deploy on `a`.
@@ -91,26 +118,50 @@ Not implemented; tracked in issue #80. The implementation plan is at the end.
      - `secrets`: write secret values.
      - `data`: read and write the tenant's data through mgmt (KV, D1, R2
        and queue admin and journal routes).
-   - **Operator routes** need a value with neither `tenants` nor `actions`
-     set. These are creating tenants, changing a tenant's limits, pool, tier
-     or credentials, and everything under hosts, releases, upgrades, public
-     images and device-delete runs. A team can't raise its own quota or put
-     itself on another pool.
-   - A caller whose only values are tenant-scoped is a new principal kind,
-     `tenant-admin`, which carries its scope. The `Admins` operator override
-     (`-admins`) stays operator-wide.
-   - `twd.dev/cap/mcp` and `twd.dev/cap/approve` values take the same
-     optional `tenants` field. The MCP tools and the approver's inbox see
-     only those tenants.
-   - `local` (mgmt's own node and the local-dev socket) and `host`
-     principals are unchanged.
+   - A caller that holds `twd.dev/cap/tenant-admin` but not
+     `twd.dev/cap/admin` is a new principal kind, `tenant-admin`, which
+     carries its matched values. A caller that holds both is an operator.
+   - **MCP and approvals inside a tenant don't get a `tenants` field on
+     their own caps,** for the same reason as above: an older mgmt or hostd
+     would ignore it and widen access.
+     - A tenant-admin value may carry `"mcp": {"tools": [...]}`. That
+       admits the caller to `/mcp` for those tenants, with the read tools
+       plus the destructive tools it names, and only where the value's
+       `actions` also allow them (`deploy` for `deploy` and `undeploy`,
+       `kill` for `kill`). ADR-035's rule that destructive tools must be
+       named still holds.
+     - A tenant-admin value may carry `"approve": [<approve value>]`, with
+       the same fields as `twd.dev/cap/approve` (ADR-040). Those are checked
+       by `internal/approvecap`, and only for approval instances in the
+       value's tenants. Holding `actions` doesn't make someone an approver.
+       The `approve` entry is the grant, just as being an admin isn't one
+       in ADR-040.
+     - The existing `twd.dev/cap/mcp` and `twd.dev/cap/approve` keep their
+       current meaning, which is across all tenants. On a shared tailnet,
+       `twd policy lint` warns about either one when it isn't granted to an
+       operator.
 
-3. **The spec says which scope every operation needs.** Each operation in
-   `api/openapi.yaml` gets `x-twd-scope: operator | tenant` and, for
-   `tenant`, `x-twd-action: <action>`. `make api` generates the
-   operationId → (scope, action) table, and api-check fails if an operation
-   is missing either field. A new route can't ship unscoped (fail closed,
-   ADR-027).
+3. **The spec says which role and action every operation needs, in the
+   existing `x-twd-role` field.** Each operation already declares
+   `x-twd-role` (`admin`, `host`, `admin|host`, `admin|approver`,
+   `admin|mcp`, `any`). The value is read at runtime from the embedded spec
+   (`OperationRoles` in `mgmt/api/v1/validate.go`), and `spec_test.go`
+   fails on an operation that lacks one.
+   - This ADR adds one more part to that list: `tenant:<action>`. For
+     example, `admin|tenant:deploy` on `POST
+     /v1/tenants/{id}/workloads/{workload}/deployments`, and
+     `admin|host|tenant:read` on a route that hosts also read.
+   - `roleAllowed` (`mgmt/v1.go`) admits a `tenant-admin` principal only
+     through a `tenant:<action>` part, and then only after the tenant check
+     below.
+   - An operation without a `tenant:` part is closed to tenant-admins. A
+     new route is therefore operator-only until someone decides otherwise
+     (fail closed, ADR-027).
+   - `spec_test.go` gains two checks: every `tenant:` part names a known
+     action, and every operation under `/v1/tenants/{id}/` either has a
+     `tenant:` part or is on a short list of operator routes in the test
+     (`UpdateTenant`, `DeleteTenant`, `WIFCheck`, …). That way, leaving a
+     route out is a deliberate choice, not an oversight.
    - Routes with `{id}` in the path are checked against it.
    - Routes keyed by a resource (`/v1/deployments/{id}`,
      `/v1/objects/{id}`, `/v1/container-reservations/{id}`,
@@ -244,22 +295,33 @@ Not implemented; tracked in issue #80. The implementation plan is at the end.
 useful on its own, and each follows AGENTS.md (new files for the logic,
 small edits to the hotspots).
 
-1. **Scoped admin cap (D2, D3).**
-   - Add the `x-twd-scope` and `x-twd-action` fields to every operation,
-     and add a check that fails when one is missing.
-   - Add `mgmt/tenantscope.go`: value parsing, per-value matching, and
-     `authorizeTenant`.
+1. **Tenant-admin cap (D2, D3).**
+   - Add `TenantAdminCap` and the `tenant:<action>` part of `x-twd-role`.
+     Tag the tenant routes in `api/openapi.yaml`, run `make api`, and add
+     the two new `spec_test.go` checks.
+   - Add `mgmt/tenantscope.go`: value parsing (required fields, unknown
+     actions match nothing), per-value matching, and `authorizeTenant`.
    - Add the `tenant-admin` principal kind to `TailnetHandler`, and the
-     checks in `/v1`, `/ui`, `/mcp` and the registry. List routes filter.
-     Cross-tenant resources return `404`.
-   - Add the `tenants` field to the MCP and approve cap values.
-   - Report the scope in `whoami`. Add the `tenant_forbidden` error code.
+     `roleAllowed` branch. Add the checks in `/v1`, `/ui`, `/mcp` (the
+     `mcp` sub-value) and the registry. List routes filter. Cross-tenant
+     resources return `404`.
+   - Add the `approve` sub-value, checked through `internal/approvecap` and
+     limited to the value's tenants, in mgmt's inbox filter and in hostd.
+   - Report the matched values and any invalid ones in `whoami`, and in
+     `twd policy lint` with the shared-tailnet warnings. Add the
+     `tenant_forbidden` error code.
    - Tests:
-     - a table test over every operationId, checking scope and action;
+     - a table test over every operation, by role and action;
+     - a tenant-admin is refused on every operator route (hosts, pools,
+       releases, upgrades, tenant limits);
+     - a value missing `tenants` or `actions` grants nothing;
+     - holding only `twd.dev/cap/tenant-admin` never satisfies `admin`;
      - a cross-tenant `404` test for each resource-keyed route;
      - a per-value (not merged) union test;
      - the registry pull and push rules.
-   - Run `make lint test` and `make test-pg`.
+   - Run `make lint test`, `make test-pg` and `make e2e-upgrade`. The
+     upgrade run checks that a mgmt from before this change refuses a
+     tenant-admin-only caller.
 2. **Owner tag (D4, D6, the owner-tag half of D7).**
    - Add the `owner_tag` column (expand migration).
    - Generate the credential and `tagOwners` snippets from the owner tag.

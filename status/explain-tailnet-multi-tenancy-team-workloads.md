@@ -1,6 +1,22 @@
-Last update: 2026-11-15 PT. Drafted ADR-team-tenants (Proposed). Design only, no code.
+Last update: 2026-11-15 PT. ADR-team-tenants revised: team access is a new `twd.dev/cap/tenant-admin` cap, and route scope goes in `x-twd-role`. Tracked in #80.
 
-## ADR-team-tenants: several tenants per tailnet, one per team
+## Revision: a new cap instead of values on `twd.dev/cap/admin`
+
+`allowed` (`mgmt/server.go`) treats holding `twd.dev/cap/admin` as full admin
+and ignores its values. If scope were a value on that cap, a mgmt that
+predates the ADR would read a team-scoped grant as full operator admin,
+hosts included. The draft now uses `twd.dev/cap/tenant-admin` (unknown to old
+versions, so they refuse it) and keeps `twd.dev/cap/admin` operator-only.
+MCP and approval scoping are sub-values of the tenant-admin cap, for the same
+reason. Route scoping extends the existing `x-twd-role` (read at runtime by
+`OperationRoles`, enforced by `spec_test.go`) with `tenant:<action>`, instead
+of adding a new `x-twd-scope` field.
+
+Who manages hosts, today and after the ADR: only admins (operators). Host,
+pool, release and upgrade routes are `x-twd-role: admin`, and the ADR keeps
+them closed to tenant-admins.
+
+## First draft: several tenants per tailnet, one per team
 
 Draft: `docs/design/adr/team-tenants.md`. The question was how two teams in one
 tailnet each manage their own workloads.
