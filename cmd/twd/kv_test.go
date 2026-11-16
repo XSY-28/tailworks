@@ -127,12 +127,12 @@ func TestCLIKV(t *testing.T) {
 	checkJSON("kv key list", "key", "list", "--namespace", "scratch")
 	checkJSON("kv key delete", "key", "delete", "j", "--namespace", "scratch")
 	checkJSON("kv key list", "key", "list", "--namespace", "scratch") // empty: keys is []
-	checkJSON("kv namespace delete", "namespace", "delete", "scratch")
+	checkJSON("kv namespace delete", "namespace", "delete", "scratch", "--yes")
 
 	// delete a key, then the namespace.
 	run("key", "delete", "token:1", "--binding", "OAUTH_KV")
 	failing("not_found", "key", "get", "token:1", "--binding", "OAUTH_KV")
-	if out := run("namespace", "delete", "oauth"); !strings.Contains(out, "deleted, with its data") {
+	if out := run("namespace", "delete", "oauth", "--yes"); !strings.Contains(out, "deleted, with its data") {
 		t.Fatal(out)
 	}
 	failing("unknown_store", "key", "list", "--binding", "OAUTH_KV")

@@ -65,7 +65,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt, cli. **When:** `twd rollback` to a deployment whose bundle mgmt no longer holds: mgmt keeps the bundles of each workload's newest deployments (twd-mgmt `-bundle-retention`, default 10) and prunes older ones, keeping their record and hash. Nothing is deployed. **Fix:** `twd deployments <workload>` marks pruned bundles with `*`; roll back to a retained one, or check out that version and `twd deploy` it.
 
 ### cancelled
-0 · cli. **When:** you answered no at a `twd up`, `twd agent setup` or `twd agent remove` confirmation prompt. **Fix:** nothing was started or written; re-run with the policy in place, or `--yes` to skip the prompt.
+0 · cli. **When:** you answered no at a `twd up`, `twd agent setup` or `twd agent remove` confirmation prompt, or typed something other than the name at a delete's prompt. **Fix:** nothing was started, written or deleted; re-run (with the policy in place for `twd up`), or add `--yes` to skip the prompt.
 
 ### cap_limit_exceeded
 403 · netd (SDK `@twd/mcp`). **When:** the caller holds the tool but a numeric limit or budget in its grant is exceeded (e.g. `maxUsd`, `perDayUsd`). **Fix:** raise the limit in the `app` capability of the grant, or wait for the daily budget to reset.
@@ -74,7 +74,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · netd (SDK `@twd/mcp`), mgmt (`/mcp`, approvals), hostd, cli. **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. From twd's own MCP server: a `deploy`, `kill` or `undeploy` call without a `twd.dev/cap/mcp` grant naming the tool, or, on the twd host, a `twd mcp` bridge started without `--allow <tool>`. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it); for twd's MCP server, ask the tailnet admin, don't work around it. For approvals: the approver's `twd.dev/cap/approve` grants do not cover the workload, Workflow, step, decision or a param limit (`missing` says which); grant it to the approver on the workload's tag (the app's page, `/_twd/approvals`) and on `tag:twd-mgmt` (`twd approve`, the admin UI) ([approvals](approvals.md)).
 
 ### confirmation_required
-1 · cli. **When:** `twd agent setup` or `twd agent remove` would write or delete files, and there is no terminal to ask on (a coding agent, a script, or `--json`). Nothing was written. **Fix:** review the change list with `--dry-run`, then run it in a terminal to answer the prompt, or add `--yes`. An agent should show the user the dry run and let them decide.
+1 · cli. **When:** a command that asks first had no terminal to ask on (a coding agent, a script, or `--json`), so it did nothing. These commands ask first: `twd agent setup` and `twd agent remove` (they would write or delete files), `twd upgrade`, and every command that deletes data or a tenant's resources: `twd d1 delete`, `twd kv namespace delete`, `twd queues rm`, `twd queues purge`, `twd r2 bucket rm`, `twd tenant rm` and `twd host rm`. **Fix:** run it in a terminal and answer the prompt (a delete asks you to type the name), or add `--yes`. An agent should tell the user what will be lost (and show `--dry-run` where there is one) and add `--yes` only after the user agreed to that action.
 
 ### credential_file_insecure
 403 · cli. **When:** the OAuth client file given to `twd up --oauth-client-file` is readable by other users. **Fix:** `chmod 600 <file>` then `twd up` again.
