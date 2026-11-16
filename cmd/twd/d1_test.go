@@ -159,7 +159,7 @@ func TestCLID1(t *testing.T) {
 	if out, err := e.call(t, cmdD1, "list"); err != nil || !strings.Contains(out, "app-db") {
 		t.Fatalf("list: %v\n%s", err, out)
 	}
-	if _, err := e.call(t, cmdD1, "delete", "app-db"); cliCode(err) != "bad_request" || !strings.Contains(cliText(err), "--yes") {
+	if _, err := e.call(t, cmdD1, "delete", "app-db"); cliCode(err) != "confirmation_required" || !strings.Contains(cliText(err), "--yes") {
 		t.Fatalf("delete without --yes: %v", err)
 	}
 	if out, err := e.call(t, cmdD1, "delete", "DB", "--yes"); err != nil || !strings.Contains(out, "deleted") {

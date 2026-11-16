@@ -61,6 +61,7 @@ func cmdQueuesSub(sub string, args []string) error {
 	limitF := f.Int("limit", 20, "messages: at most this many (1-100)")
 	textF := f.Bool("text", false, "send: the body is text (contentType text), not JSON")
 	delayF := f.Int("delay", 0, "send: delaySeconds (0-43200)")
+	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -89,6 +90,17 @@ func cmdQueuesSub(sub string, args []string) error {
 		name = pos[0]
 		if !queuecfg.ValidName(name) {
 			return fail("bad_request", fmt.Sprintf("bad queue name %q: lowercase letters, digits and dashes, at most 63", name))
+		}
+	}
+	switch sub {
+	case "rm":
+		if err := confirmDestroy(f, *yes, "deleting queue "+name+" deletes it with its messages", name, "twd queues rm "+name); err != nil {
+			return err
+		}
+	case "purge":
+		if err := confirmDestroy(f, *yes, "purging queue "+name+" deletes every message in it", name, "twd queues purge "+name,
+			"twd queues messages "+name+"   (first, to see what's in it)"); err != nil {
+			return err
 		}
 	}
 	var msg map[string]any

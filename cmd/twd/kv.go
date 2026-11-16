@@ -60,6 +60,7 @@ func cmdKV(args []string) error {
 	ttlF := f.Int64("ttl", 0, "key put: expire after this many seconds (≥ 60)")
 	expF := f.Int64("expiration", 0, "key put: expire at this Unix time (≥ 60 s ahead)")
 	metaF := f.String("metadata", "", "key put: metadata (JSON, ≤ 1024 bytes)")
+	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -96,6 +97,15 @@ func cmdKV(args []string) error {
 	}
 	if err != nil {
 		return err
+	}
+	if group+" "+verb == "namespace delete" {
+		cmdline := "twd kv namespace delete " + rest[0]
+		if *workloadF != "" {
+			cmdline += " --workload " + *workloadF
+		}
+		if err := confirmDestroy(f, *yes, "deleting namespace "+rest[0]+" deletes every key in it", rest[0], cmdline); err != nil {
+			return err
+		}
 	}
 
 	// The workload, and for key commands the namespace.
