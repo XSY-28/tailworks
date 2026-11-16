@@ -396,6 +396,8 @@ usage: twd dev [dir] [--port 8787] [--caller <name>[=<tag>,…]]… [--env <name
 flags:
   -caller value
     	an extra identity: its own dev node (tagged with =tag:a,tag:b) and local URL, listed in the result (repeatable)
+  -console-port int
+    	serve the read-only data console (KV keys, D1 rows) on 127.0.0.1:<port>; 0 picks a free port, -1 turns it off (devconsole.go)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -from-wrangler-out string
@@ -590,9 +592,9 @@ flags:
 bundle, place and deploy an app; wait until ready
 
 ```text
-twd deploy: bundle, preflight grants, build + push Dockerfile container images (docker buildx), place (prints why), deploy, wait until ready; --replace re-places a running workload
+twd deploy: bundle, preflight grants, build + push Dockerfile container images (docker buildx), place (prints why), deploy, wait until ready; --replace re-places a running workload; --preview runs it next to the workload instead (twd promote)
 
-usage: twd deploy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m]
+usage: twd deploy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m] [--preview] [--preview-alias <alias>]
 
 flags:
   -allow-missing-grants
@@ -613,6 +615,10 @@ flags:
     	return once mgmt accepted the deploy
   -platform string
     	containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)
+  -preview
+    	deploy as a preview next to the workload (<workload>--preview-<alias>), leaving the workload as it is; twd promote makes it the workload
+  -preview-alias string
+    	the preview's alias (implies --preview; default: the start of the bundle's SHA-256)
   -replace
     	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs
   -state-dir string
@@ -647,6 +653,56 @@ flags:
     	state directory (default $TWD_STATE_DIR or ~/.twd)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+```
+
+### twd previews
+
+a workload's running preview deploys
+
+```text
+twd previews: a workload's running previews (twd deploy --preview): alias, created, bundle sha256, status, host, URL
+
+usage: twd previews <workload> [--tenant <tailnet>]
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+```
+
+### twd promote
+
+make a preview the workload's deployment
+
+```text
+twd promote: deploy a preview's bundle to the workload as a new deployment, then undeploy the preview; code and config only, the workload keeps its data and secrets
+
+usage: twd promote <workload> <preview> [--tenant <tailnet>] [--host <id>] [--replace] [--force-takeover] [--keep-preview] [--allow-missing-grants] [--no-wait]
+
+flags:
+  -allow-missing-grants
+    	promote even if the current policy lacks grants the preview's bundle needs
+  -force-takeover
+    	as twd deploy --force-takeover
+  -host string
+    	pin the workload to this host (as twd deploy --host)
+  -json
+    	machine-readable output
+  -keep-preview
+    	leave the preview running (default: undeploy it once promoted)
+  -no-wait
+    	return once mgmt accepted the promotion
+  -replace
+    	re-place the workload (as twd deploy --replace); by default it stays on its host, with its Durable Object storage
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -wait duration
+    	how long to wait for ready (default 3m0s)
 ```
 
 ### twd rollback
@@ -1787,6 +1843,84 @@ flags:
     	the Workflow's name (default: the one whose instance waits)
 ```
 
+### twd notify
+
+a webhook for approvals waiting for a decision
+
+```text
+twd notify: tell people when a Workflow waits for an approval: mgmt POSTs JSON with a link to the approvals page (Slack and chat incoming webhooks show its text); the URL is a secret, never shown again
+
+usage: twd notify [show] | notify set --webhook <url|-> [--header NAME[=VALUE]]... [--events approval_requested] | notify test | notify rm   [--tenant <tailnet>]
+
+flags:
+  -events string
+    	set: what to send, comma-separated (default approval_requested)
+  -header value
+    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -webhook string
+    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
+```
+
+#### twd notify rm
+
+```text
+flags:
+  -events string
+    	set: what to send, comma-separated (default approval_requested)
+  -header value
+    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -webhook string
+    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
+```
+
+#### twd notify set
+
+```text
+flags:
+  -events string
+    	set: what to send, comma-separated (default approval_requested)
+  -header value
+    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -webhook string
+    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
+```
+
+#### twd notify test
+
+```text
+flags:
+  -events string
+    	set: what to send, comma-separated (default approval_requested)
+  -header value
+    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
+  -webhook string
+    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
+```
+
 ### twd completion
 
 shell completion script (bash, zsh, fish)
@@ -1861,6 +1995,8 @@ flags:
     	fleet: start the run and return (twd upgrade status follows it)
   -plan
     	print the plan and change nothing
+  -prefix string
+    	homelab: the install.sh prefix to upgrade (default: the one that owns --state-dir)
   -settle duration
     	fleet: how long a host may take to come back and settle (default 5m0s)
   -soak duration
