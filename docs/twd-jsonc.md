@@ -65,7 +65,7 @@ schema. `twd init` writes this line for you:
 
 | key | type | what it does |
 |---|---|---|
-| `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:twd` own them; `twd deploy` prints the snippet if it doesn't |
+| `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:twd` own them; `twd policy` (and `twd deploy`'s preflight) prints the snippet if it doesn't |
 | `connects` | `["tag:…" or name]` | what the workload calls. `twd deploy` preflights these grants, and smart placement measures paths to them |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
 | `egress.internet` | `[host, "*.suffix", IP, CIDR]` | internet destinations the workload's **containers** may reach when started with `enableInternet: true` ([containers.md](containers.md)). Worker code stays tailnet-only either way; for internet APIs, see [recipes.md](recipes.md#call-an-internet-api) |

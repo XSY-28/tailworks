@@ -104,13 +104,17 @@ SQLite storage, **and** its own tailnet node.
 ```sh
 twd init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
 cd support
+twd policy                                     # what this app needs in your tailnet policy, as one snippet
 twd deploy                                     # bundles, uploads, waits until the node is ready
 ```
 
 `twd init` names the app's tags after it (`tag:twd-wl-support`,
-`tag:twd-support-support-agent`, …). `twd deploy` checks them first. If
-your policy has no `tagOwners` line for them, it prints the exact snippet
-to add; add it and run `twd deploy` again. Every key of `twd.jsonc` is in
+`tag:twd-support-support-agent`, …). `twd policy` checks your tailnet
+policy for everything the app needs and prints **one snippet** with what's
+missing: the `tagOwners` for its tags, a grant for each `tailnet.connects`,
+and the grant that lets people call it (step 5). Paste it into the policy
+once, then deploy. `twd deploy` runs the same check first and stops if
+something is still missing. Every key of `twd.jsonc` is in
 [docs/twd-jsonc.md](docs/twd-jsonc.md), and `twd dev` / `twd deploy`
 refuse a key they don't know. When it's done, it prints the workload's address,
 e.g. `http://twd-support-<id>.<tailnet>.ts.net/` (`<id>` is a short hash;
@@ -118,8 +122,8 @@ copy the URL from the `✓ deployed` line).
 
 **5. Let people call it.** Nothing on your tailnet can reach a new workload
 until a grant allows it (unless your policy still allows everything). Add
-one for the workload's tag; workload nodes listen on port 80. When
-`twd deploy` prints the tagOwners for new tags, it prints this line too:
+one for the workload's tag; workload nodes listen on port 80. `twd policy`
+includes this line in its snippet:
 
 ```jsonc
 "grants": [

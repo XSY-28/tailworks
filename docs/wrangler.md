@@ -100,8 +100,8 @@ A project that has only a wrangler config gets these defaults:
 ```
 
 The workload node is tagged `tag:twd-wl-<workload>`. As with any new tag,
-the first `twd deploy` stops at preflight and prints the `tagOwners` line to
-add.
+`twd policy` prints the `tagOwners` line to add (and the first `twd deploy`
+stops at preflight until it's there).
 
 Durable Object classes are **internal**: you reach them through their
 binding, as on Cloudflare, and they have no tailnet node of their own (see
