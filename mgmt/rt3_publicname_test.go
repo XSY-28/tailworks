@@ -22,7 +22,7 @@ func publicNameClaims(t *testing.T, e *testEnv, tenant string) []PublicNameClaim
 }
 
 func TestRT3_H10_PublicNameSquat(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	publicHost(t, e)
 	allow := map[string]any{"publicIngress": "allow"}
@@ -105,7 +105,7 @@ func TestRT3_H10_PublicNameSquat(t *testing.T) {
 // A name a pre-upgrade deployment already serves has no claim row: the
 // first claim goes to the tenant serving it, not to whoever deploys next.
 func TestRT3_H10_PublicNameLegacyOwner(t *testing.T) {
-	e := newTestEnv(t, nil)
+	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	publicHost(t, e)
 	allow := map[string]any{"publicIngress": "allow"}

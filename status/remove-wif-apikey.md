@@ -44,6 +44,16 @@ Last update: 2026-11-15 PT. Removed the `apikey` and `wif` mint modes: Tailscale
 
 ## Tests
 
+Final, after merging `origin/master` (through #87):
+
+- `make lint test`: PASS (Go `-race` over every hermetic package, JS).
+  The merge brought `mgmt/rt3_publicname_test.go` (#82) calling the old
+  `newTestEnv(t, nil)`; updated to `newTestEnv(t)`.
+- `make test-pg` (Postgres via OrbStack): PASS.
+- `make e2e-upgrade`: PASS (`TestUpgradePreviousToCandidate`).
+
+Earlier on this branch:
+
 - `make lint`: PASS.
 - `make test` (Go `-race` over every hermetic package, JS): PASS after one
   fix (the docs policy-snippet count went from 3 to 2 with the WIF snippet
