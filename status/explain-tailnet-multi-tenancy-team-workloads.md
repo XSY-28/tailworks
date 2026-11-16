@@ -30,6 +30,21 @@ Built:
   non-admin `user`, not a new principal kind), and its plan step 1 is split
   into 1a (done) and 1b.
 
+Tests (2026-11-16, after merging origin/master at a6a8974):
+
+- `go test ./mgmt/ -run TestTenant`: pass (parsing, per-value matching,
+  spec/route consistency, scope over HTTP, values never merged,
+  invalid-only and operator callers, registry).
+- `make lint`: pass (api-check, changes-check: needs `cli-json protocol`,
+  found in the fragment).
+- `make test`: pass.
+- `make e2e-upgrade`: pass (`TestUpgradePreviousToCandidate`). It doesn't
+  yet assert that an older mgmt refuses a tenant-admin-only caller. That
+  holds by construction (older mgmts don't know the cap), but no test
+  checks it.
+- Not run: `make test-pg` (no store or migration change), and the suites
+  that need a real tailnet.
+
 Not built yet (step 1b, then steps 2 to 4 of the ADR):
 
 - `/mcp` and `/ui` for tenant admins (both refuse them for now), the
