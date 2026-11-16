@@ -38,7 +38,7 @@ func WriteFakeOAuthFile(t testing.TB, path string) string {
 // tag:twd an owner of each in the tailnet policy first (additive,
 // validated, If-Match; a no-op once present). It writes the client to a 0600 file in dir and deletes
 // the client when the test ends. twd mints only with OAuth clients
-// (ADR-oauth-only-minting); the API key stays the harness's tool for
+// (ADR-042); the API key stays the harness's tool for
 // policy setup, test nodes and leftover cleanup.
 func RealOAuthClient(t testing.TB, apiKeyFile, tailnet, dir, description string, ownedTags ...string) string {
 	t.Helper()

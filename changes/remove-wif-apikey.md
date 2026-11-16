@@ -4,7 +4,7 @@ upgrade: [protocol, cli-json, config-default]
 ---
 twd now mints node keys on Tailscale with an OAuth client only. The
 `apikey` and `wif` (workload identity federation) mint modes are removed
-(ADR-oauth-only-minting). The Headscale profile is unchanged: it still
+(ADR-042). The Headscale profile is unchanged: it still
 mints with a Headscale API key.
 
 Removed: `twd up --wif`, `--wif-client-id`, `--wif-lifecycle-client-id`,

@@ -1,4 +1,4 @@
-Last update: 2026-11-15 PT. Removed the `apikey` and `wif` mint modes: Tailscale tenants mint with an OAuth client only (ADR-oauth-only-minting, Proposed).
+Last update: 2026-11-15 PT. Removed the `apikey` and `wif` mint modes: Tailscale tenants mint with an OAuth client only (ADR-042, Proposed).
 
 ## What changed
 
@@ -38,7 +38,7 @@ Last update: 2026-11-15 PT. Removed the `apikey` and `wif` mint modes: Tailscale
   `issuer_unreachable`, `wif_credential_required`, `wif_exchange_failed`
   removed; `funnel_required`, `login_timeout`, `policy_unavailable`,
   `tailnet_required` reworded), README, RFC §4.4 and related rows, the
-  threat model, ADR draft `docs/design/adr/oauth-only-minting.md`, ADR-013
+  threat model, ADR `docs/design/adr/042-oauth-only-minting.md`, ADR-013
   and ADR-026 marked superseded in part. Release note:
   `changes/remove-wif-apikey.md` (kind breaking).
 
@@ -86,7 +86,7 @@ Earlier on this branch:
 
 ## Follow-ups
 
-- Number the ADR at merge (`git grep ADR-oauth-only-minting`).
+- Number the ADR at merge (`git grep ADR-042`).
 - twd-mgmt could log a warning at start for tenants still in a removed
   mode; today the error appears at the first mint, in `twd doctor` and in
   `twd up`.

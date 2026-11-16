@@ -1,7 +1,7 @@
-# ADR-oauth-only-minting: Mint node keys with an OAuth client only; remove the API-key and WIF mint modes
+# ADR-042: Mint node keys with an OAuth client only; remove the API-key and WIF mint modes
 
 **Date:** 2026-11-15
-**Status:** Proposed. Supersedes the minting parts of ADR-013 and ADR-026
+**Status:** Accepted (Ross). Supersedes the minting parts of ADR-013 and ADR-026
 (decision 3). ADR-026's decisions 1, 2 and 4 (tailnet identity for every
 twd connection, WhoIs auth, `twd link`, the LaunchAgent) stand.
 

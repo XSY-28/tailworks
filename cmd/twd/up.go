@@ -149,7 +149,7 @@ func cmdUp(args []string) error {
 	}
 	// The mint mode: the flag, else the state dir's, else the choice is
 	// printed. Tailscale tailnets mint with an OAuth client; the Headscale
-	// profile with a Headscale API key (ADR-oauth-only-minting).
+	// profile with a Headscale API key (ADR-042).
 	if *profileF == controlHeadscale && *oauthFile != "" {
 		return fail("profile_unsupported", "the Headscale profile mints with a Headscale API key: OAuth clients are a Tailscale feature").
 			withFix("twd up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>")

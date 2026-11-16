@@ -137,7 +137,7 @@ func (c Config) modeName() string {
 func (c Config) mintMode() string { return c.modeName() }
 
 // removedMode reports whether the state is in a mint mode twd no longer
-// supports (apikey, wif; ADR-oauth-only-minting).
+// supports (apikey, wif; ADR-042).
 func (c Config) removedMode() bool { return !c.oauth() && !c.headscale() }
 
 // errRemovedMode is the refusal for a state dir in a removed mint mode:

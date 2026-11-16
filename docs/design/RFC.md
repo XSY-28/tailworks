@@ -139,7 +139,7 @@ Rules:
 
 ### 4.4 Credential bootstrap
 
-> Revised by ADR-oauth-only-minting. The first design used workload
+> Revised by ADR-042. The first design used workload
 > identity federation (mgmt as an OIDC issuer, trust credentials per
 > tenant) with an API key as a fallback; both modes were built (M10, M2)
 > and then removed. A self-hosted operator owns the tailnet and the host,

@@ -1,6 +1,6 @@
 package mgmt
 
-// Removed mint modes (ADR-oauth-only-minting). twd used to mint with a
+// Removed mint modes (ADR-042). twd used to mint with a
 // Tailscale API key ("apikey") or through workload identity federation
 // ("wif"). Both are gone: a Tailscale tenant mints with an OAuth client,
 // a Headscale tenant with its Headscale API key. mgmt refuses to create a

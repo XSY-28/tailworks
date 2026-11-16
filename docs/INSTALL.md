@@ -198,7 +198,7 @@ also your kill switch for all future minting.
 
 twd used to mint with a Tailscale API key (`twd up --api-key-file`) or
 through workload identity federation (`twd up --wif`). Both modes are gone
-(ADR-oauth-only-minting). A state dir set up in one of them still starts
+(ADR-042). A state dir set up in one of them still starts
 and its running nodes keep serving, but nothing new can be minted: `twd up` stops with **`mint_mode_removed`**
 and `twd doctor` fails its `mint_mode` row. To switch, create the OAuth
 client above (policy, client, 0600 file), then:
