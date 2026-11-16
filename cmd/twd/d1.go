@@ -24,7 +24,7 @@ import (
 	"github.com/rosskukulinski/twd/mgmt"
 )
 
-const d1Usage = "d1 create <db> | d1 list | d1 delete <db> --yes | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]"
+const d1Usage = "d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]"
 
 type d1Result struct {
 	Workload  string           `json:"workload"`
@@ -71,7 +71,7 @@ func cmdD1Sub(sub string, args []string) error {
 	command := f.String("command", "", "execute: SQL to run (one or more statements, run as one batch)")
 	file := f.String("file", "", "execute: a file of SQL to run as one batch")
 	output := f.String("output", "", "export: write the SQL to this file (default: stdout)")
-	yes := f.Bool("yes", false, "delete: confirm deleting the database and its data")
+	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -144,9 +144,11 @@ func cmdD1Sub(sub string, args []string) error {
 	if sub == "execute" && (*command == "") == (*file == "") {
 		return fail("bad_request", "twd d1 execute needs --command <sql> or --file <file>")
 	}
-	if sub == "delete" && !*yes {
-		return fail("bad_request", "deleting database "+name+" deletes its data (its journal and key in mgmt); there is no undo").
-			withFix("twd d1 export "+name+" --output backup.sql   (first, to keep a copy)", "twd d1 delete "+name+" --yes")
+	if sub == "delete" {
+		if err := confirmDestroy(f, *yes, "deleting database "+name+" deletes its data (its journal and key in mgmt)", name, "twd d1 delete "+name,
+			"twd d1 export "+name+" --output backup.sql   (first, to keep a copy)"); err != nil {
+			return err
+		}
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {

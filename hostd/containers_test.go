@@ -261,7 +261,13 @@ func TestContainerPolyfill(t *testing.T) {
 
 	t.Run("SurvivesRedeploy", func(t *testing.T) {
 		call("/f/r/start")
-		gen := ctrOf("Box", "r").Gen
+		// start() returns before hostd has started the container: read its
+		// generation once it runs, or a slow machine reads 0 (issue #75).
+		c := waitState("Box", "r", "running")
+		if c.State != "running" {
+			t.Fatal(c)
+		}
+		gen := c.Gen
 		dep2 := e.Deploy(hostdtest.Fixture("ctr"), "ctr", nil)
 		e.WaitActive("ctr", dep2, 60*time.Second)
 		// The new code sees the same container (Cloudflare's durable_object

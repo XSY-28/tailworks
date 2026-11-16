@@ -21,7 +21,9 @@
 #                             `make release` with the three asset dirs, and
 #                             RELEASE_VM_ASSETS=1, so a tarball without its
 #                             microVM guest fails the build instead of
-#                             shipping without the tier.
+#                             shipping without the tier. Every SHA256SUMS
+#                             is signed (SHA256SUMS.sig; docs/RELEASING.md,
+#                             "Signing").
 #
 # The guest builds need no root and no VM (mkfs.ext4 -d, debugfs; plain gcc
 # kernel builds), and are meant to be reproducible: Ubuntu 24.04's gcc 13.3
@@ -181,6 +183,8 @@ jobs:
   release:
     needs: [vm-assets, vz-assets, gates, headscale]
     runs-on: macos-15
+    # The signing key is this environment's secret: only this job sees it.
+    environment: release
     permissions:
       contents: write
     timeout-minutes: 60
@@ -213,14 +217,25 @@ jobs:
         with:
           name: vz-assets-arm64
           path: dist/vz-assets-arm64
-      - name: make release (every tarball with its microVM guest)
+      # Signed (issue #71): every SHA256SUMS (each tarball's, and the
+      # release's) gets SHA256SUMS.sig, an SSH signature by the key in the
+      # release environment's TWD_RELEASE_SIGNING_KEY secret, which must be
+      # pinned in internal/releasesig/allowed_signers (release.sh checks).
+      # No secret, no release. Key ceremony: docs/RELEASING.md, "Signing".
+      - name: make release (every tarball with its microVM guest, signed)
+        env:
+          SIGNING_KEY: ${{ secrets.TWD_RELEASE_SIGNING_KEY }}
         run: |
+          [ -n "$SIGNING_KEY" ] || { echo "::error::no TWD_RELEASE_SIGNING_KEY secret (docs/RELEASING.md, Signing)"; exit 1; }
+          key="$RUNNER_TEMP/release-signing-key"
+          trap 'rm -f "$key"' EXIT
+          (umask 077 && printf '%s\n' "$SIGNING_KEY" >"$key")
           chmod +x dist/vm-assets-*/firecracker dist/vm-assets-*/jailer
           export TWD_VM_ASSETS_amd64="$PWD/dist/vm-assets-amd64"
           export TWD_VM_ASSETS_arm64="$PWD/dist/vm-assets-arm64"
           export TWD_VZ_ASSETS="$PWD/dist/vz-assets-arm64"
-          make release RELEASE_VERSION="${TAG#v}" RELEASE_VM_ASSETS=1
-          cat dist/SHA256SUMS
+          TWD_RELEASE_SIGNING_KEY="$key" TWD_RELEASE_SIGN=1 make release RELEASE_VERSION="${TAG#v}" RELEASE_VM_ASSETS=1
+          cat dist/SHA256SUMS dist/SHA256SUMS.sig
       - name: Smoke test the darwin tarball
         run: |
           mkdir -p "$RUNNER_TEMP/t" && tar -xzf dist/twd-*-darwin-arm64.tar.gz -C "$RUNNER_TEMP/t"
@@ -229,6 +244,10 @@ jobs:
             tar -xzOf dist/twd-*-$a.tar.gz '*/share/twd/release.json' | grep -Eq '"microvm": ?true' ||
               { echo "$a: release.json has no microVM tier"; exit 1; }
           done
+          # Signed, as get.sh and install.sh check it (the pinned keys only).
+          ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I twd-release -n twd-release -s dist/SHA256SUMS.sig <dist/SHA256SUMS
+          t=$(ls -d "$RUNNER_TEMP"/t/twd-*)
+          ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I twd-release -n twd-release -s "$t/SHA256SUMS.sig" <"$t/SHA256SUMS"
       - name: Draft the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -238,4 +257,4 @@ jobs:
           printf '\nInstall: see docs/INSTALL.md (or scripts/get.sh). Upgrade: `twd upgrade %s`. Built by .github/workflows/release.yml.\n' "$TAG" >>"$RUNNER_TEMP/notes.md"
           gh release view "$TAG" >/dev/null 2>&1 ||
             gh release create "$TAG" --draft --verify-tag --title "twd $TAG" --notes-file "$RUNNER_TEMP/notes.md"
-          gh release upload "$TAG" dist/twd-*.tar.gz dist/SHA256SUMS --clobber
+          gh release upload "$TAG" dist/twd-*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig --clobber

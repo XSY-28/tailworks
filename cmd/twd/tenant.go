@@ -564,12 +564,16 @@ func cmdTenantSet(args []string) error {
 func cmdTenantRm(args []string) error {
 	f := newFlags("tenant rm")
 	force := f.Bool("force", false, "kill every live object (cascade) and purge before deleting")
+	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 {
 		return fail("bad_request", "twd tenant rm needs one tenant", "usage: twd "+usageOf("tenant"))
+	}
+	if err := confirmDestroy(f, *yes, "removing tenant "+pos[0]+" stops serving it from this mgmt and deletes its deployments, queues and stores", pos[0], "twd tenant rm "+pos[0]); err != nil {
+		return err
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
@@ -596,7 +600,7 @@ func cmdTenantRm(args []string) error {
 	}
 	if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/tenants/"+tn.TenantID+q, nil, &res, map[string]string{"Twd-Actor": actor()}); err != nil {
 		if me, ok := mgmtapi.AsError(err); ok && me.Code == "tenant_has_live_objects" {
-			return fail("tenant_has_live_objects", me.Message).withFix("twd tenant rm " + pos[0] + " --force")
+			return fail("tenant_has_live_objects", me.Message).withFix("twd tenant rm " + pos[0] + " --force --yes")
 		}
 		return err
 	}

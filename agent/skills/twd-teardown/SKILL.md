@@ -17,13 +17,17 @@ count.
 | `twd kill <object> --cascade` | the object and every object it spawned | no |
 | `twd secret rm <NAME>` | deletes a secret (the app loses it on the next deploy) | no |
 | `twd down` | stops twd on this machine (`--purge` also kills every object) | no |
-| `twd tenant rm`, `twd host rm` | remove a tenant or a host (operator commands) | no |
+| `twd tenant rm`, `twd host rm` | remove a tenant or a host (operator commands) | yes, unless `--yes` |
+| `twd d1 delete`, `twd kv namespace delete`, `twd r2 bucket rm` | delete a database, a KV namespace or an R2 bucket, with all its data | yes, unless `--yes` |
+| `twd queues rm`, `twd queues purge` | delete a queue with its messages, or just its messages | yes, unless `--yes` |
 | `twd up` | starts twd | yes, unless `--yes` |
 | `twd agent setup`, `twd agent remove` | write or delete these skill files | yes, unless `--yes` |
 
-`--yes` only skips a confirmation prompt. Don't add it to a command on the
-user's behalf; let them see the prompt, or run `--dry-run` first and show
-them what will change.
+`--yes` only skips a confirmation prompt. Without a terminal (as you run
+commands) a command that asks first refuses with `confirmation_required`
+and does nothing. Tell the user what will be lost (or run `--dry-run` where
+there is one and show them), and add `--yes` only after they agree to that
+action.
 
 ## Undeploy a workload
 

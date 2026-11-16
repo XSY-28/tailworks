@@ -183,6 +183,8 @@ flags:
     	machine-readable output
   -state-dir string
     	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd tenant set
@@ -298,6 +300,8 @@ flags:
     	machine-readable output
   -state-dir string
     	state directory (default $TWD_STATE_DIR or ~/.twd)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd host setup
@@ -930,7 +934,7 @@ a workload's D1 databases and migrations
 ```text
 twd d1: a workload's D1 databases (like wrangler d1): create, list, delete, run SQL, export, and wrangler-layout migrations; execute/export/migrations reach the running workload
 
-usage: twd d1 create <db> | d1 list | d1 delete <db> --yes | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
+usage: twd d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
   (every command takes --state-dir, default ~/.twd, and --json)
 ```
 
@@ -953,7 +957,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 delete
@@ -975,7 +979,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 execute
@@ -997,7 +1001,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 export
@@ -1019,7 +1023,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 list
@@ -1041,7 +1045,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 migrations apply
@@ -1063,7 +1067,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 migrations create
@@ -1085,7 +1089,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd d1 migrations list
@@ -1107,7 +1111,7 @@ flags:
   -workload string
     	workload whose database it is (default: the app in the current directory, as twd deploy names it)
   -yes
-    	delete: confirm deleting the database and its data
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ### twd kv
@@ -1142,6 +1146,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv key
@@ -1170,6 +1176,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv key delete
@@ -1198,6 +1206,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv key get
@@ -1226,6 +1236,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv key list
@@ -1254,6 +1266,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv key put
@@ -1282,6 +1296,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv namespace
@@ -1310,6 +1326,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv namespace create
@@ -1338,6 +1356,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv namespace delete
@@ -1366,6 +1386,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd kv namespace list
@@ -1394,6 +1416,8 @@ flags:
     	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ### twd queues
@@ -1423,6 +1447,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd queues info
@@ -1441,6 +1467,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd queues ls
@@ -1459,6 +1487,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd queues messages
@@ -1477,6 +1507,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd queues purge
@@ -1495,6 +1527,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd queues rm
@@ -1513,6 +1547,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd queues send
@@ -1531,6 +1567,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -text
     	send: the body is text (contentType text), not JSON
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ### twd r2
@@ -1558,6 +1596,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -workload string
     	workload (default: the app in the current directory, as twd deploy names it)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd r2 bucket ls
@@ -1574,6 +1614,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -workload string
     	workload (default: the app in the current directory, as twd deploy names it)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd r2 bucket rm
@@ -1590,6 +1632,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -workload string
     	workload (default: the app in the current directory, as twd deploy names it)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### twd r2 object ls
@@ -1606,6 +1650,8 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'twd up' tenant)
   -workload string
     	workload (default: the app in the current directory, as twd deploy names it)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ## Observe
