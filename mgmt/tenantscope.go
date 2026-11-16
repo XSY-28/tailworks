@@ -55,6 +55,20 @@ var TenantActions = []string{
 type TenantGrant struct {
 	Tenants []string `json:"tenants"`
 	Actions []string `json:"actions"`
+
+	// MCP admits the caller to /mcp for these tenants (tenantscope_mcp.go):
+	// the read tools, plus the write and destructive tools it names where
+	// Actions allow them.
+	MCP *TenantMCP `json:"mcp,omitempty"`
+
+	// Approve are twd.dev/cap/approve values (internal/approvecap) that
+	// apply only to these tenants' approvals (tenantscope_approve.go).
+	Approve []json.RawMessage `json:"approve,omitempty"`
+}
+
+// TenantMCP is a TenantGrant's "mcp" entry.
+type TenantMCP struct {
+	Tools []string `json:"tools"`
 }
 
 // allows: this one value names both the tenant and the action.
@@ -77,8 +91,11 @@ func parseTenantGrants(vals []json.RawMessage) (grants []TenantGrant, invalid []
 		case len(g.Tenants) == 0:
 			invalid = append(invalid, fmt.Sprintf("%s: names no tenants", raw))
 			continue
-		case len(g.Actions) == 0:
-			invalid = append(invalid, fmt.Sprintf("%s: names no actions", raw))
+		case len(g.Actions) == 0 && len(g.Approve) == 0:
+			invalid = append(invalid, fmt.Sprintf("%s: names no actions (and no approve)", raw))
+			continue
+		case g.MCP != nil && len(g.Actions) == 0:
+			invalid = append(invalid, fmt.Sprintf("%s: mcp needs actions (the tools run with them)", raw))
 			continue
 		case slices.Contains(g.Tenants, "") || slices.Contains(g.Tenants, "*"):
 			invalid = append(invalid, fmt.Sprintf("%s: tenants must be tenant IDs (there is no wildcard; operators hold %s)", raw, AdminCap))
@@ -94,6 +111,13 @@ func parseTenantGrants(vals []json.RawMessage) (grants []TenantGrant, invalid []
 		if bad != "" {
 			invalid = append(invalid, fmt.Sprintf("%s: unknown action %q (want %s)", raw, bad, strings.Join(TenantActions, ", ")))
 			continue
+		}
+		if why := badSubValues(g); why != "" {
+			invalid = append(invalid, fmt.Sprintf("%s: %s", raw, why))
+			continue
+		}
+		if g.Actions == nil {
+			g.Actions = []string{} // an approve-only value
 		}
 		grants = append(grants, g)
 	}
@@ -292,29 +316,100 @@ func (a *v1api) tenantOK(r *http.Request, tenant string, named bool) error {
 }
 
 // tenantListScope is the handler-side scope of a list operation. For a
-// tenant admin: with a tenant filter, the filter is checked; without one,
-// it defaults to the caller's only tenant for the action, and a caller
-// with several must name one. scoped is false for everyone else (they see
-// what they saw before).
-func (a *v1api) tenantListScope(r *http.Request, filter *string) (tenant string, scoped bool, err error) {
+// tenant admin with a tenant filter, the filter is checked (403 if not
+// granted). Without one, it's the caller's only tenant for the action, or,
+// with several, mine lists them and the handler keeps their rows. scoped
+// is false for everyone else (they see what they saw before).
+func (a *v1api) tenantListScope(r *http.Request, filter *string) (tenant string, mine map[string]bool, err error) {
 	p := principalOf(r.Context())
 	action, _ := r.Context().Value(tenantActionKey{}).(string)
 	if action == "" || !a.s.tenantScoped(p) {
-		return str(filter), false, nil
+		return str(filter), nil, nil
 	}
 	if f := str(filter); f != "" {
 		if !p.tenantAllows(f, action) {
-			return "", true, tenantForbidden(p, f, action)
+			return "", nil, tenantForbidden(p, f, action)
 		}
-		return f, true, nil
+		return f, nil, nil
 	}
-	mine := p.tenantsWith(action)
-	if len(mine) == 1 {
-		return mine[0], true, nil
+	ts := p.tenantsWith(action)
+	if len(ts) == 1 {
+		return ts[0], nil, nil
 	}
-	e := errf(400, "bad_request", "name a tenant with ?tenant= (your %s grants cover %s)", TenantAdminCap, strings.Join(mine, ", "))
-	e.Missing = map[string]any{"param": "tenant"}
-	return "", true, e
+	mine = map[string]bool{}
+	for _, t := range ts {
+		mine[t] = true
+	}
+	return "", mine, nil
+}
+
+// keepTenants keeps rows whose tenant is in mine (all of them when mine is
+// nil), then trims to one past the page (the cursor's look-ahead row).
+func keepTenants[T any](rows []T, mine map[string]bool, n int, tenantOf func(T) string) []T {
+	if mine == nil {
+		return rows
+	}
+	kept := rows[:0]
+	for _, x := range rows {
+		if mine[tenantOf(x)] {
+			kept = append(kept, x)
+		}
+	}
+	if len(kept) > n+1 {
+		kept = kept[:n+1]
+	}
+	return kept
+}
+
+// auditForTenants runs f once per tenant in mine and merges the pages in
+// the store's order ((ts, chain, seq), reversed with Desc): each tenant's
+// page already starts after the same cursor, so the merge is exact.
+func (m *Mgmt) auditForTenants(ctx context.Context, f AuditFilter, mine map[string]bool, n int) ([]AuditRecord, []ChainStatus, error) {
+	var recs []AuditRecord
+	var chains []ChainStatus
+	for t := range mine {
+		f.TenantID = t
+		rs, cs, err := m.QueryAudit(ctx, f)
+		if err != nil {
+			return nil, nil, err
+		}
+		recs = append(recs, rs...)
+		chains = append(chains, cs...)
+	}
+	slices.SortFunc(recs, func(a, b AuditRecord) int {
+		c := cmpAudit(a, b)
+		if f.Desc {
+			return -c
+		}
+		return c
+	})
+	if len(recs) > n+1 {
+		recs = recs[:n+1]
+	}
+	if recs == nil {
+		recs = []AuditRecord{}
+	}
+	return recs, chains, nil
+}
+
+func cmpAudit(a, b AuditRecord) int {
+	switch {
+	case a.TS != b.TS:
+		return strings.Compare(a.TS, b.TS)
+	case a.Chain != b.Chain:
+		return strings.Compare(a.Chain, b.Chain)
+	}
+	return cmpInt(int64(a.Seq), int64(b.Seq))
+}
+
+func cmpInt(a, b int64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
 }
 
 // whoamiTenantGrants is whoami's view of p's TenantAdminCap values: the

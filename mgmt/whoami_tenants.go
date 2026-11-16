@@ -73,7 +73,7 @@ func (s *Server) whoamiScope(ctx context.Context, p Principal, who *WhoAmI) {
 	if err != nil {
 		return
 	}
-	onlyGranted := s.tenantScoped(p) && !isApprover(p) // tenantscope.go
+	onlyGranted := (s.tenantScoped(p) || tenantApprovers(p)) && !s.allowed(p, roleAdmin) && !plainApprover(p) // tenantscope.go
 	for _, t := range ts {
 		if onlyGranted && !slices.ContainsFunc(p.tenantGrants(), func(g TenantGrant) bool { return slices.Contains(g.Tenants, t.ID) }) {
 			continue

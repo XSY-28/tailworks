@@ -4177,6 +4177,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `accessWarnings` | array of string | no | Grants to `tag:twd-mgmt` that don't do what they look like: values on `twd.dev/cap/admin` (they don't narrow it), invalid `twd.dev/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `twd.dev/cap/mcp` or `twd.dev/cap/approve` grants (they apply to every tenant). Never make `ok` false. |
 | `missing` | array of `PreflightMissing` | yes |  |
 | `missingNodeAttrs` | array of string | no | Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes. |
 | `missingTagOwners` | array of string | yes |  |
@@ -4873,6 +4874,8 @@ One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `actions` | array of string: `data` \| `deploy` \| `kill` \| `read` \| `secrets` | yes |  |
+| `approve` | array of `ApproveGrant` | no | `twd.dev/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md). |
+| `mcp` | object | no | Admits the caller to `/mcp` for these tenants. The read tools need `read`; each write or destructive tool must be named here and its action held in `actions`. |
 | `tenants` | array of string | yes |  |
 
 #### `TenantPage`

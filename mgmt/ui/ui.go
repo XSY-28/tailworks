@@ -109,7 +109,7 @@ func (u *ui) admit(next http.Handler) http.Handler {
 			u.fail(w, r, err)
 			return
 		}
-		if who.Kind == "host" || !who.Admin && !approvalsPage(r.URL.Path) { // approvals.go
+		if who.Kind == "host" || !who.Admin && len(who.TenantGrants) == 0 && !approvalsPage(r.URL.Path) { // approvals.go
 			u.fail(w, r, &apiError{Status: 403, Code: "forbidden", Message: fmt.Sprintf("caller (%s) may not use the admin UI", who.Kind)})
 			return
 		}
@@ -261,7 +261,9 @@ func (u *ui) base(r *http.Request, title string) base {
 	} else {
 		u.call(r, "GET", "/v1/whoami", &b.Who)
 	}
-	u.call(r, "GET", "/v1/status", &b.Status)
+	if b.Who.Admin || b.Who.Kind == "local" || b.Who.Kind == "" {
+		u.call(r, "GET", "/v1/status", &b.Status) // a tenant admin may not read it
+	}
 	b.Flash = r.URL.Query().Get("ok")
 	b.FlashErr = r.URL.Query().Get("err")
 	return b
@@ -323,8 +325,11 @@ func (u *ui) overview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var err error
-	d.Hosts, err = listAll[host](u, r, "/v1/hosts?limit=500", 2000)
-	note("hosts", err)
+	operator := d.Who.Admin || d.Who.Kind == "local"
+	if operator { // a tenant admin sees its own tenants, not hosts
+		d.Hosts, err = listAll[host](u, r, "/v1/hosts?limit=500", 2000)
+		note("hosts", err)
+	}
 	d.Tenants, err = listAll[tenant](u, r, "/v1/tenants?limit=500", 2000)
 	note("tenants", err)
 	seenMode := map[string]bool{}
@@ -345,7 +350,9 @@ func (u *ui) overview(w http.ResponseWriter, r *http.Request) {
 	d.Objects = buildTree(objs)
 	d.Audit, err = u.recentAudit(r, 25)
 	note("audit", err)
-	note("audit verification", u.call(r, "GET", "/v1/audit/verification", &d.Verification))
+	if operator {
+		note("audit verification", u.call(r, "GET", "/v1/audit/verification", &d.Verification))
+	}
 	u.render(w, 200, "overview", d)
 }
 

@@ -87,6 +87,10 @@ type mcpCtx struct {
 	api http.Handler
 	p   Principal
 	hdr http.Header // the caller's request headers (Twd-Actor on the bridge)
+
+	// scoped: a tenant admin's tool, run as the caller rather than as an
+	// admin (tenantscope_mcp.go).
+	scoped bool
 }
 
 func strProp(desc string) map[string]any {
@@ -194,12 +198,25 @@ func (s *Server) mcpAllowed(p Principal, hdr http.Header) map[string]bool {
 		}
 		return out
 	case "user", "mcp":
-		granted, hasCap := mcpCapTools(p)
-		admin := p.Kind == "user" && s.allowed(p, roleAdmin)
-		for _, t := range mcpTools {
-			if (t.Kind == "read" && (admin || hasCap)) || granted[t.Name] || granted["*"] {
-				add(t.Name)
-			}
+		for name := range s.mcpPlainTools(p) {
+			add(name)
+		}
+		for name := range tenantMCPTools(p) { // tenantscope_mcp.go
+			add(name)
+		}
+	}
+	return out
+}
+
+// mcpPlainTools are the tools a tailnet caller has as an admin or from
+// MCPCap (they run as an admin, ADR-035).
+func (s *Server) mcpPlainTools(p Principal) map[string]bool {
+	out := map[string]bool{}
+	granted, hasCap := mcpCapTools(p)
+	admin := p.Kind == "user" && s.allowed(p, roleAdmin)
+	for _, t := range mcpTools {
+		if (t.Kind == "read" && (admin || hasCap)) || granted[t.Name] || granted["*"] {
+			out[t.Name] = true
 		}
 	}
 	return out
@@ -326,6 +343,11 @@ func (s *Server) mcpHandler(api http.Handler) http.Handler {
 				cp.Arguments = map[string]any{}
 			}
 			c := &mcpCtx{ctx: r.Context(), s: s, api: api, p: p, hdr: r.Header}
+			if (p.Kind == "user" || p.Kind == "mcp") && !s.mcpPlainTools(p)[t.Name] {
+				// Only a tenant-admin value allows it: run as the caller,
+				// limited to its MCP values (tenantscope_mcp.go).
+				c.p, c.scoped = tenantMCPPrincipal(p), true
+			}
 			out, err := t.run(c, cp.Arguments)
 			if err != nil {
 				writeRPC(w, req.ID, toolError(err), nil)
@@ -345,6 +367,9 @@ func (s *Server) mcpNotGranted(p Principal, t mcpTool) *Error {
 		e := errf(403, "cap_missing", "%s is not enabled on this bridge: the operator enables %s tools explicitly", t.Name, t.Kind)
 		e.Snippet = "twd mcp --allow " + t.Name
 		return e
+	}
+	if s.tenantScoped(p) && !s.mcpPlainTools(p)[t.Name] {
+		return tenantMCPNotGranted(p, t) // tenantscope_mcp.go
 	}
 	src := p.Login
 	if len(p.Tags) > 0 {
@@ -411,11 +436,13 @@ func (c *mcpCtx) call(method, path string, in any, out any) error {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	p := c.p
-	switch p.Kind {
-	case "mcp", "user":
+	switch {
+	case c.scoped:
+		p.Kind = "user"
+	case p.Kind == "mcp" || p.Kind == "user":
 		p.Kind = "user"
 		p.Caps = append(slices.Clone(p.Caps), AdminCap)
-	case "local":
+	case p.Kind == "local":
 		actor := c.hdr.Get("Twd-Actor")
 		if actor == "" {
 			actor = "operator"

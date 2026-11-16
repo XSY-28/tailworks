@@ -29,7 +29,7 @@ import (
 // isApprover reports whether a tailnet caller holds twd.dev/cap/approve
 // toward mgmt (admitted to the approvals routes only, unless also admin).
 func isApprover(p Principal) bool {
-	return slices.Contains(p.Caps, approvecap.Cap)
+	return slices.Contains(p.Caps, approvecap.Cap) || tenantApprovers(p) // tenantscope_approve.go
 }
 
 // approvalTimeout bounds one mgmt → hostd approvals call.
@@ -189,10 +189,7 @@ func (m *Mgmt) DecideApproval(ctx context.Context, p Principal, tenantID, worklo
 	if err != nil {
 		return nil, err
 	}
-	grants := p.CapValues[approvecap.Cap]
-	if grants == nil {
-		grants = []json.RawMessage{}
-	}
+	grants := approveGrantsFor(p, tenantID) // tenantscope_approve.go
 	var last error = errf(409, "approval_not_pending", "no approval of %s/%s is waiting", workflow, instance)
 	for _, src := range srcs {
 		body, _ := json.Marshal(map[string]any{
@@ -234,6 +231,10 @@ func (m *Mgmt) DecideApproval(ctx context.Context, p Principal, tenantID, worklo
 
 func (a *v1api) ListApprovals(w http.ResponseWriter, r *http.Request, id v1.TenantID, params v1.ListApprovalsParams) {
 	p := principalOf(r.Context())
+	if err := a.s.tenantApproveOK(p, id); err != nil {
+		writeErr(w, r, err)
+		return
+	}
 	out, err := a.s.M.ListApprovals(r.Context(), id, str(params.Workload), params.All != nil && *params.All)
 	if err != nil {
 		writeErr(w, r, err)
@@ -247,7 +248,7 @@ func (a *v1api) ListApprovals(w http.ResponseWriter, r *http.Request, id v1.Tena
 			if ap.Facts != nil {
 				facts = *ap.Facts
 			}
-			if approvecap.MayDecide(p.CapValues[approvecap.Cap], approvecap.Target{Workload: ap.Workload, Workflow: ap.Workflow, Step: ap.Step, Facts: facts}) {
+			if approvecap.MayDecide(approveGrantsFor(p, id), approvecap.Target{Workload: ap.Workload, Workflow: ap.Workflow, Step: ap.Step, Facts: facts}) {
 				mine = append(mine, ap)
 			}
 		}
@@ -259,6 +260,10 @@ func (a *v1api) ListApprovals(w http.ResponseWriter, r *http.Request, id v1.Tena
 func (a *v1api) DecideApproval(w http.ResponseWriter, r *http.Request, id v1.TenantID, workload v1.WorkloadName, workflow string, instance string) {
 	var req v1.ApprovalDecisionRequest
 	if err := readJSON(r, &req); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	if err := a.s.tenantApproveOK(principalOf(r.Context()), id); err != nil {
 		writeErr(w, r, err)
 		return
 	}

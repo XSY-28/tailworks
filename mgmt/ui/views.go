@@ -45,6 +45,13 @@ type whoAmI struct {
 	Tenants       []whoTenant    `json:"tenants"`
 	ApproveGrants []approveGrant `json:"approveGrants"`
 
+	// A tenant admin's grants (twd.dev/cap/tenant-admin): the console
+	// shows it its own tenants and skips the admin-only panels.
+	TenantGrants []struct {
+		Tenants []string `json:"tenants"`
+		Actions []string `json:"actions"`
+	} `json:"tenantGrants"`
+
 	Admin bool   `json:"admin"`
 	Actor string `json:"actor"`
 	Mgmt  struct {

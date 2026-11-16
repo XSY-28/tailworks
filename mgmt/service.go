@@ -3168,6 +3168,10 @@ type PreflightResult struct {
 	NodeAttrsSnippet string   `json:"nodeAttrsSnippet,omitempty"`
 	// PublicURL is where the workload's public routes will be served.
 	PublicURL string `json:"publicURL,omitempty"`
+
+	// AccessWarnings: grants to tag:twd-mgmt that don't do what they look
+	// like (tenantscope_lint.go). Never fail the preflight.
+	AccessWarnings []string `json:"accessWarnings,omitempty"`
 }
 
 // Preflight checks the request against the tenant's current policy (read
@@ -3218,6 +3222,7 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	if r.Service != "" {
 		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
 	}
+	res.AccessWarnings = m.accessWarnings(ctx, t, pol) // tenantscope_lint.go
 	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved
 	return res, nil
 }

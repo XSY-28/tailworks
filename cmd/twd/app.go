@@ -554,6 +554,9 @@ func cmdDeploy(args []string) error {
 }
 
 func printPreflight(a *app, pf mgmt.PreflightResult) {
+	for _, w := range pf.AccessWarnings { // tenant admins (docs/teams.md)
+		fmt.Printf("! preflight  access: %s\n", w)
+	}
 	if pf.Service != "" {
 		if pf.ServiceUnapproved {
 			fmt.Printf("› preflight: service %s … ✗ not in autoApprovers.services for the workload tags (control would never route it)\n    add to your tailnet policy:\n    %s\n", pf.Service, pf.ServiceSnippet)

@@ -3190,7 +3190,9 @@ type PreflightMissing struct {
 
 // PreflightResult defines model for PreflightResult.
 type PreflightResult struct {
-	Missing []PreflightMissing `json:"missing"`
+	// AccessWarnings Grants to `tag:twd-mgmt` that don't do what they look like: values on `twd.dev/cap/admin` (they don't narrow it), invalid `twd.dev/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `twd.dev/cap/mcp` or `twd.dev/cap/approve` grants (they apply to every tenant). Never make `ok` false.
+	AccessWarnings *[]string          `json:"accessWarnings,omitempty"`
+	Missing        []PreflightMissing `json:"missing"`
 
 	// MissingNodeAttrs Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes.
 	MissingNodeAttrs *[]string `json:"missingNodeAttrs,omitempty"`
@@ -4100,7 +4102,15 @@ type TenantDeleteResult struct {
 // TenantGrant One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it names.
 type TenantGrant struct {
 	Actions []TenantGrantActions `json:"actions"`
-	Tenants []string             `json:"tenants"`
+
+	// Approve `twd.dev/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md).
+	Approve *[]ApproveGrant `json:"approve,omitempty"`
+
+	// Mcp Admits the caller to `/mcp` for these tenants. The read tools need `read`; each write or destructive tool must be named here and its action held in `actions`.
+	Mcp *struct {
+		Tools []string `json:"tools"`
+	} `json:"mcp,omitempty"`
+	Tenants []string `json:"tenants"`
 }
 
 // TenantGrantActions defines model for TenantGrant.Actions.

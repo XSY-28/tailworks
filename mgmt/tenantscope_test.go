@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -129,12 +131,16 @@ const (
 	nodeTeamBad = "100.64.0.22:1" // only an invalid value
 	nodeBoth    = "100.64.0.23:1" // admin cap and a tenant-admin value: an operator
 	nodeAppr    = "100.64.0.24:1" // approver only
+	nodeTeamMCP = "100.64.0.25:1" // tn: read+kill with mcp naming kill; tn2: read without mcp
+	nodeTeamApp = "100.64.0.26:1" // approve in tn only, no actions
+	nodeTeamTwo = "100.64.0.27:1" // read in tn and tn2 (one value)
 )
 
 type tenantEnv struct {
 	*authzEnv
-	depA, depB string // deployments in tn (workload w) and tn2 (workload z)
-	objZ       string // object in tn2
+	raw        http.Handler // without the /v1 spec validator: /mcp and /ui aren't /v1
+	depA, depB string       // deployments in tn (workload w) and tn2 (workload z)
+	objZ       string       // object in tn2
 }
 
 func newTenantEnv(t *testing.T) *tenantEnv {
@@ -167,6 +173,17 @@ func newTenantEnv(t *testing.T) *tenantEnv {
 		case nodeBoth:
 			return WhoIsInfo{NodeID: "nBO", Login: "ops@example.com", Caps: []string{AdminCap, TenantAdminCap},
 				CapValues: tv(fmt.Sprintf(`{"tenants": [%q], "actions": ["read"]}`, tn))}, nil
+		case nodeTeamMCP:
+			return WhoIsInfo{NodeID: "nTM", Name: "mcp.t.ts.net.", Login: "agent@example.com", Caps: []string{TenantAdminCap},
+				CapValues: map[string][]json.RawMessage{TenantAdminCap: rawVals(
+					fmt.Sprintf(`{"tenants": [%q], "actions": ["read", "kill"], "mcp": {"tools": ["kill"]}}`, tn),
+					fmt.Sprintf(`{"tenants": [%q], "actions": ["read"]}`, tn2))}}, nil
+		case nodeTeamApp:
+			return WhoIsInfo{NodeID: "nTP", Name: "app.t.ts.net.", Login: "lead@example.com", Caps: []string{TenantAdminCap},
+				CapValues: tv(fmt.Sprintf(`{"tenants": [%q], "approve": [{"workflows": ["refund"]}]}`, tn))}, nil
+		case nodeTeamTwo:
+			return WhoIsInfo{NodeID: "nT2", Name: "two.t.ts.net.", Login: "two@example.com", Caps: []string{TenantAdminCap},
+				CapValues: tv(fmt.Sprintf(`{"tenants": [%q, %q], "actions": ["read"]}`, tn, tn2))}, nil
 		case nodeAppr:
 			return WhoIsInfo{NodeID: "nAP", Name: "ap.t.ts.net.", Login: "ap@example.com", Caps: []string{"twd.dev/cap/approve"},
 				CapValues: map[string][]json.RawMessage{"twd.dev/cap/approve": rawVals(`{}`)}}, nil
@@ -179,6 +196,7 @@ func newTenantEnv(t *testing.T) *tenantEnv {
 	}
 	a := &authzEnv{testEnv: e, t: t, h: srv.TailnetHandler(whois, val.Middleware(specReporter(t))(srv.Handler()))}
 	te.authzEnv = a
+	te.raw = srv.TailnetHandler(whois, srv.Handler())
 	a.tn = v1Tenant(t, e, "t.ts.net", nil)
 	a.tn2 = v1Tenant(t, e, "t.ts.net", nil) // a second team on the same tailnet
 	a.addHost("h1", nodeH1)
@@ -382,5 +400,175 @@ func TestTenantAdminRegistry(t *testing.T) {
 		if err := registryTenantAuthorize(c.p, c.ns, c.push); (err == nil) != c.ok {
 			t.Errorf("ns %q push %v: %v, want ok=%v", c.ns, c.push, err, c.ok)
 		}
+	}
+}
+
+func TestTenantAdminSubValues(t *testing.T) {
+	for _, c := range []struct {
+		val   string
+		valid bool
+	}{
+		{`{"tenants": ["a"], "approve": [{}]}`, true},                                 // approve alone needs no actions
+		{`{"tenants": ["a"], "actions": ["read"], "mcp": {"tools": ["kill"]}}`, true}, // the gate checks kill's action later
+		{`{"tenants": ["a"], "mcp": {"tools": []}}`, false},                           // mcp needs actions
+		{`{"tenants": ["a"], "actions": ["read"], "mcp": {"tools": ["status"]}}`, false},
+		{`{"tenants": ["a"], "approve": ["x"]}`, false},
+	} {
+		g, bad := parseTenantGrants(rawVals(c.val))
+		if (len(g) == 1) != c.valid {
+			t.Errorf("%s: grants %v, invalid %v; want valid=%v", c.val, g, bad, c.valid)
+		}
+	}
+}
+
+// mcpRPC posts one JSON-RPC request to /mcp as from.
+func (e *tenantEnv) mcpRPC(from, method string, params any) map[string]any {
+	e.t.Helper()
+	validated := e.h
+	e.h = e.raw
+	defer func() { e.h = validated }()
+	var out map[string]any
+	st, eb := e.call(from, "POST", MCPPath, map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params}, &out)
+	if st != 200 {
+		e.t.Fatalf("%s %s: %d %v", from, method, st, eb)
+	}
+	return out
+}
+
+func (e *tenantEnv) mcpTools(from string) []string {
+	res, _ := e.mcpRPC(from, "tools/list", map[string]any{})["result"].(map[string]any)
+	var names []string
+	for _, x := range res["tools"].([]any) {
+		names = append(names, x.(map[string]any)["name"].(string))
+	}
+	slices.Sort(names)
+	return names
+}
+
+func (e *tenantEnv) mcpCall(from, tool string, args map[string]any) (map[string]any, bool) {
+	res, _ := e.mcpRPC(from, "tools/call", map[string]any{"name": tool, "arguments": args})["result"].(map[string]any)
+	sc, _ := res["structuredContent"].(map[string]any)
+	return sc, res["isError"] == true
+}
+
+func TestTenantAdminMCP(t *testing.T) {
+	e := newTenantEnv(t)
+	// Read tools from the "mcp" value, plus kill (named, and "kill" in the
+	// same value). No status (operator), no deploy or undeploy.
+	if got, want := e.mcpTools(nodeTeamMCP), []string{"audit", "kill", "logs", "ls", "whoami"}; !slices.Equal(got, want) {
+		t.Fatalf("tools = %v, want %v", got, want)
+	}
+	// No "mcp" entry: no tools at all.
+	if got := e.mcpTools(nodeTeamA); len(got) != 0 {
+		t.Fatalf("tenant admin without mcp: tools %v", got)
+	}
+	// ls runs as the caller: its own tenant works...
+	if out, isErr := e.mcpCall(nodeTeamMCP, "ls", map[string]any{"tenant": e.tn}); isErr {
+		t.Fatalf("ls own tenant: %v", out)
+	}
+	// ...but tn2, granted "read" only in a value without "mcp", doesn't.
+	if out, isErr := e.mcpCall(nodeTeamMCP, "ls", map[string]any{"tenant": e.tn2}); !isErr {
+		t.Fatalf("ls tn2 through MCP: %v", out)
+	}
+	// kill: another tenant's object is invisible; its own works.
+	if out, isErr := e.mcpCall(nodeTeamMCP, "kill", map[string]any{"object": e.objZ, "reason": "test"}); !isErr {
+		t.Fatalf("kill tn2 object through MCP: %v", out)
+	}
+	if out, isErr := e.mcpCall(nodeTeamMCP, "kill", map[string]any{"object": e.objA, "reason": "test"}); isErr {
+		t.Fatalf("kill own object through MCP: %v", out)
+	}
+	// A tool it lacks names the tenant-admin value that would add it.
+	out, isErr := e.mcpCall(nodeTeamMCP, "undeploy", map[string]any{"workload": "w", "reason": "test"})
+	if eb, _ := out["error"].(map[string]any); !isErr || !strings.Contains(fmt.Sprint(eb["snippet"]), TenantAdminCap) {
+		t.Fatalf("undeploy: %v", out)
+	}
+}
+
+func TestTenantAdminApprovals(t *testing.T) {
+	e := newTenantEnv(t)
+	// An approve-only value admits the approvals routes for its tenant...
+	if st, eb := e.call(nodeTeamApp, "GET", "/v1/tenants/"+e.tn+"/approvals", nil, nil); st != 200 {
+		t.Fatalf("approvals in own tenant: %d %v", st, eb)
+	}
+	// ...not another tenant's, and nothing else.
+	e.fail(nodeTeamApp, "GET", "/v1/tenants/"+e.tn2+"/approvals", nil, 403, "tenant_forbidden")
+	e.fail(nodeTeamApp, "POST", "/v1/tenants/"+e.tn2+"/workloads/z/approvals/refund/i1", map[string]any{"decision": "approve"}, 403, "tenant_forbidden")
+	e.fail(nodeTeamApp, "GET", "/v1/deployments", nil, 403, "tenant_forbidden")
+	// The values sent to the host for a decision are the tenant's only.
+	p := Principal{Kind: "user", Caps: []string{TenantAdminCap}, CapValues: map[string][]json.RawMessage{TenantAdminCap: rawVals(
+		fmt.Sprintf(`{"tenants": [%q], "approve": [{"workflows": ["refund"]}]}`, e.tn))}}
+	if g := approveGrantsFor(p, e.tn); len(g) != 1 || !strings.Contains(string(g[0]), "refund") {
+		t.Fatalf("grants for tn = %s", g)
+	}
+	if g := approveGrantsFor(p, e.tn2); len(g) != 0 {
+		t.Fatalf("grants for tn2 = %s", g)
+	}
+	// whoami lists only the tenant its values name.
+	var who WhoAmI
+	if st, _ := e.call(nodeTeamApp, "GET", "/v1/whoami", nil, &who); st != 200 || !who.Approver || len(who.Tenants) != 1 || who.Tenants[0].TenantID != e.tn {
+		t.Fatalf("whoami = %d %+v", st, who)
+	}
+}
+
+func TestTenantAdminSeveralTenants(t *testing.T) {
+	e := newTenantEnv(t)
+	// read in both tenants, no ?tenant=: both tenants' rows, nobody else's.
+	var ds struct{ Items []map[string]any }
+	if st, eb := e.call(nodeTeamTwo, "GET", "/v1/deployments", nil, &ds); st != 200 || len(ds.Items) != 2 {
+		t.Fatalf("deployments: %d %v %v", st, eb, ds.Items)
+	}
+	var objs struct{ Items []map[string]any }
+	if st, eb := e.call(nodeTeamTwo, "GET", "/v1/objects?limit=1", nil, &objs); st != 200 || len(objs.Items) != 1 {
+		t.Fatalf("objects page of 1: %d %v %v", st, eb, objs.Items)
+	}
+	var aud struct{ Items []map[string]any }
+	if st, eb := e.call(nodeTeamTwo, "GET", "/v1/audit", nil, &aud); st != 200 {
+		t.Fatalf("audit: %d %v", st, eb)
+	}
+	for _, r := range aud.Items {
+		if tn := r["tenantID"]; tn != e.tn && tn != e.tn2 {
+			t.Fatalf("audit record of tenant %v", tn)
+		}
+	}
+	// The console opens, without the hosts panel.
+	r := httptest.NewRequest("GET", "http://twd-mgmt/ui/", nil)
+	r.RemoteAddr = nodeTeamTwo
+	w := httptest.NewRecorder()
+	e.raw.ServeHTTP(w, r)
+	if w.Code != 200 || strings.Contains(w.Body.String(), `id="hosts"`) || !strings.Contains(w.Body.String(), "tenant admin") {
+		t.Fatalf("console: %d (hosts panel or tenant-admin note wrong)", w.Code)
+	}
+}
+
+func TestTenantAccessWarnings(t *testing.T) {
+	e := newTenantEnv(t) // tn and tn2 share t.ts.net
+	ctx := context.Background()
+	tn, err := e.m.store.GetTenant(ctx, e.tn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol, err := ParsePolicy([]byte(fmt.Sprintf(`{"grants": [
+		{"src": ["group:a"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/admin": [{"tenants": [%q]}]}},
+		{"src": ["group:b"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/tenant-admin": [{"tenants": [%q]}, {"tenants": ["nope"], "actions": ["read"]}]}},
+		{"src": ["group:c"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/approve": [{}], "twd.dev/cap/mcp": [{}]}},
+		{"src": ["group:ops"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/admin": [{}]}}
+	]}`, e.tn, e.tn)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(e.m.accessWarnings(ctx, tn, pol), "\n")
+	for _, want := range []string{
+		"group:a → tag:twd-mgmt: values on twd.dev/cap/admin don't narrow it",
+		"names no actions",
+		`names "nope", which is not a tenant`,
+		"twd.dev/cap/approve applies to every tenant on this tailnet (" + e.tn2,
+		"twd.dev/cap/mcp applies to every tenant",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warnings lack %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "group:ops") {
+		t.Errorf("a plain admin grant was warned about:\n%s", got)
 	}
 }
