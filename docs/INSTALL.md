@@ -124,8 +124,9 @@ tw completion fish > ~/.config/fish/completions/tw.fish          # fish
 
 `tw version --check` says whether a newer release is out and whether the
 running `tw up` needs a restart. An interactive tailworks also prints a one-line
-notice when a newer release is out, at most once a day. `CI=1`, `--json` or
-`TW_NO_UPDATE_CHECK=1` turns it off.
+notice when a newer release is out, at most once a day (never after `tw init`
+or `tw dev`). `CI=1`, `--json` or `TW_NO_UPDATE_CHECK=1` turns it off. What
+it sends: [security-model.md](security-model.md#telemetry-and-the-update-check).
 
 tailworks mints a Tailscale auth key for every node it runs (mgmt's own node,
 this host's node, every object), so it needs **one** credential: an OAuth
