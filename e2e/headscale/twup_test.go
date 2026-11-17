@@ -13,6 +13,7 @@ import (
 
 	"github.com/rosskukulinski/tailworks/e2e/cliflow"
 	"github.com/rosskukulinski/tailworks/internal/policy"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // TestTwUp is the user flow on the Headscale profile, through the CLI:
@@ -27,6 +28,12 @@ func TestTwUp(t *testing.T) {
 }
 
 func testTwUp(t *testing.T, extra []string) {
+	// tw up starts workerd; a clean runner has no installed tw to find it in.
+	wd, err := nettest.WorkerdBinary()
+	if err != nil {
+		t.Fatalf("workerd (run make deps): %v", err)
+	}
+	t.Setenv("TW_WORKERD", wd)
 	hs := startServer(t)
 	ctx := ctxT(t, 10*time.Minute)
 	e := &cliflow.Env{T: t, BinDir: cliflow.BuildBinaries(t), StateDir: shortDir(t, "tw-hs-state-"), WorkDir: t.TempDir()}
