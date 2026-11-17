@@ -668,16 +668,12 @@ const (
 // EgressEnforcement reports whether a Node-tier process under the given
 // sandbox can only reach the network through hostd's egress proxy. Neither
 // "none" nor macOS Seatbelt (which confines files, not TCP) does that; the
-// Linux Landlock sandbox (ABI ≥ 4, pinning the process's TCP connects to
-// the proxy port) is the only process-tier sandbox that makes the proxy an
-// enforcement boundary, and a microVM the only other one. Until a sandbox
-// of that kind reports itself here, the Node tier's egress is advisory.
+// Linux Landlock sandbox pins the process's TCP connects to the proxy port
+// only on a kernel with Landlock ABI ≥ 4 (6.7+). Below that, Landlock has
+// no TCP rules and the seccomp filter allows TCP sockets, so the proxy is
+// cooperative there too. A microVM is the only other enforcement boundary.
 func EgressEnforcement(sandbox string) string {
-	switch sandbox {
-	case SandboxLandlock:
-		return EgressEnforced
-	}
-	return EgressUnenforced
+	return egressEnforcement(sandbox, landlockABI(sandbox))
 }
 
 // StatusView is GET /v1/status (hostd's local API).

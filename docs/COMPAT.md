@@ -419,8 +419,10 @@ caveat: on Linux with Landlock ABI ≥ 4 (kernel 6.7+) the sandbox lets a Node
 app open TCP only to its own port and its egress proxy, so egress through
 netd is **enforced**; on macOS (Seatbelt) and on Landlock ABI < 4 it is
 **cooperative** (a malicious Node app can bypass the proxy; `tw status`
-says `egress unenforced` and a multi-tenant host refuses such a deploy by
-default). The microVM tier is the strongest boundary.
+says `egress unenforced` and `tw doctor` warns). A multi-tenant host
+refuses a Node deploy by default only when it has no process sandbox at
+all; see [security-model.md](security-model.md#when-a-host-is-shared-between-tenants).
+The microVM tier is the strongest boundary.
 
 | env | value |
 |---|---|
