@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 const (
@@ -186,7 +186,7 @@ func (h *Host) ensure(ctx context.Context, w *workload, class, name string, pare
 			h.mu.Unlock()
 			if !h.pubCreates.has(w.tenantID, w.name, class, name) {
 				return nil, &apiError{Code: "create_not_admitted", Detail: "object " + class + "/" + name + " does not exist and no request admitted its creation: " +
-					"a tailnet request reaches new objects through the env twd hands the handler (not a raw or cached binding), and a public request only through public.create"}
+					"a tailnet request reaches new objects through the env tailworks hands the handler (not a raw or cached binding), and a public request only through public.create"}
 			}
 			pubOK = true // a publicly created name (ADR-029 D5)
 			continue
@@ -263,7 +263,7 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 	}
 	if resp.Hostname != "" && resp.Hostname != hn {
 		// mgmt names the node (M2: the object ID); keep the host's prefix
-		// (per-run test names, ttest-*/twd-*).
+		// (per-run test names, ttest-*/tw-*).
 		hn = resp.Hostname
 		if p := h.cfg.HostnamePrefix; p != "" && !strings.HasPrefix(hn, p) {
 			hn = label(p + hn)
@@ -435,7 +435,7 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object) {
 
 // retryNode re-joins a node whose bootstrap failed while its workload is
 // still deployed, after a backoff (1, 2, 4, 8, 16 s; 5 tries). The case
-// that needs it: a `twd deploy` while this host is still bringing up the
+// that needs it: a `tw deploy` while this host is still bringing up the
 // previous deployment's nodes bumps the lease epoch, so the mint in flight
 // is refused with lease_lost; nothing else would retry it and the workload
 // would stay "active" with a dead entry node ("node minted" forever). The
@@ -576,7 +576,7 @@ func (h *Host) forgetLocked(o *object) {
 	}
 }
 
-// Purge forgets every killed object (twd down --purge), removes its saved
+// Purge forgets every killed object (tw down --purge), removes its saved
 // node state (its device is gone; a kill's tombstone would otherwise keep
 // the state dir until it expires, and a redeploy of the same identity would
 // re-mint instead of joining fresh), and saves objects.json without them.
@@ -620,7 +620,7 @@ func decodeObjects(b []byte) ([]*object, error) {
 	}
 	for _, o := range list {
 		if o.V > objectsVersion {
-			return nil, fmt.Errorf("hostd: objects.json record v%d was written by a newer twd (this one reads up to v%d); upgrade twd-hostd", o.V, objectsVersion)
+			return nil, fmt.Errorf("hostd: objects.json record v%d was written by a newer tailworks (this one reads up to v%d); upgrade tw-hostd", o.V, objectsVersion)
 		}
 	}
 	return list, nil

@@ -19,8 +19,8 @@ async function nodeCompat() {
   ee.on("x", (v) => (emitted = v));
   ee.emit("x", 42);
   return {
-    base64: Buffer.from("twd").toString("base64"),
-    sha256: createHash("sha256").update("twd").digest("hex"),
+    base64: Buffer.from("tw").toString("base64"),
+    sha256: createHash("sha256").update("tw").digest("hex"),
     uuid: /^[0-9a-f-]{36}$/.test(randomUUID()),
     als: seen,
     emitted,

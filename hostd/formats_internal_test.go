@@ -9,12 +9,12 @@ import (
 	"time"
 )
 
-// formatFixture returns testdata/formats/<name>; TWD_WRITE_FIXTURES=1
+// formatFixture returns testdata/formats/<name>; TW_WRITE_FIXTURES=1
 // writes it from gen only if it is missing (ADR-041 §4).
 func formatFixture(t *testing.T, name string, gen func() []byte) []byte {
 	t.Helper()
 	p := filepath.Join("testdata", "formats", name)
-	if os.Getenv("TWD_WRITE_FIXTURES") == "1" {
+	if os.Getenv("TW_WRITE_FIXTURES") == "1" {
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			if err := os.WriteFile(p, gen(), 0o644); err != nil {
 				t.Fatal(err)
@@ -23,7 +23,7 @@ func formatFixture(t *testing.T, name string, gen func() []byte) []byte {
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
-		t.Fatalf("%s: %v (new fixture? run with TWD_WRITE_FIXTURES=1)", p, err)
+		t.Fatalf("%s: %v (new fixture? run with TW_WRITE_FIXTURES=1)", p, err)
 	}
 	return b
 }
@@ -92,7 +92,7 @@ func TestObjectsFormatFixtures(t *testing.T) {
 			t.Errorf("%s: record 1 = %+v", name, b)
 		}
 	}
-	if _, err := decodeObjects([]byte(`[{"v":2,"id":"x"}]`)); err == nil || !strings.Contains(err.Error(), "newer twd") {
+	if _, err := decodeObjects([]byte(`[{"v":2,"id":"x"}]`)); err == nil || !strings.Contains(err.Error(), "newer tailworks") {
 		t.Fatalf("v2 record: %v", err)
 	}
 }

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/netd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // env is one hermetic tailnet: local control, a registry with objects a,b,c
@@ -36,7 +36,7 @@ type env struct {
 
 func newRundir(t *testing.T) string {
 	// unix socket paths must stay short (macOS: 104 bytes), so not t.TempDir().
-	d, err := os.MkdirTemp("/tmp", "twd-netd-")
+	d, err := os.MkdirTemp("/tmp", "tw-netd-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,8 +191,8 @@ func TestChain(t *testing.T) {
 	t.Run("ForgedIngressHeadersStripped", func(t *testing.T) {
 		forged := `{"tailscale":{"caller":{"nodeId":"nEVIL","node":"admin.evil","tags":["tag:admin"]}},"objectId":"b"}`
 		code, _, b := e.get("http://"+e.objIP["a"]+"/", map[string]string{
-			"x-twd-cf": forged, "x-twd-object": "b", "cf-connecting-ip": "1.2.3.4",
-			"x-forwarded-for": "1.2.3.4", "tailnet-assertion": "forged", "x-twd-trace": "t",
+			"x-tw-cf": forged, "x-tw-object": "b", "cf-connecting-ip": "1.2.3.4",
+			"x-forwarded-for": "1.2.3.4", "tailnet-assertion": "forged", "x-tw-trace": "t",
 		})
 		var r objResp
 		json.Unmarshal(b, &r)
@@ -200,7 +200,7 @@ func TestChain(t *testing.T) {
 			t.Fatalf("forgery reached tenant: %d %s", code, b)
 		}
 		for k, v := range r.SawHeaders {
-			if k != "x-twd-object" || v != "a" {
+			if k != "x-tw-object" || v != "a" {
 				t.Errorf("tenant saw client-controlled header %s=%q", k, v)
 			}
 		}
@@ -213,11 +213,11 @@ func TestChain(t *testing.T) {
 			if err := json.Unmarshal(b, &r); err != nil || code != 200 {
 				t.Fatalf("%s: %d %s", id, code, b)
 			}
-			if got := strings.SplitN(r.Caller.Node, ".", 2)[0]; got != "twd-"+id || r.Caller.Addrs[0] != e.objIP[id] {
+			if got := strings.SplitN(r.Caller.Node, ".", 2)[0]; got != "tw-"+id || r.Caller.Addrs[0] != e.objIP[id] {
 				t.Fatalf("%s: echo saw %q %v", id, r.Caller.Node, r.Caller.Addrs)
 			}
 			for k := range r.Headers {
-				if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-twd") || strings.HasPrefix(lk, "cf-") || lk == "proxy-authorization" {
+				if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-tw-") || strings.HasPrefix(lk, "cf-") || lk == "proxy-authorization" {
 					t.Errorf("%s: identity header %s leaked to echo", id, k)
 				}
 			}
@@ -230,11 +230,11 @@ func TestChain(t *testing.T) {
 			code, _, b := e.get("http://"+e.objIP[id]+"/forge-egress?as="+v+"&url="+echoURL, nil)
 			var r nettest.EchoReply
 			json.Unmarshal(b, &r)
-			if got := strings.SplitN(r.Caller.Node, ".", 2)[0]; code != 200 || got != "twd-"+id {
+			if got := strings.SplitN(r.Caller.Node, ".", 2)[0]; code != 200 || got != "tw-"+id {
 				t.Fatalf("%s forging as %s: echo saw %q (%d %s)", id, v, got, code, b)
 			}
 			for k := range r.Headers {
-				if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-twd") || lk == "proxy-authorization" {
+				if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-tw-") || lk == "proxy-authorization" {
 					t.Errorf("forged header %s leaked", k)
 				}
 			}
@@ -246,10 +246,10 @@ func TestChain(t *testing.T) {
 		cases := []struct{ name, url, code string }{
 			{"own-ip", "http://" + e.objIP["a"] + "/", netd.CodeForbiddenDestination},
 			{"own-ip-other-port", "http://" + e.objIP["a"] + ":8080/", netd.CodeForbiddenDestination},
-			{"own-name", "http://twd-a/", netd.CodePeerNotVisible}, // self is not a peer in its own netmap
+			{"own-name", "http://tw-a/", netd.CodePeerNotVisible}, // self is not a peer in its own netmap
 			{"sibling-ip", "http://" + e.objIP["b"] + "/", netd.CodeForbiddenDestination},
-			{"sibling-name", "http://twd-b/", netd.CodeForbiddenDestination},
-			{"sibling-fqdn", "http://twd-c." + nettest.MagicDNSDomain + "/", netd.CodeForbiddenDestination},
+			{"sibling-name", "http://tw-b/", netd.CodeForbiddenDestination},
+			{"sibling-fqdn", "http://tw-c." + nettest.MagicDNSDomain + "/", netd.CodeForbiddenDestination},
 			{"host-ip", "http://" + hostIP + "/", netd.CodeForbiddenDestination},
 			{"loopback-v4", "http://127.0.0.1/", netd.CodeForbiddenDestination},
 			{"loopback-v4-alt", "http://127.1.2.3:18080/", netd.CodeForbiddenDestination},
@@ -273,8 +273,8 @@ func TestChain(t *testing.T) {
 				code, h, b := e.get("http://"+e.objIP["a"]+"/egress?url="+c.url, nil)
 				var er netd.Error
 				json.Unmarshal(b, &er)
-				if er.Code != c.code || h.Get("twd-error") != c.code || code != 403 {
-					t.Fatalf("%s: got %d %q %s; want 403 %s", c.url, code, h.Get("twd-error"), b, c.code)
+				if er.Code != c.code || h.Get("tw-error") != c.code || code != 403 {
+					t.Fatalf("%s: got %d %q %s; want 403 %s", c.url, code, h.Get("tw-error"), b, c.code)
 				}
 				if er.Object != "a" {
 					t.Errorf("error does not name the object: %s", b)

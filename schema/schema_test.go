@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// Every twd.jsonc in the repo (templates, examples, e2e fixtures) must pass:
-// the schema is the list of keys twd reads, so a failure here means the
+// Every tailworks.jsonc in the repo (templates, examples, e2e fixtures) must pass:
+// the schema is the list of keys tailworks reads, so a failure here means the
 // schema is missing a key, not that the fixture is wrong.
 func TestRepoConfigsPass(t *testing.T) {
 	n := 0
@@ -20,7 +20,7 @@ func TestRepoConfigsPass(t *testing.T) {
 		if d.IsDir() && (d.Name() == "node_modules" || d.Name() == ".git" || d.Name() == "dist") {
 			return filepath.SkipDir
 		}
-		if d.Name() != "twd.jsonc" {
+		if d.Name() != "tailworks.jsonc" {
 			return nil
 		}
 		b, err := os.ReadFile(p)
@@ -28,7 +28,7 @@ func TestRepoConfigsPass(t *testing.T) {
 			return err
 		}
 		n++
-		probs, err := CheckTwd(b)
+		probs, err := CheckTw(b)
 		if err != nil {
 			t.Errorf("%s: %v", p, err)
 		}
@@ -41,17 +41,17 @@ func TestRepoConfigsPass(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n < 5 {
-		t.Fatalf("found only %d twd.jsonc files", n)
+		t.Fatalf("found only %d tailworks.jsonc files", n)
 	}
 }
 
-func TestCheckTwd(t *testing.T) {
+func TestCheckTw(t *testing.T) {
 	for _, tc := range []struct {
 		name, cfg string
 		want      []string // substrings, one per problem, in path order
 	}{
 		{"ok", `{
-			"$schema": "../schema/twd.schema.json",
+			"$schema": "../schema/tailworks.schema.json",
 			"name": "x", "tier": "microvm", "replicas": 2,
 			"placement": {"mode": "smart", "targets": ["pg"], "aggregate": "sum"},
 			"public": {"routes": ["/hook"], "limits": {"rps": 1.5}},
@@ -75,12 +75,12 @@ func TestCheckTwd(t *testing.T) {
 		{"type", `{"replicas": "3"}`, []string{`replicas: is string, want an integer`}},
 		{"integer", `{"replicas": 1.5}`, []string{`replicas: is number, want an integer`}},
 		{"minimum", `{"replicas": 0}`, []string{`below the minimum 1`}},
-		{"tag pattern", `{"tailnet": {"tags": ["twd-wl-x"]}}`, []string{`tailnet.tags[0]: "twd-wl-x" must match ^tag:`}},
+		{"tag pattern", `{"tailnet": {"tags": ["tw-wl-x"]}}`, []string{`tailnet.tags[0]: "tw-wl-x" must match ^tag:`}},
 		{"required", `{"public": {"upgrade": []}}`, []string{`public: missing required "routes"`}},
 		{"no suggestion when far", `{"zzzzzzzz": 1}`, []string{"zzzzzzzz: unknown key"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			probs, err := CheckTwd([]byte(tc.cfg))
+			probs, err := CheckTw([]byte(tc.cfg))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +100,7 @@ func TestCheckTwd(t *testing.T) {
 }
 
 func TestSyntaxError(t *testing.T) {
-	if _, err := CheckTwd([]byte(`{"tailnet": `)); err == nil {
+	if _, err := CheckTw([]byte(`{"tailnet": `)); err == nil {
 		t.Fatal("want a syntax error")
 	}
 }

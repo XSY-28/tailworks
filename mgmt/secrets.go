@@ -1,7 +1,7 @@
 package mgmt
 
 // Worker secrets (ADR-034): Cloudflare-compatible `env.NAME`
-// values a tenant admin sets with `twd secret put`. Values live only in
+// values a tenant admin sets with `tw secret put`. Values live only in
 // custody (encrypted at rest: FileCustody seals with AES-256-GCM, setec
 // with its own keys), one entry per workload; the store holds nothing. No
 // admin operation returns a value: they are released, like a DO volume
@@ -21,7 +21,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Secret limits (Cloudflare's: 128 per Worker, 5 KiB per value).
@@ -35,9 +35,9 @@ var secretNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 
 // ValidSecretName reports whether name may name a secret: an identifier
 // usable as both env.NAME (workerd) and an environment variable (runtime
-// node), not in twd's reserved TWD_ / __TWD prefixes.
+// node), not in tailworks' reserved TW_ / __TW prefixes.
 func ValidSecretName(name string) bool {
-	return secretNameRE.MatchString(name) && !strings.HasPrefix(name, "TWD_") && !strings.HasPrefix(name, "__TWD")
+	return secretNameRE.MatchString(name) && !strings.HasPrefix(name, "TW_") && !strings.HasPrefix(name, "__TW")
 }
 
 // SecretMeta is a secret without its value (GET …/secrets, PUT's answer).
@@ -70,7 +70,7 @@ var secretsMu sync.Mutex
 
 // secretsCustodyName is where a workload's secrets live in custody.
 func secretsCustodyName(tenantID, workload string) string {
-	return "twd/" + tenantID + "/workloads/" + workload + "/secrets"
+	return "tw/" + tenantID + "/workloads/" + workload + "/secrets"
 }
 
 func (m *Mgmt) checkSecretScope(ctx context.Context, tenantID, workload string) error {
@@ -123,7 +123,7 @@ func (m *Mgmt) PutSecret(ctx context.Context, tenantID, workload, name, value, b
 		return SecretMeta{}, false, err
 	}
 	if !ValidSecretName(name) {
-		return SecretMeta{}, false, errf(400, "bad_request", "secret name %q must match [A-Za-z_][A-Za-z0-9_]* (≤128) and not start with TWD_ or __TWD", name)
+		return SecretMeta{}, false, errf(400, "bad_request", "secret name %q must match [A-Za-z_][A-Za-z0-9_]* (≤128) and not start with TW_ or __TW", name)
 	}
 	if len(value) > SecretMaxValueBytes {
 		return SecretMeta{}, false, errf(400, "bad_request", "secret value is %d bytes; at most %d", len(value), SecretMaxValueBytes)

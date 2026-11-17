@@ -1,6 +1,6 @@
-# Debugging in twd dev
+# Debugging in tw dev
 
-`twd dev` runs your app on the same twd-hostd, netd and workerd as a deployed
+`tw dev` runs your app on the same tw-hostd, netd and workerd as a deployed
 host. This page covers the debugging tools it has in common with
 `wrangler dev`: source-mapped exception stacks, `req.url`, the V8 inspector
 (Chrome DevTools, VS Code) and the terminal hotkeys.
@@ -15,21 +15,21 @@ back to your TypeScript:
     error Error: boom at /boom
           at explode (src/boom.ts:3:9)
           at Object.fetch (src/index.ts:8:7)
-          … 4 twd runtime frames (__twd_rt.js)
+          … 4 tw runtime frames (__tw_rt.js)
 ```
 
 - The built-in bundler (esbuild) writes `dist/index.js.map` next to the
-  bundle. The map holds positions and names but no source text. twd-hostd
+  bundle. The map holds positions and names but no source text. tw-hostd
   rewrites every exception stack with it before it writes the request
-  record, so `twd dev`, `twd logs`, `twd logs --json` and the OTLP export all
+  record, so `tw dev`, `tw logs`, `tw logs --json` and the OTLP export all
   show `src/…` positions.
-- The text output folds frames from twd's own modules (`__twd_rt.js`, the
-  generated `__twd_main.js` and `__twd_facet.js`) into one `… N twd runtime
-  frames` line. The JSON record (`twd dev --json`, `twd logs --json`) keeps
+- The text output folds frames from tailworks' own modules (`__tw_rt.js`, the
+  generated `__tw_main.js` and `__tw_facet.js`) into one `… N tw runtime
+  frames` line. The JSON record (`tw dev --json`, `tw logs --json`) keeps
   the whole stack.
-- `twd deploy` ships the map too, unless the wrangler config sets
+- `tw deploy` ships the map too, unless the wrangler config sets
   `"upload_source_maps": false`. Then deployed stacks show `dist/index.js`
-  positions. `twd dev` always maps.
+  positions. `tw dev` always maps.
 - Bundles built by wrangler's bundler (`--wrangler`, `--from-wrangler-out`)
   ship no map yet, so their stacks show bundle positions.
 
@@ -45,23 +45,23 @@ that builds absolute URLs (OAuth redirect URIs, links,
 `getCaller(req)` is unaffected. The caller is always the dev client node's
 identity (WhoIs of the tailnet connection), never anything in the request's
 headers. On a deployed host, `Host` is whatever the tailnet client sent (the
-MagicDNS name, the 100.x address or a Funnel hostname), and twd never uses it
+MagicDNS name, the 100.x address or a Funnel hostname), and tailworks never uses it
 for identity or routing either.
 
 ## Attach a debugger: `--inspector-port`
 
 ```sh
-twd dev --inspector-port 9229
+tw dev --inspector-port 9229
 ```
 
 This starts workerd with its V8 inspector and serves it on
-`127.0.0.1:9229`, loopback only. On every reload, twd dev forwards the fixed
+`127.0.0.1:9229`, loopback only. On every reload, tw dev forwards the fixed
 port to the new workerd, so you don't need to reconfigure the debugger. With
 the flag on, the bundle also carries its source map inline, with the
 sources, so the debugger shows `src/…` files.
 
 There are a few targets. Pick **`workerd: worker tenant`**: that is your
-app. `platform` and `deny` are twd's own isolates. Breakpoints and `debugger;`
+app. `platform` and `deny` are tailworks' own isolates. Breakpoints and `debugger;`
 statements stop in a request handler, so make a request after you attach.
 
 ### Chrome DevTools
@@ -74,15 +74,15 @@ The **Sources** panel lists `src/…` from the inline source map.
 
 ### VS Code
 
-Add this to `.vscode/launch.json`, run `twd dev --inspector-port 9229`, then
-start **Attach to twd dev**:
+Add this to `.vscode/launch.json`, run `tw dev --inspector-port 9229`, then
+start **Attach to tw dev**:
 
 ```json
 {
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Attach to twd dev",
+      "name": "Attach to tw dev",
       "type": "node",
       "request": "attach",
       "address": "127.0.0.1",
@@ -104,12 +104,12 @@ With `--json`, the `inspector` event gives the address
 (`{"event":"inspector","addr":"127.0.0.1:9229","ws":"ws://127.0.0.1:9229"}`).
 
 The inspector gives full control of the isolate, so it listens on loopback
-only. twd-hostd's `WorkerdInspector` option takes effect only in twd dev's
+only. tw-hostd's `WorkerdInspector` option takes effect only in tw dev's
 process-tier mode, never on a host that serves tenants.
 
 ## Look at the data: the dev console
 
-`twd dev` serves a read-only data console on `127.0.0.1`, as `wrangler
+`tw dev` serves a read-only data console on `127.0.0.1`, as `wrangler
 dev`'s `e` hotkey opens a local explorer. The ready output prints its
 address (`console on http://127.0.0.1:<port>/`); press `e` to open it.
 
@@ -122,8 +122,8 @@ address (`console on http://127.0.0.1:<port>/`); press `e` to open it.
   not browsable.
 
 It reads the run's own stores, so it shows what the app wrote a moment
-ago. It never writes: change data from the app (for a deployed app, `twd
-kv` and `twd d1 execute` also write). Durable Object storage isn't shown
+ago. It never writes: change data from the app (for a deployed app, `tw
+kv` and `tw d1 execute` also write). Durable Object storage isn't shown
 yet.
 
 `--console-port <port>` picks the port (default `0`, a free one);
@@ -134,7 +134,7 @@ gives its URL.
 
 ## Hotkeys
 
-When stdin is a terminal and `--json` is off, `twd dev` reads single keys:
+When stdin is a terminal and `--json` is off, `tw dev` reads single keys:
 
 | Key | Action |
 |---|---|
@@ -142,6 +142,6 @@ When stdin is a terminal and `--json` is off, `twd dev` reads single keys:
 | `e` | open the data console (below) in the default browser |
 | `x` or `q` | stop, like Ctrl-C |
 
-While twd dev runs, the terminal doesn't echo keys. It goes back to normal
-when twd dev exits. Ctrl-C works as usual. With stdin redirected, under
-`--json`, or as a background job, twd dev doesn't read hotkeys.
+While tw dev runs, the terminal doesn't echo keys. It goes back to normal
+when tw dev exits. Ctrl-C works as usual. With stdin redirected, under
+`--json`, or as a background job, tw dev doesn't read hotkeys.

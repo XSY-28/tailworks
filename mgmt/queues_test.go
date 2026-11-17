@@ -35,7 +35,7 @@ func newQueueEnv(t *testing.T) *queueEnv {
 	var tn struct{ TenantID string }
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "wrangler.jsonc": queueWrangler, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "wrangler.jsonc": queueWrangler, "dist/index.js": "export default {}"})
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, &dep)
 	return &queueEnv{e: e, tenant: tn.TenantID, epoch: dep.Epoch}
@@ -368,6 +368,6 @@ func TestQueuesLifecycle(t *testing.T) {
 	}
 	c.fail("GET", "/v1/tenants/tn_nope/queues", nil, 404, "unknown_tenant")
 
-	bad := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "wrangler.jsonc": `{"queues":{"consumers":[{"queue":"Bad"}]}}`, "dist/index.js": "export default {}"})
+	bad := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "wrangler.jsonc": `{"queues":{"consumers":[{"queue":"Bad"}]}}`, "dist/index.js": "export default {}"})
 	c.fail("POST", "/v1/deployments", map[string]any{"tenantID": q.tenant, "workload": "other", "bundle": bad}, 400, "bad_bundle")
 }

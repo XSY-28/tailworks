@@ -47,9 +47,9 @@ func TestDBClockExtrapolates(t *testing.T) {
 // On Postgres, the store clock follows the server: Now() matches
 // clock_timestamp() closely, and Mgmt.now() uses it.
 func TestStoreClockPostgres(t *testing.T) {
-	dsn := os.Getenv("TWD_TEST_POSTGRES_DSN")
+	dsn := os.Getenv("TW_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("TWD_TEST_POSTGRES_DSN not set")
+		t.Skip("TW_TEST_POSTGRES_DSN not set")
 	}
 	ctx := context.Background()
 	st, err := OpenStore(ctx, dsn)

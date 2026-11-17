@@ -17,7 +17,7 @@ import (
 // The test binary doubles as the two processes the tests need:
 //
 //	DEVREAP_TEST_CHILD=1   a stand-in for workerd: sleeps until killed.
-//	DEVREAP_TEST_OWNER=dir a stand-in for twd dev: Guards dir, starts a
+//	DEVREAP_TEST_OWNER=dir a stand-in for tw dev: Guards dir, starts a
 //	                       child in its own process group (as hostd starts
 //	                       workerd) whose command line names dir, prints
 //	                       "ready <pid>" and waits to be killed.
@@ -56,7 +56,7 @@ func startChild(exe, dir string) *exec.Cmd {
 }
 
 func shortDir(t *testing.T) string {
-	d, err := os.MkdirTemp("/tmp", "twd-devreap-test-")
+	d, err := os.MkdirTemp("/tmp", "tw-devreap-test-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func deadPID(t *testing.T) int {
 }
 
 // ReapStale: a dir whose owner is dead is reaped; one whose owner is alive
-// (another worktree's twd dev) and one with no owner file are not; and a
+// (another worktree's tw dev) and one with no owner file are not; and a
 // process that isn't one of the dir's programs is never signalled, even if
 // its command line names the dir.
 func TestReapStale(t *testing.T) {

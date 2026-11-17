@@ -1,8 +1,8 @@
 //go:build sdk
 
 // Package sdk is the M5 SDK conformance suite (make test-sdk): real
-// Cloudflare Agents SDK and Vercel AI SDK code on twd's process tier
-// (twd-hostd + generated platform + stock workerd), driven over a hermetic
+// Cloudflare Agents SDK and Vercel AI SDK code on tailworks' process tier
+// (tw-hostd + generated platform + stock workerd), driven over a hermetic
 // tailnet (testcontrol + local DERP/STUN). No real tailnet, no LLM keys.
 //
 // Two hosts share one control plane: host A runs the agent apps, host B the
@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -66,7 +66,7 @@ func startSuite(t *testing.T) *suite {
 	})
 	start := func(prefix string) *hostdtest.Env {
 		return hostdtest.Start(t, hostdtest.Options{ControlURL: ctl.URL, Fake: fakemgmt.Config{StaticKey: nettest.DummyKey}, Ephemeral: true,
-			HostnamePrefix: prefix, KillTombstone: 5 * time.Second, Sandbox: hostd.SandboxAuto, // twd-hostd's default
+			HostnamePrefix: prefix, KillTombstone: 5 * time.Second, Sandbox: hostd.SandboxAuto, // tw-hostd's default
 			Tenant: mgmtapi.Tenant{Tailnet: "ttest.ts.net", ControlURL: ctl.URL, MintMode: "static"}})
 	}
 	s := &suite{t: t, ctl: ctl, a: start("a-"), b: start("b-")}

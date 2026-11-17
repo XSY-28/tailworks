@@ -1,4 +1,4 @@
-// Package devreap cleans up after a twd dev (or test) process that died
+// Package devreap cleans up after a tw dev (or test) process that died
 // without running its defers, SIGKILL included: the workerd and node
 // children it started, and its private temp dir.
 //
@@ -16,8 +16,8 @@
 //
 // Guard also records the owner's pid in the dir (OwnerFile), so ReapStale
 // can clean up dirs whose owner and watchdog are both gone (a reboot, or a
-// kill of the whole session) the next time twd dev starts. A dir whose
-// owner is alive, such as another worktree's twd dev, is left alone.
+// kill of the whole session) the next time tw dev starts. A dir whose
+// owner is alive, such as another worktree's tw dev, is left alone.
 package devreap
 
 import (
@@ -36,10 +36,10 @@ import (
 )
 
 // WatchArg is the watchdog's argv[1].
-const WatchArg = "__twd-devreap"
+const WatchArg = "__tw-devreap"
 
 // OwnerFile is the file in a guarded dir that records its owner.
-const OwnerFile = ".twd-owner.json"
+const OwnerFile = ".tailworks-owner.json"
 
 // defaultPrograms are always a dir's programs.
 var defaultPrograms = []string{"workerd", "node"}
@@ -60,7 +60,7 @@ type owner struct {
 }
 
 // The watchdog runs from package init, before main or testing.Main, in any
-// binary that imports devreap (twd, and the test binaries of the packages
+// binary that imports devreap (tailworks, and the test binaries of the packages
 // that use it).
 func init() {
 	if len(os.Args) > 1 && os.Args[1] == WatchArg {

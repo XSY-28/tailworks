@@ -10,15 +10,15 @@ import (
 	"testing"
 )
 
-// TestMCPServer: twd's MCP server (mcp.go) behind the WhoIs gate. Who
+// TestMCPServer: tailworks' MCP server (mcp.go) behind the WhoIs gate. Who
 // gets which tools (read for admins and MCPCap holders; deploy, kill,
 // undeploy only from an MCPCap grant naming them; the local bridge only
-// with Twd-MCP-Tools), that an MCPCap-only caller reaches /mcp and nothing
+// with Tw-MCP-Tools), that an MCPCap-only caller reaches /mcp and nothing
 // else, that tools run the /v1 handlers (their errors and data), and the
 // JSON-RPC edges.
 func TestMCPServer(t *testing.T) {
 	e := newTestEnv(t)
-	srv := &Server{M: e.m, Version: "v-test", Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Version: "v-test", Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	tn := v1Tenant(t, e, "op.ts.net", nil)
 	mcpVals := func(v ...string) map[string][]json.RawMessage {
 		var out []json.RawMessage
@@ -134,7 +134,7 @@ func TestMCPServer(t *testing.T) {
 
 	// initialize.
 	init := rpc("ro", "initialize", map[string]any{"protocolVersion": "2025-03-26", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "t"}})["result"].(map[string]any)
-	if init["protocolVersion"] != "2025-03-26" || init["serverInfo"].(map[string]any)["name"] != "twd" {
+	if init["protocolVersion"] != "2025-03-26" || init["serverInfo"].(map[string]any)["name"] != "tw" {
 		t.Fatalf("initialize: %v", init)
 	}
 
@@ -164,7 +164,7 @@ func TestMCPServer(t *testing.T) {
 	if _, errv := call("admin", "undeploy", map[string]any{"workload": "w", "reason": "x"}); errv == nil || errv["code"] != "cap_missing" {
 		t.Fatalf("an admin without the MCP grant must not undeploy over MCP: %v", errv)
 	}
-	if _, errv := call("local", "kill", map[string]any{"object": "o1", "reason": "x"}); errv == nil || errv["code"] != "cap_missing" || errv["snippet"] != "twd mcp --allow kill" {
+	if _, errv := call("local", "kill", map[string]any{"object": "o1", "reason": "x"}); errv == nil || errv["code"] != "cap_missing" || errv["snippet"] != "tw mcp --allow kill" {
 		t.Fatalf("local kill without --allow: %v", errv)
 	}
 	// Granted: the /v1 handler's own answer.

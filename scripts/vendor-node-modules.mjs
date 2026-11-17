@@ -2,7 +2,7 @@
 // Copies the runtime dependency closure of <pkg>... from the repo's
 // node_modules (exactly the versions the tests ran with; no network) into
 // out, keeping node's nested layout. Workspace packages (symlinks, e.g.
-// @twd/*) are copied as package.json + their "files". devDependencies,
+// @tailworks/*) are copied as package.json + their "files". devDependencies,
 // .bin and native/platform packages (workerd, esbuild) are left out.
 import fs from "node:fs";
 import path from "node:path";

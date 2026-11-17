@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Teardown gate for `twd down --purge`. down lists every object and kills
+// Teardown gate for `tw down --purge`. down lists every object and kills
 // it, then stops the daemons. Anything created after the list stayed on
 // the tailnet as a device:
 //   - a pool refill (killing a pool node let maintainPools top the pool up:
@@ -26,7 +26,7 @@ func (h *Host) gateCreate() (done func(), err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.tearingDown {
-		return nil, &apiError{Code: "upstream_unavailable", Detail: "twd is shutting down (twd down): no new objects"}
+		return nil, &apiError{Code: "upstream_unavailable", Detail: "tw is shutting down (tw down): no new objects"}
 	}
 	h.createsInFlight++
 	return func() {
@@ -54,7 +54,7 @@ func (h *Host) Teardown() (stillCreating int) {
 	}
 }
 
-// teardownHandler is POST /v1/teardown (push API; the local socket for twd
+// teardownHandler is POST /v1/teardown (push API; the local socket for tailworks
 // down).
 func (h *Host) teardownHandler(w http.ResponseWriter, r *http.Request) {
 	n := h.Teardown()

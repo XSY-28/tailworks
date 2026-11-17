@@ -17,8 +17,8 @@ import (
 	"tailscale.com/types/key"
 	"tailscale.com/types/views"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // fakeWhoIs answers WhoIs for every remote address with one identity
@@ -83,7 +83,7 @@ func wantRefused(t *testing.T, resp *http.Response) {
 }
 
 // TestPushAuthTsnet: the tsnet push surface serves kills and assignment
-// pushes to mgmt's node only (tag:twd-mgmt and the pinned stable node ID),
+// pushes to mgmt's node only (tag:tw-mgmt and the pinned stable node ID),
 // and nothing else.
 func TestPushAuthTsnet(t *testing.T) {
 	mgmt := node("nMGMT", MgmtTag)
@@ -152,7 +152,7 @@ func TestPushAuthTsnet(t *testing.T) {
 
 // TestPushAuthRepin: mgmt's node recreated (new stable ID at the same
 // -mgmt address) is accepted once the address resolves to it; an unrelated
-// tag:twd-mgmt node is still refused.
+// tag:tw-mgmt node is still refused.
 func TestPushAuthRepin(t *testing.T) {
 	old, renewed := node("nMGMT1", MgmtTag), node("nMGMT2", MgmtTag)
 	f := &fakeWhoIs{mgmt: old}
@@ -183,7 +183,7 @@ func TestPushAuthRepin(t *testing.T) {
 	wantRefused(t, pushReq(t, srv, "POST", "/v1/push/kill", `{"objectID":"o1"}`))
 }
 
-// TestPushAuthPinByDNSName: -mgmt http://twd-mgmt.<tailnet> is resolved
+// TestPushAuthPinByDNSName: -mgmt http://tw-mgmt.<tailnet> is resolved
 // through the netmap; a peer at that name without the tag does not pin,
 // and a mgmt node that is not in the netmap yet is pinned by the first
 // tagged pusher.
@@ -199,25 +199,25 @@ func TestPushAuthPinByDNSName(t *testing.T) {
 		}
 	}
 	f := &fakeWhoIs{}
-	h := newPushTestHost(t, "https://twd-mgmt.ttest.ts.net", f.whois,
-		st(&ipnstate.PeerStatus{ID: "nHOST2", DNSName: "twd-host-h2.ttest.ts.net."},
-			&ipnstate.PeerStatus{ID: "nMGMT", DNSName: "twd-mgmt.ttest.ts.net.", Tags: &tags}))
+	h := newPushTestHost(t, "https://tw-mgmt.ttest.ts.net", f.whois,
+		st(&ipnstate.PeerStatus{ID: "nHOST2", DNSName: "tw-host-h2.ttest.ts.net."},
+			&ipnstate.PeerStatus{ID: "nMGMT", DNSName: "tw-mgmt.ttest.ts.net.", Tags: &tags}))
 	if err := h.pushAuth.pin(context.Background()); err != nil || h.pushAuth.Pinned() != "nMGMT" {
 		t.Fatalf("pin by DNS name: %v %q", err, h.pushAuth.Pinned())
 	}
 	// Short name (no tailnet suffix) matches the first label.
-	h = newPushTestHost(t, "http://twd-mgmt", f.whois, st(&ipnstate.PeerStatus{ID: "nMGMT", DNSName: "twd-mgmt.ttest.ts.net.", Tags: &tags}))
+	h = newPushTestHost(t, "http://tw-mgmt", f.whois, st(&ipnstate.PeerStatus{ID: "nMGMT", DNSName: "tw-mgmt.ttest.ts.net.", Tags: &tags}))
 	if err := h.pushAuth.pin(context.Background()); err != nil || h.pushAuth.Pinned() != "nMGMT" {
 		t.Fatalf("pin by short name: %v %q", err, h.pushAuth.Pinned())
 	}
 	// The name resolves to an untagged node: not pinned.
-	h = newPushTestHost(t, "http://twd-mgmt.ttest.ts.net", f.whois, st(&ipnstate.PeerStatus{ID: "nIMP", DNSName: "twd-mgmt.ttest.ts.net."}))
+	h = newPushTestHost(t, "http://tw-mgmt.ttest.ts.net", f.whois, st(&ipnstate.PeerStatus{ID: "nIMP", DNSName: "tw-mgmt.ttest.ts.net."}))
 	if err := h.pushAuth.pin(context.Background()); err == nil || h.pushAuth.Pinned() != "" {
 		t.Fatalf("untagged node at mgmt's name pinned: %v %q", err, h.pushAuth.Pinned())
 	}
 	// Not in the netmap: no pin at Start; the first tagged pusher pins,
 	// an untagged one never does.
-	h = newPushTestHost(t, "http://twd-mgmt.ttest.ts.net", f.whois, st())
+	h = newPushTestHost(t, "http://tw-mgmt.ttest.ts.net", f.whois, st())
 	if err := h.pushAuth.pin(context.Background()); err == nil {
 		t.Fatal("pinned with an empty netmap")
 	}

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -18,8 +18,8 @@ import (
 // waitForApproval (ADR-040) on workerd's built-in Workflows
 // engine, in both object modes, and checks the approval surface:
 //
-//   - the wait is listed (GET /_twd/approvals on the workload node) only to
-//     a caller holding twd.dev/cap/approve;
+//   - the wait is listed (GET /_tw/approvals on the workload node) only to
+//     a caller holding github.com/rosskukulinski/tailworks/cap/approve;
 //   - without the grant (or outside its limits) the decision is refused
 //     (cap_missing) and the instance keeps waiting; app code approving its
 //     own Workflow (approveWorkflow) is refused too;
@@ -53,7 +53,7 @@ func TestWorkflowApprovals(t *testing.T) {
 		return r
 	}
 	decide := func(id, body string) (int, map[string]any) {
-		code, _, b := s.do("POST", base+"/_twd/approvals/refund/"+id, []byte(body), "content-type", "application/json")
+		code, _, b := s.do("POST", base+"/_tw/approvals/refund/"+id, []byte(body), "content-type", "application/json")
 		return code, parse(b)
 	}
 
@@ -81,7 +81,7 @@ func TestWorkflowApprovals(t *testing.T) {
 	})
 
 	t.Run("NoGrantRefused", func(t *testing.T) {
-		code, _, b := s.do("GET", base+"/_twd/approvals", nil)
+		code, _, b := s.do("GET", base+"/_tw/approvals", nil)
 		if code != 403 || parse(b)["code"] != "cap_missing" {
 			t.Fatalf("list without grant: %d %s", code, b)
 		}
@@ -91,7 +91,7 @@ func TestWorkflowApprovals(t *testing.T) {
 				t.Fatalf("%s approve without grant: %d %v", m.class, code, r)
 			}
 			// A form post (not JSON) is refused before anything else.
-			code, _, b = s.do("POST", base+"/_twd/approvals/refund/"+m.id, []byte("decision=approve"), "content-type", "application/x-www-form-urlencoded")
+			code, _, b = s.do("POST", base+"/_tw/approvals/refund/"+m.id, []byte("decision=approve"), "content-type", "application/x-www-form-urlencoded")
 			if code != 400 {
 				t.Fatalf("form post: %d %s", code, b)
 			}
@@ -125,7 +125,7 @@ func TestWorkflowApprovals(t *testing.T) {
 		s.waitPeer(w2.IP)
 		base = "http://" + w2.IP
 		eventually(t, 30*time.Second, "both waits listed after the restart", func() (bool, any) {
-			code, _, b := s.do("GET", base+"/_twd/approvals", nil)
+			code, _, b := s.do("GET", base+"/_tw/approvals", nil)
 			var r struct {
 				Approvals []hostd.Approval `json:"approvals"`
 			}
@@ -147,7 +147,7 @@ func TestWorkflowApprovals(t *testing.T) {
 
 	t.Run("ApproveWithIdentity", func(t *testing.T) {
 		for _, m := range modes {
-			// The request names a forged approver twice; twd ignores both.
+			// The request names a forged approver twice; tailworks ignores both.
 			code, r := decide(m.id, `{"decision":"approve","comment":"ok by me","approver":{"user":"forged@example.com"},"metadata":{"approver":{"user":"forged@example.com"},"note":"n1"}}`)
 			if code != 200 || get(r, "approval", "status") != "approved" {
 				t.Fatalf("%s approve: %d %v", m.class, code, r)
@@ -198,7 +198,7 @@ func TestWorkflowApprovals(t *testing.T) {
 	})
 
 	t.Run("ViaMgmtPushAPI", func(t *testing.T) {
-		// What mgmt sends for `twd approve` / the admin UI: the approver's
+		// What mgmt sends for `tw approve` / the admin UI: the approver's
 		// WhoIs identity and their grants toward mgmt, to the host's push API.
 		code, r := s.getJSON(base + "/agents/plain-refund-agent/r1/start?amount=5&id=wf-mgmt")
 		if code != 200 {

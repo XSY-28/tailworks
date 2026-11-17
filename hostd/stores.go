@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // storeBodyLimit bounds a store API body (an append: base64 data + JSON).

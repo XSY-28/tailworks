@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // errStatus maps catalog codes to HTTP statuses for hostd-originated errors.
@@ -53,7 +53,7 @@ func writeAPIError(w http.ResponseWriter, e *apiError) {
 }
 
 // ingressHandler is the tenant registry's netd Upstream: netd has done
-// WhoIs and set the cf blob; hostd adds cf.twd routing (only hostd can, as
+// WhoIs and set the cf blob; hostd adds cf.tw routing (only hostd can, as
 // only it reaches the ingress socket) and forwards to the active workerd.
 func (h *Host) ingressHandler(t *tenant) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			writeAPIError(w, &apiError{Code: "no_identity", Detail: "missing cf blob"})
 			return
 		}
-		if h.serveApprovals(w, r, wl, blob) { // approvals.go: /_twd/approvals
+		if h.serveApprovals(w, r, wl, blob) { // approvals.go: /_tw/approvals
 			return
 		}
 		route := map[string]any{"kind": "workload", "workload": o.Workload, "objectID": o.ID}
@@ -82,7 +82,7 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			route = map[string]any{"kind": "object", "class": o.Class, "name": o.Name, "workload": o.Workload, "objectID": o.ID}
 		}
 		trace := newTraceID()
-		blob["twd"] = route
+		blob["tw"] = route
 		blob["traceId"] = trace
 		ctx, cancel := context.WithTimeout(r.Context(), h.cfg.DrainTimeout+5*time.Second)
 		inst, release := wl.acquire(ctx)
@@ -114,7 +114,7 @@ func publicBlob(blob map[string]any) bool {
 	return rq["kind"] == "public"
 }
 
-// statusRecorder captures the status and twd-error of a proxied response.
+// statusRecorder captures the status and tw-error of a proxied response.
 type statusRecorder struct {
 	http.ResponseWriter
 	code int
@@ -243,7 +243,7 @@ type apiReq struct {
 	Records   []map[string]any              `json:"records"`
 	ActingFor string                        `json:"actingFor"`
 	Principal string                        `json:"principal"`
-	// Ticket is the create ticket of the request being served (cf.twd.ticket,
+	// Ticket is the create ticket of the request being served (cf.tw.ticket,
 	// hostd-issued for tailnet requests and cron runs); it admits creates
 	// ("admit", a workload-level "spawn"). Public requests have none.
 	Ticket string `json:"ticket"`
@@ -385,7 +385,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			if parent.Class == "" {
 				// A spawn from the Worker (workload identity) is admitted by the
 				// request's ticket; a public request has none, and neither has
-				// code that reached __TWD some other way (RT3-07).
+				// code that reached __TW some other way (RT3-07).
 				if _, ok := gen.VerifyTicket(inst.macKey(), req.Ticket, time.Now()); !ok {
 					fail(&apiError{Code: "create_not_admitted", Detail: "spawn from the workload needs the request's create ticket (a public request may not spawn)"})
 					return
@@ -520,13 +520,13 @@ func (h *Host) pushHandlers(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/push/probe", h.probeHandler)
 	// upgrade.go: install a release pushed by an upgrade run (Config.SelfUpgrade).
 	m.HandleFunc("POST /v1/push/upgrade", h.upgradeHandler)
-	// logs.go: one workload's app log, for `twd logs` from a linked machine
+	// logs.go: one workload's app log, for `tw logs` from a linked machine
 	// (mgmt asks the lease holder; on the tsnet surface pushAuth admits
 	// mgmt's node only).
 	m.HandleFunc("GET /v1/logs", h.logsHandler)
-	// storeadmin.go: an operator op on a platform store (twd d1 execute, …).
+	// storeadmin.go: an operator op on a platform store (tw d1 execute, …).
 	m.HandleFunc("POST /v1/store-admin", h.storeAdminHandler)
-	// approvals.go: twd approvals / twd approve and the admin UI, through mgmt.
+	// approvals.go: tw approvals / tw approve and the admin UI, through mgmt.
 	m.HandleFunc("GET /v1/approvals", h.approvalsListHandler)
 	m.HandleFunc("POST /v1/approvals/decide", h.approvalsDecideHandler)
 }
@@ -553,11 +553,11 @@ func (h *Host) PushHandler() http.Handler {
 
 // pushAPI is the local unix-socket API (<run-dir>/hostd.sock, mode 0600,
 // procsb.Guard): the pushes (local-dev mgmt) plus the operator's status,
-// purge and VM checks (twd status / down --purge / host vmcheck).
+// purge and VM checks (tw status / down --purge / host vmcheck).
 func (h *Host) pushAPI() http.Handler {
 	m := http.NewServeMux()
 	h.pushHandlers(m)
-	// twd down --purge: forget killed objects (their tombstones) so a
+	// tw down --purge: forget killed objects (their tombstones) so a
 	// redeploy on this state dir starts from a clean registry.
 	m.HandleFunc("POST /v1/purge", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "purged": h.Purge()})
@@ -567,10 +567,10 @@ func (h *Host) pushAPI() http.Handler {
 	})
 	// The operator's local scrape (the tailnet one is MetricsListener).
 	m.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) { h.MetricsHandler().ServeHTTP(w, r) })
-	// teardown.go: no new objects before twd down --purge lists them.
+	// teardown.go: no new objects before tw down --purge lists them.
 	m.HandleFunc("POST /v1/teardown", h.teardownHandler)
 
-	// Operator checks of a workload's microVM (twd host vmcheck): guest
+	// Operator checks of a workload's microVM (tw host vmcheck): guest
 	// stats, DO volume fsync latency, and the no-keys-in-guest scan. The
 	// socket is the user's (0700 dir); answers carry no key material.
 	m.HandleFunc("POST /v1/vm/check", func(w http.ResponseWriter, r *http.Request) {
@@ -687,7 +687,7 @@ type StatusView struct {
 	// or "none".
 	Sandbox string `json:",omitempty"`
 	// Tiers this host offers ("process", and "microvm" with a backend);
-	// VMVia says how microVMs are launched (twd-vmhelper or in-process).
+	// VMVia says how microVMs are launched (tw-vmhelper or in-process).
 	Tiers     []string
 	VMVia     string `json:",omitempty"`
 	Objects   []ObjectStatus

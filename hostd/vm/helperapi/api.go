@@ -1,5 +1,5 @@
-// Package helperapi is the contract between twd-hostd (running as a normal
-// user) and twd-vmhelper, the small privileged service that does the parts
+// Package helperapi is the contract between tw-hostd (running as a normal
+// user) and tw-vmhelper, the small privileged service that does the parts
 // of the microVM tier that need root: network namespaces and TAP devices,
 // the Firecracker jailer (chroot, per-VM uid/gid, cgroups v2), and the
 // dm-crypt volumes that hold Durable Object storage.
@@ -35,8 +35,8 @@ import (
 	"time"
 )
 
-// DefaultSocket is where `twd host setup --microvm` puts the helper.
-const DefaultSocket = "/run/twd/vmhelper.sock"
+// DefaultSocket is where `tw host setup --microvm` puts the helper.
+const DefaultSocket = "/run/tailworks/vmhelper.sock"
 
 // Version is bumped when the protocol changes incompatibly.
 // 2: VolumeSlot + the attach op (warm pool); snapshot-base + Restore.
@@ -72,7 +72,7 @@ func Check(r Response) error {
 	if min <= 0 {
 		min = r.Version
 	}
-	return fmt.Errorf("twd-vmhelper speaks protocol %d-%d, this twd %d-%d", min, r.Version, MinVersion, Version)
+	return fmt.Errorf("tw-vmhelper speaks protocol %d-%d, this tailworks %d-%d", min, r.Version, MinVersion, Version)
 }
 
 // Error codes.

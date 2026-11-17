@@ -8,7 +8,7 @@ tenant's OTLP export, whose custody pattern it reuses).
 **Context.**
 
 - A Workflow that waits for an approval (ADR-040) is listed by
-  `twd approvals`, the admin UI and `GET /_twd/approvals`, and recorded as
+  `tw approvals`, the admin UI and `GET /_tw/approvals`, and recorded as
   `approval_requested` in the host's audit chain. Nobody is told. An
   approval waits until someone happens to look, and the default timeout
   (24 hours) then rejects it.
@@ -35,14 +35,14 @@ tenant's OTLP export, whose custody pattern it reuses).
 
 1. **One webhook per tenant, set by an admin.** `PUT
    /v1/tenants/{id}/notifications` with `{"webhook": {"url", "headers",
-   "events"}}` (`twd notify set --webhook -`); `GET` (origin and header
-   names only), `DELETE`, and `POST …/notifications/test` (`twd notify
+   "events"}}` (`tw notify set --webhook -`); `GET` (origin and header
+   names only), `DELETE`, and `POST …/notifications/test` (`tw notify
    test`). Events today: `approval_requested` (the default). The list is
    one value per line in the spec so later events (`approval_timeout`,
    deploy failures) add cleanly.
 2. **The config is a secret, kept in custody.** A chat webhook's path is
    its credential (Slack, Discord, Google Chat). The whole config lives in
-   custody under `twd/<tenant>/notifications`, like the OTLP export; the
+   custody under `tw/<tenant>/notifications`, like the OTLP export; the
    store holds nothing. No API answer, log line or audit record carries the
    URL's path or query or a header value: only the origin
    (`https://hooks.slack.com`) and the header names.
@@ -56,11 +56,11 @@ tenant's OTLP export, whose custody pattern it reuses).
 4. **The payload.** JSON `NotificationEvent`: `event`, `tenantID`,
    `workload`, `workflow`, `instance`, `step`, `facts`, `link`
    (`https://<mgmt>/ui/approvals?tenant=<id>#<instance>`), `cli`
-   (`twd approve <workload> <instance> --workflow <name>`), `sentAt`, and a
+   (`tw approve <workload> <instance> --workflow <name>`), `sentAt`, and a
    one-line `text`, which Slack, Mattermost and Google Chat incoming
    webhooks show as is. The link is a convenience, not a capability:
    whoever opens it still decides with their own tailnet identity and
-   grants. Header `Twd-Event` names the event.
+   grants. Header `Tw-Event` names the event.
 5. **Egress from mgmt.** mgmt dials the URL itself: a one-label name, a
    `*.ts.net` name or a Tailscale address over its tailnet node; anything
    else over the host's network. Loopback, link-local and unspecified

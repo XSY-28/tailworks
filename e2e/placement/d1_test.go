@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/ipn/store/mem"
 	"tailscale.com/tsnet"
 )
@@ -28,7 +28,7 @@ import (
 // binding and through mgmt's operator API survives a restart of its
 // hostd, and a lease move to another host (`--replace`), whose workerd
 // starts with no DO storage and rebuilds the database from mgmt's
-// journal. Real twd-mgmt and two real twd-hostd processes on testcontrol.
+// journal. Real tw-mgmt and two real tw-hostd processes on testcontrol.
 func TestD1SurvivesRestartAndMove(t *testing.T) {
 	wd, err := nettest.WorkerdBinary()
 	if err != nil {
@@ -37,12 +37,12 @@ func TestD1SurvivesRestartAndMove(t *testing.T) {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available (needed to bundle the app)")
 	}
-	dir, err := hostdtest.ShortDir("twd-d1-")
+	dir, err := hostdtest.ShortDir("tw-d1-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -115,7 +115,7 @@ func TestD1SurvivesRestartAndMove(t *testing.T) {
 
 	app := filepath.Join(dir, "app")
 	os.MkdirAll(filepath.Join(app, "src"), 0o755)
-	os.WriteFile(filepath.Join(app, "twd.jsonc"), []byte(`{"name": "notes", "tailnet": {"tags": ["tag:ttest"]}}`), 0o644)
+	os.WriteFile(filepath.Join(app, "tailworks.jsonc"), []byte(`{"name": "notes", "tailnet": {"tags": ["tag:ttest"]}}`), 0o644)
 	os.WriteFile(filepath.Join(app, "wrangler.jsonc"), []byte(`{"name": "notes", "main": "src/index.js", "compatibility_date": "2026-04-01",
   "d1_databases": [{"binding": "DB", "database_name": "notes-db", "database_id": "00000000-0000-4000-8000-0000000000d1"}]}`), 0o644)
 	os.WriteFile(filepath.Join(app, "src", "index.js"), []byte(`export default { async fetch(req, env) {

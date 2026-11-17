@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/oci"
-	"github.com/rosskukulinski/twd/internal/registry"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/oci"
+	"github.com/rosskukulinski/tailworks/internal/registry"
 )
 
 // Images pinned at deploy (ADR-032 D3): hostd pulls Repository@Digest from
-// twd's registry (mgmt, over the host's own tailnet node or the local-dev
+// tailworks' registry (mgmt, over the host's own tailnet node or the local-dev
 // socket) and nowhere else; no container engine, no Docker Hub. Every
 // manifest and blob is verified against its digest as it arrives.
 //
@@ -35,7 +35,7 @@ type Puller interface {
 	Pull(ctx context.Context, repo, digest, dir string) error
 }
 
-// RegistryPuller pulls from twd's registry through an oci.Client.
+// RegistryPuller pulls from tailworks' registry through an oci.Client.
 type RegistryPuller struct{ Client *oci.Client }
 
 // Pull implements Puller.

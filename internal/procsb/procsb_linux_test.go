@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/procsb"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
 )
 
 func needLandlock(t *testing.T) int {
@@ -160,7 +160,7 @@ func TestSandboxProbes(t *testing.T) {
 	}
 	// Pathname unix sockets outside the own dirs: Landlock refuses the
 	// connect from ABI 9; below that only servers that Guard their
-	// listener refuse it (all of twd's do).
+	// listener refuse it (all of tailworks' do).
 	got := probe(t, p, procsb.ProbeConnectUnix, usock)
 	t.Logf("unguarded unix socket outside own dirs (ABI %d): %s", abi, got)
 	if abi >= 9 && got == "ok" {

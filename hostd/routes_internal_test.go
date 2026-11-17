@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// GET /v1/logs is a push route (mgmt asks the lease holder for `twd logs`
+// GET /v1/logs is a push route (mgmt asks the lease holder for `tw logs`
 // from a linked machine), so it is on every push surface: the in-process
-// handler (single-process twd up) as well as the local socket. POST
-// /v1/teardown is the operator's (twd down) and stays on the local socket.
+// handler (single-process tw up) as well as the local socket. POST
+// /v1/teardown is the operator's (tw down) and stays on the local socket.
 func TestPushRoutes(t *testing.T) {
 	h := &Host{workloads: map[string]*workload{}, objects: map[string]*object{}, poolBusy: map[string]bool{}}
 	routed := func(hd http.Handler, method, path string) bool {

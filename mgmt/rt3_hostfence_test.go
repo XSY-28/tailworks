@@ -29,7 +29,7 @@ func TestRT3_HostWritesAreLeaseBound(t *testing.T) {
 	pub2, key2, _ := ed25519.GenerateKey(rand.Reader)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}, "auditPubKey": base64.StdEncoding.EncodeToString(pub1)}, nil)
 	h2.ok("PUT", "/v1/hosts/h2", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}, "auditPubKey": base64.StdEncoding.EncodeToString(pub2)}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	var dep struct {
 		DeploymentID string
 		Host         string

@@ -1,6 +1,6 @@
-// twd Workers KV (TRUSTED; runs in the platform worker, never in a tenant
+// tailworks Workers KV (TRUSTED; runs in the platform worker, never in a tenant
 // isolate). ADR-037, on the platform-store substrate
-// (ADR-platform-stores, twd-store.js).
+// (ADR-platform-stores, tw-store.js).
 //
 // A tenant's env.<BINDING> is workerd's own `kvNamespace` binding, so the
 // API (get/getWithMetadata/put/delete/list, types, bulk get) and its
@@ -15,11 +15,11 @@
 //
 // Consistency: a namespace's reads and writes on one host go through one
 // object, so they are read-your-writes. Writes by other writers (another
-// replica, `twd kv key put`) are seen on the next read that wants fresher
+// replica, `tw kv key put`) are seen on the next read that wants fresher
 // data than the last sync: by default 60 s (Cloudflare's cacheTtl default),
 // or the read's cacheTtl.
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { registerStoreKind, storeStub, StoreError, toBytes, utf8 } from "twd-store.js";
+import { registerStoreKind, storeStub, StoreError, toBytes, utf8 } from "tw-store.js";
 
 // Limits (internal/kvwire): Cloudflare's, except values, which are one
 // journal entry (≤ 2 MiB) minus room for the header.
@@ -49,7 +49,7 @@ export function encodeEntry(h, value) {
 }
 
 export function decodeEntry(u8) {
-  if (u8.length < 5 || u8[0] !== 1) throw new Error(u8.length >= 1 && u8[0] > 1 ? `kv: entry v${u8[0]} was written by a newer twd (this one reads v1); upgrade twd-hostd` : "kv: not a v1 KV entry");
+  if (u8.length < 5 || u8[0] !== 1) throw new Error(u8.length >= 1 && u8[0] > 1 ? `kv: entry v${u8[0]} was written by a newer tailworks (this one reads v1); upgrade tw-hostd` : "kv: not a v1 KV entry");
   const n = new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(1);
   if (n > u8.length - 5) throw new Error("kv: truncated KV entry");
   return { h: JSON.parse(utf8(u8.subarray(5, 5 + n))), v: u8.subarray(5 + n) };
@@ -184,7 +184,7 @@ registerStoreKind("kv", {
           .map((r) => ({ ckey: r.k, data: encodeEntry({ k: r.k, d: true }) })),
       );
     } catch (e) {
-      console.warn("twd kv: expiring keys: " + (e?.message ?? e) + "; retrying in 60 s");
+      console.warn("tw kv: expiring keys: " + (e?.message ?? e) + "; retrying in 60 s");
       await s.wakeAt(Date.now() + 60_000);
       return;
     }
@@ -394,7 +394,7 @@ export class KVBackend extends WorkerEntrypoint {
 export class KVFacet extends WorkerEntrypoint {
   #kv() {
     const b = this.ctx.props?.binding;
-    const kv = typeof b === "string" ? this.env["__TWD_STORE_" + b] : undefined;
+    const kv = typeof b === "string" ? this.env["__TW_STORE_" + b] : undefined;
     if (!kv) throw new StoreError("bad_request", "kv: no such binding");
     return kv;
   }

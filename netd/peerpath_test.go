@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // TestEgressWaitsForNewPeerPath: object a calls a node that has just
@@ -60,7 +60,7 @@ func TestEgressWaitsForNewPeerPath(t *testing.T) {
 			st, err := lcA.Status(ctx)
 			if err == nil {
 				for _, p := range st.Peer {
-					if p.HostName == "twd-"+id && len(p.TailscaleIPs) > 0 {
+					if p.HostName == "tw-"+id && len(p.TailscaleIPs) > 0 {
 						ip = p.TailscaleIPs[0].String()
 					}
 				}
@@ -115,7 +115,7 @@ func TestSetHostname(t *testing.T) {
 	t.Cleanup(func() { reg.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	p, _ := reg.Create("pool-aaaa", netd.ObjectOptions{Hostname: "twd-pool-aaaa"})
+	p, _ := reg.Create("pool-aaaa", netd.ObjectOptions{Hostname: "tw-pool-aaaa"})
 	q, _ := reg.Create("peer", netd.ObjectOptions{})
 	if err := p.Ready(ctx); err != nil {
 		t.Fatal(err)

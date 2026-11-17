@@ -1,4 +1,4 @@
-// Package ui is twd-mgmt's embedded admin web UI: Go html/template pages
+// Package ui is tw-mgmt's embedded admin web UI: Go html/template pages
 // plus one CSS file and one vanilla-JS file, served under /ui/ by mgmt
 // itself (no build step, no external assets, nothing stored client-side).
 //
@@ -42,7 +42,7 @@ var templateFS embed.FS
 var staticFS embed.FS
 
 // Handler serves the admin UI under /ui/. It sends its /v1 requests with
-// api to baseURL (for example "https://twd-mgmt.example.ts.net"), each with
+// api to baseURL (for example "https://tw-mgmt.example.ts.net"), each with
 // the browser request's context. Only admins that are not hosts may use
 // it, as GET /v1/whoami reports them.
 func Handler(api *http.Client, baseURL string) http.Handler {
@@ -145,9 +145,9 @@ func (u *ui) call(r *http.Request, method, p string, out any) error {
 		return &apiError{Status: 500, Code: "internal", Message: err.Error()}
 	}
 	req.Header.Set("Accept", "application/json")
-	// Twd-Actor names the actor on the local-dev socket, as the CLI does;
+	// Tw-Actor names the actor on the local-dev socket, as the CLI does;
 	// over the tailnet the caller's WhoIs login wins.
-	req.Header.Set("Twd-Actor", "operator (admin ui)")
+	req.Header.Set("Tw-Actor", "operator (admin ui)")
 	res, err := u.api.Do(req)
 	if err != nil {
 		return &apiError{Status: 502, Code: "internal", Message: fmt.Sprintf("%s %s: %v", method, p, err)}
@@ -291,7 +291,7 @@ func (u *ui) fail(w http.ResponseWriter, r *http.Request, err error) {
 	if ae.Status == 0 {
 		ae.Status = 500
 	}
-	w.Header().Set("Twd-Error", ae.Code)
+	w.Header().Set("Tw-Error", ae.Code)
 	u.render(w, ae.Status, "error", struct {
 		base
 		Err *apiError

@@ -1,7 +1,7 @@
 # ADR-030: microVM snapshot restore: one shared base per host, private guest pages, no cross-tenant page sharing, hourly base rotation
 
 **Date:** 2026-11-13
-**Status:** Accepted (Ross, 2026-11-13; implemented on twd branch `fast-vm`):
+**Status:** Accepted (Ross, 2026-11-13; implemented on tailworks branch `fast-vm`):
 1. one base shared by all tenants on a host;
 2. no guest pages shared across tenants, ever (no File backend, no KSM);
 3. the base is rebuilt at every hostd start and every hour (`-vm-snapshot-rotate`).
@@ -9,8 +9,8 @@
 `-vm-snapshot` is **on by default**, used for warm-pool misses. The pool still refills by booting: restore-filled pool VMs were measured 20–50 ms slower to claim; `-vm-snapshot-refill` opts in to restore-filled refills.
 
 **Context.**
-- **Cold boot vs restore.** A cold microVM boot to workerd-ready takes ~0.6 s (twd STATUS FV Phase 1; nested virt). Restoring a Firecracker snapshot avoids the kernel boot and most first-touch costs.
-- **What's built (twd `hostd/vm/snapshot_linux.go`, `helper/uffd_linux.go`):**
+- **Cold boot vs restore.** A cold microVM boot to workerd-ready takes ~0.6 s (tailworks STATUS FV Phase 1; nested virt). Restoring a Firecracker snapshot avoids the kernel boot and most first-touch costs.
+- **What's built (tailworks `hostd/vm/snapshot_linux.go`, `helper/uffd_linux.go`):**
   - **The base.** hostd boots one *pooled* VM: kernel, guestd, and a no-tenant warm-up workerd that has run once and exited. It has an empty app dir, no tenant code, no keys and no instance identity (every VM uses the same guest IP, MAC and vsock CID, each in its own netns and jail; identity comes with the post-restore `load`). The helper (root) takes a full snapshot of it into a root-only directory (state 11 KB, memory 512 MiB, config drive 8 KB) and kills it, so the original never resumes. The base lives as long as hostd's helper connection.
   - **A restore** is a new jail, netns and VMM, plus `PUT /snapshot/load` with `mem_backend: Uffd`. Firecracker v1.17 requires Uffd for 2 MiB pages. The **helper** serves the faults: it copies each touched page from the base memory file into the VM with `UFFDIO_COPY`, and prefetches the base's non-zero pages in the background. **Firecracker never maps the memory file; every restored VM gets private copies of every page.**
   - **After the restore**, guestd reconnects and is claimed like a pool VM. Its `load` brings the bundle, 64 bytes of host entropy (then `RNDADDENTROPY` + `RNDRESEEDCRNG`), a new boot_id and the wall clock. The tenant's workerd then starts as a **new process**, after the reseed.
@@ -23,7 +23,7 @@
   - **No keys:** the 26+ needle scan (tskey-, auth key, every node and machine private key, the volume key) finds nothing in a restored VM's disks, files or full RAM, nor in the base snapshot's three files. The workload's MAC key is in the restored VM's RAM (positive control) and **not** in the base.
 - **Firecracker's own guidance** (`docs/snapshotting/random-for-clones.md`, v1.17):
   - it considers resuming one state more than once insecure;
-  - VMGenID on aarch64 needs a guest kernel ≥ 6.10 (DeviceTree), and our guest kernel is 6.1, so twd reseeds explicitly.
+  - VMGenID on aarch64 needs a guest kernel ≥ 6.10 (DeviceTree), and our guest kernel is 6.1, so tailworks reseeds explicitly.
 
 **Threat model.**
 - **Adversary:** a tenant's code in its own VM, up to and including a V8 escape and a guest-kernel compromise. It wants another tenant's data, keys, randomness or activity, or another tenant's identity.
@@ -64,4 +64,4 @@
 2. ~~Confirm: no guest-page sharing across tenants, ever (no File backend, no KSM, across tenants).~~ **Decided (Ross, 2026-11-13): confirmed.**
 3. ~~Base rotation: required, and how often?~~ **Decided (Ross, 2026-11-13): yes, at start and hourly.** On rotation, idle pool VMs restored from the old base are discarded, and its files are removed after a 30 s grace.
 
-**Open.** Bare-metal numbers. A per-restore KASLR re-randomization isn't possible with snapshots; accepting (d) is the price of restore. `net_secret` could be re-keyed by a guest kernel patch, which twd doesn't build.
+**Open.** Bare-metal numbers. A per-restore KASLR re-randomization isn't possible with snapshots; accepting (d) is the price of restore. `net_secret` could be re-keyed by a guest kernel patch, which tailworks doesn't build.

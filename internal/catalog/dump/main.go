@@ -1,12 +1,12 @@
 // Command dump prints the embedded release catalog as a JSON array
-// (scripts/release.sh writes it to share/twd/catalog.json).
+// (scripts/release.sh writes it to share/tailworks/catalog.json).
 package main
 
 import (
 	"encoding/json"
 	"os"
 
-	"github.com/rosskukulinski/twd/internal/catalog"
+	"github.com/rosskukulinski/tailworks/internal/catalog"
 )
 
 func main() {

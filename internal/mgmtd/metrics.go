@@ -3,8 +3,8 @@ package mgmtd
 import (
 	"net/http"
 
-	"github.com/rosskukulinski/twd/internal/obs"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // MetricsHandler is GET /metrics: mgmt's registry and every registry added
@@ -18,7 +18,7 @@ func (rt *Runtime) MetricsHandler() http.Handler {
 }
 
 // AddMetrics serves r with mgmt's metrics (the embedded host's registry in
-// single-process twd up, whose host has no node of its own).
+// single-process tw up, whose host has no node of its own).
 func (rt *Runtime) AddMetrics(r *obs.Registry) {
 	rt.metricsMu.Lock()
 	defer rt.metricsMu.Unlock()

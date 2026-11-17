@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // Workflows (ADR-040). workerd's built-in engine, the
@@ -23,7 +23,7 @@ import (
 //     a cloudflare-internal:workflows-api wrapped binding, except that the
 //     inner fetcher is the platform's WorkflowGate, not the engine.
 //   - WorkflowGate forwards every call to the engine and keeps approvals
-//     twd's: app code may not send an approval event, and no event it sends
+//     tailworks': app code may not send an approval event, and no event it sends
 //     carries an "approver" (platform.js).
 //   - the platform binds the engine directly (WF_<name>) to deliver the
 //     approvals hostd has authorised and audited.
@@ -172,7 +172,7 @@ func workflowsFacetOpt(app *bundle.App, inObject bool) string {
 	return ", { workflows: WF }"
 }
 
-// workflowsConfig is twd-config.json's "workflows".
+// workflowsConfig is tw-config.json's "workflows".
 type workflowCfg struct {
 	Name    string `json:"name"`
 	Binding string `json:"binding"`

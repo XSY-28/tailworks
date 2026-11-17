@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
-// wfApp is a Workflows app as `twd deploy` would bundle it (hand-written
+// wfApp is a Workflows app as `tw deploy` would bundle it (hand-written
 // ES modules, no bundler): Flow does steps with a retry, a sleep and an
 // approval wait; the Worker and both object modes drive it through env.FLOW.
 const wfWrangler = `{
@@ -17,7 +17,7 @@ const wfWrangler = `{
   "workflows": [ { "name": "flow", "binding": "FLOW", "class_name": "Flow", "limits": { "steps": 50 } } ]
 }`
 
-const wfTwd = `{ "tailnet": { "objects": { "Plain": { "egress": "workload" } } } }`
+const wfTw = `{ "tailnet": { "objects": { "Plain": { "egress": "workload" } } } }`
 
 const wfJS = `import { WorkflowEntrypoint, DurableObject } from "cloudflare:workers";
 let tries = 0;
@@ -79,7 +79,7 @@ export default { async fetch(req, env) { return Response.json(await drive(env, r
 `
 
 func wfFiles() map[string][]byte {
-	return map[string][]byte{"wrangler.jsonc": []byte(wfWrangler), "twd.jsonc": []byte(wfTwd), "index.js": []byte(wfJS)}
+	return map[string][]byte{"wrangler.jsonc": []byte(wfWrangler), "tailworks.jsonc": []byte(wfTw), "index.js": []byte(wfJS)}
 }
 
 func TestParseWorkflows(t *testing.T) {
@@ -96,7 +96,7 @@ func TestParseWorkflows(t *testing.T) {
 		{`{"name": "x", "binding": "B", "class_name": "Facet"}`, "Durable Object class"},
 		{`{"name": "x", "binding": "B", "class_name": "C", "script_name": "other"}`, "script_name"},
 		{`{"name": "x", "binding": "B", "class_name": "C", "schedules": ["* * * * *"]}`, "schedules"},
-		{`{"name": "x", "binding": "__TWD_X", "class_name": "C"}`, "reserved"},
+		{`{"name": "x", "binding": "__TW_X", "class_name": "C"}`, "reserved"},
 	} {
 		f := wfFiles()
 		f["wrangler.jsonc"] = []byte(strings.Replace(wfWrangler, `{ "name": "flow", "binding": "FLOW", "class_name": "Flow", "limits": { "steps": 50 } }`, bad.wf, 1))
@@ -110,19 +110,19 @@ func TestParseWorkflows(t *testing.T) {
 // the generated config: steps (with a retry), sleeps and events from the
 // Worker, a facet-mode object and a plain-DO object; WorkflowGate refuses
 // app-sent approvals and strips "approver"; the platform delivers the
-// approvals hostd sends (cf.twd kind "approval").
+// approvals hostd sends (cf.tw kind "approval").
 func TestGeneratedWorkflows(t *testing.T) {
 	in := startFiles(t, wfFiles())
 	where := map[string]map[string]any{"Worker": wl, "Facet": obj("Facet", "f1"), "Plain": obj("Plain", "p1")}
-	status := func(twd map[string]any, id string) map[string]any {
-		_, _, r := in.get("/status?id="+id, twd)
+	status := func(tw map[string]any, id string) map[string]any {
+		_, _, r := in.get("/status?id="+id, tw)
 		return r
 	}
-	waitStatus := func(twd map[string]any, id, want string) map[string]any {
+	waitStatus := func(tw map[string]any, id, want string) map[string]any {
 		t.Helper()
 		deadline := time.Now().Add(15 * time.Second)
 		for {
-			r := status(twd, id)
+			r := status(tw, id)
 			if r["status"] == want {
 				return r
 			}
@@ -134,12 +134,12 @@ func TestGeneratedWorkflows(t *testing.T) {
 	}
 
 	t.Run("StepsRetrySleep", func(t *testing.T) {
-		for w, twd := range where {
+		for w, tw := range where {
 			id := "s-" + strings.ToLower(w)
-			if code, _, r := in.get("/create?n=4&id="+id, twd); code != 200 || r["id"] != id {
+			if code, _, r := in.get("/create?n=4&id="+id, tw); code != 200 || r["id"] != id {
 				t.Fatalf("%s create: %d %v", w, code, r)
 			}
-			r := waitStatus(twd, id, "complete")
+			r := waitStatus(tw, id, "complete")
 			if jsonOf(r["output"]) != `{"b":5}` {
 				t.Fatalf("%s: %v", w, r)
 			}
@@ -149,41 +149,41 @@ func TestGeneratedWorkflows(t *testing.T) {
 	t.Run("InstanceLifecycle", func(t *testing.T) {
 		// pause / resume / terminate / restart and createBatch through the
 		// real binding (Worker, plain DO) and the facet's Workflow client.
-		for w, twd := range where {
+		for w, tw := range where {
 			id := "l-" + strings.ToLower(w)
-			in.get("/create?long=1&id="+id, twd)
-			waitStatus(twd, id, "waiting") // sleepUntil an hour from now
+			in.get("/create?long=1&id="+id, tw)
+			waitStatus(tw, id, "waiting") // sleepUntil an hour from now
 			for _, op := range []struct{ op, want string }{{"pause", "paused"}, {"resume", ""}, {"terminate", "terminated"}} {
-				code, _, r := in.get("/"+op.op+"?id="+id, twd)
+				code, _, r := in.get("/"+op.op+"?id="+id, tw)
 				if code != 200 || r["done"] != op.op || r["error"] != nil {
 					t.Fatalf("%s %s: %d %v", w, op.op, code, r)
 				}
 				if op.want != "" {
-					waitStatus(twd, id, op.want)
+					waitStatus(tw, id, op.want)
 				}
 			}
-			if code, _, r := in.get("/restart?id="+id, twd); code != 200 || r["error"] != nil {
+			if code, _, r := in.get("/restart?id="+id, tw); code != 200 || r["error"] != nil {
 				t.Fatalf("%s restart: %d %v", w, code, r)
 			}
-			waitStatus(twd, id, "waiting") // running again, from the start
-			_, _, r := in.get("/batch?id=b-"+strings.ToLower(w), twd)
+			waitStatus(tw, id, "waiting") // running again, from the start
+			_, _, r := in.get("/batch?id=b-"+strings.ToLower(w), tw)
 			if jsonOf(r["ids"]) != `["b-`+strings.ToLower(w)+`-1","b-`+strings.ToLower(w)+`-2"]` {
 				t.Fatalf("%s createBatch: %v", w, r)
 			}
-			waitStatus(twd, "b-"+strings.ToLower(w)+"-2", "complete")
+			waitStatus(tw, "b-"+strings.ToLower(w)+"-2", "complete")
 		}
 	})
 
 	t.Run("AppCannotApprove", func(t *testing.T) {
-		for w, twd := range where {
+		for w, tw := range where {
 			id := "a-" + strings.ToLower(w)
-			in.get("/create?approve=1&id="+id, twd)
-			waitStatus(twd, id, "waiting")
-			_, _, r := in.get("/send?type=approval&id="+id, twd)
+			in.get("/create?approve=1&id="+id, tw)
+			waitStatus(tw, id, "waiting")
+			_, _, r := in.get("/send?type=approval&id="+id, tw)
 			if !strings.Contains(fmtAny(r["error"]), "approval_requires_identity") {
 				t.Fatalf("%s: app-sent approval: %v", w, r)
 			}
-			_, _, r = in.get("/send?type=approval-manager&id="+id, twd)
+			_, _, r = in.get("/send?type=approval-manager&id="+id, tw)
 			if !strings.Contains(fmtAny(r["error"]), "approval_requires_identity") {
 				t.Fatalf("%s: app-sent approval-*: %v", w, r)
 			}
@@ -193,10 +193,10 @@ func TestGeneratedWorkflows(t *testing.T) {
 			// and restarts run() during long waits), more often on a loaded
 			// machine, so "running" alone isn't progress: the instance must
 			// settle back to "waiting" with no output (issue #75).
-			if st := status(twd, id); st["status"] == "complete" || st["status"] == "errored" || st["output"] != nil {
+			if st := status(tw, id); st["status"] == "complete" || st["status"] == "errored" || st["output"] != nil {
 				t.Fatalf("%s: instance moved on: %v", w, st)
 			}
-			if st := waitStatus(twd, id, "waiting"); st["output"] != nil {
+			if st := waitStatus(tw, id, "waiting"); st["output"] != nil {
 				t.Fatalf("%s: instance moved on: %v", w, st)
 			}
 		}

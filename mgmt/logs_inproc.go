@@ -9,8 +9,8 @@ import (
 
 // handlerTransport serves requests through an in-process http.Handler: the
 // push handler of a host agent embedded in this process (EmbeddedPushURL,
-// single-process twd up). pushInProcess buffers a JSON push; workload logs
-// stream (twd logs -f), so the body is a pipe the handler writes into as it
+// single-process tw up). pushInProcess buffers a JSON push; workload logs
+// stream (tw logs -f), so the body is a pipe the handler writes into as it
 // goes, and the response returns as soon as the handler writes its header.
 type handlerTransport struct{ h http.Handler }
 

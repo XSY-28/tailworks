@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
-	v1 "github.com/rosskukulinski/twd/hostd/mgmtapi/v1"
+	v1 "github.com/rosskukulinski/tailworks/hostd/mgmtapi/v1"
 )
 
 // OTLPExport is a tenant's OTLP export (ADR-observability), as a host's

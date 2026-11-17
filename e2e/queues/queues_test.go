@@ -1,7 +1,7 @@
 //go:build e2equeues
 
 // Package queues is the hermetic multi-host Queues e2e (ADR-039): real
-// twd-mgmt and two real twd-hostd processes on testcontrol + a local DERP.
+// tw-mgmt and two real tw-hostd processes on testcontrol + a local DERP.
 // A producer workload on one host sends to a queue that a consumer
 // workload on the other host consumes; the consumer reports every
 // delivery to a recorder node on the tailnet, so the record survives
@@ -31,10 +31,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/ipn/store/mem"
 	"tailscale.com/tsnet"
 )
@@ -99,9 +99,9 @@ func (e *env) start(name string, args ...string) {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	bin := "twd-hostd"
+	bin := "tw-hostd"
 	if name == "mgmt" {
-		bin = "twd-mgmt"
+		bin = "tw-mgmt"
 	}
 	cmd := exec.Command(filepath.Join(e.bin, bin), args...)
 	cmd.Stdout, cmd.Stderr = lf, lf
@@ -299,12 +299,12 @@ func TestQueuesMultiHost(t *testing.T) {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available (needed to bundle the apps)")
 	}
-	dir, err := hostdtest.ShortDir("twd-q-")
+	dir, err := hostdtest.ShortDir("tw-q-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -369,7 +369,7 @@ func TestQueuesMultiHost(t *testing.T) {
 		t.Helper()
 		app := filepath.Join(dir, name)
 		os.MkdirAll(filepath.Join(app, "src"), 0o755)
-		os.WriteFile(filepath.Join(app, "twd.jsonc"), []byte(`{"name": "`+name+`", "tailnet": {"tags": ["tag:ttest"]}}`), 0o644)
+		os.WriteFile(filepath.Join(app, "tailworks.jsonc"), []byte(`{"name": "`+name+`", "tailnet": {"tags": ["tag:ttest"]}}`), 0o644)
 		os.WriteFile(filepath.Join(app, "wrangler.jsonc"), []byte(wrangler), 0o644)
 		os.WriteFile(filepath.Join(app, "src", "index.js"), []byte(js), 0o644)
 		files, err := hostdtest.Build(app, nil)

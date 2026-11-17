@@ -23,7 +23,7 @@ func TestV1PreviewPromote(t *testing.T) {
 	built := map[string][]byte{}
 	bundleOf := func(v string) []byte {
 		if built[v] == nil {
-			built[v] = makeBundle(t, map[string]string{"twd.jsonc": `{ "tailnet": { "tags": ["tag:twd-web"], "service": true } }`, "dist/index.js": "export default {} // " + v})
+			built[v] = makeBundle(t, map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"], "service": true } }`, "dist/index.js": "export default {} // " + v})
 		}
 		return built[v]
 	}
@@ -115,7 +115,7 @@ func TestV1PreviewPromote(t *testing.T) {
 		t.Fatalf("bad alias: %v", err)
 	}
 	c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": p1.Workload, "bundle": b64("v2"), "preview": true}, 400, "preview_unsupported")
-	queued := makeBundle(t, map[string]string{"twd.jsonc": `{ "tailnet": { "tags": ["tag:twd-web"] } }`,
+	queued := makeBundle(t, map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"] } }`,
 		"wrangler.jsonc": `{"queues":{"consumers":[{"queue":"jobs"}]}}`, "dist/index.js": "export default {}"})
 	c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "web", "bundle": base64.StdEncoding.EncodeToString(queued), "preview": true}, 400, "preview_unsupported")
 	deploy(map[string]any{"workload": "web--preview-taken", "bundle": b64("v1")}) // a workload of that name, not a preview
@@ -196,8 +196,8 @@ func TestV1PreviewPromote(t *testing.T) {
 // strip drops the Service, public routes and replicas from a preview's
 // config (and nothing from anyone else's).
 func TestPreviewStrip(t *testing.T) {
-	cfg := func() *TwdConfig {
-		var c TwdConfig
+	cfg := func() *TwConfig {
+		var c TwConfig
 		if err := json.Unmarshal([]byte(`{"replicas": 3, "public": {"routes": ["/"]}, "tailnet": {"tags": ["tag:a"], "service": true,
 			"objects": {"Room": {"tags": ["tag:b"], "public": {"create": true}}}}}`), &c); err != nil {
 			t.Fatal(err)

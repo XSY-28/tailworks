@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/kvwire"
+	"github.com/rosskukulinski/tailworks/internal/kvwire"
 )
 
-// TestKVAdmin: the operator's KV view (twd kv key …) reads and writes the
+// TestKVAdmin: the operator's KV view (tw kv key …) reads and writes the
 // same journal a binding does, with Cloudflare's rules; a host can't use
 // it (TestV1RoleMatrix); a namespace must exist; entries written by a binding (kv.js) are
 // read back, and admin writes are entries a binding can apply.

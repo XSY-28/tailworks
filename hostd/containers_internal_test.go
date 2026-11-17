@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/sandbox/sandboxtest"
-	"github.com/rosskukulinski/twd/internal/container"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox/sandboxtest"
+	"github.com/rosskukulinski/tailworks/internal/container"
 )
 
 func ctrHost(t *testing.T, mod func(*Config)) (*Host, *sandboxtest.Procs) {
 	t.Helper()
 	procs := &sandboxtest.Procs{}
-	st, err := sandboxtest.ImageStore(t.TempDir(), []string{"sleep", "3600"}, "twd.test/box:1", "twd.test/other:1")
+	st, err := sandboxtest.ImageStore(t.TempDir(), []string{"sleep", "3600"}, "tw.test/box:1", "tw.test/other:1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func ctrInst(h *Host, tenant, wl string) *instance {
 	h.workloads[tenant+"/"+wl] = w
 	h.mu.Unlock()
 	app := &bundle.App{Classes: map[string]*bundle.Class{"Box": {Name: "Box", Node: true}, "NoCtr": {Name: "NoCtr", Node: true}},
-		Containers: map[string]container.Class{"Box": {Class: "Box", Image: "twd.test/box:1", InstanceType: "lite"}}}
+		Containers: map[string]container.Class{"Box": {Class: "Box", Image: "tw.test/box:1", InstanceType: "lite"}}}
 	return &instance{h: h, w: w, app: app}
 }
 
@@ -76,7 +76,7 @@ func TestContainerNoBackendRefuses(t *testing.T) {
 func TestContainerImageAndClassScope(t *testing.T) {
 	h, procs := ctrHost(t, nil)
 	inst := ctrInst(h, "t", "w")
-	if err := ctrStart(t, h, inst, "a", startReq{Image: "twd.test/other:1"}); codeOf(err) != "bad_request" || !strings.Contains(err.Error(), "not one of class Box's images") {
+	if err := ctrStart(t, h, inst, "a", startReq{Image: "tw.test/other:1"}); codeOf(err) != "bad_request" || !strings.Contains(err.Error(), "not one of class Box's images") {
 		t.Fatalf("undeclared image: %v", err)
 	}
 	if _, _, err := h.ctrKeyFor(inst, &ctrAs{Class: "NoCtr", Name: "x"}); codeOf(err) != "bad_request" {

@@ -8,7 +8,7 @@ import (
 
 // After Teardown no object is created (maintainPools starts no pool node,
 // and h.create is refused), and Teardown itself returns only once creates
-// already in flight are done: `twd down --purge` lists objects after it, so
+// already in flight are done: `tw down --purge` lists objects after it, so
 // its list is complete.
 func TestTeardownGate(t *testing.T) {
 	h := &Host{

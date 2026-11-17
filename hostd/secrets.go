@@ -6,7 +6,7 @@ package hostd
 // into the instance only:
 //
 //   - workerd (process tier): text bindings in config.capnp and the facets'
-//     env in twd-config.json, both in the 0700 instance directory;
+//     env in tw-config.json, both in the 0700 instance directory;
 //   - runtime "node": environment variables of the node process.
 //
 // They are never logged and never written anywhere else. The microVM tier
@@ -23,10 +23,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
-// nodeReservedEnv are the node process variables twd sets itself; neither
+// nodeReservedEnv are the node process variables tailworks sets itself; neither
 // node.env nor a secret may replace them.
 var nodeReservedEnv = map[string]bool{
 	"PATH":               true,
@@ -72,16 +72,16 @@ func applySecrets(app *bundle.App, tier, workload string, vals map[string]string
 	if tier == bundle.TierMicroVM {
 		return nil, &apiError{Code: "secrets_unsupported_tier", Detail: fmt.Sprintf(
 			"workload %q has %d secret(s) (%s), and the microvm tier does not support secrets yet. "+
-				"Deploy it with \"tier\": \"process\" in twd.jsonc, or remove them (twd secret rm <NAME>); see docs/secrets.md",
+				"Deploy it with \"tier\": \"process\" in tailworks.jsonc, or remove them (tw secret rm <NAME>); see docs/secrets.md",
 			workload, len(names), strings.Join(names, ", "))}
 	}
 	for _, k := range names {
-		if strings.HasPrefix(k, "TWD_") || strings.HasPrefix(k, "__TWD") {
-			return nil, &apiError{Code: "bad_secret_name", Detail: fmt.Sprintf("secret %q uses a name twd reserves (TWD_, __TWD)", k)}
+		if strings.HasPrefix(k, "TW_") || strings.HasPrefix(k, "__TW") {
+			return nil, &apiError{Code: "bad_secret_name", Detail: fmt.Sprintf("secret %q uses a name tw reserves (TW_, __TW)", k)}
 		}
 		if app.Runtime == bundle.RuntimeNode && nodeReservedEnv[k] {
 			return nil, &apiError{Code: "bad_secret_name", Detail: fmt.Sprintf(
-				"secret %q would replace an environment variable twd sets for runtime \"node\"; rename it (twd secret rm %s, then twd secret put <NEW_NAME>)", k, k)}
+				"secret %q would replace an environment variable tailworks sets for runtime \"node\"; rename it (tw secret rm %s, then tw secret put <NEW_NAME>)", k, k)}
 		}
 	}
 	cp := *app
@@ -105,12 +105,12 @@ func nodeEnv(app *bundle.App) map[string]string {
 // overriding node.env of the same name, and deletes the file. Every
 // (re)start writes it again.
 const (
-	nodeSecretsFile    = ".twd-secrets.json"
-	nodeSecretsPreload = ".twd-secrets.cjs"
+	nodeSecretsFile    = ".tailworks-secrets.json"
+	nodeSecretsPreload = ".tailworks-secrets.cjs"
 )
 
 const nodeSecretsPreloadJS = `"use strict";
-// twd: load this workload's secrets into process.env, then delete them.
+// tailworks: load this workload's secrets into process.env, then delete them.
 const fs = require("fs");
 const p = require("path").join(__dirname, ` + "`" + nodeSecretsFile + "`" + `);
 let s;

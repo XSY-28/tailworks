@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // newMgmt is a real mgmt (SQLite store, file custody) with its /v1 API.
@@ -98,7 +98,7 @@ func TestClientIsHostPrincipal(t *testing.T) {
 	}
 }
 
-// inproc:// is reserved for the in-process transport: a tag:twd-host node
+// inproc:// is reserved for the in-process transport: a tag:tw-host node
 // over the tailnet (TailnetHandler) and a local-dev caller (LocalHandler)
 // naming it are refused, with nothing recorded.
 func TestEmbeddedPushURLRefusedOnListeners(t *testing.T) {
@@ -108,7 +108,7 @@ func TestEmbeddedPushURLRefusedOnListeners(t *testing.T) {
 	}
 	// A tailnet host node: first registration of an unknown host.
 	whois := func(ctx context.Context, addr string) (mgmt.WhoIsInfo, error) {
-		return mgmt.WhoIsInfo{NodeID: "nHOST", Name: "twd-host-h9.t.ts.net.", Tags: []string{mgmt.HostTag}}, nil
+		return mgmt.WhoIsInfo{NodeID: "nHOST", Name: "tw-host-h9.t.ts.net.", Tags: []string{mgmt.HostTag}}, nil
 	}
 	ts := httptest.NewServer(api.TailnetHandler(whois, api.Handler()))
 	defer ts.Close()

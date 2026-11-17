@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
 	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
 )
@@ -399,7 +399,7 @@ func (o *Object) stopPublicFlusher() {
 }
 
 // SetPublicEnabled opens or closes a public node's Funnel listener
-// (`twd expose on|off`). Closing RSTs the node's public flows and returns
+// (`tw expose on|off`). Closing RSTs the node's public flows and returns
 // at once; the node stays joined. Both directions are idempotent. On a node
 // that is still joining it decides what happens once the node is ready.
 func (r *Registry) SetPublicEnabled(id string, on bool) error {

@@ -36,7 +36,7 @@ func newEmbeddedTestMgmt(t *testing.T) *Mgmt {
 	return m
 }
 
-// An embedded host (single-process twd up) registers with push URL
+// An embedded host (single-process tw up) registers with push URL
 // inproc:// only when the context carries the marker; its pushes are then
 // served through the handler SetInProcessPush registered, nothing dialled.
 func TestEmbeddedHostRegistrationAndPush(t *testing.T) {

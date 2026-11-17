@@ -1,9 +1,9 @@
 {
-  "name": "@twd/mcp",
+  "name": "@tailworks/mcp",
   "version": "0.2.0",
-  "description": "withTailnet, caller(), authorizeTool and budget() for stateless MCP servers on twd",
+  "description": "withTailnet, caller(), authorizeTool and budget() for stateless MCP servers on tw",
   "keywords": [
-    "twd",
+    "tw",
     "tailscale",
     "mcp",
     "workers"
@@ -25,7 +25,7 @@
     "dist"
   ],
   "dependencies": {
-    "@twd/tailnet": "0.2.0"
+    "@tailworks/tailnet": "0.2.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -37,10 +37,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rosskukulinski/twd.git",
+    "url": "git+https://github.com/rosskukulinski/tailworks.git",
     "directory": "js/packages/mcp"
   },
-  "homepage": "https://github.com/rosskukulinski/twd#readme",
-  "bugs": "https://github.com/rosskukulinski/twd/issues",
+  "homepage": "https://github.com/rosskukulinski/tailworks#readme",
+  "bugs": "https://github.com/rosskukulinski/tailworks/issues",
   "license": "BSD-3-Clause"
 }

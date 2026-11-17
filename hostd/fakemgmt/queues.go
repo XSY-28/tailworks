@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/queuecfg"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/queuecfg"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // Queues (ADR-039), in memory: the same claim / settle / dead-letter
-// semantics as twd-mgmt (mgmt/queues.go), fenced by the acting workload's
+// semantics as tw-mgmt (mgmt/queues.go), fenced by the acting workload's
 // lease. Not sealed (nothing here is persisted), and the deployment's
 // declarations aren't checked (hostd checks them before it calls).
 
@@ -78,7 +78,7 @@ func (s *Server) fenceQueue(w http.ResponseWriter, r *http.Request) (workload st
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, fmt.Sprintf("lease %s is not held at epoch %d", name, epoch))
 		return "", false
 	}
-	if hid := r.Header.Get("Twd-Host-ID"); hid != "" && hid != l.host {
+	if hid := r.Header.Get("Tw-Host-ID"); hid != "" && hid != l.host {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, "host "+hid+" does not hold the lease")
 		return "", false
 	}

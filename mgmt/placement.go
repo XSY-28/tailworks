@@ -9,7 +9,7 @@ import (
 )
 
 // Smart placement (ADR-033 draft, Proposed): when a workload declares what it
-// connects to (twd.jsonc tailnet.connects, or placement.targets), mgmt
+// connects to (tailworks.jsonc tailnet.connects, or placement.targets), mgmt
 // prefers the eligible host with the best measured tailnet path to those
 // targets: direct WireGuard over a peer relay over DERP, then lower RTT.
 // Capacity breaks ties. Placement only chooses; the workload lease decides
@@ -44,7 +44,7 @@ func pathRank(p string) int {
 	return 0
 }
 
-// Placement modes (twd.jsonc placement.mode).
+// Placement modes (tailworks.jsonc placement.mode).
 const (
 	PlacementSmart = "smart"
 	PlacementOff   = "off"
@@ -65,7 +65,7 @@ const (
 	pathRetention       = time.Hour       // rows older than this are deleted when the host reports again
 )
 
-// Hysteresis for an explicit re-place (`twd deploy --replace`): the
+// Hysteresis for an explicit re-place (`tw deploy --replace`): the
 // current holder is kept unless the best host is in a better path class, or
 // the same class with an RTT at least replaceMinGain lower and
 // replaceMinRatio of the holder's. Measurement noise does not move
@@ -191,7 +191,7 @@ type Requirements struct {
 	// (capacity aside: it already holds its share). "" = none.
 	Sticky string
 	// Replace ignores Sticky unless the best host is not clearly better
-	// (hysteresis): `twd deploy --replace`.
+	// (hysteresis): `tw deploy --replace`.
 	Replace bool
 	// Path scoring. Empty Targets (or Mode off) = capacity only.
 	Mode      string
@@ -323,7 +323,7 @@ func scoreHosts(cands []Candidate, ms []PathMeasurement, req Requirements) Place
 	case req.Sticky != "" && !req.Replace:
 		if s, ok := find(req.Sticky); ok && s.Eligible {
 			d.Host, d.Reason = s.Host, "sticky"
-			d.Summary = "kept on " + s.Host + " (current lease holder; `twd deploy --replace` re-places it)" + d.pathSuffix(s)
+			d.Summary = "kept on " + s.Host + " (current lease holder; `tw deploy --replace` re-places it)" + d.pathSuffix(s)
 			return d
 		}
 	}
@@ -563,7 +563,7 @@ func (d PlacementDecision) others(chosen string) string {
 
 func noHostSummary(hosts []HostScore, req Requirements) string {
 	if len(hosts) == 0 {
-		return "no live host (register twd-hostd and heartbeat first)"
+		return "no live host (register tw-hostd and heartbeat first)"
 	}
 	var parts []string
 	for _, s := range hosts {
@@ -573,7 +573,7 @@ func noHostSummary(hosts []HostScore, req Requirements) string {
 	if len(req.Tiers) > 0 {
 		want = "no live host with tier " + strings.Join(req.Tiers, "+")
 		if slices.Contains(req.Tiers, "microvm") {
-			fix = "; set one up with `sudo twd host setup --microvm`, or deploy with \"tier\": \"process\""
+			fix = "; set one up with `sudo tw host setup --microvm`, or deploy with \"tier\": \"process\""
 		}
 	}
 	if req.Containers {
@@ -590,9 +590,9 @@ func noHostSummary(hosts []HostScore, req Requirements) string {
 		} else {
 			want = "no live host with " + c
 		}
-		fix = "; set up a Linux host with KVM (`sudo twd host setup --microvm`); NAS and no-KVM hosts never offer containers"
+		fix = "; set up a Linux host with KVM (`sudo tw host setup --microvm`); NAS and no-KVM hosts never offer containers"
 		if req.Arch != "" {
-			fix = fmt.Sprintf("; set up a %s Linux host with KVM (`sudo twd host setup --microvm`); NAS and no-KVM hosts never offer containers", req.Arch)
+			fix = fmt.Sprintf("; set up a %s Linux host with KVM (`sudo tw host setup --microvm`); NAS and no-KVM hosts never offer containers", req.Arch)
 		}
 	}
 	return want + " (" + strings.Join(parts, "; ") + ")" + fix
@@ -603,16 +603,16 @@ type PlacementConfig struct {
 	Mode      string   `json:"mode"`
 	Targets   []string `json:"targets,omitempty"`
 	Aggregate string   `json:"aggregate,omitempty"`
-	// Warnings are config fields twd accepts but ignores (e.g. a
+	// Warnings are config fields tailworks accepts but ignores (e.g. a
 	// Cloudflare "region" hint).
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// resolvePlacement turns twd.jsonc's placement block (or, failing that,
+// resolvePlacement turns tailworks.jsonc's placement block (or, failing that,
 // wrangler's) and tailnet.connects into the targets to score. Smart is the
 // default whenever the workload declares connects: stickiness makes it
 // safe (a running workload never moves on its own).
-func resolvePlacement(cfg *TwdConfig) PlacementConfig {
+func resolvePlacement(cfg *TwConfig) PlacementConfig {
 	pc := PlacementConfig{Mode: PlacementSmart, Aggregate: AggregateWorst}
 	if cfg == nil {
 		return pc
@@ -631,7 +631,7 @@ func resolvePlacement(cfg *TwdConfig) PlacementConfig {
 		pc.Warnings = append(pc.Warnings, fmt.Sprintf("placement.aggregate %q is not \"worst\" or \"sum\"; using worst", p.Aggregate))
 	}
 	if p.Region != "" {
-		pc.Warnings = append(pc.Warnings, "placement.region is ignored: twd places by measured tailnet path, not cloud region")
+		pc.Warnings = append(pc.Warnings, "placement.region is ignored: tw places by measured tailnet path, not cloud region")
 	}
 	var ts []string
 	switch {

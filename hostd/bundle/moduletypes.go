@@ -6,17 +6,17 @@ import (
 	"strings"
 )
 
-// setModuleTypes records twd-bundle.json "modules" (path -> type). Every
+// setModuleTypes records tw-bundle.json "modules" (path -> type). Every
 // listed path must be in the bundle and have a type workerd knows.
 func (a *App) setModuleTypes(files map[string][]byte, types map[string]string) error {
 	for p, t := range types {
 		switch t {
 		case "js", "json", "text", "data", "wasm":
 		default:
-			return fmt.Errorf("bundle: twd-bundle.json modules[%q]: type %q: want js, json, text, data or wasm", p, t)
+			return fmt.Errorf("bundle: tw-bundle.json modules[%q]: type %q: want js, json, text, data or wasm", p, t)
 		}
 		if _, ok := files[p]; !ok {
-			return fmt.Errorf("bundle: twd-bundle.json modules[%q]: not in bundle", p)
+			return fmt.Errorf("bundle: tw-bundle.json modules[%q]: not in bundle", p)
 		}
 		if a.ModuleTypes == nil {
 			a.ModuleTypes = map[string]string{}

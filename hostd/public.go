@@ -4,11 +4,11 @@ package hostd
 //
 //   - A workload whose assignment carries Public gets one extra object, the
 //     public node: namespace "_public", object name = the workload, tags
-//     and hostname chosen by mgmt (tag:twd-public, the workload name). Its
+//     and hostname chosen by mgmt (tag:tw-public, the workload name). Its
 //     netd node listens only on Funnel and delivers every request to the
 //     workload's entry node (netd PublicOptions.DeliverTo), so public
 //     traffic reaches the app's default export, never an object directly.
-//   - `twd expose off` (Assignment.Public.Exposed=false) closes the Funnel
+//   - `tw expose off` (Assignment.Public.Exposed=false) closes the Funnel
 //     listener and resets its flows; the node stays joined so its
 //     certificate stays warm. An assignment without Public closes it too
 //     (mgmt deletes the node when the routes are removed).
@@ -31,11 +31,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/publicspec"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // OriginPublic is ActingFor for objects a public request created.
@@ -309,7 +309,7 @@ func (h *Host) admitPublic(w *workload, app *bundle.App, class, name string) (ex
 // by a tailnet request's ticket or an attested object (admitCreate, from
 // the platform's "admit" op), by public.create (admitPublic), or by a spawn.
 // ensure refuses to create a name nobody admitted: code that reaches a raw
-// binding (import { env } from "cloudflare:workers", a cached env, __TWD)
+// binding (import { env } from "cloudflare:workers", a cached env, __TW)
 // can wake existing objects but cannot mint nodes.
 
 const maxAdmits = 50_000

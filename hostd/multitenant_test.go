@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/procsb"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -49,7 +49,7 @@ func TestMultiTenant(t *testing.T) {
 	// can reach a container engine, is in its group, or can reach the system
 	// tailscaled (procsb.ScanHostSockets; the sandbox_unavailable control,
 	// tested by TestSharedHost* below). On such a dev box this test lifts
-	// the refusal, as `twd up --insecure-shared-host` would; every isolation
+	// the refusal, as `tw up --insecure-shared-host` would; every isolation
 	// assertion below (distinct identities, 0700 dirs, netmap, sandbox
 	// probes, kill) is unchanged by that flag.
 	opts := hostdtest.Options{Fake: fakemgmt.Config{StaticKey: nettest.DummyKey}, Ephemeral: true,
@@ -404,7 +404,7 @@ func sharedHost(t *testing.T, o hostdtest.Options, aListen, mention string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		files["twd.jsonc"] = []byte(strings.Replace(string(files["twd.jsonc"]), `"node": {`, `"node": { "listen": "`+aListen+`",`, 1))
+		files["tailworks.jsonc"] = []byte(strings.Replace(string(files["tailworks.jsonc"]), `"node": {`, `"node": { "listen": "`+aListen+`",`, 1))
 		ea.WaitActive("nodeprobe", ea.DeployFiles(files, "nodeprobe"), 60*time.Second)
 	} else {
 		ea.WaitActive("agent", ea.Deploy(hostdtest.Template("agent"), "agent", nil), 60*time.Second)

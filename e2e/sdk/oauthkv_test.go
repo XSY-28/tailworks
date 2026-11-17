@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // TestOAuthProviderKV runs @cloudflare/workers-oauth-provider unmodified
-// on twd with its OAUTH_KV on the Workers KV binding (ADR-037):
+// on tailworks with its OAUTH_KV on the Workers KV binding (ADR-037):
 // dynamic client registration, the authorization code flow with PKCE,
 // tokens (stored with expirationTtl), refresh, a protected API call, and
 // the library's own list() calls. Everything it stored is in the
@@ -39,7 +39,7 @@ func TestOAuthProviderKV(t *testing.T) {
 
 	// 1. Dynamic client registration (a public client).
 	code, _, b := s.do("POST", base+"/register", []byte(js(map[string]any{
-		"redirect_uris": []string{redirect}, "client_name": "twd-e2e", "token_endpoint_auth_method": "none",
+		"redirect_uris": []string{redirect}, "client_name": "tw-e2e", "token_endpoint_auth_method": "none",
 	})), "content-type", "application/json")
 	reg := parse(b)
 	clientID, _ := reg["client_id"].(string)
@@ -76,7 +76,7 @@ func TestOAuthProviderKV(t *testing.T) {
 	whoami := func(token string) (int, map[string]any) {
 		return s.getJSON(base+"/api/whoami", "authorization", "Bearer "+token)
 	}
-	if code, r := whoami(access); code != 200 || get(r, "props", "user") != "alice" || get(r, "props", "via") != "twd-kv" {
+	if code, r := whoami(access); code != 200 || get(r, "props", "user") != "alice" || get(r, "props", "via") != "tw-kv" {
 		t.Fatalf("whoami: %d %v", code, r)
 	}
 	if code, r := whoami("alice:nope:" + strings.Repeat("x", 32)); code != 401 {

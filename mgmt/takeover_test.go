@@ -16,9 +16,9 @@ import (
 // move freely. Moving away from a live holder stays refused (lease_held).
 func TestMM_F4_GuardedTakeover(t *testing.T) {
 	const (
-		stateful  = `{ "tailnet": { "objects": { "SupportAgent": { "tags": ["tag:twd-agent-support"], "agent": true } } } }`
-		stateless = `{ "tailnet": { "tags": ["tag:twd-web"] } }`
-		fenceNo   = `{ "tailnet": { "objects": { "Cache": { "tags": ["tag:twd-cache"], "fence": "never" } } } }`
+		stateful  = `{ "tailnet": { "objects": { "SupportAgent": { "tags": ["tag:tw-agent-support"], "agent": true } } } }`
+		stateless = `{ "tailnet": { "tags": ["tag:tw-web"] } }`
+		fenceNo   = `{ "tailnet": { "objects": { "Cache": { "tags": ["tag:tw-cache"], "fence": "never" } } } }`
 		// A DO class declared only in wrangler.jsonc is stateful too.
 		wranglerOnly = `{ "durable_objects": { "bindings": [ { "name": "ROOMS", "class_name": "Room" } ] } }`
 	)
@@ -62,7 +62,7 @@ func TestMM_F4_GuardedTakeover(t *testing.T) {
 			for _, h := range []string{"h1", "h2"} {
 				m.RegisterHost(ctx, RegisterRequest{HostID: h, CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 			}
-			files := map[string]string{"twd.jsonc": s.jsonc, "dist/index.js": "export default {}"}
+			files := map[string]string{"tailworks.jsonc": s.jsonc, "dist/index.js": "export default {}"}
 			if s.wrangler != "" {
 				files["wrangler.jsonc"] = s.wrangler
 			}
@@ -81,7 +81,7 @@ func TestMM_F4_GuardedTakeover(t *testing.T) {
 				// how to move it (drain), not "wait for the lease".
 				_, err := deploy("h2", false)
 				var e *Error
-				if !errors.As(err, &e) || e.Code != "lease_held" || !strings.Contains(e.Message, "live") || !strings.Contains(e.Message, "twd host rm h1 --drain") {
+				if !errors.As(err, &e) || e.Code != "lease_held" || !strings.Contains(e.Message, "live") || !strings.Contains(e.Message, "tw host rm h1 --drain") {
 					t.Fatalf("pinned move away from a live holder: want lease_held explaining the drain, got %v", err)
 				}
 				return
@@ -99,7 +99,7 @@ func TestMM_F4_GuardedTakeover(t *testing.T) {
 				if !errors.As(err, &e) || e.Code != s.wantErr || e.Status != 409 {
 					t.Fatalf("want 409 %s, got %+v %v", s.wantErr, r, err)
 				}
-				for _, w := range []string{"h1", "--force-takeover", "twd host rm h1"} {
+				for _, w := range []string{"h1", "--force-takeover", "tw host rm h1"} {
 					if !strings.Contains(e.Message, w) {
 						t.Errorf("message should mention %q: %s", w, e.Message)
 					}
@@ -134,14 +134,14 @@ func TestBundleStateful(t *testing.T) {
 		files map[string]string
 		want  bool
 	}{
-		{"workers only", map[string]string{"twd.jsonc": `{"tailnet":{"tags":["tag:w"]}}`}, false},
-		{"twd objects", map[string]string{"twd.jsonc": `{"tailnet":{"objects":{"A":{"tags":["tag:a"]}}}}`}, true},
-		{"all fence never", map[string]string{"twd.jsonc": `{"tailnet":{"objects":{"A":{"tags":["tag:a"],"fence":"never"},"B":{"node":false,"fence":"never"}}}}`}, false},
-		{"one class not exempt", map[string]string{"twd.jsonc": `{"tailnet":{"objects":{"A":{"tags":["tag:a"],"fence":"never"},"B":{"node":false}}}}`}, true},
-		{"wrangler-only DO", map[string]string{"twd.jsonc": `{"tailnet":{"tags":["tag:w"]}}`, "wrangler.json": `{"durable_objects":{"bindings":[{"name":"X","class_name":"X"}]}}`}, true},
-		{"wrangler DO exempted in twd.jsonc", map[string]string{"twd.jsonc": `{"tailnet":{"objects":{"X":{"node":false,"fence":"never"}}}}`, "wrangler.jsonc": `{"durable_objects":{"bindings":[{"name":"X","class_name":"X"}]}}`}, false},
-		{"wrangler.toml: assume stateful", map[string]string{"twd.jsonc": `{"tailnet":{"tags":["tag:w"]}}`, "wrangler.toml": "name = \"x\""}, true},
-		{"deps don't count", map[string]string{"twd.jsonc": `{"tailnet":{"tags":["tag:w"]}}`, "node_modules/pkg/wrangler.toml": "x"}, false},
+		{"workers only", map[string]string{"tailworks.jsonc": `{"tailnet":{"tags":["tag:w"]}}`}, false},
+		{"tw objects", map[string]string{"tailworks.jsonc": `{"tailnet":{"objects":{"A":{"tags":["tag:a"]}}}}`}, true},
+		{"all fence never", map[string]string{"tailworks.jsonc": `{"tailnet":{"objects":{"A":{"tags":["tag:a"],"fence":"never"},"B":{"node":false,"fence":"never"}}}}`}, false},
+		{"one class not exempt", map[string]string{"tailworks.jsonc": `{"tailnet":{"objects":{"A":{"tags":["tag:a"],"fence":"never"},"B":{"node":false}}}}`}, true},
+		{"wrangler-only DO", map[string]string{"tailworks.jsonc": `{"tailnet":{"tags":["tag:w"]}}`, "wrangler.json": `{"durable_objects":{"bindings":[{"name":"X","class_name":"X"}]}}`}, true},
+		{"wrangler DO exempted in tailworks.jsonc", map[string]string{"tailworks.jsonc": `{"tailnet":{"objects":{"X":{"node":false,"fence":"never"}}}}`, "wrangler.jsonc": `{"durable_objects":{"bindings":[{"name":"X","class_name":"X"}]}}`}, false},
+		{"wrangler.toml: assume stateful", map[string]string{"tailworks.jsonc": `{"tailnet":{"tags":["tag:w"]}}`, "wrangler.toml": "name = \"x\""}, true},
+		{"deps don't count", map[string]string{"tailworks.jsonc": `{"tailnet":{"tags":["tag:w"]}}`, "node_modules/pkg/wrangler.toml": "x"}, false},
 	} {
 		if got, why := BundleStateful(makeBundle(t, tc.files)); got != tc.want {
 			t.Errorf("%s: stateful=%v (%s), want %v", tc.name, got, why, tc.want)
@@ -178,7 +178,7 @@ func TestMM_F9_AssignmentFence(t *testing.T) {
 		{"cache", `{"tailnet":{"objects":{"C":{"tags":["tag:c"],"fence":"never"}}}}`, false},
 	} {
 		if _, err := m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: tc.workload,
-			Bundle: makeBundle(t, map[string]string{"twd.jsonc": tc.jsonc, "dist/index.js": "export default {}"})}); err != nil {
+			Bundle: makeBundle(t, map[string]string{"tailworks.jsonc": tc.jsonc, "dist/index.js": "export default {}"})}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -217,7 +217,7 @@ func TestMM_F12_IdentityConflictStillRefused(t *testing.T) {
 	tn, _ := m.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	m.RegisterHost(ctx, RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 	if _, err := m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w",
-		Bundle: makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})}); err != nil {
+		Bundle: makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})}); err != nil {
 		t.Fatal(err)
 	}
 	id := m.objectID(tn.ID, "w", "SupportAgent", "alice")
@@ -256,7 +256,7 @@ func TestMM_F13_DeploymentStatusShared(t *testing.T) {
 	tn, _ := a.CreateTenant(ctx, TenantRequest{Tailnet: "t.ts.net", MintMode: MintOAuth, OAuthClientFile: kf})
 	a.RegisterHost(ctx, RegisterRequest{HostID: "h1", CapacityNodes: 10, Tiers: []string{"process"}}, "", "")
 	d, err := a.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w",
-		Bundle: makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})})
+		Bundle: makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})})
 	if err != nil {
 		t.Fatal(err)
 	}

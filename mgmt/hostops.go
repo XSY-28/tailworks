@@ -6,14 +6,14 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/rosskukulinski/twd/internal/features"
+	"github.com/rosskukulinski/tailworks/internal/features"
 )
 
 // Host cordon and drain (ADR-041 §5). A cordoned host
 // keeps what it runs, keeps heartbeating and keeps its leases; placement
 // skips it (Candidate.Draining). Drain cordons, then re-places each
 // workload assigned to the host elsewhere through the ordinary deploy path
-// (`twd deploy --replace`): the cordoned host is ineligible, so placement
+// (`tw deploy --replace`): the cordoned host is ineligible, so placement
 // moves the workload and its lease at the next epoch.
 
 // CordonHost cordons (on) or uncordons a host. by is the actor.
@@ -165,7 +165,7 @@ func replicaGroupOf(d Deployment) string {
 
 // namespacesIfNoConfig: a deployment whose bundle carries its config is
 // redeployed from the bundle alone; one deployed with explicit namespaces
-// (no twd.jsonc) gets them back.
+// (no tailworks.jsonc) gets them back.
 func namespacesIfNoConfig(d Deployment) []ClassConfig {
 	if _, err := BundleConfig(d.Bundle); err == nil {
 		return nil

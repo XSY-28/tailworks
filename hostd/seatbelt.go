@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/procsb"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
 )
 
 // Process-tier sandboxes (Config.Sandbox).
 const (
 	SandboxNone = "none"
 	// SandboxSeatbelt runs each workerd under macOS Seatbelt
-	// (sandbox-exec). Every twd process runs as one uid on the process
+	// (sandbox-exec). Every tailworks process runs as one uid on the process
 	// tier, so 0700 dirs alone don't keep tenant A's workerd out of tenant
 	// B's state: the profile denies every hostd data and run dir (node
 	// keys, other tenants' DO storage and sockets, mgmt's admin socket,
@@ -146,7 +146,7 @@ func seatbeltProfile(own, readOnly, readOnlyTrees, deny []string) string {
 // sandboxDeny is what no workerd may touch: the user's home dir (API key
 // files, including those of tenants added after this workerd started, and
 // everything else there), hostd's data and run dirs, the configured extra
-// paths (twd up: its state and run dirs), and the API key file of every
+// paths (tw up: its state and run dirs), and the API key file of every
 // tenant this host serves.
 func (h *Host) sandboxDeny() []string {
 	deny := append([]string{h.cfg.DataDir, h.cfg.RunDir}, h.cfg.SandboxDeny...)
@@ -202,7 +202,7 @@ func (inst *instance) workerdCommand() (*exec.Cmd, error) {
 		}
 		args = append(args, "--socket-fd", "ingress=3")
 	}
-	args, bind := inst.inspectorArgs(args) // inspector.go: twd dev --inspector-port
+	args, bind := inst.inspectorArgs(args) // inspector.go: tw dev --inspector-port
 	cmd, err := inst.sandboxed(inst.h.cfg.WorkerdBin, args,
 		[]string{inst.dir, inst.doStorage}, []string{inst.h.cfg.WorkerdBin}, nil, bind, inst.loopPorts)
 	if err != nil {
@@ -290,7 +290,7 @@ func (inst *instance) sandboxed(bin string, args, own, readOnly, readOnlyTrees [
 }
 
 // sandboxLauncher is the binary that applies Landlock profiles: any binary
-// importing internal/procsb (twd-hostd; in tests, the test binary).
+// importing internal/procsb (tw-hostd; in tests, the test binary).
 func (h *Host) sandboxLauncher() (string, error) {
 	if h.cfg.SandboxLauncher != "" {
 		return h.cfg.SandboxLauncher, nil

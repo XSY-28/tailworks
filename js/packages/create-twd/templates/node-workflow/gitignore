@@ -1,5 +1,0 @@
-.well-known/
-.twd-build/
-node_modules/
-# local secrets for `twd dev` (docs/secrets.md); never commit them
-.dev.vars

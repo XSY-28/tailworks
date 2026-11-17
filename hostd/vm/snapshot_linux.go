@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rosskukulinski/twd/guest/proto"
-	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
+	"github.com/rosskukulinski/tailworks/guest/proto"
+	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
 )
 
 // Snapshot restore (vm.Config.Snapshot; off by default — see the ADR
@@ -226,7 +226,7 @@ func (b *Backend) baseID(ctx context.Context, wait bool) string {
 	}
 	if gid, err := GuestIdentity(b.cfg.Kernel, b.cfg.Rootfs); err != nil || gid != bs.guest {
 		// The guest changed under the base (an install swapped
-		// share/twd/vm): boot cold until a base of the new guest is built.
+		// share/tailworks/vm): boot cold until a base of the new guest is built.
 		b.baseMu.Lock()
 		warn := !b.baseStale
 		b.baseStale = true

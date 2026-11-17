@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/internal/publicspec"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 const browserAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
@@ -42,7 +42,7 @@ func TestPublicErrorsHTML(t *testing.T) {
 	c := e.client(defaultSrc())
 	path := "/secret-admin-<script>alert(1)</script>"
 	resp, body := do(t, c, "GET", e.url(path), nil, map[string]string{"Accept": browserAccept})
-	if resp.StatusCode != 404 || resp.Header.Get("twd-error") != "not_public" || !strings.HasPrefix(resp.Header.Get("content-type"), "text/html") {
+	if resp.StatusCode != 404 || resp.Header.Get("tw-error") != "not_public" || !strings.HasPrefix(resp.Header.Get("content-type"), "text/html") {
 		t.Fatalf("html 404: %d %v %s", resp.StatusCode, resp.Header, body)
 	}
 	if !strings.Contains(body, "404 Not Found") || !strings.Contains(body, "<code>not_public</code>") || !strings.Contains(body, netd.DocBase+"not_public") ||

@@ -94,7 +94,7 @@ func TestApprovalsDefaults(t *testing.T) {
 		t.Errorf("approver page: tenant box, tenant listing or admin links:\n%s", body)
 	}
 	// The form fallback returns to the row.
-	r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net/ui/approvals/decide", strings.NewReader("tenant=tn_1&workload=refunds&workflow=refund&instance=inst-7&decision=approve"))
+	r := httptest.NewRequest("POST", "http://tw-mgmt.t.ts.net/ui/approvals/decide", strings.NewReader("tenant=tn_1&workload=refunds&workflow=refund&instance=inst-7&decision=approve"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)

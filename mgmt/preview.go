@@ -6,12 +6,12 @@ import (
 	"slices"
 	"strings"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Preview deploys and promotion (ADR-deploy-preview).
 //
-// `twd deploy --preview` (POST /v1/deployments with "preview": true) runs a
+// `tw deploy --preview` (POST /v1/deployments with "preview": true) runs a
 // bundle as a workload of its own, PreviewName(workload, alias) =
 // "<workload>--preview-<alias>", next to the workload, which it never
 // touches. That keeps every per-workload mechanism unchanged, as for
@@ -28,7 +28,7 @@ import (
 // preview would consume or produce the workload's messages: a bundle with
 // queue bindings is refused (preview_unsupported).
 //
-// `twd promote <workload> <alias>` deploys the preview's bundle to the
+// `tw promote <workload> <alias>` deploys the preview's bundle to the
 // workload through Deploy, exactly as a rollback does (rollback.go): lease
 // at epoch+1, host fencing, sticky placement, the workload's own replicas,
 // Service and public routes. Then it undeploys the preview. Data never
@@ -61,7 +61,7 @@ type previewCtx struct {
 
 // strip drops what routes production traffic from a preview's config:
 // the Tailscale Service, public routes and replicas.
-func (pc *previewCtx) strip(cfg *TwdConfig) {
+func (pc *previewCtx) strip(cfg *TwConfig) {
 	if pc == nil || pc.of == "" || cfg == nil {
 		return
 	}
@@ -98,7 +98,7 @@ func (pc *previewCtx) auditDetail(detail map[string]any) {
 
 // deployPreview is Deploy's preview entry point. It handles a deploy with
 // Preview (or PreviewAlias) set, and a redeploy of an existing preview by
-// its own name (host drain, `twd deploy --name web--preview-x`), which
+// its own name (host drain, `tw deploy --name web--preview-x`), which
 // stays a preview. Anything else is not handled (false).
 func (m *Mgmt) deployPreview(ctx context.Context, r DeployRequest) (bool, DeployResponse, error) {
 	var none DeployResponse
@@ -230,13 +230,13 @@ func (m *Mgmt) promoteRequestFor(ctx context.Context, r PromoteRequest) (DeployR
 		return DeployRequest{}, Deployment{}, errf(400, "bad_request", "workload must be a DNS label ([a-z0-9-], ≤63)")
 	}
 	if r.Preview == "" {
-		return DeployRequest{}, Deployment{}, errf(400, "bad_request", "name the preview to promote (its alias; twd previews %s lists them)", r.Workload)
+		return DeployRequest{}, Deployment{}, errf(400, "bad_request", "name the preview to promote (its alias; tw previews %s lists them)", r.Workload)
 	}
 	name := r.Preview
 	if !strings.HasPrefix(name, PreviewName(r.Workload, "")) {
 		name = PreviewName(r.Workload, name)
 	}
-	unknown := errf(404, "unknown_preview", "%s has no running preview %q; twd previews %s lists them", r.Workload, r.Preview, r.Workload)
+	unknown := errf(404, "unknown_preview", "%s has no running preview %q; tw previews %s lists them", r.Workload, r.Preview, r.Workload)
 	l, err := m.latestDeployment(ctx, r.TenantID, name)
 	if err != nil || l.StoppedAt != 0 || previewOf(l.Namespaces) != r.Workload {
 		return DeployRequest{}, Deployment{}, lookupErr(orNotFound(err), unknown)

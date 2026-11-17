@@ -7,10 +7,10 @@
 **Context.**
 
 - Cloudflare Workflows and the Agents SDK's `AgentWorkflow` /
-  `waitForApproval` were ❌ on twd: no binding, no engine.
+  `waitForApproval` were ❌ on tailworks: no binding, no engine.
 - workerd 1.20261114.1 is the first release with a built-in Workflows engine
   (workerd#8331): a bundled Worker, `/workerd/workflows.js`, run with
-  `--experimental` (which twd already passes). Each instance is a
+  `--experimental` (which tailworks already passes). Each instance is a
   SQLite-backed Durable Object. A `run()` that restarts runs from the start,
   with completed steps returning their stored results; a wait longer than a
   minute ends the in-memory run, and the instance's alarm (or an arriving
@@ -23,13 +23,13 @@
 - On Cloudflare any code holding the binding can send that event, so "who
   approved" is whatever the app writes into the payload. Hosted agent
   platforms offer "pause a run until a person approves", usually through a
-  link or a token. On twd every caller already has a WireGuard-verified
+  link or a token. On tailworks every caller already has a WireGuard-verified
   identity and tailnet grants (`getCaller`, ADR-006, ADR-010).
 
 **Decision.**
 
 1. **Engine hosting.**
-   - twd uses workerd's engine unmodified, configured as workerd's own
+   - tailworks uses workerd's engine unmodified, configured as workerd's own
      `wrangler.json` mapping does: an engine service (`workflows`,
      `bundled = "/workerd/workflows.js"`), the tenant worker's
      `workflowsEngine` naming its `Engine` class, and each Workflow's
@@ -58,41 +58,41 @@
      an event of type `approval` or `approval-*` from app code is refused
      (`approval_requires_identity`), and any `approver` key is removed from
      every other event's payload (and its `metadata`).
-   - So a Workflow can trust `approver`: only twd sets it. The Agents SDK's
-     `approveWorkflow()` / `rejectWorkflow()` are refused on twd by design.
+   - So a Workflow can trust `approver`: only tailworks sets it. The Agents SDK's
+     `approveWorkflow()` / `rejectWorkflow()` are refused on tailworks by design.
 
 3. **The approval surface.** A wait for an `approval`/`approval-*` event is
-   an approval. twd's runtime wraps each Workflow class's `step.waitForEvent`
+   an approval. Tailworks' runtime wraps each Workflow class's `step.waitForEvent`
    and reports the wait (workflow, instance, step, type, timeout, the
    instance's numeric params) to hostd through the platform, as a durable
    step, so a `run()` that runs again does not report twice. hostd keeps
    the list (`<data>/approvals.json`, so it survives a restart). A decision
    reaches hostd in one of two ways, and hostd alone delivers it:
-   - **On the workload's (or an object's) node:** `/_twd/approvals[/<workflow>/<instance>]`
+   - **On the workload's (or an object's) node:** `/_tw/approvals[/<workflow>/<instance>]`
      is intercepted by hostd before the request reaches workerd. The
      approver is netd's verified caller (user, node, node ID, tags); the
-     grants are that caller's `twd.dev/cap/approve` toward the node. A
+     grants are that caller's `github.com/rosskukulinski/tailworks/cap/approve` toward the node. A
      `POST` must be `application/json` (a cross-site page can't send one
-     without a preflight, which twd never answers), public requests are
+     without a preflight, which tailworks never answers), public requests are
      refused, and a same-origin page the app serves can use it.
-   - **Through mgmt:** `twd approve` / `twd approvals` and the admin UI call
+   - **Through mgmt:** `tw approve` / `tw approvals` and the admin UI call
      `GET /v1/tenants/{id}/approvals` and
      `POST /v1/tenants/{id}/workloads/{w}/approvals/{workflow}/{instance}`.
      mgmt vouches for its WhoIs of the caller and sends the caller's
-     `twd.dev/cap/approve` grants toward `tag:twd-mgmt` to the lease
+     `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt` to the lease
      holder's push API (`POST /v1/approvals/decide`, admitted only from
      mgmt's node). The operator console and the local socket have no
      personal identity and are refused (`no_identity`).
-   - hostd then sends the event through the platform (`cf.twd` kind
+   - hostd then sends the event through the platform (`cf.tw` kind
      `approval`, which only hostd can set) with the payload
      `{approved, approver, comment, reason?, metadata: {…, approver, comment}, decidedAt}`.
      `waitForApproval` returns `metadata`, so the approver is in both.
 
-4. **Authorisation.** `twd.dev/cap/approve` is an app capability. A grant
+4. **Authorisation.** `github.com/rosskukulinski/tailworks/cap/approve` is an app capability. A grant
    value may narrow it by `workloads`, `workflows`, `steps`, `decisions`
    and numeric `limits` on the instance's params; grants are a union, and
    a limit the instance has no number for does not match (fail closed).
-   Being a twd admin is not a grant. The rules are one package
+   Being a tailworks admin is not a grant. The rules are one package
    (`internal/approvecap`), used by hostd to enforce and by mgmt to filter
    what an approver is shown. The Workflow may add its own rules on the
    verified identity (the template refuses the requester).
@@ -105,25 +105,25 @@
    their timing is the workload's word. All are privileged kinds that
    tenant code cannot submit.
 
-6. **Notification, timeouts.** `twd approvals` and the admin UI list what
+6. **Notification, timeouts.** `tw approvals` and the admin UI list what
    waits, with age and params. No built-in email or chat: the Workflow
    notifies from a step. A `waitForEvent` timeout rejects (nothing was
    approved; the default timeout is 24 hours), recorded as
    `approval_timeout`; escalation is the Workflow's (catch and wait again).
 
-7. **One twd fix to the SDK interplay.** The engine ends a long wait by
+7. **One tailworks fix to the SDK interplay.** The engine ends a long wait by
    throwing `WorkflowAbortedError` through `run()`; `AgentWorkflow` reports
-   any thrown error to its Agent (`onWorkflowError`). twd's wrapper marks
+   any thrown error to its Agent (`onWorkflowError`). Tailworks' wrapper marks
    that abort as already reported, so the Agent hears only real failures.
 
 **Consequences.**
 
 - Workflows, `AgentWorkflow` and `waitForApproval` work in both object
   modes, on both tiers' storage; the pinned workerd moves to 1.20261114.1.
-- An approval on twd cannot come from a link, a token or the app's own
+- An approval on tailworks cannot come from a link, a token or the app's own
   code; it names a tailnet identity whose grant allowed it.
 - Apps that approve from their own code (`approveWorkflow()`) must move
-  that decision to `twd approve`, the admin UI or `/_twd/approvals`.
+  that decision to `tw approve`, the admin UI or `/_tw/approvals`.
 - ADR-012 (one host per namespace) is unchanged: a workload's instances
   live on its lease holder. workerd's cluster mode, which replicates engine
   instances, is not used.

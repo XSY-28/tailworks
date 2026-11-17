@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/devreap"
+	"github.com/rosskukulinski/tailworks/internal/devreap"
 )
 
 // Workerd is a running stock workerd (test supervisor; hostd owns the real one in M3).

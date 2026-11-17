@@ -883,7 +883,7 @@ var index_default = {
       notes,
       hello,
       wasm: inst instanceof WebAssembly.Instance,
-      buffer: Buffer2.from("twd").toString("base64"),
+      buffer: Buffer2.from("tw").toString("base64"),
       count: await env2.COUNTER.getByName("c").bump(),
       cache: typeof env2.CACHE
     });

@@ -26,7 +26,7 @@ func newKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 func TestSignVerify(t *testing.T) {
 	pub, priv := newKey(t)
 	other, _ := newKey(t)
-	msg := []byte("abc  twd-0.3.0-linux-amd64.tar.gz\n")
+	msg := []byte("abc  tailworks-0.3.0-linux-amd64.tar.gz\n")
 	sig := Sign(priv, msg)
 	if err := Verify([]ed25519.PublicKey{other, pub}, msg, sig); err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestParseAllowedSigners(t *testing.T) {
 	other, _ := newKey(t)
 	file := "# comment\n\n" + AuthorizedKey(pub, "release 2026") + "\n" +
 		strings.Replace(AuthorizedKey(other, ""), Namespace+" ", "someone-else ", 1) + "\n" +
-		strings.Replace(AuthorizedKey(other, ""), `namespaces="twd-release"`, `namespaces="git"`, 1) + "\n"
+		strings.Replace(AuthorizedKey(other, ""), `namespaces="tw-release"`, `namespaces="git"`, 1) + "\n"
 	keys, err := ParseAllowedSigners([]byte(file))
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestParseAllowedSigners(t *testing.T) {
 }
 
 // The signature ssh-keygen writes verifies here, and Sign's verifies with
-// ssh-keygen: the shell installers and twd-hostd agree.
+// ssh-keygen: the shell installers and tw-hostd agree.
 func TestSSHKeygenInterop(t *testing.T) {
 	kg, err := exec.LookPath("ssh-keygen")
 	if err != nil {
@@ -115,9 +115,9 @@ func TestVerifyTree(t *testing.T) {
 	keys := []ed25519.PublicKey{pub}
 	mk := func(t *testing.T) string {
 		dir := t.TempDir()
-		files := map[string]string{"install.sh": "#!/bin/sh\n", "VERSION": "0.3.0\n", "bin/twd": "twd", "share/twd/release.json": "{}"}
+		files := map[string]string{"install.sh": "#!/bin/sh\n", "VERSION": "0.3.0\n", "bin/tw": "tw", "share/tailworks/release.json": "{}"}
 		var sums strings.Builder
-		for _, n := range []string{"VERSION", "bin/twd", "install.sh", "share/twd/release.json"} {
+		for _, n := range []string{"VERSION", "bin/tw", "install.sh", "share/tailworks/release.json"} {
 			p := filepath.Join(dir, n)
 			os.MkdirAll(filepath.Dir(p), 0o755)
 			os.WriteFile(p, []byte(files[n]), 0o644)
@@ -132,7 +132,7 @@ func TestVerifyTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, tamper := range map[string]func(dir string){
-		"changed file":  func(d string) { os.WriteFile(filepath.Join(d, "bin/twd"), []byte("evil"), 0o755) },
+		"changed file":  func(d string) { os.WriteFile(filepath.Join(d, "bin/tw"), []byte("evil"), 0o755) },
 		"unlisted file": func(d string) { os.WriteFile(filepath.Join(d, "bin/extra"), []byte("evil"), 0o755) },
 		"missing file":  func(d string) { os.Remove(filepath.Join(d, "VERSION")) },
 		"no signature":  func(d string) { os.Remove(filepath.Join(d, SigFile)) },
@@ -162,10 +162,10 @@ func TestScriptsPinTheSameKeys(t *testing.T) {
 	want := keyLines(string(pinned))
 	for _, s := range []string{"../../scripts/get.sh", "../../scripts/install.sh"} {
 		b := string(mustRead(t, s))
-		_, rest, ok := strings.Cut(b, "# BEGIN twd release signers")
-		block, _, ok2 := strings.Cut(rest, "# END twd release signers")
+		_, rest, ok := strings.Cut(b, "# BEGIN tw release signers")
+		block, _, ok2 := strings.Cut(rest, "# END tw release signers")
 		if !ok || !ok2 {
-			t.Fatalf("%s: no BEGIN/END twd release signers block", s)
+			t.Fatalf("%s: no BEGIN/END tw release signers block", s)
 		}
 		if got := keyLines(block); got != want {
 			t.Errorf("%s pins %q, internal/releasesig/allowed_signers %q: run sh scripts/release-keygen.sh --sync", s, got, want)

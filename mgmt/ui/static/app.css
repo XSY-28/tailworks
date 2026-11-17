@@ -1,4 +1,4 @@
-/* twd admin UI. One file, no fonts, no CDNs. Light/dark via prefers-color-scheme. */
+/* tailworks admin UI. One file, no fonts, no CDNs. Light/dark via prefers-color-scheme. */
 :root {
   --bg: #f6f7f9; --fg: #1d2330; --muted: #677084; --faint: #9aa1b0; --line: #e3e6ec; --card: #ffffff; --head: #f9fafb;
   --link: #2459c9; --accent: #2459c9;

@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/image"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/sandbox/sandboxtest"
-	"github.com/rosskukulinski/twd/internal/container"
+	"github.com/rosskukulinski/tailworks/hostd/image"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox/sandboxtest"
+	"github.com/rosskukulinski/tailworks/internal/container"
 )
 
 // fakeQuota is mgmt's reservation API: reachable or down, granting up to
@@ -126,7 +126,7 @@ func TestContainerNeedsBackend(t *testing.T) {
 	}
 	_, err = h.AcquireContainer(context.Background(), testCtrKey("a"), lite)
 	wantCode(t, err, "tier_unavailable")
-	// twd dev (ForceProcessTier) offers neither, even with both backends.
+	// tw dev (ForceProcessTier) offers neither, even with both backends.
 	h, q2 := admitHost(t, true, roomy)
 	h.cfg.ForceProcessTier = true
 	if got := h.tiers(); !slices.Equal(got, []string{"process"}) {

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// StoreSnapshot is one platform store's journal, for `twd dev` to keep
+// StoreSnapshot is one platform store's journal, for `tw dev` to keep
 // stores (KV namespaces) between runs: it exports a tenant's stores when it
 // stops and imports them into the next run's tenant (whose ID differs).
 type StoreSnapshot struct {

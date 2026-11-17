@@ -1,23 +1,23 @@
 # Limits
 
-Every size, count, rate and timeout twd enforces, in one place, with the
+Every size, count, rate and timeout tailworks enforces, in one place, with the
 line of code that sets it. Limits apply per host and per workload unless a
 row says otherwise (a tenant quota covers all of a tenant's workloads).
 **Configurable** names the flag or config key that changes a limit; "no"
 means it is a constant. Several limits copy Cloudflare's so that code
 written for Workers behaves the same; the feature pages explain the
 differences. [Limits that don't exist](#limits-that-dont-exist) lists what
-twd deliberately does not bound.
+tailworks deliberately does not bound.
 
 ## Limits that don't exist
 
-These were checked in the workerd config twd generates (`hostd/gen`) and in
+These were checked in the workerd config tailworks generates (`hostd/gen`) and in
 the proxies a tailnet request passes through (netd, then hostd, then workerd).
 
 | Limit | Value | Notes |
 |---|---|---|
-| CPU time per request, alarm, cron or queue run | none | the workerd config sets no CPU limit; wrangler's `limits` key is ignored (`cmd/twd/wranglercfg.go:252`) |
-| Memory per isolate | none set by twd | V8's own heap limit applies; Durable Objects on the [microVM tier](#hosts-and-the-microvm-tier) are bounded by the guest's memory |
+| CPU time per request, alarm, cron or queue run | none | the workerd config sets no CPU limit; wrangler's `limits` key is ignored (`cmd/tw/wranglercfg.go:252`) |
+| Memory per isolate | none set by tailworks | V8's own heap limit applies; Durable Objects on the [microVM tier](#hosts-and-the-microvm-tier) are bounded by the guest's memory |
 | Wall time of a tailnet request | none | `netd/ingress.go:183` and the hostd ingress set no deadline. Requests from the internet do have one: see [Public ingress](#public-ingress) |
 | Tailnet request body size | none | |
 | Request rate over the tailnet | none | your tailnet policy decides who can connect |
@@ -33,11 +33,11 @@ the proxies a tailnet request passes through (netd, then hostd, then workerd).
 |---|---|---|---|
 | Deploy request body (the bundle, JSON-encoded) | 64 MiB | no | `mgmt/server.go:180` |
 | Unpacked bundle, all files | 64 MiB | no | `hostd/bundle/bundle.go:27` |
-| Bundle sent into a microVM guest | 256 MiB | no | `guest/twd-guestd/main_linux.go:313` |
-| `twd deploy` wait for ready | 3 min | `twd deploy --wait` | `cmd/twd/app.go:335` |
+| Bundle sent into a microVM guest | 256 MiB | no | `guest/tw-guestd/main_linux.go:313` |
+| `tw deploy` wait for ready | 3 min | `tw deploy --wait` | `cmd/tw/app.go:335` |
 | One host bringing up a deployment | 2 min | no | `hostd/workload.go:182` |
 | In-flight requests on the old instance at a redeploy (then it stops) | 10 s | no | `hostd/host.go:366` |
-| Replicas of a stateless workload | 16 | `twd.jsonc` `replicas` | `mgmt/workload_replicas.go:30` |
+| Replicas of a stateless workload | 16 | `tailworks.jsonc` `replicas` | `mgmt/workload_replicas.go:30` |
 
 ## Requests
 
@@ -51,7 +51,7 @@ See [Limits that don't exist](#limits-that-dont-exist) for duration, body and CP
 | Wait for a running instance during a redeploy | 15 s, then `upstream_unavailable` | no | `hostd/http.go:87` |
 | Wait for an object's node (`identity_pending` after) | 30 s | no | `hostd/host.go:360` |
 | `Retry-After` on `identity_pending` | 1 s | no | `mgmt/server.go:170` |
-| Node-tier caller header clock skew | 60 s | `maxSkewMs` in `@twd/node` | `js/packages/node/src/index.ts:37` |
+| Node-tier caller header clock skew | 60 s | `maxSkewMs` in `@tailworks/node` | `js/packages/node/src/index.ts:37` |
 
 ## Durable Objects
 
@@ -59,16 +59,16 @@ See also [create-admission.md](create-admission.md).
 
 | Limit | Value | Configurable? | Source |
 |---|---|---|---|
-| Live objects per tenant | 1000 | `twd tenant set --max-objects` | `mgmt/types.go:42` |
-| Spawn depth below a root object | 3 (a deployment may only lower it) | `twd.jsonc` `tailnet.spawn.maxDepth` | `mgmt/types.go:47`, `mgmt/service.go:956` |
-| Live descendants of one root object | 64 (a deployment may only lower it) | `twd.jsonc` `tailnet.spawn.maxLive` | `mgmt/types.go:46`, `mgmt/service.go:953` |
-| Node registrations per tenant | 200 per minute (twd's own throttle) | `twd tenant set --registrations-per-minute` | `mgmt/types.go:41` |
+| Live objects per tenant | 1000 | `tw tenant set --max-objects` | `mgmt/types.go:42` |
+| Spawn depth below a root object | 3 (a deployment may only lower it) | `tailworks.jsonc` `tailnet.spawn.maxDepth` | `mgmt/types.go:47`, `mgmt/service.go:956` |
+| Live descendants of one root object | 64 (a deployment may only lower it) | `tailworks.jsonc` `tailnet.spawn.maxLive` | `mgmt/types.go:46`, `mgmt/service.go:953` |
+| Node registrations per tenant | 200 per minute (tailworks' own throttle) | `tw tenant set --registrations-per-minute` | `mgmt/types.go:41` |
 | Create ticket lifetime | 2 min | no | `hostd/gen/mac.go:143` |
 | `ready()` wait after a spawn | `timeoutMs`, at most 5 min (else 30 s) | per call | `hostd/http.go:422` |
 | Node join after a create | 3 min | no | `hostd/objects.go:366` |
 | Retries of a failed node join | 5 (1, 2, 4, 8, 16 s) | no | `hostd/objects.go:440` |
 | Storage per object (workerd tier) | none | — | |
-| Storage per object (microVM tier) | 1024 MiB volume (sparse) | `twd-hostd -vm-volume-mib` | `cmd/twd-hostd/main.go:89` |
+| Storage per object (microVM tier) | 1024 MiB volume (sparse) | `tw-hostd -vm-volume-mib` | `cmd/tw-hostd/main.go:89` |
 
 ## KV
 
@@ -95,11 +95,11 @@ Details: [d1.md](d1.md#limits).
 | Bound parameters per statement | 100 | no | `hostd/gen/js/store-d1.js:32` |
 | String or BLOB value | 2,000,000 bytes | no | `hostd/gen/js/store-d1.js:33` |
 | Statements per request | 1000 | no | `hostd/gen/js/store-d1.js:34` |
-| Result of one request, and `twd d1 export` | 16 MiB | no | `hostd/gen/js/store-d1.js:35` |
+| Result of one request, and `tw d1 export` | 16 MiB | no | `hostd/gen/js/store-d1.js:35` |
 | Database | 1 GiB | no | `hostd/gen/js/store-d1.js:36` |
 | One write (statement or batch), encoded | 2 MiB | no | `hostd/gen/js/store-d1.js:37` |
 | Journal (every write, no compaction yet) | 1 GiB | no | `mgmt/stores.go:50` |
-| `twd d1 execute` / migration body | 8 MiB | no | `mgmt/d1.go:29` |
+| `tw d1 execute` / migration body | 8 MiB | no | `mgmt/d1.go:29` |
 | Query duration | none | — | |
 
 ## R2
@@ -131,7 +131,7 @@ Details: [queues.md](queues.md#delivery).
 | `max_concurrency` | 1 to 20, default 1 | consumer config | `internal/queuecfg/queuecfg.go:24` |
 | Queue size (stored bytes) | 1 GiB, then `queue_limit` | no | `mgmt/queues.go:41` |
 | One `queue()` run | 15 min wall time | no | `hostd/queues.go:54` |
-| Claimed batch hidden (push consumer) | 60 s, extended while `queue()` runs | `twd-hostd -queue-visibility` | `hostd/queues.go:51` |
+| Claimed batch hidden (push consumer) | 60 s, extended while `queue()` runs | `tw-hostd -queue-visibility` | `hostd/queues.go:51` |
 | HTTP pull visibility timeout | 1 s to 12 h, default 30 s | per call | `internal/queuecfg/queuecfg.go:25`, `mgmt/queues.go:42` |
 | HTTP pull wait | up to 20 s | per call | `mgmt/queues.go:43` |
 
@@ -159,7 +159,7 @@ Details: [secrets.md](secrets.md#commands).
 ## Public ingress
 
 Requests from the internet (Funnel) only. Each limit has a default and a
-ceiling; a workload sets its own up to the ceiling in `twd.jsonc`
+ceiling; a workload sets its own up to the ceiling in `tailworks.jsonc`
 `public.limits`. Details: [public-ingress.md](public-ingress.md#limits).
 
 | Limit | Default | Ceiling | Source |
@@ -174,7 +174,7 @@ ceiling; a workload sets its own up to the ceiling in `twd.jsonc`
 | Limit | Value | Configurable? | Source |
 |---|---|---|---|
 | Public routes per workload | 64 | no | `internal/publicspec/publicspec.go:32` |
-| `public.maxObjects` per class | at most 1000 | `twd.jsonc` | `internal/publicspec/publicspec.go:36` |
+| `public.maxObjects` per class | at most 1000 | `tailworks.jsonc` | `internal/publicspec/publicspec.go:36` |
 | Objects created by public requests | 20 per minute per tenant | no | `internal/publicspec/publicspec.go:40` |
 | Time to send request headers | 10 s | no | `netd/public_serve.go:296` |
 | Idle keep-alive connection | 60 s | no | `netd/public_serve.go:297` |
@@ -194,13 +194,13 @@ Details: [observability.md](observability.md#volume-bounds).
 | OTLP export queue per signal and workload | 4096 items | no | `hostd/telemetry.go:79` |
 | OTLP export interval: logs and spans / metrics | 2 s / 30 s | no | `hostd/telemetry.go:63` |
 | OTLP headers / header value / endpoint | 16 / 4 KiB / 2048 bytes | no | `mgmt/telemetry.go:30` |
-| `twd logs` lines | default 50, at most 10,000 | `twd logs -n` | `cmd/twd/ops.go:586`, `mgmt/logs.go:30` |
-| One `twd logs -f` stream | 1 h (the CLI reconnects) | no | `hostd/logs.go:36` |
+| `tw logs` lines | default 50, at most 10,000 | `tw logs -n` | `cmd/tw/ops.go:586`, `mgmt/logs.go:30` |
+| One `tw logs -f` stream | 1 h (the CLI reconnects) | no | `hostd/logs.go:36` |
 | Log retention | none beyond the rotation above | — | |
 
 ## Workflows and approvals
 
-Workflows run on workerd's built-in engine; twd adds no limits of its own
+Workflows run on workerd's built-in engine; tailworks adds no limits of its own
 to workflows, steps or retention. Details:
 [approvals.md](approvals.md#waiting-for-an-approval).
 
@@ -219,47 +219,47 @@ Details: [containers.md](containers.md#instance-types) and
 |---|---|---|---|
 | Instance types | `lite` (1/16 vCPU, 256 MiB, 2 GB) to `standard-4` (4 vCPU, 12 GiB, 20 GB) | `instance_type` | `internal/container/container.go:47` |
 | Custom instance | up to 4 vCPU, 12 GiB, 20 GB; at least 128 MiB | `instance_type` | `hostd/sandbox/container.go:151` |
-| Running containers per tenant | 10 | `twd tenant set --max-containers` | `mgmt/types.go:43` |
-| Container memory per tenant | 16,384 MiB | `twd tenant set --max-container-mem-mib` | `mgmt/types.go:44` |
-| Container vCPU per tenant | 8 | `twd tenant set --max-container-vcpu` | `mgmt/types.go:45` |
-| Containers, memory, vCPU per host | unlimited | `twd-hostd -container-max`, `-container-mem-mib`, `-container-vcpu` | `cmd/twd-hostd/main.go:119` |
-| Inactivity timeout | 10 min default, at most 6 h | `twd-hostd -container-idle`, `setInactivityTimeout` | `hostd/containers.go:49` |
-| Hard max lifetime | 24 h | `twd-hostd -container-max-lifetime` | `hostd/containers.go:51` |
-| `destroy()` grace before SIGKILL | 10 s | `twd-hostd -container-stop-grace` | `hostd/containers.go:52` |
+| Running containers per tenant | 10 | `tw tenant set --max-containers` | `mgmt/types.go:43` |
+| Container memory per tenant | 16,384 MiB | `tw tenant set --max-container-mem-mib` | `mgmt/types.go:44` |
+| Container vCPU per tenant | 8 | `tw tenant set --max-container-vcpu` | `mgmt/types.go:45` |
+| Containers, memory, vCPU per host | unlimited | `tw-hostd -container-max`, `-container-mem-mib`, `-container-vcpu` | `cmd/tw-hostd/main.go:119` |
+| Inactivity timeout | 10 min default, at most 6 h | `tw-hostd -container-idle`, `setInactivityTimeout` | `hostd/containers.go:49` |
+| Hard max lifetime | 24 h | `tw-hostd -container-max-lifetime` | `hostd/containers.go:51` |
+| `destroy()` grace before SIGKILL | 10 s | `tw-hostd -container-stop-grace` | `hostd/containers.go:52` |
 | Quota reservation at `start()` | 10 s | no | `hostd/container_admit.go:59` |
 | Outbound intercepts per container | 128 | no | `netd/sbxnet/sbxnet.go:53` |
-| Image, uncompressed | 40 GiB | `twd-hostd -container-image-max-mib` | `hostd/image/limits.go:33` |
+| Image, uncompressed | 40 GiB | `tw-hostd -container-image-max-mib` | `hostd/image/limits.go:33` |
 | Image layers / entries / path depth / path length | 128 / 1 Mi / 256 / 4096 bytes | no | `hostd/image/limits.go:39` |
-| Converted image cache | unlimited | `twd-hostd -container-image-cache-max-mib` | `cmd/twd-hostd/main.go:115` |
+| Converted image cache | unlimited | `tw-hostd -container-image-cache-max-mib` | `cmd/tw-hostd/main.go:115` |
 | `exec()` duration | none | — | |
 
 ## Hosts and the microVM tier
 
-Flags are `twd-hostd`'s; `twd up` uses its own defaults for some (1 s
+Flags are `tw-hostd`'s; `tw up` uses its own defaults for some (1 s
 heartbeat, 12 s kill tombstone).
 
 | Limit | Value | Configurable? | Source |
 |---|---|---|---|
-| Guest memory (microVM DO) | 512 MiB | `-vm-mem-mib` | `cmd/twd-hostd/main.go:90` |
-| Guest vCPUs | 2 | `-vm-vcpus` | `cmd/twd-hostd/main.go:91` |
+| Guest memory (microVM DO) | 512 MiB | `-vm-mem-mib` | `cmd/tw-hostd/main.go:90` |
+| Guest vCPUs | 2 | `-vm-vcpus` | `cmd/tw-hostd/main.go:91` |
 | microVMs per host | 64 | no | `hostd/capacity.go:16` |
 | Host RAM offered to guests | 75% | no | `hostd/capacity.go:20` |
 | Free disk offered as container scratch | 90% | no | `hostd/capacity.go:23` |
-| Warm VM pool | auto (at most 2) | `-vm-pool` | `cmd/twd-hostd/main.go:98` |
+| Warm VM pool | auto (at most 2) | `-vm-pool` | `cmd/tw-hostd/main.go:98` |
 | microVM boot | 60 s | no | `hostd/workload.go:853` |
-| Tailnet nodes advertised per host | 1000 | `-capacity-nodes` | `cmd/twd-hostd/main.go:79` |
+| Tailnet nodes advertised per host | 1000 | `-capacity-nodes` | `cmd/tw-hostd/main.go:79` |
 | Pre-joined nodes per hot class | 1 | `-pool-nodes` | `internal/hostdrun/hostdrun.go:47` |
-| Concurrent node joins | 16 | `twd-netd -join-parallel` | `cmd/twd-netd/main.go:62` |
+| Concurrent node joins | 16 | `tw-netd -join-parallel` | `cmd/tw-netd/main.go:62` |
 | One node join | 2 min | no | `netd/registry.go:167` |
-| Heartbeat | 3 s | `-heartbeat` | `cmd/twd-hostd/main.go:74` |
+| Heartbeat | 3 s | `-heartbeat` | `cmd/tw-hostd/main.go:74` |
 | Stop serving stateful workloads without a heartbeat | 30 s, at most 40 s | `-fence-after` | `hostd/host.go:335` |
 | Namespace lease (a DO's host) | 45 s | no | `mgmt/types.go:48` |
 | Host lease | 10 s | no | `mgmt/types.go:49` |
-| Killed node keeps refusing connections | 10 s | `-kill-tombstone` | `cmd/twd-hostd/main.go:80` |
+| Killed node keeps refusing connections | 10 s | `-kill-tombstone` | `cmd/tw-hostd/main.go:80` |
 | Node-tier restart backoff | 250 ms doubling to 10 s, never gives up | no | `hostd/node.go:301` |
 | Node-tier stop: SIGTERM to SIGKILL | 3 s | no | `hostd/node.go:538` |
-| Warm keys per (tenant, tag set) | 5 | `twd-mgmt -warm-keys` | `internal/mgmtd/mgmtd.go:44` |
-| Warm key lifetime | 30 min | `twd-mgmt -warm-key-ttl` | `mgmt/warmkeys.go:38` |
+| Warm keys per (tenant, tag set) | 5 | `tw-mgmt -warm-keys` | `internal/mgmtd/mgmtd.go:44` |
+| Warm key lifetime | 30 min | `tw-mgmt -warm-key-ttl` | `mgmt/warmkeys.go:38` |
 
 ## Management API
 

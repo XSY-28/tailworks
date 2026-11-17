@@ -20,18 +20,18 @@ import (
 
 	"github.com/tailscale/peercred"
 
-	"github.com/rosskukulinski/twd/internal/procsb"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
 )
 
 // Principal is the authenticated caller of an API request.
 type Principal struct {
-	Kind   string   // "local" (unix socket + host token), "host" (tag:twd-host), "user" (tailnet admin: autogroup:admin / twd.dev/cap/admin)
-	HostID string   // hosts: the registered hostID (tsnet), or Twd-Host-ID (unix)
+	Kind   string   // "local" (unix socket + host token), "host" (tag:tw-host), "user" (tailnet admin: autogroup:admin / github.com/rosskukulinski/tailworks/cap/admin)
+	HostID string   // hosts: the registered hostID (tsnet), or Tw-Host-ID (unix)
 	NodeID string   // tsnet: caller's stable node ID
 	Login  string   // users: the WhoIs login (tagged admin nodes: their first tag)
 	Tags   []string // tsnet: caller's tags
 	// Caps are the app capabilities the caller holds toward mgmt (WhoIs
-	// CapMap): twd.dev/cap/admin makes a tailnet caller an admin.
+	// CapMap): github.com/rosskukulinski/tailworks/cap/admin makes a tailnet caller an admin.
 	Caps []string
 
 	// CapValues are the grants' values per capability (WhoIs CapMap);
@@ -43,7 +43,7 @@ type Principal struct {
 }
 
 // Actor names the principal for audit records (deployedBy, kill by):
-// the WhoIs login (or tag + node) over the tailnet, the Twd-Actor header
+// the WhoIs login (or tag + node) over the tailnet, the Tw-Actor header
 // on the unix socket.
 func (p Principal) Actor(r *http.Request) string {
 	switch p.Kind {
@@ -55,7 +55,7 @@ func (p Principal) Actor(r *http.Request) string {
 	case "host":
 		return "host:" + p.HostID
 	}
-	if a := r.Header.Get("Twd-Actor"); a != "" {
+	if a := r.Header.Get("Tw-Actor"); a != "" {
 		return a
 	}
 	return "local"
@@ -74,15 +74,15 @@ func WithPrincipal(ctx context.Context, p Principal) context.Context {
 }
 
 // HostTag is the tag hosts carry on the operator tailnet.
-const HostTag = "tag:twd-host"
+const HostTag = "tag:tw-host"
 
 // MgmtTag is mgmt's own tag; the admin grant targets it.
-const MgmtTag = "tag:twd-mgmt"
+const MgmtTag = "tag:tw-mgmt"
 
-// AdminCap is the app capability that makes a tailnet caller a twd admin.
-// It is granted to tag:twd-mgmt; autogroup:admin members get it from the
+// AdminCap is the app capability that makes a tailnet caller a tailworks admin.
+// It is granted to tag:tw-mgmt; autogroup:admin members get it from the
 // base snippet, and any group, user or tag may be granted it too.
-const AdminCap = "twd.dev/cap/admin"
+const AdminCap = "github.com/rosskukulinski/tailworks/cap/admin"
 
 // AdminGrantSnippet is the policy grant that admits a source to mgmt's
 // API (network path and the admin cap). src is "autogroup:admin" in the
@@ -106,10 +106,10 @@ type Server struct {
 	Version string
 }
 
-// SelfInfo is mgmt's own identity, reported to callers so `twd link` can
+// SelfInfo is mgmt's own identity, reported to callers so `tw link` can
 // learn the endpoint and tailnet.
 type SelfInfo struct {
-	DNSName string `json:"dnsName,omitempty"` // twd-mgmt.<tailnet>.ts.net
+	DNSName string `json:"dnsName,omitempty"` // tw-mgmt.<tailnet>.ts.net
 	Tailnet string `json:"tailnet,omitempty"` // MagicDNS suffix
 	HTTPS   bool   `json:"https"`             // the API is served on :443 with the node's cert
 	// Transport is how this request reached mgmt: "tsnet" (normal
@@ -122,7 +122,7 @@ type SelfInfo struct {
 	IP string `json:"ip,omitempty"`
 }
 
-// Loopback is <state>/mgmt/loopback.json (0600): how the twd CLI on the
+// Loopback is <state>/mgmt/loopback.json (0600): how the tailworks CLI on the
 // host machine reaches mgmt through mgmt's own tsnet node (tsnet
 // Loopback: a SOCKS5 proxy on 127.0.0.1 with a per-start credential). The
 // connection then arrives from mgmt's own node, which WhoIs resolves to
@@ -152,7 +152,7 @@ func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	if e.DocURL == "" {
 		e.DocURL = DocBase + e.Code
 	}
-	e.TraceID = r.Header.Get("Twd-Trace-ID")
+	e.TraceID = r.Header.Get("Tw-Trace-ID")
 	if e.TraceID == "" {
 		e.TraceID = traceID()
 	}
@@ -165,7 +165,7 @@ func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	if e.RetryAfter > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(e.RetryAfter))
 	}
-	w.Header().Set("Twd-Error", e.Code)
+	w.Header().Set("Tw-Error", e.Code)
 	writeJSON(w, e.Status, e)
 }
 
@@ -188,7 +188,7 @@ const (
 )
 
 // roleApprover: the approvals routes, for a tailnet identity holding
-// twd.dev/cap/approve (approvals.go).
+// github.com/rosskukulinski/tailworks/cap/approve (approvals.go).
 const roleApprover = roleAdmin << 1
 
 func (s *Server) allowed(p Principal, roles int) bool {
@@ -210,13 +210,13 @@ func (s *Server) allowed(p Principal, roles int) bool {
 }
 
 // hostOf names the calling host: tsnet hosts by WhoIs binding; local
-// callers by the Twd-Host-ID header or ?host= ("" if neither).
+// callers by the Tw-Host-ID header or ?host= ("" if neither).
 func hostOf(r *http.Request) string {
 	p := principalOf(r.Context())
 	if p.Kind == "host" {
 		return p.HostID
 	}
-	if h := r.Header.Get("Twd-Host-ID"); h != "" {
+	if h := r.Header.Get("Tw-Host-ID"); h != "" {
 		return h
 	}
 	return r.URL.Query().Get("host")
@@ -230,7 +230,7 @@ type WhoAmI struct {
 	Tags   []string `json:"tags,omitempty"`
 
 	// whoami_tenants.go: the caller's tailnet, the tenants it can act in
-	// without knowing their IDs, and its twd.dev/cap/approve grants.
+	// without knowing their IDs, and its github.com/rosskukulinski/tailworks/cap/approve grants.
 	Tailnet       string         `json:"tailnet,omitempty"`
 	Tenants       []WhoAmITenant `json:"tenants"`
 	ApproveGrants []ApproveGrant `json:"approveGrants"`
@@ -240,14 +240,14 @@ type WhoAmI struct {
 	Actor  string   `json:"actor"`
 	Mgmt   SelfInfo `json:"mgmt"`
 
-	// What the caller may do besides admin (`twd whoami`): the
-	// twd.dev/cap/* capabilities it holds toward mgmt, whether it may
+	// What the caller may do besides admin (`tw whoami`): the
+	// github.com/rosskukulinski/tailworks/cap/* capabilities it holds toward mgmt, whether it may
 	// decide Workflow approvals, and the MCP tools /mcp lets it call.
 	Caps     []string `json:"caps"`
 	Approver bool     `json:"approver"`
 	MCPTools []string `json:"mcpTools"`
 
-	// tenantscope.go: the caller's valid twd.dev/cap/tenant-admin values,
+	// tenantscope.go: the caller's valid github.com/rosskukulinski/tailworks/cap/tenant-admin values,
 	// and why any others grant nothing.
 	TenantGrants        []TenantGrant `json:"tenantGrants"`
 	InvalidTenantGrants []string      `json:"invalidTenantGrants,omitempty"`
@@ -309,7 +309,7 @@ func (l *uidListener) Accept() (net.Conn, error) {
 // HostTokenHeader carries the per-host bearer token on the unix socket
 // (RT-03). Same-uid peercred alone admits nobody: every request, host or
 // admin, must present the token mgmt minted into the host's token file.
-const HostTokenHeader = "Twd-Host-Token"
+const HostTokenHeader = "Tw-Host-Token"
 
 // LocalHandler wraps h for the unix socket: a request becomes the "local"
 // principal only if it carries HostTokenHeader equal to token (constant
@@ -318,15 +318,15 @@ func LocalHandler(h http.Handler, token string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.Header.Get(HostTokenHeader)
 		if token == "" {
-			writeErr(w, r, errf(503, "host_token_unconfigured", "twd-mgmt has no host token configured (-host-token-file); the unix socket admits nobody"))
+			writeErr(w, r, errf(503, "host_token_unconfigured", "tw-mgmt has no host token configured (-host-token-file); the unix socket admits nobody"))
 			return
 		}
 		if got == "" {
-			writeErr(w, r, errf(401, "host_token_required", "missing %s (twd-mgmt's unix socket needs the per-host token from the token file)", HostTokenHeader))
+			writeErr(w, r, errf(401, "host_token_required", "missing %s (tw-mgmt's unix socket needs the per-host token from the token file)", HostTokenHeader))
 			return
 		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
-			writeErr(w, r, errf(403, "host_token_invalid", "%s does not match this twd-mgmt's token", HostTokenHeader))
+			writeErr(w, r, errf(403, "host_token_invalid", "%s does not match this tw-mgmt's token", HostTokenHeader))
 			return
 		}
 		h.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), Principal{Kind: "local"})))
@@ -398,7 +398,7 @@ type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIsInfo, error)
 // or OPTIONS:
 //   - Sec-Fetch-Site, if present, must be same-origin or none;
 //   - Origin, if present, must name the request's own Host;
-//   - a /v1 mutation must carry X-Twd-UI: 1 (the custom header forces a
+//   - a /v1 mutation must carry X-Tw-UI: 1 (the custom header forces a
 //     CORS preflight, which mgmt never answers, so cross-origin JavaScript
 //     cannot reach the handler at all). The admin UI itself no longer
 //     sends it: its browser side only POSTs forms to /ui/..., and the UI
@@ -436,8 +436,8 @@ func browserGuard(h http.Handler) http.Handler {
 			refuse("browsers may not call the MCP server")
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/v1/") && r.Header.Get("X-Twd-UI") != "1" {
-			refuse("browser mutations of /v1 need the X-Twd-UI header (use the admin UI)")
+		if strings.HasPrefix(r.URL.Path, "/v1/") && r.Header.Get("X-Tw-UI") != "1" {
+			refuse("browser mutations of /v1 need the X-Tw-UI header (use the admin UI)")
 			return
 		}
 		h.ServeHTTP(w, r)
@@ -445,8 +445,8 @@ func browserGuard(h http.Handler) http.Handler {
 }
 
 // TailnetHandler authenticates tailnet callers by WhoIs (ADR-026):
-//   - tag:twd-host nodes are hosts, bound to the hostID they registered with;
-//   - callers holding AdminCap (granted to tag:twd-mgmt; autogroup:admin
+//   - tag:tw-host nodes are hosts, bound to the hostID they registered with;
+//   - callers holding AdminCap (granted to tag:tw-mgmt; autogroup:admin
 //     members get it from the base snippet) or listed in Admins are admins,
 //     whether users or tagged nodes;
 //   - everyone else is refused with 403 not_admin and the grant to add.
@@ -461,7 +461,7 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 		switch {
 		case s.Self.NodeID != "" && wi.NodeID == s.Self.NodeID:
 			// mgmt's own node: the operator console on the host machine
-			// (the twd CLI dials through the node's loopback proxy, so the
+			// (the tailworks CLI dials through the node's loopback proxy, so the
 			// connection carries mgmt's identity). Local admin, like the
 			// local-dev socket, but over the tsnet listener.
 			p.Kind = "local"
@@ -495,14 +495,14 @@ func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 					who = "node " + strings.TrimSuffix(wi.Name, ".") + " " + fmt.Sprint(wi.Tags)
 					src = wi.Tags[0]
 				}
-				e := errf(403, "not_admin", "%s is not a twd admin: no %s capability from a grant to %s (and not in -admins)", who, AdminCap, MgmtTag)
+				e := errf(403, "not_admin", "%s is not a tailworks admin: no %s capability from a grant to %s (and not in -admins)", who, AdminCap, MgmtTag)
 				e.Snippet = AdminGrantSnippet(src)
 				if src == "" {
 					e.Snippet = AdminGrantSnippet("autogroup:admin")
 				}
 				e.Missing = map[string]any{"src": src, "dst": MgmtTag, "cap": AdminCap}
 				if r.URL.Path == MCPPath {
-					e.Message = fmt.Sprintf("%s may not use twd's MCP server: no %s (or %s) capability from a grant to %s", who, MCPCap, AdminCap, MgmtTag)
+					e.Message = fmt.Sprintf("%s may not use tailworks' MCP server: no %s (or %s) capability from a grant to %s", who, MCPCap, AdminCap, MgmtTag)
 					e.Snippet = MCPGrantSnippet(src)
 					if src == "" {
 						e.Snippet = MCPGrantSnippet("autogroup:admin")

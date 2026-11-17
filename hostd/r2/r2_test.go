@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/r2"
-	"github.com/rosskukulinski/twd/hostd/r2/r2test"
+	"github.com/rosskukulinski/tailworks/hostd/r2"
+	"github.com/rosskukulinski/tailworks/hostd/r2/r2test"
 )
 
 // TestSigV4AWSExample signs AWS's published S3 example ("GET Object",
@@ -144,17 +144,17 @@ func TestFlags(t *testing.T) {
 	if err != nil || b.String() != "fs:"+filepath.Join("/data", "r2") {
 		t.Fatalf("fs default: %v %v", b, err)
 	}
-	f = r2.Flags{Backend: "s3", Endpoint: "http://minio:9000", Bucket: "b", Prefix: "twd"}
+	f = r2.Flags{Backend: "s3", Endpoint: "http://minio:9000", Bucket: "b", Prefix: "tw"}
 	if _, err := f.Open("/data", get); err == nil || !strings.Contains(err.Error(), "credentials") {
 		t.Fatalf("s3 without credentials: %v", err)
 	}
 	env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"] = "id", "secret"
 	b, err = f.Open("/data", get)
-	if err != nil || b.String() != "s3:http://minio:9000/b/twd/" || strings.Contains(b.String(), "secret") {
+	if err != nil || b.String() != "s3:http://minio:9000/b/tw/" || strings.Contains(b.String(), "secret") {
 		t.Fatalf("s3: %v %v", b, err)
 	}
 	cf := filepath.Join(t.TempDir(), "creds")
-	os.WriteFile(cf, []byte("# r2\nexport TWD_R2_S3_ACCESS_KEY_ID=k\nTWD_R2_S3_SECRET_ACCESS_KEY=\"s\"\n"), 0o600)
+	os.WriteFile(cf, []byte("# r2\nexport TW_R2_S3_ACCESS_KEY_ID=k\nTW_R2_S3_SECRET_ACCESS_KEY=\"s\"\n"), 0o600)
 	f.CredsFile = cf
 	if _, err := f.Open("/data", func(string) string { return "" }); err != nil {
 		t.Fatalf("credentials file: %v", err)

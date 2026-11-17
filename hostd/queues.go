@@ -17,7 +17,7 @@ package hostd
 // rule cron triggers follow), hostd runs max_concurrency loops that claim
 // a batch from mgmt (long poll; then up to max_batch_size or
 // max_batch_timeout), run the default export's queue() handler over the
-// instance's private ingress (cf.twd kind "queue", which only hostd can
+// instance's private ingress (cf.tw kind "queue", which only hostd can
 // set), and settle the batch: explicit acks and retries as the handler
 // made them, the rest acked if it returned and retried if it threw. The
 // leases are extended while the handler runs. Nothing is kept here: a
@@ -38,10 +38,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/queuecfg"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/queuecfg"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 const (
@@ -431,7 +431,7 @@ func (h *Host) runBatch(ctx context.Context, w *workload, k queueRunKey, batch [
 	return ran
 }
 
-// RunQueueBatch claims and runs one batch of a consumer now (twd dev,
+// RunQueueBatch claims and runs one batch of a consumer now (tw dev,
 // tests); it reports how many messages it ran.
 func (h *Host) RunQueueBatch(ctx context.Context, tenantID, workload, queue string) (int, error) {
 	w := h.queueWorkload(tenantID, workload)
@@ -463,7 +463,7 @@ type queueWireMsg struct {
 	Attempts    int64  `json:"attempts"`
 }
 
-// invokeQueue sends one batch to the workload's active instance (cf.twd
+// invokeQueue sends one batch to the workload's active instance (cf.tw
 // kind "queue") and waits for its outcome.
 func (h *Host) invokeQueue(ctx context.Context, w *workload, k queueRunKey, batch []mgmtapi.QueueMessage) (QueueResult, error) {
 	var res QueueResult
@@ -487,10 +487,10 @@ func (h *Host) invokeQueue(ctx context.Context, w *workload, k queueRunKey, batc
 	trace := newTraceID()
 	blob, _ := json.Marshal(map[string]any{
 		// The ticket lets queue() create objects through its guarded env.
-		"twd":     map[string]any{"kind": "queue", "queue": k.queue, "workload": w.name, "ticket": gen.CreateTicket(inst.macKey(), trace, time.Now())},
+		"tw":     map[string]any{"kind": "queue", "queue": k.queue, "workload": w.name, "ticket": gen.CreateTicket(inst.macKey(), trace, time.Now())},
 		"traceId": trace,
 	})
-	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_twd/queue", strings.NewReader(string(body)))
+	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_tw/queue", strings.NewReader(string(body)))
 	req.Header.Set(netd.HeaderCF, string(blob))
 	req.Header.Set("content-type", "application/json")
 	resp, err := (&http.Client{Transport: inst.direct.Transport}).Do(req)

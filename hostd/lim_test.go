@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -37,7 +37,7 @@ func TestSpawnLimEnforcedAtReceiver(t *testing.T) {
 	s.waitPeer(agent.IP)
 	server := "http://" + mcp.IP + "/mcp"
 
-	// The client is not a twd object: its WhoIs caps apply unchanged.
+	// The client is not a tailworks object: its WhoIs caps apply unchanged.
 	code, r := s.getJSON("http://" + agent.IP + "/?agent=alice")
 	if code != 200 {
 		t.Fatalf("alice: %d %v", code, r)

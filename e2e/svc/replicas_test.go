@@ -1,21 +1,21 @@
 //go:build e2esvc
 
 // E2E-REPLICAS on tailnet 1: one stateless workload with "replicas": 2 on
-// two real hosts behind one Tailscale Service. Host A comes from `twd up`;
-// host B is a second twd-hostd on this machine joined with `twd host add`
+// two real hosts behind one Tailscale Service. Host A comes from `tw up`;
+// host B is a second tw-hostd on this machine joined with `tw host add`
 // (its own data dir and tailnet node). The hello app fetches a tag:ttest
 // echo node, whose WhoIs of the caller names the serving replica's workload
 // node, so each answer says which replica served it.
 //
 // Checks: two replicas on distinct hosts; the Service answers with the
-// caller's identity; `twd kill` of the serving replica's node fails traffic
+// caller's identity; `tw kill` of the serving replica's node fails traffic
 // over to the other replica; a redeploy with "replicas": 1 removes the
-// second replica and the Service keeps answering; twd down → no leftovers.
+// second replica and the Service keeps answering; tw down → no leftovers.
 //
-//	TWD_E2E_API_KEY_FILE=~/.config/tailnet-agents-design/tailnet1_api.env TWD_E2E_TAILNET=tail7906d5.ts.net \
+//	TW_E2E_API_KEY_FILE=~/.config/tailnet-agents-design/tailnet1_api.env TW_E2E_TAILNET=tail7906d5.ts.net \
 //	  go test -tags e2esvc -run TestE2EReplicas -count=1 -v -timeout 20m ./e2e/svc/
 //
-// Policy as for E2E-SVC, plus tag:twd-wl-svc → tag:ttest tcp:80 (the echo).
+// Policy as for E2E-SVC, plus tag:tw-wl-svc → tag:ttest tcp:80 (the echo).
 package svc
 
 import (
@@ -36,17 +36,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/netd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 func TestE2EReplicas(t *testing.T) {
-	keyFile, tailnet := os.Getenv("TWD_E2E_API_KEY_FILE"), os.Getenv("TWD_E2E_TAILNET")
+	keyFile, tailnet := os.Getenv("TW_E2E_API_KEY_FILE"), os.Getenv("TW_E2E_TAILNET")
 	if keyFile == "" || tailnet == "" {
-		t.Skip("TWD_E2E_API_KEY_FILE / TWD_E2E_TAILNET not set")
+		t.Skip("TW_E2E_API_KEY_FILE / TW_E2E_TAILNET not set")
 	}
 	if !allowedTailnets[tailnet] {
 		t.Fatalf("refusing to run against tailnet %q (not in the allow list)", tailnet)
@@ -55,15 +55,15 @@ func TestE2EReplicas(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
-	t.Setenv("TWD_WORKERD", wd)
+	t.Setenv("TW_WORKERD", wd)
 	apiKey, err := tsapi.LoadEnvFile(keyFile, "TS_API_KEY")
 	if err != nil {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
-	// twd mints with an OAuth client: this run's own, created with the
+	// tailworks mints with an OAuth client: this run's own, created with the
 	// harness's API key and deleted when the test ends.
-	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "twd-e2e-replicas-oauth")
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "tw-e2e-replicas-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -78,11 +78,11 @@ func TestE2EReplicas(t *testing.T) {
 	minter := tsapi.MintSource(api, quiet)
 	tracker := tsapi.NewTracker(api)
 	bin := cliflow.BuildBinaries(t)
-	state := filepath.Join("/tmp", "twd-e2e-rep-"+run)
+	state := filepath.Join("/tmp", "tw-e2e-rep-"+run)
 	work := t.TempDir()
 	hostB := strings.TrimSuffix(prefix, "-") + "-b"
-	hostBDir := filepath.Join("/tmp", "twd-e2e-repb-"+run)
-	hostBRun := filepath.Join("/tmp", "twd-rb-"+run) // short: unix socket paths
+	hostBDir := filepath.Join("/tmp", "tw-e2e-repb-"+run)
+	hostBRun := filepath.Join("/tmp", "tw-rb-"+run) // short: unix socket paths
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: state, WorkDir: work, Tailnet: tailnet, OAuthClientFile: oauthFile,
 		ControlURL: prodControl, Prefix: prefix, Res: res, ClientTagged: true}
 	var nodes []*nettest.Node
@@ -90,7 +90,7 @@ func TestE2EReplicas(t *testing.T) {
 	downDone := false
 	t.Cleanup(func() {
 		if !downDone {
-			e.Twd("down", "--purge")
+			e.Tw("down", "--purge")
 		}
 		if hostdB != nil && hostdB.Process != nil {
 			hostdB.Process.Signal(syscall.SIGTERM)
@@ -115,10 +115,10 @@ func TestE2EReplicas(t *testing.T) {
 		defer cc()
 		devs, keys := cliflow.Leftovers(cctx, api, res)
 		for _, id := range res.NodeIDs {
-			tracker.Track(id, "twd")
+			tracker.Track(id, "tw")
 		}
 		for _, id := range res.InfraNodeIDs {
-			tracker.Track(id, "twd-infra")
+			tracker.Track(id, "tw-infra")
 		}
 		crep := tracker.Cleanup(cctx, testPrefix)
 		for _, k := range keys {
@@ -134,7 +134,7 @@ func TestE2EReplicas(t *testing.T) {
 		out, _ := json.MarshalIndent(res, "", "  ")
 		t.Logf("results:\n%s", netd.Redact(string(out)))
 		if len(devs) > 0 || len(keys) > 0 {
-			t.Errorf("after twd down: leftover twd devices %v, valid keys %d", devs, len(keys))
+			t.Errorf("after tw down: leftover tw devices %v, valid keys %d", devs, len(keys))
 		}
 		if crep.Left != 0 || len(crep.Untracked) > 0 {
 			t.Errorf("cleanup left devices: %+v", crep)
@@ -148,7 +148,7 @@ func TestE2EReplicas(t *testing.T) {
 	e.MustJSON(&up, "up", "--oauth-client-file", oauthFile, "--tailnet", tailnet, "--yes", "--hostname-prefix", prefix,
 		"--control-url", prodControl, "--mgmt-hostname", prefix+"mgmt", "--host-id", strings.TrimSuffix(prefix, "-"), "--ephemeral")
 
-	// Host B: a second twd-hostd on this machine, joined via `twd host add`.
+	// Host B: a second tw-hostd on this machine, joined via `tw host add`.
 	var join struct {
 		JoinFile   string `json:"joinFile"`
 		ControlURL string `json:"controlURL"`
@@ -157,7 +157,7 @@ func TestE2EReplicas(t *testing.T) {
 	os.MkdirAll(hostBDir, 0o700)
 	e.MustJSON(&join, "host", "add", hostB, "--out", filepath.Join(hostBDir, "join.env"))
 	lf, _ := os.Create(filepath.Join(hostBDir, "hostd.log"))
-	hostdB = exec.Command(filepath.Join(bin, "twd-hostd"), "-host-id", hostB, "-mgmt", join.Mgmt, "-tsnet-control-url", join.ControlURL,
+	hostdB = exec.Command(filepath.Join(bin, "tw-hostd"), "-host-id", hostB, "-mgmt", join.Mgmt, "-tsnet-control-url", join.ControlURL,
 		"-join-token-file", join.JoinFile, "-data-dir", filepath.Join(hostBDir, "data"), "-run-dir", hostBRun, "-mgmt-token-file", "",
 		"-hostname-prefix", prefix+"b-", "-ephemeral", "-control-url", prodControl, "-workerd", wd, "-heartbeat", "1s")
 	hostdB.Stdout, hostdB.Stderr = lf, lf
@@ -216,7 +216,7 @@ func TestE2EReplicas(t *testing.T) {
   "tailnet": { "tags": ["%s"], "service": "%s" }
 }
 `, n, wlTag, strings.TrimPrefix(svcName, "svc:"))
-		if err := os.WriteFile(filepath.Join(dir, "twd.jsonc"), []byte(cfg), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "tailworks.jsonc"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -240,7 +240,7 @@ func TestE2EReplicas(t *testing.T) {
 	}
 	res.Pass("replicas_distinct_hosts", dep.Replicas[0].Host+", "+dep.Replicas[1].Host)
 
-	// Workload node FQDN → replica (from twd ls).
+	// Workload node FQDN → replica (from tw ls).
 	nodeOf := map[string]string{}
 	for _, o := range e.Objects() {
 		if o.Namespace == "_workload" && strings.HasPrefix(o.Name, "rephello") {
@@ -393,7 +393,7 @@ func TestE2EReplicas(t *testing.T) {
 	time.Sleep(2 * time.Second)
 }
 
-// hostWorkload reads one workload's status from a twd-hostd status socket.
+// hostWorkload reads one workload's status from a tw-hostd status socket.
 func hostWorkload(t *testing.T, sock, workload string) hostd.WorkloadStatus {
 	t.Helper()
 	hc := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {

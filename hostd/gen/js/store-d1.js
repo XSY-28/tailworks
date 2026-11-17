@@ -1,6 +1,6 @@
-// twd D1 (TRUSTED; runs in the platform worker). ADR-038.
+// tailworks D1 (TRUSTED; runs in the platform worker). ADR-038.
 //
-// A D1 database is a platform store of kind "d1" (twd-store.js): one
+// A D1 database is a platform store of kind "d1" (tw-store.js): one
 // platform-owned SQLite Durable Object per database, whose SQL namespace
 // holds only the tenant's tables. Tenant code gets workerd's own D1 API
 // (the `wrapped` binding "cloudflare-internal:d1-api"); its inner fetcher
@@ -21,7 +21,7 @@
 // incarnation. A read with a bookmark is served once the local copy has
 // applied at least that position; "first-primary" catches up first.
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { registerStoreKind, storeStub, utf8, toBytes } from "twd-store.js";
+import { registerStoreKind, storeStub, utf8, toBytes } from "tw-store.js";
 
 // Limits, checked before SQLite sees a statement (statement size,
 // parameters, value sizes, statements per request) and before a response
@@ -145,7 +145,7 @@ function cell(v) {
   return v;
 }
 
-const ZERO_META = Object.freeze({ served_by: "twd", served_by_primary: true, duration: 0, changes: 0, last_row_id: 0, changed_db: false, size_after: 0, rows_read: 0, rows_written: 0 });
+const ZERO_META = Object.freeze({ served_by: "tw", served_by_primary: true, duration: 0, changes: 0, last_row_id: 0, changed_db: false, size_after: 0, rows_read: 0, rows_written: 0 });
 
 // execAll runs the statements in the current transaction. It throws
 // D1Fail (with the statement's index) on an SQL error or a limit; the
@@ -191,7 +191,7 @@ function execAll(s, stmts, format, collect = true) {
       success: true,
       results: format === "ROWS_AND_COLUMNS" ? { columns, rows } : rows.map((r) => Object.fromEntries(columns.map((c, j) => [c, r[j]]))),
       meta: {
-        served_by: "twd",
+        served_by: "tw",
         served_by_primary: true,
         duration: performance.now() - t0,
         changes,
@@ -232,11 +232,11 @@ function encodeEntry(id, stmts) {
   }));
   return te.encode(JSON.stringify({ v: D1_ENTRY_V, id, q }));
 }
-// D1_ENTRY_V is the journal entry version this twd writes
+// D1_ENTRY_V is the journal entry version this tailworks writes
 // (ADR-041 §4); every D1 entry has carried v since the
 // first release, and a missing v reads as v1.
 const D1_ENTRY_V = 1;
-// D1FormatError: an entry written by a newer twd. apply rethrows it (a
+// D1FormatError: an entry written by a newer tailworks. apply rethrows it (a
 // skipped write would silently lose data on replay).
 class D1FormatError extends Error {}
 export function decodeEntry(data) {
@@ -244,7 +244,7 @@ export function decodeEntry(data) {
   // change of the limits must not make the journal unreplayable.
   const e = JSON.parse(utf8(data));
   const v = e.v ?? 1;
-  if (v > D1_ENTRY_V) throw new D1FormatError(`twd d1: journal entry v${v} was written by a newer twd (this one reads up to v${D1_ENTRY_V}); upgrade twd-hostd`);
+  if (v > D1_ENTRY_V) throw new D1FormatError(`tw d1: journal entry v${v} was written by a newer tailworks (this one reads up to v${D1_ENTRY_V}); upgrade tw-hostd`);
   const stmts = e.q.map((q) => ({
     sql: q.s,
     params: (q.p ?? []).map((v) => (v && typeof v === "object" && typeof v.$b === "string" ? unb64(v.$b) : v)),
@@ -366,7 +366,7 @@ registerStoreKind("d1", {
       e = decodeEntry(data);
     } catch (err) {
       if (err instanceof D1FormatError) throw err;
-      console.warn(`twd d1 ${s.name}: journal entry ${seq} is not a D1 write; skipped (${err.message})`);
+      console.warn(`tw d1 ${s.name}: journal entry ${seq} is not a D1 write; skipped (${err.message})`);
       return;
     }
     const format = s.d1Want.get(e.id);
@@ -379,7 +379,7 @@ registerStoreKind("d1", {
       });
     } catch (err) {
       r = { error: String(err?.message ?? err), index: err?.index ?? 0 };
-      console.warn(`twd d1 ${s.name}: journal entry ${seq} failed to apply and was skipped: ${r.error}`);
+      console.warn(`tw d1 ${s.name}: journal entry ${seq} failed to apply and was skipped: ${r.error}`);
     }
     if (format !== undefined) s.d1Out.set(e.id, r);
   },
@@ -396,7 +396,7 @@ registerStoreKind("d1", {
     query,
   },
   adminOps: {
-    // query: `twd d1 execute` and migrations. Always catches up first.
+    // query: `tw d1 execute` and migrations. Always catches up first.
     // {queries: [{sql, params}]} runs as one batch (atomic).
     async query(s, req) {
       const r = await query(s, { body: req?.queries ?? [], format: "ROWS_AND_COLUMNS", perLine: false, session: "first-primary" });
@@ -426,7 +426,7 @@ export class D1Backend extends WorkerEntrypoint {
       return new Response(JSON.stringify(body), { status, headers: h });
     };
     if (req.method !== "POST") return reply({ error: "D1 takes POST" }, null, 405);
-    if (u.pathname === "/dump") return reply({ error: "dump() is not supported on twd; use `twd d1 export`" }, null, 501);
+    if (u.pathname === "/dump") return reply({ error: "dump() is not supported on tailworks; use `tw d1 export`" }, null, 501);
     if (u.pathname !== "/query" && u.pathname !== "/execute") return reply({ error: "not found" }, null, 404);
     let body;
     try {

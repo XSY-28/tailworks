@@ -11,7 +11,7 @@ import (
 )
 
 // TestStoreMintClaim: one replica at a time may mint a pending object
-// (mm-loop F3, H02). Runs on SQLite and, with TWD_TEST_POSTGRES_DSN, Postgres.
+// (mm-loop F3, H02). Runs on SQLite and, with TW_TEST_POSTGRES_DSN, Postgres.
 func TestStoreMintClaim(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
 		ctx := context.Background()
@@ -73,11 +73,11 @@ func TestStoreMintClaim(t *testing.T) {
 // each other's entry; objects minted before keyed names keep the legacy one.
 func TestCustodyNamesPerKey(t *testing.T) {
 	o := Object{TenantID: "tn", ID: "o1"}
-	if got := custodyName(o); got != "twd/tn/o1/authkey" {
+	if got := custodyName(o); got != "tw/tn/o1/authkey" {
 		t.Fatalf("unminted/legacy name = %q", got)
 	}
 	o.KeyID = "k7"
-	if a, b := custodyName(o), custodyKeyName(o, "k8"); a == b || a != "twd/tn/o1/authkey/k7" {
+	if a, b := custodyName(o), custodyKeyName(o, "k8"); a == b || a != "tw/tn/o1/authkey/k7" {
 		t.Fatalf("keyed names must differ per key: %q vs %q", a, b)
 	}
 }

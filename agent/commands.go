@@ -7,19 +7,19 @@ import (
 
 // The commands a skill tells an agent to run, as tests read them:
 //
-//   - every `twd …` invocation in a sh/bash/shell code block, and inline
-//     code spans starting with "twd ", must name a real command and real
-//     flags (cmd/twd TestSkillCommandsExist);
-//   - a code block right after an "<!-- twd-eval: <step> -->" comment is
-//     replayed verbatim, in step order, against a running twd by the eval
-//     test (cmd/twd TestAgentEval, e2e/agenteval).
+//   - every `tw …` invocation in a sh/bash/shell code block, and inline
+//     code spans starting with "tw ", must name a real command and real
+//     flags (cmd/tw TestSkillCommandsExist);
+//   - a code block right after an "<!-- tw-eval: <step> -->" comment is
+//     replayed verbatim, in step order, against a running tailworks by the eval
+//     test (cmd/tw TestAgentEval, e2e/agenteval).
 
 // Command is one shell command from a skill.
 type Command struct {
 	Skill string
 	Line  int    // 1-based line in SKILL.md
 	Text  string // the command as written
-	// Args are the words after "twd" (quotes removed); nil for `cd`.
+	// Args are the words after "tw" (quotes removed); nil for `cd`.
 	Args []string
 	// Cd is the directory of a `cd <dir>` step.
 	Cd string
@@ -27,16 +27,16 @@ type Command struct {
 	Inline bool
 }
 
-// EvalStep is a replayable block: <!-- twd-eval: <Name> -->.
+// EvalStep is a replayable block: <!-- tw-eval: <Name> -->.
 type EvalStep struct {
 	Name     string
 	Skill    string
 	Commands []Command
 }
 
-const evalPrefix = "<!-- twd-eval: "
+const evalPrefix = "<!-- tw-eval: "
 
-// Commands returns every twd command in a skill (blocks and inline code),
+// Commands returns every tailworks command in a skill (blocks and inline code),
 // and its eval steps.
 func Commands(s Skill) ([]Command, []EvalStep, error) {
 	var cmds []Command
@@ -62,7 +62,7 @@ func Commands(s Skill) ([]Command, []EvalStep, error) {
 			shell = lang == "sh" || lang == "bash" || lang == "shell"
 			if pendingEval != "" {
 				if !shell {
-					return nil, nil, fmt.Errorf("%s:%d: twd-eval block must be sh", s.Name, ln)
+					return nil, nil, fmt.Errorf("%s:%d: tw-eval block must be sh", s.Name, ln)
 				}
 				step = &EvalStep{Name: pendingEval, Skill: s.Name}
 				pendingEval = ""
@@ -90,13 +90,13 @@ func Commands(s Skill) ([]Command, []EvalStep, error) {
 			continue
 		}
 		if pendingEval != "" && t != "" {
-			return nil, nil, fmt.Errorf("%s:%d: twd-eval comment must be followed by a code block", s.Name, ln)
+			return nil, nil, fmt.Errorf("%s:%d: tw-eval comment must be followed by a code block", s.Name, ln)
 		}
 		for _, span := range codeSpans(l) {
-			if !strings.HasPrefix(span, "twd ") {
+			if !strings.HasPrefix(span, "tw ") {
 				continue
 			}
-			args, err := words(strings.TrimPrefix(span, "twd "))
+			args, err := words(strings.TrimPrefix(span, "tw "))
 			if err != nil {
 				return nil, nil, fmt.Errorf("%s:%d: %w", s.Name, ln, err)
 			}
@@ -110,7 +110,7 @@ func Commands(s Skill) ([]Command, []EvalStep, error) {
 }
 
 // splitShell splits one shell line at |, && and ;, drops a trailing
-// comment, and keeps the `twd …` and `cd …` parts.
+// comment, and keeps the `tw …` and `cd …` parts.
 func splitShell(line string) []Command {
 	if i := commentStart(line); i >= 0 {
 		line = line[:i]
@@ -123,7 +123,7 @@ func splitShell(line string) []Command {
 			continue
 		}
 		switch w[0] {
-		case "twd":
+		case "tw":
 			out = append(out, Command{Text: part, Args: append([]string{}, w[1:]...)})
 		case "cd":
 			if len(w) == 2 {

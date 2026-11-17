@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // TestMM_F9_FenceStatefulOnly (ADR-028 §3): heartbeat loss stops only

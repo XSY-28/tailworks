@@ -7,12 +7,12 @@ pull request or discussion for them.
 
 Use GitHub's private vulnerability reporting: on the repository's
 **Security** tab, choose **Report a vulnerability**
-(<https://github.com/rosskukulinski/twd/security/advisories/new>). The
+(<https://github.com/rosskukulinski/tailworks/security/advisories/new>). The
 report reaches the maintainers only.
 
 Include what you can of:
 
-- the twd version (`twd version`) and the platform (macOS or Linux, tier:
+- the tailworks version (`tw version`) and the platform (macOS or Linux, tier:
   process or microVM);
 - what an attacker needs (tailnet member, tenant code, a host, the public
   internet) and what they gain;
@@ -28,7 +28,7 @@ What happens next:
 - Security fixes go to the latest minor release and the one before it
   ([docs/RELEASING.md](docs/RELEASING.md#branches)).
 
-twd is pre-1.0, maintained on a best-effort basis, with no bug bounty.
+tailworks is pre-1.0, maintained on a best-effort basis, with no bug bounty.
 
 ## Supported versions
 
@@ -40,10 +40,10 @@ twd is pre-1.0, maintained on a best-effort basis, with no bug bounty.
 
 ## What's in scope
 
-The twd binaries (`twd`, `twd-mgmt`, `twd-hostd`, `twd-netd`,
-`twd-vmhelper`), the microVM guest, the platform runtime and the `@twd/*`
+The tailworks binaries (`tw`, `tw-mgmt`, `tw-hostd`, `tw-netd`,
+`tw-vmhelper`), the microVM guest, the platform runtime and the `@tailworks/*`
 packages in this repository. Bugs in workerd, Firecracker or Tailscale go
-to those projects; tell us too if twd's use of them makes things worse.
+to those projects; tell us too if tailworks' use of them makes things worse.
 
 Known limits are not vulnerabilities, but tell us if one is worse than
 documented. Read these first:

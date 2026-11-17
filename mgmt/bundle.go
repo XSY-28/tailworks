@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/cron"
-	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/cron"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
 	"github.com/tailscale/hujson"
 )
 
-// TwdConfig is the part of twd.jsonc mgmt reads.
-type TwdConfig struct {
+// TwConfig is the part of tailworks.jsonc mgmt reads.
+type TwConfig struct {
 	// Tier is the requested isolation tier ("process", "microvm"; "" = the
 	// tenant's default). Placement only sends a workload to hosts that offer
 	// its tier.
@@ -28,7 +28,7 @@ type TwdConfig struct {
 	// Runtime is "" / "workerd" or "node" (Node apps always run in the
 	// process tier; public ingress is workerd-only in v1).
 	Runtime string `json:"runtime"`
-	// Public is twd.jsonc "public" (ADR-029): path prefixes reachable from
+	// Public is tailworks.jsonc "public" (ADR-029): path prefixes reachable from
 	// the public internet over Funnel. nil: tailnet-only.
 	Public *publicspec.Spec `json:"public"`
 	// Placement is smart placement (ADR-033): mode "smart" (default) or
@@ -53,7 +53,7 @@ type TwdConfig struct {
 		// Service: true ("svc:<workload>"), or a Service name the workload
 		// entry node hosts (Tailscale Services); see ServiceName.
 		Service json.RawMessage `json:"service"`
-		// Connects are declared dependencies (tags or names), preflighted by twd deploy.
+		// Connects are declared dependencies (tags or names), preflighted by tw deploy.
 		Connects []string `json:"connects"`
 		Objects  map[string]struct {
 			Tags   []string `json:"tags"`
@@ -82,7 +82,7 @@ const WorkloadNamespace = "_workload"
 // Classes returns the DO namespaces that get tailnet nodes, sorted by
 // class, plus the implicit "_workload" namespace (tailnet.tags) when set.
 // Classes with "node": false have no identity and are not namespaces.
-func (c *TwdConfig) Classes() []ClassConfig {
+func (c *TwConfig) Classes() []ClassConfig {
 	var out []ClassConfig
 	for name, o := range c.Tailnet.Objects {
 		if o.Node != nil && !*o.Node {
@@ -97,9 +97,9 @@ func (c *TwdConfig) Classes() []ClassConfig {
 	return out
 }
 
-// PublicConfig validates twd.jsonc "public" and the per-class public
+// PublicConfig validates tailworks.jsonc "public" and the per-class public
 // settings; nil when the workload declares no public routes.
-func (c *TwdConfig) PublicConfig() (*DeploymentPublic, error) {
+func (c *TwConfig) PublicConfig() (*DeploymentPublic, error) {
 	var classes map[string]publicspec.ClassSpec
 	for name, o := range c.Tailnet.Objects {
 		if o.Public == nil {
@@ -109,7 +109,7 @@ func (c *TwdConfig) PublicConfig() (*DeploymentPublic, error) {
 			return nil, err
 		}
 		if c.Public == nil && o.Public.Create {
-			return nil, fmt.Errorf("tailnet.objects.%s.public.create needs twd.jsonc \"public\" routes", name)
+			return nil, fmt.Errorf("tailnet.objects.%s.public.create needs tailworks.jsonc \"public\" routes", name)
 		}
 		if classes == nil {
 			classes = map[string]publicspec.ClassSpec{}
@@ -129,38 +129,38 @@ func (c *TwdConfig) PublicConfig() (*DeploymentPublic, error) {
 	return &DeploymentPublic{Spec: sp, Classes: classes}, nil
 }
 
-// ParseTwdConfig parses twd.jsonc (JSONC/HuJSON).
-func ParseTwdConfig(b []byte) (*TwdConfig, error) {
+// ParseTwConfig parses tailworks.jsonc (JSONC/HuJSON).
+func ParseTwConfig(b []byte) (*TwConfig, error) {
 	// Standardize rewrites its argument in place (comments become spaces);
-	// copy so the caller's bytes (twd.jsonc as shipped) keep their comments.
+	// copy so the caller's bytes (tailworks.jsonc as shipped) keep their comments.
 	std, err := hujson.Standardize(append([]byte(nil), b...))
 	if err != nil {
-		return nil, fmt.Errorf("twd.jsonc: %w", err)
+		return nil, fmt.Errorf("tailworks.jsonc: %w", err)
 	}
-	var c TwdConfig
+	var c TwConfig
 	if err := json.Unmarshal(std, &c); err != nil {
-		return nil, fmt.Errorf("twd.jsonc: %w", err)
+		return nil, fmt.Errorf("tailworks.jsonc: %w", err)
 	}
 	return &c, nil
 }
 
-// BundleConfig extracts twd.jsonc from a (optionally gzipped) tar bundle,
+// BundleConfig extracts tailworks.jsonc from a (optionally gzipped) tar bundle,
 // preferring the shallowest one.
 // BundleStateful reports whether moving this workload between hosts can
 // split its Durable Object state (ADR-028 §3): true if any DO class, from
-// twd.jsonc tailnet.objects or wrangler.jsonc/.json durable_objects, is not
+// tailworks.jsonc tailnet.objects or wrangler.jsonc/.json durable_objects, is not
 // marked "fence": "never". It errs on the side of stateful: a wrangler.toml
 // (not parsed here) or an unreadable bundle counts as stateful. reason names
 // the classes or the uncertainty.
 func BundleStateful(bundle []byte) (stateful bool, reason string) {
-	files, err := bundleFiles(bundle, "twd.jsonc", "wrangler.jsonc", "wrangler.json", "wrangler.toml")
+	files, err := bundleFiles(bundle, "tailworks.jsonc", "wrangler.jsonc", "wrangler.json", "wrangler.toml")
 	if err != nil {
 		return true, "bundle unreadable"
 	}
 	exempt := map[string]bool{}
 	classes := map[string]bool{}
-	if b, ok := files["twd.jsonc"]; ok {
-		if cfg, err := ParseTwdConfig(b); err == nil {
+	if b, ok := files["tailworks.jsonc"]; ok {
+		if cfg, err := ParseTwConfig(b); err == nil {
 			for name, o := range cfg.Tailnet.Objects {
 				classes[name] = true
 				if o.Fence == "never" {
@@ -168,7 +168,7 @@ func BundleStateful(bundle []byte) (stateful bool, reason string) {
 				}
 			}
 		} else {
-			return true, "twd.jsonc unreadable"
+			return true, "tailworks.jsonc unreadable"
 		}
 	}
 	for _, f := range []string{"wrangler.jsonc", "wrangler.json"} {
@@ -295,11 +295,11 @@ func bundleFiles(bundle []byte, names ...string) (map[string][]byte, error) {
 
 // BundleContainers returns the container classes a bundle declares: the
 // wrangler.jsonc/.json "containers" array (Cloudflare's shape) with
-// twd.jsonc "containers" overriding by class (ADR-032). A bundle that
+// tailworks.jsonc "containers" overriding by class (ADR-032). A bundle that
 // declares containers needs a host offering them (placement), and each
 // class's max_instances bounds its running containers (reservations).
 func BundleContainers(bundle []byte) ([]container.Class, error) {
-	files, err := bundleFiles(bundle, "twd.jsonc", "wrangler.jsonc", "wrangler.json")
+	files, err := bundleFiles(bundle, "tailworks.jsonc", "wrangler.jsonc", "wrangler.json")
 	if err != nil {
 		return nil, err
 	}
@@ -321,14 +321,14 @@ func BundleContainers(bundle []byte) ([]container.Class, error) {
 	if err != nil {
 		return nil, err
 	}
-	tb, err := std("twd.jsonc")
+	tb, err := std("tailworks.jsonc")
 	if err != nil {
 		return nil, err
 	}
 	return container.Parse(wb, tb)
 }
 
-func BundleConfig(bundle []byte) (*TwdConfig, error) {
+func BundleConfig(bundle []byte) (*TwConfig, error) {
 	var r io.Reader = bytes.NewReader(bundle)
 	if len(bundle) > 2 && bundle[0] == 0x1f && bundle[1] == 0x8b {
 		gz, err := gzip.NewReader(r)
@@ -349,7 +349,7 @@ func BundleConfig(bundle []byte) (*TwdConfig, error) {
 			return nil, fmt.Errorf("bundle: %w", err)
 		}
 		name := path.Clean(strings.TrimPrefix(h.Name, "./"))
-		if h.Typeflag != tar.TypeReg || path.Base(name) != "twd.jsonc" {
+		if h.Typeflag != tar.TypeReg || path.Base(name) != "tailworks.jsonc" {
 			continue
 		}
 		if d := strings.Count(name, "/"); d < bestDepth {
@@ -361,9 +361,9 @@ func BundleConfig(bundle []byte) (*TwdConfig, error) {
 		}
 	}
 	if best == nil {
-		return nil, errors.New("bundle has no twd.jsonc")
+		return nil, errors.New("bundle has no tailworks.jsonc")
 	}
-	return ParseTwdConfig(best)
+	return ParseTwConfig(best)
 }
 
 // ParseTTL accepts a Go duration string ("10m") or a number of seconds.

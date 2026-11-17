@@ -1,7 +1,7 @@
 //go:build e2eobs
 
 // Package observability is the hermetic logs/metrics/traces e2e
-// (ADR-observability): real twd-mgmt and twd-hostd processes on
+// (ADR-observability): real tw-mgmt and tw-hostd processes on
 // testcontrol + a local DERP, a tsnet caller, an echo node (an egress
 // destination) and an OTLP collector node. The tenant's OTLP export is set
 // through mgmt's API (custody) and released to the host as the workload's
@@ -29,11 +29,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/internal/obs"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 const fakeToken = "fake-api-token"
@@ -198,12 +198,12 @@ func TestObservabilityHermetic(t *testing.T) {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available (needed to bundle the app)")
 	}
-	dir, err := hostdtest.ShortDir("twd-obs-")
+	dir, err := hostdtest.ShortDir("tw-obs-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -280,7 +280,7 @@ func TestObservabilityHermetic(t *testing.T) {
 	// mgmt and one host, as separate processes.
 	keyFile := filepath.Join(dir, "api.env")
 	cliflow.WriteFakeOAuthFile(t, keyFile)
-	e.start("mgmt", "twd-mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
+	e.start("mgmt", "tw-mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	waitFor(t, e, "mgmt", 15*time.Second, func() bool {
 		b, err := os.ReadFile(filepath.Join(dir, "token"))
@@ -296,7 +296,7 @@ func TestObservabilityHermetic(t *testing.T) {
 	e.must("PUT", "/v1/tenants/"+tn.TenantID+"/telemetry", map[string]any{"otlp": map[string]any{"endpoint": "http://ttest-otel:4318",
 		"headers": map[string]string{"authorization": "Bearer e2e-t0ken"}}}, nil)
 	hd := filepath.Join(dir, "h1")
-	e.start("h1", "twd-hostd", "-local-dev", "-mgmt", "unix://"+e.sock, "-mgmt-token-file", filepath.Join(dir, "token"),
+	e.start("h1", "tw-hostd", "-local-dev", "-mgmt", "unix://"+e.sock, "-mgmt-token-file", filepath.Join(dir, "token"),
 		"-host-id", "h1", "-data-dir", filepath.Join(hd, "data"), "-run-dir", filepath.Join(hd, "run"),
 		"-control-url", ctl.URL, "-ephemeral", "-heartbeat", "500ms", "-sandbox", "none", "-workerd", wd, "-hostname-prefix", "h1-")
 	waitFor(t, e, "host h1 live", 30*time.Second, func() bool {
@@ -354,7 +354,7 @@ func TestObservabilityHermetic(t *testing.T) {
 	}
 	t.Logf("TRACE %s: caller %s → ingress %s → DO call %s → egress %s", t0, p0, tw.SpanID, td.SpanID, te.SpanID)
 
-	// 2. twd logs (the API a linked machine uses): mgmt reads the
+	// 2. tw logs (the API a linked machine uses): mgmt reads the
 	// records from the lease holder's hostd, filtered there.
 	logs := func(q string) []obs.Record {
 		rq, _ := http.NewRequest("GET", "http://mgmt/v1/tenants/"+tn.TenantID+"/workloads/obsprobe/logs?source=requests&n=50"+q, nil)
@@ -406,9 +406,9 @@ func TestObservabilityHermetic(t *testing.T) {
 	// the same handler serves port 9464 of that node).
 	st, body := e.hostGet("/metrics")
 	for _, want := range []string{
-		`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",twd_tenant_id="` + tn.TenantID + `",twd_workload="obsprobe"}`,
-		`twd_invocations_total{twd_tenant_id="` + tn.TenantID + `",twd_workload="obsprobe",twd_object_class="Obj",twd_invocation_event="fetch",twd_invocation_outcome="ok"} 1`,
-		`http_client_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",twd_tenant_id="` + tn.TenantID + `",twd_workload="obsprobe"`,
+		`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",tw_tenant_id="` + tn.TenantID + `",tw_workload="obsprobe"}`,
+		`tw_invocations_total{tw_tenant_id="` + tn.TenantID + `",tw_workload="obsprobe",tw_object_class="Obj",tw_invocation_event="fetch",tw_invocation_outcome="ok"} 1`,
+		`http_client_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",tw_tenant_id="` + tn.TenantID + `",tw_workload="obsprobe"`,
 	} {
 		if st != 200 || !strings.Contains(body, want) {
 			t.Fatalf("/metrics lacks %s:\n%s", want, body)

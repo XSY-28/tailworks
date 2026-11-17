@@ -22,7 +22,7 @@ guide: [docs/teams.md](../../teams.md).
   VM per tenant.
 - mgmt access was all or nothing. `TailnetHandler` (`mgmt/server.go`)
   admitted a tailnet user only as:
-  - an admin (`twd.dev/cap/admin` from a grant to `tag:twd-mgmt`, or
+  - an admin (`github.com/rosskukulinski/tailworks/cap/admin` from a grant to `tag:tw-mgmt`, or
     `autogroup:admin`);
   - an approver;
   - an MCP caller.
@@ -31,7 +31,7 @@ guide: [docs/teams.md](../../teams.md).
   registry's user branch admitted every `user` principal as if it were an
   admin, an approver included.
 - **Tag ownership wasn't separated either.** Every tenant's OAuth client is
-  scoped to `tag:twd`, and twd's generated `tagOwners` make `tag:twd` the
+  scoped to `tag:tw`, and tailworks' generated `tagOwners` make `tag:tw` the
   owner of every tag a workload asks for (`tagOwnersFor`, the deploy
   preflight). If two tenants shared a tailnet, either one's client could
   mint the other's tags, and so could join a node that the other tenant's
@@ -39,13 +39,13 @@ guide: [docs/teams.md](../../teams.md).
 - **Names collided.** mgmt names every node after its object ID
   (`<class or workload>-<hash10>`, `objectID` in `mgmt/service.go`), and
   names a public node after its workload. Services are `svc:<workload>`, or
-  a name from `twd.jsonc`. Two teams that each deploy a workload `api`
+  a name from `tailworks.jsonc`. Two teams that each deploy a workload `api`
   would get the same Service and public name.
-- The RFC's threat model said a reconciler "deletes tagged devices that twd
+- The RFC's threat model said a reconciler "deletes tagged devices that tailworks
   didn't mint". With two tenants on one tailnet and a tailnet-wide device
   scope (TS-5), one tenant's sweep would find the other's devices.
 - Scoped app capabilities are already an established pattern:
-  `twd.dev/cap/mcp` values name tools (ADR-035), and `twd.dev/cap/approve`
+  `github.com/rosskukulinski/tailworks/cap/mcp` values name tools (ADR-035), and `github.com/rosskukulinski/tailworks/cap/approve`
   values narrow by workload, workflow and step, failing closed (ADR-040).
 
 **Options considered.**
@@ -66,7 +66,7 @@ guide: [docs/teams.md](../../teams.md).
 4. **Several tenants in one tailnet, one per team, with access granted by
    a new tenant-scoped capability.** This reuses every per-tenant boundary,
    and authorization stays in the tailnet policy. **Chosen.**
-5. **The same, but scoped by adding values to `twd.dev/cap/admin`.**
+5. **The same, but scoped by adding values to `github.com/rosskukulinski/tailworks/cap/admin`.**
    Rejected: mgmt ignores that cap's values, so on any older version a
    scoped grant would mean full admin (D2).
 
@@ -76,20 +76,20 @@ guide: [docs/teams.md](../../teams.md).
    tenants, one per team. The RFC identity table says so now. A tenant alone
    on its tailnet changes in no way (D7).
 
-2. **Team access is a new capability, `twd.dev/cap/tenant-admin`. The
-   existing `twd.dev/cap/admin` stays operator-only.**
+2. **Team access is a new capability, `github.com/rosskukulinski/tailworks/cap/tenant-admin`. The
+   existing `github.com/rosskukulinski/tailworks/cap/admin` stays operator-only.**
    (`mgmt/tenantscope.go`.)
 
    ```jsonc
-   {"src": ["group:payments"], "dst": ["tag:twd-mgmt"], "ip": ["tcp:443"],
-    "app": {"twd.dev/cap/tenant-admin": [
+   {"src": ["group:payments"], "dst": ["tag:tw-mgmt"], "ip": ["tcp:443"],
+    "app": {"github.com/rosskukulinski/tailworks/cap/tenant-admin": [
       {"tenants": ["tn_example-pay"], "actions": ["read", "deploy", "kill"],
        "mcp": {"tools": ["kill"]}, "approve": [{"workflows": ["refund"]}]}
     ]}}
    ```
 
    - **Why a new capability.** The gate (`allowed` in `mgmt/server.go`)
-     treats *holding* `twd.dev/cap/admin` as full admin and ignores its
+     treats *holding* `github.com/rosskukulinski/tailworks/cap/admin` as full admin and ignores its
      values. A mgmt that predates this ADR would read a team-scoped value on
      that cap as full operator admin. That happens when a grant is written
      before an upgrade, or on old replicas during a rolling upgrade
@@ -97,7 +97,7 @@ guide: [docs/teams.md](../../teams.md).
      them. The rule generalizes: **never narrow an existing capability by
      adding a field to its values; older readers ignore the field and widen
      the access.** The deploy preflight warns about values on
-     `twd.dev/cap/admin` (D3).
+     `github.com/rosskukulinski/tailworks/cap/admin` (D3).
    - **Required values.** `tenants` is required and holds tenant IDs, with
      no wildcard. `actions` is required unless the value carries `approve`.
      The actions are:
@@ -110,7 +110,7 @@ guide: [docs/teams.md](../../teams.md).
 
      A value that is missing a required field, or that names an unknown
      action, field or MCP tool, grants nothing. `GET /v1/whoami`
-     (`invalidTenantGrants`) and `twd whoami` say why.
+     (`invalidTenantGrants`) and `tw whoami` say why.
    - **One value at a time.** A request is allowed only if one single value
      permits both the tenant and the action. Values are never merged; this
      is the same per-value matching as `internal/approvecap`.
@@ -124,7 +124,7 @@ guide: [docs/teams.md](../../teams.md).
      - container reservations, device-delete runs, and pushing operator
        base images.
    - **Kind of principal.** A caller that holds the capability but not
-     `twd.dev/cap/admin` stays a plain `user` principal that isn't an admin;
+     `github.com/rosskukulinski/tailworks/cap/admin` stays a plain `user` principal that isn't an admin;
      its values travel in `CapValues`. Every existing "is this user an
      admin?" check still says no. A caller that holds both is an operator.
      A holder whose values are all invalid is admitted only to `whoami`.
@@ -135,23 +135,23 @@ guide: [docs/teams.md](../../teams.md).
        action in the same value's `actions`;
      - `status` is never offered.
 
-     Unlike a `twd.dev/cap/mcp` holder's tools, which run as an admin
+     Unlike a `github.com/rosskukulinski/tailworks/cap/mcp` holder's tools, which run as an admin
      (ADR-035), these run as the caller, limited to the values that carry
      `mcp`. So the `/v1` gate decides every call they make.
    - **`approve` entry** (`mgmt/tenantscope_approve.go`). Its values have
-     the same fields as `twd.dev/cap/approve` and apply only to approvals in
+     the same fields as `github.com/rosskukulinski/tailworks/cap/approve` and apply only to approvals in
      the value's tenants. mgmt sends the host only the values that apply to
      the tenant being decided, so hostd's check is unchanged, and a host
      from before this ADR sees only what applies. `actions` never make
      anyone an approver.
-   - The existing `twd.dev/cap/mcp` and `twd.dev/cap/approve` keep their
+   - The existing `github.com/rosskukulinski/tailworks/cap/mcp` and `github.com/rosskukulinski/tailworks/cap/approve` keep their
      meaning, which is across all tenants. On a shared tailnet the
      preflight warns about them (D3).
    - **The admin console** (`/ui`) opens to tenant admins. It shows their
      tenants, and leaves out the hosts, status and audit-chain panels.
 
 3. **The spec says which role and action every operation needs, in the
-   existing `x-twd-role` field.**
+   existing `x-tw-role` field.**
    - **The role part.** A `tenant:<action>` part (`admin|tenant:deploy`)
      opens an operation to tenant admins. An operation without one is closed
      to them, so a new route is operator-only until someone decides
@@ -181,32 +181,32 @@ guide: [docs/teams.md](../../teams.md).
      and the handler lists consistent. Every operation under
      `/v1/tenants/{id}` is either tenant-scoped or on an explicit list of
      admin-only routes.
-   - **Access warnings.** The deploy preflight (`twd policy`, `twd deploy`)
+   - **Access warnings.** The deploy preflight (`tw policy`, `tw deploy`)
      reads the tenant's policy anyway. It now also reports `accessWarnings`
      (`mgmt/tenantscope_lint.go`); they never fail a deploy:
-     - values on `twd.dev/cap/admin`;
+     - values on `github.com/rosskukulinski/tailworks/cap/admin`;
      - invalid tenant-admin values, and values naming unknown tenant IDs;
-     - on a shared tailnet, `twd.dev/cap/mcp` and `twd.dev/cap/approve`
+     - on a shared tailnet, `github.com/rosskukulinski/tailworks/cap/mcp` and `github.com/rosskukulinski/tailworks/cap/approve`
        grants.
 
-     There is no separate `twd policy lint`.
+     There is no separate `tw policy lint`.
 
 4. **Each tenant has its own owner tag, and its OAuth client is scoped to
    it** (`mgmt/teams.go`, column `tenants.owner_tag`).
-   - **Default.** `""` means `tag:twd`, as before. `twd tenant add
-     --owner-tag` and `twd tenant set --owner-tag` set it. Generated
+   - **Default.** `""` means `tag:tw`, as before. `tw tenant add
+     --owner-tag` and `tw tenant set --owner-tag` set it. Generated
      `tagOwners` snippets, the spawn delegation snippet and the public
      Funnel snippet name it.
    - **The hard boundary.** Tailscale only lets a credential mint tags its
      own tag owns, so tenant B's client *can't* mint tenant A's tags, even
      if mgmt is wrong or compromised.
    - **A second tenant on a tailnet.** It is refused with
-     `409 shared_owner_tag` when either tenant uses `tag:twd`, or when both
-     use the same owner tag. The error names the `twd tenant set` command
+     `409 shared_owner_tag` when either tenant uses `tag:tw`, or when both
+     use the same owner tag. The error names the `tw tenant set` command
      that moves the existing tenant.
-   - **Which tags can be owner tags.** An owner tag can't be one of twd's
-     own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`, `tag:twd-issuer`,
-     `tag:twd-public`). No workload may ask for any tenant's owner tag
+   - **Which tags can be owner tags.** An owner tag can't be one of tailworks'
+     own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`, `tag:tw-issuer`,
+     `tag:tw-public`). No workload may ask for any tenant's owner tag
      (`reserved_tag`).
    - **mgmt checks too, as a second layer.** For a tenant with its own owner
      tag, each tag a workload asks for must be owned by that tag, and by no
@@ -216,11 +216,11 @@ guide: [docs/teams.md](../../teams.md).
        false.
 
      A deploy checks only when the tenant's policy is readable; otherwise
-     the OAuth client is the boundary. `tag:twd-public` is exempt from the
+     the OAuth client is the boundary. `tag:tw-public` is exempt from the
      "other tenant" half: every public node carries it, and each public
      node is its own node.
    - **Hosts** are minted with a tenant whose client can mint
-     `tag:twd-host`, which is the operator's tenant on `tag:twd`.
+     `tag:tw-host`, which is the operator's tenant on `tag:tw`.
    - **Headscale** keeps one tenant per tailnet: a Headscale tenant can't
      have an owner tag.
 
@@ -249,25 +249,25 @@ guide: [docs/teams.md](../../teams.md).
      unprefixed tenant's workloads already use is refused.
    - **When it's set.** A prefix is fixed once the tenant has deployed
      (`immutable_field`).
-   - **Tags aren't prefixed.** `twd init` still writes `tag:twd-wl-<name>`.
+   - **Tags aren't prefixed.** `tw init` still writes `tag:tw-wl-<name>`.
      Ownership (D4) decides who may use a tag, not its name, and the
      preflight prints the `tagOwners` line for the tenant's owner tag.
-     `twd init` runs before `twd link` and doesn't know the tenant.
-   - **The tenant ID.** `twd tenant add --name-prefix p` gives the tenant
+     `tw init` runs before `tw link` and doesn't know the tenant.
+   - **The tenant ID.** `tw tenant add --name-prefix p` gives the tenant
      the ID `tn_<label>-p`. Naming a shared tailnet with `--tenant` is
      `ambiguous_tenant`, so name tenants by ID.
 
-6. **Devices are deleted only by the node IDs twd recorded for the
-   tenant.** No code sweeps the tailnet for devices twd "didn't mint", and
+6. **Devices are deleted only by the node IDs tailworks recorded for the
+   tenant.** No code sweeps the tailnet for devices tailworks "didn't mint", and
    Tier-3 posture kill isn't implemented. So one tenant never acts on
    another's devices, whatever the answer to TS-5. The RFC's threat model
    now says this. A future sweep must keep to the tenant's own minted node
    IDs.
 
 7. **Moving an existing tenant.** Existing tenants keep owner tag `""`
-   (`tag:twd`) and no prefix, and nothing about them changes.
+   (`tag:tw`) and no prefix, and nothing about them changes.
    - Before a team joins its tailnet, the operator moves the existing
-     tenant with `twd tenant set <t> --owner-tag tag:twd-t-<team>
+     tenant with `tw tenant set <t> --owner-tag tag:tw-t-<team>
      --oauth-client-file <client scoped to it>`, after adding the new tag to
      `tagOwners`. Existing nodes keep their tags; only who owns them
      changes.
@@ -280,7 +280,7 @@ guide: [docs/teams.md](../../teams.md).
 
 **Consequences.**
 
-- Two teams on one twd install and one tailnet each get their own tenant.
+- Two teams on one tailworks install and one tailnet each get their own tenant.
   Each manages its own workloads, secrets, data and approvals, and neither
   can deploy, kill, read or mint as the other. The operator keeps hosts,
   pools, quotas and releases.
@@ -288,7 +288,7 @@ guide: [docs/teams.md](../../teams.md).
   WhoIs login.
 - **Teams can't edit their own grants.** Only tailnet admins edit the
   policy file. Delegating it (for example GitOps with a code owner per
-  team's section) is outside twd.
+  team's section) is outside tailworks.
 - **This boundary is only as strong as the tailnet's admins are
   trustworthy.** Teams that need a boundary against each other's tailnet
   admins should use separate tailnets (option 2).
@@ -298,7 +298,7 @@ guide: [docs/teams.md](../../teams.md).
 - `tenants.owner_tag` and `tenants.name_prefix` are added as an expand
   migration (ADR-041), `202611161200_tenant_owner_tag_name_prefix.sql`.
 - **A registry fix ships with this.** A tailnet user holding only
-  `twd.dev/cap/approve` could push and pull every tenant's images.
+  `github.com/rosskukulinski/tailworks/cap/approve` could push and pull every tenant's images.
 
 **Open.**
 
@@ -314,11 +314,11 @@ guide: [docs/teams.md](../../teams.md).
 following AGENTS.md (new files for the logic, small edits to the hotspots):
 
 1. D2 and D3 for `/v1`, the registry and the CLI: `mgmt/tenantscope.go`,
-   `mgmt/tenantscope_registry.go`, `twd link`, `twd whoami`.
+   `mgmt/tenantscope_registry.go`, `tw link`, `tw whoami`.
 2. D2 for `/mcp`, approvals and `/ui`, and D3's access warnings:
    `mgmt/tenantscope_mcp.go`, `mgmt/tenantscope_approve.go`,
    `mgmt/tenantscope_lint.go`.
-3. D4, D5 and D7: `mgmt/teams.go`, the migration, and `twd tenant add/set
+3. D4, D5 and D7: `mgmt/teams.go`, the migration, and `tw tenant add/set
    --owner-tag --name-prefix`.
 4. Docs: `docs/teams.md`, `docs/errors.md`, and the RFC's identity table
    and threat model.

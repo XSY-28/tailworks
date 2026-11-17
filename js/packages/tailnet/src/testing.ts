@@ -1,11 +1,11 @@
-// @twd/tailnet/testing: unit-test helpers for the twd-specific APIs
+// @tailworks/tailnet/testing: unit-test helpers for the tw-specific APIs
 // (getCaller, getRequester, ctx.tailnet). Works in Node (node:test, vitest)
 // and inside workerd (@cloudflare/vitest-plugin). docs/testing.md has the
 // whole story.
 //
-// Why this can't weaken a deployed app: on twd, request.cf is not something
+// Why this can't weaken a deployed app: on tailworks, request.cf is not something
 // a client can send. netd (the only process that can connect to workerd's
-// ingress socket) drops any client-sent x-twd-cf header and writes its own,
+// ingress socket) drops any client-sent x-tw-cf header and writes its own,
 // built from WireGuard + WhoIs; workerd turns that header into request.cf
 // (cfBlobHeader) and removes it. withCaller() adds no header and talks to no
 // socket: it builds an in-memory Request object whose `cf` property is set,
@@ -35,8 +35,8 @@ export interface TestCaller {
   addrs?: string[];
   /** App capabilities granted to this caller: name → values (what caller.caps(name) returns). */
   caps?: Record<string, unknown[]>;
-  /** Set for a caller that is itself a twd object (ADR-010). */
-  twd?: { objectId: string; lim?: Record<string, unknown>; parent?: string; root?: string };
+  /** Set for a caller that is itself a tailworks object (ADR-010). */
+  tw?: { objectId: string; lim?: Record<string, unknown>; parent?: string; root?: string };
   /** netd could not verify the caller's node certificate (caps() is empty). */
   capsWithheld?: boolean;
   /** request.cf.objectId: the object the request was delivered to. */
@@ -112,7 +112,7 @@ function wireCaller(who: TestCaller): Record<string, unknown> {
     capMap: structuredClone(who.caps ?? {}),
   };
   if (who.login) c.user = who.login;
-  if (who.twd) c.twd = structuredClone(who.twd);
+  if (who.tw) c.tw = structuredClone(who.tw);
   if (who.capsWithheld) c.capsWithheld = true;
   return c;
 }
@@ -193,15 +193,15 @@ export interface TestTailnetOptions {
   self?: Partial<{ objectId: string; hostname: string; magicDNS: string; status: string; kind: string; epoch: number }>;
   /**
    * The egress of ctx.tailnet.fetch()/forward(). Default: every destination
-   * is refused (forbidden_destination), as on twd with no grant. A response
-   * with a twd-error header is thrown as a TailnetError, as on twd.
+   * is refused (forbidden_destination), as on tailworks with no grant. A response
+   * with a tw-error header is thrown as a TailnetError, as on tailworks.
    */
   fetch?: (req: Request) => Response | Promise<Response>;
   /** Called on each spawn before it is recorded; throw (e.g. a TailnetError) to make it fail. */
   onSpawn?: (rec: SpawnRecord) => void | Promise<void>;
 }
 
-/** A fake twd runtime: a ctx.tailnet that records what the app asked of it. */
+/** A fake tw runtime: a ctx.tailnet that records what the app asked of it. */
 export interface TestTailnet {
   /** The fake ctx.tailnet. */
   readonly tailnet: TailnetContext;
@@ -230,7 +230,7 @@ export interface ExecutionContextLike {
   props: Record<string, unknown>;
 }
 
-/** createTestTailnet makes a fake twd runtime, and turns test mode on. */
+/** createTestTailnet makes a fake tw runtime, and turns test mode on. */
 export function createTestTailnet(opts: TestTailnetOptions = {}): TestTailnet {
   testMode = true;
   const spawned: SpawnRecord[] = [];

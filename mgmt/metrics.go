@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/obs"
+	"github.com/rosskukulinski/tailworks/internal/obs"
 )
 
 // mgmt's own metrics (ADR-observability), served on GET /metrics on mgmt's
@@ -27,10 +27,10 @@ func newMgmtMetrics() *mgmtMetrics {
 	r := obs.NewRegistry()
 	return &mgmtMetrics{
 		reg: r,
-		mint: r.Histogram("twd.mint.duration", "s", "Object node mints: create to minted (the \"mint spans\" log line's create_to_minted_ms).",
-			MintBuckets, "twd.tenant.id", "twd.mint.pooled"),
-		stage: r.Histogram("twd.mint.stage.duration", "s", "One stage of a mint attempt (queued, load, claim, throttle, reclaim, broker, createkey, custody, commit).",
-			MintBuckets, "twd.mint.stage"),
+		mint: r.Histogram("tw.mint.duration", "s", "Object node mints: create to minted (the \"mint spans\" log line's create_to_minted_ms).",
+			MintBuckets, "tw.tenant.id", "tw.mint.pooled"),
+		stage: r.Histogram("tw.mint.stage.duration", "s", "One stage of a mint attempt (queued, load, claim, throttle, reclaim, broker, createkey, custody, commit).",
+			MintBuckets, "tw.mint.stage"),
 	}
 }
 
@@ -57,7 +57,7 @@ func (s *mintSpans) observe(tenantID string, pooled bool) {
 func Metrics() *obs.Registry { return metrics.reg }
 
 // MetricsHandler serves GET /metrics: mgmt's registry, then extra's (an
-// embedded host's, single-process twd up; read at each scrape).
+// embedded host's, single-process tw up; read at each scrape).
 func MetricsHandler(extra func() obs.Gatherers) http.Handler {
 	return obs.MetricsHandler(gatherFunc(func(w io.Writer) error {
 		g := obs.Gatherers{metrics.reg}

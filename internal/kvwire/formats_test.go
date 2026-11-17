@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-// fixture returns testdata/formats/<name>. With TWD_WRITE_FIXTURES=1 a
+// fixture returns testdata/formats/<name>. With TW_WRITE_FIXTURES=1 a
 // missing fixture is written from gen first; an existing one is never
 // overwritten (ADR-041 §4).
 func fixture(t *testing.T, name string, gen func() []byte) []byte {
 	t.Helper()
 	p := filepath.Join("testdata", "formats", name)
-	if os.Getenv("TWD_WRITE_FIXTURES") == "1" {
+	if os.Getenv("TW_WRITE_FIXTURES") == "1" {
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			if err := os.WriteFile(p, gen(), 0o644); err != nil {
 				t.Fatal(err)
@@ -23,7 +23,7 @@ func fixture(t *testing.T, name string, gen func() []byte) []byte {
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
-		t.Fatalf("%s: %v (new fixture? run with TWD_WRITE_FIXTURES=1)", p, err)
+		t.Fatalf("%s: %v (new fixture? run with TW_WRITE_FIXTURES=1)", p, err)
 	}
 	return b
 }
@@ -50,7 +50,7 @@ func TestFormatFixtures(t *testing.T) {
 		t.Fatalf("v1 delete: %+v %v", e, err)
 	}
 	newer := append([]byte{2}, put[1:]...)
-	if _, err := Decode(newer); err == nil || !strings.Contains(err.Error(), "newer twd") {
+	if _, err := Decode(newer); err == nil || !strings.Contains(err.Error(), "newer tailworks") {
 		t.Fatalf("v2 entry: %v", err)
 	}
 }

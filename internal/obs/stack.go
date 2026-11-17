@@ -8,17 +8,17 @@ import (
 	"strings"
 )
 
-// runtimeFrameRE is a stack frame in one of twd's own modules (the
-// __twd_rt.js runtime, the generated __twd_main.js / __twd_facet.js
+// runtimeFrameRE is a stack frame in one of tailworks' own modules (the
+// __tw_rt.js runtime, the generated __tw_main.js / __tw_facet.js
 // entries): not the app's code.
-var runtimeFrameRE = regexp.MustCompile(`(?:^|[\s(/])(__twd_[A-Za-z0-9_.-]*\.js):\d+:\d+\)?\s*$`)
+var runtimeFrameRE = regexp.MustCompile(`(?:^|[\s(/])(__tw_[A-Za-z0-9_.-]*\.js):\d+:\d+\)?\s*$`)
 
-// FoldRuntimeFrames folds each run of stack frames in twd's own modules
-// into one line ("… 4 twd runtime frames (__twd_rt.js)"), so an uncaught
+// FoldRuntimeFrames folds each run of stack frames in tailworks' own modules
+// into one line ("… 4 tailworks runtime frames (__tw_rt.js)"), so an uncaught
 // exception shows the app's frames, as `wrangler dev` does. The JSON
 // record keeps the whole stack.
 func FoldRuntimeFrames(stack string) string {
-	if !strings.Contains(stack, "__twd_") {
+	if !strings.Contains(stack, "__tw_") {
 		return stack
 	}
 	lines := strings.Split(stack, "\n")
@@ -38,7 +38,7 @@ func FoldRuntimeFrames(stack string) string {
 		if run == 1 {
 			s = ""
 		}
-		out = append(out, fmt.Sprintf("    … %d twd runtime frame%s (%s)", run, s, strings.Join(names, ", ")))
+		out = append(out, fmt.Sprintf("    … %d tw runtime frame%s (%s)", run, s, strings.Join(names, ", ")))
 		run = 0
 		clear(mods)
 	}

@@ -1,9 +1,9 @@
-# Mutual exclusion and leader election with Durable Objects on twd
+# Mutual exclusion and leader election with Durable Objects on tailworks
 
 Hosted platforms sell "only one worker handles this task at a time, with a
-lease that renews while the work runs" as a separate product. On twd it
+lease that renews while the work runs" as a separate product. On tailworks it
 comes from the Durable Object model. A named object runs single-threaded,
-in one place. twd keeps it in one place by giving the host a lease on the
+in one place. Tailworks keeps it in one place by giving the host a lease on the
 workload ([ADR-011](design/adr/011-leases-conditional-writes-durable-store.md),
 [ADR-028](design/adr/028-database-lease-clock-hosts-fence-themselves.md)).
 Every object also has its own tailnet identity
@@ -11,14 +11,14 @@ Every object also has its own tailnet identity
 
 This page covers:
 
-- what twd guarantees when a host dies or loses its lease, as measured;
+- what tailworks guarantees when a host dies or loses its lease, as measured;
 - three patterns: a named DO as a mutex, leases with renewal and fencing
   tokens, and leader election;
-- the `lock` template (`twd init my-locks --template lock`), which ships the
+- the `lock` template (`tw init my-locks --template lock`), which ships the
   second and third patterns as a small service and client;
 - the failure modes.
 
-## What twd guarantees
+## What tailworks guarantees
 
 | Question | Answer | Measured by |
 |---|---|---|
@@ -26,7 +26,7 @@ This page covers:
 | A host is cut off from mgmt but still on the tailnet. Can a second copy start elsewhere while the first still serves? | No. The cut-off host stops serving its stateful workloads (it *fences* itself) 30 s after its last successful heartbeat. mgmt won't let another host take the workload until the lease runs out, 45 s after the last renewal by the database's clock. Measured with default timings: h1 answered its last lock request at t0+32.8 s (t0 is the moment it was cut off). The takeover was accepted at t0+45.3 s, and h2 granted the lock at t0+47.9 s | `e2e/locks:TestLocksFailover` |
 | Side effects outside storage (egress calls)? | The fence stops the old copy, alarms included. In the test, a Durable Object made an egress call every 250 ms. h1's last call arrived at t0+32.7 s and h2's first at t0+48.1 s, so the two never overlapped. When h1 reconnected, mgmt revoked the workload and h1 stayed silent. **What the fence can't do** is recall a request that left before it: a packet still in flight, or a retry inside the system you called, can arrive after the new copy has started. Use [fencing tokens](#fencing-tokens) for that | `e2e/locks:TestLocksFailover` |
 | Storage writes? | A Durable Object's storage lives on its host's disk and **doesn't move**. After a takeover, the object starts **empty** on the new host. The old copy's writes stay on the old disk and are never served again, so nothing is corrupted, but they are lost to the new copy. A lock held at that moment is forgotten (see [failure modes](#failure-modes)) | `e2e/locks:TestLocksFailover` (B's acquire on h2 sees no holder) |
-| How long is the takeover gap? | About **45 s** from the old host's last successful heartbeat (measured: 15.1 s between h1's last answer and h2's first grant). twd has **no automatic failover**: someone has to redeploy with `--force-takeover` (or remove the host). Until then the lock is unavailable, so it fails closed | `e2e/locks:TestLocksFailover` |
+| How long is the takeover gap? | About **45 s** from the old host's last successful heartbeat (measured: 15.1 s between h1's last answer and h2's first grant). Tailworks has **no automatic failover**: someone has to redeploy with `--force-takeover` (or remove the host). Until then the lock is unavailable, so it fails closed | `e2e/locks:TestLocksFailover` |
 | Are fencing tokens monotonic across a host failover? | Yes, with the template. Tokens include the workload's lease epoch, which mgmt raises on every deploy and every move. They went from 1000000001 (epoch 1, h1) to 2000000001 (epoch 2, h2), and the example store refused the old holder's late write | `e2e/locks:TestLocksFailover`, `hostd:TestLockTemplate/RedeployKeepsHolderTokenCarriesEpoch` |
 
 The safety argument is two timeouts, both measured on one clock each:
@@ -75,10 +75,10 @@ Caveats:
 
 ## Pattern 2: leases with renewal (the `lock` template)
 
-`twd init my-locks --template lock` creates a small lock service:
+`tw init my-locks --template lock` creates a small lock service:
 
 - one Durable Object per lock name;
-- each lock object has its own tailnet node, so `twd ls` lists the locks;
+- each lock object has its own tailnet node, so `tw ls` lists the locks;
 - its expiry runs on an alarm (plain-DO mode);
 - it records the holder by tailnet identity.
 
@@ -139,7 +139,7 @@ calls are `acquire`, `tryAcquire`, `renew`, `release` and `status`.
   take it. Calls from a workload **on the same host** over the tailnet are
   refused today: netd blocks sibling hairpins (`forbidden_destination`,
   ADR-019). So run the lock workload on a host its clients aren't on
-  (`twd deploy --host`), or use `twd up --allow-sibling-egress` on a
+  (`tw deploy --host`), or use `tw up --allow-sibling-egress` on a
   single-host setup.
 
 ## Fencing tokens
@@ -165,7 +165,7 @@ token = max(lastToken + 1, epoch × 1 000 000 000 + 1)
 move, and never reuses one. So even when a takeover starts the lock with
 empty storage on another host, its first token beats anything the old host
 handed out. That holds across a restore of mgmt's store from a backup too:
-the restore fence (`twd-mgmt restore-fence`, run by `twd upgrade`'s
+the restore fence (`tw-mgmt restore-fence`, run by `tw upgrade`'s
 rollback; [upgrading.md](upgrading.md)) raises every lease epoch by 2²⁰, far
 past anything handed out after the backup.
 
@@ -240,7 +240,7 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
   verified (WireGuard + WhoIs), not self-reported.
 - Pass `lease.token` along with anything only the leader may do.
 
-## What twd adds
+## What tailworks adds
 
 - **The holder is a tailnet identity.** It's the caller's verified node ID,
   MagicDNS name and tags, not a string the client sends. A token that leaks
@@ -249,14 +249,14 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
   is its workload node, so two requests in one Worker share an identity;
   the token still tells them apart.
 - **Auditable.** The lock writes `lock_acquired`, `lock_released` and
-  `lock_expired` notes with the token and the holder. `twd audit <lock
+  `lock_expired` notes with the token and the holder. `tw audit <lock
   object>` lists who held it and when
   (`hostd:TestLockTemplate/ContendedAcquireOneWinner`).
-- **Emergency release: `twd kill` the holder.** Its node is cut off the
+- **Emergency release: `tw kill` the holder.** Its node is cut off the
   tailnet, so it can't renew, and the lock is free when the lease runs out.
   Measured: 0.8 s after killing a holder of a 1 s lease
   (`hostd:TestLockTemplate/KillHolderReleases`).
-- **Kill switch: `twd kill` the lock object.** This is **not** a release.
+- **Kill switch: `tw kill` the lock object.** This is **not** a release.
   A killed object keeps a killed marker in its storage, so that lock name
   answers `410 killed` from then on. The holder's next renewal fails, and
   nobody can take that name again. Other names are unaffected
@@ -266,7 +266,7 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
 ## Failure modes
 
 - **No automatic failover.** When the lock's host dies, the lock is
-  unavailable until someone runs `twd deploy --force-takeover` (or removes
+  unavailable until someone runs `tw deploy --force-takeover` (or removes
   the host) and the 45 s lease has run out. Holders can't renew, and their
   leases run out. The lock fails closed.
 - **A move forgets every holder.** Storage doesn't move, so after a
@@ -281,24 +281,24 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
 
   The template caps leases at **10 s** (`MAX_TTL_MS`) for this reason. In
   the test, A's lease ended at t0+41.0 s and B was granted at t0+47.9 s.
-  Don't raise the cap, and don't lower `twd-hostd -fence-after` and the
+  Don't raise the cap, and don't lower `tw-hostd -fence-after` and the
   lease margin at the same time without redoing this sum. Fencing tokens
   stay correct either way.
-- **`twd deploy --replace --force-takeover` on a live host** moves the lease
+- **`tw deploy --replace --force-takeover` on a live host** moves the lease
   at once. The old host stops at its next heartbeat (≤ 3 s), but the new
   copy can start in that window with empty storage. Locks held at that
   moment are forgotten, and the new host may grant them while the old
   holders' leases are still running. Tokens still order them correctly.
   Don't force-move the lock workload while its locks are in use. (This is
   from the code, `mgmt.Deploy` with `Replace`; `e2e/locks` doesn't run it.)
-- **`twd host rm --drain` of a host that is actually still running**
+- **`tw host rm --drain` of a host that is actually still running**
   releases its leases at once (by reading the code: `mgmt.DeleteHost`; not
   exercised in `e2e/locks`). If that host is only cut off, it keeps serving
   until it fences, up to 30 s, while the new host starts. The lease refusal
-  message suggests `twd host rm`. For a host that may still be running,
+  message suggests `tw host rm`. For a host that may still be running,
   prefer `--force-takeover`: it waits for the lease to run out.
 - **The fence can't recall requests already sent.** A request that left the
-  old host before it fenced can arrive later. Anything outside twd that the
+  old host before it fenced can arrive later. Anything outside tailworks that the
   lock protects must check the fencing token.
 - **Clocks.** Lease expiry is measured on the lock host's clock, and the
   client's deadline on the client's own clock, counted from when its request
@@ -308,12 +308,12 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
 - **Same-host callers.** A workload can't call the lock workload over the
   tailnet when both run on the same host (see
   [Where to run it](#pattern-2-leases-with-renewal-the-lock-template)).
-- **Off twd** (no `ctx.tailnet`, e.g. under another runtime) the epoch is 0,
+- **Off tailworks** (no `ctx.tailnet`, e.g. under another runtime) the epoch is 0,
   so tokens are monotonic only while the object's storage lasts.
 
 ## Tests
 
 | Test | What it shows |
 |---|---|
-| `hostd:TestLockTemplate` (`make test`) | the template on twd-hostd + stock workerd, with 4 tailnet client nodes, a Worker using the client, and the example store: one winner under contention, holder-bound renew and release, alarm expiry, strictly increasing tokens, `withLock` renewal and fencing, killing the holder vs killing the lock, tokens carrying the epoch across a redeploy |
-| `e2e/locks:TestLocksFailover` (`make e2e-locks`) | real twd-mgmt and two twd-hostd processes, default timings. h1 is cut off from mgmt while still on the tailnet: it fences before h2 can take over; side effects don't overlap; tokens increase across the move; the store refuses the old holder; h1 is revoked when it reconnects |
+| `hostd:TestLockTemplate` (`make test`) | the template on tw-hostd + stock workerd, with 4 tailnet client nodes, a Worker using the client, and the example store: one winner under contention, holder-bound renew and release, alarm expiry, strictly increasing tokens, `withLock` renewal and fencing, killing the holder vs killing the lock, tokens carrying the epoch across a redeploy |
+| `e2e/locks:TestLocksFailover` (`make e2e-locks`) | real tw-mgmt and two tw-hostd processes, default timings. h1 is cut off from mgmt while still on the tailnet: it fences before h2 can take over; side effects don't overlap; tokens increase across the move; the store refuses the old holder; h1 is revoked when it reconnects |

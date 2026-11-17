@@ -8,7 +8,7 @@
 
 - Issue #17 asks for the D1 binding (`d1_databases`, `env.DB.prepare().
   bind().first/all/run/raw`, `batch()`, `exec()`, `withSession()`) and
-  wrangler's migration workflow. twd had no D1. Durable Objects already
+  wrangler's migration workflow. Tailworks had no D1. Durable Objects already
   have SQLite (`ctx.storage.sql`).
 - **workerd has the frontend.** Stock workerd ships the D1 API as
   `cloudflare-internal:d1-api`, used through a `wrapped` binding whose
@@ -50,7 +50,7 @@
      fetcher is the platform's `D1Backend` entrypoint with props `{kind,
      name}` written by hostd. A facet-mode object can't be handed a wrapped
      binding (it doesn't serialize into a Dynamic Worker's env), so its env
-     gets a stub to `D1Backend` and the facet runtime (`twd-rt.js`) puts a
+     gets a stub to `D1Backend` and the facet runtime (`tw-rt.js`) puts a
      re-implementation of the same client API around it: the same wire
      protocol, results, errors and bookmarks.
    - **Reads** run on the object's local copy, in a transaction that checks
@@ -103,7 +103,7 @@
    duration limit is not enforced (Durable Object SQLite can't interrupt a
    statement).
 
-4. **Migrations: wrangler's format, applied explicitly.** `twd d1
+4. **Migrations: wrangler's format, applied explicitly.** `tw d1
    migrations create|list|apply <db>` reads the binding's
    `migrations_dir` (default `migrations`): `NNNN_<message>.sql` files in
    name order, recorded by file name in `migrations_table` (default
@@ -115,17 +115,17 @@
    lands whole or not at all, and an existing wrangler project's
    migrations and table apply unchanged. Migrations are **not** applied at
    deploy, as with wrangler: a deploy of new code and a schema change are
-   separate steps the operator orders. `twd dev`, whose databases live in
+   separate steps the operator orders. `tw dev`, whose databases live in
    the in-memory mgmt for one run, applies pending migrations after each
    (re)deploy, as `wrangler d1 migrations apply --local` would.
 
-5. **Operator surface.** `twd d1 create|list|delete` are the generic store
+5. **Operator surface.** `tw d1 create|list|delete` are the generic store
    routes (`PUT|GET|DELETE …/stores/d1/{name}`; delete crypto-shreds).
-   `twd d1 execute <db> --command|--file` and `twd d1 export` use two new
+   `tw d1 execute <db> --command|--file` and `tw d1 export` use two new
    routes, `POST /v1/tenants/{id}/workloads/{w}/d1/{name}/query` (a batch,
    `200` with D1's per-statement results, `400 d1_error` when a statement
    fails) and `GET …/d1/{name}/export` (SQL text in `wrangler d1 export`'s
-   shape). Both are `x-twd-role: admin`. mgmt sends them to the host
+   shape). Both are `x-tw-role: admin`. mgmt sends them to the host
    holding the workload's lease over the mgmt → hostd channel (`POST
    /v1/store-admin` on hostd's push API, like logs), and hostd hands them
    to its platform worker's admin route (`Store.adminOp`, a generic hook
@@ -147,7 +147,7 @@
 
 7. **Differences from Cloudflare** (listed in `docs/COMPAT.md`): no
    global read replicas, no Time Travel / point-in-time restore, no
-   `dump()` (it throws; use `twd d1 export`), `database_id` ignored, a
+   `dump()` (it throws; use `tw d1 export`), `database_id` ignored, a
    database scoped to a workload, a bound number stored as REAL without
    INTEGER affinity (as under `wrangler dev`), `exec()` atomic, a write
    at most 2 MiB encoded, every write waiting on mgmt, and non-deterministic
@@ -172,7 +172,7 @@
 **Consequences.**
 
 - Existing D1 code and wrangler migrations run unchanged, in the Worker and
-  in Durable Objects of both modes, with `twd dev` support.
+  in Durable Objects of both modes, with `tw dev` support.
 - Each write costs a dry run, a journal append (one round trip to mgmt) and
   the apply. Reads cost local SQLite. Write-heavy hot paths belong in a
   Durable Object's own SQLite.

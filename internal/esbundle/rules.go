@@ -29,9 +29,9 @@ var DefaultRules = []Rule{
 	{Type: "CompiledWasm", Globs: []string{"**/*.wasm", "**/*.wasm?module"}},
 }
 
-// ModuleType maps a wrangler rule type to the twd bundle module type
-// (twd-bundle.json "modules"): "text", "data", "wasm" or "js"; "" for a
-// type twd can't ship (CommonJS, Python).
+// ModuleType maps a wrangler rule type to the tailworks bundle module type
+// (tw-bundle.json "modules"): "text", "data", "wasm" or "js"; "" for a
+// type tailworks can't ship (CommonJS, Python).
 func ModuleType(ruleType string) string {
 	switch ruleType {
 	case "Text":
@@ -116,7 +116,7 @@ var HashedRE = regexp.MustCompile(`^[0-9a-f]{40}-`)
 
 // Module is an additional module written next to the entry.
 type Module struct {
-	Type string // twd bundle module type (ModuleType)
+	Type string // tw bundle module type (ModuleType)
 	Data []byte
 }
 
@@ -128,14 +128,14 @@ func rulesPlugin(rules []Rule, mods map[string]Module, mu *sync.Mutex) (api.Plug
 	var res []string
 	for _, r := range rules {
 		if ModuleType(r.Type) == "" || r.Type == "ESModule" {
-			return api.Plugin{}, fmt.Errorf("rules: type %q is not supported by twd's built-in bundler (Text, Data and CompiledWasm are); bundle with wrangler (twd deploy --wrangler)", r.Type)
+			return api.Plugin{}, fmt.Errorf("rules: type %q is not supported by tailworks' built-in bundler (Text, Data and CompiledWasm are); bundle with wrangler (tw deploy --wrangler)", r.Type)
 		}
 		for _, g := range r.Globs {
 			res = append(res, globRE(g))
 		}
 	}
 	filter := "(?:" + strings.Join(res, ")|(?:") + ")"
-	return api.Plugin{Name: "twd-rules", Setup: func(b api.PluginBuild) {
+	return api.Plugin{Name: "tw-rules", Setup: func(b api.PluginBuild) {
 		if len(res) == 0 {
 			return
 		}

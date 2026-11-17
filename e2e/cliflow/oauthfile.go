@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/policy"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/internal/policy"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // The OAuth client hermetic tests use: a fake Tailscale API knows it, and
@@ -32,12 +32,12 @@ func WriteFakeOAuthFile(t testing.TB, path string) string {
 
 // RealOAuthClient creates an OAuth client on a real tailnet for one test
 // run, the way an admin does in the console (auth_keys, devices:core,
-// policy_file:read; tag tag:twd), with the harness's own API key, which
-// twd never sees. An OAuth client mints only tags its own tag owns, so for
+// policy_file:read; tag tag:tw), with the harness's own API key, which
+// tailworks never sees. An OAuth client mints only tags its own tag owns, so for
 // suites whose objects carry other tags (e.g. TestTag) ownedTags makes
-// tag:twd an owner of each in the tailnet policy first (additive,
+// tag:tw an owner of each in the tailnet policy first (additive,
 // validated, If-Match; a no-op once present). It writes the client to a 0600 file in dir and deletes
-// the client when the test ends. twd mints only with OAuth clients
+// the client when the test ends. Tailworks mints only with OAuth clients
 // (ADR-042); the API key stays the harness's tool for
 // policy setup, test nodes and leftover cleanup.
 func RealOAuthClient(t testing.TB, apiKeyFile, tailnet, dir, description string, ownedTags ...string) string {
@@ -52,13 +52,13 @@ func RealOAuthClient(t testing.TB, apiKeyFile, tailnet, dir, description string,
 	if len(ownedTags) > 0 {
 		owners := map[string][]string{}
 		for _, tag := range ownedTags {
-			owners[tag] = []string{"autogroup:admin", "tag:twd"}
+			owners[tag] = []string{"autogroup:admin", "tag:tw"}
 		}
 		if _, err := policy.ApplyWith(ctx, api, policy.Snippet{TagOwners: owners}, policy.Options{AllowTags: ownedTags}); err != nil {
-			t.Fatalf("policy: let tag:twd own %v: %v", ownedTags, netd.RedactError(err))
+			t.Fatalf("policy: let tag:tw own %v: %v", ownedTags, netd.RedactError(err))
 		}
 	}
-	oc, err := api.CreateOAuthClient(ctx, []string{"auth_keys", "devices:core", "policy_file:read"}, []string{"tag:twd"}, description)
+	oc, err := api.CreateOAuthClient(ctx, []string{"auth_keys", "devices:core", "policy_file:read"}, []string{"tag:tw"}, description)
 	if err != nil {
 		t.Fatalf("create the run's OAuth client: %v", netd.RedactError(err))
 	}

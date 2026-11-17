@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 func TestHostListsStoreKinds(t *testing.T) {
@@ -25,7 +25,7 @@ func TestRequired(t *testing.T) {
 			"kv_namespaces":[{"binding":"CACHE","id":"cache"}],
 			"r2_buckets":[{"binding":"B","bucket_name":"b"}]}`),
 		"index.js":  []byte(`export default { fetch() { return new Response("ok") } }`),
-		"twd.jsonc": []byte(`{"tailnet":{"tags":["tag:app"]}}`),
+		"tailworks.jsonc": []byte(`{"tailnet":{"tags":["tag:app"]}}`),
 	}
 	b, err := bundle.Pack(files)
 	if err != nil {

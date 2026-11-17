@@ -1,9 +1,9 @@
-// @twd/mcp: per-request tailnet identity for stateless MCP servers
+// @tailworks/mcp: per-request tailnet identity for stateless MCP servers
 // (createMcpHandler from agents/mcp/server), per-tool authorization from app
 // capabilities, and DO-backed budgets. Needs "nodejs_compat" (AsyncLocalStorage).
 import { AsyncLocalStorage } from "node:async_hooks";
-import { getCaller, principalKey, TailnetError, isTailnetError } from "@twd/tailnet";
-import type { Caller } from "@twd/tailnet";
+import { getCaller, principalKey, TailnetError, isTailnetError } from "@tailworks/tailnet";
+import type { Caller } from "@tailworks/tailnet";
 
 export type { Caller };
 export { getCaller, TailnetError, isTailnetError };
@@ -175,8 +175,8 @@ interface BudgetStub {
 
 /**
  * budget returns a per-(tool, principal) daily counter backed by the
- * TwdBudget Durable Object (export it from your Worker:
- * `export { TwdBudget } from "@twd/mcp/budget-do"`). reserve() is serialised
+ * TwBudget Durable Object (export it from your Worker:
+ * `export { TwBudget } from "@tailworks/mcp/budget-do"`). reserve() is serialised
  * by the DO and throws cap_limit_exceeded past the limit.
  */
 export function budget(ns: { getByName(name: string): unknown }, who: Caller, tool: string, opts: BudgetOptions = {}) {
@@ -219,10 +219,10 @@ export interface McpFetchOptions {
 }
 
 /**
- * mcpFetch returns a `fetch` for MCP clients running on twd (for example
+ * mcpFetch returns a `fetch` for MCP clients running on tailworks (for example
  * `createMCPClient({ transport: { type: "http", url, fetch: mcpFetch(ctx) } })`
  * from `@ai-sdk/mcp`). Requests leave through `ctx.tailnet.fetch`, so they
- * carry the calling object's (or workload's) own node identity, and a twd
+ * carry the calling object's (or workload's) own node identity, and a tailworks
  * egress refusal (`peer_not_visible`, `forbidden_destination`, `acl_denied`,
  * `identity_pending`…) throws a typed TailnetError instead of surfacing as an
  * opaque "HTTP 403" from the MCP SDK. The trace ID is propagated as
@@ -234,7 +234,7 @@ export interface McpFetchOptions {
  */
 export function mcpFetch(ctx: { tailnet?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> } } | null | undefined, opts: McpFetchOptions = {}) {
   const tn = ctx?.tailnet;
-  if (!tn) throw new TailnetError("no_identity", "mcpFetch: ctx.tailnet is not available (not running on twd?)");
+  if (!tn) throw new TailnetError("no_identity", "mcpFetch: ctx.tailnet is not available (not running on tailworks?)");
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // workerd rejects redirect: "error" (the @ai-sdk/mcp default); emulate it
     // with "manual" plus a check.

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -16,7 +16,7 @@ import (
 // move to another host (ADR-037; ADR-028 forced takeover), and a
 // host that gets the workload back catches up on what was written while it
 // didn't hold it; with mgmt's journal down, reads fail static and writes
-// fail. Two twd-hostd processes (each with its own data dir and
+// fail. Two tw-hostd processes (each with its own data dir and
 // workerd) share one mgmt and one tailnet.
 func TestWorkersKVMove(t *testing.T) {
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, nil)

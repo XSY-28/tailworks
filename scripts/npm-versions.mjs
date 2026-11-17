@@ -7,9 +7,9 @@
 //   node scripts/npm-versions.mjs --set 0.3.0  rewrite every version below to 0.3.0
 //
 // Checked (and set):
-//   - every workspace package (js/packages/*: @twd/*, create-twd) is at the
+//   - every workspace package (js/packages/*: @tailworks/*, create-tailworks) is at the
 //     version, and one workspace package depends on another at exactly it;
-//   - every create-twd template depends on the workspace packages at
+//   - every create-tailworks template depends on the workspace packages at
 //     "^<version>", the range `npm install` resolves after a release;
 //   - the published packages carry what npm needs: name, license,
 //     repository, publishConfig.access "public", and "files".
@@ -35,7 +35,7 @@ for (const d of fs.readdirSync(pkgDir).sort()) {
   if (!fs.existsSync(f)) continue;
   workspaces.set(JSON.parse(fs.readFileSync(f, "utf8")).name, f);
 }
-const tmplDir = path.join(pkgDir, "create-twd", "templates");
+const tmplDir = path.join(pkgDir, "create-tailworks", "templates");
 const templates = fs
   .readdirSync(tmplDir)
   .sort()

@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	v1 "github.com/rosskukulinski/twd/hostd/mgmtapi/v1"
+	v1 "github.com/rosskukulinski/tailworks/hostd/mgmtapi/v1"
 )
 
 // LogsOptions selects a workload log read (GetWorkloadLogs).

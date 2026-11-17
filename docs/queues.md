@@ -1,6 +1,6 @@
 # Queues
 
-twd runs Cloudflare-style Queues. A Worker sends messages with
+tailworks runs Cloudflare-style Queues. A Worker sends messages with
 `env.QUEUE.send()`, and a Worker's `queue()` handler consumes them in
 batches, with retries and a dead-letter queue. The producer and the consumer
 can be different workloads on different hosts. The design is
@@ -75,14 +75,14 @@ Delivery is at least once.
   `msg.attempts` counts deliveries, starting at 1.
 - **Crashes and moves lose nothing.** Messages live in mgmt's database,
   not on a host. A claimed batch is hidden for a visibility timeout (60 s,
-  `twd-hostd -queue-visibility`). hostd extends it while `queue()` runs. If
+  `tw-hostd -queue-visibility`). hostd extends it while `queue()` runs. If
   workerd dies mid-batch, the batch is retried. If hostd or its host dies,
   the timeout expires and the batch is delivered again. A batch that never
   reached `queue()` (workerd restarting) is handed back without counting
   an attempt.
 - **Who consumes.** The host holding the consumer workload's lease runs
   the consumer, and only while its heartbeat to mgmt is fresh (the same
-  rule as cron triggers). When the workload moves (`twd deploy --replace`,
+  rule as cron triggers). When the workload moves (`tw deploy --replace`,
   a failover), the new host takes over. A batch the old host was still
   running is delivered again if the old host can no longer settle it.
 - **Order** is best effort: oldest first, but retries, delays and
@@ -93,7 +93,7 @@ Delivery is at least once.
 
 - A queue belongs to the **tenant** (your tailnet), as a Cloudflare queue
   belongs to the account. Queues are created on first use, or with
-  `twd queues create`.
+  `tw queues create`.
 - **The deploy is the grant.** mgmt serves a host only the queues the
   workload's latest deployment declares: `queues.producers` to send,
   `queues.consumers` to consume. The consumer's `max_retries`,
@@ -101,31 +101,31 @@ Delivery is at least once.
   acts only for workloads whose lease it holds, so a host that lost a
   workload can't send or consume for it.
 - Message bodies are encrypted at rest in mgmt's database with a per-queue
-  key in custody. `twd queues rm` deletes the key too.
+  key in custody. `tw queues rm` deletes the key too.
 - A `queue()` run has no caller, like a cron run, and its outbound
   `fetch()` leaves from the workload's own node. It may create Durable Objects through its `env`, as a tailnet
   request may.
 - Nobody on the tailnet can invoke `queue()`. hostd delivers batches over
-  the instance's private ingress as `cf.twd.kind = "queue"`, which only
+  the instance's private ingress as `cf.tw.kind = "queue"`, which only
   hostd can set.
 
 ## Operating queues
 
 ```sh
-twd queues ls                       # backlog, in flight, delayed, last consumer
-twd queues info jobs
-twd queues messages jobs-dlq        # read messages without claiming them
-twd queues send jobs '{"retry": 7}' # or --text 'hello', or the body on stdin
-twd queues purge jobs               # delete every message
-twd queues rm jobs                  # delete the queue, its messages and its key
-twd queues create jobs
+tw queues ls                       # backlog, in flight, delayed, last consumer
+tw queues info jobs
+tw queues messages jobs-dlq        # read messages without claiming them
+tw queues send jobs '{"retry": 7}' # or --text 'hello', or the body on stdin
+tw queues purge jobs               # delete every message
+tw queues rm jobs                  # delete the queue, its messages and its key
+tw queues create jobs
 ```
 
 HTTP pull consumers (`"type": "http_pull"`) use mgmt's API:
 `POST /v1/tenants/{id}/queues/{queue}/messages/pull` and `…/messages/ack`
 ([contract](contracts/mgmt-api.md)). They have Cloudflare's pull shape:
 lease IDs, a visibility timeout, and per-message retries with delays. The
-caller needs twd's admin capability (a tailnet identity, never a token).
+caller needs tailworks' admin capability (a tailnet identity, never a token).
 
 ## Differences from Cloudflare
 
@@ -135,12 +135,12 @@ caller needs twd's admin capability (a tailnet identity, never a token).
   host. Cloudflare scales up to it.
 - No per-queue settings: `delivery_delay` is per producer binding, and
   messages are kept until consumed (no `message_retention_period`).
-- HTTP pull is admin-only, through twd's API (not Cloudflare's REST API).
+- HTTP pull is admin-only, through tailworks' API (not Cloudflare's REST API).
 - Errors from `send()` read `Error: [<code>] <message> (<HTTP status>)`,
-  with twd's [error codes](errors.md) (`queue_limit`, `queue_unavailable`).
+  with tailworks' [error codes](errors.md) (`queue_limit`, `queue_unavailable`).
 
 ## Local development
 
-`twd dev` runs producers and consumers against its in-memory mgmt, so a
+`tw dev` runs producers and consumers against its in-memory mgmt, so a
 send from your Worker reaches its own `queue()` handler. Dev queues last
-one `twd dev` run.
+one `tw dev` run.

@@ -1,13 +1,13 @@
 # npm publish: when a maintainer publishes a GitHub release (the draft that
-# release.yml built), publish @twd/tailnet, @twd/node, @twd/mcp and
-# create-twd at the same version, from the same tag (ADR-041 §9: npm
+# release.yml built), publish @tailworks/tailnet, @tailworks/node, @tailworks/mcp and
+# create-tailworks at the same version, from the same tag (ADR-041 §9: npm
 # follows the GitHub release). scripts/npm-publish.sh checks that every
 # package and template is at the tag's version first, and skips packages
 # already published, so re-running it (or running it by hand for an
 # existing tag) is safe.
 #
 # Needs the repository secret NPM_TOKEN (an npm automation or granular
-# token that may publish the @twd scope and create-twd). Without it the job
+# token that may publish the @tailworks scope and create-tailworks). Without it the job
 # says so and does nothing, so forks and repos without npm access don't
 # fail. release.yml's gates already ran a --dry-run of the same script.
 #

@@ -14,7 +14,7 @@ ID order, once each; `schema_migrations` records which ran.
 - **Expand only, by default:** add tables, columns with a default or
   nullable, indexes. An older mgmt binary (N−1) keeps working against the
   expanded schema.
-- **Contract** (drop, rename, tighten a constraint): put `-- twd:contract`
+- **Contract** (drop, rename, tighten a constraint): put `-- tw:contract`
   on its own line. It ships no earlier than the release after the one that
   stopped using the old shape, and it raises the store's minimum binary
   version to the applying binary's version, so an older binary refuses to

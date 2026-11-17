@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 )
 
-// FS keeps blobs as files under Root (the homelab and twd dev backend).
+// FS keeps blobs as files under Root (the homelab and tw dev backend).
 // A put writes a temporary file in the blob's directory, syncs it and
 // renames it into place, so a blob is either whole or absent.
 type FS struct {

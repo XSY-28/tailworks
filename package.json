@@ -1,11 +1,11 @@
 {
-  "name": "twd-monorepo",
+  "name": "tailworks-monorepo",
   "private": true,
   "workspaces": [
     "js/packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @twd/tailnet && npm run build -w @twd/mcp",
+    "build": "npm run build -w @tailworks/tailnet && npm run build -w @tailworks/mcp",
     "test": "npm run build && npm test --workspaces --if-present"
   },
   "devDependencies": {

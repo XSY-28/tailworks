@@ -1,5 +1,5 @@
-// Platform-injected runtime. twd-hostd's generated shims import this module
-// (bundled as __twd_rt.js) to install ctx.tailnet on Durable Object state
+// Platform-injected runtime. tw-hostd's generated shims import this module
+// (bundled as __tw_rt.js) to install ctx.tailnet on Durable Object state
 // and on the Worker ExecutionContext. Tenant code reaches it as
 // `this.ctx.tailnet` / `ctx.tailnet` (RFC §6.1); it never imports it.
 //
@@ -44,7 +44,7 @@ export interface TailnetApiStub {
 
 export interface SpawnOptions {
   name: string;
-  /** Must be ⊆ the parent's effective caps (checked by twd-mgmt). */
+  /** Must be ⊆ the parent's effective caps (checked by tw-mgmt). */
   caps?: Record<string, unknown>;
   ttl?: string;
   principal?: "inherit" | "none";
@@ -85,7 +85,7 @@ export interface Self {
 }
 
 export function createTailnetContext(tw: TailnetApiStub, env: Record<string, any>, bindings: BindingMap, self?: Self, ticket?: string): TailnetContext {
-  if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "twd platform binding missing (not running on twd?)");
+  if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "tw platform binding missing (not running on tailworks?)");
   const op = async (name: string, args: Record<string, unknown> = {}) => {
     // The request's create ticket admits a Worker-level spawn (hostd checks
     // it); an object's own spawns are attested by `as` instead.
@@ -209,13 +209,13 @@ function installAlarmShim(ctx: any, tw: TailnetApiStub) {
 
 /** wrapFacetClass wraps a tenant DO class run as a facet (per-object egress). */
 export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts: { container?: ContainerSpec; workflows?: Record<string, string> } = {}) {
-  if (typeof C !== "function") throw new Error(`twd: durable_objects class ${name} is not exported by the main module`);
+  if (typeof C !== "function") throw new Error(`tw: durable_objects class ${name} is not exported by the main module`);
   const W = {
     [name]: class extends C {
       constructor(ctx: any, env: any) {
-        const tw = env?.__TWD;
+        const tw = env?.__TW;
         // Bindings admit before they reach an object (chained creation by
-        // an attested object; hostd records it), and __TWD stays platform-only.
+        // an attested object; hostd records it), and __TW stays platform-only.
         const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
         // Workflow bindings: the platform's WorkflowGate, as the Workflow API.
         for (const k of Object.keys(opts.workflows ?? {})) if (e?.[k]) e[k] = workflowClient(e[k]);
@@ -227,13 +227,13 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
         twOf.set(this, tw);
       }
       // Called by the Host DO when the delegated alarm fires.
-      async __twd_alarm(info: unknown) {
+      async __tw_alarm(info: unknown) {
         const self = this as any;
         if (typeof self.alarm === "function") return self.alarm(info);
       }
       // Called by the Host DO with a request the container sent to an
       // intercepted destination (hostd's sandbox egress proxy).
-      async __twd_intercept(key: string, req: Request) {
+      async __tw_intercept(key: string, req: Request) {
         return dispatchIntercept((this as any).ctx, key, req);
       }
     },
@@ -249,7 +249,7 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
 }
 
 // Sandbox SDK preview URLs (exposePort, proxyToSandbox) need public
-// ingress (ADR-029): on twd they fail with a typed not_supported error
+// ingress (ADR-029): on tailworks they fail with a typed not_supported error
 // instead of minting URLs nothing can reach.
 const PREVIEW_HEADER = "x-sandbox-preview-proxy";
 function noPreviewURLs(W: any) {
@@ -266,7 +266,7 @@ function noPreviewURLs(W: any) {
         const e = notSupportedPreview();
         return new Response(JSON.stringify({ code: "not_supported", message: e.message }), {
           status: 501,
-          headers: { "content-type": "application/json", "twd-error": "not_supported" },
+          headers: { "content-type": "application/json", "tw-error": "not_supported" },
         });
       }
       return f.call(this, req);
@@ -280,14 +280,14 @@ function noPreviewURLs(W: any) {
  * tells hostd the object exists (so its node comes up) and enforces kill.
  */
 export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts: { node: boolean; container?: ContainerSpec }) {
-  if (typeof C !== "function") throw new Error(`twd: durable_objects class ${name} is not exported by the main module`);
+  if (typeof C !== "function") throw new Error(`tw: durable_objects class ${name} is not exported by the main module`);
   const proto = C.prototype;
   const killedResponse = (reason: string) =>
     new TailnetError("killed", `object ${name} was killed: ${reason}`).toResponse();
   const W: any = {
     [name]: class extends C {
       constructor(ctx: any, env: any) {
-        const tw = env?.__TWD;
+        const tw = env?.__TW;
         const oname = ctx?.id?.name;
         const self = oname ? { class: name, name: oname } : undefined;
         const e = guardEnv(env, bindings, "tailnet", admitter(tw, self ? { as: self } : {}));
@@ -301,10 +301,10 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
               const err = TailnetError.from((r as any).error);
-              if (err.code === "create_not_admitted") (this as any).__twd_denied = err;
+              if (err.code === "create_not_admitted") (this as any).__tw_denied = err;
             }
           }, () => {});
-          (this as any).__twd_ensure = p;
+          (this as any).__tw_ensure = p;
           try {
             ctx.waitUntil?.(p);
           } catch {
@@ -312,13 +312,13 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
           }
         }
       }
-      async __twd_kill(reason: string) {
-        (this as any).ctx.storage.kv.put("__twd_killed", reason || "killed");
+      async __tw_kill(reason: string) {
+        (this as any).ctx.storage.kv.put("__tw_killed", reason || "killed");
         return true;
       }
-      async __twd_intercept(key: string, req: Request) {
+      async __tw_intercept(key: string, req: Request) {
         const self = this as any;
-        const k = self.ctx.storage.kv.get("__twd_killed");
+        const k = self.ctx.storage.kv.get("__tw_killed");
         if (k) return killedResponse(k);
         return dispatchIntercept(self.ctx, key, req);
       }
@@ -326,10 +326,10 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
   }[name];
   if (typeof proto.fetch === "function") {
     W.prototype.fetch = async function (this: any, req: Request) {
-      const k = this.ctx.storage.kv.get("__twd_killed");
+      const k = this.ctx.storage.kv.get("__tw_killed");
       if (k) return killedResponse(k);
-      if (this.__twd_ensure) await this.__twd_ensure;
-      if (this.__twd_denied) return (this.__twd_denied as TailnetError).toResponse();
+      if (this.__tw_ensure) await this.__tw_ensure;
+      if (this.__tw_denied) return (this.__tw_denied as TailnetError).toResponse();
       return runTraced(req, () => proto.fetch.call(this, req), spanFlusher(twOf.get(this), this.ctx));
     };
   }
@@ -342,7 +342,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
 // Every new object name mints a tailnet node, so creating one is a platform
 // decision: hostd "admit". Tenant code reaches Durable Objects only through
 // a guarded env whose namespaces admit a name before any call reaches it:
-//   - a tailnet request admits with its create ticket (cf.twd.ticket, which
+//   - a tailnet request admits with its create ticket (cf.tw.ticket, which
 //     only hostd sets and verifies);
 //   - an object admits as itself (attested by the platform; chained
 //     creation is the app's logic);
@@ -350,7 +350,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
 //     set only by netd) admits only names its class opens with
 //     public.create, under its cap; its ctx.tailnet cannot spawn or kill.
 // A raw binding (import { env } from "cloudflare:workers", an env cached in
-// a global, __TWD itself) admits nothing: hostd refuses to create for it
+// a global, __TW itself) admits nothing: hostd refuses to create for it
 // (create_not_admitted), so bypassing the guard loses the ability to mint
 // nodes rather than gaining it. Existing objects are reachable either way.
 
@@ -363,7 +363,7 @@ type Admitter = (cls: string, name: string) => Promise<{ ok: boolean; error?: Re
 /** admitter builds the admit call for one env: extra is {ticket} for a request, {as} for a plain object, {} for a facet. */
 function admitter(tw: TailnetApiStub | undefined, extra: Record<string, unknown>): Admitter {
   return async (cls, name) => {
-    if (!tw || typeof tw.call !== "function") return { ok: false, error: { code: "create_not_admitted", message: "twd platform binding missing; refusing to reach a Durable Object" } };
+    if (!tw || typeof tw.call !== "function") return { ok: false, error: { code: "create_not_admitted", message: "tw platform binding missing; refusing to reach a Durable Object" } };
     return tw.call("admit", { class: cls, name, ...extra });
   };
 }
@@ -452,7 +452,7 @@ function guardNamespace(adm: Admitter, cls: string, ns: any, mode: GuardMode): a
 function guardEnv(env: any, bindings: BindingMap, mode: GuardMode, adm: Admitter): any {
   if (!env || typeof env !== "object") return env;
   const out: Record<string, unknown> = { ...env };
-  delete out.__TWD;
+  delete out.__TW;
   wrapStores(out); // a facet's storage bindings (D1)
   for (const [k, cls] of Object.entries(bindings)) {
     if (env[k]) out[k] = guardNamespace(adm, cls, env[k], mode);
@@ -462,12 +462,12 @@ function guardEnv(env: any, bindings: BindingMap, mode: GuardMode, adm: Admitter
 
 /** guardTailnetEnv guards env as for a tailnet caller without a create ticket (Workflows). */
 export function guardTailnetEnv(env: any, bindings: BindingMap): any {
-  return guardEnv(env, bindings, "tailnet", admitter(env?.__TWD, {}));
+  return guardEnv(env, bindings, "tailnet", admitter(env?.__TW, {}));
 }
 
 /** publicEnv returns env guarded for a public request (kept for callers of the old name). */
 export function publicEnv(env: any, bindings: BindingMap): any {
-  return guardEnv(env, bindings, "public", admitter(env?.__TWD, {}));
+  return guardEnv(env, bindings, "public", admitter(env?.__TW, {}));
 }
 
 /** publicTailnet is ctx.tailnet for a public request: no spawn, no kill. */
@@ -496,13 +496,13 @@ function asResponse(e: unknown): Response | null {
 
 /** requestTicket is the create ticket hostd stamped on a tailnet request or cron run. */
 function requestTicket(req: any): string | undefined {
-  const t = req?.cf?.twd?.ticket;
+  const t = req?.cf?.tailworks?.ticket;
   return typeof t === "string" && t ? t : undefined;
 }
 
-/** isScheduledReq: the platform dispatching a cron run (cf.twd.kind "scheduled", set by hostd). */
+/** isScheduledReq: the platform dispatching a cron run (cf.tw.kind "scheduled", set by hostd). */
 function isScheduledReq(req: any): boolean {
-  return req?.cf?.twd?.kind === "scheduled";
+  return req?.cf?.tailworks?.kind === "scheduled";
 }
 
 /**
@@ -511,7 +511,7 @@ function isScheduledReq(req: any): boolean {
  * platform's {outcome, noRetry, error} record.
  */
 async function runScheduled(scheduledFn: ((c: any, ...rest: any[]) => unknown) | undefined, req: any, extra: unknown[]): Promise<Response> {
-  const t = req.cf.twd;
+  const t = req.cf.tw;
   let noRetry = false;
   const controller = {
     cron: String(t.cron ?? ""),
@@ -538,7 +538,7 @@ async function runScheduled(scheduledFn: ((c: any, ...rest: any[]) => unknown) |
  * producer can send one). queueBatch strips it before the handler sees the
  * batch; hostd verifies the ticket like a request's.
  */
-const QUEUE_TICKET_ID = "__twd_ticket";
+const QUEUE_TICKET_ID = "__tw_ticket";
 
 function queueBatch(batch: any): { batch: any; ticket?: string } {
   const msgs: any[] = Array.isArray(batch?.messages) ? batch.messages : [];
@@ -570,24 +570,24 @@ function handlerKeys(H: any): string[] {
 export function wrapHandler(H: any, bindings: BindingMap) {
   if (!H) {
     return {
-      fetch: () => new TailnetError("unknown_object", "this app has no default export (Worker); address objects via their own nodes or /_twd/o/<Class>/<name>/").toResponse(),
+      fetch: () => new TailnetError("unknown_object", "this app has no default export (Worker); address objects via their own nodes or /_tw/o/<Class>/<name>/").toResponse(),
     };
   }
   if (typeof H === "function") {
     // A WorkerEntrypoint class (one instance per request).
     const C = class extends H {
       constructor(ctx: any, env: any) {
-        const tw = env?.__TWD;
+        const tw = env?.__TW;
         const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
         define(ctx, createTailnetContext(tw, e, bindings));
         super(ctx, e);
-        (this as any).__twd = tw;
+        (this as any).__tw = tw;
       }
     };
     if (typeof H.prototype?.fetch === "function") {
       const f = H.prototype.fetch;
       (C.prototype as any).fetch = async function (this: any, req: Request) {
-        const tw: TailnetApiStub | undefined = this.__twd;
+        const tw: TailnetApiStub | undefined = this.__tw;
         if (isPublicReq(req)) {
           this.env = guardEnv(this.env, bindings, "public", admitter(tw, {}));
           if (tw) define(this.ctx, publicTailnet(createTailnetContext(tw, this.env, bindings)));
@@ -612,7 +612,7 @@ export function wrapHandler(H: any, bindings: BindingMap) {
     if (typeof H.prototype?.queue === "function") {
       const qf = H.prototype.queue;
       (C.prototype as any).queue = async function (this: any, batch: any) {
-        const tw: TailnetApiStub | undefined = this.__twd;
+        const tw: TailnetApiStub | undefined = this.__tw;
         const q = queueBatch(batch);
         this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket: q.ticket }));
         if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, undefined, q.ticket));
@@ -625,14 +625,14 @@ export function wrapHandler(H: any, bindings: BindingMap) {
   for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
     out[k] = function (this: unknown, a: unknown, env: any, ctx: any) {
-      const tw: TailnetApiStub | undefined = env?.__TWD;
+      const tw: TailnetApiStub | undefined = env?.__TW;
       const pub = k === "fetch" && isPublicReq(a);
       if (pub) {
         env = guardEnv(env, bindings, "public", admitter(tw, {}));
         if (ctx && tw) define(ctx, publicTailnet(createTailnetContext(tw, env, bindings)));
       } else {
         // The create ticket rides on the request (a cron run is dispatched
-        // as a fetch with cf.twd.kind "scheduled" and its own ticket), or on
+        // as a fetch with cf.tw.kind "scheduled" and its own ticket), or on
         // a queue batch's first message.
         let ticket: string | undefined;
         if (k === "fetch") ticket = requestTicket(a);

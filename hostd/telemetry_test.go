@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/obs"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -329,16 +329,16 @@ func TestTelemetry(t *testing.T) {
 			t.Fatalf("%d %v", rec.Code, rec.Header())
 		}
 		for _, want := range []string{
-			`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",twd_tenant_id="` + e.TenantID + `",twd_workload="obsprobe"}`,
-			`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="500",twd_tenant_id="` + e.TenantID + `",twd_workload="obsprobe"} 1`,
-			`twd_invocations_total{twd_tenant_id="` + e.TenantID + `",twd_workload="obsprobe",twd_object_class="Obj",twd_invocation_event="fetch",twd_invocation_outcome="ok"}`,
-			`twd_invocation_outcome="exception"`,
-			`http_client_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",twd_tenant_id="` + e.TenantID + `",twd_workload="obsprobe"`,
-			`twd_do_objects{twd_tenant_id="` + e.TenantID + `",twd_workload="obsprobe",twd_object_class="Obj",twd_object_status="ready"} 1`,
-			`twd_do_wakeups_total{twd_tenant_id="` + e.TenantID + `",twd_workload="obsprobe",twd_object_class="Obj"}`,
-			`twd_host_capacity{twd_resource="nodes"}`,
-			`twd_workloads{twd_tenant_id="` + e.TenantID + `",twd_workload_status="active"}`,
-			"# TYPE twd_logs_dropped_total counter",
+			`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",tw_tenant_id="` + e.TenantID + `",tw_workload="obsprobe"}`,
+			`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="500",tw_tenant_id="` + e.TenantID + `",tw_workload="obsprobe"} 1`,
+			`tw_invocations_total{tw_tenant_id="` + e.TenantID + `",tw_workload="obsprobe",tw_object_class="Obj",tw_invocation_event="fetch",tw_invocation_outcome="ok"}`,
+			`tw_invocation_outcome="exception"`,
+			`http_client_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",tw_tenant_id="` + e.TenantID + `",tw_workload="obsprobe"`,
+			`tw_do_objects{tw_tenant_id="` + e.TenantID + `",tw_workload="obsprobe",tw_object_class="Obj",tw_object_status="ready"} 1`,
+			`tw_do_wakeups_total{tw_tenant_id="` + e.TenantID + `",tw_workload="obsprobe",tw_object_class="Obj"}`,
+			`tw_host_capacity{tw_resource="nodes"}`,
+			`tw_workloads{tw_tenant_id="` + e.TenantID + `",tw_workload_status="active"}`,
+			"# TYPE tw_logs_dropped_total counter",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("/metrics lacks %s", want)
@@ -397,7 +397,7 @@ func TestTelemetry(t *testing.T) {
 		chk(tpEcho.SpanID, tpDO.SpanID, obs.SpanKindClient, "GET")
 		// Metrics are the workload's only.
 		for _, p := range coll.find("/v1/metrics") {
-			if strings.Contains(js(p.body), "twd.host.capacity") {
+			if strings.Contains(js(p.body), "tw.host.capacity") {
 				t.Fatal("host-level metrics exported to a tenant")
 			}
 		}

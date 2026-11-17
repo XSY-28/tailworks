@@ -3,7 +3,7 @@
 # a same-version repair keeps the older .prev, --uninstall removes it all;
 # install.sh and get.sh refuse a release that isn't signed by a pinned key
 # (issue #71). Hermetic (fake releases in a temp dir, signed by a throwaway
-# key that TWD_RELEASE_SIGNERS pins); run: sh scripts/install_test.sh
+# key that TW_RELEASE_SIGNERS pins); run: sh scripts/install_test.sh
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d)
@@ -18,28 +18,28 @@ command -v ssh-keygen >/dev/null || { echo "install_test: needs ssh-keygen (Open
 # A release key the test pins, and one it doesn't.
 ssh-keygen -q -t ed25519 -N '' -C test -f "$T/key"
 ssh-keygen -q -t ed25519 -N '' -C other -f "$T/other"
-printf 'twd-release namespaces="twd-release" %s\n' "$(cat "$T/key.pub")" >"$T/allowed_signers"
-export TWD_RELEASE_SIGNERS=$T/allowed_signers
+printf 'tw-release namespaces="tw-release" %s\n' "$(cat "$T/key.pub")" >"$T/allowed_signers"
+export TW_RELEASE_SIGNERS=$T/allowed_signers
 sign() { # key file
 	rm -f "$2.sig"
-	ssh-keygen -q -Y sign -f "$1" -n twd-release "$2"
+	ssh-keygen -q -Y sign -f "$1" -n tw-release "$2"
 }
 
 mkrel() { # version [dir]: a signed release directory (default $T/rel-<version>)
 	d=${2:-$T/rel-$1}
-	mkdir -p "$d/bin" "$d/share/twd"
-	printf '#!/bin/sh\necho twd %s\n' "$1" >"$d/bin/twd"
+	mkdir -p "$d/bin" "$d/share/tailworks"
+	printf '#!/bin/sh\necho tw %s\n' "$1" >"$d/bin/tw"
 	printf '#!/bin/sh\necho workerd\n' >"$d/bin/workerd"
 	chmod 755 "$d/bin/"*
 	printf '%s\n' "$1" >"$d/VERSION"
-	printf '{"version":"%s","os":"%s","arch":"%s"}\n' "$1" "$os" "$arch" >"$d/share/twd/release.json"
+	printf '{"version":"%s","os":"%s","arch":"%s"}\n' "$1" "$os" "$arch" >"$d/share/tailworks/release.json"
 	cp "$ROOT/scripts/install.sh" "$d/install.sh"
 	(cd "$d" && find . -type f ! -name SHA256SUMS ! -name SHA256SUMS.sig | sed 's|^\./||' | while read -r f; do sha "$f"; done >SHA256SUMS)
 	sign "$T/key" "$d/SHA256SUMS"
 }
 fail() { echo "FAIL: $*" >&2; exit 1; }
 P=$T/prefix
-export TWD_HOME=$P
+export TW_HOME=$P
 
 mkrel 0.1.0
 mkrel 0.2.0
@@ -51,17 +51,17 @@ sh "$T/rel-0.1.0/install.sh" >/dev/null
 sh "$T/rel-0.2.0/install.sh" >/dev/null
 [ "$(cat "$P/VERSION")" = 0.2.0 ] || fail "upgrade"
 [ "$(cat "$P/VERSION.prev")" = 0.1.0 ] || fail "VERSION.prev after upgrade"
-[ "$("$P/bin.prev/twd")" = "twd 0.1.0" ] || fail "bin.prev is not 0.1.0"
+[ "$("$P/bin.prev/tw")" = "tw 0.1.0" ] || fail "bin.prev is not 0.1.0"
 
 sh "$T/rel-0.2.0/install.sh" >/dev/null # repair: keeps 0.1.0 as .prev
 [ "$(cat "$P/VERSION.prev")" = 0.1.0 ] || fail "repair replaced .prev"
 
 sh "$P/install.sh" --rollback >/dev/null
 [ "$(cat "$P/VERSION")" = 0.1.0 ] || fail "rollback VERSION"
-[ "$("$P/bin/twd")" = "twd 0.1.0" ] || fail "rollback bin"
+[ "$("$P/bin/tw")" = "tw 0.1.0" ] || fail "rollback bin"
 [ "$(cat "$P/VERSION.prev")" = 0.2.0 ] || fail "rollback did not keep 0.2.0 as .prev"
 sh "$P/install.sh" --rollback >/dev/null
-[ "$("$P/bin/twd")" = "twd 0.2.0" ] || fail "second rollback did not return"
+[ "$("$P/bin/tw")" = "tw 0.2.0" ] || fail "second rollback did not return"
 
 # Refuses while running (a live supervisor.pid), unless --force.
 sleep 30 &
@@ -93,7 +93,7 @@ mkrel 0.3.0 "$T/garbled-sig"
 echo garbage >"$T/garbled-sig/SHA256SUMS.sig"
 refused "a garbled signature" "$T/garbled-sig"
 mkrel 0.3.0 "$T/resummed"
-printf '#!/bin/sh\necho evil\n' >"$T/resummed/bin/twd"
+printf '#!/bin/sh\necho evil\n' >"$T/resummed/bin/tw"
 (cd "$T/resummed" && find . -type f ! -name SHA256SUMS ! -name SHA256SUMS.sig | sed 's|^\./||' | while read -r f; do sha "$f"; done >SHA256SUMS)
 refused "a changed binary with a re-made SHA256SUMS" "$T/resummed"
 mkrel 0.3.0 "$T/unsigned"
@@ -101,7 +101,7 @@ rm "$T/unsigned/SHA256SUMS.sig"
 refused "an unsigned release" "$T/unsigned"
 grep -q 'not signed' "$T/out" || fail "unsigned message: $(cat "$T/out")"
 mkrel 0.3.0 "$T/nokey"
-(TWD_RELEASE_SIGNERS=/dev/null && refused "with no key pinned" "$T/nokey")
+(TW_RELEASE_SIGNERS=/dev/null && refused "with no key pinned" "$T/nokey")
 grep -q 'pins no release signing key' "$T/out" || fail "no pinned key message: $(cat "$T/out")"
 rm -rf "$P"
 sh "$T/unsigned/install.sh" --allow-unsigned >"$T/out" 2>&1 || fail "--allow-unsigned: $(cat "$T/out")"
@@ -114,12 +114,12 @@ grep -q 'local build' "$T/out" || fail "a local build did not warn"
 rm -rf "$P"
 mkrel 0.3.0 "$T/good"
 sh "$T/good/install.sh" >"$T/out" 2>&1 || fail "a signed release: $(cat "$T/out")"
-grep -q 'signed by a twd release key' "$T/out" || fail "signed release message: $(cat "$T/out")"
+grep -q 'signed by a tw release key' "$T/out" || fail "signed release message: $(cat "$T/out")"
 rm -rf "$P"
 
 # get.sh: SHA256SUMS.sig is checked before the tarball is opened.
 mkmirror() { # dir version: a fake GitHub release (tarball, SHA256SUMS, SHA256SUMS.sig)
-	n=twd-$2-$os-$arch
+	n=tailworks-$2-$os-$arch
 	mkdir -p "$1/stage"
 	mkrel "$2" "$1/stage/$n"
 	tar -czf "$1/$n.tar.gz" -C "$1/stage" "$n"
@@ -128,7 +128,7 @@ mkmirror() { # dir version: a fake GitHub release (tarball, SHA256SUMS, SHA256SU
 	sign "$T/key" "$1/SHA256SUMS"
 }
 get() { # dir version
-	TWD_RELEASE_BASE="file://$1" sh "$ROOT/scripts/get.sh" "v$2" >"$T/out" 2>&1
+	TW_RELEASE_BASE="file://$1" sh "$ROOT/scripts/get.sh" "v$2" >"$T/out" 2>&1
 }
 mkmirror "$T/m-good" 0.3.0
 get "$T/m-good" 0.3.0 || fail "get.sh a signed release: $(cat "$T/out")"

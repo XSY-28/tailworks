@@ -4,7 +4,7 @@
 # here before use; a mismatch deletes the file and fails the build. Bumping a
 # version means bumping its hash in the same commit.
 #
-# Arch names: twd uses Go's (amd64, arm64); kernel.org, Firecracker and the
+# Arch names: tailworks uses Go's (amd64, arm64); kernel.org, Firecracker and the
 # Firecracker CI bucket use x86_64/aarch64; npm names amd64 "64".
 
 # Ubuntu 24.04 base rootfs (cdimage.ubuntu.com, SHA256SUMS of 24.04.5): the
@@ -23,7 +23,7 @@ CA_DEB_SHA256=641de77d8f142cfd62a1a6f964ba67b20754d3337c480efb529d086075a06c9a
 
 # Guest kernel: kernel.org 6.1 LTS with Firecracker's CI config for that
 # kernel line (firecracker-ci/v1.15/<arch>/vmlinux-6.1.155.config, the build
-# ~/fc/vmlinux came from) plus guest/kernel/twd.config (erofs + overlayfs for
+# ~/fc/vmlinux came from) plus guest/kernel/tw.config (erofs + overlayfs for
 # container mode).
 KERNEL_VERSION=6.1.155
 KERNEL_URL=https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VERSION.tar.xz

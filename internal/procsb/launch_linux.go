@@ -17,7 +17,7 @@ import (
 )
 
 // The launcher runs from package init, before main or testing.Main, in any
-// binary that imports procsb (twd-hostd, twd, hostd's test binaries).
+// binary that imports procsb (tw-hostd, tailworks, hostd's test binaries).
 func init() {
 	if len(os.Args) > 1 && os.Args[1] == ExecArg {
 		os.Exit(launcherMain(os.Args[2:]))
@@ -25,7 +25,7 @@ func init() {
 }
 
 // systemRO are read-and-execute everywhere (if present): the OS, its
-// libraries, CA certificates, time zones. They hold nothing of twd's.
+// libraries, CA certificates, time zones. They hold nothing of tailworks'.
 var systemRO = []string{"/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc", "/opt", "/nix/store", "/run/current-system"}
 
 // procRO and sysRO are the global /proc and /sys files runtimes read (CPU
@@ -124,7 +124,7 @@ func (p *Profile) Apply() error {
 func launcherMain(args []string) int {
 	runtime.LockOSThread()
 	fail := func(format string, a ...any) int {
-		fmt.Fprintf(os.Stderr, "twd sandbox: "+format+"\n", a...)
+		fmt.Fprintf(os.Stderr, "tw sandbox: "+format+"\n", a...)
 		return 126
 	}
 	if len(args) < 3 || args[0] != "-f" {

@@ -44,7 +44,7 @@ func newH10World(t *testing.T, skewB time.Duration) *h10World {
 	ctx := context.Background()
 	dir := t.TempDir()
 	dsn := filepath.Join(dir, "mgmt.db")
-	if pg := os.Getenv("TWD_TEST_POSTGRES_DSN"); pg != "" {
+	if pg := os.Getenv("TW_TEST_POSTGRES_DSN"); pg != "" {
 		dsn = pg
 	}
 	st, err := OpenStore(ctx, dsn)
@@ -84,7 +84,7 @@ func newH10World(t *testing.T, skewB time.Duration) *h10World {
 func (w *h10World) deploy(t *testing.T, m *Mgmt, host string) (DeployResponse, error) {
 	t.Helper()
 	return m.Deploy(context.Background(), DeployRequest{TenantID: w.tenant, Workload: "w", Host: host,
-		Bundle: makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})})
+		Bundle: makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})})
 }
 
 // TestMM_H10_LeaseClockSkew probes H10: lease expiry and host liveness are

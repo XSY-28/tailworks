@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/image"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/hostd/image"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
 )
 
 type execResult struct {
@@ -78,25 +78,25 @@ func checkCPUShare(t *testing.T, s string) {
 }
 
 // TestContainerSmoke boots a container guest from a real image on this
-// OS's backend (Linux: root, KVM, TWD_VM_CONTAINER_KERNEL (erofs),
-// TWD_VM_ROOTFS; macOS: vz, see ctrSmokeBackend) and TWD_CTR_IMAGES (a dir
+// OS's backend (Linux: root, KVM, TW_VM_CONTAINER_KERNEL (erofs),
+// TW_VM_ROOTFS; macOS: vz, see ctrSmokeBackend) and TW_CTR_IMAGES (a dir
 // from guest/images/build-sandbox-images.sh for the arch the backend runs),
 // and checks what a hostile tenant inside it can and can't do.
 func TestContainerSmoke(t *testing.T) {
-	imgs := os.Getenv("TWD_CTR_IMAGES")
+	imgs := os.Getenv("TW_CTR_IMAGES")
 	if imgs == "" {
-		t.Skip("TWD_CTR_IMAGES not set")
+		t.Skip("TW_CTR_IMAGES not set")
 	}
 	b, emulated := ctrSmokeBackend(t)
 	st := &image.Store{Dir: filepath.Join(t.TempDir(), "cache"), Sources: []image.Source{image.DirSource{Dir: imgs}}, Emulated: emulated}
 	ctx := context.Background()
 	t0 := time.Now()
-	img, err := st.Get(ctx, "smoke", "twd.local/debian-trixie-python:1")
+	img, err := st.Get(ctx, "smoke", "tw.local/debian-trixie-python:1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("image %s %s (linux/%s) %d MiB, convert %v", img.Ref, img.Digest, img.Config.Architecture, img.SizeB>>20, time.Since(t0))
-	argv, env, err := sandbox.ContainerProcess(img.Config.Config.Entrypoint, img.Config.Config.Cmd, img.Config.Config.Env, nil, map[string]string{"TWD_TEST": "1"})
+	argv, env, err := sandbox.ContainerProcess(img.Config.Config.Entrypoint, img.Config.Config.Cmd, img.Config.Config.Env, nil, map[string]string{"TW_TEST": "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ print(round((time.process_time()-c)/(time.monotonic()-w), 3))
 	if r.out != big || r.code != 0 {
 		t.Fatalf("stdin round trip: %d bytes back, code %d", len(r.out), r.code)
 	}
-	r = runExec(t, c, sandbox.ExecSpec{Argv: []string{"sh", "-c", "echo hello > /workspace/hello.txt && cat /workspace/hello.txt && pwd && id -u && echo x${TWD_TEST}x $X"},
+	r = runExec(t, c, sandbox.ExecSpec{Argv: []string{"sh", "-c", "echo hello > /workspace/hello.txt && cat /workspace/hello.txt && pwd && id -u && echo x${TW_TEST}x $X"},
 		Cwd: "/workspace", Env: []string{"X=y"}}, "")
 	if r.out != "hello\n/workspace\n0\nxx y\n" {
 		t.Fatalf("file/cwd/env: %q", r.out)
@@ -159,7 +159,7 @@ print(round((time.process_time()-c)/(time.monotonic()-w), 3))
 	}
 	// Nothing of the guest's plumbing is visible: no guestd, no config
 	// drive contents, no block devices.
-	r = runExec(t, c, sandbox.ExecSpec{Argv: []string{"sh", "-c", "ls /run/twd /sbin/twd-guestd 2>&1; ls /dev; cat /proc/mounts | grep -c vd"}}, "")
+	r = runExec(t, c, sandbox.ExecSpec{Argv: []string{"sh", "-c", "ls /run/tailworks /sbin/tw-guestd 2>&1; ls /dev; cat /proc/mounts | grep -c vd"}}, "")
 	if strings.Contains(r.out, "guest.json") || !strings.Contains(r.out, "No such file") || strings.Contains(r.out, "vda") || strings.Contains(r.out, "vdc") {
 		t.Fatalf("guest internals visible: %s", r.out)
 	}

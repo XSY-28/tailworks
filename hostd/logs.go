@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // Workload logs over the push API (mgmt → hostd): GET /v1/logs serves the
 // tail of one workload's app log (workerd.log, the node tier's app.log, or
 // a microVM's serial console), and with follow=1 streams what is appended.
-// mgmt calls it for `twd logs <workload>` from a linked machine
+// mgmt calls it for `tw logs <workload>` from a linked machine
 // (GET /v1/tenants/{id}/workloads/{workload}/logs).
 //
 // The file is always resolved here from the host's own record of the

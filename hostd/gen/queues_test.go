@@ -7,16 +7,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/internal/queuecfg"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/internal/queuecfg"
 )
 
 // TestGenerateQueues: a producer binding becomes workerd's queue binding
 // to the platform's QueueProducer with props naming the queue and binding
 // (and a platform-side twin for facets); a push consumer turns on
 // service_binding_extra_handlers (TENANT.queue()) and is listed in
-// twd-config.json; producers alone don't.
+// tw-config.json; producers alone don't.
 func TestGenerateQueues(t *testing.T) {
 	gen1 := func(q *queuecfg.Config, secrets map[string]string) (string, []byte, error) {
 		app := &bundle.App{
@@ -29,7 +29,7 @@ func TestGenerateQueues(t *testing.T) {
 			return "", nil, err
 		}
 		c, _ := os.ReadFile(filepath.Join(dir, "config.capnp"))
-		cfg, _ := os.ReadFile(filepath.Join(dir, "twd-config.json"))
+		cfg, _ := os.ReadFile(filepath.Join(dir, "tw-config.json"))
 		return string(c), cfg, nil
 	}
 	q, err := queuecfg.Parse([]byte(`{"producers":[{"binding":"JOBS","queue":"jobs"}],"consumers":[{"queue":"jobs"},{"queue":"pulled","type":"http_pull"}]}`))
@@ -42,9 +42,9 @@ func TestGenerateQueues(t *testing.T) {
 	}
 	for _, want := range []string{
 		`(name = "JOBS", queue = (name = "platform", entrypoint = "QueueProducer", props = (json = "{\"binding\":\"JOBS\",\"queue\":\"jobs\"}")))`,
-		`(name = "__TWD_QUEUE_JOBS", queue = (name = "platform", entrypoint = "QueueProducer"`,
+		`(name = "__TW_QUEUE_JOBS", queue = (name = "platform", entrypoint = "QueueProducer"`,
 		`compatibilityFlags = ["service_binding_extra_handlers"]`,
-		`(name = "twd-queue.js", esModule = embed "twd-queue.js")`,
+		`(name = "tw-queue.js", esModule = embed "tw-queue.js")`,
 	} {
 		if !strings.Contains(c, want) {
 			t.Errorf("config.capnp lacks %s", want)
@@ -57,11 +57,11 @@ func TestGenerateQueues(t *testing.T) {
 		}
 	}
 	if err := json.Unmarshal(cfgb, &tc); err != nil || len(tc.Queues.Consumers) != 1 || tc.Queues.Consumers[0] != "jobs" || tc.Queues.Producers[0].Binding != "JOBS" {
-		t.Fatalf("twd-config.json queues: %+v %v", tc.Queues, err)
+		t.Fatalf("tw-config.json queues: %+v %v", tc.Queues, err)
 	}
 	// The tenant never gets the platform-side twin.
 	tenant := c[strings.Index(c, "const tenant"):]
-	if strings.Contains(tenant, "__TWD_QUEUE_") {
+	if strings.Contains(tenant, "__TW_QUEUE_") {
 		t.Error("the tenant worker has a platform queue binding")
 	}
 

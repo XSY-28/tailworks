@@ -1,6 +1,6 @@
 //go:build e2ereal
 
-// Package mgmtreal runs twd-mgmt against tailnet 1 (production control):
+// Package mgmtreal runs tw-mgmt against tailnet 1 (production control):
 // mgmt mints a single-use tag:ttest key → a tsnet node joins with it → a
 // cascade kill deletes the device via the API → the device is verified gone.
 //
@@ -27,11 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tsnet"
 )
 
@@ -65,9 +65,9 @@ func (r *results) check(t *testing.T, name string, ok bool, detail string) bool 
 func ms(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
 
 func TestMgmtRealMintJoinKill(t *testing.T) {
-	keyFile, tailnet := os.Getenv("TWD_E2E_API_KEY_FILE"), os.Getenv("TWD_E2E_TAILNET")
+	keyFile, tailnet := os.Getenv("TW_E2E_API_KEY_FILE"), os.Getenv("TW_E2E_TAILNET")
 	if keyFile == "" || tailnet == "" {
-		t.Skip("TWD_E2E_API_KEY_FILE / TWD_E2E_TAILNET not set")
+		t.Skip("TW_E2E_API_KEY_FILE / TW_E2E_TAILNET not set")
 	}
 	if !allowedTailnets[tailnet] {
 		t.Fatalf("refusing to run against tailnet %q (not in the allow list)", tailnet)
@@ -88,7 +88,7 @@ func TestMgmtRealMintJoinKill(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
-	dir, err := os.MkdirTemp("/tmp", "twd-m2-real-")
+	dir, err := os.MkdirTemp("/tmp", "tw-m2-real-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestMgmtRealMintJoinKill(t *testing.T) {
 			bb, _ := json.Marshal(body)
 			rd = bytes.NewReader(bb)
 		}
-		req, _ := http.NewRequestWithContext(ctx, method, "http://twd-mgmt"+path, rd)
+		req, _ := http.NewRequestWithContext(ctx, method, "http://tw-mgmt"+path, rd)
 		if rd != nil {
 			ct := "application/json"
 			if method == "PATCH" {
@@ -206,7 +206,7 @@ func TestMgmtRealMintJoinKill(t *testing.T) {
 			}
 			req.Header.Set("Content-Type", ct)
 		}
-		req.Header.Set("Twd-Host-ID", hostID)
+		req.Header.Set("Tw-Host-ID", hostID)
 		req.Header.Set(mgmt.HostTokenHeader, hostToken)
 		resp, err := hc.Do(req)
 		if err != nil {

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 func main() {

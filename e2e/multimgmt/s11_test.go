@@ -16,7 +16,7 @@ import (
 // h1's lease is valid (lease_held + Retry-After); after the lease expires a
 // forced redeploy through another replica lands on h2 at epoch+1 and is
 // audited; h1 coming back is revoked and fenced (lease_lost); h2 can join
-// objects at the new epoch. (A real twd-hostd is not used: see LEDGER.)
+// objects at the new epoch. (A real tw-hostd is not used: see LEDGER.)
 func TestMM_S11_HostFailover(t *testing.T) {
 	r := newRun(t, "S11")
 	c := newCluster(t, r, 3)
@@ -34,7 +34,7 @@ func TestMM_S11_HostFailover(t *testing.T) {
 	for _, h := range []string{"h1", "h2"} {
 		c.must(0, h, "PUT", "/v1/hosts/"+h, map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	}
-	bundle := makeBundle(map[string]string{"twd.jsonc": twdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(map[string]string{"tailworks.jsonc": twJSONC, "dist/index.js": "export default {}"})
 	var d1 struct {
 		DeploymentID, Host string
 		Epoch              int64

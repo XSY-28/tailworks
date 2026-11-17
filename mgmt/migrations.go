@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 // Numbered store migrations (ADR-041 §3; the rules are
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 // Migration is one file in migrations/.
 type Migration struct {
 	ID       string // <yyyymmddhhmm>_<slug>
-	Contract bool   // carries "-- twd:contract"
+	Contract bool   // carries "-- tw:contract"
 	common   string
 	pg       string
 	sqlite   string
@@ -99,7 +99,7 @@ func loadMigrations(fsys fs.FS) ([]Migration, error) {
 		}
 		body := string(b)
 		for _, line := range strings.Split(body, "\n") {
-			if strings.TrimSpace(line) == "-- twd:contract" {
+			if strings.TrimSpace(line) == "-- tw:contract" {
 				m.Contract = true
 			}
 		}
@@ -153,9 +153,9 @@ type SchemaStatus struct {
 	// PendingContract are the pending contract migrations.
 	PendingContract []string `json:"pendingContract,omitempty"`
 	// Ahead are applied migrations this binary doesn't know: the store
-	// was migrated by a newer twd-mgmt (allowed while MinBinary permits).
+	// was migrated by a newer tw-mgmt (allowed while MinBinary permits).
 	Ahead []string `json:"ahead,omitempty"`
-	// MinBinary is the oldest twd-mgmt version that may open the store
+	// MinBinary is the oldest tw-mgmt version that may open the store
 	// ("" = any).
 	MinBinary string `json:"minBinary,omitempty"`
 	// RestoreGeneration counts restores from backup (lease epochs jump
@@ -163,11 +163,11 @@ type SchemaStatus struct {
 	RestoreGeneration int64 `json:"restoreGeneration,omitempty"`
 }
 
-// errSchemaTooNew: the store was contracted by a newer twd-mgmt.
+// errSchemaTooNew: the store was contracted by a newer tw-mgmt.
 type errSchemaTooNew struct{ min, self string }
 
 func (e errSchemaTooNew) Error() string {
-	return fmt.Sprintf("version_skew: this store was migrated by twd-mgmt %s or newer (a contract migration), and this twd-mgmt is %s; run twd-mgmt %s or newer, or restore the pre-upgrade backup", e.min, e.self, e.min)
+	return fmt.Sprintf("version_skew: this store was migrated by tw-mgmt %s or newer (a contract migration), and this tw-mgmt is %s; run tw-mgmt %s or newer, or restore the pre-upgrade backup", e.min, e.self, e.min)
 }
 
 // readSchema reads the applied migrations and meta (tables must exist).
@@ -261,7 +261,7 @@ func (s *SQLStore) ensureSchemaTables(ctx context.Context) error {
 //
 // Contract migrations run only with allowContract: while an older replica
 // is live (it would break against the contracted schema), opening the
-// store defers them, and an upgrade run (or `twd-mgmt migrate --apply`)
+// store defers them, and an upgrade run (or `tw-mgmt migrate --apply`)
 // applies them once every replica runs this version
 // (ApplyDeferredContract).
 func (s *SQLStore) applyMigrations(ctx context.Context, known []Migration, self string, allowContract bool) error {
@@ -338,8 +338,8 @@ func (s *SQLStore) SchemaStatus(ctx context.Context) (SchemaStatus, error) {
 }
 
 // CheckSchema opens dsn without migrating and reports what opening it
-// would do (`twd-mgmt migrate --check`). A store that has never been
-// opened by a migrations-aware twd-mgmt reports every migration pending.
+// would do (`tw-mgmt migrate --check`). A store that has never been
+// opened by a migrations-aware tw-mgmt reports every migration pending.
 func CheckSchema(ctx context.Context, dsn string) (SchemaStatus, error) {
 	s, err := openSQL(ctx, dsn)
 	if err != nil {
@@ -398,7 +398,7 @@ func (s *SQLStore) olderReplicaLive(ctx context.Context, self string) bool {
 }
 
 // BackupSQLite writes a consistent copy of the SQLite store at dbPath to
-// dst (VACUUM INTO; safe while twd-mgmt runs). twd upgrade calls it before
+// dst (VACUUM INTO; safe while tw-mgmt runs). tw upgrade calls it before
 // it swaps binaries.
 func BackupSQLite(ctx context.Context, dbPath, dst string) error {
 	s, err := openSQL(ctx, dbPath)

@@ -1,7 +1,7 @@
 // The typed error catalog (DX.md "Error catalog", RFC §6.1). Every denial
-// has the same shape: from fetch() an HTTP status with a `twd-error: <code>`
+// has the same shape: from fetch() an HTTP status with a `tw-error: <code>`
 // header and a JSON body {code, message|detail, missing?, snippet?, doc_url,
-// trace_id?}; from ctx.tailnet.* and the @twd/mcp helpers a thrown
+// trace_id?}; from ctx.tailnet.* and the @tailworks/mcp helpers a thrown
 // TailnetError.
 
 export type TailnetErrorCode =
@@ -45,7 +45,7 @@ export interface CatalogEntry {
   title: string;
 }
 
-export const DOC_BASE = "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#";
+export const DOC_BASE = "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#";
 
 export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.freeze({
   peer_not_visible: { status: 403, title: "the destination is not in this node's netmap (a grant is missing, or the name does not exist)" },
@@ -59,12 +59,12 @@ export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.
   bootstrap_failed: { status: 502, title: "the object's node could not be created (mint, token exchange or join failed)" },
   identity_pending: { status: 503, title: "the object's node is not ready yet" },
   derp_unreachable: { status: 502, title: "no direct path and no reachable DERP relay" },
-  plan_feature_missing: { status: 501, title: "the tailnet's plan or control server lacks a feature twd can use" },
+  plan_feature_missing: { status: 501, title: "the tailnet's plan or control server lacks a feature tailworks can use" },
   killed: { status: 410, title: "the object was killed" },
   object_killed: { status: 410, title: "a new request reached a killed object (its node's tombstone answered)" },
   no_identity: { status: 401, title: "the request carries no verified tailnet caller" },
   lease_lost: { status: 409, title: "this host no longer holds the namespace lease" },
-  namespace_conflict: { status: 409, title: "mgmt returned another identity's object for this workload's class + object name (an invariant violation; twd fails closed rather than share a node)" },
+  namespace_conflict: { status: 409, title: "mgmt returned another identity's object for this workload's class + object name (an invariant violation; tailworks fails closed rather than share a node)" },
   bad_request: { status: 400, title: "the request is malformed" },
   unknown_object: { status: 404, title: "no such object" },
   dial_failed: { status: 502, title: "the tailnet dial failed" },
@@ -72,7 +72,7 @@ export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.
   hostd_unavailable: { status: 503, title: "the host agent is unavailable" },
   public_request: { status: 403, title: "a public (Funnel) request reached code that needs a tailnet caller; use getRequester()" },
   public_create_denied: { status: 403, title: "a public request may not create a new object (or spawn); only existing objects, or classes with public.create" },
-  create_not_admitted: { status: 403, title: "the object does not exist and nothing admitted its creation: reach new objects through the env twd hands your handler (not a raw or cached binding, not from a public request)" },
+  create_not_admitted: { status: 403, title: "the object does not exist and nothing admitted its creation: reach new objects through the env tailworks hands your handler (not a raw or cached binding, not from a public request)" },
   public_ingress_not_allowed: { status: 403, title: "the tenant does not allow public ingress (operator setting publicIngress)" },
   public_name_taken: { status: 409, title: "the workload's public node name is taken on the tailnet (MagicDNS would rename it)" },
   rate_limited: { status: 429, title: "too many public requests (per workload or per client IP)" },
@@ -100,7 +100,7 @@ export interface TailnetErrorInit {
   [k: string]: unknown;
 }
 
-const BRAND = Symbol.for("twd.TailnetError");
+const BRAND = Symbol.for("tw.TailnetError");
 
 export class TailnetError extends Error {
   readonly code: TailnetErrorCode | string;
@@ -109,7 +109,7 @@ export class TailnetError extends Error {
   docUrl: string;
   traceId: string;
   status: number;
-  /** Human-readable detail (message may be JSON; see @twd/mcp). */
+  /** Human-readable detail (message may be JSON; see @tailworks/mcp). */
   detail: string;
   [k: string]: unknown;
 
@@ -138,11 +138,11 @@ export class TailnetError extends Error {
     return o;
   }
 
-  /** Render as an HTTP response with the twd-error header. */
+  /** Render as an HTTP response with the tw-error header. */
   toResponse(): Response {
     return new Response(JSON.stringify(this.toJSON()), {
       status: this.status,
-      headers: { "content-type": "application/json", "twd-error": String(this.code), "cache-control": "no-store" },
+      headers: { "content-type": "application/json", "tw-error": String(this.code), "cache-control": "no-store" },
     });
   }
 
@@ -161,11 +161,11 @@ export function isTailnetError(e: unknown): e is TailnetError {
 }
 
 /**
- * fromResponse returns a TailnetError if r is a typed twd/netd denial
- * (it has a twd-error header), else null. The body is read from a clone.
+ * fromResponse returns a TailnetError if r is a typed tw/netd denial
+ * (it has a tw-error header), else null. The body is read from a clone.
  */
 export async function fromResponse(r: Response): Promise<TailnetError | null> {
-  const code = r.headers.get("twd-error");
+  const code = r.headers.get("tw-error");
   if (!code) return null;
   let body: Record<string, any> = { code };
   try {

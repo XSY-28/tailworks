@@ -1,6 +1,6 @@
-// twd R2 buckets (TRUSTED; platform worker). ADR-036.
+// tailworks R2 buckets (TRUSTED; platform worker). ADR-036.
 //
-// A bucket is a platform store of kind "r2" (twd-store.js): its Store
+// A bucket is a platform store of kind "r2" (tw-store.js): its Store
 // object holds the INDEX (key → version, size, etag, upload time, HTTP and
 // custom metadata, checksums, and the blobs holding the bytes), journaled
 // to mgmt like every store. The BYTES are immutable blobs in the host's R2
@@ -22,7 +22,7 @@
 // RPC stub to R2FacetProxy (which calls the platform's own native binding
 // of the same bucket), wrapped by the facet shim (store-r2-facet.js).
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { registerStoreKind, storeStub, utf8 } from "twd-store.js";
+import { registerStoreKind, storeStub, utf8 } from "tw-store.js";
 
 const MAX_KEY = 1024;
 const MAX_META = 8192;
@@ -67,7 +67,7 @@ const ERR = {
   badUpload: () => new R2Err(500, 10048, "There was a problem with the multipart upload."),
 };
 
-// R2_ENTRY_V is the index journal entry version this twd writes.
+// R2_ENTRY_V is the index journal entry version this tailworks writes.
 const R2_ENTRY_V = 1;
 
 function errResponse(e, meta) {
@@ -270,9 +270,9 @@ function blobGC(env, waitUntil, bucket, ids) {
     for (const id of ids.slice(i, i + 50)) q.append("id", id);
     const p = env.HOSTD.fetch("http://hostd/v1/r2/blob?" + q, { method: "DELETE" })
       .then((r) => {
-        if (!r.ok) console.warn("twd r2 " + bucket + ": blob delete answered " + r.status);
+        if (!r.ok) console.warn("tw r2 " + bucket + ": blob delete answered " + r.status);
       })
-      .catch((e) => console.warn("twd r2 " + bucket + ": blob delete: " + (e?.message ?? e)));
+      .catch((e) => console.warn("tw r2 " + bucket + ": blob delete: " + (e?.message ?? e)));
     waitUntil(p);
   }
 }
@@ -290,9 +290,9 @@ registerStoreKind("r2", {
       etag TEXT NOT NULL, md5 TEXT NOT NULL, PRIMARY KEY (upload, n))`);
   },
   // Journal entries (JSON), with their compaction keys. Every entry
-  // carries v (ADR-041 §4): R2_ENTRY_V is what this twd
+  // carries v (ADR-041 §4): R2_ENTRY_V is what this tailworks
   // writes; an entry without v was written before versioning and is v1.
-  // A newer v (or an unknown op) was written by a newer twd: apply throws,
+  // A newer v (or an unknown op) was written by a newer tailworks: apply throws,
   // so the store refuses to sync instead of silently dropping writes.
   //   {o:"put", k, row, up?}   ckey "o:"+k  (up: the multipart upload it completes)
   //   {o:"del", k}             ckey "o:"+k
@@ -302,7 +302,7 @@ registerStoreKind("r2", {
   apply(s, data) {
     const e = JSON.parse(utf8(data));
     const v = e.v ?? 1;
-    if (v > R2_ENTRY_V) throw new Error(`twd r2: index entry v${v} was written by a newer twd (this one reads up to v${R2_ENTRY_V}); upgrade twd-hostd`);
+    if (v > R2_ENTRY_V) throw new Error(`tw r2: index entry v${v} was written by a newer tailworks (this one reads up to v${R2_ENTRY_V}); upgrade tw-hostd`);
     switch (e.o) {
       case "put": {
         const r = e.row;
@@ -330,7 +330,7 @@ registerStoreKind("r2", {
         s.sql.exec("DELETE FROM r2_parts WHERE upload = ?", e.id);
         break;
       default:
-        throw new Error(`twd r2: unknown index entry op ${JSON.stringify(e.o)} (v${v}): written by a newer twd? upgrade twd-hostd`);
+        throw new Error(`tw r2: unknown index entry op ${JSON.stringify(e.o)} (v${v}): written by a newer tailworks? upgrade tw-hostd`);
     }
   },
   // reset: the bucket's store was deleted (or deleted and created again).
@@ -670,8 +670,8 @@ export class R2Backend extends WorkerEntrypoint {
     } catch (e) {
       if (e instanceof R2Err) return errResponse(e, e.meta);
       const msg = String(e?.message ?? e);
-      console.error("twd r2 " + this.#bucket + ": " + msg);
-      return errResponse(ERR.internal("twd r2: " + msg));
+      console.error("tw r2 " + this.#bucket + ": " + msg);
+      return errResponse(ERR.internal("tw r2: " + msg));
     }
   }
 
@@ -717,7 +717,7 @@ export class R2Backend extends WorkerEntrypoint {
       if (!first.ok) {
         const body = await first.json().catch(() => ({}));
         if (first.status === 404 && !retried) return this.#get(m, true);
-        throw ERR.internal("twd r2: " + (body.code ?? "r2_backend_unavailable") + ": " + (body.message ?? "blob read answered " + first.status));
+        throw ERR.internal("tw r2: " + (body.code ?? "r2_backend_unavailable") + ": " + (body.message ?? "blob read answered " + first.status));
       }
     }
     const meta = te.encode(JSON.stringify(rawMeta(row, range)));
@@ -735,7 +735,7 @@ export class R2Backend extends WorkerEntrypoint {
           }
           await writable.close();
         } catch (e) {
-          console.error("twd r2 " + this.#bucket + ": get " + m.object + ": " + (e?.message ?? e));
+          console.error("tw r2 " + this.#bucket + ": get " + m.object + ": " + (e?.message ?? e));
           await writable.abort(e).catch(() => {});
         }
       })(),
@@ -768,7 +768,7 @@ export class R2Backend extends WorkerEntrypoint {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       if (j.code === "r2_too_large") throw ERR.tooLarge();
-      throw ERR.internal("twd r2: " + (j.code ?? "r2_backend_unavailable") + ": " + (j.message ?? "blob write answered " + r.status));
+      throw ERR.internal("tw r2: " + (j.code ?? "r2_backend_unavailable") + ": " + (j.message ?? "blob write answered " + r.status));
     }
     return j;
   }
@@ -780,7 +780,7 @@ export class R2Backend extends WorkerEntrypoint {
       checkKey(m.object);
       custom = customOf(m.customFields);
       checkCustom(custom);
-      if (!(size >= 0)) throw ERR.invalidArg("twd r2: a put body needs a known length");
+      if (!(size >= 0)) throw ERR.invalidArg("tw r2: a put body needs a known length");
       if (size > MAX_VALUE) throw ERR.tooLarge();
       // Fail fast before moving bytes; the append checks again.
       if (m.onlyIf && !condOK(m.onlyIf, await this.#store().op("head", [m.object]))) throw ERR.precondition();
@@ -839,7 +839,7 @@ export class R2Backend extends WorkerEntrypoint {
       checkKey(m.object);
       const n = Number(m.partNumber);
       if (!Number.isInteger(n) || n < 1 || n > MAX_PART_NUMBER) throw ERR.invalidArg("part number must be 1 to 10000");
-      if (!(size >= 0)) throw ERR.invalidArg("twd r2: a part body needs a known length");
+      if (!(size >= 0)) throw ERR.invalidArg("tw r2: a part body needs a known length");
       if (size > MAX_VALUE) throw ERR.tooLarge();
       if (!(await this.#store().op("mpuCheck", [m.uploadId, m.object]))) throw ERR.noSuchUpload();
     } catch (e) {
@@ -903,7 +903,7 @@ function toPlain(o, withBody) {
 
 export class R2FacetProxy extends WorkerEntrypoint {
   #b() {
-    const b = this.env["__TWD_STORE_" + this.ctx.props.binding];
+    const b = this.env["__TW_STORE_" + this.ctx.props.binding];
     if (!b) throw new Error("[bad_request] no R2 binding " + this.ctx.props.binding);
     return b;
   }

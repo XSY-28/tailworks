@@ -31,7 +31,7 @@ export default {
       notes,
       hello,
       wasm: inst instanceof WebAssembly.Instance,
-      buffer: Buffer.from("twd").toString("base64"),
+      buffer: Buffer.from("tw").toString("base64"),
       count: await env.COUNTER.getByName("c").bump(),
       cache: typeof env.CACHE,
     });

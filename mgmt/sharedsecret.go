@@ -22,7 +22,7 @@ type secretChooser interface {
 // already issued) or a new 32-byte secret; the others use the chosen one.
 func LoadSharedIDSecret(ctx context.Context, path string, st secretChooser, cust Custody) ([]byte, error) {
 	const choice = "id-secret"
-	name := func(kid string) string { return "twd/mgmt/id-secret/" + kid }
+	name := func(kid string) string { return "tw/mgmt/id-secret/" + kid }
 	kid, err := st.SecretChoice(ctx, choice)
 	if errors.Is(err, ErrNotFound) {
 		var secret []byte

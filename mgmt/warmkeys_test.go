@@ -14,7 +14,7 @@ import (
 
 // TestStoreWarmKeyTakeOnce: concurrent takes of one pool hand out each key
 // once, only to the right (tenant, pool), never an expired one. SQLite and
-// (TWD_TEST_POSTGRES_DSN) Postgres.
+// (TW_TEST_POSTGRES_DSN) Postgres.
 func TestStoreWarmKeyTakeOnce(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
 		ctx := context.Background()
@@ -112,7 +112,7 @@ func newPoolEnv(t *testing.T, rpm int, mutate func(*Config)) *poolEnv {
 	}
 	c.ok("POST", "/v1/tenants", body, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, nil)
 	return &poolEnv{testEnv: e, h1: h1, tenant: tn.TenantID}
 }
@@ -172,7 +172,7 @@ func (f *fakeTS) wasDeleted(id string) bool {
 // are audited; the pool refills; a kill revokes the adopted key.
 func TestWarmKeyPool(t *testing.T) {
 	e := newPoolEnv(t, 0, nil)
-	support := PoolName([]string{"tag:twd-agent-support"}, false)
+	support := PoolName([]string{"tag:tw-agent-support"}, false)
 	rogue := PoolName([]string{"tag:crm"}, false)
 	e.waitWarm(t, support, 1, 5*time.Second)
 	e.waitWarm(t, rogue, 1, 5*time.Second)
@@ -184,13 +184,13 @@ func TestWarmKeyPool(t *testing.T) {
 	e.h1.ok("POST", "/v1/objects/"+o.ObjectID+"/credentials?epoch=1&wait=10", nil, &cred)
 	t.Logf("create → credential with a warm key: %v", time.Since(t0).Round(time.Millisecond))
 	obj, _ := e.store.GetObject(context.Background(), o.ObjectID) // the v1 view hides keyID
-	if !strings.HasPrefix(e.ts.keyDesc(obj.KeyID), "twd pool ") {
+	if !strings.HasPrefix(e.ts.keyDesc(obj.KeyID), "tw pool ") {
 		t.Fatalf("object key %s was not a pooled key (description %q)", obj.KeyID, e.ts.keyDesc(obj.KeyID))
 	}
 	e.ts.mu.Lock()
 	secret := e.ts.secrets[obj.KeyID]
 	for id, b := range e.ts.keys {
-		if b["description"] == "twd "+o.ObjectID {
+		if b["description"] == "tw "+o.ObjectID {
 			t.Errorf("a fresh key %s was minted for the object despite a warm one", id)
 		}
 	}
@@ -198,7 +198,7 @@ func TestWarmKeyPool(t *testing.T) {
 	if cred.AuthKey != secret {
 		t.Fatal("the released credential is not the adopted key")
 	}
-	if got := e.ts.keyTags(obj.KeyID); !slices.Equal(got, []string{"tag:twd-agent-support"}) || e.ts.keyEphemeral(obj.KeyID) {
+	if got := e.ts.keyTags(obj.KeyID); !slices.Equal(got, []string{"tag:tw-agent-support"}) || e.ts.keyEphemeral(obj.KeyID) {
 		t.Fatalf("adopted key tags %v ephemeral %v, want exactly the object's", got, e.ts.keyEphemeral(obj.KeyID))
 	}
 	if _, err := e.m.custody.Get(context.Background(), poolCustodyName(e.tenant, obj.KeyID)); err == nil {
@@ -267,7 +267,7 @@ func TestWarmKeyExpiry(t *testing.T) {
 		c.WarmKeyTTL = 3 * time.Minute
 		c.Store.(*SQLStore).SetClock(clk)
 	})
-	support := PoolName([]string{"tag:twd-agent-support"}, false)
+	support := PoolName([]string{"tag:tw-agent-support"}, false)
 	e.waitWarm(t, support, 1, 5*time.Second)
 	ws := e.m.warmStore()
 	before, _ := ws.ListWarmKeys(context.Background(), WarmKeyWarm)
@@ -328,8 +328,8 @@ func TestWarmKeyExpiry(t *testing.T) {
 func TestWarmKeyRefillRespectsThrottle(t *testing.T) {
 	e := newPoolEnv(t, 10, nil)
 	classOf := map[string]string{
-		PoolName([]string{"tag:twd-agent-support"}, false):     "SupportAgent",
-		PoolName([]string{"tag:twd-agent-support-sub"}, false): "LookupAgent",
+		PoolName([]string{"tag:tw-agent-support"}, false):     "SupportAgent",
+		PoolName([]string{"tag:tw-agent-support-sub"}, false): "LookupAgent",
 		PoolName([]string{"tag:crm"}, false):                   "Rogue",
 	}
 	var pool string

@@ -106,13 +106,13 @@ func TestParseFragment(t *testing.T) {
 }
 
 func TestMarkdownSections(t *testing.T) {
-	md := Markdown("twd v0.2.0", []Note{
+	md := Markdown("tw v0.2.0", []Note{
 		{Kind: KindFeature, Source: "f.md", Text: "feat"},
 		{Kind: KindBreaking, Source: "b.md", Text: "broke"},
 		{Kind: KindFix, Source: "x.md", Text: "fixed", Upgrade: []string{"schema-contract"}},
 		{Kind: KindSecurity, Source: "s.md", Text: "sec"},
 	})
-	order := []string{"# twd v0.2.0", "## Breaking", "### b", "## Security", "## Upgrade actions", "### x", "## Features", "## Fixes"}
+	order := []string{"# tw v0.2.0", "## Breaking", "### b", "## Security", "## Upgrade actions", "### x", "## Features", "## Fixes"}
 	last := -1
 	for _, h := range order {
 		i := strings.Index(md[last+1:], h)

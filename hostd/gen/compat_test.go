@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
 )
 
 // TestRuntimeCompat measures the Workers runtime surfaces listed in
@@ -20,8 +20,8 @@ func TestRuntimeCompat(t *testing.T) {
 	}
 
 	t.Run("NodejsCompat", func(t *testing.T) {
-		for w, twd := range where {
-			code, _, r := in.get("/node", twd)
+		for w, tw := range where {
+			code, _, r := in.get("/node", tw)
 			if code != 200 || r["base64"] != "dHdk" || r["uuid"] != true || r["als"] != "ctx-1" || r["emitted"] != float64(42) ||
 				r["sha256"] != "684d49d53963cec93bc0c0056995be45d6f99c8ec9976bb80ce03515bb921668" {
 				t.Fatalf("%s: %d %v", w, code, r)
@@ -44,8 +44,8 @@ func TestRuntimeCompat(t *testing.T) {
 	// refuses the socket. Raw TCP egress would need netd support
 	// (ctx.tailnet.connect() is a typed plan_feature_missing stub).
 	t.Run("ConnectTCPRefused", func(t *testing.T) {
-		for w, twd := range where {
-			code, _, r := in.get("/connect?host=echo&port=80", twd)
+		for w, tw := range where {
+			code, _, r := in.get("/connect?host=echo&port=80", tw)
 			if code != 200 || r["ok"] != false || !strings.Contains(fmtAny(r["error"]), "cannot connect") {
 				t.Fatalf("%s: connect() changed (update docs/COMPAT.md): %d %v", w, code, r)
 			}
@@ -64,7 +64,7 @@ var addWasm = []byte{
 
 // TestRuntimeCompatWasm: a bundle that ships a .wasm module next to its JS
 // (wrangler's CompiledWasm rule) runs in the Worker, a facet object and a
-// plain-DO object. twd's own bundler (twd deploy) has no .wasm loader, so
+// plain-DO object. Tailworks' own bundler (tw deploy) has no .wasm loader, so
 // the bundle is assembled by hand here; see docs/COMPAT.md "wasm".
 func TestRuntimeCompatWasm(t *testing.T) {
 	const js = `import { DurableObject } from "cloudflare:workers";
@@ -77,13 +77,13 @@ export default { fetch() { return sum(); } };
 	files := map[string][]byte{
 		"wrangler.jsonc": []byte(`{"name": "wasm", "main": "index.js", "compatibility_date": "2026-04-01",
   "durable_objects": {"bindings": [{"name": "FACET", "class_name": "Facet"}, {"name": "PLAIN", "class_name": "Plain"}]}}`),
-		"twd.jsonc": []byte(`{"tailnet": {"objects": {"Plain": {"egress": "workload"}}}}`),
+		"tailworks.jsonc": []byte(`{"tailnet": {"objects": {"Plain": {"egress": "workload"}}}}`),
 		"index.js":  []byte(js),
 		"add.wasm":  addWasm,
 	}
 	in := startFiles(t, files)
-	for w, twd := range map[string]map[string]any{"Worker": wl, "Facet": obj("Facet", "w1"), "Plain": obj("Plain", "w2")} {
-		code, _, r := in.get("/", twd)
+	for w, tw := range map[string]map[string]any{"Worker": wl, "Facet": obj("Facet", "w1"), "Plain": obj("Plain", "w2")} {
+		code, _, r := in.get("/", tw)
 		if code != 200 || r["sum"] != float64(5) {
 			t.Fatalf("%s: %d %v", w, code, r)
 		}

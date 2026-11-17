@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // /v1 conventions (api/openapi.yaml): cursor pagination, JSON Merge Patch,
@@ -240,7 +240,7 @@ func TestV1DeleteSemantics(t *testing.T) {
 	}
 
 	// Kill: 202, then 410 with the kill record (by, cascade, root).
-	c.hdr = map[string]string{"Twd-Actor": "ross@example.com"}
+	c.hdr = map[string]string{"Tw-Actor": "ross@example.com"}
 	var kr KillResult
 	if st := c.okStatus("DELETE", "/v1/objects/"+root.ObjectID+killQuery(true, "test kill"), nil, &kr); st != 202 || len(kr.Killed) != 2 {
 		t.Fatalf("kill: %d %+v", st, kr)
@@ -248,7 +248,7 @@ func TestV1DeleteSemantics(t *testing.T) {
 	c.hdr = nil
 	for _, id := range []string{root.ObjectID, kid.ObjectID} {
 		st, eb, hdr := c.doRaw("GET", "/v1/objects/"+id, nil, nil)
-		if st != 410 || eb["code"] != "killed" || hdr.Get("Twd-Error") != "killed" {
+		if st != 410 || eb["code"] != "killed" || hdr.Get("Tw-Error") != "killed" {
 			t.Fatalf("GET killed %s: %d %v", id, st, eb)
 		}
 		ts := eb["tombstone"].(map[string]any)
@@ -323,10 +323,10 @@ func TestV1DeleteSemantics(t *testing.T) {
 
 // TestV1RoleMatrix drives every operation in the spec through the WhoIs
 // gate as a host, an admin and a non-admin, so a route can't be added
-// without its x-twd-role being enforced.
+// without its x-tw-role being enforced.
 func TestV1RoleMatrix(t *testing.T) {
 	e := newTestEnv(t)
-	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
 		case "100.64.0.1:1":
@@ -446,12 +446,12 @@ func TestV1HostJoinKey(t *testing.T) {
 	if st != 201 || hdr.Get("Location") != "/v1/hosts/h-mbp" || hdr.Get("Cache-Control") != "no-store" {
 		t.Fatalf("create host: %d %v", st, hdr)
 	}
-	if !strings.HasPrefix(hj.AuthKey, "tskey-auth-") || fmt.Sprint(hj.Tags) != "[tag:twd-host]" || hj.Hostname != "twd-host-h-mbp" || hj.Host.Status != "pending" || hj.Tailnet != "op.ts.net" {
+	if !strings.HasPrefix(hj.AuthKey, "tskey-auth-") || fmt.Sprint(hj.Tags) != "[tag:tw-host]" || hj.Hostname != "tw-host-h-mbp" || hj.Host.Status != "pending" || hj.Tailnet != "op.ts.net" {
 		t.Fatalf("join: %+v", hj)
 	}
 	kb := e.ts.createdKey(1)
 	create := kb["capabilities"].(map[string]any)["devices"].(map[string]any)["create"].(map[string]any)
-	if create["reusable"] != false || create["preauthorized"] != true || fmt.Sprint(create["tags"]) != "[tag:twd-host]" || kb["expirySeconds"].(float64) != 600 {
+	if create["reusable"] != false || create["preauthorized"] != true || fmt.Sprint(create["tags"]) != "[tag:tw-host]" || kb["expirySeconds"].(float64) != 600 {
 		t.Fatalf("minted host key options %v", kb)
 	}
 	// Pending again: a fresh key, 200.

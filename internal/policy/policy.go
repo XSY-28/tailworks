@@ -1,4 +1,4 @@
-// Package policy merges twd's policy additions (tagOwners entries and
+// Package policy merges tailworks' policy additions (tagOwners entries and
 // grants) into a tailnet policy file without disturbing existing rules or
 // comments, and applies the result safely: validate first, then write with
 // If-Match so a concurrent edit is never overwritten.
@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"github.com/tailscale/hujson"
 )
 
@@ -23,7 +23,7 @@ type Snippet struct {
 	TagOwners map[string][]string `json:"tagOwners,omitempty"`
 	Grants    []map[string]any    `json:"grants,omitempty"`
 	// NodeAttrs are nodeAttrs entries ({"target": [...], "attr": [...]}),
-	// e.g. the funnel attribute for tag:twd-public.
+	// e.g. the funnel attribute for tag:tw-public.
 	NodeAttrs []map[string]any `json:"nodeAttrs,omitempty"`
 }
 
@@ -153,7 +153,7 @@ type Options struct {
 	// AllowTags may additionally appear as tagOwners keys and grant sources.
 	AllowTags []string
 	// AllowSrcs may additionally appear as grant sources (the base snippet
-	// grants autogroup:admin the admin capability on tag:twd-mgmt).
+	// grants autogroup:admin the admin capability on tag:tw-mgmt).
 	AllowSrcs []string
 
 	// Headscale checks the snippet against the Headscale profile too
@@ -161,18 +161,18 @@ type Options struct {
 	Headscale bool
 }
 
-// TwdTagPrefix: the only tags twd may own or use as a grant source.
-const TwdTagPrefix = "tag:twd"
+// TwTagPrefix: the only tags tailworks may own or use as a grant source.
+const TwTagPrefix = "tag:tw"
 
-// IsTwdTag reports whether t is exactly `tag:twd` or a `tag:twd-…` tag in
+// IsTwTag reports whether t is exactly `tag:tw` or a `tag:tw-…` tag in
 // Tailscale's tag grammar (`^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`). A bare
-// prefix match is not enough: `tag:twdx`, `tag:twd-x ` (padding) or a tag
+// prefix match is not enough: `tag:twx`, `tag:tw-x ` (padding) or a tag
 // with control characters would otherwise slip into tagOwners and grants.
-func IsTwdTag(t string) bool {
-	if t == TwdTagPrefix {
+func IsTwTag(t string) bool {
+	if t == TwTagPrefix {
 		return true
 	}
-	rest, ok := strings.CutPrefix(t, TwdTagPrefix+"-")
+	rest, ok := strings.CutPrefix(t, TwTagPrefix+"-")
 	if !ok || rest == "" {
 		return false
 	}
@@ -184,11 +184,11 @@ func IsTwdTag(t string) bool {
 	return true
 }
 
-// Check enforces what a twd-generated snippet may add to a tenant policy
-// (RT-06). It never trusts the snippet's origin (a bundle's twd.jsonc):
-//   - tagOwners keys must be twd tags (tag:twd, tag:twd-*), owned only by
-//     tag:twd, autogroup:admin or other twd tags;
-//   - every grant must have a non-empty src of twd tags (never "*",
+// Check enforces what a tw-generated snippet may add to a tenant policy
+// (RT-06). It never trusts the snippet's origin (a bundle's tailworks.jsonc):
+//   - tagOwners keys must be tailworks tags (tag:tw, tag:tw-*), owned only by
+//     tag:tw, autogroup:admin or other tailworks tags;
+//   - every grant must have a non-empty src of tailworks tags (never "*",
 //     autogroup:*, groups, users or arbitrary tags) and a non-empty dst of
 //     tags or svc: names (never "*" or autogroup:*);
 //   - grants may only carry src, dst, ip and app.
@@ -199,7 +199,7 @@ func Check(s Snippet, o Options) error {
 		}
 	}
 	okTag := func(t string) bool {
-		return IsTwdTag(t) || slices.Contains(o.AllowTags, t)
+		return IsTwTag(t) || slices.Contains(o.AllowTags, t)
 	}
 	keys := make([]string, 0, len(s.TagOwners))
 	for t := range s.TagOwners {
@@ -208,14 +208,14 @@ func Check(s Snippet, o Options) error {
 	sort.Strings(keys)
 	for _, t := range keys {
 		if !okTag(t) {
-			return fmt.Errorf("policy snippet: refusing to add tagOwners for %q: twd only adds %s* tags", t, TwdTagPrefix)
+			return fmt.Errorf("policy snippet: refusing to add tagOwners for %q: tailworks only adds %s* tags", t, TwTagPrefix)
 		}
-		if len(s.TagOwners[t]) == 0 && !(o.Headscale && t == TwdTagPrefix) {
+		if len(s.TagOwners[t]) == 0 && !(o.Headscale && t == TwTagPrefix) {
 			return fmt.Errorf("policy snippet: tagOwners %q has no owners", t)
 		}
 		for _, owner := range s.TagOwners[t] {
 			if owner != "autogroup:admin" && !okTag(owner) {
-				return fmt.Errorf("policy snippet: refusing owner %q for %q: owners may be autogroup:admin or %s* tags", owner, t, TwdTagPrefix)
+				return fmt.Errorf("policy snippet: refusing owner %q for %q: owners may be autogroup:admin or %s* tags", owner, t, TwTagPrefix)
 			}
 		}
 	}
@@ -224,7 +224,7 @@ func Check(s Snippet, o Options) error {
 			switch k {
 			case "src", "dst", "ip", "app":
 			default:
-				return fmt.Errorf("policy snippet: grant %d has field %q; twd only adds src/dst/ip/app", i, k)
+				return fmt.Errorf("policy snippet: grant %d has field %q; tailworks only adds src/dst/ip/app", i, k)
 			}
 		}
 		src, dst := strs(g["src"]), strs(g["dst"])
@@ -233,12 +233,12 @@ func Check(s Snippet, o Options) error {
 		}
 		for _, x := range src {
 			if !okTag(x) && !slices.Contains(o.AllowSrcs, x) {
-				return fmt.Errorf("policy snippet: grant %d: refusing src %q: twd grants only have %s* sources (never *, autogroup:*, groups or users)", i, x, TwdTagPrefix)
+				return fmt.Errorf("policy snippet: grant %d: refusing src %q: tailworks grants only have %s* sources (never *, autogroup:*, groups or users)", i, x, TwTagPrefix)
 			}
 		}
 		for _, x := range dst {
 			if x == "*" || strings.HasPrefix(x, "autogroup:") || !(strings.HasPrefix(x, "tag:") || strings.HasPrefix(x, "svc:")) {
-				return fmt.Errorf("policy snippet: grant %d: refusing dst %q: twd grants only target tags or svc: names (never * or autogroup:*)", i, x)
+				return fmt.Errorf("policy snippet: grant %d: refusing dst %q: tailworks grants only target tags or svc: names (never * or autogroup:*)", i, x)
 			}
 		}
 		if _, has := g["ip"]; has && strs(g["ip"]) == nil {
@@ -248,7 +248,7 @@ func Check(s Snippet, o Options) error {
 	for i, n := range s.NodeAttrs {
 		for k := range n {
 			if k != "target" && k != "attr" {
-				return fmt.Errorf("policy snippet: nodeAttrs %d has field %q; twd only adds target/attr", i, k)
+				return fmt.Errorf("policy snippet: nodeAttrs %d has field %q; tailworks only adds target/attr", i, k)
 			}
 		}
 		target, attr := strs(n["target"]), strs(n["attr"])
@@ -256,36 +256,36 @@ func Check(s Snippet, o Options) error {
 			return fmt.Errorf("policy snippet: nodeAttrs %d: target and attr must be non-empty lists of strings", i)
 		}
 		for _, t := range target {
-			// ADR-029 D6: funnel (the only attr twd sets) is for public
+			// ADR-029 D6: funnel (the only attr tailworks sets) is for public
 			// nodes only, never workload or object tags, so a netd bug
 			// can't publish an object node.
 			if !slices.Contains(FunnelTargets, t) {
-				return fmt.Errorf("policy snippet: nodeAttrs %d: refusing target %q: twd only sets funnel on %s", i, t, strings.Join(FunnelTargets, " and "))
+				return fmt.Errorf("policy snippet: nodeAttrs %d: refusing target %q: tailworks only sets funnel on %s", i, t, strings.Join(FunnelTargets, " and "))
 			}
 		}
 		for _, a := range attr {
 			if a != "funnel" {
-				return fmt.Errorf("policy snippet: nodeAttrs %d: refusing attr %q: twd only sets funnel", i, a)
+				return fmt.Errorf("policy snippet: nodeAttrs %d: refusing attr %q: tailworks only sets funnel", i, a)
 			}
 		}
 	}
 	return nil
 }
 
-// FunnelTargets are the only tags twd gives the funnel nodeAttr (ADR-029
-// D6): public nodes. Never tag:twd-mgmt: mgmt's node serves the API and
+// FunnelTargets are the only tags tailworks gives the funnel nodeAttr (ADR-029
+// D6): public nodes. Never tag:tw-mgmt: mgmt's node serves the API and
 // must not be reachable from the internet.
 var FunnelTargets = []string{PublicTag}
 
 // PublicTag is the tag of a workload's public node (ADR-029).
-const PublicTag = "tag:twd-public"
+const PublicTag = "tag:tw-public"
 
-// PublicSnippet is what a tailnet needs before a workload with twd.jsonc
-// "public" routes can be served over Funnel (ADR-029 D6): tag:twd-public
-// owned by twd, and the funnel nodeAttr on it (and only on it).
+// PublicSnippet is what a tailnet needs before a workload with tailworks.jsonc
+// "public" routes can be served over Funnel (ADR-029 D6): tag:tw-public
+// owned by tailworks, and the funnel nodeAttr on it (and only on it).
 func PublicSnippet() Snippet {
 	return Snippet{
-		TagOwners: map[string][]string{PublicTag: {"autogroup:admin", "tag:twd"}},
+		TagOwners: map[string][]string{PublicTag: {"autogroup:admin", "tag:tw"}},
 		NodeAttrs: []map[string]any{{"target": []string{PublicTag}, "attr": []string{"funnel"}}},
 	}
 }
@@ -571,29 +571,29 @@ func ApplyWith(ctx context.Context, api API, s Snippet, o Options) (ApplyResult,
 	return res, nil
 }
 
-// InfraSnippet is the policy every twd deployment needs for its own nodes
-// (normal operation is tsnet only): tag:twd owns twd's tags; mgmt's node is
-// tag:twd-mgmt and each host's node tag:twd-host, both owned by tag:twd so
-// the mint credential (an OAuth client or trust credential tagged tag:twd)
+// InfraSnippet is the policy every tailworks deployment needs for its own nodes
+// (normal operation is tsnet only): tag:tw owns tailworks' tags; mgmt's node is
+// tag:tw-mgmt and each host's node tag:tw-host, both owned by tag:tw so
+// the mint credential (an OAuth client or trust credential tagged tag:tw)
 // can mint their keys with no interactive login (M12); hosts call mgmt's
 // API on :80/:443 and mgmt pushes kills to the hosts' nodes on pushPort.
 func InfraSnippet(pushPort int) Snippet {
 	return Snippet{
 		TagOwners: map[string][]string{
-			"tag:twd":      {"autogroup:admin"},
-			"tag:twd-mgmt": {"autogroup:admin", "tag:twd"},
-			"tag:twd-host": {"autogroup:admin", "tag:twd"},
+			"tag:tw":      {"autogroup:admin"},
+			"tag:tw-mgmt": {"autogroup:admin", "tag:tw"},
+			"tag:tw-host": {"autogroup:admin", "tag:tw"},
 		},
 		Grants: []map[string]any{
-			{"src": []string{"tag:twd-host"}, "dst": []string{"tag:twd-mgmt"}, "ip": []string{"tcp:443", "tcp:80"}},
-			{"src": []string{"tag:twd-mgmt"}, "dst": []string{"tag:twd-host"}, "ip": []string{fmt.Sprintf("tcp:%d", pushPort)}},
+			{"src": []string{"tag:tw-host"}, "dst": []string{"tag:tw-mgmt"}, "ip": []string{"tcp:443", "tcp:80"}},
+			{"src": []string{"tag:tw-mgmt"}, "dst": []string{"tag:tw-host"}, "ip": []string{fmt.Sprintf("tcp:%d", pushPort)}},
 		},
 	}
 }
 
-// AdminGrant makes src (autogroup:admin in the operator snippet) twd
+// AdminGrant makes src (autogroup:admin in the operator snippet) tailworks
 // admins over the tailnet: it reaches mgmt's API on :443/:80 with the
-// admin app capability (WhoIs; `twd link`).
+// admin app capability (WhoIs; `tw link`).
 func AdminGrant(src, mgmtTag, adminCap string) map[string]any {
 	return map[string]any{"src": []string{src}, "dst": []string{mgmtTag}, "ip": []string{"tcp:443", "tcp:80"},
 		"app": map[string]any{adminCap: []any{map[string]any{}}}}

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/internal/releasesig"
+	"github.com/rosskukulinski/tailworks/internal/releasesig"
 )
 
 // signRelease adds SHA256SUMS and SHA256SUMS.sig (by priv) to the files of
@@ -54,7 +54,7 @@ func testReleaseKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 func TestSelfUpgradeRefusesUnsignedReleases(t *testing.T) {
 	pub, priv := testReleaseKey(t)
 	_, other := testReleaseKey(t)
-	top := "twd-0.3.0-linux-amd64"
+	top := "tailworks-0.3.0-linux-amd64"
 	files := map[string]string{top + "/install.sh": "#!/bin/sh\necho ran > \"$2/installed\"\n", top + "/VERSION": "0.3.0\n"}
 	for name, tgz := range map[string]map[string]string{
 		"unsigned":  files,

@@ -13,7 +13,7 @@ Add `changes/<your-branch>.md`, and don't touch any other fragment.
 kind: feature
 upgrade: [schema-expand, protocol]
 ---
-What changed, written for the people who run or use twd.
+What changed, written for the people who run or use tw.
 
 Operator action: what an operator must do when upgrading (omit if nothing).
 ```
@@ -25,7 +25,7 @@ Operator action: what an operator must do when upgrading (omit if nothing).
 | Kind | Use it when the branch… |
 |---|---|
 | `schema-expand` | adds a mgmt store migration that only adds things (`mgmt/migrations/`) |
-| `schema-contract` | adds a migration marked `-- twd:contract` (drops, renames, tightened constraints) |
+| `schema-contract` | adds a migration marked `-- tw:contract` (drops, renames, tightened constraints) |
 | `format` | adds or changes a persisted format version (`testdata/formats/`) |
 | `feature-string` | adds a host feature string that placement gates on |
 | `protocol` | changes a wire contract: `api/openapi.yaml`, or the push, guest or helper protocol |
@@ -43,4 +43,4 @@ fails.
 `scripts/release-notes.sh <prev-tag> <tag>` prints the assembled notes.
 With `--finalize` it also moves the fragments to `changes/released/<tag>/`
 and writes the release catalog entry `internal/catalog/releases/<tag>.json`,
-which `twd-mgmt` embeds. See `docs/RELEASING.md`.
+which `tw-mgmt` embeds. See `docs/RELEASING.md`.

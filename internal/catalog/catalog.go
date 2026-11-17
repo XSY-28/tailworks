@@ -1,9 +1,9 @@
-// Package catalog is twd's release catalog (ADR-041 §8):
+// Package catalog is tailworks' release catalog (ADR-041 §8):
 // for every release, its notes and the facts an upgrade plan needs (the
 // workerd pin, the newest mgmt migration, contract migrations, protocol
 // versions). One JSON file per release lives in releases/, written by
 // `scripts/release-notes.sh --finalize`, and is embedded in every binary
-// that imports this package (twd-mgmt), so planning works offline.
+// that imports this package (tw-mgmt), so planning works offline.
 package catalog
 
 import (
@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 // Note is one release-note fragment (changes/<branch>.md).
@@ -147,7 +147,7 @@ func Breaking(es []Entry) []Note {
 
 // ContractSteps returns the entries that carry contract migrations: an
 // upgrade must stop at each of them (every replica at that version before
-// its contract migration runs), so `twd upgrade` never jumps over one.
+// its contract migration runs), so `tw upgrade` never jumps over one.
 func ContractSteps(es []Entry) []Entry {
 	var out []Entry
 	for _, e := range es {

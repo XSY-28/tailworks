@@ -4,11 +4,11 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
-// Restart stops e's twd-hostd and starts it again on the same data and run
+// Restart stops e's tw-hostd and starts it again on the same data and run
 // directories, as a hostd restart (or upgrade) does. Its workloads come
 // back from mgmt's assignments.
 func (e *Env) Restart() {
@@ -25,7 +25,7 @@ func (e *Env) Restart() {
 	e.Host = h
 }
 
-// StartHost starts a second twd-hostd, id, on e's fakemgmt, with its own
+// StartHost starts a second tw-hostd, id, on e's fakemgmt, with its own
 // data and run directories (another machine, as far as mgmt and the stores
 // can tell). Move a workload to it with e.FM.MoveWorkload.
 func (e *Env) StartHost(id string) *hostd.Host {

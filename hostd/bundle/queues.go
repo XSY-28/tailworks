@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rosskukulinski/twd/internal/queuecfg"
+	"github.com/rosskukulinski/tailworks/internal/queuecfg"
 )
 
 // Queues (ADR-039): wrangler.jsonc "queues". Producers become env

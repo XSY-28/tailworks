@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // Pre-joined node pool (ADR-031, variant B: one pool per host, tenant,
@@ -89,7 +89,7 @@ func (h *Host) maintainPools() {
 	}
 	var todo []want
 	h.mu.Lock()
-	if h.tearingDown { // teardown.go: twd down --purge
+	if h.tearingDown { // teardown.go: tw down --purge
 		h.mu.Unlock()
 		return
 	}

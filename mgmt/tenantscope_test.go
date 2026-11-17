@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/internal/registry"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/registry"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
-// Tenant admins (ADR-043 D2, D3): twd.dev/cap/tenant-admin lets a
+// Tenant admins (ADR-043 D2, D3): github.com/rosskukulinski/tailworks/cap/tenant-admin lets a
 // team act in the tenants its grant names, and nowhere else.
 
 func rawVals(vals ...string) []json.RawMessage {
@@ -78,7 +78,7 @@ func TestTenantGrantPerValue(t *testing.T) {
 var tenantOperatorRoutes = map[string]bool{
 	"DELETE /v1/tenants/{id}":         true, // removing a tenant
 	"DELETE /v1/tenants/{id}/objects": true, // purging every object
-	"GET /v1/tenants/{id}/approvals":  true, // approvers (twd.dev/cap/approve)
+	"GET /v1/tenants/{id}/approvals":  true, // approvers (github.com/rosskukulinski/tailworks/cap/approve)
 	"PATCH /v1/tenants/{id}":          true, // limits, pool, tier, credentials
 	"POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}": true, // approvers
 	"POST /v1/tenants/{id}/workloads/{workload}/secret-grants":                   true, // hosts
@@ -145,7 +145,7 @@ type tenantEnv struct {
 
 func newTenantEnv(t *testing.T) *tenantEnv {
 	e := newTestEnvWith(t, func(c *Config) { c.RegistryDir = filepath.Join(t.TempDir(), "registry") })
-	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	te := &tenantEnv{}
 	tv := func(v string) map[string][]json.RawMessage {
 		return map[string][]json.RawMessage{TenantAdminCap: rawVals(v)}
@@ -185,8 +185,8 @@ func newTenantEnv(t *testing.T) *tenantEnv {
 			return WhoIsInfo{NodeID: "nT2", Name: "two.t.ts.net.", Login: "two@example.com", Caps: []string{TenantAdminCap},
 				CapValues: tv(fmt.Sprintf(`{"tenants": [%q, %q], "actions": ["read"]}`, tn, tn2))}, nil
 		case nodeAppr:
-			return WhoIsInfo{NodeID: "nAP", Name: "ap.t.ts.net.", Login: "ap@example.com", Caps: []string{"twd.dev/cap/approve"},
-				CapValues: map[string][]json.RawMessage{"twd.dev/cap/approve": rawVals(`{}`)}}, nil
+			return WhoIsInfo{NodeID: "nAP", Name: "ap.t.ts.net.", Login: "ap@example.com", Caps: []string{"github.com/rosskukulinski/tailworks/cap/approve"},
+				CapValues: map[string][]json.RawMessage{"github.com/rosskukulinski/tailworks/cap/approve": rawVals(`{}`)}}, nil
 		}
 		return WhoIsInfo{}, fmt.Errorf("unknown")
 	}
@@ -198,8 +198,8 @@ func newTenantEnv(t *testing.T) *tenantEnv {
 	te.authzEnv = a
 	te.raw = srv.TailnetHandler(whois, srv.Handler())
 	// Two teams on one tailnet: each its own owner tag; the second, a prefix.
-	a.tn = v1Tenant(t, e, "t.ts.net", map[string]any{"ownerTag": "tag:twd-t-a"})
-	a.tn2 = v1Tenant(t, e, "t.ts.net", map[string]any{"ownerTag": "tag:twd-t-b", "namePrefix": "b"})
+	a.tn = v1Tenant(t, e, "t.ts.net", map[string]any{"ownerTag": "tag:tw-t-a"})
+	a.tn2 = v1Tenant(t, e, "t.ts.net", map[string]any{"ownerTag": "tag:tw-t-b", "namePrefix": "b"})
 	a.addHost("h1", nodeH1)
 	a.addHost("h2", nodeH2)
 	var d struct{ DeploymentID string }
@@ -532,7 +532,7 @@ func TestTenantAdminSeveralTenants(t *testing.T) {
 		}
 	}
 	// The console opens, without the hosts panel.
-	r := httptest.NewRequest("GET", "http://twd-mgmt/ui/", nil)
+	r := httptest.NewRequest("GET", "http://tw-mgmt/ui/", nil)
 	r.RemoteAddr = nodeTeamTwo
 	w := httptest.NewRecorder()
 	e.raw.ServeHTTP(w, r)
@@ -549,21 +549,21 @@ func TestTenantAccessWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 	pol, err := ParsePolicy([]byte(fmt.Sprintf(`{"grants": [
-		{"src": ["group:a"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/admin": [{"tenants": [%q]}]}},
-		{"src": ["group:b"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/tenant-admin": [{"tenants": [%q]}, {"tenants": ["nope"], "actions": ["read"]}]}},
-		{"src": ["group:c"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/approve": [{}], "twd.dev/cap/mcp": [{}]}},
-		{"src": ["group:ops"], "dst": ["tag:twd-mgmt"], "app": {"twd.dev/cap/admin": [{}]}}
+		{"src": ["group:a"], "dst": ["tag:tw-mgmt"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{"tenants": [%q]}]}},
+		{"src": ["group:b"], "dst": ["tag:tw-mgmt"], "app": {"github.com/rosskukulinski/tailworks/cap/tenant-admin": [{"tenants": [%q]}, {"tenants": ["nope"], "actions": ["read"]}]}},
+		{"src": ["group:c"], "dst": ["tag:tw-mgmt"], "app": {"github.com/rosskukulinski/tailworks/cap/approve": [{}], "github.com/rosskukulinski/tailworks/cap/mcp": [{}]}},
+		{"src": ["group:ops"], "dst": ["tag:tw-mgmt"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}}
 	]}`, e.tn, e.tn)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := strings.Join(e.m.accessWarnings(ctx, tn, pol), "\n")
 	for _, want := range []string{
-		"group:a → tag:twd-mgmt: values on twd.dev/cap/admin don't narrow it",
+		"group:a → tag:tw-mgmt: values on github.com/rosskukulinski/tailworks/cap/admin don't narrow it",
 		"names no actions",
 		`names "nope", which is not a tenant`,
-		"twd.dev/cap/approve applies to every tenant on this tailnet (" + e.tn2,
-		"twd.dev/cap/mcp applies to every tenant",
+		"github.com/rosskukulinski/tailworks/cap/approve applies to every tenant on this tailnet (" + e.tn2,
+		"github.com/rosskukulinski/tailworks/cap/mcp applies to every tenant",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("warnings lack %q:\n%s", want, got)

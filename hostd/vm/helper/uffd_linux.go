@@ -196,7 +196,7 @@ func (u *uffdServer) serve() {
 					return
 				}
 			case uffdEventRemove:
-				// Only a balloon removes pages; twd configures none.
+				// Only a balloon removes pages; tailworks configures none.
 			}
 		}
 	}

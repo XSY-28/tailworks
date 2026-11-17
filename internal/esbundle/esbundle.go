@@ -1,7 +1,7 @@
-// Package esbundle bundles a twd app (wrangler.jsonc "main") into one ESM
+// Package esbundle bundles a tailworks app (wrangler.jsonc "main") into one ESM
 // module, in-process via esbuild's Go API. It is the Go twin of
-// js/packages/create-twd/lib/build.mjs (same options, same plugin), so a
-// release install can `twd deploy` with no Node.js and no esbuild binary:
+// js/packages/create-tailworks/lib/build.mjs (same options, same plugin), so a
+// release install can `tw deploy` with no Node.js and no esbuild binary:
 // workerd conditions, Node builtins mapped to node:* (needs nodejs_compat),
 // cloudflare:* and node:* external, cloudflare:email stubbed. Beyond
 // build.mjs it honours wrangler's build settings (define, alias, rules:
@@ -45,7 +45,7 @@ type Options struct {
 	Dir       string   // the app directory (absWorkingDir)
 	Main      string   // the entry, relative to Dir (wrangler.jsonc "main")
 	Outfile   string   // absolute path of the output module
-	NodePaths []string // module fallbacks (twd's own node_modules)
+	NodePaths []string // module fallbacks (tailworks' own node_modules)
 	Minify    bool
 
 	// Wrangler build settings the built-in bundler honours (wrangler
@@ -103,12 +103,12 @@ func BuildApp(o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	twd := api.Plugin{Name: "twd", Setup: func(b api.PluginBuild) {
+	tw := api.Plugin{Name: "tw", Setup: func(b api.PluginBuild) {
 		b.OnResolve(api.OnResolveOptions{Filter: `^cloudflare:email$`}, func(a api.OnResolveArgs) (api.OnResolveResult, error) {
-			return api.OnResolveResult{Path: "email", Namespace: "twd-stub"}, nil
+			return api.OnResolveResult{Path: "email", Namespace: "tw-stub"}, nil
 		})
-		b.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "twd-stub"}, func(a api.OnLoadArgs) (api.OnLoadResult, error) {
-			s := "export class EmailMessage { constructor() { throw new Error('cloudflare:email is not supported on twd'); } }"
+		b.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "tw-stub"}, func(a api.OnLoadArgs) (api.OnLoadResult, error) {
+			s := "export class EmailMessage { constructor() { throw new Error('cloudflare:email is not supported on tailworks'); } }"
 			return api.OnLoadResult{Contents: &s, Loader: api.LoaderJS}, nil
 		})
 		b.OnResolve(api.OnResolveOptions{Filter: `^[a-z_][a-z0-9_/]*$`}, func(a api.OnResolveArgs) (api.OnResolveResult, error) {
@@ -140,7 +140,7 @@ func BuildApp(o Options) (*Result, error) {
 		NodePaths:         o.NodePaths,
 		LegalComments:     api.LegalCommentsNone,
 		LogLevel:          api.LogLevelSilent,
-		Plugins:           []api.Plugin{twd, rules},
+		Plugins:           []api.Plugin{tw, rules},
 		Define:            o.Define,
 		Alias:             o.Alias,
 		KeepNames:         o.KeepNames,

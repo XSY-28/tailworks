@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // Platform stores (ADR-platform-stores), in memory: the journal a store
@@ -57,7 +57,7 @@ func (s *Server) fenceStore(w http.ResponseWriter, r *http.Request) bool {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, fmt.Sprintf("lease %s is not held at epoch %d", name, epoch))
 		return false
 	}
-	if hid := r.Header.Get("Twd-Host-ID"); hid != "" && hid != l.host {
+	if hid := r.Header.Get("Tw-Host-ID"); hid != "" && hid != l.host {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, "host "+hid+" does not hold the lease")
 		return false
 	}

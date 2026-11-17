@@ -1,9 +1,9 @@
-// Package agent ships twd's skills for coding agents (Claude Code, Codex,
-// Cursor, OpenCode, Gemini CLI) and installs them (`twd agent setup`,
+// Package agent ships tailworks' skills for coding agents (Claude Code, Codex,
+// Cursor, OpenCode, Gemini CLI) and installs them (`tw agent setup`,
 // issue #25, docs/agents.md).
 //
 // The skills are Markdown with front matter in skills/<name>/SKILL.md,
-// embedded in the twd binary so they are versioned with the CLI. Plan
+// embedded in the tailworks binary so they are versioned with the CLI. Plan
 // works out what setup or remove would write for each detected agent, in
 // that agent's format:
 //
@@ -12,10 +12,10 @@
 //     Cursor keeps user rules in its settings, not in files);
 //   - Codex and OpenCode (AGENTS.md) and Gemini CLI (GEMINI.md): one
 //     managed block in the instructions file: the core skill plus an index
-//     of the others (`twd agent show <name>` prints one).
+//     of the others (`tw agent show <name>` prints one).
 //
-// Everything twd writes carries a marker, so updates and `twd agent remove`
-// touch only twd's own files and blocks, never the user's.
+// Everything tailworks writes carries a marker, so updates and `tw agent remove`
+// touch only tailworks' own files and blocks, never the user's.
 package agent
 
 import (
@@ -42,7 +42,7 @@ type Skill struct {
 }
 
 // CoreSkill is the entry point every agent gets in full.
-const CoreSkill = "twd"
+const CoreSkill = "tw"
 
 // Skills returns every embedded skill, sorted by name with the core skill
 // first.
@@ -131,7 +131,7 @@ const (
 	FormatBlock Format = "block"
 )
 
-// Agent is a coding agent twd knows how to teach.
+// Agent is a coding agent tailworks knows how to teach.
 type Agent struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -148,7 +148,7 @@ type Agent struct {
 	NoUser string `json:"-"`
 }
 
-// Agents is every agent twd knows, in display order.
+// Agents is every agent tailworks knows, in display order.
 var Agents = []Agent{
 	{ID: "claude", Name: "Claude Code", Dirs: []string{".claude"}, Bins: []string{"claude"},
 		Format: FormatClaudeSkill, User: ".claude/skills", Project: ".claude/skills"},
@@ -212,17 +212,17 @@ func Detect(env Env) []Detection {
 
 // ---- rendering ----
 
-// marker identifies twd-written content; version is the twd that wrote it.
+// marker identifies tw-written content; version is the tailworks that wrote it.
 func marker(version string) string {
-	return "<!-- twd agent skills " + version + ": written by `twd agent setup`, removed by `twd agent remove`. Edit the source in the twd repo (agent/skills), not here. -->"
+	return "<!-- tw agent skills " + version + ": written by `tw agent setup`, removed by `tw agent remove`. Edit the source in the tailworks repo (agent/skills), not here. -->"
 }
 
-const markerPrefix = "<!-- twd agent skills "
+const markerPrefix = "<!-- tw agent skills "
 
 // Block delimiters in shared instruction files.
 const (
-	blockBegin = "<!-- BEGIN twd agent skills -->"
-	blockEnd   = "<!-- END twd agent skills -->"
+	blockBegin = "<!-- BEGIN tw agent skills -->"
+	blockEnd   = "<!-- END tw agent skills -->"
 )
 
 func renderClaude(s Skill, version string) string {
@@ -249,7 +249,7 @@ func renderBlock(skills []Skill, version string) string {
 			}
 		}
 	}
-	b.WriteString("\n### twd skills\n\nPrint a skill with `twd agent show <skill>` before you start that task:\n\n")
+	b.WriteString("\n### tw skills\n\nPrint a skill with `tw agent show <skill>` before you start that task:\n\n")
 	for _, s := range skills {
 		if s.Name != CoreSkill {
 			fmt.Fprintf(&b, "- `%s`: %s\n", s.Name, s.Description)
@@ -277,7 +277,7 @@ const (
 	Update    Action = "update"
 	Unchanged Action = "unchanged"
 	Remove    Action = "remove"
-	// Skip: a file twd didn't write is in the way; it is left alone.
+	// Skip: a file tailworks didn't write is in the way; it is left alone.
 	Skip Action = "skip"
 )
 
@@ -322,7 +322,7 @@ type Options struct {
 	Dir     string
 	Agents  []Agent
 	Version string
-	// Remove plans `twd agent remove` instead of setup.
+	// Remove plans `tw agent remove` instead of setup.
 	Remove bool
 }
 
@@ -384,7 +384,7 @@ func MakePlan(env Env, opts Options) (*Plan, error) {
 
 func isOurs(b []byte) bool { return bytes.Contains(b, []byte(markerPrefix)) }
 
-// planFiles plans one file per skill, plus removal of twd-written files
+// planFiles plans one file per skill, plus removal of tw-written files
 // for skills this version no longer ships.
 func planFiles(t *target, skills []Skill, opts Options, at func(Skill) string, render func(Skill, string) string) ([]Change, error) {
 	var out []Change
@@ -402,7 +402,7 @@ func planFiles(t *target, skills []Skill, opts Options, at func(Skill) string, r
 		case opts.Remove:
 			continue
 		case exists && !ours:
-			c.Action, c.Note = Skip, "exists and wasn't written by twd; left alone"
+			c.Action, c.Note = Skip, "exists and wasn't written by tailworks; left alone"
 		default:
 			c.content = []byte(render(s, opts.Version))
 			switch {
@@ -416,8 +416,8 @@ func planFiles(t *target, skills []Skill, opts Options, at func(Skill) string, r
 		}
 		out = append(out, c)
 	}
-	// Stale: twd-written skills of another version that this one doesn't ship.
-	matches, _ := filepath.Glob(at(Skill{Name: "twd*"}))
+	// Stale: tw-written skills of another version that this one doesn't ship.
+	matches, _ := filepath.Glob(at(Skill{Name: "tw*"}))
 	sort.Strings(matches)
 	for _, m := range matches {
 		if want[m] {
@@ -451,7 +451,7 @@ func planBlock(t *target, skills []Skill, opts Options) (Change, error) {
 		rest := joinAround(before, after)
 		if strings.TrimSpace(rest) != "" {
 			c.content = []byte(rest) // the file stays, without the block
-			c.Note = "removes the twd block; the rest of the file stays"
+			c.Note = "removes the tailworks block; the rest of the file stays"
 		}
 		return c, nil
 	}
@@ -464,7 +464,7 @@ func planBlock(t *target, skills []Skill, opts Options) (Change, error) {
 		next = block
 	default:
 		next = strings.TrimRight(string(old), "\n") + "\n\n" + block
-		c.Note = "appends a twd block; the rest of the file stays"
+		c.Note = "appends a tailworks block; the rest of the file stays"
 	}
 	c.content = []byte(next)
 	switch {
@@ -487,7 +487,7 @@ func splitBlock(s string) (before, block, after string, ok bool, err error) {
 	}
 	j := strings.Index(s[i:], blockEnd)
 	if j < 0 {
-		return "", "", "", false, fmt.Errorf("a %q without %q: fix or delete the twd block by hand", blockBegin, blockEnd)
+		return "", "", "", false, fmt.Errorf("a %q without %q: fix or delete the tailworks block by hand", blockBegin, blockEnd)
 	}
 	end := i + j + len(blockEnd)
 	if end < len(s) && s[end] == '\n' {
@@ -530,7 +530,7 @@ func Apply(p *Plan) error {
 			if err := os.Remove(c.Path); err != nil && !os.IsNotExist(err) {
 				return err
 			}
-			// A Claude skill directory twd made: remove it once empty.
+			// A Claude skill directory tailworks made: remove it once empty.
 			if filepath.Base(c.Path) == "SKILL.md" {
 				os.Remove(filepath.Dir(c.Path))
 			}

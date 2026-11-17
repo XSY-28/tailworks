@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // Restart policy for a workerd (or microVM) that exits on its own

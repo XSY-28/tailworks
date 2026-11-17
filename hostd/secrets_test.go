@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
 )
 
 // The secret value of these tests: quotes, a backslash and a newline must
-// survive the Cap'n Proto text literal and the JSON of twd-config.json.
+// survive the Cap'n Proto text literal and the JSON of tw-config.json.
 const testSecret = "sk-test-\"quoted\" \\ back\nline2"
 
 func putSecret(t *testing.T, e *hostdtest.Env, workload, name, value string) {
@@ -55,10 +55,10 @@ func TestWorkerSecrets(t *testing.T) {
 		}
 	}
 	check("/")   // the tenant worker's text bindings
-	check("/do") // a facet's env (twd-config.json)
+	check("/do") // a facet's env (tw-config.json)
 
 	// The value is written only into the instance directory (config.capnp
-	// as a text binding, twd-config.json for facets), nowhere else under
+	// as a text binding, tw-config.json for facets), nowhere else under
 	// hostd's data or run directories.
 	caps, _ := filepath.Glob(filepath.Join(e.Dir, "run", "i*", "config.capnp"))
 	if len(caps) == 0 {
@@ -143,10 +143,10 @@ func TestNodeSecrets(t *testing.T) {
 	if bytes.Contains(pe, []byte("from-a-secret")) {
 		t.Fatalf("the secret is in node's exec-time environment (pid %d)", pid)
 	}
-	if !bytes.Contains(pe, []byte("TWD_WORKLOAD=")) {
+	if !bytes.Contains(pe, []byte("TW_WORKLOAD=")) {
 		t.Fatalf("procEnv read no environment for pid %d: the check above proves nothing", pid)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".twd-secrets.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, ".tailworks-secrets.json")); !os.IsNotExist(err) {
 		t.Fatalf("secrets file still in the instance dir after start: %v", err)
 	}
 }

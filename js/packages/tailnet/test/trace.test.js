@@ -71,7 +71,7 @@ test("a DO stub fetch gets a child span, reported when the handler ends", async 
   assert.equal(s.parentSpanId, P);
   assert.equal(s.name, "Counter fetch");
   assert.equal(s.error, true);
-  assert.equal(s.attrs["twd.do.name"], "alice");
+  assert.equal(s.attrs["tw.do.name"], "alice");
   assert.equal(s.attrs["http.request.method"], "POST");
   assert.equal(s.attrs["http.response.status_code"], 503);
   assert.ok(s.end >= s.start);

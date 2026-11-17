@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // MoveWorkload moves a workload's current deployment to host to, as
-// `twd deploy --replace --force-takeover` does after a host loss
+// `tw deploy --replace --force-takeover` does after a host loss
 // (ADR-028): a new deployment of the same bundle on to, holding the
 // workload's lease at the next epoch. The old host is revoked on its next
 // heartbeat (and fenced from mgmt at once). Tests of state that must

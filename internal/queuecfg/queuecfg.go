@@ -2,7 +2,7 @@
 // configuration (wrangler.jsonc "queues": {"producers": [...],
 // "consumers": [...]}) and holds the limits shared by hostd, mgmt and the
 // CLI (ADR-039). Both hostd's bundle parser and mgmt's deploy check use
-// it, so a bad config fails `twd deploy` with 400 bad_bundle.
+// it, so a bad config fails `tw deploy` with 400 bad_bundle.
 package queuecfg
 
 import (
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Limits (Cloudflare's, except MaxConcurrency, which is twd's).
+// Limits (Cloudflare's, except MaxConcurrency, which is tailworks').
 const (
 	MaxMessageBytes     = 128 * 1000 // one message body
 	MaxBatchMessages    = 100        // one sendBatch, one pull
@@ -208,7 +208,7 @@ func (c *Config) Validate() error {
 	binds := map[string]bool{}
 	for i, p := range c.Producers {
 		where := fmt.Sprintf("queues.producers[%d]", i)
-		if !identRE.MatchString(p.Binding) || len(p.Binding) > 128 || (len(p.Binding) >= 5 && p.Binding[:5] == "__TWD") {
+		if !identRE.MatchString(p.Binding) || len(p.Binding) > 128 || (len(p.Binding) >= 5 && p.Binding[:5] == "__TW") {
 			return fmt.Errorf("%s: bad binding name %q", where, p.Binding)
 		}
 		if binds[p.Binding] {
@@ -250,7 +250,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("%s: retry_delay must be 0 to %d seconds", where, MaxDelaySeconds)
 		}
 		if k.MaxConcurrency < 0 || k.MaxConcurrency > MaxConcurrency {
-			return fmt.Errorf("%s: max_concurrency must be 1 to %d on twd", where, MaxConcurrency)
+			return fmt.Errorf("%s: max_concurrency must be 1 to %d on tailworks", where, MaxConcurrency)
 		}
 		if k.DeadLetterQueue != "" {
 			if !ValidName(k.DeadLetterQueue) {

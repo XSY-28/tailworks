@@ -28,7 +28,7 @@ import (
 // {name}, host role), checks its SHA-256 and its release signature against
 // the keys pinned in this binary (upgradesig.go), runs the tarball's install.sh
 // into Config.InstallPrefix (which keeps the previous install as .prev),
-// and calls Config.Restart. twd-hostd then exits for its service manager
+// and calls Config.Restart. tw-hostd then exits for its service manager
 // to start the new binary; the run waits for the host to re-register at
 // the new version.
 
@@ -42,7 +42,7 @@ type UpgradeOrder struct {
 }
 
 var (
-	artifactNameRE = regexp.MustCompile(`^twd-[0-9]+\.[0-9]+\.[0-9]+-(darwin|linux)-(amd64|arm64)\.tar\.gz$`)
+	artifactNameRE = regexp.MustCompile(`^tw-[0-9]+\.[0-9]+\.[0-9]+-(darwin|linux)-(amd64|arm64)\.tar\.gz$`)
 	sha256RE       = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
@@ -64,7 +64,7 @@ func (h *Host) upgradeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case !h.selfUpgradeEnabled():
-		writeAPIError(w, &apiError{Code: "bad_request", Detail: "this host does not upgrade itself (start twd-hostd with -self-upgrade under a service manager)"})
+		writeAPIError(w, &apiError{Code: "bad_request", Detail: "this host does not upgrade itself (start tw-hostd with -self-upgrade under a service manager)"})
 		return
 	case !artifactNameRE.MatchString(o.Name) || !sha256RE.MatchString(o.SHA256) ||
 		!strings.Contains(o.Name, "-"+o.Version+"-"):
@@ -125,7 +125,7 @@ func (h *Host) installArtifact(ctx context.Context, tgz, dir, version string) er
 	if err := extractTarGz(tgz, dir); err != nil {
 		return fmt.Errorf("extract %s: %w", name, err)
 	}
-	inst, err := filepath.Glob(filepath.Join(dir, "twd-*", "install.sh"))
+	inst, err := filepath.Glob(filepath.Join(dir, "tailworks-*", "install.sh"))
 	if err != nil || len(inst) != 1 {
 		return fmt.Errorf("%s has no install.sh", name)
 	}
@@ -139,7 +139,7 @@ func (h *Host) installArtifact(ctx context.Context, tgz, dir, version string) er
 		return fmt.Errorf("%s: refusing an unverified release: its VERSION is %q, the order was for %s", name, strings.TrimSpace(string(b)), version)
 	}
 	cmd := exec.CommandContext(ctx, "sh", inst[0], "--prefix", h.cfg.InstallPrefix, "--force")
-	cmd.Env = append(os.Environ(), "TWD_HOME="+h.cfg.InstallPrefix)
+	cmd.Env = append(os.Environ(), "TW_HOME="+h.cfg.InstallPrefix)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("install.sh: %v: %s", err, lastLines(string(out), 5))

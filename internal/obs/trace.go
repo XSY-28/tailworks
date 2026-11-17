@@ -1,10 +1,10 @@
-// Package obs is twd's observability core (ADR-observability): W3C trace
+// Package obs is tailworks' observability core (ADR-observability): W3C trace
 // context, a small metrics registry with Prometheus text exposition,
 // OTLP/HTTP (JSON encoding) for logs, metrics and traces, the structured
-// request record behind `twd logs`, and the volume bounds (rotating files,
+// request record behind `tw logs`, and the volume bounds (rotating files,
 // a rate limiter) that keep one noisy workload from filling a host's disk.
 //
-// It has no dependencies outside the standard library: twd implements the
+// It has no dependencies outside the standard library: tailworks implements the
 // OTLP JSON encoding and the Prometheus text format itself rather than
 // pulling in the OpenTelemetry SDK and its gRPC/protobuf stack.
 package obs

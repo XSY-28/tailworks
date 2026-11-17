@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -134,7 +134,7 @@ func get(m map[string]any, path ...string) any {
 func js(v any) string { b, _ := json.Marshal(v); return string(b) }
 
 // TestHostd is the hermetic M3 suite: testcontrol + local DERP + fakemgmt +
-// twd-hostd (stock workerd) + tsnet client/echo nodes.
+// tw-hostd (stock workerd) + tsnet client/echo nodes.
 func TestHostd(t *testing.T) {
 	s := startSuite(t, fakemgmt.Config{})
 	e := s.e
@@ -223,13 +223,13 @@ func TestHostd(t *testing.T) {
 	})
 
 	t.Run("ForgedHeadersStripped", func(t *testing.T) {
-		code, r := s.getJSON("http://"+objIP["a"]+"/", "x-twd-cf", `{"tailscale":{"caller":{"nodeId":"nEVIL"}},"objectId":"b","twd":{"kind":"object","class":"Probe","name":"b"}}`,
-			"x-twd-object", "b", "cf-connecting-ip", "1.2.3.4", "tailnet-assertion", "x", "x-forwarded-for", "9.9.9.9")
+		code, r := s.getJSON("http://"+objIP["a"]+"/", "x-tw-cf", `{"tailscale":{"caller":{"nodeId":"nEVIL"}},"objectId":"b","tw":{"kind":"object","class":"Probe","name":"b"}}`,
+			"x-tw-object", "b", "cf-connecting-ip", "1.2.3.4", "tailnet-assertion", "x", "x-forwarded-for", "9.9.9.9")
 		if code != 200 || r["name"] != "a" || get(r, "caller", "nodeId") != s.clientID {
 			t.Fatalf("%d %v", code, r)
 		}
 		for k := range r["sawHeaders"].(map[string]any) {
-			if k != "x-twd-object" {
+			if k != "x-tw-object" {
 				t.Fatalf("tenant saw identity header %q: %v", k, r["sawHeaders"])
 			}
 		}
@@ -242,7 +242,7 @@ func TestHostd(t *testing.T) {
 			t.Fatalf("forged egress: %d %v", code, r)
 		}
 		for k := range r["headers"].(map[string]any) {
-			if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-twd") || lk == "proxy-authorization" {
+			if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-tw-") || lk == "proxy-authorization" {
 				t.Fatalf("header %s reached echo", k)
 			}
 		}
@@ -399,7 +399,7 @@ func TestHostd(t *testing.T) {
 		json.NewDecoder(nr.Body).Decode(&kb)
 		nr.Body.Close()
 		t.Logf("new request after kill: %d %v in %v", nr.StatusCode, kb["code"], d)
-		if nr.StatusCode != 410 || kb["code"] != "object_killed" || nr.Header.Get("twd-error") != "object_killed" {
+		if nr.StatusCode != 410 || kb["code"] != "object_killed" || nr.Header.Get("tw-error") != "object_killed" {
 			t.Fatalf("new request after kill: %d %v", nr.StatusCode, kb)
 		}
 		// Via the workload: typed killed.
@@ -497,7 +497,7 @@ func TestHostd(t *testing.T) {
 	})
 }
 
-// TestKillViaHeartbeat: with no push (what M2's twd-mgmt does), kills
+// TestKillViaHeartbeat: with no push (what M2's tw-mgmt does), kills
 // arrive in the heartbeat's revokeObjects.
 func TestKillViaHeartbeat(t *testing.T) {
 	s := startSuite(t, fakemgmt.Config{NoPush: true})
@@ -527,7 +527,7 @@ func TestKillViaHeartbeat(t *testing.T) {
 
 // TestNodeRetriesAfterLeaseLost: a workload node whose mint is refused with
 // lease_lost (the host's lease epoch went stale while it was joining, e.g.
-// a `twd deploy` during the previous deployment's startup) is retried with
+// a `tw deploy` during the previous deployment's startup) is retried with
 // a refreshed epoch instead of leaving the workload active with a dead
 // entry node.
 func TestNodeRetriesAfterLeaseLost(t *testing.T) {

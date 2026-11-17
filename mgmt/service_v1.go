@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
 // Service methods added for /v1 (REST semantics: PATCH, DELETE with
@@ -37,14 +37,14 @@ type TenantPatch struct {
 	PublicIngress *string
 	By            string
 
-	// teams.go: the owner tag (null = tag:twd) and the name prefix (only
+	// teams.go: the owner tag (null = tag:tw) and the name prefix (only
 	// before the tenant's first deploy).
 	OwnerTag   *string
 	NamePrefix *string
 }
 
 // UpdateTenant applies a merge patch. Changing the mode, client ID or
-// credential file drops cached tokens. A tenant an older twd left in a
+// credential file drops cached tokens. A tenant an older tailworks left in a
 // removed mint mode (mintmodes.go) can still be patched, and switching it
 // to oauth is how it gets minting again.
 func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tenant, error) {
@@ -253,13 +253,13 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 }
 
 // HostJoin is POST /v1/hosts: the record plus a single-use join key for
-// the host's tag:twd-host node.
+// the host's tag:tw-host node.
 type HostJoin struct {
 	Host    Host   `json:"host"`
 	AuthKey string `json:"authKey"`
 	// RegistrationSecret (M1) is the one-time secret the host presents in
 	// its first PUT /v1/hosts/{id}; mgmt keeps only its SHA-256, so the
-	// join key alone (a tag:twd-host node) cannot claim this host ID.
+	// join key alone (a tag:tw-host node) cannot claim this host ID.
 	RegistrationSecret string   `json:"registrationSecret"`
 	ExpiresAt          int64    `json:"expiresAt"`
 	Tags               []string `json:"tags"`
@@ -297,7 +297,7 @@ func hashRegistrationSecret(secret string) string {
 }
 
 // HostNodeName is the tsnet hostname of a host's own node.
-func HostNodeName(hostID string) string { return "twd-host-" + hostID }
+func HostNodeName(hostID string) string { return "tw-host-" + hostID }
 
 // operatorTenant finds the tenant whose tailnet is mgmt's own (the one
 // whose credential mints host and mgmt keys). With an explicit ID it is
@@ -326,7 +326,7 @@ func (m *Mgmt) operatorTenant(ctx context.Context, id string) (Tenant, error) {
 }
 
 // CreateHost records a host (status pending until it registers) and mints
-// a single-use, pre-authorized tag:twd-host key for its node. Re-running it
+// a single-use, pre-authorized tag:tw-host key for its node. Re-running it
 // for a pending host mints a fresh key; a bound host is 409 exists.
 func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, error) {
 	if !validHostID(r.HostID) {
@@ -347,7 +347,7 @@ func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, er
 	}
 	tags := []string{HostTag}
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: tags, Preauthorized: true, ExpirySeconds: int(HostJoinKeyExpiry / time.Second),
-		Description: "twd host " + r.HostID})
+		Description: "tw host " + r.HostID})
 	if err != nil {
 		if tsapi.IsTagsNotPermitted(err) {
 			e := errf(403, "policy_missing_tag_owners", "the control plane refused to mint a %s key with tenant %s's %s credential: %v", HostTag, t.ID, t.MintMode, err)
@@ -531,7 +531,7 @@ func (m *Mgmt) Undeploy(ctx context.Context, id, reason, by string) (KillResult,
 	go m.push(d.HostID, "/v1/push/assignments", map[string]any{})
 	m.audit(ctx, AuditRecord{TenantID: d.TenantID, Kind: "undeploy", ActingFor: by}, map[string]any{"deploymentID": d.ID,
 		"workload": d.Workload, "host": d.HostID, "killed": len(res.Killed), "reason": reason, "by": by})
-	// Undeploying a workload stops its replicas too (twd.jsonc "replicas").
+	// Undeploying a workload stops its replicas too (tailworks.jsonc "replicas").
 	if replicaGroup(d.Namespaces) == "" {
 		if reps, err := m.replicasOf(ctx, d.TenantID, d.Workload); err == nil {
 			for _, rd := range reps {
@@ -563,7 +563,7 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 	}
 	classes := slices.Clone(r.Namespaces)
 	var connects []string
-	var svcCfg *TwdConfig
+	var svcCfg *TwConfig
 	var pub *DeploymentPublic
 	if len(r.Bundle) > 0 {
 		if _, err := BundleCrons(r.Bundle); err != nil {
@@ -616,7 +616,7 @@ func (m *Mgmt) PreflightBundle(ctx context.Context, r DeployRequest) (PreflightR
 		}
 	}
 	if len(classes) == 0 {
-		return res, errf(400, "bad_bundle", "no namespaces: the bundle's twd.jsonc declares neither tailnet.tags (the workload node) nor tailnet.objects")
+		return res, errf(400, "bad_bundle", "no namespaces: the bundle's tailworks.jsonc declares neither tailnet.tags (the workload node) nor tailnet.objects")
 	}
 	classes = withPublicNamespace(classes, pub)
 	var src []string
@@ -734,9 +734,9 @@ func (m *Mgmt) deploymentStatus(ctx context.Context, d Deployment) (string, stri
 
 var _ = fmt.Sprintf
 
-// TagOwnersSnippet is the tagOwners twd's own nodes need: tag:twd (the
+// TagOwnersSnippet is the tagOwners tailworks' own nodes need: tag:tw (the
 // mint credential's tag) must own the mgmt and host tags so an OAuth
-// client or trust credential tagged tag:twd can mint their keys.
+// client or trust credential tagged tag:tw can mint their keys.
 func TagOwnersSnippet() string {
-	return `"tagOwners": { "tag:twd": ["autogroup:admin"], "` + MgmtTag + `": ["autogroup:admin", "tag:twd"], "` + HostTag + `": ["autogroup:admin", "tag:twd"] }`
+	return `"tagOwners": { "tag:tw": ["autogroup:admin"], "` + MgmtTag + `": ["autogroup:admin", "tag:tw"], "` + HostTag + `": ["autogroup:admin", "tag:tw"] }`
 }

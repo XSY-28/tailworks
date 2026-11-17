@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/features"
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/features"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 // Versions, skew and features (ADR-041 §7).
 
-// Version is this replica's twd-mgmt version: Config.Version, else the
+// Version is this replica's tw-mgmt version: Config.Version, else the
 // built-in one.
 func (m *Mgmt) Version() string {
 	if m.cfg.Version != "" {
@@ -36,9 +36,9 @@ func (m *Mgmt) hostSkew(h Host) string {
 // hostVersionName is the host's version for messages.
 func hostVersionName(h Host) string {
 	if h.Version == "" {
-		return "twd " + version.Legacy + " or older (no version reported)"
+		return "tw " + version.Legacy + " or older (no version reported)"
 	}
-	return "twd " + h.Version
+	return "tw " + h.Version
 }
 
 // featureGap is why h can't run a deployment needing need ("" = it can).
@@ -105,9 +105,9 @@ func (m *Mgmt) replicaSkew(rs []Replica) string {
 	return ""
 }
 
-// VersionHeader is the response header carrying twd-mgmt's version; the
+// VersionHeader is the response header carrying tw-mgmt's version; the
 // CLI compares it with its own (internal/version.CLIAdvice).
-const VersionHeader = "Twd-Version"
+const VersionHeader = "Tw-Version"
 
 func versionHeader(v string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

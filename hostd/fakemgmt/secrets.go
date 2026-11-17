@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // Worker secrets (ADR-034), in memory: put/list/delete as an
 // admin, and the lease-fenced grant hostd fetches when it starts a
-// deployment. `twd dev` loads .dev.vars through these.
+// deployment. `tw dev` loads .dev.vars through these.
 
 type fakeSecret struct {
 	value            string
@@ -73,7 +73,7 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 		sec = &fakeSecret{created: now}
 		s.secrets[k][name] = sec
 	}
-	sec.value, sec.updated, sec.updatedBy = *body.Value, now, r.Header.Get("Twd-Actor")
+	sec.value, sec.updated, sec.updatedBy = *body.Value, now, r.Header.Get("Tw-Actor")
 	status := 200
 	if !exists {
 		status = 201
@@ -126,7 +126,7 @@ func (s *Server) secretGrant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, fmt.Sprintf("lease %s is not held at epoch %d", name, epoch))
 		return
 	}
-	if hid := r.Header.Get("Twd-Host-ID"); hid != "" && hid != l.host {
+	if hid := r.Header.Get("Tw-Host-ID"); hid != "" && hid != l.host {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, "host "+hid+" does not hold the lease")
 		return
 	}

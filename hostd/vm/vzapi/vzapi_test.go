@@ -3,7 +3,7 @@ package vzapi
 import (
 	"testing"
 
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 func TestCheckProto(t *testing.T) {

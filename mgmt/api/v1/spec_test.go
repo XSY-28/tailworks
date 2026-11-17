@@ -55,19 +55,19 @@ func TestSpecConventions(t *testing.T) {
 			if op.OperationID == "" {
 				t.Errorf("%s: no operationId", name)
 			}
-			role, hasRole := op.Extensions["x-twd-role"]
+			role, hasRole := op.Extensions["x-tw-role"]
 			public := op.Security != nil && len(*op.Security) == 0
 			if !public && !hasRole {
-				t.Errorf("%s: no x-twd-role", name)
+				t.Errorf("%s: no x-tw-role", name)
 			}
 			if public && !strings.HasPrefix(path, "/.well-known") && !strings.HasPrefix(path, "/jwks") && !strings.HasPrefix(path, "/t/") {
 				t.Errorf("%s: public but not an OIDC path", name)
 			}
 			mutating := method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE"
-			audited, _ := op.Extensions["x-twd-audit"].(bool)
+			audited, _ := op.Extensions["x-tw-audit"].(bool)
 			switch {
 			case mutating && !audited && !unauditedOK[op.OperationID]:
-				t.Errorf("%s: mutating but not x-twd-audit: true", name)
+				t.Errorf("%s: mutating but not x-tw-audit: true", name)
 			case !mutating && audited:
 				t.Errorf("%s: GET marked audited", name)
 			}
@@ -192,7 +192,7 @@ func TestValidatorRejectsAndAccepts(t *testing.T) {
 	}{
 		{"tenant ok", 200, good, false},
 		{"tenant missing required", 200, map[string]any{"tenantID": "tn_abc123"}, true},
-		{"error ok", 404, Error{Code: ErrorCodeNotFound, Message: "no", DocURL: "https://twd.dev/errors/not_found", TraceID: "t"}, false},
+		{"error ok", 404, Error{Code: ErrorCodeNotFound, Message: "no", DocURL: "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#not_found", TraceID: "t"}, false},
 		{"error bad code", 404, map[string]any{"code": "nope", "message": "m", "doc_url": "u", "trace_id": "t"}, true},
 		{"undocumented status", 418, good, true},
 	} {

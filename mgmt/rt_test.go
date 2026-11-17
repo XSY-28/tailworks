@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/nodecert"
+	"github.com/rosskukulinski/tailworks/internal/nodecert"
 )
 
 // RT-01: mgmt signs a node certificate at ready, carrying the spawn lim,
@@ -24,7 +24,7 @@ func TestNodeCertificates(t *testing.T) {
 	var tn struct{ TenantID string }
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, nil)
 
 	var root, child CreateObjectResponse
@@ -49,7 +49,7 @@ func TestNodeCertificates(t *testing.T) {
 	var cert NodeCertView
 	h1.ok("GET", "/v1/certificates/nCHILD?tenant="+tn.TenantID, nil, &cert)
 	if cert.ObjectID != child.ObjectID || cert.Payload == nil || cert.Payload.ParentID != root.ObjectID || cert.Payload.RootID != root.ObjectID ||
-		cert.Payload.Tags[0] != "tag:twd-agent-support-sub" || !strings.Contains(string(cert.Payload.Lim), "lookup_order") {
+		cert.Payload.Tags[0] != "tag:tw-agent-support-sub" || !strings.Contains(string(cert.Payload.Lim), "lookup_order") {
 		t.Fatalf("cert view: %+v payload %+v", cert, cert.Payload)
 	}
 	p, err := nodecert.Verify(ed25519.PublicKey(pub), cert.Cert, "nCHILD", time.Now())
@@ -66,7 +66,7 @@ func TestNodeCertificates(t *testing.T) {
 		t.Fatalf("root cert: %+v", rc.Payload)
 	}
 	// Unknown node / wrong tenant: 404 (the receiver then applies the plain
-	// WhoIs caps: not a twd object). Killed: 410.
+	// WhoIs caps: not a tailworks object). Killed: 410.
 	h1.fail("GET", "/v1/certificates/nNOBODY?tenant="+tn.TenantID, nil, 404, "not_found")
 	h1.fail("GET", "/v1/certificates/nCHILD?tenant=tn_other", nil, 404, "not_found")
 	c.ok("DELETE", "/v1/objects/"+child.ObjectID+killQuery(false, "test"), nil, nil)
@@ -95,7 +95,7 @@ func TestHostTokenOnUnixSocket(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", e.sock)
 	}}}
 	get := func(path, token string) (int, string) {
-		req, _ := http.NewRequest("GET", "http://twd-mgmt"+path, nil)
+		req, _ := http.NewRequest("GET", "http://tw-mgmt"+path, nil)
 		if token != "" {
 			req.Header.Set(HostTokenHeader, token)
 		}

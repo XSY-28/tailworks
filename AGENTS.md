@@ -53,8 +53,8 @@ conflict. Two branches that each add their own line usually don't.
 
 The hotspots that conflicted most were `hostd/host.go`, `hostd/http.go`,
 `hostd/workload.go`, `hostd/objects.go`, `netd/registry.go`,
-`mgmt/service.go`, `mgmt/sqlstore.go`, `cmd/twd/main.go` and
-`cmd/twd-hostd/main.go`. Put the feature's logic in its own file
+`mgmt/service.go`, `mgmt/sqlstore.go`, `cmd/tw/main.go` and
+`cmd/tw-hostd/main.go`. Put the feature's logic in its own file
 (`hostd/public.go`, `mgmt/placement.go` and `mgmt/warmkeys.go` are good
 examples). Keep the edit to the shared file small: one field, one route
 registration, one call. Don't reformat or reorder code you aren't changing.
@@ -117,13 +117,13 @@ and break master together (as #54, #55 and #57 did).
    - API: edit `api/openapi.yaml`, run `make api`, commit the output (rule 2).
    - Release notes: when `make changes-check` asks for one, add a
      `changes/<branch>.md` fragment.
-   - New CLI command: one entry in `commands` (`cmd/twd/main.go`) with its
+   - New CLI command: one entry in `commands` (`cmd/tw/main.go`) with its
      `group:` and `short:` (≤ 60 characters). There is nothing else to
      register.
    - Command, flag or help text change: run `make cli-docs` and commit
      `docs/cli.md` (`TestCLIReferenceUpToDate` fails when it is stale).
    - New error code: add it to `docs/errors.md` with "When" and "Fix".
-   - Template or binding change: run `twd types` and commit the template's
+   - Template or binding change: run `tw types` and commit the template's
      `worker-configuration.d.ts`.
 4. **Status:** update `status/<branch>.md` (rule 1) with the commands you
    ran and their results.

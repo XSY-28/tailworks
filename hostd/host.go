@@ -1,4 +1,4 @@
-// Package hostd is twd-hostd's process tier: it registers with twd-mgmt and
+// Package hostd is tw-hostd's process tier: it registers with tw-mgmt and
 // heartbeats, pulls assignments, and for each deployment unpacks the
 // bundle, generates the workerd config (platform wrapper + tenant service),
 // supervises one workerd process per tenant workload, and drives the netd
@@ -7,7 +7,7 @@
 //
 // Data flow (see gen for the workerd side):
 //
-//	caller ─WG─▶ node (netd: WhoIs, strip, cf blob) ─▶ hostd ingress (adds cf.twd routing)
+//	caller ─WG─▶ node (netd: WhoIs, strip, cf blob) ─▶ hostd ingress (adds cf.tw routing)
 //	       ─▶ workerd ingress.sock ─▶ platform entry ─▶ Host_<Class> DO ─▶ tenant facet
 //	tenant fetch() ─▶ platform Egress (props: class,name; MAC) ─▶ hostd egress-obj.sock
 //	       ─▶ netd egress (object's own node, ADR-019 guard) ─WG─▶ destination
@@ -22,8 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
+	"github.com/rosskukulinski/tailworks/internal/version"
 	"log/slog"
 	"net"
 	"net/http"
@@ -35,12 +35,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/image"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/r2"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/internal/procsb"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/image"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/r2"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/netd"
 	"tailscale.com/tsnet"
 )
 
@@ -78,7 +78,7 @@ type Config struct {
 	PoolNodes     int
 	CapacityNodes int
 	// RegistrationSecret is the one-time secret from the join file
-	// (TWD_REGISTRATION_SECRET); mgmt needs it on this host ID's first
+	// (TW_REGISTRATION_SECRET); mgmt needs it on this host ID's first
 	// tailnet registration. Empty for local-dev hosts. Never logged.
 	RegistrationSecret string
 	// ReadyTimeout bounds how long requests wait for an object's node
@@ -103,13 +103,13 @@ type Config struct {
 	// Nil means this host offers the process tier only: a microvm
 	// deployment is refused (tier_unavailable), never downgraded.
 	VM sandbox.Backend
-	// ForceProcessTier is explicit local development (twd dev): every
-	// workload runs in the process tier whatever its twd.jsonc or tenant
+	// ForceProcessTier is explicit local development (tw dev): every
+	// workload runs in the process tier whatever its tailworks.jsonc or tenant
 	// asks for, and the host registers the process tier only. Never set it
 	// on a host that serves real tenants (ADR-032 D5b).
 	ForceProcessTier bool
 
-	// WorkerdInspector (twd dev --inspector-port; only with
+	// WorkerdInspector (tw dev --inspector-port; only with
 	// ForceProcessTier) starts each workerd with its V8 inspector on a free
 	// 127.0.0.1 port (inspector.go). It gives full control of the isolate:
 	// never on a host serving tenants.
@@ -120,13 +120,13 @@ type Config struct {
 	// backend every VM dimension is 0.
 	Capacity *mgmtapi.HostCapacity
 	// VMMemMiB and VMVCPUs are a microVM DO instance's guest size, for usage
-	// accounting (defaults 512 and 2, twd-hostd's -vm-mem-mib / -vm-vcpus).
+	// accounting (defaults 512 and 2, tw-hostd's -vm-mem-mib / -vm-vcpus).
 	VMMemMiB, VMVCPUs int
 	// ContainerQuota reserves container quota at ctx.container.start()
 	// (default: mgmt's /v1/container-reservations through Mgmt; tests: a
 	// fake).
 	ContainerQuota ContainerQuota
-	// DefaultTier applies when neither the deployment (twd.jsonc "tier")
+	// DefaultTier applies when neither the deployment (tailworks.jsonc "tier")
 	// nor the tenant names one. Default "process".
 	DefaultTier string
 	// VMDebug enables guest diagnostics (connectivity probes; tests).
@@ -149,7 +149,7 @@ type Config struct {
 	// (procsb.ScanHostSockets; tests).
 	HostSockets func() procsb.HostSockets
 	// SandboxDeny are extra paths no workerd may read, write or connect to
-	// (twd up: its whole state dir, which holds mgmt's custody and socket).
+	// (tw up: its whole state dir, which holds mgmt's custody and socket).
 	SandboxDeny []string
 	// NodeBin is the node binary for runtime "node" deployments (default:
 	// node from PATH).
@@ -173,7 +173,7 @@ type Config struct {
 	WhoIs         WhoIsFunc
 	TailnetStatus StatusFunc
 	// PushInProcess: this host agent runs inside mgmt's own process
-	// (single-process twd up). It registers with the push URL
+	// (single-process tw up). It registers with the push URL
 	// EmbeddedPushURL and mgmt serves its pushes through PushHandler
 	// directly; no push listener is opened besides the local socket.
 	PushInProcess bool
@@ -203,7 +203,7 @@ type Config struct {
 	// ContainerInternet is the sandbox internet path (ADR-032 D4): how a
 	// container started with enableInternet reaches the hosts on its
 	// workload's egress.internet allowlist. Nil: none; such flows are
-	// refused. twd-hostd sets DirectInternet unless -container-internet=off.
+	// refused. tw-hostd sets DirectInternet unless -container-internet=off.
 	ContainerInternet *ContainerInternet
 	// PathEvery is how often hostd measures and reports the tailnet paths
 	// to its assignments' placement targets (smart placement, ADR-033).
@@ -235,7 +235,7 @@ type Config struct {
 	// the reported version (tests; "" = internal/version's). SelfUpgrade
 	// lets mgmt's upgrade runs install a release on this host and restart
 	// it: InstallPrefix is the install.sh prefix to install into, and
-	// Restart is called once the new release is installed (twd-hostd exits
+	// Restart is called once the new release is installed (tw-hostd exits
 	// for its service manager to start the new binary).
 	Version       string
 	SelfUpgrade   bool
@@ -253,7 +253,7 @@ type ContainerInternet struct {
 	HostAddrs []netip.Addr
 }
 
-// DirectInternet is the host network and resolver (twd has no tenant
+// DirectInternet is the host network and resolver (tailworks has no tenant
 // exit-node or gateway path yet; RFC §4.8).
 func DirectInternet() *ContainerInternet {
 	d := &net.Dialer{Timeout: 10 * time.Second}
@@ -266,7 +266,7 @@ func DirectInternet() *ContainerInternet {
 // (mgmt.EmbeddedPushURL; hostd does not import mgmt).
 const EmbeddedPushURL = "inproc://"
 
-// Host is a running twd-hostd.
+// Host is a running tw-hostd.
 type Host struct {
 	cfg    Config
 	log    *slog.Logger
@@ -289,7 +289,7 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
-	// teardown gate (teardown.go): POST /v1/teardown, twd down --purge.
+	// teardown gate (teardown.go): POST /v1/teardown, tw down --purge.
 	tearingDown     bool
 	createsInFlight int
 
@@ -394,7 +394,7 @@ func New(cfg Config) (*Host, error) {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
 	if cfg.DefaultTier == "microvm" && cfg.VM == nil && !cfg.ForceProcessTier {
-		return nil, errors.New("hostd: default tier microvm needs a microVM backend (Linux + KVM + twd-vmhelper: `sudo twd host setup --microvm`); without one, use -default-tier process")
+		return nil, errors.New("hostd: default tier microvm needs a microVM backend (Linux + KVM + tw-vmhelper: `sudo tw host setup --microvm`); without one, use -default-tier process")
 	}
 	sb, err := ResolveSandbox(cfg.Sandbox)
 	if err != nil {
@@ -430,7 +430,7 @@ func New(cfg Config) (*Host, error) {
 	h.admits = map[string]time.Time{}
 	os.Chmod(cfg.DataDir, 0o700)
 	if h.cfg.RunDir == "" {
-		d, err := os.MkdirTemp("/tmp", "twd-h-")
+		d, err := os.MkdirTemp("/tmp", "tw-h-")
 		if err != nil {
 			return nil, err
 		}
@@ -488,7 +488,7 @@ func (h *Host) Start(ctx context.Context) error {
 	if h.cfg.PushListener != nil {
 		// Pushes over the tailnet come from mgmt's node only (H1). Pin it
 		// now from the -mgmt address; if that is a MagicDNS name not yet
-		// in the netmap, the first tag:twd-mgmt pusher pins it instead.
+		// in the netmap, the first tag:tw-mgmt pusher pins it instead.
 		h.pushAuth = newPushAuth(h.mgmt.Base, h.cfg.WhoIs, h.cfg.TailnetStatus, h.log)
 		if err := h.pushAuth.pin(ctx); err != nil {
 			h.log.Warn("push API: mgmt's node not resolved yet; pinning to the first tagged pusher", "err", err)

@@ -1,8 +1,8 @@
 package hostd
 
 import (
-	"github.com/rosskukulinski/twd/internal/features"
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/features"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 // FeatureSelfUpgrade: this hostd installs a release pushed by an upgrade

@@ -45,7 +45,7 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 		}
 	}
 	p := filepath.Join(dir, "ok.tgz")
-	os.WriteFile(p, tarGz(t, map[string]string{"twd-0.2.0-linux-amd64/install.sh": "#!/bin/sh\n"}), 0o600)
+	os.WriteFile(p, tarGz(t, map[string]string{"tailworks-0.2.0-linux-amd64/install.sh": "#!/bin/sh\n"}), 0o600)
 	if err := extractTarGz(p, filepath.Join(dir, "ok")); err != nil {
 		t.Fatal(err)
 	}
@@ -55,13 +55,13 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 func TestSelfUpgradeInstalls(t *testing.T) {
 	prefix := t.TempDir()
 	pub, priv := testReleaseKey(t)
-	tgz := tarGz(t, signRelease(t, priv, "twd-0.2.0-linux-amd64", map[string]string{
-		"twd-0.2.0-linux-amd64/install.sh": "#!/bin/sh\n[ \"$1\" = --prefix ] || exit 3\necho 0.2.0 > \"$2/installed\"\n",
-		"twd-0.2.0-linux-amd64/VERSION":    "0.2.0\n",
+	tgz := tarGz(t, signRelease(t, priv, "tailworks-0.2.0-linux-amd64", map[string]string{
+		"tailworks-0.2.0-linux-amd64/install.sh": "#!/bin/sh\n[ \"$1\" = --prefix ] || exit 3\necho 0.2.0 > \"$2/installed\"\n",
+		"tailworks-0.2.0-linux-amd64/VERSION":    "0.2.0\n",
 	}))
 	h := &Host{cfg: Config{DataDir: t.TempDir(), SelfUpgrade: true, InstallPrefix: prefix, Restart: func() {}}}
 	h.upg.signers = []ed25519.PublicKey{pub}
-	p := filepath.Join(t.TempDir(), "twd-0.2.0-linux-amd64.tar.gz")
+	p := filepath.Join(t.TempDir(), "tailworks-0.2.0-linux-amd64.tar.gz")
 	os.WriteFile(p, tgz, 0o600)
 	if err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "x"), "0.2.0"); err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestSelfUpgradeInstalls(t *testing.T) {
 		t.Fatalf("install.sh did not run into the prefix: %q", b)
 	}
 	// A failing install.sh is an error (the old release stays).
-	bad := tarGz(t, signRelease(t, priv, "twd-0.2.0-linux-amd64", map[string]string{"twd-0.2.0-linux-amd64/install.sh": "#!/bin/sh\necho nope; exit 1\n", "twd-0.2.0-linux-amd64/VERSION": "0.2.0\n"}))
+	bad := tarGz(t, signRelease(t, priv, "tailworks-0.2.0-linux-amd64", map[string]string{"tailworks-0.2.0-linux-amd64/install.sh": "#!/bin/sh\necho nope; exit 1\n", "tailworks-0.2.0-linux-amd64/VERSION": "0.2.0\n"}))
 	os.WriteFile(p, bad, 0o600)
 	if err := h.installArtifact(context.Background(), p, filepath.Join(t.TempDir(), "y"), "0.2.0"); err == nil || !strings.Contains(err.Error(), "nope") {
 		t.Fatalf("failing install.sh: %v", err)
@@ -183,7 +183,7 @@ func TestExtractTarGzSymlinkEscapes(t *testing.T) {
 func TestSelfUpgradeRefusesOtherVersion(t *testing.T) {
 	prefix := t.TempDir()
 	pub, priv := testReleaseKey(t)
-	top := "twd-0.3.0-linux-amd64"
+	top := "tailworks-0.3.0-linux-amd64"
 	tgz := tarGz(t, signRelease(t, priv, top, map[string]string{
 		top + "/install.sh": "#!/bin/sh\necho ran > \"$2/installed\"\n",
 		top + "/VERSION":    "0.2.0\n",

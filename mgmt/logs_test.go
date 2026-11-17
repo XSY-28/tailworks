@@ -33,7 +33,7 @@ func (f *fakeLogHost) seen() []string {
 func logHost(t *testing.T, e *testEnv, id string) *fakeLogHost {
 	t.Helper()
 	f := &fakeLogHost{}
-	sock := filepath.Join(os.TempDir(), "twd-logs-"+id+"-"+filepath.Base(filepath.Dir(filepath.Dir(e.sock)))+".sock")
+	sock := filepath.Join(os.TempDir(), "tw-logs-"+id+"-"+filepath.Base(filepath.Dir(filepath.Dir(e.sock)))+".sock")
 	os.Remove(sock)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
@@ -71,7 +71,7 @@ func logHost(t *testing.T, e *testEnv, id string) *fakeLogHost {
 // getLogs is GET …/logs as the local admin, through the spec validator.
 func getLogs(t *testing.T, e *testEnv, path string) (int, string) {
 	t.Helper()
-	req, _ := http.NewRequest("GET", "http://twd-mgmt"+path, nil)
+	req, _ := http.NewRequest("GET", "http://tw-mgmt"+path, nil)
 	req.Header.Set(HostTokenHeader, e.token)
 	res, err := e.c.hc.Do(req)
 	if err != nil {
@@ -120,7 +120,7 @@ func TestWorkloadLogs(t *testing.T) {
 	// The host's typed refusal comes through; a dead host is 502.
 	e.store.AcquireLease(ctx, LeaseName(tnA, "gone"), "h1", time.Minute, time.Now())
 	e.c.fail("GET", "/v1/tenants/"+tnA+"/workloads/gone/logs", nil, 404, "no_logs")
-	if _, _, err := e.m.RegisterHost(ctx, RegisterRequest{HostID: "hdead", CapacityNodes: 1, Tiers: []string{"process"}, PushURL: "unix:///nonexistent/twd.sock"}, "", ""); err != nil {
+	if _, _, err := e.m.RegisterHost(ctx, RegisterRequest{HostID: "hdead", CapacityNodes: 1, Tiers: []string{"process"}, PushURL: "unix:///nonexistent/tw.sock"}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	e.store.AcquireLease(ctx, LeaseName(tnA, "dead"), "hdead", time.Minute, time.Now())
@@ -135,7 +135,7 @@ func TestWorkloadLogs(t *testing.T) {
 		case "100.64.0.4:1":
 			return WhoIsInfo{NodeID: "nEVE", Login: "eve@example.com"}, nil
 		case "100.64.0.5:1":
-			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:twd-agent-support"}, Login: "tagged-devices"}, nil
+			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:tw-agent-support"}, Login: "tagged-devices"}, nil
 		case "100.64.0.6:1":
 			return WhoIsInfo{NodeID: "nADM", Login: "alice@example.com", Caps: []string{AdminCap}}, nil
 		}
@@ -176,10 +176,10 @@ func TestWorkloadLogsReplicas(t *testing.T) {
 	tn := v1Tenant(t, e, "ttest.ts.net", nil)
 	logHost(t, e, "h1")
 	logHost(t, e, "h2")
-	jsonc := `{ "replicas": 2, "tailnet": { "tags": ["tag:twd-web"], "service": true } }`
+	jsonc := `{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"], "service": true } }`
 	var dep DeploymentView
 	e.c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "web",
-		"bundle": base64.StdEncoding.EncodeToString(makeBundle(t, map[string]string{"twd.jsonc": jsonc, "dist/index.js": "export default {}"}))}, &dep)
+		"bundle": base64.StdEncoding.EncodeToString(makeBundle(t, map[string]string{"tailworks.jsonc": jsonc, "dist/index.js": "export default {}"}))}, &dep)
 	if len(dep.Replicas) != 2 {
 		t.Fatalf("replicas %+v", dep.Replicas)
 	}

@@ -1,12 +1,12 @@
 #!/bin/sh
-# npm-publish.sh <version> [--dry-run]: publish twd's npm packages
-# (@twd/tailnet, @twd/node, @twd/mcp, create-twd) at <version>, from a
+# npm-publish.sh <version> [--dry-run]: publish tailworks' npm packages
+# (@tailworks/tailnet, @tailworks/node, @tailworks/mcp, create-tailworks) at <version>, from a
 # checkout of the release tag (ADR-041 §9; docs/RELEASING.md "Publish npm").
 #
 #   - Checks every package and template is at <version> first
 #     (scripts/npm-versions.mjs), so a release never publishes a mix.
 #   - Builds each package (its prepack runs tsc for dist/ and the .d.ts).
-#   - Publishes in dependency order (@twd/mcp depends on @twd/tailnet), and
+#   - Publishes in dependency order (@tailworks/mcp depends on @tailworks/tailnet), and
 #     skips a package already on the registry at <version>, so a re-run after
 #     a partial failure finishes the job.
 #   - A prerelease (0.3.0-rc.1) goes to the "next" dist-tag, not "latest".
@@ -32,7 +32,7 @@ TAG=latest
 case "$V" in *-*) TAG=next ;; esac
 
 # Workspace directory → package name, in publish order.
-for ws in tailnet node mcp create-twd; do
+for ws in tailnet node mcp create-tailworks; do
 	name=$(node -p "require('./js/packages/$ws/package.json').name")
 	if [ -z "$DRY" ] && [ "$(npm view "$name@$V" version 2>/dev/null || true)" = "$V" ]; then
 		echo "npm-publish: $name@$V is already published; skipping"

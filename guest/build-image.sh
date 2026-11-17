@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the twd microVM guest rootfs (Linux only; no root needed).
+# Build the tailworks microVM guest rootfs (Linux only; no root needed).
 #
 #   TARGETARCH=amd64|arm64 guest/build-image.sh [OUT_DIR]   (default: this
 #   machine's arch, guest/out/<arch>)
@@ -9,7 +9,7 @@
 #   - workerd: the npm package @cloudflare/workerd-linux-<arch> at the exact
 #     version in package-lock.json (node_modules/ after `npm ci` when it is
 #     there, else `npm pack`, sha512-checked against the lockfile);
-#   - twd-guestd: built from this repo (CGO off, -trimpath, no build ID);
+#   - tw-guestd: built from this repo (CGO off, -trimpath, no build ID);
 #   - glibc: the shared libraries workerd needs, copied from the Ubuntu
 #     24.04 base rootfs tarball for the arch (sha256-pinned). glibc 2.39 >=
 #     workerd's floor. BASE_ROOTFS=<dir> uses an extracted rootfs instead
@@ -42,7 +42,7 @@ for t in readelf mkfs.ext4 debugfs sha256sum node openssl; do
   command -v $t >/dev/null || { echo "build-image: needs $t" >&2; exit 1; }
 done
 
-WORK=$(mktemp -d /tmp/twd-guest-work.XXXXXX)
+WORK=$(mktemp -d /tmp/tw-guest-work.XXXXXX)
 STAGE=$WORK/stage
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT" "$STAGE"
@@ -91,14 +91,14 @@ else
 fi
 [ -d "$BASE_ROOTFS/usr/lib/$LIBDIR" ] || { echo "BASE_ROOTFS=$BASE_ROOTFS has no usr/lib/$LIBDIR" >&2; exit 1; }
 
-# The twd release this guest belongs to (ADR-041 §1):
-# TWD_VERSION from the release build, else <VERSION>-dev. Stamped into
-# twd-guestd (its hello reports it) and manifest.json.
-TWD_GUEST_VERSION=${TWD_VERSION:-$(cat "$ROOT/VERSION")-dev}
-# twd-guestd: static, reproducible.
+# The tailworks release this guest belongs to (ADR-041 §1):
+# TW_VERSION from the release build, else <VERSION>-dev. Stamped into
+# tw-guestd (its hello reports it) and manifest.json.
+TW_GUEST_VERSION=${TW_VERSION:-$(cat "$ROOT/VERSION")-dev}
+# tw-guestd: static, reproducible.
 (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=$GARCH GOFLAGS=-mod=mod \
-  $GO build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/rosskukulinski/twd/internal/version.Version=$TWD_GUEST_VERSION" -o "$STAGE/sbin/twd-guestd" ./guest/twd-guestd)
-[ "$(elf_machine "$STAGE/sbin/twd-guestd")" = "$GARCH" ] || { echo "build-image: twd-guestd is not $GARCH" >&2; exit 1; }
+  $GO build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/rosskukulinski/tailworks/internal/version.Version=$TW_GUEST_VERSION" -o "$STAGE/sbin/tw-guestd" ./guest/tw-guestd)
+[ "$(elf_machine "$STAGE/sbin/tw-guestd")" = "$GARCH" ] || { echo "build-image: tw-guestd is not $GARCH" >&2; exit 1; }
 
 mkdir -p "$STAGE"/{usr/bin,usr/sbin,usr/lib/$LIBDIR,dev,proc,sys,run,tmp,etc}
 ln -s usr/lib "$STAGE/lib"
@@ -129,9 +129,9 @@ for lib in $( (readelf -d "$WORKERD"; readelf -d "$STAGE/usr/sbin/mke2fs") | sed
   [ "$(elf_machine "$STAGE/usr/lib/$LIBDIR/$lib")" = "$GARCH" ] || { echo "build-image: $lib is not $GARCH" >&2; exit 1; }
 done
 
-printf 'root:x:0:0:root:/tmp:/sbin/twd-guestd\n' >"$STAGE/etc/passwd"
+printf 'root:x:0:0:root:/tmp:/sbin/tw-guestd\n' >"$STAGE/etc/passwd"
 printf 'root:x:0:\n' >"$STAGE/etc/group"
-printf 'twd-guest\n' >"$STAGE/etc/hostname"
+printf 'tw-guest\n' >"$STAGE/etc/hostname"
 printf 'hosts: files\n' >"$STAGE/etc/nsswitch.conf"
 printf '127.0.0.1 localhost\n' >"$STAGE/etc/hosts"
 # workerd refuses to start without a system CA store (it is unused: https
@@ -171,7 +171,7 @@ IMG=$OUT/rootfs.ext4
 rm -f "$IMG"
 E2FSPROGS_FAKE_TIME=$SOURCE_DATE_EPOCH mkfs.ext4 -q -F -t ext4 -O ^has_journal,^metadata_csum_seed \
   -U "$FS_UUID" -E "hash_seed=$FS_UUID,root_owner=0:0,lazy_itable_init=0,nodiscard" \
-  -L twd-guest -m 0 -b 4096 -I 256 -d "$STAGE" "$IMG" "${SIZE_KB}k"
+  -L tw-guest -m 0 -b 4096 -I 256 -d "$STAGE" "$IMG" "${SIZE_KB}k"
 
 # mke2fs -d copies each file's ctime, which touch can't set, and its owner
 # (root_owner covers only /): pin them (and the root's) with debugfs so the
@@ -192,20 +192,20 @@ N=$(( $(find "$STAGE" | wc -l) + 16 ))
 E2FSPROGS_FAKE_TIME=$SOURCE_DATE_EPOCH debugfs -w -f "$WORK/debugfs.cmds" "$IMG" >/dev/null 2>&1
 # debugfs writes only the primary superblock; rewriting the label makes
 # tune2fs copy it (with the pinned flags) to the backups too.
-E2FSPROGS_FAKE_TIME=$SOURCE_DATE_EPOCH tune2fs -L twd-guest "$IMG" >/dev/null
+E2FSPROGS_FAKE_TIME=$SOURCE_DATE_EPOCH tune2fs -L tw-guest "$IMG" >/dev/null
 
 sha() { sha256_of "$1"; }
 cat >"$OUT/manifest.json" <<EOF
 {
   "rootfs": "rootfs.ext4",
   "arch": "$GARCH",
-  "twd_version": "$TWD_GUEST_VERSION",
+  "tw_version": "$TW_GUEST_VERSION",
   "rootfs_sha256": "$(sha "$IMG")",
   "size_bytes": $(stat -c %s "$IMG"),
   "source_date_epoch": $SOURCE_DATE_EPOCH,
   "workerd_version": "$WORKERD_VERSION",
   "workerd_sha256": "$(sha "$WORKERD")",
-  "twd_guestd_sha256": "$(sha "$STAGE/sbin/twd-guestd")",
+  "tw_guestd_sha256": "$(sha "$STAGE/sbin/tw-guestd")",
   "glibc_from": "$GLIBC_FROM",
   "libc_sha256": "$(sha "$STAGE/usr/lib/$LIBDIR/libc.so.6")",
   "ca_from": "$CA_FROM",

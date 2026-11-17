@@ -30,7 +30,7 @@ func (f *fakeD1Host) seen() []string {
 func d1Host(t *testing.T, e *testEnv, id string) *fakeD1Host {
 	t.Helper()
 	f := &fakeD1Host{}
-	sock := filepath.Join(os.TempDir(), "twd-d1-"+id+"-"+filepath.Base(filepath.Dir(filepath.Dir(e.sock)))+".sock")
+	sock := filepath.Join(os.TempDir(), "tw-d1-"+id+"-"+filepath.Base(filepath.Dir(filepath.Dir(e.sock)))+".sock")
 	os.Remove(sock)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {

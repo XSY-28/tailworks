@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
 )
 
 // ProbeStoreKey is the wrangler.jsonc key of the test-only "probe" store
 // kind: [{"binding": "P", "name": "main"}].
-const ProbeStoreKey = "twd_test_probes"
+const ProbeStoreKey = "tw_test_probes"
 
 var probeOnce sync.Once
 
@@ -37,7 +37,7 @@ func RegisterProbeStore() {
 }
 
 const probeStoreJS = `import { WorkerEntrypoint } from "cloudflare:workers";
-import { registerStoreKind, storeStub, utf8 } from "twd-store.js";
+import { registerStoreKind, storeStub, utf8 } from "tw-store.js";
 
 registerStoreKind("probe", {
   init(s) {

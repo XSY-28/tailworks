@@ -1,4 +1,4 @@
-// twd admin UI: progressive enhancement over server-rendered pages.
+// tailworks admin UI: progressive enhancement over server-rendered pages.
 //  - every 5 s, re-fetch the current page and swap the [data-live] regions
 //    whose data changed (the server's templates stay the single renderer).
 //    Relative times (<time data-ago>) are computed here, in the browser, so

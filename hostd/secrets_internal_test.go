@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 func TestApplySecrets(t *testing.T) {
@@ -28,8 +28,8 @@ func TestApplySecrets(t *testing.T) {
 	if _, err := applySecrets(node, bundle.TierProcess, "w", map[string]string{"PORT": "1"}); asAPIError(err).Code != "bad_secret_name" {
 		t.Fatalf("node reserved: %v", err)
 	}
-	if _, err := applySecrets(app, bundle.TierProcess, "w", map[string]string{"TWD_X": "1"}); asAPIError(err).Code != "bad_secret_name" {
-		t.Fatalf("TWD_ prefix: %v", err)
+	if _, err := applySecrets(app, bundle.TierProcess, "w", map[string]string{"TW_X": "1"}); asAPIError(err).Code != "bad_secret_name" {
+		t.Fatalf("TW_ prefix: %v", err)
 	}
 	ns, err := applySecrets(node, bundle.TierProcess, "w", map[string]string{"B": "secret", "C": "secret"})
 	if err != nil {

@@ -14,8 +14,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rosskukulinski/twd/internal/features"
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/features"
+	"github.com/rosskukulinski/tailworks/internal/version"
 	"log/slog"
 	"math"
 	"net"
@@ -29,11 +29,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/oci"
-	"github.com/rosskukulinski/twd/internal/registry"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/internal/tssvc"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/oci"
+	"github.com/rosskukulinski/tailworks/internal/registry"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tssvc"
 )
 
 // Config configures a Mgmt.
@@ -46,7 +46,7 @@ type Config struct {
 	PolicyMaxAge time.Duration
 	Clock        Clock
 	Log          *slog.Logger
-	// ReplicaID is this replica's stable identity (twd-mgmt keeps it in
+	// ReplicaID is this replica's stable identity (tw-mgmt keeps it in
 	// <state-dir>/replica.id). Empty: a fresh per-process ID (tests).
 	ReplicaID string
 	// IDSecret keys the object-name HMAC (RFC §4.3). Required.
@@ -78,7 +78,7 @@ type Config struct {
 	// RegistryUpstream returns the client mgmt mirrors an external image
 	// through (nil: oci.RegistryBase over HTTPS for every host, except the
 	// RegistryInsecure hosts, over plain HTTP). NoMirror refuses external
-	// images (only twd.local refs and public bases deploy). ImageAliases
+	// images (only tw.local refs and public bases deploy). ImageAliases
 	// default to registry.DefaultAliases.
 	RegistryDir      string
 	RegistryUpstream func(host string) *oci.Client
@@ -96,7 +96,7 @@ type Config struct {
 	// (default 2 s; a take also triggers a refill at once).
 	WarmPoolInterval time.Duration
 
-	// Version is this replica's twd-mgmt version ("" = internal/version's),
+	// Version is this replica's tw-mgmt version ("" = internal/version's),
 	// checked against hosts and other replicas (versions.go). ReleaseDir
 	// holds imported release artifacts ("" = none: hosts can't upgrade
 	// themselves through this replica; upgrades.go).
@@ -109,7 +109,7 @@ type Config struct {
 	BundleRetention int
 }
 
-// Mgmt is twd-mgmt's core: tenants, deployments, objects, the mint broker
+// Mgmt is tw-mgmt's core: tenants, deployments, objects, the mint broker
 // and its per-tenant throttle, spawn checks, kill, the reaper and audit.
 type Mgmt struct {
 	cfg      Config
@@ -133,7 +133,7 @@ type Mgmt struct {
 	pushURLs     map[string]string      // hostID → push target cache (unix://, http://node:port, inproc://)
 	pending      map[string]*pendingDelete
 	// inprocPush are the push handlers of hosts embedded in this process
-	// (single-process twd up): hostID → the host agent's push API.
+	// (single-process tw up): hostID → the host agent's push API.
 	inprocPush map[string]http.Handler
 	// reg is the OCI registry (nil without Config.RegistryDir).
 	reg      *registry.Registry
@@ -342,7 +342,7 @@ type TenantRequest struct {
 	PublicIngress string `json:"publicIngress,omitempty"`
 
 	// Several tenants on one tailnet (teams.go): its owner tag and name
-	// prefix; "" = tag:twd and none.
+	// prefix; "" = tag:tw and none.
 	OwnerTag   string `json:"ownerTag,omitempty"`
 	NamePrefix string `json:"namePrefix,omitempty"`
 }
@@ -413,7 +413,7 @@ type RegisterRequest struct {
 	RegistrationSecret string `json:"registrationSecret,omitempty"`
 	// PushURL is where mgmt pushes kills and assignment changes on the
 	// local-dev socket (unix:///… only), or EmbeddedPushURL for the host
-	// agent embedded in mgmt's own process (single-process twd up). Over
+	// agent embedded in mgmt's own process (single-process tw up). Over
 	// the tailnet hosts give PushPort instead: mgmt pushes to the WhoIs
 	// node's address.
 	PushURL  string `json:"pushURL,omitempty"`
@@ -431,7 +431,7 @@ type RegisterRequest struct {
 }
 
 // EmbeddedPushURL is the push "URL" of a host agent that runs inside
-// mgmt's own process (single-process `twd up`): pushes are served through
+// mgmt's own process (single-process `tw up`): pushes are served through
 // the handler given to SetInProcessPush, nothing is dialled. A
 // registration naming it is accepted only when the request's context
 // carries the embedded-host marker (WithEmbeddedHost), which only the
@@ -489,27 +489,27 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 		case embeddedHostOf(ctx) != r.HostID || nodeID != "":
 			m.audit(ctx, AuditRecord{Kind: "deny", Code: "host_identity_mismatch", ActingFor: "host:" + r.HostID},
 				map[string]any{"host": r.HostID, "node": nodeID, "reason": "push URL inproc:// from a caller that is not the embedded host"})
-			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: push URL %s is reserved for the host agent embedded in twd-mgmt's process", r.HostID, EmbeddedPushURL)
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: push URL %s is reserved for the host agent embedded in tw-mgmt's process", r.HostID, EmbeddedPushURL)
 		case old.NodeID != "":
-			return Host{}, false, errf(403, "host_identity_mismatch", "host %s is registered to tailnet node %s; `twd host rm %s` before running it embedded", r.HostID, old.NodeID, r.HostID)
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s is registered to tailnet node %s; `tw host rm %s` before running it embedded", r.HostID, old.NodeID, r.HostID)
 		}
 	}
 	switch {
 	case nodeID == "":
-		// No node to bind: the --local-dev socket (Twd-Host-ID), where the
+		// No node to bind: the --local-dev socket (Tw-Host-ID), where the
 		// record may still be created implicitly. A bound node ID is kept.
 		nodeID = old.NodeID
 	case created:
 		// M1: over the tailnet a host ID exists only if an admin added it.
-		return Host{}, false, errf(403, "host_not_registered", "host %s was never added: `twd host add %s` mints its join key and registration secret", r.HostID, r.HostID)
+		return Host{}, false, errf(403, "host_not_registered", "host %s was never added: `tw host add %s` mints its join key and registration secret", r.HostID, r.HostID)
 	case old.NodeID == "":
 		// First bind of an admin-created host: the join key proves
-		// tag:twd-host, the one-time secret proves this host ID.
+		// tag:tw-host, the one-time secret proves this host ID.
 		if secretHash == "" || r.RegistrationSecret == "" ||
 			subtle.ConstantTimeCompare([]byte(hashRegistrationSecret(r.RegistrationSecret)), []byte(secretHash)) != 1 {
 			m.audit(ctx, AuditRecord{Kind: "deny", Code: "host_identity_mismatch", ActingFor: "host:" + r.HostID},
 				map[string]any{"host": r.HostID, "node": nodeID, "reason": "registration secret missing or wrong"})
-			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: the registration secret is missing or wrong (`twd host add %s` mints a new join key and secret)", r.HostID, r.HostID)
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: the registration secret is missing or wrong (`tw host add %s` mints a new join key and secret)", r.HostID, r.HostID)
 		}
 		secretHash = "" // used once
 		created = true  // the record existed (pending); this is the host's first registration
@@ -518,11 +518,11 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	}
 	// M4: the audit key is pinned at the first registration that carries
 	// one; later registrations may repeat or omit it, never change it
-	// (rotation is twd host rm + twd host add).
+	// (rotation is tw host rm + tw host add).
 	auditKey := r.AuditPubKey
 	if old.AuditPubKey != "" {
 		if auditKey != "" && auditKey != old.AuditPubKey {
-			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: auditPubKey is pinned to the key of its first registration (rotate with twd host rm %s --drain, then twd host add)", r.HostID, r.HostID)
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: auditPubKey is pinned to the key of its first registration (rotate with tw host rm %s --drain, then tw host add)", r.HostID, r.HostID)
 		}
 		auditKey = old.AuditPubKey
 	}
@@ -690,9 +690,9 @@ func (m *Mgmt) resolveLease(ctx context.Context, hostID, ns string) string {
 // ---- deployments ----
 
 // DeployRequest is POST /v0/deployments. Namespaces and Host are additions
-// to the v0 contract: explicit class config (instead of twd.jsonc in the
+// to the v0 contract: explicit class config (instead of tailworks.jsonc in the
 // bundle) and an explicit host choice.
-// BuiltImages are one class's images built by twd deploy.
+// BuiltImages are one class's images built by tw deploy.
 type BuiltImages = registry.Built
 
 type DeployRequest struct {
@@ -705,11 +705,11 @@ type DeployRequest struct {
 	// stopped heartbeating, is really gone, so a stateful workload may move
 	// off it (ADR-028 §3). Audited.
 	ForceTakeover bool `json:"forceTakeover,omitempty"`
-	// ContainerImages are the images twd deploy built and pushed, by class
-	// (twd.local/<tenant>/…@sha256 refs): they replace the class's Dockerfile
+	// ContainerImages are the images tw deploy built and pushed, by class
+	// (tw.local/<tenant>/…@sha256 refs): they replace the class's Dockerfile
 	// image / images before every ref is pinned (ADR-032 D3).
 	ContainerImages map[string]BuiltImages `json:"containerImages,omitempty"`
-	// Replace re-places the workload (`twd deploy --replace`, ADR-033):
+	// Replace re-places the workload (`tw deploy --replace`, ADR-033):
 	// the current live holder is not kept just because it holds the lease;
 	// the workload moves if another eligible host is clearly better (or to
 	// Host, when pinned). The lease moves at epoch+1 in one conditional
@@ -729,7 +729,7 @@ type DeployRequest struct {
 	// stored bundle this deploy redeploys (audited as kind "rollback").
 	rollbackOf string
 
-	// Preview / PreviewAlias: deploy as a preview workload (twd deploy
+	// Preview / PreviewAlias: deploy as a preview workload (tw deploy
 	// --preview, ADR-deploy-preview); preview is set by preview.go.
 	Preview      bool   `json:"preview,omitempty"`
 	PreviewAlias string `json:"previewAlias,omitempty"`
@@ -749,7 +749,7 @@ type DeployResponse struct {
 	} `json:"endpoint"`
 	Placement *PlacementDecision `json:"placement,omitempty"`
 
-	// Replicas (twd.jsonc "replicas" > 1): every copy, this one first.
+	// Replicas (tailworks.jsonc "replicas" > 1): every copy, this one first.
 	Replicas []ReplicaRef `json:"replicas,omitempty"`
 }
 
@@ -773,11 +773,11 @@ func validName(s string) bool {
 	return true
 }
 
-// reservedTags are twd's own infrastructure tags. The OAuth client (owner
-// of tag:twd) can mint keys for them, so a bundle must never be able to
-// ask for them: a workload node with tag:twd-host would be admitted as a
+// reservedTags are tailworks' own infrastructure tags. The OAuth client (owner
+// of tag:tw) can mint keys for them, so a bundle must never be able to
+// ask for them: a workload node with tag:tw-host would be admitted as a
 // host by mgmt's WhoIs gate.
-var reservedTags = []string{"tag:twd", MgmtTag, HostTag}
+var reservedTags = []string{"tag:tw", MgmtTag, HostTag}
 
 // validTagSyntax is Tailscale's tag grammar: ^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$
 // (no whitespace, no control characters, nothing after a bare "tag:").
@@ -799,14 +799,14 @@ func validTagSyntax(tag string) bool {
 
 // validateObjectTag is the single check every tag a workload asks for goes
 // through (deploy, preflight, spawn): well-formed (400 bad_request) and not
-// one of twd's own tags (400 reserved_tag).
+// one of tailworks' own tags (400 reserved_tag).
 func validateObjectTag(class, tag string) *Error {
 	if !validTagSyntax(tag) {
 		return errf(400, "bad_request", "namespace %q: %q is not a valid tag (want tag:[a-zA-Z0-9][a-zA-Z0-9._-]*)", class, tag)
 	}
 	for _, res := range reservedTags {
 		if strings.EqualFold(tag, res) {
-			return errf(400, "reserved_tag", "namespace %q: %s is one of twd's own tags (%s) and cannot be given to a workload", class, tag, strings.Join(reservedTags, ", "))
+			return errf(400, "reserved_tag", "namespace %q: %s is one of tailworks' own tags (%s) and cannot be given to a workload", class, tag, strings.Join(reservedTags, ", "))
 		}
 	}
 	return nil
@@ -831,9 +831,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
-	var svcCfg *TwdConfig
+	var svcCfg *TwConfig
 	var pub *DeploymentPublic
-	var bcfg *TwdConfig
+	var bcfg *TwConfig
 	if len(r.Bundle) > 0 {
 		if _, err := BundleCrons(r.Bundle); err != nil {
 			return resp, errf(400, "bad_bundle", "%v", err)
@@ -875,7 +875,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 		}
 	}
 	if len(classes) == 0 {
-		return resp, errf(400, "bad_request", "no namespaces: the bundle's twd.jsonc declares neither tailnet.tags (the workload node) nor tailnet.objects")
+		return resp, errf(400, "bad_request", "no namespaces: the bundle's tailworks.jsonc declares neither tailnet.tags (the workload node) nor tailnet.objects")
 	}
 	classes = withPublicNamespace(classes, pub)
 	for _, c := range classes {
@@ -967,7 +967,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, e
 		}
 		if fence && !r.ForceTakeover {
-			return resp, errf(409, "move_unconfirmed", "workload %q is stateful (%s): moving it from %s to %s starts its Durable Objects with empty storage on %s (DO storage stays on %s's disk). Redeploy with --replace --force-takeover to move it anyway, or pin it with --host %s. Classes that tolerate this can set \"fence\": \"never\" in twd.jsonc",
+			return resp, errf(409, "move_unconfirmed", "workload %q is stateful (%s): moving it from %s to %s starts its Durable Objects with empty storage on %s (DO storage stays on %s's disk). Redeploy with --replace --force-takeover to move it anyway, or pin it with --host %s. Classes that tolerate this can set \"fence\": \"never\" in tailworks.jsonc",
 				r.Workload, stateWhy, held.Holder, host, host, held.Holder, held.Holder)
 		}
 		lease, err = m.store.MoveLease(ctx, name, held.Holder, held.Epoch, host, NamespaceLeaseTTL, m.now())
@@ -1084,7 +1084,7 @@ type DeploymentView struct {
 		Service  *ServiceEndpoint `json:"service,omitempty"`
 	} `json:"endpoint"`
 
-	// Replicas (twd.jsonc "replicas" > 1): every copy with its status.
+	// Replicas (tailworks.jsonc "replicas" > 1): every copy with its status.
 	Replicas []ReplicaRef `json:"replicas,omitempty"`
 }
 
@@ -1118,7 +1118,7 @@ func (m *Mgmt) GetDeployment(ctx context.Context, id string) (DeploymentView, er
 // stopped heartbeating but is still registered (ADR-028 §3): that host may
 // still be serving the workload's Durable Objects from its own disk, and it
 // can't be told to stop. Allowed when the old host is live (it is revoked at
-// its next heartbeat), was removed (twd host rm), the workload is stateless
+// its next heartbeat), was removed (tw host rm), the workload is stateless
 // or every DO class is "fence": "never", or the deploy sets ForceTakeover.
 // It returns the old host when a forced takeover happens (for the audit).
 func (m *Mgmt) guardTakeover(ctx context.Context, t Tenant, r DeployRequest, host string) (string, error) {
@@ -1148,7 +1148,7 @@ func (m *Mgmt) guardTakeover(ctx context.Context, t Tenant, r DeployRequest, hos
 	if old.LastSeen > 0 {
 		seen = now.Sub(time.UnixMilli(old.LastSeen)).Round(time.Second).String() + " ago"
 	}
-	return "", errf(409, "takeover_unconfirmed", "workload %q runs on host %s, which mgmt last heard from %s; it may still be serving the workload's %s from its own disk, so moving it to %s could run two copies. If %s is gone for good: `twd host rm %s --drain`, or redeploy with --force-takeover. If it is coming back, wait for it. Classes that tolerate two instances can set \"fence\": \"never\" in twd.jsonc",
+	return "", errf(409, "takeover_unconfirmed", "workload %q runs on host %s, which mgmt last heard from %s; it may still be serving the workload's %s from its own disk, so moving it to %s could run two copies. If %s is gone for good: `tw host rm %s --drain`, or redeploy with --force-takeover. If it is coming back, wait for it. Classes that tolerate two instances can set \"fence\": \"never\" in tailworks.jsonc",
 		r.Workload, old.ID, seen, why, host, old.ID, old.ID)
 }
 
@@ -1169,7 +1169,7 @@ func (m *Mgmt) leaseHeldError(ctx context.Context, name, workload string) *Error
 	}
 	if herr == nil && h.Live(now) {
 		// A live holder keeps renewing: its lease won't run out.
-		return errf(409, "lease_held", "workload %q runs on host %s (live, epoch %d, last seen %s); it can't be placed elsewhere while %s holds it. To move it, drain that host first (`twd host rm %s --drain`)",
+		return errf(409, "lease_held", "workload %q runs on host %s (live, epoch %d, last seen %s); it can't be placed elsewhere while %s holds it. To move it, drain that host first (`tw host rm %s --drain`)",
 			workload, l.Holder, l.Epoch, seen, l.Holder, l.Holder)
 	}
 	left := time.UnixMilli(l.ExpiresAt).Sub(now)
@@ -1182,10 +1182,10 @@ func (m *Mgmt) leaseHeldError(ctx context.Context, name, workload string) *Error
 }
 
 // placementTier is the tier a host must offer to run the deployment: the
-// bundle's twd.jsonc "tier", else the tenant's default. "" means any host
+// bundle's tailworks.jsonc "tier", else the tenant's default. "" means any host
 // (every host offers the process tier). Node apps always run in the process
 // tier (the microVM guest has no Node.js).
-func placementTier(t Tenant, cfg *TwdConfig) string {
+func placementTier(t Tenant, cfg *TwConfig) string {
 	tier := t.Tier
 	if cfg != nil {
 		if cfg.Runtime == "node" {
@@ -1286,7 +1286,7 @@ type Assignment struct {
 	// (ADR-032 D3): hosts pull only these digests.
 	Containers []container.Class `json:"containers,omitempty"`
 	// Public (ADR-029): the workload's public ingress; nil when it has no
-	// twd.jsonc "public" or the tenant's publicIngress is not allow.
+	// tailworks.jsonc "public" or the tenant's publicIngress is not allow.
 	Public *PublicAssignment `json:"public,omitempty"`
 	// PlacementTargets are what the host should measure paths to for this
 	// workload (smart placement, ADR-033; empty = nothing).
@@ -1714,7 +1714,7 @@ func (m *Mgmt) findWorkloadClass(ctx context.Context, tenantID, name string) (De
 			}
 		}
 	}
-	return Deployment{}, ClassConfig{}, fmt.Errorf("workload %q has no %s namespace (twd.jsonc tailnet.tags): %w", name, WorkloadNamespace, ErrNotFound)
+	return Deployment{}, ClassConfig{}, fmt.Errorf("workload %q has no %s namespace (tailworks.jsonc tailnet.tags): %w", name, WorkloadNamespace, ErrNotFound)
 }
 
 // checkSpawn enforces depth ≤ maxDepth, live descendants of the root <
@@ -1877,7 +1877,7 @@ func (m *Mgmt) enqueue(tenantID, objectID string) {
 	}
 }
 
-// QueueDepth is twd_registration_queue for a tenant.
+// QueueDepth is tw_registration_queue for a tenant.
 func (m *Mgmt) QueueDepth(tenantID string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1959,7 +1959,7 @@ func custodyKeyName(o Object, keyID string) string {
 	return legacyCustodyName(o) + "/" + keyID
 }
 
-func legacyCustodyName(o Object) string { return "twd/" + o.TenantID + "/" + o.ID + "/authkey" }
+func legacyCustodyName(o Object) string { return "tw/" + o.TenantID + "/" + o.ID + "/authkey" }
 
 // deleteCustody removes the object's current key entry and any legacy one.
 func (m *Mgmt) deleteCustody(ctx context.Context, o Object) {
@@ -2021,7 +2021,7 @@ func (m *Mgmt) mintOne(ctx context.Context, t Tenant, id string, th *Throttle) (
 	}
 	sp.mark(&sp.broker)
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: o.Tags, Ephemeral: o.Ephemeral, Preauthorized: true,
-		ExpirySeconds: int(KeyExpiry / time.Second), Description: "twd " + o.ID})
+		ExpirySeconds: int(KeyExpiry / time.Second), Description: "tw " + o.ID})
 	if err != nil {
 		return false, err
 	}
@@ -2366,7 +2366,7 @@ type KillWarning struct {
 const CodeDeviceDeleteUnavailable = "device_delete_unavailable"
 
 // DeviceScopeFix tells the operator how to let kills delete devices.
-const DeviceScopeFix = "the OAuth client lacks the devices:core scope: in the admin console (Settings › Trust credentials) generate a new OAuth client with Auth Keys (write) AND Devices › Core (write), both with tag tag:twd, write it to the same credential file (0600), then revoke the old client; until then remove killed devices in the admin console (Machines)"
+const DeviceScopeFix = "the OAuth client lacks the devices:core scope: in the admin console (Settings › Trust credentials) generate a new OAuth client with Auth Keys (write) AND Devices › Core (write), both with tag tag:tw, write it to the same credential file (0600), then revoke the old client; until then remove killed devices in the admin console (Machines)"
 
 // errDeviceDeleteUnavailable wraps a 403 on a device delete.
 var errDeviceDeleteUnavailable = errors.New(CodeDeviceDeleteUnavailable)
@@ -2560,7 +2560,7 @@ func (m *Mgmt) push(hostID, path string, body any) error {
 
 func (m *Mgmt) pushTo(u, hostID, path string, body any) error {
 	if u == EmbeddedPushURL {
-		// A host embedded in this process (single-process twd up): served
+		// A host embedded in this process (single-process tw up): served
 		// through its handler, no dial. Another replica would see the same
 		// persisted target and fail here, which is right: only the process
 		// that embeds the host can reach it.
@@ -2750,10 +2750,10 @@ type PurgeResult struct {
 	WarmKeysRevoked int `json:"warmKeysRevoked,omitempty"`
 }
 
-// Purge forgets a tenant's killed and failed objects (twd down --purge):
+// Purge forgets a tenant's killed and failed objects (tw down --purge):
 // pending device deletes run first, then the rows go, so the same
 // (workload, namespace, name) can be created again on the next deploy.
-// Before this, a redeploy on the same state dir after `twd down --purge`
+// Before this, a redeploy on the same state dir after `tw down --purge`
 // was refused: the killed workload-node object (same name, same ID) made
 // CreateObject answer 410 and the deployment's endpoint read "killed".
 // Live objects are never touched; every removal is audited as "purge".
@@ -2879,7 +2879,7 @@ func (m *Mgmt) Reap(ctx context.Context) (int, error) {
 		if err != nil || !cur.Live() {
 			continue // killed by an earlier cascade in this pass
 		}
-		res, err := m.Kill(ctx, o.ID, KillRequest{Cascade: true, Reason: reason, By: "twd-reaper"})
+		res, err := m.Kill(ctx, o.ID, KillRequest{Cascade: true, Reason: reason, By: "tw-reaper"})
 		if err != nil {
 			return n, err
 		}
@@ -3141,7 +3141,7 @@ func auditSource(r AuditRecord) string {
 // ---- deploy preflight ----
 
 // PreflightRequest asks whether the tenant policy lets a workload's tags
-// reach its declared dependencies (twd.jsonc tailnet.connects) and whether
+// reach its declared dependencies (tailworks.jsonc tailnet.connects) and whether
 // every tag it will mint is in tagOwners.
 type PreflightRequest struct {
 	SrcTags  []string `json:"srcTags"`  // workload + object tags
@@ -3150,7 +3150,7 @@ type PreflightRequest struct {
 	// Service, with WorkloadTags, checks autoApprovers.services.
 	Service      string   `json:"service,omitempty"`
 	WorkloadTags []string `json:"workloadTags,omitempty"`
-	// Public: the workload declares public routes, so tag:twd-public needs
+	// Public: the workload declares public routes, so tag:tw-public needs
 	// the funnel nodeAttr (ADR-029 D6).
 	Public bool `json:"public,omitempty"`
 }
@@ -3177,14 +3177,14 @@ type PreflightResult struct {
 	Service           string `json:"service,omitempty"`
 	ServiceUnapproved bool   `json:"serviceUnapproved,omitempty"`
 	ServiceSnippet    string `json:"serviceSnippet,omitempty"`
-	// MissingNodeAttrs names missing nodeAttrs ("funnel on tag:twd-public");
+	// MissingNodeAttrs names missing nodeAttrs ("funnel on tag:tw-public");
 	// NodeAttrsSnippet is the policy to add (ADR-029 D6).
 	MissingNodeAttrs []string `json:"missingNodeAttrs,omitempty"`
 	NodeAttrsSnippet string   `json:"nodeAttrsSnippet,omitempty"`
 	// PublicURL is where the workload's public routes will be served.
 	PublicURL string `json:"publicURL,omitempty"`
 
-	// AccessWarnings: grants to tag:twd-mgmt that don't do what they look
+	// AccessWarnings: grants to tag:tw-mgmt that don't do what they look
 	// like (tenantscope_lint.go). Never fail the preflight.
 	AccessWarnings []string `json:"accessWarnings,omitempty"`
 
@@ -3257,7 +3257,7 @@ func (VolumeKeyResponse) String() string { return "mgmt.VolumeKeyResponse{[REDAC
 
 // volumeKeyName is the custody name of a workload's DO volume data key.
 func volumeKeyName(tenantID, workload string) string {
-	return "twd/" + tenantID + "/volumes/" + workload + "/dek"
+	return "tw/" + tenantID + "/volumes/" + workload + "/dek"
 }
 
 // VolumeKey returns the 256-bit data key of the (tenant, workload) DO

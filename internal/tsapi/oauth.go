@@ -17,7 +17,7 @@ import (
 )
 
 // OAuth client support (M12): a Tailscale OAuth client (scope auth_keys,
-// tag tag:twd; optionally devices:core and policy_file:read) is exchanged
+// tag tag:tw; optionally devices:core and policy_file:read) is exchanged
 // for a short-lived API access token with the client-credentials grant
 // (POST /api/v2/oauth/token). The secret never expires and lives only in a
 // 0600 file on the host; it is re-read at every exchange and never logged.

@@ -1,6 +1,6 @@
 // e2e/sdk approvals app: a real Agents SDK AgentWorkflow that waits for a
-// human approval (waitForApproval) on twd. twd delivers the approval only
-// from a tailnet identity holding twd.dev/cap/approve, and puts that
+// human approval (waitForApproval) on tailworks. Tailworks delivers the approval only
+// from a tailnet identity holding github.com/rosskukulinski/tailworks/cap/approve, and puts that
 // identity in the approval's metadata (approval.approver).
 //
 // The same Agent body runs in both object modes:
@@ -64,7 +64,7 @@ class RefundBase extends Agent<Env> {
         }
         case "self-approve": {
           // App code approving its own Workflow (the Agents SDK's
-          // approveWorkflow), with a forged approver: twd refuses it.
+          // approveWorkflow), with a forged approver: tailworks refuses it.
           try {
             await this.approveWorkflow(q("id")!, { reason: "self", metadata: { approver: { user: "forged@example.com" } } });
             return Response.json({ approved: true });
@@ -98,8 +98,8 @@ export class RefundWorkflow extends AgentWorkflow<RefundBase, Params> {
       if (n <= (event.payload.failQuote ?? 0)) throw new Error("quote service down");
       return { amount };
     });
-    // twd lists this wait, and delivers the decision only from a tailnet
-    // identity holding twd.dev/cap/approve. The metadata carries twd's
+    // tailworks lists this wait, and delivers the decision only from a tailnet
+    // identity holding github.com/rosskukulinski/tailworks/cap/approve. The metadata carries tailworks'
     // verified approver, whatever the request said.
     const approval = (await this.waitForApproval(step, { timeout: "1 hour" })) as any;
     await step.do("refund", async () => {

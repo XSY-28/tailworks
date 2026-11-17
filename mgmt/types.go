@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
 )
 
 // Mint modes (MintHeadscale is in headscale.go; the removed modes are in
@@ -73,7 +73,7 @@ type Tenant struct {
 	Pool string `json:"pool,omitempty"`
 	Tier string `json:"tier,omitempty"`
 	// PublicIngress is the operator gate for public (Funnel) ingress
-	// (ADR-029 D1): PublicAllow lets the tenant's twd.jsonc "public" routes
+	// (ADR-029 D1): PublicAllow lets the tenant's tailworks.jsonc "public" routes
 	// take effect; "" or PublicDeny refuses them.
 	PublicIngress string `json:"publicIngress,omitempty"`
 	CreatedAt     int64  `json:"createdAt"`
@@ -81,7 +81,7 @@ type Tenant struct {
 
 	// Several tenants on one tailnet (ADR-043, teams.go):
 	// OwnerTag owns the tenant's tags and scopes its OAuth client
-	// ("" = tag:twd); NamePrefix goes in front of every tailnet name twd
+	// ("" = tag:tw); NamePrefix goes in front of every tailnet name tailworks
 	// generates for it ("" = none).
 	OwnerTag   string `json:"ownerTag,omitempty"`
 	NamePrefix string `json:"namePrefix,omitempty"`
@@ -96,14 +96,14 @@ const (
 // PublicAllowed reports whether the tenant's gate lets public routes take effect.
 func (t Tenant) PublicAllowed() bool { return t.PublicIngress == PublicAllow && !t.Headscale() }
 
-// DeploymentPublic is a deployment's validated twd.jsonc "public" (ADR-029),
+// DeploymentPublic is a deployment's validated tailworks.jsonc "public" (ADR-029),
 // plus the per-class public-create settings, persisted with the deployment.
 type DeploymentPublic struct {
 	Spec    publicspec.Spec                 `json:"spec"`
 	Classes map[string]publicspec.ClassSpec `json:"classes,omitempty"`
 }
 
-// WorkloadPublic is a workload's `twd expose` setting. It outlives
+// WorkloadPublic is a workload's `tw expose` setting. It outlives
 // deployments; a workload that was never toggled is exposed.
 type WorkloadPublic struct {
 	TenantID  string `json:"tenantID"`
@@ -113,7 +113,7 @@ type WorkloadPublic struct {
 	UpdatedBy string `json:"updatedBy,omitempty"`
 }
 
-// Host is a twd-hostd instance.
+// Host is a tw-hostd instance.
 type Host struct {
 	ID            string   `json:"hostID"`
 	CapacityNodes int      `json:"capacityNodes"`
@@ -187,7 +187,7 @@ const (
 	CapContainers = "containers"
 )
 
-// Pending reports a host created by `twd host add` that never registered.
+// Pending reports a host created by `tw host add` that never registered.
 func (h Host) Pending() bool { return h.LastSeen == 0 }
 
 // Live reports whether the host heartbeated within the host lease TTL.
@@ -195,17 +195,17 @@ func (h Host) Live(now time.Time) bool {
 	return now.UnixMilli()-h.LastSeen <= HostLeaseTTL.Milliseconds()
 }
 
-// ClassConfig is one DO namespace from twd.jsonc tailnet.objects.
+// ClassConfig is one DO namespace from tailworks.jsonc tailnet.objects.
 type ClassConfig struct {
 	Class string   `json:"class"`
 	Tags  []string `json:"tags"`
 	Agent bool     `json:"agent,omitempty"`
 	TTL   string   `json:"ttl,omitempty"`
 	// Service (the _workload namespace only) is the Tailscale Service the
-	// workload entry node hosts (twd.jsonc tailnet.service).
+	// workload entry node hosts (tailworks.jsonc tailnet.service).
 	Service string `json:"service,omitempty"`
 	// ReplicaOf (the _workload namespace of replicas 2..N only) names the
-	// workload this deployment is a replica of (twd.jsonc "replicas");
+	// workload this deployment is a replica of (tailworks.jsonc "replicas");
 	// Replicas (replica 1, the workload itself) is how many there are.
 	ReplicaOf string `json:"replicaOf,omitempty"`
 	Replicas  int    `json:"replicas,omitempty"`
@@ -227,7 +227,7 @@ type Deployment struct {
 	Epoch      int64         `json:"epoch"`
 	Bundle     []byte        `json:"-"`
 	// DeployedBy is who ran the deploy: the WhoIs login of a tailnet
-	// caller (`twd link`), or the local actor on the unix socket.
+	// caller (`tw link`), or the local actor on the unix socket.
 	DeployedBy string `json:"deployedBy,omitempty"`
 	CreatedAt  int64  `json:"createdAt"`
 	// StoppedAt is set by undeploy (DELETE /v1/deployments/{id}).
@@ -371,7 +371,7 @@ func (e *Error) Error() string { return e.Code + ": " + e.Message }
 // DocBase is the prefix of every error's doc_url: the heading of the code
 // in the typed error catalog (docs/errors.md). It equals netd.DocBase;
 // mgmt keeps its own copy so it does not import netd.
-const DocBase = "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#"
+const DocBase = "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#"
 
 func errf(status int, code, format string, a ...any) *Error {
 	return &Error{Status: status, Code: code, Message: fmt.Sprintf(format, a...),

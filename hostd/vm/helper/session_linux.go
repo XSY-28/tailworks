@@ -21,7 +21,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
+	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
 	"golang.org/x/sys/unix"
 )
 

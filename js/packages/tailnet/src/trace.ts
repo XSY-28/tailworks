@@ -2,7 +2,7 @@
 //
 // hostd's ingress gives every request a `traceparent` whose span is its
 // SERVER span. The runtime runs each fetch handler inside that context
-// (AsyncLocalStorage; twd sets the nodejs_als compatibility flag) and:
+// (AsyncLocalStorage; tailworks sets the nodejs_als compatibility flag) and:
 //   - adds it to egress fetch() (hostd's egress then opens a CLIENT span
 //     under it and passes the trace on to the next hop);
 //   - gives a Durable Object stub's fetch() a new child span, recorded here
@@ -175,7 +175,7 @@ export async function tracedStubFetch(cls: string, name: string, args: unknown[]
     start: Date.now(),
     end: 0,
     error: false,
-    attrs: { "twd.do.class": cls, "twd.do.name": name, "http.request.method": method },
+    attrs: { "tw.do.class": cls, "tw.do.name": name, "http.request.method": method },
   };
   const done = () => {
     rec.end = Date.now();

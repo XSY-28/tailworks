@@ -1,9 +1,9 @@
 # ADR-028: The database is the lease clock, and hosts fence themselves for stateful namespaces
 
 **Date:** 2026-11-11
-**Status:** §1–2 Accepted and implemented (twd mm-loop F1/F2). **§3 re-decided by Ross (2026-11-11, second interview)** after a correction: hostd already self-fenced every workload after 9 s. Guarded moves (twd F4) are implemented.
+**Status:** §1–2 Accepted and implemented (tailworks mm-loop F1/F2). **§3 re-decided by Ross (2026-11-11, second interview)** after a correction: hostd already self-fenced every workload after 9 s. Guarded moves (tailworks F4) are implemented.
 
-**Context.** The multi-replica mgmt test loop (twd `e2e/multimgmt`, H10)
+**Context.** The multi-replica mgmt test loop (tailworks `e2e/multimgmt`, H10)
 showed that lease expiry and host liveness use each mgmt replica's own wall
 clock.
 - With ≥ 10 s of skew, redeploys of a healthy workload are refused.

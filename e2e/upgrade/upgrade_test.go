@@ -17,22 +17,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/ipn/store/mem"
 	"tailscale.com/tsnet"
 )
 
-const vpkg = "github.com/rosskukulinski/twd/internal/version"
+const vpkg = "github.com/rosskukulinski/tailworks/internal/version"
 
-// build compiles twd-mgmt and twd-hostd from dir, stamped with v.
+// build compiles tw-mgmt and tw-hostd from dir, stamped with v.
 func build(t *testing.T, dir, v string) string {
 	t.Helper()
 	out := t.TempDir()
 	ld := "-X " + vpkg + ".Version=" + v + " -X main.version=" + v
-	cmd := exec.Command("go", "build", "-ldflags", ld, "-o", out+"/", "./cmd/twd-mgmt", "./cmd/twd-hostd")
+	cmd := exec.Command("go", "build", "-ldflags", ld, "-o", out+"/", "./cmd/tw-mgmt", "./cmd/tw-hostd")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOFLAGS=-mod=mod")
 	if b, err := cmd.CombinedOutput(); err != nil {
@@ -41,13 +41,13 @@ func build(t *testing.T, dir, v string) string {
 	return out
 }
 
-// previous builds the previous release (TWD_UPGRADE_FROM) and returns its
+// previous builds the previous release (TW_UPGRADE_FROM) and returns its
 // binaries and version.
 func previous(t *testing.T, root string) (string, string) {
 	t.Helper()
-	ref := os.Getenv("TWD_UPGRADE_FROM")
+	ref := os.Getenv("TW_UPGRADE_FROM")
 	if ref == "" || ref == "self" {
-		v := os.Getenv("TWD_UPGRADE_FROM_VERSION")
+		v := os.Getenv("TW_UPGRADE_FROM_VERSION")
 		if v == "" {
 			v = "0.0.1"
 		}
@@ -79,19 +79,19 @@ func TestUpgradePreviousToCandidate(t *testing.T) {
 	}
 	oldBin, oldV := previous(t, root)
 	vb, _ := os.ReadFile(filepath.Join(root, "VERSION"))
-	newV := os.Getenv("TWD_UPGRADE_TO_VERSION")
+	newV := os.Getenv("TW_UPGRADE_TO_VERSION")
 	if newV == "" {
 		newV = strings.TrimSpace(string(vb))
 	}
 	newBin := build(t, root, newV)
 	aheadBin := build(t, root, "9.0.0") // a host far outside the window
 
-	dir, err := hostdtest.ShortDir("twd-upg-")
+	dir, err := hostdtest.ShortDir("tw-upg-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -173,7 +173,7 @@ func TestUpgradePreviousToCandidate(t *testing.T) {
 
 	app := filepath.Join(dir, "app")
 	os.MkdirAll(filepath.Join(app, "src"), 0o755)
-	os.WriteFile(filepath.Join(app, "twd.jsonc"), []byte(`{"name": "counter", "tailnet": {"tags": ["tag:ttest"], "objects": {"Counter": {"tags": ["tag:ttest"]}}}}`), 0o644)
+	os.WriteFile(filepath.Join(app, "tailworks.jsonc"), []byte(`{"name": "counter", "tailnet": {"tags": ["tag:ttest"], "objects": {"Counter": {"tags": ["tag:ttest"]}}}}`), 0o644)
 	os.WriteFile(filepath.Join(app, "wrangler.jsonc"), []byte(`{"name": "counter", "main": "src/index.js", "compatibility_date": "2026-04-01",
   "durable_objects": {"bindings": [{"name": "COUNTER", "class_name": "Counter"}]}}`), 0o644)
 	os.WriteFile(filepath.Join(app, "src", "index.js"), []byte(`import { DurableObject } from "cloudflare:workers";

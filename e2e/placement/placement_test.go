@@ -1,7 +1,7 @@
 //go:build e2eplacement
 
 // Package placement is the hermetic smart-placement e2e (ADR-033): real
-// twd-mgmt and two real twd-hostd processes on testcontrol + a local DERP,
+// tw-mgmt and two real tw-hostd processes on testcontrol + a local DERP,
 // a "database" peer tagged tag:db, and one host forced onto DERP
 // (TS_DEBUG_ALWAYS_USE_DERP=1 in that hostd's environment, so its nodes
 // never use direct UDP). Nothing talks to the internet; no real keys.
@@ -27,10 +27,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/ipn/store/mem"
 	"tailscale.com/tsnet"
 )
@@ -99,9 +99,9 @@ func (e *env) start(name string, extraEnv []string, args ...string) *proc {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	bin := "twd-hostd"
+	bin := "tw-hostd"
 	if name == "mgmt" {
-		bin = "twd-mgmt"
+		bin = "tw-mgmt"
 	}
 	cmd := exec.Command(filepath.Join(e.bin, bin), args...)
 	cmd.Stdout, cmd.Stderr = lf, lf
@@ -247,12 +247,12 @@ func TestSmartPlacementHermetic(t *testing.T) {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available (needed to bundle the app)")
 	}
-	dir, err := hostdtest.ShortDir("twd-sp-")
+	dir, err := hostdtest.ShortDir("tw-sp-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -335,7 +335,7 @@ func TestSmartPlacementHermetic(t *testing.T) {
 	// The app: a Worker that declares it connects to tag:db.
 	app := filepath.Join(dir, "app")
 	os.MkdirAll(filepath.Join(app, "src"), 0o755)
-	os.WriteFile(filepath.Join(app, "twd.jsonc"), []byte(`{"name": "pgapp", "tailnet": {"tags": ["tag:ttest"], "connects": ["tag:db"]}}`), 0o644)
+	os.WriteFile(filepath.Join(app, "tailworks.jsonc"), []byte(`{"name": "pgapp", "tailnet": {"tags": ["tag:ttest"], "connects": ["tag:db"]}}`), 0o644)
 	os.WriteFile(filepath.Join(app, "wrangler.jsonc"), []byte(`{"name": "pgapp", "main": "src/index.js", "compatibility_date": "2026-04-01"}`), 0o644)
 	os.WriteFile(filepath.Join(app, "src", "index.js"), []byte(`export default { async fetch(req) { return new Response("pgapp ok\n"); } };`), 0o644)
 	files, err := hostdtest.Build(app, nil)

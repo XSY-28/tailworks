@@ -30,10 +30,10 @@ const (
 )
 
 // DocBase is the prefix for doc_url in error bodies.
-const DocBase = "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#"
+const DocBase = "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#"
 
 // Error is a typed netd refusal. It is rendered as JSON with the code also in
-// the twd-error response header.
+// the tw-error response header.
 type Error struct {
 	Code        string `json:"code"`
 	Detail      string `json:"detail"`

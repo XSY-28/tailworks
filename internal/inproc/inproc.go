@@ -1,5 +1,5 @@
 // Package inproc is the transport between a host agent (hostd) and a
-// twd-mgmt that run in the same process (single-process `twd up`): an
+// tw-mgmt that run in the same process (single-process `tw up`): an
 // http.RoundTripper that serves every request directly through mgmt's
 // /v1 handler, with the request context carrying the host principal
 // (mgmt.Principal{Kind: "host", HostID}) and the embedded-host marker
@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // RemoteAddr is the sentinel RemoteAddr of in-process requests (no host:port,

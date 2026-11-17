@@ -8,7 +8,7 @@
 - Issue #16 asks for the R2 binding (`r2_buckets` in `wrangler.jsonc`;
   `env.BUCKET.get/put/head/delete/list`, `R2Object`/`R2ObjectBody`,
   `onlyIf`, `httpMetadata`/`customMetadata`, ranged reads; multipart
-  upload as a stretch). twd had no R2 support.
+  upload as a stretch). Tailworks had no R2 support.
 - **workerd already has the frontend.** Its `r2Bucket` binding turns the
   R2 API into HTTP requests to a service you name (with `entrypoint` and
   `props`): `GET` with the operation as JSON in a `cf-r2-request` header
@@ -17,7 +17,7 @@
   multipart). Answers are the object's metadata as JSON, then its bytes;
   errors carry `cf-r2-error`. Argument checking, `R2Object`, `.text()`,
   `writeHttpMetadata()` and so on are all workerd's. miniflare implements
-  the backend side for `wrangler dev`; twd has to supply one.
+  the backend side for `wrangler dev`; tailworks has to supply one.
 - **ADR-platform-stores** gives a storage binding a platform-owned SQLite
   Durable Object, fed by a fenced, sealed journal in mgmt, so its data
   survives a move and two hosts never both write. It says R2 fits only for
@@ -60,17 +60,17 @@
      read-after-write consistent. If mgmt can't be reached, the store
      serves its local index (fail static, ADR-platform-stores §8).
 
-2. **The backend is per host, set by the operator.** `twd-hostd
+2. **The backend is per host, set by the operator.** `tw-hostd
    -r2-backend fs|s3` (default `fs`):
-   - `fs`: files under `<data-dir>/r2` on the host. For `twd up` (homelab)
-     and `twd dev`. The index still survives a move, but the bytes don't:
+   - `fs`: files under `<data-dir>/r2` on the host. For `tw up` (homelab)
+     and `tw dev`. The index still survives a move, but the bytes don't:
      on a new host a get of an old object fails with `r2_blob_missing`. A
      multi-host install uses `s3`.
    - `s3`: any S3-compatible service (MinIO, Garage, SeaweedFS, AWS S3,
      Cloudflare R2): `-r2-s3-endpoint`, `-r2-s3-bucket`, `-r2-s3-region`,
      `-r2-s3-prefix`, path-style or virtual-host addressing. Credentials
-     come from the environment of twd-hostd (`TWD_R2_S3_ACCESS_KEY_ID`,
-     `TWD_R2_S3_SECRET_ACCESS_KEY`, or the `AWS_*` names) or a file
+     come from the environment of tw-hostd (`TW_R2_S3_ACCESS_KEY_ID`,
+     `TW_R2_S3_SECRET_ACCESS_KEY`, or the `AWS_*` names) or a file
      (`-r2-s3-credentials-file`, same `KEY=value` form). Every host that
      can run the workload must point at the same backend, as they must
      already point at the same mgmt.
@@ -141,19 +141,19 @@
    at once. A crash between the two leaves an orphan blob (bytes nothing
    points to); a sweep that lists the bucket's prefix against the index is
    future work. When the bucket's store is deleted
-   (`twd r2 bucket delete`), the store object empties itself on its next
+   (`tw r2 bucket delete`), the store object empties itself on its next
    use (it sees a new incarnation) and deletes the blobs its old index
    pointed to. It doesn't delete the bucket's whole prefix: a replica
    might already be writing blobs for the new incarnation there.
 
 8. **Operator surface.** A bucket is a store of kind `r2`, so the stores
-   API (ADR-platform-stores) already covers it: `twd r2 bucket list|create|
+   API (ADR-platform-stores) already covers it: `tw r2 bucket list|create|
    delete <workload> [<bucket>]` call `GET|PUT|DELETE
-   …/workloads/{w}/stores/r2/{bucket}`, and `twd r2 object list` reads the
+   …/workloads/{w}/stores/r2/{bucket}`, and `tw r2 object list` reads the
    bucket's journal (admin) and folds it into the live keys. No new mgmt
-   endpoint. Object bodies (`twd r2 object get|put`) need the blob
+   endpoint. Object bodies (`tw r2 object get|put`) need the blob
    backend, which only hosts have; they need an mgmt endpoint proxied to
-   the lease holder (as `twd logs` is) and are a follow-up.
+   the lease holder (as `tw logs` is) and are a follow-up.
 
 **Consequences.**
 
@@ -162,7 +162,7 @@
   slower than a local miniflare, and fine for R2-style object storage.
 - With the `fs` backend, bytes are as durable as the host's disk (the
   same as Durable Object storage on the process tier) and are not
-  encrypted by twd. With `s3`, durability and encryption at rest are the
+  encrypted by tailworks. With `s3`, durability and encryption at rest are the
   backend's.
 - Writes need mgmt (as for every store); reads keep working from the
   local index while mgmt is down, as long as the backend is up.
@@ -177,7 +177,7 @@
 - An orphan-blob sweep; deleting a workload's blobs when it is deleted
   (today they go when the bucket's store is deleted and next used, and
   only from a host whose store object had them indexed).
-- `twd r2 object get|put` through mgmt to the lease holder.
+- `tw r2 object get|put` through mgmt to the lease holder.
 - Sharing a bucket between workloads (needs the stores' grant model).
 - Bucket mounts for containers (ADR-032): a FUSE or virtio-fs view of a
   bucket in the container VM, served by hostd from the same index and

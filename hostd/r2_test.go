@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/r2"
-	"github.com/rosskukulinski/twd/hostd/r2/r2test"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/r2"
+	"github.com/rosskukulinski/tailworks/hostd/r2/r2test"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -40,7 +40,7 @@ func TestR2Binding(t *testing.T) {
 		be   func(dir string) r2.Backend
 	}{
 		{"fs", func(dir string) r2.Backend { return &r2.FS{Root: dir} }},
-		{"s3", func(string) r2.Backend { return fake.Backend("twd/") }},
+		{"s3", func(string) r2.Backend { return fake.Backend("tw/") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			blobDir := t.TempDir()
@@ -71,7 +71,7 @@ func TestR2Binding(t *testing.T) {
 			}
 			want := "t/" + e.TenantID + "/w/r2probe/b/"
 			if tc.name == "s3" {
-				want = "twd/" + want
+				want = "tw/" + want
 			}
 			if len(names) == 0 {
 				t.Fatal("no blobs in the backend")
@@ -487,7 +487,7 @@ func r2Mem(pid int) (heap, rss uint64) {
 // TestR2IndexSurvivesMove: the bucket's index is a platform store, so it
 // survives losing the host's DO storage (what a move to a new host looks
 // like to the bucket): with the S3 backend every object is still there.
-// Deleting the bucket (its store, as `twd r2 bucket delete` does) empties
+// Deleting the bucket (its store, as `tw r2 bucket delete` does) empties
 // it and deletes the blobs the index pointed to.
 func TestR2IndexSurvivesMove(t *testing.T) {
 	fake := r2test.StartFakeS3(t.TempDir())

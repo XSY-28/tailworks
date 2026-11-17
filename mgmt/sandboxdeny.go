@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sort"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // GetHostSandboxDeny is GET /v1/hosts/{id}/sandbox-deny: every tenant's

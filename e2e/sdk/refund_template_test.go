@@ -12,17 +12,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
-// TestRefundApprovalTemplate: the create-twd `refund-approval` template. A
+// TestRefundApprovalTemplate: the create-tailworks `refund-approval` template. A
 // support user asks for a refund (the Workflow records who asked); a
-// different tailnet identity holding twd.dev/cap/approve approves it on the
+// different tailnet identity holding github.com/rosskukulinski/tailworks/cap/approve approves it on the
 // workload's node, and the refund completes naming the approver. The
-// requester approving their own refund passes twd's grant check but is
+// requester approving their own refund passes tailworks' grant check but is
 // refused by the Workflow's own rule.
 func TestRefundApprovalTemplate(t *testing.T) {
 	s := startSuite(t)
@@ -47,7 +47,7 @@ func TestRefundApprovalTemplate(t *testing.T) {
 	}
 	approver := approverNode.HTTPClient(30 * time.Second)
 	decideAs := func(c *http.Client, id, body string) (int, map[string]any) {
-		resp, err := c.Post(base+"/_twd/approvals/refund/"+id, "application/json", bytes.NewReader([]byte(body)))
+		resp, err := c.Post(base+"/_tw/approvals/refund/"+id, "application/json", bytes.NewReader([]byte(body)))
 		if err != nil {
 			return 0, map[string]any{"err": err.Error()}
 		}
@@ -75,14 +75,14 @@ func TestRefundApprovalTemplate(t *testing.T) {
 		return nil
 	}
 
-	// The page is the app's; /_twd/approvals on the same node is twd's.
-	if code, _, b := s.do("GET", base+"/", nil); code != 200 || !strings.Contains(string(b), "/_twd/approvals") {
+	// The page is the app's; /_tw/approvals on the same node is tailworks'.
+	if code, _, b := s.do("GET", base+"/", nil); code != 200 || !strings.Contains(string(b), "/_tw/approvals") {
 		t.Fatalf("page: %d", code)
 	}
 
 	id := refund("o-1", "42")
 	eventually(t, 30*time.Second, "approver sees the refund", func() (bool, any) {
-		resp, err := approver.Get(base + "/_twd/approvals")
+		resp, err := approver.Get(base + "/_tw/approvals")
 		if err != nil {
 			return false, err
 		}
@@ -98,14 +98,14 @@ func TestRefundApprovalTemplate(t *testing.T) {
 		return st["state"] == "refunded" && strings.Contains(js(st["detail"]), "customer called") && strings.Contains(js(st["detail"]), "approvedBy"), st
 	})
 
-	// Above the grant's limit: refused by twd, still waiting.
+	// Above the grant's limit: refused by tailworks, still waiting.
 	big := refund("o-2", "500")
 	eventually(t, 30*time.Second, "over the limit", func() (bool, any) {
 		code, r := decideAs(approver, big, `{"decision":"approve"}`)
 		return code == 403 && r["code"] == "cap_missing", r
 	})
 
-	// The requester approving their own: twd delivers it (the grant covers
+	// The requester approving their own: tailworks delivers it (the grant covers
 	// it), the Workflow's own rule refuses it.
 	own := refund("o-3", "10")
 	eventually(t, 30*time.Second, "self-approval delivered", func() (bool, any) {

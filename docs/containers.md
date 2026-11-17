@@ -1,6 +1,6 @@
 # Containers and code sandboxes: `ctx.container` on the microVM tier
 
-twd runs Cloudflare's container surface: `ctx.container` in a Durable
+tailworks runs Cloudflare's container surface: `ctx.container` in a Durable
 Object, the `Container` class from `@cloudflare/containers`, and the Sandbox
 SDK (0.x and 1.0) on top of it. Each container is its own microVM attached to
 one object. ADR-032 (design repo) is the decision. This page explains how to
@@ -24,19 +24,19 @@ and the class bound as a Durable Object.
 ```
 
 - `image` is a Dockerfile (or build directory), or a registry ref
-  (`docker.io/...`). `twd deploy` builds Dockerfiles on your machine with
-  `docker buildx`, pushes them to twd's registry, and pins every image by
+  (`docker.io/...`). `tw deploy` builds Dockerfiles on your machine with
+  `docker buildx`, pushes them to tailworks' registry, and pins every image by
   digest (see [Images](#images-build-registry-pinning-host-pull-adr-032-d3)).
   The host never builds and never runs a container engine.
 - `instance_type` is one of Cloudflare's types or custom resources (below).
   `max_instances` caps the running containers of that class for the tenant.
-- twd.jsonc can add `"containers"` too: the same array form, or
+- tailworks.jsonc can add `"containers"` too: the same array form, or
   `{"<Class>": {"image": ref, "images": {name: ref}}}` to pin refs (Sandbox SDK
   1.0 named images). A pin may only name that class's wrangler images.
 - A bundle with containers is placed only on a host that offers the
   `containers` tier, for the image's arch, with a free VM in its capacity
   vector (`503 no_host`; with `--host` or a sticky lease holder that lacks
-  `containers`, `409 tier_unavailable`, and `twd deploy --replace` moves it
+  `containers`, `409 tier_unavailable`, and `tw deploy --replace` moves it
   instead). This applies even when the parent object itself is process-tier.
   Smart placement (ADR-033: the best measured tailnet path to the
   workload's `tailnet.connects`) only ranks the hosts that pass these
@@ -45,7 +45,7 @@ and the class bound as a Durable Object.
 
 ### Use it
 
-The app code is Cloudflare's, unchanged. These run unmodified on twd (the v1
+The app code is Cloudflare's, unchanged. These run unmodified on tailworks (the v1
 acceptance tests):
 
 - **Sandbox SDK 0.x** (`@cloudflare/sandbox` 0.12.x, `examples/minimal`):
@@ -57,9 +57,9 @@ acceptance tests):
   `ctx.container.exec(argv).output()`, and 1.0's `Files` helper, which runs the
   image's `sandbox-shim` through `exec`.
 
-The `ctx.container` methods twd implements:
+The `ctx.container` methods tailworks implements:
 
-| Method | On twd |
+| Method | On tailworks |
 |---|---|
 | `start({env, entrypoint, enableInternet, image, instance, labels})` | ✅ returns at once (no readiness wait); throws if already running. `image` must be one of the class's pinned images |
 | `running`, `inspect()` | ✅ |
@@ -98,7 +98,7 @@ Admission at `start()`, in order: the host's capacity vector (VMs, memory,
 vCPU with overcommit, scratch disk; shared with microVM DOs), else
 `503 capacity_exhausted`; then a synchronous reservation in mgmt against the
 tenant's quotas (`maxContainers` 10, `maxContainerMemMiB` 16384,
-`maxContainerVCPU` 8 by default; `twd tenant set --max-containers ...`) and
+`maxContainerVCPU` 8 by default; `tw tenant set --max-containers ...`) and
 the class's `max_instances`, else `429 container_quota_exceeded`. If mgmt is
 unreachable the start fails closed (`503 quota_unavailable`), except a
 restart of a container this host already holds a reservation for. Containers
@@ -122,12 +122,12 @@ a per-container proxy on the host:
   `/etc/cloudflare/certs/cloudflare-containers-ca.crt` and in its trust
   bundles. Up to 128 interceptors per container.
 - **`enableInternet: true`** reaches only the hosts on the workload's
-  `tailnet.egress.internet` allowlist in twd.jsonc, never a private, tailnet,
+  `tailnet.egress.internet` allowlist in tailworks.jsonc, never a private, tailnet,
   metadata or host address (even through a DNS name that resolves to one).
   Each new destination is audited as `egress` with `actingFor: "sandbox-of
   <object>"`, and refusals as `deny`. There is no tenant exit node yet, so
   the traffic leaves from the host's own network
-  (`twd-hostd -container-internet=direct`, the default; `off` refuses it).
+  (`tw-hostd -container-internet=direct`, the default; `off` refuses it).
 - **Inbound** is only the parent's `getTcpPort(p).fetch()`.
 
 ### Lifetime
@@ -138,7 +138,7 @@ a per-container proxy on the host:
 - It belongs to the object, not to the isolate: it survives the object's
   eviction and a blue/green redeploy of the parent (the new code sees
   `running`). It dies with its host; nothing migrates.
-- `twd kill <object>`, stopping the workload, and fencing (ADR-028; a
+- `tw kill <object>`, stopping the workload, and fencing (ADR-028; a
   container inherits its parent class's fence) all SIGKILL the VM at once.
 - Disks are ephemeral. There are no snapshots yet.
 
@@ -146,12 +146,12 @@ a per-container proxy on the host:
 
 | Host | Containers | Notes |
 |---|---|---|
-| Linux arm64, KVM (Firecracker) | ✅ verified (Lima, nested KVM) | the stock `cloudflare/sandbox` images are amd64 only, so twd swaps in its arm64 rebuilds through the alias map; app code is unchanged |
+| Linux arm64, KVM (Firecracker) | ✅ verified (Lima, nested KVM) | the stock `cloudflare/sandbox` images are amd64 only, so tailworks swaps in its arm64 rebuilds through the alias map; app code is unchanged |
 | Linux amd64, KVM (Firecracker) | ⚠ built, not verified | stock images run as published (no alias). The only x86 test host so far is a nested guest whose L2 VMs lose interrupts, so no amd64 VM has booted to ready there |
-| macOS, Apple silicon (vz) | ✅ verified | needs `mkfs.erofs` (`brew install erofs-utils`). With `twd-hostd -vm-rosetta` the stock amd64 images run under Rosetta; without it, the arm64 rebuilds |
+| macOS, Apple silicon (vz) | ✅ verified | needs `mkfs.erofs` (`brew install erofs-utils`). With `tw-hostd -vm-rosetta` the stock amd64 images run under Rosetta; without it, the arm64 rebuilds |
 | no KVM / NAS / process-only hosts | ❌ | they don't offer `containers`; a container bundle is not placed there and `start()` throws `tier_unavailable` (no fallback) |
 
-`twd dev` uses the process tier, so `ctx.container.start()` throws
+`tw dev` uses the process tier, so `ctx.container.start()` throws
 `tier_unavailable` there.
 
 ### Not supported (v1)
@@ -170,7 +170,7 @@ a per-container proxy on the host:
   used).
 - Nested virtualization and GPUs (non-goals).
 - Workers bindings the Sandbox SDK templates may also use (KV, R2, Workers AI)
-  remain unsupported on twd as before (docs/COMPAT.md).
+  remain unsupported on tailworks as before (docs/COMPAT.md).
 
 ## How it works
 
@@ -178,9 +178,9 @@ a per-container proxy on the host:
 DO (workerd, any tier) ── ctx.container (polyfill in the generated wrapper)
    └─ platform TailnetApi (attests the object) ── HOSTD binding ── hostd /v1/container…
         └─ container manager, keyed (tenant, workload, class, object)
-             └─ hostd/vm BootContainer ── twd-vmhelper ── jailer ── Firecracker   (Linux)
-                                       └─ twd-vz (Virtualization.framework)       (macOS)
-                  guest: twd-guestd (PID 1) ── overlay(erofs image + scratch) ── ENTRYPOINT/CMD, execs
+             └─ hostd/vm BootContainer ── tw-vmhelper ── jailer ── Firecracker   (Linux)
+                                       └─ tw-vz (Virtualization.framework)       (macOS)
+                  guest: tw-guestd (PID 1) ── overlay(erofs image + scratch) ── ENTRYPOINT/CMD, execs
 ```
 
 - **One VM per container, one container per object.** On Firecracker its own
@@ -191,10 +191,10 @@ DO (workerd, any tier) ── ctx.container (polyfill in the generated wrapper)
   content-addressed cache, `public` scope for operator-marked bases). Each run
   gets a fresh sparse ext4 scratch: the overlay's upper layer, gone with the
   VM.
-- **Guest:** the same guest rootfs and twd-guestd as DO VMs, in container
+- **Guest:** the same guest rootfs and tw-guestd as DO VMs, in container
   mode (`guest.json` "container"); the kernel is `guest/build-kernel.sh`'s
   (erofs) on Linux and `guest/build-kernel-vz.sh`'s on macOS. Every
-  container process starts through `twd-guestd ctr-exec`: a re-exec in a new
+  container process starts through `tw-guestd ctr-exec`: a re-exec in a new
   mount namespace that `pivot_root`s into the overlay and detaches the old
   root, so no container process sees guestd or its config. It installs a
   seccomp filter (`socket`/`socketpair(AF_VSOCK)` and `io_uring_setup` fail
@@ -244,7 +244,7 @@ DO (workerd, any tier) ── ctx.container (polyfill in the generated wrapper)
   from one base snapshot holds that base's token in guestd's memory, so the
   pre-claim token is *not* unique per VM. It authenticates only the
   connection before the claim, when the VM holds no tenant code (just
-  twd's warm-up app, which has run and exited) and no keys. The claim's
+  tailworks' warm-up app, which has run and exited) and no keys. The claim's
   `load` op carries a fresh 256-bit `Load.CtlToken`, together with the
   entropy, boot id and clock: hostd switches to it before it sends the load
   (from then on the pre-claim or base token is refused), and guestd adopts
@@ -290,12 +290,12 @@ gateway; that is the only DNS server it has.
   container (Cloudflare's limit; re-registering a key replaces it). A
   matching request is delivered to the **parent object**: hostd sends it
   through the workload's current instance to the platform wrapper
-  (`cf.twd.kind = "intercept"`, which only hostd can set), which calls the
-  object's `__twd_intercept`; the polyfill runs it through the handler
+  (`cf.tw.kind = "intercept"`, which only hostd can set), which calls the
+  object's `__tw_intercept`; the polyfill runs it through the handler
   registered under that key. So whatever the handler fetches leaves with the
   object's own identity, egress policy and `lim` (facet mode: the object's
   node; plain-DO mode: the workload node). The request URL is what the
-  container connected to; its `x-twd*`/`twd-*`/`cf-*` headers are dropped;
+  container connected to; its `x-tw-*`/`tw-*`/`cf-*` headers are dropped;
   the rest is untrusted input. Handlers live in the object's memory: one
   registered before the object restarted answers `502
   intercept_unavailable` until it is registered again
@@ -319,9 +319,9 @@ gateway; that is the only DNS server it has.
   range, NAT64/6to4/Teredo, the synthetic pool, the host's own addresses).
   Every first flow per destination is audited `egress` with `actingFor:
   "sandbox-of <object>"`; refusals are audited `deny` (the first 32 per run)
-  and listed in `twd-hostd`'s `ContainerStatus.Refused`. twd has no tenant
+  and listed in `tw-hostd`'s `ContainerStatus.Refused`. Tailworks has no tenant
   exit-node or gateway path yet (RFC §4.8), so the path is the host's own
-  network (`twd-hostd -container-internet=direct`, the default) or none
+  network (`tw-hostd -container-internet=direct`, the default) or none
   (`off`).
 - **Preview URLs** (`exposePort`, `proxyToSandbox`) need public ingress
   (ADR-029): on a container class `exposePort()` throws `not_supported`,
@@ -330,7 +330,7 @@ gateway; that is the only DNS server it has.
 
 ## No keys in a sandbox
 
-`twd host vmcheck <workload> --container <Class>/<name>` scans the running
+`tw host vmcheck <workload> --container <Class>/<name>` scans the running
 container guest's disks (config drive, image, scratch when readable), its
 files and a full RAM dump for: `tskey-`, every node/machine private key on
 the host, the parent's egress MAC keys (instance root and the object's
@@ -346,32 +346,32 @@ exits `keys_in_guest`.
 ## Images: build, registry, pinning, host pull (ADR-032 D3)
 
 ```
-developer machine            twd-mgmt (tsnet, WhoIs)                       host (twd-hostd)
-twd deploy                    /v2/  OCI registry                            no container engine
+developer machine            tw-mgmt (tsnet, WhoIs)                       host (tw-hostd)
+tw deploy                    /v2/  OCI registry                            no container engine
   docker buildx (per arch) ─▶   <tenant>/<workload>-<class>  ◀─ pull by digest ─ image.Store.GetPinned
   alias contexts              public/…  (operator bases)                      verify, flatten, mkfs.erofs
   push over your tailnet  ─▶  POST /v1/deployments {containerImages}          cache: <tenant>/ or public/
                               pin every ref → per-arch digest (mirror external refs)
 ```
 
-- **Build (`twd deploy`, `internal/imagebuild`).** A class whose wrangler
+- **Build (`tw deploy`, `internal/imagebuild`).** A class whose wrangler
   `image` is a Dockerfile (or build dir), or whose `images.<name>` has a
   `dockerfile`, is built **on the developer's machine** with `docker buildx`,
   once per target arch (`--platform`, default: the arches of the live hosts in
   the tenant's pool that offer containers), into an OCI layout, and pushed to
-  `twd.local/<tenantID>/<workload>-<class>[-<name>]` over the CLI's own mgmt
+  `tw.local/<tenantID>/<workload>-<class>[-<name>]` over the CLI's own mgmt
   connection (a linked developer: their own Tailscale connection; WhoIs). The
   result (`…@sha256:…`, an index for several arches) goes to mgmt in
   `DeployRequest.containerImages`; it must be in the deploying tenant's
   namespace. The app's Dockerfile is used as written: the **alias map**
   (`GET /v1/images/aliases`; default `cloudflare/sandbox:0.12.14/1.0.0/1.0.1`
-  → twd's arm64 rebuilds on arm64) becomes BuildKit named contexts
+  → tailworks' arm64 rebuilds on arm64) becomes BuildKit named contexts
   (`--build-context docker.io/cloudflare/sandbox:0.12.14=oci-layout://…`) for
   every form the Dockerfile writes the ref in (FROM, `COPY --from=`, an ARG
-  default), fetched from twd's registry (`public/`) or else from the local
-  Docker store. (A `docker-image://` context naming a `twd.local` ref makes
+  default), fetched from tailworks' registry (`public/`) or else from the local
+  Docker store. (A `docker-image://` context naming a `tw.local` ref makes
   BuildKit try the network first: 100 s of timeouts, measured.)
-- **Registry (`internal/registry`, served by twd-mgmt at `/v2/`).** The OCI
+- **Registry (`internal/registry`, served by tw-mgmt at `/v2/`).** The OCI
   distribution push/pull subset on mgmt's own listeners (tsnet `:80`/`:443`,
   and the local-dev socket), behind the `/v1` WhoIs gate: admins push and pull
   every namespace; hosts only pull, and only `public/…` and the namespaces of
@@ -392,23 +392,23 @@ twd deploy                    /v2/  OCI registry                            no c
   (`ContainerClass.pins`, in `Assignment.containers` and
   `GET /v1/deployments/{id}`); placement is then limited to arches every image
   resolved for (an amd64-only image in a mixed pool lands on an amd64 host).
-  `twd.local/<tenant>/…` refs resolve in the tenant's namespace,
-  `twd.local/<other>` only ever in `public/`. An **external ref**
+  `tw.local/<tenant>/…` refs resolve in the tenant's namespace,
+  `tw.local/<other>` only ever in `public/`. An **external ref**
   (`docker.io/…`) is mirrored now into `<tenant>/mirror/<registry>/<repo>`
   through **mgmt's own egress** (anonymous bearer tokens for Docker Hub;
   `-no-mirror` refuses external refs; `-registry-insecure` lists plain-HTTP
   upstreams for tests), unless it is a public base. The alias map applies per
   arch. Retagging the upstream after the deploy changes nothing that runs; the
   next deploy picks the new digest. Audited (`image_pin`, with every pin).
-- **Public bases.** `twd image public add <ref> [--arch …]` mirrors an
-  upstream image into `public/<registry>/<repo>` (or names a `twd.local` ref
+- **Public bases.** `tw image public add <ref> [--arch …]` mirrors an
+  upstream image into `public/<registry>/<repo>` (or names a `tw.local` ref
   already in `public/`) and marks its per-arch digests public; deploys of every
-  tenant then pin those, so hosts cache it once. `twd image push <layout|tar>
-  twd.local/<name>:<tag>` is how the operator puts twd's arm64 rebuilds (the
+  tenant then pin those, so hosts cache it once. `tw image push <layout|tar>
+  tw.local/<name>:<tag>` is how the operator puts tailworks' arm64 rebuilds (the
   alias targets) into `public/`. Unmarking (`rm`) leaves pinned deployments as
   they are.
 - **Host pull (`hostd/image`).** hostd starts a container only from the pin
-  for its own arch, pulled as a host from twd's registry over the API's own
+  for its own arch, pulled as a host from tailworks' registry over the API's own
   connection (`mgmtapi.Client.OCI`: never Docker Hub, no container engine),
   every manifest and blob verified against its digest as it arrives. The cache
   scope comes from the pin's repository, not from the tenant: `public/` is
@@ -435,7 +435,7 @@ twd deploy                    /v2/  OCI registry                            no c
 | inactivity | no container API call and no open exec/port/stdin stream for the timeout (default 10 min, the `@cloudflare/containers` default; `setInactivityTimeout` ≤ 6 h); a parked `monitor()` is not activity |
 | hard max lifetime | `ContainerMaxLife`, default 24 h |
 | object evicted / blue-green redeploy | nothing: the next instance reconciles `running` from hostd before any event |
-| `twd kill` of the object, workload stopped or fenced (ADR-028) | VMM SIGKILL, no grace |
+| `tw kill` of the object, workload stopped or fenced (ADR-028) | VMM SIGKILL, no grace |
 
 `running` is synchronous in Cloudflare's API: the polyfill keeps it in the
 object's SQLite kv, reconciles it with hostd in `blockConcurrencyWhile` at
@@ -456,7 +456,7 @@ trust domain), never a facet object's and never another workload's.
 ## Warm pool and snapshots
 
 The fast-vm work (master, ADR-030) gives Durable Object microVMs a warm pool
-of pre-booted, tenant-free VMs (`twd-hostd -vm-pool`, on by default) and
+of pre-booted, tenant-free VMs (`tw-hostd -vm-pool`, on by default) and
 restores from one shared base snapshot per host for pool misses
 (`-vm-snapshot`, on by default, rebuilt hourly). **Container guests use
 neither: every container cold-boots** (`BootContainer`, ~250 ms to the

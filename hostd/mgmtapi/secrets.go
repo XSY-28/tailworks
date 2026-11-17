@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	v1 "github.com/rosskukulinski/twd/hostd/mgmtapi/v1"
+	v1 "github.com/rosskukulinski/tailworks/hostd/mgmtapi/v1"
 )
 
 // SecretGrant is the answer to POST

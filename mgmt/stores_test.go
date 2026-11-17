@@ -21,7 +21,7 @@ func newStoreEnv(t *testing.T) *storeEnv {
 	var tn struct{ TenantID string }
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, &dep)
 	return &storeEnv{e: e, tenant: tn.TenantID, epoch: dep.Epoch}
@@ -93,7 +93,7 @@ func TestStoresJournal(t *testing.T) {
 	if strings.Contains(fmt.Sprint(p), storeValue) {
 		t.Fatal("StoreJournalPage prints its data")
 	}
-	// An admin writes and reads without an epoch (twd kv key put/get); the
+	// An admin writes and reads without an epoch (tw kv key put/get); the
 	// store object then sees a conflict and catches up.
 	s.e.c.ok("POST", s.journal(0, ""), map[string]any{"after": 4, "incarnation": inc, "entries": []any{entry("c", "c1")}}, &r)
 	if r.Head != 5 {

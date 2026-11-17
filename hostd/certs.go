@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/nodecert"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/nodecert"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // certSource is a tenant registry's netd.CertSource (RT-01, ADR-010): for
@@ -30,7 +30,7 @@ type certSource struct {
 }
 
 type certEntry struct {
-	obj     *netd.CallerObject // nil: not a twd object (ErrNoCert)
+	obj     *netd.CallerObject // nil: not a tailworks object (ErrNoCert)
 	expires time.Time
 }
 

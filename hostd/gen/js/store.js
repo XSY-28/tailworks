@@ -1,4 +1,4 @@
-// twd platform stores (TRUSTED; runs in the platform worker, never in a
+// tailworks platform stores (TRUSTED; runs in the platform worker, never in a
 // tenant isolate). ADR-platform-stores.
 //
 // A store is one platform-owned SQLite Durable Object per (kind, name) of a
@@ -94,10 +94,10 @@ export class Store extends DurableObject {
   }
 
   #meta(k, d) {
-    return this.kv.get("__twd_store_" + k) ?? d;
+    return this.kv.get("__tw_store_" + k) ?? d;
   }
   #setMeta(k, v) {
-    this.kv.put("__twd_store_" + k, v);
+    this.kv.put("__tw_store_" + k, v);
   }
   get seq() {
     return Number(this.#meta("seq", 0));
@@ -201,7 +201,7 @@ export class Store extends DurableObject {
       await this.sync();
     } catch (e) {
       if (!this.everSynced || e?.code === "lease_lost") throw e;
-      console.warn("twd store " + this.kindName + "/" + this.name + ": serving local data; journal unreachable: " + e.message);
+      console.warn("tw store " + this.kindName + "/" + this.name + ": serving local data; journal unreachable: " + e.message);
     }
   }
 
@@ -262,7 +262,7 @@ export class Store extends DurableObject {
   }
 
   // adminOp runs one of the kind's operator operations (def.adminOps:
-  // `twd d1 execute`, exports, …). Only the platform's admin route calls
+  // `tw d1 execute`, exports, …). Only the platform's admin route calls
   // it: hostd sends it for mgmt's admin API, for a store the running
   // deployment declares.
   async adminOp(name, args = []) {

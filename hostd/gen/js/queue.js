@@ -1,4 +1,4 @@
-// twd Queues (TRUSTED; runs in the platform worker, never in a tenant
+// tailworks Queues (TRUSTED; runs in the platform worker, never in a tenant
 // isolate). ADR-039.
 //
 // Producer: a tenant's env.<Binding> is workerd's own `queue` binding,
@@ -8,19 +8,19 @@
 // bodies, /metrics); QueueProducer forwards them to hostd's local API,
 // which checks the deployment binds the queue and sends to mgmt as the
 // workload's lease holder. Facets get QueueFacetProxy, which forwards to a
-// native binding of the same queue held here (__TWD_QUEUE_<Binding>),
+// native binding of the same queue held here (__TW_QUEUE_<Binding>),
 // because native bindings can't enter a Dynamic Worker's env.
 //
 // Consumer: hostd posts a claimed batch over the private ingress as
-// cf.twd {kind: "queue"}; deliverQueue decodes the bodies and runs the
+// cf.tw {kind: "queue"}; deliverQueue decodes the bodies and runs the
 // tenant's queue() handler with workerd's own MessageBatch
 // (env.TENANT.queue, service_binding_extra_handlers). The batch's first
 // message carries the delivery's create ticket; the tenant runtime strips
-// it (twd-rt queueBatch).
+// it (tw-rt queueBatch).
 import { WorkerEntrypoint } from "cloudflare:workers";
-import CFG from "twd-config.json";
+import CFG from "tw-config.json";
 
-const TICKET_ID = "__twd_ticket";
+const TICKET_ID = "__tw_ticket";
 const td = new TextDecoder();
 
 function b64enc(u8) {
@@ -115,7 +115,7 @@ export class QueueProducer extends WorkerEntrypoint {
 // QueueFacetProxy is a facet's env.<Binding> (props {binding}).
 export class QueueFacetProxy extends WorkerEntrypoint {
   #q() {
-    return this.env["__TWD_QUEUE_" + this.ctx.props?.binding];
+    return this.env["__TW_QUEUE_" + this.ctx.props?.binding];
   }
   send(body, opts) {
     return this.#q().send(body, opts);
@@ -149,7 +149,7 @@ function decode(m) {
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-// deliverQueue runs one batch (cf.twd.kind "queue", set only by hostd) and
+// deliverQueue runs one batch (cf.tw.kind "queue", set only by hostd) and
 // answers {outcome, ackAll, retryBatch, explicitAcks, retryMessages, error}.
 export async function deliverQueue(env, t, req) {
   const name = t.queue;

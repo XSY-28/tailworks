@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
 )
 
 // fakeApprovalHost serves hostd's approvals push API: two pending
@@ -29,7 +29,7 @@ type fakeApprovalHost struct {
 func approvalHost(t *testing.T, e *testEnv, id, tenant string) *fakeApprovalHost {
 	t.Helper()
 	f := &fakeApprovalHost{}
-	sock := filepath.Join(os.TempDir(), "twd-appr-"+id+"-"+filepath.Base(filepath.Dir(filepath.Dir(e.sock)))+".sock")
+	sock := filepath.Join(os.TempDir(), "tw-appr-"+id+"-"+filepath.Base(filepath.Dir(filepath.Dir(e.sock)))+".sock")
 	os.Remove(sock)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
@@ -61,7 +61,7 @@ func approvalHost(t *testing.T, e *testEnv, id, tenant string) *fakeApprovalHost
 			}
 			if fmt.Sprint(d["grants"]) == "[]" {
 				w.WriteHeader(403)
-				io.WriteString(w, `{"code":"cap_missing","message":"no grant","snippet":"{}","missing":{"cap":"twd.dev/cap/approve"}}`)
+				io.WriteString(w, `{"code":"cap_missing","message":"no grant","snippet":"{}","missing":{"cap":"github.com/rosskukulinski/tailworks/cap/approve"}}`)
 				return
 			}
 			json.NewEncoder(w).Encode(map[string]any{"ok": true, "approval": map[string]any{
@@ -92,7 +92,7 @@ func TestApprovals(t *testing.T) {
 	srv := &Server{M: e.m}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
-		case "100.64.0.4:1": // a tailnet user with no twd grant at all
+		case "100.64.0.4:1": // a tailnet user with no tw grant at all
 			return WhoIsInfo{NodeID: "nEVE", Name: "eve-laptop.a.ts.net.", Login: "eve@example.com"}, nil
 		case "100.64.0.5:1": // an approver up to 100, not an admin
 			return WhoIsInfo{NodeID: "nBOB", Name: "bob-laptop.a.ts.net.", Login: "bob@example.com", Caps: []string{approvecap.Cap},

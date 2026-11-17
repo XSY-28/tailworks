@@ -1,7 +1,7 @@
 //go:build e2elocks
 
 // Package locks is the hermetic multi-host e2e for docs/locks.md: real
-// twd-mgmt and two real twd-hostd processes on testcontrol + a local DERP,
+// tw-mgmt and two real tw-hostd processes on testcontrol + a local DERP,
 // with the default timings (heartbeat 3 s, FenceAfter 30 s, namespace lease
 // 45 s). h1's only path to mgmt goes through a proxy the test can cut, so
 // h1 is partitioned from mgmt while it stays on the tailnet and keeps
@@ -31,10 +31,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 const (
@@ -314,12 +314,12 @@ func TestLocksFailover(t *testing.T) {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available (needed to bundle the app)")
 	}
-	dir, err := hostdtest.ShortDir("twd-lk-")
+	dir, err := hostdtest.ShortDir("tw-lk-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -397,7 +397,7 @@ func TestLocksFailover(t *testing.T) {
 	// mgmt through its own proxy.
 	keyFile := filepath.Join(dir, "api.env")
 	cliflow.WriteFakeOAuthFile(t, keyFile)
-	e.start("mgmt", "twd-mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
+	e.start("mgmt", "tw-mgmt", "-local-dev", "-socket", e.sock, "-host-token-file", filepath.Join(dir, "token"), "-rotate-host-token",
 		"-state-dir", filepath.Join(dir, "mgmt"), "-tsapi-url", ts.URL, "-reap-interval", "1h")
 	for i := 0; ; i++ {
 		b, err := os.ReadFile(filepath.Join(dir, "token"))
@@ -420,7 +420,7 @@ func TestLocksFailover(t *testing.T) {
 		ps := filepath.Join(dir, id+"-mgmt.sock")
 		proxies[id] = startProxy(t, ps, e.sock)
 		hd := filepath.Join(dir, id)
-		e.start(id, "twd-hostd", "-local-dev", "-mgmt", "unix://"+ps, "-mgmt-token-file", filepath.Join(dir, "token"),
+		e.start(id, "tw-hostd", "-local-dev", "-mgmt", "unix://"+ps, "-mgmt-token-file", filepath.Join(dir, "token"),
 			"-host-id", id, "-data-dir", filepath.Join(hd, "data"), "-run-dir", filepath.Join(hd, "run"),
 			"-control-url", ctl.URL, "-ephemeral", "-sandbox", "none", "-workerd", wd, "-hostname-prefix", id+"-", "-log-level", "debug")
 	}

@@ -1,17 +1,17 @@
-// Package imagebuild is twd deploy's container image builder (ADR-032 D3):
+// Package imagebuild is tw deploy's container image builder (ADR-032 D3):
 // a class whose wrangler "image" (or "images.<name>.dockerfile") is a
 // Dockerfile is built on the developer's machine with `docker buildx`,
 // once per target architecture, into an OCI image layout, and pushed to
-// twd's registry (mgmt's /v2/, over the developer's own tailnet
+// tailworks' registry (mgmt's /v2/, over the developer's own tailnet
 // connection) in the tenant's namespace. The result is a digest reference
-// (twd.local/<tenant>/<repo>@sha256:…, an index when built for several
+// (tw.local/<tenant>/<repo>@sha256:…, an index when built for several
 // arches) that mgmt pins at deploy.
 //
 // The arm64 alias map is applied as BuildKit named contexts: a Dockerfile
 // `FROM docker.io/cloudflare/sandbox:0.12.14` (or `COPY --from=` it, or an
-// ARG default naming it) builds for arm64 against twd's rebuild, so the
+// ARG default naming it) builds for arm64 against tailworks' rebuild, so the
 // app's Dockerfile is used as written. The rebuild comes from the local
-// Docker image store when it is there, else from twd's registry (public/)
+// Docker image store when it is there, else from tailworks' registry (public/)
 // as an OCI layout.
 //
 // Hosts never build: only the developer's machine runs a container engine.
@@ -30,9 +30,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/oci"
-	"github.com/rosskukulinski/twd/internal/registry"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/oci"
+	"github.com/rosskukulinski/tailworks/internal/registry"
 )
 
 // Job is one image to build.
@@ -113,7 +113,7 @@ type Options struct {
 	// Arches to build for (linux/<arch>).
 	Arches  []string
 	Aliases []registry.Alias
-	// Registry is twd's registry (mgmt /v2/) as the developer: pushes go
+	// Registry is tailworks' registry (mgmt /v2/) as the developer: pushes go
 	// here, and alias targets absent from the local Docker image store come
 	// from here.
 	Registry *oci.Client
@@ -135,7 +135,7 @@ func (o *Options) docker() string {
 // Result is one built and pushed image.
 type Result struct {
 	Job       Job
-	Ref       string            // twd.local/<repo>@sha256:… (index if several arches)
+	Ref       string            // tw.local/<repo>@sha256:… (index if several arches)
 	Platforms map[string]string // arch → image manifest digest
 	Layouts   map[string]string // arch → OCI layout tar (kept only with Options.WorkDir)
 }
@@ -145,7 +145,7 @@ type Result struct {
 func BuildAndPush(ctx context.Context, jobs []Job, o Options) (map[string]registry.Built, []Result, error) {
 	work := o.WorkDir
 	if work == "" {
-		d, err := os.MkdirTemp("", "twd-imagebuild-")
+		d, err := os.MkdirTemp("", "tw-imagebuild-")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -293,9 +293,9 @@ func refForms(r oci.Ref) []string {
 }
 
 // aliasSource is where BuildKit gets an alias target, always as a local
-// OCI layout (oci-layout://dir@digest): from twd's registry (public/, the
+// OCI layout (oci-layout://dir@digest): from tailworks' registry (public/, the
 // very image mgmt pins for this arch), else from the local Docker image
-// store (docker save). A docker-image:// context naming a twd.local image
+// store (docker save). A docker-image:// context naming a tw.local image
 // would make BuildKit try to resolve it over the network first.
 func aliasSource(ctx context.Context, to, arch, work string, o Options) (string, string, error) {
 	r, err := oci.ParseRef(to)
@@ -324,9 +324,9 @@ func aliasSource(ctx context.Context, to, arch, work string, o Options) (string,
 		}
 	}
 	if src == nil {
-		// Not in twd's registry: the local Docker image, if it has one.
+		// Not in tailworks' registry: the local Docker image, if it has one.
 		if localImageArch(ctx, o.docker(), to) != arch {
-			return fail(fmt.Errorf("%s is neither in twd's registry (%s: %v) nor a local linux/%s Docker image; the operator pushes it with `twd image push`", to, repo, regErr, arch))
+			return fail(fmt.Errorf("%s is neither in tailworks' registry (%s: %v) nor a local linux/%s Docker image; the operator pushes it with `tw image push`", to, repo, regErr, arch))
 		}
 		tar := filepath.Join(dir, "save.tar")
 		if b, err := exec.CommandContext(ctx, o.docker(), "image", "save", "-o", tar, to).CombinedOutput(); err != nil {

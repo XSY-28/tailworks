@@ -54,7 +54,7 @@ func TestMM_F5_LeaseHeldExplains(t *testing.T) {
 	}
 	deploy := func(host string) (DeployResponse, error) {
 		return m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w", Host: host, ForceTakeover: host == "",
-			Bundle: makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})})
+			Bundle: makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})})
 	}
 	if _, err := deploy("h1"); err != nil {
 		t.Fatal(err)

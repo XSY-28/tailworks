@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
 )
 
 // TestGenerateModuleTypes: a module the bundler typed (a wrangler Text rule
@@ -34,8 +34,8 @@ func TestGenerateModuleTypes(t *testing.T) {
 			t.Errorf("config.capnp lacks %s", want)
 		}
 	}
-	tm, _ := os.ReadFile(filepath.Join(dir, "twd-modules.js"))
+	tm, _ := os.ReadFile(filepath.Join(dir, "tw-modules.js"))
 	if !strings.Contains(string(tm), `"aa-notes.md": { text: `) {
-		t.Errorf("twd-modules.js does not type the .md as text:\n%s", tm)
+		t.Errorf("tw-modules.js does not type the .md as text:\n%s", tm)
 	}
 }

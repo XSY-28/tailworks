@@ -1,6 +1,6 @@
 package version
 
-// WorkerdPin is the workerd npm version this twd is built and tested
+// WorkerdPin is the workerd npm version this tailworks is built and tested
 // against. It must equal package-lock.json's node_modules/workerd version
 // (TestWorkerdPinMatchesLockfile fails otherwise): bump workerd with
 // `npm install workerd@<v>` and update this line in the same PR

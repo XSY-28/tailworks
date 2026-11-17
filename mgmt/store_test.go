@@ -13,7 +13,7 @@ import (
 )
 
 // storesUnderTest returns SQLite always, plus Postgres when
-// TWD_TEST_POSTGRES_DSN is set (`make test-pg` starts one in OrbStack).
+// TW_TEST_POSTGRES_DSN is set (`make test-pg` starts one in OrbStack).
 func storesUnderTest(t *testing.T) map[string]*SQLStore {
 	t.Helper()
 	ctx := context.Background()
@@ -24,7 +24,7 @@ func storesUnderTest(t *testing.T) map[string]*SQLStore {
 	}
 	t.Cleanup(func() { s.Close() })
 	out["sqlite"] = s
-	if dsn := os.Getenv("TWD_TEST_POSTGRES_DSN"); dsn != "" {
+	if dsn := os.Getenv("TW_TEST_POSTGRES_DSN"); dsn != "" {
 		p, err := OpenStore(ctx, dsn)
 		if err != nil {
 			t.Fatalf("postgres: %v", err)

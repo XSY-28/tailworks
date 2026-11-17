@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
 )
 
 // TestWhoAmITenants (issue #50): whoami names the caller's own tailnet,

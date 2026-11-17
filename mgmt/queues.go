@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/queuecfg"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/queuecfg"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 	"github.com/tailscale/hujson"
 )
 
@@ -261,7 +261,7 @@ func (m *Mgmt) authorizeQueue(ctx context.Context, tenantID, name string, c Queu
 var queueKeys sync.Map // incarnation -> []byte
 
 func queueKeyCustodyName(tenantID, inc string) string {
-	return "twd/" + tenantID + "/queues/" + inc + "/key"
+	return "tw/" + tenantID + "/queues/" + inc + "/key"
 }
 
 func (m *Mgmt) queueKey(ctx context.Context, tenantID, inc string) ([]byte, error) {
@@ -279,7 +279,7 @@ func (m *Mgmt) queueKey(ctx context.Context, tenantID, inc string) ([]byte, erro
 	return k, nil
 }
 
-func queueAAD(inc, id string) []byte { return []byte("twd-queue-v1\n" + inc + "\n" + id) }
+func queueAAD(inc, id string) []byte { return []byte("tw-queue-v1\n" + inc + "\n" + id) }
 
 func sealQueueBody(key []byte, inc, id string, body []byte) ([]byte, error) {
 	g, err := storeAEAD(key)

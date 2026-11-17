@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/catalog"
+	"github.com/rosskukulinski/tailworks/internal/catalog"
 )
 
 func main() {

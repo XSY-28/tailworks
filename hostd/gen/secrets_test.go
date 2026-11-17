@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
 )
 
 func secretsApp() *bundle.App {
@@ -43,14 +43,14 @@ func TestGenerateSecrets(t *testing.T) {
 	var tc struct {
 		Vars map[string]any `json:"vars"`
 	}
-	b, _ := os.ReadFile(filepath.Join(dir, "twd-config.json"))
+	b, _ := os.ReadFile(filepath.Join(dir, "tw-config.json"))
 	if err := json.Unmarshal(b, &tc); err != nil || tc.Vars["API_KEY"] != "s\"e\\c\nret" || tc.Vars["GREETING"] != "hi" || tc.Vars["OTHER"] != "o" {
-		t.Fatalf("twd-config.json vars: %v %v", tc.Vars, err)
+		t.Fatalf("tw-config.json vars: %v %v", tc.Vars, err)
 	}
 	if string(app.Vars["API_KEY"]) != `"from-vars"` || len(app.Vars) != 2 {
 		t.Fatalf("Generate modified app.Vars: %v", app.Vars)
 	}
-	for _, f := range []string{"config.capnp", "twd-config.json"} {
+	for _, f := range []string{"config.capnp", "tw-config.json"} {
 		if st, _ := os.Stat(filepath.Join(dir, f)); st.Mode().Perm() != 0o600 {
 			t.Errorf("%s mode %v", f, st.Mode().Perm())
 		}
@@ -59,7 +59,7 @@ func TestGenerateSecrets(t *testing.T) {
 
 func TestGenerateSecretNames(t *testing.T) {
 	for name, mod := range map[string]func(*bundle.App){
-		"reserved":        func(a *bundle.App) { a.Secrets = map[string]string{"__TWD": "x"} },
+		"reserved":        func(a *bundle.App) { a.Secrets = map[string]string{"__TW": "x"} },
 		"not identifier":  func(a *bundle.App) { a.Secrets = map[string]string{"A-B": "x"} },
 		"do binding name": func(a *bundle.App) { a.Bindings = []bundle.DOBinding{{Name: "OTHER", Class: "C"}} },
 	} {

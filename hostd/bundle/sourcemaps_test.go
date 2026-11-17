@@ -7,7 +7,7 @@ import "testing"
 func TestSourceMaps(t *testing.T) {
 	files := map[string][]byte{
 		"wrangler.jsonc":                   []byte(`{"name":"w","main":"src/index.ts"}`),
-		"twd-bundle.json":                  []byte(`{"main":"dist/index.js"}`),
+		"tw-bundle.json":                  []byte(`{"main":"dist/index.js"}`),
 		"dist/index.js":                    []byte("export default {}"),
 		"dist/index.js.map":                []byte(`{"version":3,"sources":[],"mappings":""}`),
 		"dist/other.css.map":               []byte("{}"),

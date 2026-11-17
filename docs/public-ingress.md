@@ -1,9 +1,9 @@
 # Public ingress (Funnel)
 
-Everything twd runs is tailnet-only by default: callers are identified by
+Everything tailworks runs is tailnet-only by default: callers are identified by
 their WireGuard identity (`getCaller`). Some apps need a public surface
 too: a webhook receiver (GitHub, Stripe, Slack), an OAuth callback, a
-public page. twd can serve **chosen path prefixes** of a workload to the
+public page. Tailworks can serve **chosen path prefixes** of a workload to the
 public internet over [Tailscale Funnel](https://tailscale.com/kb/1223/funnel).
 The design is ADR-029.
 
@@ -11,18 +11,18 @@ The design is ADR-029.
 
 - **One public node per public workload.** It is an extra node named after
   the workload, so the URL is `https://<workload>.<tailnet>.ts.net/`. It
-  carries `tag:twd-public`, needs no grants, and listens **only** on
+  carries `tag:tw-public`, needs no grants, and listens **only** on
   Funnel (`:443`, TLS terminated on the node).
 - **Every public request goes to the workload's Worker** (its default
   export), never straight to a Durable Object. Object nodes are never
   public. Your routing (`routeAgentRequest`, `/agents/<class>/<name>`)
   decides which object a request reaches.
 - **The public node is netd's own listener.** There is no extra gateway
-  hop, so `twd expose off` and `twd kill` act on it directly.
+  hop, so `tw expose off` and `tw kill` act on it directly.
 
 ## Opting in
 
-In `twd.jsonc`:
+In `tailworks.jsonc`:
 
 ```jsonc
 {
@@ -44,7 +44,7 @@ In `twd.jsonc`:
 ```
 
 - **No `"public": true` shorthand.** If you mean every path, write `"/*"`.
-- **Never public:** anything under `/_twd` (the platform's own object
+- **Never public:** anything under `/_tw` (the platform's own object
   addressing), paths with dot segments or doubled slashes, and encoded
   slashes or backslashes.
 - **Unlisted paths** get `404 not_public` from netd and never reach your
@@ -55,10 +55,10 @@ In `twd.jsonc`:
 Routes only take effect if the tenant allows public ingress:
 
 ```sh
-twd tenant set <tenant> --public-ingress allow   # or deny
+tw tenant set <tenant> --public-ingress allow   # or deny
 ```
 
-- **Single-tenant (`twd up`):** the gate is set to `allow` the first time,
+- **Single-tenant (`tw up`):** the gate is set to `allow` the first time,
   and an explicit `deny` is kept on later runs.
 - **Gate is `deny`:** a deploy with `"public"` is refused with
   `public_ingress_not_allowed`. Switching the gate to `deny` later closes
@@ -66,33 +66,33 @@ twd tenant set <tenant> --public-ingress allow   # or deny
 
 ### Tailnet policy
 
-`twd deploy` checks this and prints it if it's missing:
+`tw deploy` checks this and prints it if it's missing:
 
 ```jsonc
-"tagOwners": { "tag:twd-public": ["autogroup:admin", "tag:twd"] },
-"nodeAttrs": [ { "target": ["tag:twd-public"], "attr": ["funnel"] } ]
+"tagOwners": { "tag:tw-public": ["autogroup:admin", "tag:tw"] },
+"nodeAttrs": [ { "target": ["tag:tw-public"], "attr": ["funnel"] } ]
 ```
 
 - **HTTPS:** your tailnet needs HTTPS certificates (admin console › DNS ›
   HTTPS Certificates).
-- **No new OAuth scopes:** `auth_keys` with tag `tag:twd` already lets twd
-  mint `tag:twd-public` nodes.
-- **twd never adds `funnel` to any other tag.** mgmt's node
-  (`tag:twd-mgmt`) is never Funnel-capable (`internal/policy.Check`
+- **No new OAuth scopes:** `auth_keys` with tag `tag:tw` already lets tailworks
+  mint `tag:tw-public` nodes.
+- **tailworks never adds `funnel` to any other tag.** mgmt's node
+  (`tag:tw-mgmt`) is never Funnel-capable (`internal/policy.Check`
   refuses it).
 
 ### Deploying
 
 ```sh
-twd deploy                      # prints the public URL
-twd deploy --wait-public 10m    # …and waits until it answers from the internet
+tw deploy                      # prints the public URL
+tw deploy --wait-public 10m    # …and waits until it answers from the internet
 ```
 
 - **The first fetch of a new name is slow:** the first certificate for a
   new name takes about 1–2 minutes, and public DNS can take up to
   10 minutes. Later deploys reuse the node and its certificate.
 - **Name taken:** if another device already has the name, MagicDNS would
-  append `-1`. twd refuses to serve that name (`public_name_taken`).
+  append `-1`. Tailworks refuses to serve that name (`public_name_taken`).
 
 ### Name ownership
 
@@ -129,7 +129,7 @@ is shared by every tenant on a tailnet. mgmt gives each name one owner:
 ## What your code sees
 
 ```ts
-import { getCaller, getRequester } from "@twd/tailnet";
+import { getCaller, getRequester } from "@tailworks/tailnet";
 
 export default {
   async fetch(req, env, ctx) {
@@ -148,7 +148,7 @@ export default {
   fails closed instead of treating "no identity" as a principal.
 - **Public kind can't be forged.** netd sets it from the Funnel connection
   itself, never from a header. Client copies of every identity header are
-  stripped: `Tailscale-*`, `X-Forwarded-*`, `CF-*`, `x-twd-*`,
+  stripped: `Tailscale-*`, `X-Forwarded-*`, `CF-*`, `x-tw-*`,
   `Forwarded`, `X-Real-IP`.
 - **Client IP:** netd sets `CF-Connecting-IP` and `X-Forwarded-For` (one
   value) to the client address Funnel reports, and `X-Forwarded-Proto:
@@ -156,7 +156,7 @@ export default {
 
 ## Objects and spawn amplification
 
-In twd every new Durable Object name becomes a tailnet node, so public
+In tailworks every new Durable Object name becomes a tailnet node, so public
 traffic must not be able to mint nodes.
 
 - **New objects are refused.** A public request can reach objects that
@@ -225,9 +225,9 @@ Connections:
 Funnel has its own bandwidth limits, which Tailscale doesn't publish.
 
 **Error bodies.** netd's refusals are the typed JSON error (`code`,
-`detail`, `doc_url`, and the `twd-error` header). A request whose `Accept`
+`detail`, `doc_url`, and the `tw-error` header). A request whose `Accept`
 prefers `text/html` to JSON (a browser) gets a minimal HTML page instead,
-with the same status and `twd-error` header: the status, the code, one
+with the same status and `tw-error` header: the status, the code, one
 fixed sentence per code, `Retry-After` when there is one, and the docs
 link. The page never includes the request's path, the detail or anything
 about the workload. A wildcard `Accept: */*` (curl) or a tie keeps JSON.
@@ -236,21 +236,21 @@ Errors your own code returns are passed through unchanged.
 ## Exposing and unexposing
 
 ```sh
-twd expose off <workload>    # close the public listener now; survives redeploys
-twd expose on  <workload>
+tw expose off <workload>    # close the public listener now; survives redeploys
+tw expose on  <workload>
 ```
 
 - **`off`:** closes the Funnel listener and resets in-flight public
   connections. The node stays joined, so its certificate stays warm.
   Measured on a real tailnet, see STATUS.md.
-- **Removing `"public"` from `twd.jsonc` and redeploying** deletes the
+- **Removing `"public"` from `tailworks.jsonc` and redeploying** deletes the
   public node.
 
 ## Audit
 
 - **Per request:** every public request that matched a route is a
   `public_request` record in the host audit chain
-  (`twd audit <public-object-id>`). It holds the method, the path
+  (`tw audit <public-object-id>`). It holds the method, the path
   **without the query string**, the matched route, the status, the client
   IP, bytes and duration.
 - **Refusals:** requests the limits refused (429/413/431, and connections
@@ -259,7 +259,7 @@ twd expose on  <workload>
   `public_rejected` summary per minute, so a refused flood or a path scan
   can't grow the chain. The summary has `rateLimited`, `tooLarge`,
   `connsRefused`, `ipConnsRefused`, `notPublic`, `badRequest` and the top
-  client IPs. The limit refusals also go to the `twd.public.rejected`
+  client IPs. The limit refusals also go to the `tw.public.rejected`
   metric (see [observability](observability.md)).
 - **Backlog:** while mgmt is unreachable, hostd queues host records in
   memory and then on disk; none is dropped. If the disk queue reaches its
@@ -272,7 +272,7 @@ twd expose on  <workload>
 
 ## Checking it
 
-`twd doctor` shows:
+`tw doctor` shows:
 
 - `https_certs`;
 - `public_ingress` (the tenant gate);

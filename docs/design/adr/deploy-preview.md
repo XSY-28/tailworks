@@ -7,8 +7,8 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
 
 **Context.**
 
-- Issue #45 item 3 asks for `twd deploy --preview`, a second workload node
-  (`<workload>-preview-<short>`) with the same tags, and `twd promote`. It
+- Issue #45 item 3 asks for `tw deploy --preview`, a second workload node
+  (`<workload>-preview-<short>`) with the same tags, and `tw promote`. It
   leaves one question to an ADR: may a preview share the workload's
   Durable Object state? A preview must not take the DO lease.
 - On Cloudflare, `wrangler versions upload --preview-alias` uploads a
@@ -16,10 +16,10 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
   versions share the Worker's bindings and secrets; Durable Objects are not
   supported in previews. Vercel gives each deploy a preview URL and
   `vercel promote` makes one the production deploy.
-- In twd, a workload's Durable Objects run in exactly one place: the
+- In tailworks, a workload's Durable Objects run in exactly one place: the
   `(tenant, workload)` lease, its epoch and host fencing enforce that
   (ADR-011, ADR-028). DO storage lives on the host's disk.
-- Replicas (`twd.jsonc` `replicas`) already run extra copies of a workload
+- Replicas (`tailworks.jsonc` `replicas`) already run extra copies of a workload
   as workloads of their own (`<workload>--r2`), each with its own lease,
   record, assignment and node, and the group's secrets and stores.
 - Platform stores (KV, R2, D1) are per workload. Queues are per tenant:
@@ -29,7 +29,7 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
 
 1. **A preview is a workload of its own,** `<workload>--preview-<alias>`,
    like a replica (the `--` separator is the same). `POST /v1/deployments`
-   with `preview: true` (`twd deploy --preview`) deploys the bundle under
+   with `preview: true` (`tw deploy --preview`) deploys the bundle under
    that name. The alias is `previewAlias` (`--preview-alias`, a DNS label of
    at most 20 characters), or by default the first 8 hex digits of the
    bundle's SHA-256, so deploying the same bundle again redeploys the same
@@ -37,7 +37,7 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
    per-workload mechanism then applies unchanged: the preview's own
    lease and epoch, deployment record and history, assignment, workload
    node, MagicDNS name and identity. A redeploy by the preview's own name
-   (for example by `twd host drain`) keeps it a preview.
+   (for example by `tw host drain`) keeps it a preview.
 
 2. **A preview never shares Durable Object state, and never takes the
    workload's lease.** Its lease is its own, so deploying it never moves,
@@ -76,7 +76,7 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
    (smart placement as for any new workload; `--host` pins it).
 
 7. **Promote is a deploy of the preview's bundle to the workload.**
-   `POST /v1/tenants/{id}/workloads/{workload}/promotions` (`twd promote
+   `POST /v1/tenants/{id}/workloads/{workload}/promotions` (`tw promote
    <workload> <alias>`) loads the preview's current bundle and calls
    `Mgmt.Deploy` for the workload, as rollback does: lease at `epoch+1`,
    host fencing, sticky placement, every deploy refusal, and the
@@ -89,7 +89,7 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
    `404 unknown_preview`. Promote moves code and configuration only; the
    preview's data is not copied, and the workload keeps its storage.
 
-8. **Authorization is deploy's**: `x-twd-role: admin` on
+8. **Authorization is deploy's**: `x-tw-role: admin` on
    `GET …/previews` and `POST …/promotions`; hosts get `403`.
 
 **Consequences.**
@@ -100,10 +100,10 @@ ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
 - A preview of a stateful app shows the new code against empty state.
   Seeding it (or copying production data into it) is the operator's job.
 - Previews are workloads: they count against the tenant's quotas, appear
-  in `twd ls`, and are stopped with `twd undeploy <workload>--preview-<alias>`.
+  in `tw ls`, and are stopped with `tw undeploy <workload>--preview-<alias>`.
   Undeploying the workload doesn't stop its previews.
 - History stays per workload: the preview's deploys are in
-  `twd deployments <workload>--preview-<alias>`, the promotion in the
+  `tw deployments <workload>--preview-<alias>`, the promotion in the
   workload's history (and audit, with `promotedFrom`).
 
 **Not built.**

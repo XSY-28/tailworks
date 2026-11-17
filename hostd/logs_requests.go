@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/obs"
+	"github.com/rosskukulinski/tailworks/internal/obs"
 )
 
 // requestLogsHandler is GET /v1/logs?source=requests: the workload's
