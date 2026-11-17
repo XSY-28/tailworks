@@ -73,7 +73,9 @@ can't list tenants.
 machine reports: `version` and `restartNeeded` (it runs an older binary than
 this CLI), or `null` when no `tw up` runs here. A failed lookup is
 `update_check_failed`. `--json` never prints the once-a-day update notice
-that an interactive tailworks prints on stderr.
+that an interactive tailworks prints on stderr. `tw version --json`'s
+`updateCheck` says whether that notice's check is on (a release build
+without `CI` or `TW_NO_UPDATE_CHECK` set).
 
 `tw completion <shell> --json` is `{"shell", "script"}`; without `--json`
 it prints the script.

@@ -245,6 +245,18 @@ prove every ✅ and ⚠️.
 | Tooling | [tailworks' MCP server (`/mcp`, `tw mcp`)](docs/COMPAT.md#tw-mcp) | ✅ | tools gated per tool by a tailnet grant |
 | Tooling | [Docs for agents (`llms.txt`, `tw docs`)](docs/COMPAT.md#docs-for-agents) | ✅ | offline search |
 
+## What tw sends
+
+tailworks has no telemetry. The one request the CLI makes on its own is an
+update check: at most once a day, after an interactive command (a release
+build, stderr on a terminal, no `--json`, `CI` unset), `tw` asks
+`api.github.com` for the latest release of this repository, sending only
+the request itself with a `tw/<version>` User-Agent, and caches the answer
+in `~/.tailworks/update-check.json`. It never runs after `tw init` or
+`tw dev`, which make no outbound request. `TW_NO_UPDATE_CHECK=1` turns it
+off; `tw version --json` reports it as `updateCheck`. Details:
+[docs/security-model.md](docs/security-model.md#telemetry-and-the-update-check).
+
 ## More
 
 - **Docs map** (every doc by role and by task): [docs/README.md](docs/README.md).
