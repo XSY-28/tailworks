@@ -22,7 +22,10 @@
 # The image is an ext4 without a journal, every mtime is SOURCE_DATE_EPOCH,
 # owners are 0:0, and the UUID and hash seed are fixed. It is mounted
 # read-only by every VM (runtime state is tmpfs in the guest). Output:
-#   OUT_DIR/rootfs.ext4, OUT_DIR/manifest.json (input + output hashes).
+#   OUT_DIR/rootfs.ext4, OUT_DIR/manifest.json (input + output hashes, and
+#   "packages": the Ubuntu packages the image's glibc, mke2fs and CA bundle
+#   come from, whose copyright files go in the image's /usr/share/doc;
+#   guest/rootfs-packages.sh, issue #102).
 #
 # There is no tailscale, no tsnet and no key material in the image; the e2e
 # suite scans it (and guest memory) to check that.
@@ -87,6 +90,9 @@ else
   BASE_ROOTFS=$WORK/base
   mkdir -p "$BASE_ROOTFS"
   tar -xzf "$base_tgz" -C "$BASE_ROOTFS" --no-same-owner --no-same-permissions "usr/lib/$LIBDIR" usr/sbin/mke2fs
+  # The dpkg database and copyright files: which package (and version) each
+  # copied file comes from, for the release's license notices.
+  tar -xzf "$base_tgz" -C "$BASE_ROOTFS" --no-same-owner --no-same-permissions var/lib/dpkg/status var/lib/dpkg/info usr/share/doc
   GLIBC_FROM="ubuntu-base-$UBUNTU_BASE_VERSION-base-$GARCH.tar.gz sha256:$base_sha"
 fi
 [ -d "$BASE_ROOTFS/usr/lib/$LIBDIR" ] || { echo "BASE_ROOTFS=$BASE_ROOTFS has no usr/lib/$LIBDIR" >&2; exit 1; }
@@ -121,10 +127,12 @@ case $GARCH:$INTERP in
 esac
 
 # The shared libraries workerd and mke2fs link, from the base rootfs.
+FROM_BASE=(usr/sbin/mke2fs)
 for lib in $( (readelf -d "$WORKERD"; readelf -d "$STAGE/usr/sbin/mke2fs") | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' | sort -u) $LDSO; do
   src=$BASE_ROOTFS/usr/lib/$LIBDIR/$lib
   [ -e "$src" ] || { echo "missing $lib in $BASE_ROOTFS" >&2; exit 1; }
   cp -L "$src" "$STAGE/usr/lib/$LIBDIR/$lib"
+  FROM_BASE+=("usr/lib/$LIBDIR/$lib")
   chmod 0755 "$STAGE/usr/lib/$LIBDIR/$lib"
   [ "$(elf_machine "$STAGE/usr/lib/$LIBDIR/$lib")" = "$GARCH" ] || { echo "build-image: $lib is not $GARCH" >&2; exit 1; }
 done
@@ -143,14 +151,21 @@ CA=$STAGE/etc/ssl/certs/ca-certificates.crt
 if [ -f "$BASE_ROOTFS/etc/ssl/certs/ca-certificates.crt" ]; then
   cp -L "$BASE_ROOTFS/etc/ssl/certs/ca-certificates.crt" "$CA"
   CA_FROM=$GLIBC_FROM
+  CA_PKG=
 else
   deb=$(fetch "$CA_DEB_URL" "$CA_DEB_SHA256")
   mkdir -p "$WORK/ca"
   if command -v dpkg-deb >/dev/null; then
-    dpkg-deb --fsys-tarfile "$deb" | tar -xf - -C "$WORK/ca" ./usr/share/ca-certificates/mozilla
+    dpkg-deb --fsys-tarfile "$deb" | tar -xf - -C "$WORK/ca" ./usr/share/ca-certificates/mozilla ./usr/share/doc/ca-certificates/copyright
   else
-    (cd "$WORK/ca" && ar x "$deb" data.tar.zst) && zstd -dc "$WORK/ca/data.tar.zst" | tar -xf - -C "$WORK/ca" ./usr/share/ca-certificates/mozilla
+    (cd "$WORK/ca" && ar x "$deb" data.tar.zst) && zstd -dc "$WORK/ca/data.tar.zst" | tar -xf - -C "$WORK/ca" ./usr/share/ca-certificates/mozilla ./usr/share/doc/ca-certificates/copyright
   fi
+  # ca-certificates_<version>_all.deb: its own source package.
+  ca_ver=${CA_DEB#ca-certificates_}
+  ca_ver=${ca_ver%%_*}
+  mkdir -p "$STAGE/usr/share/doc/ca-certificates"
+  install -m 0644 "$WORK/ca/usr/share/doc/ca-certificates/copyright" "$STAGE/usr/share/doc/ca-certificates/copyright"
+  CA_PKG='{"package":"ca-certificates","version":"'$ca_ver'","source":"ca-certificates","source_version":"'$ca_ver'","files":["/etc/ssl/certs/ca-certificates.crt"]}'
   n=0
   : >"$CA"
   while IFS= read -r c; do cat "$c" >>"$CA"; n=$((n + 1)); done < <(find "$WORK/ca/usr/share/ca-certificates/mozilla" -name '*.crt' | LC_ALL=C sort)
@@ -159,6 +174,21 @@ else
 fi
 chmod 0644 "$CA"
 : >"$STAGE/etc/resolv.conf" # no DNS: names are resolved by host netd, from the netmap
+
+# The Ubuntu packages behind the files copied from the base rootfs (+ their
+# copyright files, into the image), for manifest.json "packages". A
+# BASE_ROOTFS without a dpkg database only gets a warning; the pinned
+# tarball (every release build) always has one.
+set +e
+PKGS=$("$ROOT/guest/rootfs-packages.sh" "$BASE_ROOTFS" "$STAGE" "${FROM_BASE[@]}")
+rc=$?
+set -e
+case $rc in
+  0) ;;
+  3) echo "build-image: WARNING: no package list for $BASE_ROOTFS (release builds need one)" >&2; PKGS= ;;
+  *) exit 1 ;;
+esac
+PACKAGES=$(printf '%s\n%s\n' "$PKGS" "$CA_PKG" | sed '/^$/d; s/^/    /' | sed '$!s/$/,/')
 
 find "$STAGE" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
 # ASCII names only (see the directory-hash flag below).
@@ -209,7 +239,10 @@ cat >"$OUT/manifest.json" <<EOF
   "glibc_from": "$GLIBC_FROM",
   "libc_sha256": "$(sha "$STAGE/usr/lib/$LIBDIR/libc.so.6")",
   "ca_from": "$CA_FROM",
-  "ca_sha256": "$(sha "$CA")"
+  "ca_sha256": "$(sha "$CA")",
+  "packages": [
+$PACKAGES
+  ]
 }
 EOF
 echo "built $IMG ($GARCH, $(du -h "$IMG" | cut -f1)), sha256 $(sha "$IMG")"
