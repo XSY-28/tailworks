@@ -47,8 +47,8 @@ func testTwUp(t *testing.T, extra []string) {
 	if _, se, _, err := e.Tw("up", "--yes", "--control=headscale", "--tailnet", hs.Domain, "--api-key-file", hs.KeyFile); err == nil || !strings.Contains(se, "--control-url") {
 		t.Fatalf("tw up --control=headscale without --control-url: %v\n%s", err, se)
 	}
-	if _, se, _, err := e.Tw("up", "--yes", "--control=headscale", "--control-url", hs.URL, "--wif"); err == nil || !strings.Contains(se, "profile_unsupported") {
-		t.Fatalf("tw up --control=headscale --wif: %v\n%s", err, se)
+	if _, se, _, err := e.Tw("up", "--yes", "--control=headscale", "--control-url", hs.URL, "--oauth-client-file", "/nonexistent/oauth"); err == nil || !strings.Contains(se, "profile_unsupported") {
+		t.Fatalf("tw up --control=headscale --oauth-client-file: %v\n%s", err, se)
 	}
 
 	// Without --policy-apply, an undefined tag:tw-mgmt stops tw up before
