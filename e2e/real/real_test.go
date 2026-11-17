@@ -40,7 +40,7 @@ const (
 	testCap     = "example.com/cap/ttest"
 )
 
-// allowedTailnets are the only tailnets this suite may touch (BUILD-PLAN safety rule 2).
+// allowedTailnets are the only tailnets this suite may touch (docs/install-testing.md, safety rule 1).
 var allowedTailnets = map[string]bool{"tail7906d5.ts.net": true}
 
 type results struct {

@@ -1,6 +1,6 @@
 //go:build e2embp
 
-// E2E-MAC on a different, clean MacBook (BUILD-PLAN definition of done 1,
+// E2E-MAC on a different, clean MacBook (the macOS acceptance test,
 // the headline): from this Mac, copy the darwin release tarball and the
 // tailnet-1 API key file to `mbp` (~/.tailworks-e2e, mode 0600), run install.sh
 // there, `tw up` / `tw init` / `tw deploy` on mbp over ssh, and run the
