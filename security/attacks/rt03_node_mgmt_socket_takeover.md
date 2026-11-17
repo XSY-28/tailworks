@@ -51,7 +51,7 @@ E2E-MULTI isolation claim on Linux. macOS is mitigated by the Seatbelt profile.
 tier on Linux has no per-tenant confinement" (integration gap). But the
 **E2E-MULTI "isolation holds" headline and DoD item 2 are macOS-only**; they do
 not hold on the Linux process or Node tiers, which the docs present as
-first-class (`LINUX-PLAN`). This should be stated as a hard precondition.
+first-class (docs/install-testing.md, "Linux requirements"). This should be stated as a hard precondition.
 
 **Recommended fix:** do not rely on same-uid peercred for the mgmt admin socket.
 Options: (a) run each tenant workload under a distinct uid + per-tenant
