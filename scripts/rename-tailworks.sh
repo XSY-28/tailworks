@@ -68,7 +68,7 @@ sub long {
 	s{create-twd}{create-tailworks}g;
 	s{\bnpm (create|init) twd\b}{npm $1 tailworks}g;
 	# install root and system dirs
-	s{(?<![\w.])\.twd\b}{.tailworks}g;
+	s{(?<![\w.?])\.twd\b}{.tailworks}g; # not req.cf?.twd
 	s{\b(share|etc|libexec|run|opt)/twd\b}{$1/tailworks}g;
 	s{\.config/twd\b}{.config/tailworks}g;
 	s{/var/lib/twd-vm\b}{/var/lib/tailworks-vm}g;

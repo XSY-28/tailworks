@@ -17,7 +17,7 @@ func Changelog(es []Entry) string {
 	slices.Reverse(es)
 	var b strings.Builder
 	b.WriteString("# Changelog\n\n")
-	b.WriteString("What changed in each tw release, newest first. This file is generated\n")
+	b.WriteString("What changed in each tailworks release, newest first. This file is generated\n")
 	b.WriteString("from the release catalog (`internal/catalog/releases/`, written from the\n")
 	b.WriteString("fragments in `changes/released/`); don't edit it by hand. How versions\n")
 	b.WriteString("work and what may break: [docs/RELEASING.md](docs/RELEASING.md#versions).\n")

@@ -149,7 +149,7 @@ async function admin(req, env, ctx, t) {
 
 export default {
   async fetch(req, env, ctx) {
-    const t = req.cf?.tailworks;
+    const t = req.cf?.tw;
     if (!t || typeof t !== "object") return errResponse("no_identity", "request did not come through netd/hostd");
     if (isPublic(req)) {
       // A public node only fronts its workload's default export; the
@@ -621,7 +621,7 @@ function slimEvent(e) {
     out.path = pathOf(ev.request.url);
     const tp = ev.request.headers?.traceparent;
     if (typeof tp === "string") out.traceparent = tp;
-    const t = ev.request.cf?.tailworks;
+    const t = ev.request.cf?.tw;
     if (t && typeof t === "object") {
       out.route = { kind: String(t.kind ?? ""), class: String(t.class ?? ""), name: String(t.name ?? "") };
       if (t.kind === "scheduled") out.event = "scheduled";

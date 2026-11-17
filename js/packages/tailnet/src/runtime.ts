@@ -496,13 +496,13 @@ function asResponse(e: unknown): Response | null {
 
 /** requestTicket is the create ticket hostd stamped on a tailnet request or cron run. */
 function requestTicket(req: any): string | undefined {
-  const t = req?.cf?.tailworks?.ticket;
+  const t = req?.cf?.tw?.ticket;
   return typeof t === "string" && t ? t : undefined;
 }
 
 /** isScheduledReq: the platform dispatching a cron run (cf.tw.kind "scheduled", set by hostd). */
 function isScheduledReq(req: any): boolean {
-  return req?.cf?.tailworks?.kind === "scheduled";
+  return req?.cf?.tw?.kind === "scheduled";
 }
 
 /**

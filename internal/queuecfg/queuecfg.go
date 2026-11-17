@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -208,7 +209,7 @@ func (c *Config) Validate() error {
 	binds := map[string]bool{}
 	for i, p := range c.Producers {
 		where := fmt.Sprintf("queues.producers[%d]", i)
-		if !identRE.MatchString(p.Binding) || len(p.Binding) > 128 || (len(p.Binding) >= 5 && p.Binding[:5] == "__TW") {
+		if !identRE.MatchString(p.Binding) || len(p.Binding) > 128 || strings.HasPrefix(p.Binding, "__TW") {
 			return fmt.Errorf("%s: bad binding name %q", where, p.Binding)
 		}
 		if binds[p.Binding] {

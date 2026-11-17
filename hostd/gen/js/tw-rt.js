@@ -1296,11 +1296,11 @@ function asResponse(e) {
   return null;
 }
 function requestTicket(req) {
-  const t = req?.cf?.tailworks?.ticket;
+  const t = req?.cf?.tw?.ticket;
   return typeof t === "string" && t ? t : void 0;
 }
 function isScheduledReq(req) {
-  return req?.cf?.tailworks?.kind === "scheduled";
+  return req?.cf?.tw?.kind === "scheduled";
 }
 async function runScheduled(scheduledFn, req, extra) {
   const t = req.cf.tw;

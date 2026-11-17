@@ -41,8 +41,8 @@ func TestLLMsTxt(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(b)
-	if !strings.HasPrefix(s, "# tw\n") {
-		t.Fatal("llms.txt must start with `# tw`")
+	if !strings.HasPrefix(s, "# tailworks\n") {
+		t.Fatal("llms.txt must start with `# tailworks`")
 	}
 	base := "https://github.com/rosskukulinski/tailworks/blob/master/"
 	linked := map[string]bool{}

@@ -15,10 +15,10 @@ import (
 )
 
 func TestRT06_UnicodeHomoglyphTagRefused(t *testing.T) {
-	// "tag:twԁ-wl-x": the 'd' is U+0501 (Cyrillic small letter komi de). It
+	// "tag:tԝ-wl-x": the 'w' is U+051D (Cyrillic small letter we). It
 	// is NOT the ASCII prefix "tag:tw", so Check must refuse it as a
 	// non-tw tagOwners key even though it looks like one.
-	homo := "tag:twԁ-wl-x"
+	homo := "tag:tԝ-wl-x"
 	if strings.HasPrefix(homo, "tag:tw") {
 		t.Fatal("precondition: the homoglyph must not be the ASCII prefix")
 	}
