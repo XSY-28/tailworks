@@ -28,7 +28,9 @@ import (
 // After a command, an interactive tailworks also prints a one-line notice when a
 // newer release is out, at most once a day. It is off with --json, when
 // stderr isn't a terminal, with CI set, for development builds, and with
-// TW_NO_UPDATE_CHECK=1.
+// TW_NO_UPDATE_CHECK=1. It never runs after the local-only commands in
+// noUpdateNotice (tw init, tw dev: no tailnet, no credentials, no outbound
+// request; issue #104). `tw version --json` reports it as updateCheck.
 
 // versionCheck is `tw version --check --json` (schema $defs/version).
 type versionCheck struct {
@@ -172,7 +174,7 @@ func cmdVersionCheck(f *flags) error {
 	saveUpdateCache(s, latest)
 	emit(f, map[string]any{"tw": version, "go": runtime.Version(), "os": runtime.GOOS + "/" + runtime.GOARCH, "workerdPin": workerdPin, "esbuild": esbundle.Version,
 		"latest": res.Latest, "url": res.URL, "updateAvailable": res.UpdateAvailable,
-		"upgrade": res.Upgrade, "daemons": res.Daemons}, func() { printVersionCheck(res, release) })
+		"upgrade": res.Upgrade, "daemons": res.Daemons, "updateCheck": updateCheckOn()}, func() { printVersionCheck(res, release) })
 	return nil
 }
 
@@ -237,20 +239,35 @@ func saveUpdateCache(s *state, latest string) {
 var noUpdateNotice = map[string]bool{
 	"__supervise": true,
 	"completion":  true,
+	"dev":         true, // local only: no outbound request (#104)
+	"init":        true, // local only: no outbound request (#104)
 	"mcp":         true,
 	"version":     true,
 }
 
-// updateNoticeEnabled reports whether the notice may run after cmd.
-func updateNoticeEnabled(cmd string, stderr io.Writer) bool {
-	if jsonOut || noUpdateNotice[cmd] || os.Getenv("CI") != "" || os.Getenv("TW_NO_UPDATE_CHECK") != "" {
+// updateCheckOn reports whether this tailworks runs the once-a-day check
+// at all: a release build, without CI or TW_NO_UPDATE_CHECK set. It is
+// `tw version --json`'s updateCheck.
+func updateCheckOn() bool {
+	if os.Getenv("CI") != "" || os.Getenv("TW_NO_UPDATE_CHECK") != "" {
 		return false
 	}
-	if !parseSemver(version).ok || parseSemver(version).pre != "" {
-		return false // a development build
-	}
-	fh, ok := stderr.(*os.File)
+	v := parseSemver(version)
+	return v.ok && v.pre == "" // not a development build
+}
+
+// stderrIsTerminal reports whether w is a terminal (a var for tests).
+var stderrIsTerminal = func(w io.Writer) bool {
+	fh, ok := w.(*os.File)
 	return ok && term.IsTerminal(int(fh.Fd()))
+}
+
+// updateNoticeEnabled reports whether the notice may run after cmd.
+func updateNoticeEnabled(cmd string, stderr io.Writer) bool {
+	if jsonOut || noUpdateNotice[cmd] || !updateCheckOn() {
+		return false
+	}
+	return stderrIsTerminal(stderr)
 }
 
 // updateNotice prints the once-a-day "newer release" line to stderr.
