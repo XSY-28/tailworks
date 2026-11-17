@@ -1,6 +1,6 @@
 package mgmt
 
-// Platform stores (ADR-platform-stores): the durable half of every
+// Platform stores (ADR-044): the durable half of every
 // platform-owned storage binding (Workers KV first; D1, Queues and R2 are
 // expected to reuse it). A store is served by a platform-owned SQLite
 // Durable Object in the workload's workerd (hostd/gen/js/store.js); that

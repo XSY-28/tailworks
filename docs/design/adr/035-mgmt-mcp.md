@@ -1,7 +1,8 @@
 # ADR-035: tailworks' own MCP server on mgmt, gated per tool by a tailnet grant
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/agent-first-dx-issue-25.md`).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: mgmt's `/mcp`,
+`tw mcp`; results in `status/agent-first-dx-issue-25.md`).
 
 **Context.**
 

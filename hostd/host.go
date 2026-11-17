@@ -220,7 +220,7 @@ type Config struct {
 	// mgmt (default DefaultQueueVisibility, 60 s; extended while queue()
 	// runs). It bounds how soon a crashed consumer's batch comes back.
 	QueueVisibility time.Duration
-	// Observability (ADR-observability, telemetry.go): MetricsListener,
+	// Observability (ADR-045, telemetry.go): MetricsListener,
 	// when set, serves GET /metrics (the host's own tailnet node; who may
 	// scrape is the tailnet policy's call). Telemetry tunes the request
 	// records and the OTLP export.
@@ -316,7 +316,7 @@ type Host struct {
 	ctr         *ctrManager
 	nowFn       func() time.Time // wall clock for cron triggers (tests)
 
-	// telemetry.go (ADR-observability)
+	// telemetry.go (ADR-045)
 	tel        *telemetry
 	metricsSrv *http.Server
 

@@ -1,8 +1,10 @@
 # ADR-029: Public ingress over Funnel, through netd on a stable per-workload public node; tsidp deferred
 
 **Date:** 2026-11-13
-**Status:** Proposed (Ross, design interview 2026-11-13). Implemented on
-tailworks branch `amazing-kolibri` (see "Implementation notes" at the end).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `tw expose`,
+[docs/public-ingress.md](../../public-ingress.md)). Proposed 2026-11-13 after a
+design interview; where the build differs, see "Implementation notes" at the end.
+tsidp (D4) stays deferred.
 
 **Context.**
 - Cloudflare Workers are public by default. Many apps need a public

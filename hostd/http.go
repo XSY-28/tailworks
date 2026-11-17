@@ -642,7 +642,7 @@ type WorkloadStatus struct {
 	// LogFile is the app's log (workerd.log, or app.log for runtime node).
 	LogFile string `json:",omitempty"`
 	// RequestLog is the workload's structured request records
-	// (ADR-observability; JSON Lines), whether or not it exists yet.
+	// (ADR-045; JSON Lines), whether or not it exists yet.
 	RequestLog string `json:",omitempty"`
 	// Public is the workload's public ingress (ADR-029), if any.
 	Public *PublicStatus `json:",omitempty"`

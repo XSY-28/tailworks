@@ -398,7 +398,7 @@ func TestReadWranglerOutEntry(t *testing.T) {
 }
 
 // TestWranglerWarningsStoreKinds: a key registered as a platform store
-// binding (ADR-platform-stores) is supported, so it isn't warned about.
+// binding (ADR-044) is supported, so it isn't warned about.
 func TestWranglerWarningsStoreKinds(t *testing.T) {
 	cfg := map[string]any{hostdtest.ProbeStoreKey: []any{map[string]any{"binding": "P", "name": "main"}}}
 	if w := wranglerWarnings("wrangler.toml", cfg, "esbuild"); len(w) != 1 || !strings.Contains(w[0], "unknown key") {

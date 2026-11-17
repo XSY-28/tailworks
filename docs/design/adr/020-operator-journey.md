@@ -7,4 +7,4 @@
 - Hosts join with `tw host add` → a **single-use join token with a 5-minute expiry**, minted by mgmt → `tw-hostd join --token`, after which the host persists its own node key. This implements DX-H1: no long-lived host secret.
 - Tenants are assigned pools with `tw tenant set` (`max-objects`, `registrations-per-minute`).
 - Day-2 verbs: `host drain`, `upgrade --plan`, `restore`, `status`, `freeze`.
-- Paging conditions are defined in DX.md journey 6b.
+- Paging conditions were defined in the design-phase DX.md journey 6b (not published; RFC §9 lists them).

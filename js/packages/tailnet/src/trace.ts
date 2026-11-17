@@ -1,4 +1,4 @@
-// W3C trace context inside tenant code (ADR-observability).
+// W3C trace context inside tenant code (ADR-045).
 //
 // hostd's ingress gives every request a `traceparent` whose span is its
 // SERVER span. The runtime runs each fetch handler inside that context

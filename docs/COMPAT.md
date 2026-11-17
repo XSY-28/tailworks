@@ -272,7 +272,7 @@ workloads may consume one queue, `max_concurrency` doesn't autoscale, and
 HTTP pull is tailworks' admin API. See [queues.md](queues.md). The `node`
 runtime does not support queues.
 
-## Logs, metrics and traces (ADR-observability)
+## Logs, metrics and traces (ADR-045)
 
 See [observability.md](observability.md). Measured by `TestTelemetry`
 (`hostd`, hermetic: real workerd, testcontrol, a tsnet caller, echo and
@@ -303,7 +303,7 @@ separate processes).
 | `@ai-sdk/mcp` stdio transport | ❌ | — | `child_process` (Node process tier) |
 | `mcp-handler` `createMcpHandler` + `withTailnet` | ✅ | `McpHandlerWithTailnet` | Web-standard handler mounted at `/mcp`; per-request caller, allow/deny, `whoami` |
 | Typed egress refusals through the MCP client | ✅ | `EgressRefusalIsTyped` | `mcpFetch` throws `TailnetError`; the template renders it (`403 peer_not_visible`) instead of a 500 |
-| `traceparent` propagation | ✅ | `TraceparentPropagated`, `TestTelemetry/TraceparentAcrossDOAndEgress` | `mcpFetch` sends `00-<caller traceId>-<span>-01`, and tailworks itself propagates the W3C trace across ingress, DO calls and egress (ADR-observability). The **audit** trace ID (`getCaller().traceId`) is still each hop's own: the header is never trusted for audit or identity |
+| `traceparent` propagation | ✅ | `TraceparentPropagated`, `TestTelemetry/TraceparentAcrossDOAndEgress` | `mcpFetch` sends `00-<caller traceId>-<span>-01`, and tailworks itself propagates the W3C trace across ingress, DO calls and egress (ADR-045). The **audit** trace ID (`getCaller().traceId`) is still each hop's own: the header is never trusted for audit or identity |
 | On-behalf-of (`actingFor`) assertions on MCP calls | ❌ | — | RFC §4.6 not implemented: the server sees the agent's node, not the human it acts for |
 | `WorkflowAgent` / Workflow SDK | ❌ | — | `node:vm` (ADR-022: Node process tier, branch m9) |
 | `HarnessAgent`, Vercel Sandbox, hosted Vercel services | ❌ | — | client-only or process tier (Cloudflare's Sandbox SDK: see below) |
@@ -360,7 +360,7 @@ project) and wrangler 4.60.0 (`make e2e-wrangler`). See
 | `minify`, `keep_names`, `jsx_*`, `tsconfig` | ⚠️ mapped, not measured | — | passed to esbuild's options |
 | CommonJS modules, `rules` of type ESModule / CommonJS, Python modules | ❌ | `cmd/tw:TestReadWranglerOutEntry`, `internal/esbundle:TestBuildAppUnsupportedRule` | tailworks ships ES modules (plus text, data, wasm, json) |
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id` | 🚫 warned | `cmd/tw:TestWranglerWarnings`, `cmd/tw:TestCLIDeployWranglerTOML` | no Cloudflare zone: a workload answers at its MagicDNS name; internet exposure is `tailworks.jsonc` `public` (Funnel) |
-| Binding sections with no tailworks binding (`r2_buckets`, `d1_databases`, `services`, `queues`, `ai`, …) | ❌ warned | `cmd/tw:TestWranglerWarnings` | one line per section naming each `env.X` that will be undefined. A section registered as a [platform store](design/adr/platform-stores.md) is not warned (`cmd/tw:TestWranglerWarningsStoreKinds`) |
+| Binding sections with no tailworks binding (`r2_buckets`, `d1_databases`, `services`, `queues`, `ai`, …) | ❌ warned | `cmd/tw:TestWranglerWarnings` | one line per section naming each `env.X` that will be undefined. A section registered as a [platform store](design/adr/044-platform-stores.md) is not warned (`cmd/tw:TestWranglerWarningsStoreKinds`) |
 | `assets`, `site` | ❌ warned | `cmd/tw:TestWranglerWarnings` | serve from the Worker or import files as Text/Data modules |
 | `upload_source_maps` | ✅ | `cmd/tw:TestWantSourceMap`, `cmd/tw:TestDevParity` | the built-in esbuild ships `dist/index.js.map` (positions and names, no sources) unless it is `false`; hosts map exception stacks with it ([dev-debugging.md](dev-debugging.md)). `tw dev` always maps. With `--wrangler` it is warned: wrangler-built bundles ship no map |
 | `observability`, `logpush`, `limits`, unknown keys | ❌ ignored, warned | `cmd/tw:TestWranglerWarnings` | nothing is ignored silently |

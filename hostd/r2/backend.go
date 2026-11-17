@@ -2,7 +2,7 @@
 //
 // An R2 bucket is a platform store of kind "r2": its index (key → version,
 // size, etag, metadata, blob IDs) is a platform store, journaled to mgmt
-// (ADR-platform-stores). The object bytes are immutable blobs in a Backend
+// (ADR-044). The object bytes are immutable blobs in a Backend
 // that the host's operator configures: a directory (FS, the default) or an
 // S3-compatible service (S3). Only tw-hostd talks to the backend, so the
 // workload never holds a credential (ADR-034).

@@ -192,7 +192,7 @@ func TestAgentEval(t *testing.T) {
 
 	testMCP(t, ag, doc(up), ctl.URL, work)
 
-	// History and rollback (ADR-deploy-rollback): the deploy and the MCP
+	// History and rollback (ADR-046): the deploy and the MCP
 	// redeploy ran the same bundle, so a rollback with no ID has no target;
 	// naming the first deployment rolls back through the whole stack.
 	hr := ag.Exec("deployments", "hello-mcp", "--json")
@@ -214,7 +214,7 @@ func TestAgentEval(t *testing.T) {
 		t.Fatalf("rollback events: %v", err)
 	}
 
-	// Preview and promote (ADR-deploy-preview): a preview runs next to the
+	// Preview and promote (ADR-048): a preview runs next to the
 	// workload, through to ready, and promote makes its bundle the
 	// workload's, through the whole stack.
 	pv := ag.Exec("deploy", "--preview-alias", "try", "--json")

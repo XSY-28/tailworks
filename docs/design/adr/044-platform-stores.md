@@ -1,7 +1,9 @@
-# ADR-platform-stores: Platform-owned SQLite Durable Objects with a fenced journal in mgmt back storage bindings
+# ADR-044: Platform-owned SQLite Durable Objects with a fenced journal in mgmt back storage bindings
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/platform-stores.md`).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: KV, D1 and R2
+run on it, ADR-036 to ADR-038; results in `status/platform-stores.md`).
+Drafted as `ADR-platform-stores`.
 
 **Context.**
 

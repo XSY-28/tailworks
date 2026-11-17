@@ -1588,7 +1588,7 @@
     },
     "deploymentRecord": {
       "type": "object",
-      "description": "one entry of a workload's deployment history (the /v1 DeploymentRecord, ADR-deploy-rollback)",
+      "description": "one entry of a workload's deployment history (the /v1 DeploymentRecord, ADR-046)",
       "properties": {
         "deploymentID": {
           "type": "string"
@@ -2720,7 +2720,7 @@
     },
     "logs.record": {
       "type": "object",
-      "description": "tw logs <workload> --json (the default, without --console): one structured request record per line on stdout (ADR-observability)",
+      "description": "tw logs <workload> --json (the default, without --console): one structured request record per line on stdout (ADR-045)",
       "properties": {
         "time": {
           "type": "string"

@@ -16,7 +16,7 @@ import { wrapStores } from "./d1.js";
 import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
 
 // Egress fetch() carries the running handler's trace context
-// (ADR-observability).
+// (ADR-045).
 installFetchPropagation();
 
 /** spanFlusher reports a handler's DO-call spans to hostd (TailnetApi "spans"). */

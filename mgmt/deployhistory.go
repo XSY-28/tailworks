@@ -7,7 +7,7 @@ import (
 	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
-// Deployment history and bundle retention (ADR-deploy-rollback).
+// Deployment history and bundle retention (ADR-046).
 //
 // Every deploy already left its deployment row behind; what was missing
 // was a way to read a workload's history and a bound on the bundles mgmt

@@ -1,8 +1,10 @@
 # ADR-037: Workers KV is a platform store per workload, behind workerd's own kvNamespace binding
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/workers-kv-binding-issue-15.md`).
-Builds on [ADR-platform-stores](platform-stores.md).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `kv_namespaces`,
+`tw kv`, [docs/kv.md](../../kv.md); results in
+`status/workers-kv-binding-issue-15.md`).
+Builds on [ADR-044](044-platform-stores.md).
 
 **Context.**
 
@@ -11,7 +13,7 @@ Builds on [ADR-platform-stores](platform-stores.md).
   that need KV didn't run. The most common one is
   `@cloudflare/workers-oauth-provider`, which keeps clients, grants and
   tokens in `env.OAUTH_KV`.
-- ADR-platform-stores gives every storage binding a platform-owned SQLite
+- ADR-044 gives every storage binding a platform-owned SQLite
   Durable Object per store, a write-ahead journal in mgmt that is fenced to
   the lease holder, sealed at rest and compacted by key, and the plumbing
   to bind workerd's native binding types to a platform backend. KV is its
@@ -47,7 +49,7 @@ Builds on [ADR-platform-stores](platform-stores.md).
    Two options were rejected. A **mgmt-store-backed** KV (every operation
    a call to mgmt) has no local reads, and an mgmt outage takes reads down
    too. A **DO alone**, with no journal, loses the data on a move. See
-   ADR-platform-stores, options 1 and 2.
+   ADR-044, options 1 and 2.
 
    - **Binding.** A tenant's `env.<BINDING>` is workerd's own
      `kvNamespace` binding. Its target is the platform's `KVBackend`

@@ -131,7 +131,7 @@ func hasLog(r obs.Record, msg string) bool {
 	return false
 }
 
-// TestTelemetry (ADR-observability), hermetic: testcontrol + fakemgmt +
+// TestTelemetry (ADR-045), hermetic: testcontrol + fakemgmt +
 // hostd + stock workerd, a tsnet caller, an echo node and an OTLP
 // collector node. Request records (ingress joined with workerd's tail),
 // traceparent across a DO call and an egress fetch, /metrics, the logs

@@ -1,8 +1,9 @@
-# ADR-deploy-rollback: Deployment history and rollback as a new deploy of a stored bundle; data moves forward only, secrets are not versioned
+# ADR-046: Deployment history and rollback as a new deploy of a stored bundle; data moves forward only, secrets are not versioned
 
 **Date:** 2026-11-15
-**Status:** Proposed (branch `deploy-history-rollback-issue-45`, issue #45
-items 1 and 2; results in `status/deploy-history-rollback-issue-45.md`).
+**Status:** Accepted (2026-11-16, built on master after v0.2.0: `tw deployments`,
+`tw rollback`; issue #45 items 1 and 2; results in
+`status/deploy-history-rollback-issue-45.md`). Drafted as `ADR-deploy-rollback`.
 Preview deploys (issue #45 item 3) are not part of this decision.
 
 **Context.**

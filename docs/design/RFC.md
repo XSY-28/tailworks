@@ -2,6 +2,60 @@
 
 Status: Draft, for public comment · Applies to: tailworks MVP and v1 · License of this document: CC-BY-4.0
 
+What is built, and where it differs from this design: [As built (v0.2.0)](#as-built-v020).
+
+---
+
+## As built (v0.2.0)
+
+> This RFC is the design tailworks started from, and it reads as that
+> design. What shipped in v0.2.0, and on master since, differs in places.
+> This table is the summary; sections the build revised carry a "Revised"
+> note, and the rest of the text is not updated line by line. The operator
+> docs describe the real behaviour: [README](../../README.md),
+> [COMPAT.md](../COMPAT.md), [INSTALL.md](../INSTALL.md) and
+> [concepts.md](../concepts.md). Each [ADR](adr/README.md) says whether
+> it is built.
+
+Status: **Built** as designed · **Differs**: built, but not as this RFC says · **Not built** · **Revised**: this RFC's text is revised in place.
+
+| RFC | Claim | Status | As built |
+|---|---|---|---|
+| §1, §4.3 | Every workload and every object is its own tailnet node | Built | Objects of a class with tags in `tailnet.objects` get their own node ([concepts.md](../concepts.md)) |
+| §1, §4.8 | Tenant code runs in Firecracker microVMs | Differs | The default is the process tier: workerd as a sandboxed process (Landlock and seccomp on Linux, Seatbelt on macOS; ADR-023). The microVM tier (Firecracker on Linux, Virtualization.framework on macOS; ADR-024, ADR-030) is opt-in, one VM per workload |
+| §4.8 | One VM per trust domain (`isolation: "tenant"`, `"principal"`, `"object"`) | Not built | The unit of isolation is the workload |
+| §4.8 | Per-object egress through a platform wrapper with a request MAC | Differs | Facet mode (the default) sends each object's `fetch()` from its own node; plain-DO mode sends it from the workload's node ([egress-modes.md](../egress-modes.md)) |
+| §4.8 | Internet egress opt-in per class (`egress.internet`) | Differs | Workers reach tailnet peers only. Only containers have an `egress.internet` allowlist (ADR-032) |
+| §4.2, §4.8, §15 | `stord` (`tw-stord`): DO storage over vsock, encrypted per object, shipped to a tenant bucket | Not built | DO storage is a host-local directory (on the microVM tier, a per-workload volume). KV, D1 and R2 indexes are journaled in mgmt (ADR-044); Queues live in mgmt (ADR-039) |
+| §4.9, §9, §10 | Async encrypted DO backup, RPO ≤ 5 s, `tw restore --namespace` drilled in CI | Not built | [ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md) is amended. Back up the state directory ([INSTALL.md](../INSTALL.md#back-up-and-restore)). Moving a workload with Durable Objects to another host starts them empty (`tw host drain --allow-local-state-loss`); see [#38](https://github.com/rosskukulinski/tailworks/issues/38) |
+| §4.9 | Namespace lease on S3 or Postgres, TTL 15 s, renew 5 s | Differs | The database is the lease clock (ADR-028): SQLite or Postgres, no S3. The namespace lease TTL is 45 s, and hosts fence themselves after 30 s without a renewal |
+| §4.9, §9 | Parking, `gcAfter`, 500 online nodes per netd | Not built | Nodes stay online until their object is killed, reaped or undeployed. Hosts advertise a node capacity to placement (`tw-hostd -capacity-nodes`, default 1000). Pool nodes (ADR-031) and warm keys make new objects faster |
+| §4.9 | macOS pre-sleep hook | Not built | A sleeping Mac takes its nodes offline |
+| §4.4 | Minting with a tenant OAuth client; single-use keys; warm keys; registration throttle | Built | ADR-042. The WIF and API-key modes were built, then removed. Headscale mints with a Headscale API key (ADR-015) |
+| §4.3, §4.4 | Mint-time node attributes (`custom:tw-*`) | Not built | Auth keys carry tags only; lineage lives in tailworks' audit |
+| §4.3, §8 | Node keys rotated on migration and every 30 days | Not built | A node keeps its key for its lifetime |
+| §4.4, §4.8 | Node keys and DEKs in setec; the OBO root key in KMS | Differs | Node state lives in the host's state directory. mgmt's custody is a file store (AES-GCM, the default) or setec (`tw-mgmt -custody setec`); there is no KMS and no per-object DEK ([ADR-018](adr/018-use-setec-node-key-dek-custody.md) stays Proposed) |
+| §4.4 | `tw login` (browser OIDC); CI deploys by OIDC token exchange | Not built | Developers, agents and CI runners on the tailnet use `tw link`: mgmt identifies the machine by WhoIs |
+| §4.5 | `getCaller()`: WhoIs at ingress, `request.cf`, client identity headers stripped | Built | [COMPAT.md](../COMPAT.md#identity) |
+| §4.6 | Node certificates with `lim`; spawn budgets (64 live, depth 3); `--cascade` | Built | ADR-025 |
+| §4.6, §6 | Per-request on-behalf-of assertions (`Tailnet-Assertion`, `actingFor`); `forward()` re-signs the act chain | Not built | A receiver sees the calling node, not the human it acts for. `ctx.tailnet.forward()` re-sends the request from the calling node ([COMPAT.md](../COMPAT.md#identity)) |
+| §6.1 | `ctx.tailnet.connect()` | Not built | Throws `plan_feature_missing`; egress is HTTP only |
+| §6.2, §6.3 | Go and Python verifiers | Not built | The packages are `@tailworks/tailnet`, `@tailworks/mcp`, `@tailworks/node` and `create-tailworks` |
+| §4.11, §5.5 | Kill tiers 1 and 2 | Built | Tier 1 resets flows and closes the node; tier 2 deletes the device after a tombstone window |
+| §4.11, §5.5 | Kill tier 3 (posture flip on `custom:tw-live`) | Not built | `tw kill` reports it as unavailable |
+| §4.10 | Hash-chained, host-signed audit; `tw audit`; trace IDs | Built | Request logs, metrics and traces are ADR-045 (`tw logs`, `tw telemetry`) |
+| §4.10 | `tw tail` | Not built | `tw logs -f` |
+| §3, §5.1, §7.2 | `tw connect` | Not built | `tw up --oauth-client-file` serves the first tailnet, `tw tenant add` the next ones; `tw up --control=headscale` for Headscale |
+| §4.5, §4.6, §7, §9, §12 | `tw policy lint`, `tw policy test`, `tw policy push`, `policy.tw-tests.hujson` | Not built | `tw policy [dir]` prints the policy snippet an app needs, checked against the live policy; `tw deploy` runs the same preflight |
+| §4.7 | A Tailscale Service per workload | Built | Opt-in per workload ([services.md](../services.md)) |
+| §3 | Non-goals: KV, R2, D1 and Queues out of scope; not a VM platform | Revised | KV, R2, D1, Queues, Workflows (ADR-036 to ADR-040) and containers (ADR-032) ship; see §3 |
+| §3 | Goal 1: the compatibility matrix in DX.md | Differs | [docs/COMPAT.md](../COMPAT.md), with the tests behind each row |
+| §3 | Goal 6: ≤5 lines of code and one CLI step | Revised | See §3 |
+| §10 | `tw-mgmt init`; N≥2 stateless replicas | Differs | `tw up` runs mgmt and a host in one process (SQLite, file custody). Replicas run `tw-mgmt` on Postgres behind `svc:tw-mgmt` ([services.md](../services.md#mgmt-replicas-svctw-mgmt)). Hosts join with `tw host add` |
+| §10 | Blue/green deploys; `tw host drain`; N−1 upgrades | Built | ADR-041 |
+| §4.9, §12 | v1: workerd cluster mode through upstream hooks (WD-1 to WD-4) | Not built | Single host per namespace (ADR-012) |
+| §15 | `MAINTAINERS`, DCO sign-off, `rfcs/` | Not built | See §15 |
+
 ---
 
 ## 1. Summary
@@ -53,13 +107,20 @@ The defensible claim is narrow: tailworks is the Workers/DO runtime where each o
 ## 3. Goals and non-goals
 
 **Goals**
-1. Existing Workers/DO code runs under a **documented compatibility matrix** (DX.md). That covers fetch, DO storage (KV and SQL), alarms, WebSocket hibernation, DO JS RPC, and the Agents SDK `Agent` and `McpAgent`.
+1. Existing Workers/DO code runs under a **documented compatibility matrix** ([docs/COMPAT.md](../COMPAT.md)). That covers fetch, DO storage (KV and SQL), alarms, WebSocket hibernation, DO JS RPC, and the Agents SDK `Agent` and `McpAgent`.
 2. **Node per object** (and per workload), in the owner's tailnet. Hosts serve tenants from different tailnets at once.
 3. **No long-lived customer secret** in tailworks storage on Tailscale SaaS. No secrets of any kind inside the guest.
 4. **Tool-level authorization** from grants and app caps, read in one line: `getCaller(request)`.
 5. **Per-request on-behalf-of**, sub-agent narrowing without an admin round-trip, a three-tier kill switch, and a tamper-evident audit chain.
-6. **Quickstart:** ≤5 lines of code plus one CLI step to the first private fetch, after a one-time `tw connect`.
+6. **Quickstart:** ≤5 lines of code plus one CLI step to the first private fetch, after a one-time tailnet setup.
 7. **Self-hosted first**, with Tailscale SaaS and a Headscale profile. A hosted offering is not precluded.
+
+> Revised (as built, v0.2.0). Goal 5: sub-agent narrowing, tamper-evident
+> audit and kill tiers 1 and 2 are built; per-request on-behalf-of and kill
+> tier 3 are not. Goal 6: app code stays a few lines, but the one-time
+> setup is longer than one step: `tw up` with an OAuth client, plus policy
+> edits in the admin console (the [README](../../README.md) quick start).
+> The planned one-step setup command was not built.
 
 **Non-goals**
 - **Not an agent framework.** We ship adapters for the Cloudflare Agents SDK and the MCP TypeScript SDK. Other frameworks (Claude Agent SDK, LangGraph, OpenAI Agents SDK) are *clients* that reach tailworks tools over the tailnet.
@@ -67,6 +128,13 @@ The defensible claim is narrow: tailworks is the Workers/DO runtime where each o
 - **Not a secrets manager.** tailworks removes the *network* secret. Application credentials remain the application's concern.
 - **Not a general-purpose VM platform.** The guest image is fixed: kernel, `tw-guestd` and workerd.
 - **Not a Cloudflare replacement.** KV, R2, D1, Queues and Workers AI are out of scope for the MVP.
+
+> Revised (as built, v0.2.0). Two non-goals moved. Containers
+> ([ADR-032](adr/032-containers-code-sandboxes.md)) run tenant OCI images,
+> one microVM per container, attached to a Durable Object; the Worker's own
+> guest image is still fixed. KV, R2, D1, Queues and Workflows ship as
+> platform stores and bindings (ADR-036 to ADR-040, ADR-044). Workers AI is
+> still out of scope: use an LLM gateway on your tailnet.
 
 ## 4. Design
 
@@ -106,11 +174,11 @@ flowchart LR
 
 | Component | Runs where | Responsibilities | Never holds |
 |---|---|---|---|
-| `tw` CLI | Developer laptop, CI | `init`, `dev`, `link`, `connect`, `deploy`, `policy test/lint/push`, `types`, `kill`, `audit`, `tail` | Any tailnet key |
+| `tw` CLI | Developer laptop, CI | As built: `up`, `init`, `dev`, `link`, `deploy`, `policy`, `types`, `kill`, `audit`, `logs` and more (`tw help`); the design's `connect`, `policy test/lint/push` and `tail` were not built | Any tailnet key |
 | `tw-mgmt` | Operator tailnet, N≥2 stateless replicas | Tenant registry; minting broker; namespace and object leases; per-object key custody; spawn verification against policy; reaper/reconciler; audit index | Decrypted node keys (it unwraps a DEK only *for* a lease holder) |
 | `tw-hostd` | One per host | The host's operator-tailnet node (`tag:tw-host`); Firecracker and netd supervisor; lease renewal; sleep hooks on dev hosts | Tenant node keys |
 | `netd[tenant]` | One process per (tenant, host) | N `tsnet.Server`s in the tenant's tailnet; ingress demux with WhoIs; attributed egress proxy; assertion signing and verification; local policy check for object→object calls; Tier-1 kill; audit records | Mint credentials; other tenants' keys |
-| `stord[tenant]` | One process per (tenant, host) | Receives DO storage I/O from the guest over vsock; local fsync; encrypts with the per-object DEK; ships asynchronously to the tenant bucket prefix | Other tenants' data |
+| `stord[tenant]` (not built; see As built) | One process per (tenant, host) | Receives DO storage I/O from the guest over vsock; local fsync; encrypts with the per-object DEK; ships asynchronously to the tenant bucket prefix | Other tenants' data |
 | Guest image | Firecracker VM | A minimal kernel, `tw-guestd` (init, vsock storage, health) and pinned upstream workerd | Node keys, bucket credentials, signing keys |
 | workerd | In the guest | Stock upstream binary. Runs a generated platform wrapper plus the tenant bundle with real DO namespaces | Nothing secret |
 
@@ -178,8 +246,8 @@ We call the REST API ourselves because tsnet can't set `nodeAttributes` on a joi
 | `tw dev` | None. An embedded control plane | No |
 
 **Developers and CI** (no secret anywhere):
-- `tw login`: self-hosted tw-mgmt identifies the developer by WhoIs over the tailnet; hosted tw-mgmt uses a browser OIDC flow.
-- CI deploys exchange GitHub/GitLab OIDC tokens with tw-mgmt (trust rules per repo and environment).
+- `tw login`: self-hosted tw-mgmt identifies the developer by WhoIs over the tailnet; hosted tw-mgmt uses a browser OIDC flow. (Not built: `tw link` does the WhoIs part.)
+- CI deploys exchange GitHub/GitLab OIDC tokens with tw-mgmt (trust rules per repo and environment). (Not built.)
 - Hosts enrol in the operator tailnet with a single-use key minted by tw-mgmt, then persist their node key.
 - `tw link` binds a checkout to a tenant and namespace in `.tailworks/`, which is gitignored.
 
@@ -192,7 +260,7 @@ import { getCaller } from "@tailworks/tailnet";
 const who = getCaller(request); // { nodeId, tags, user?, actingFor?, chain, caps(), traceId }
 ```
 
-**Cap merge semantics** follow `wgengine/filter`: values from every matching grant are *appended*, i.e. unioned [verified: tailscale/wgengine/filter/filter.go:410-435]. For numeric limits the helper takes the **max** across entries. Adding a grant can therefore only widen a limit, and `tw policy lint` warns when two grants give the same (src, dst) different limits.
+**Cap merge semantics** follow `wgengine/filter`: values from every matching grant are *appended*, i.e. unioned [verified: tailscale/wgengine/filter/filter.go:410-435]. For numeric limits the helper takes the **max** across entries. Adding a grant can therefore only widen a limit, and `tw policy lint` warns when two grants give the same (src, dst) different limits (not built).
 
 **Values finer than a tag**, such as "this sub-agent: refund ≤ $10", go into the **object's node certificate**. tw-mgmt signs that certificate at spawn (§4.6) and attaches it to every assertion. Receivers compute:
 
@@ -237,7 +305,7 @@ A recipient therefore can't re-bind or replay an assertion. Multi-hop calls use 
 The real login is resolvable only through the tenant's audit log. A destination whose caps declare `"identity": "login"` receives `login` in place of the pairwise `sub`.
 
 **Sub-agent narrowing:**
-- **Network bound.** The child tag's grants. `tw policy test` statically checks that every grant whose src is a child tag is ⊆ the parent tag's grants, including cap values.
+- **Network bound.** The child tag's grants. `tw policy test` (not built) statically checks that every grant whose src is a child tag is ⊆ the parent tag's grants, including cap values.
 - **Per-spawn bound.** At spawn, tw-mgmt computes the parent's effective caps from *policy* (the embedded evaluator), not from observed traffic, so the first spawn works. It checks `requested ⊆ effective(parent)`, writes `lim` into the child's certificate, and records the lineage.
 - **Budgets.** Each root principal may have at most 64 live descendants, a depth of at most 3, and a limited spawn rate.
 - **Reaping.** A parent dead past its TTL causes its children to be deleted.
@@ -338,7 +406,7 @@ No bucket credential enters the guest, and no storage service is shared across t
 
 - **Attribution chain.** Lineage lives in tw-mgmt (`human → agent → sub-agent`). Each request carries a signed `act` chain. Each object has its own node ID in Tailscale flow logs, where the plan includes flow logs. Joining the node ID to the object record to the lineage is `tw audit`.
 - **Trace ID.** netd generates the W3C trace ID; the guest can't set it. A guest-supplied ID is kept only as `parentHint`. The ID goes into the assertion's `txn`, so it survives hops through platform and non-platform servers.
-- **Audit log.** netd writes L7 records `{ts, tenant, srcNode, dstNode, srcObject, dstObject, sub, chain, tool, verdict, grant, traceId}`. Records are **hash-chained per host and signed with the host key**, exported over OTLP, and indexed by tw-mgmt. Commands are `tw audit <object|human|trace>` and `tw tail`.
+- **Audit log.** netd writes L7 records `{ts, tenant, srcNode, dstNode, srcObject, dstObject, sub, chain, tool, verdict, grant, traceId}`. Records are **hash-chained per host and signed with the host key**, exported over OTLP, and indexed by tw-mgmt. Commands are `tw audit <object|human|trace>` and `tw logs -f` (the design's `tw tail` was not built).
 - **Independent cross-check.** The Tailscale configuration audit log records every mint and delete under the federated credentials.
 
 ### 4.11 Safety and kill switch
@@ -371,7 +439,7 @@ sequenceDiagram
   participant M as tw-mgmt
   participant TS as Tailscale API
   participant H as hostd + netd[acme]
-  A->>CLI: tw connect acme.com
+  A->>CLI: tw up --oauth-client-file … (or tw tenant add acme.com)
   M-->>CLI: policy snippet (tagOwners, postures, grants), OAuth client spec
   A->>TS: apply policy; generate the OAuth client (auth_keys, tag:tw)
   A->>CLI: save the client to a 0600 file on the mgmt host
@@ -568,7 +636,7 @@ export class TailnetError extends Error {
 }
 ```
 
-On `fetch()`, a netd denial is HTTP 403 with `tw-error: <code>` and a JSON body `{code, missing, snippet, doc_url, trace_id}`. `ctx.tailnet.fetch` throws `TailnetError` instead, and `tw dev` and `tw tail` always print the full error.
+On `fetch()`, a netd denial is HTTP 403 with `tw-error: <code>` and a JSON body `{code, missing, snippet, doc_url, trace_id}`. `ctx.tailnet.fetch` throws `TailnetError` instead, and `tw dev` and `tw logs` always print the full error.
 
 **Worker and DO:**
 
@@ -659,7 +727,7 @@ async def mcp(request: Request):
     "tag:db":                     ["autogroup:admin"],
   },
   "postures": {
-    // Only ever referenced by grants whose src is a tw tag. Never use defaultSrcPosture.
+    // Only ever referenced by grants whose src is a tailworks tag. Never use defaultSrcPosture.
     "posture:tw-live": ["custom:tw-live == 'true'"],
   },
   "grants": [
@@ -679,7 +747,7 @@ async def mcp(request: Request):
           "groups": { "refund": ["group:support"] } }      // actingFor must be in group:support
       ]}},
 
-    // Narrower sub-agent: lookup only (tw policy test checks ⊆ parent).
+    // Narrower sub-agent: lookup only (a tw policy test ⊆-parent check: not built).
     { "src": ["tag:tw-agent-support-sub"], "dst": ["svc:payments-mcp"], "ip": ["tcp:443"],
       "srcPosture": ["posture:tw-live"],
       "app": { "acme.com/cap/mcp": [{ "tools": ["lookup_order"] }] } },
@@ -698,9 +766,9 @@ async def mcp(request: Request):
 ```
 
 - `acme.com/cap/*` is the tenant's own cap domain. The `tailscale.com` cap domains are reserved.
-- Native `tests` can't assert caps. Cap tests live in `policy.tw-tests.hujson`, which `tw policy test` evaluates with the embedded evaluator. The Tailscale policy file never receives a field it doesn't know.
+- Native `tests` can't assert caps. Cap tests live in `policy.tw-tests.hujson`, which `tw policy test` evaluates with the embedded evaluator (not built). The Tailscale policy file never receives a field it doesn't know.
 
-### 7.2 Headscale profile (`tw connect --control=headscale`)
+### 7.2 Headscale profile (`tw up --control=headscale`)
 
 Headscale rejects unknown policy fields. The profile therefore emits no `postures` or `srcPosture`, no `svc:` destinations or `autoApprovers.services`, no `app` in `nodeAttrs` (string caps only), and no key-level `nodeAttributes`. Caps travel in grants only.
 
@@ -763,12 +831,18 @@ Measured on Headscale v0.29.7 (ADR-015 has the details):
 | Rejoin from saved state (after a crash) | **~3.9 s p50**, all 50 up in 4.5 s at 50-way; ≈11 nodes/s per process (extrapolated); consumes no auth key |
 | `Close()` | **~0.36 s per node, serial**. Drains must close in parallel |
 
+> Revised (as built, v0.2.0). Parking, `gcAfter` and the per-netd node
+> budget below were not built: nodes stay online, and each host
+> advertises a node capacity to placement (`-capacity-nodes`, default
+> 1000). The RPO targets assume the DO backup, which was not built
+> ([ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md)).
+
 **Derived budgets:**
 - **Host node budget.** Budget ≤ rejoin rate × RTO target. At ≈11 nodes/s and a 60 s RTO that is ~650, so the MVP default is **500 online nodes per netd process**. That is ~1.25 GB RSS, raised only after Linux measurements under traffic exist. Rejoin goes in priority order: objects with open connections, then those with alarms, then the rest lazily on wake.
 - **Tenant creation** is bounded by the per-tenant registration throttle (default 200/min, §4.9) and by the coordination server's limits, not by netd: 1k objects at the default ≈ 5 min. Measured single-process capacity is 5.6 joins/s.
 - **Create-to-reachable** is at least the join time (~2 s p50, ~6.5 s p90), plus any time queued behind the throttle. This is why creation is asynchronous (§4.9).
 - **Drain of 500 nodes:** 64-way parallel `Close()` ≈ 3 s, plus ≈45 s of rejoin on the target, plus storage handoff.
-- **Netmaps** follow *visibility*, not tailnet size. Example policies route humans through `svc:` entries, and `tw policy lint` flags any source that can see more than 1k objects.
+- **Netmaps** follow *visibility*, not tailnet size. Example policies route humans through `svc:` entries, and `tw policy lint` flags any source that can see more than 1k objects (not built).
 - **The long-term model assumes control-plane scale targets on the order of 1M nodes per tailnet.** The MVP targets ≤~1k objects per tenant on today's control plane.
 
 **Resource costs.** Pricing is out of scope for this RFC. The table lists only the resources each object consumes.
@@ -848,7 +922,13 @@ Two spikes ran on 2026-11-07, on macOS arm64 (Apple M5 Pro) with tailscale.com m
 
 ## 10. Operations
 
-**Operator bootstrap** (DX.md journey 6):
+**Operator bootstrap:**
+
+> Revised (as built, v0.2.0). There is no `tw-mgmt init`. `tw up` runs mgmt
+> and a host in one process; replicas run `tw-mgmt` on Postgres behind
+> `svc:tw-mgmt` ([services.md](../services.md#mgmt-replicas-svctw-mgmt)).
+> Hosts are added with `tw host add` and `tw-hostd join`, as below.
+
 - **Production:** `tw-mgmt init --tailnet <ops> --store <postgres|s3> --custody setec://…` joins as `tag:tw-mgmt`, and runs as N≥2 stateless replicas behind `svc:tw-mgmt`. A host is added with `tw host add h1`, which mints a single-use join token valid for 5 minutes; then `tw-hostd join --token …` runs on the host, which persists its own node key from then on. Tenants are assigned a pool with `tw tenant set`.
 - **Homelab:** `tw up --oauth-client-file <file>` runs everything (mgmt, homelab-mode setec, SQLite leases) on one machine, as its own tsnet nodes; it never uses the machine's tailscaled. It has two console steps: the policy snippet and the OAuth client.
 
@@ -877,9 +957,16 @@ workerd is pinned per tailworks release, and a conformance suite (Agents SDK, pa
 Drains are refused while placement is frozen.
 
 **Backup.**
+
+> Revised (as built, v0.2.0). None of the per-object backup below is built
+> ([ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md),
+> [#38](https://github.com/rosskukulinski/tailworks/issues/38)). What exists
+> is a backup of the state directory ([INSTALL.md](../INSTALL.md#back-up-and-restore))
+> and the store backup `tw upgrade` takes before it upgrades.
+
 - Encrypted WAL plus periodic SQLite snapshots per object, in the tenant prefix. Versioning is on.
 - The durable store (leases, object records, lineage, wrapped DEKs) is backed up with point-in-time recovery. KMS keys are backed up separately.
-- `tw restore --namespace` is drilled in CI.
+- `tw restore --namespace` is drilled in CI. (Not built.)
 - If the store is lost permanently, the system is restored from backup. Running hosts keep serving until their leases expire.
 
 ## 11. Alternatives considered
@@ -936,7 +1023,7 @@ None is on the MVP critical path. Every item has a fallback that also works on t
 | TS-5 | OAuth client scopes restricted to devices with given tags | `devices:core` reaches every device | `devices:core` is an opt-in scope; the reconciler acts only on devices tailworks minted |
 | TS-6 | On-demand peers for nodes that may see ≥10⁴ peers | Full peer lists to all-seeing nodes | Policy discipline (`svc:` entries, lint) and parking |
 | TS-7 | Per-key ephemeral inactivity timeout | 30–60 min crash cleanup | Persistent nodes plus the tailworks reaper |
-| TS-8 | App-cap assertions in policy `tests` | Native tests cover L3/L4 only | `tw policy test` with the embedded evaluator |
+| TS-8 | App-cap assertions in policy `tests` | Native tests cover L3/L4 only | `tw policy test` with the embedded evaluator (not built) |
 | TS-9 | tsnet: `nodeAttributes` on the join path; per-server log-upload opt-out; DERP connection sharing across co-located nodes | a tsnet join sets tags only; each node uploads logs and holds its own DERP connection [assumption] | Call the REST API directly; process-wide log policy; netd process sharding |
 | WD-1 | workerd: a public ownership-change hook (event stream or callback with epoch) | The only signal today is the private bucket layout | v1 is blocked; MVP is single-host |
 | WD-2 | workerd: degrade to read-only, or stop accepting new work, on a bucket stall, instead of exiting | A fence calls exit, and restarts crash-loop | No multi-host |
@@ -981,22 +1068,29 @@ Headscale: tailworks needs no Headscale changes, only the profile (§7.2).
 
 Release tarballs ship LICENSE and THIRD_PARTY_NOTICES, and source offers for the guest kernel and rootfs (docs/RELEASING.md, "Licenses and notices"). "Workers", "Durable Objects" and "wrangler" are used nominatively.
 
-**Repository layout**
+**Repository layout** (as built, v0.2.0; the design also had a `tw-stord`,
+Go and Python verifiers, `policy/profiles/` and `rfcs/`, none of them built)
 
 ```
-cmd/{tw,tw-mgmt,tw-hostd,tw-netd,tw-stord}
-netd/                 # multi-node registry; imports tailvisor/netd
-guest/                # kernel config, tw-guestd, reproducible image
-js/packages/{tailnet,mcp,verify,test,create-tailworks}
-go/verify/  py/tw-verify/
-policy/profiles/{tailscale,headscale}/
-conformance/{agents-sdk,partyserver,mcp,headscale}/
-rfcs/
+cmd/{tw,tw-mgmt,tw-hostd,tw-netd,tw-vmhelper,tw-vz}
+mgmt/                 # tw-mgmt: tenants, minting, leases, custody, placement, platform stores
+hostd/                # tw-hostd: workloads, tiers, the generated platform wrapper
+netd/                 # per-tenant multi-node registry: ingress, attributed egress, kill
+guest/                # microVM guest: tw-guestd and the image build
+js/packages/{tailnet,mcp,node,create-tailworks}
+api/                  # openapi.yaml: the mgmt /v1 API (ADR-027)
+docs/  e2e/
 ```
 
 **Governance.**
-- Maintainers are listed in `MAINTAINERS`, and external committers are added by lazy consensus.
-- Design changes go through `rfcs/`. Contributions use DCO sign-off.
+
+> Revised (as built, v0.2.0). The first two items below are the plan, not
+> the current state: there is no `MAINTAINERS` file, no `rfcs/` directory
+> and no DCO sign-off check. Design changes go through ADRs in
+> [adr/](adr/README.md).
+
+- Maintainers are to be listed in `MAINTAINERS`, and external committers added by lazy consensus.
+- Design changes are to go through `rfcs/`, and contributions to use DCO sign-off.
 - `SECURITY.md` defines a private disclosure process.
 - **Compatibility promise.** Each tailworks minor release pins one workerd release and supports the latest two Headscale minor versions. Config and API remain stable within a major version.
 - The npm scope must be reserved before launch, because the bare `tw` package name is taken.
@@ -1005,4 +1099,4 @@ rfcs/
 - Operator pre-auth keys; no posture; no Services (MagicDNS names only).
 - String-only `nodeAttrs`; caps in grants only; no flow logs.
 - Kill Tiers 1 and 2.
-- `tw connect --control=headscale` emits a policy that Headscale's parser accepts, and CI verifies it against a pinned release.
+- `tw up --control=headscale --policy-apply` writes a policy that Headscale's parser accepts; `make e2e-headscale` checks it against a pinned release.

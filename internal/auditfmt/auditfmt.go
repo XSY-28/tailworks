@@ -76,14 +76,14 @@ func Describe(kind, objectID, actingFor, code string, d map[string]any, name fun
 		return fmt.Sprintf("KV namespace %v of %v: a key written by %s", d["name"], d["workload"], orDash(actingFor))
 	case "kv_delete":
 		return fmt.Sprintf("KV namespace %v of %v: a key deleted by %s", d["name"], d["workload"], orDash(actingFor))
-	// OTLP export (ADR-observability): endpoint and header names only.
+	// OTLP export (ADR-045): endpoint and header names only.
 	case "telemetry_put":
 		return fmt.Sprintf("OTLP export to %v (headers %s, signals %s) set by %s", d["endpoint"], compact(d["headers"]), compact(d["signals"]), orDash(actingFor))
 	case "telemetry_delete":
 		return fmt.Sprintf("OTLP export removed by %s", orDash(actingFor))
 	case "telemetry_release":
 		return fmt.Sprintf("OTLP export to %v released to host %v for %v (epoch %v)", d["endpoint"], d["host"], d["workload"], d["epoch"])
-	// Notification webhooks (ADR-approval-notifications): the origin only.
+	// Notification webhooks (ADR-047): the origin only.
 	case "notification_put":
 		return fmt.Sprintf("notifications (%s) to %v set by %s", compact(d["events"]), d["origin"], orDash(actingFor))
 	case "notification_delete":

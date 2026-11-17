@@ -8,7 +8,7 @@ import (
 	v1 "github.com/rosskukulinski/tailworks/hostd/mgmtapi/v1"
 )
 
-// OTLPExport is a tenant's OTLP export (ADR-observability), as a host's
+// OTLPExport is a tenant's OTLP export (ADR-045), as a host's
 // grant carries it. It never prints its header values.
 type OTLPExport struct {
 	Endpoint string            `json:"endpoint"`

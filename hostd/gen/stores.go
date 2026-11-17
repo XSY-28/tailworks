@@ -12,7 +12,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
-// Platform stores (ADR-platform-stores): every storage binding of the app
+// Platform stores (ADR-044): every storage binding of the app
 // (bundle.App.Stores) is backed by the platform's `Store` Durable Object
 // class (js/store.js) in the platform worker, one object per (kind, name).
 //

@@ -1,7 +1,9 @@
 # ADR-040: Workflows on workerd's built-in engine; approvals are decisions by tailnet identities
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/workflows-approvals.md`). Implements the
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `workflows`,
+`tw approvals`, `tw approve`, [docs/approvals.md](../../approvals.md); results
+in `status/workflows-approvals.md`). Implements the
 "Workflows engine for `AgentWorkflow`" item of ADR-022.
 
 **Context.**

@@ -10,7 +10,7 @@
 - It has two interactive consents: the policy diff, and creating the trust credential in the admin console (it opens the page pre-filled, and the user pastes back a public client ID).
 - It stores no auth key.
 **Trade-offs:**
-- The Funnel issuer on a `ts.net` name relaxes SEC-19. That's acceptable when operator = tenant, and it is documented in DX.md 6a. `--issuer <custom domain>` restores it.
+- The Funnel issuer on a `ts.net` name relaxes SEC-19. That's acceptable when operator = tenant, and it was documented in the design-phase DX.md (not published). `--issuer <custom domain>` restores it.
 - With local-only durability, backup is opt-in.
-- `tw mgmt migrate --store postgres://…` is the path to multi-host.
+- `tw mgmt migrate --store postgres://…` is the path to multi-host (not built: multi-mgmt runs `tw-mgmt -db postgres://…` directly, see [docs/services.md](../../services.md)).
 **Success metric:** on a fresh Linux box already on a tailnet, the time from `curl … | sh` to the first private fetch from a deployed Worker is **≤10 minutes**, including both consents.

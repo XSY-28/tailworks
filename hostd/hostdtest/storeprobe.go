@@ -15,7 +15,7 @@ const ProbeStoreKey = "tw_test_probes"
 var probeOnce sync.Once
 
 // RegisterProbeStore registers the "probe" store kind (tests of the
-// platform-store substrate, ADR-platform-stores): a last-writer-wins map
+// platform-store substrate, ADR-044): a last-writer-wins map
 // behind a service binding with put/get/del/all, built on the same
 // Store object, journal and catch-up as the real kinds.
 func RegisterProbeStore() {

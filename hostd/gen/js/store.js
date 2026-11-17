@@ -1,5 +1,5 @@
 // tailworks platform stores (TRUSTED; runs in the platform worker, never in a
-// tenant isolate). ADR-platform-stores.
+// tenant isolate). ADR-044.
 //
 // A store is one platform-owned SQLite Durable Object per (kind, name) of a
 // workload: `Store`, addressed as getByName(kind + ":" + name). It is the

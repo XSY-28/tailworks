@@ -1,6 +1,6 @@
 package hostd
 
-// Operator operations on platform stores (ADR-platform-stores, ADR-038):
+// Operator operations on platform stores (ADR-044, ADR-038):
 // `tw d1 execute`, `tw d1 migrations apply`, `tw d1 export`. A store's
 // data lives in its Store object in the workload's workerd, so mgmt asks
 // the host holding the workload's lease (the push API, like logs):

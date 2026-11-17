@@ -367,7 +367,7 @@ grants let it decide. A read, so not audited.
 
 `GetTenantNotifications` · role **admin\|tenant:read** · audited: no
 
-ADR-approval-notifications. The webhook URL is shown as its origin
+ADR-047. The webhook URL is shown as its origin
 only (scheme and host): a chat webhook's path or query is its
 credential. Header names only. A tenant that sends nothing has no
 `webhook`. `404 unknown_tenant`.
@@ -387,7 +387,7 @@ credential. Header names only. A tenant that sends nothing has no
 
 `PutTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
-ADR-approval-notifications. When one of `events` happens in the
+ADR-047. When one of `events` happens in the
 tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 fires when a Workflow starts waiting for an approval (when mgmt
@@ -595,7 +595,7 @@ Only the workload's own app log: the daemons' logs
 | `n` | query | integer | no | Lines from the end of the log (0 with `follow` for new lines only). |
 | `follow` | query | boolean | no | Keep the stream open and send new lines as they are written. |
 | `host` | query | string | no | Only the replica on this host (a host ID). |
-| `source` | query | string: `console` \| `requests` | no | `console`: the app's raw output (workerd's stdout, the node tier's `app.log`, the microVM console). `requests`: the workload's structured request records (ADR-observability), as JSON Lines (`application/x-ndjson`), one `RequestRecord` per line; `n` and the filters below then count records, not lines. |
+| `source` | query | string: `console` \| `requests` | no | `console`: the app's raw output (workerd's stdout, the node tier's `app.log`, the microVM console). `requests`: the workload's structured request records (ADR-045), as JSON Lines (`application/x-ndjson`), one `RequestRecord` per line; `n` and the filters below then count records, not lines. |
 | `object` | query | string | no | `source=requests`: only records of this object (object ID, `Class/name`, `Class` or name). |
 | `status` | query | string | no | `source=requests`: only this HTTP status (`404`) or class (`5xx`). |
 | `outcome` | query | string | no | `source=requests`: only this workerd outcome (`ok`, `exception`, `canceled`, …). |
@@ -1117,7 +1117,7 @@ Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (o
 
 `ListWorkloadDeployments` · role **admin\|tenant:read** · audited: no
 
-ADR-deploy-rollback. Every deployment of the workload, newest first:
+ADR-046. Every deployment of the workload, newest first:
 who deployed it, when, the bundle's SHA-256, its status (the current
 one is `assigned`, `starting`, `active` or `failed`; older ones are
 `superseded` or `stopped`), the host's last report (`hostStatus`)
@@ -1147,7 +1147,7 @@ workload with no deployment is `404 unknown_workload`.
 
 `ListWorkloadPreviews` · role **admin\|tenant:read** · audited: no
 
-ADR-deploy-preview. The previews of the workload that are not
+ADR-048. The previews of the workload that are not
 stopped, newest first. A preview is created by
 `POST /v1/deployments` with `preview: true`: it runs as a workload
 of its own, `<workload>--preview-<alias>`, with its own lease,
@@ -1172,7 +1172,7 @@ answers an empty list.
 
 `CreatePromotion` · role **admin\|tenant:deploy** · audited: yes
 
-ADR-deploy-preview. Deploys the bundle the preview runs to the
+ADR-048. Deploys the bundle the preview runs to the
 workload itself, as a **new** deployment, through the same code
 path as `POST /v1/deployments`: the same validation, placement
 (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -1212,7 +1212,7 @@ policy.
 
 `CreateRollback` · role **admin\|tenant:deploy** · audited: yes
 
-ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+ADR-046. Redeploys the bundle of an earlier deployment
 as a **new** deployment, through the same code path as
 `POST /v1/deployments`: the same validation, placement, lease at
 `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -1623,7 +1623,7 @@ when the workload has no secret of that name. Audited
 
 ## Stores
 
-Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
+Platform storage objects (ADR-044) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export` — Export a D1 database as SQL (`tw d1 export`)
 
@@ -1967,13 +1967,13 @@ append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
 
 ## Telemetry
 
-A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
+A tenant's OTLP export (ADR-045). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
 
 ### `GET /v1/tenants/{id}/telemetry` — Read the tenant's OTLP export (`tw telemetry`), without header values
 
 `GetTenantTelemetry` · role **admin\|tenant:read** · audited: no
 
-ADR-observability. Header names only: no admin operation returns a
+ADR-045. Header names only: no admin operation returns a
 header value. A tenant that exports nothing has no `otlp`.
 `404 unknown_tenant`.
 
@@ -2043,7 +2043,7 @@ Hosts stop exporting within a minute. Records stay on the hosts
 
 hostd calls this when it starts a workload, and every minute while
 it runs it, to export the workload's logs, metrics and spans
-(ADR-observability). As with secrets (ADR-034), the config, header
+(ADR-045). As with secrets (ADR-034), the config, header
 values included, is released only to the host holding the
 workload's lease at `epoch` (`409 lease_lost`), with
 `Cache-Control: no-store`, and is never logged. `otlp` is absent
@@ -3164,7 +3164,7 @@ mgmt chain:
 `upgrade_abort`,
 `deploy`,
 `undeploy`,
-`rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
+`rollback` (a deploy of an earlier deployment's stored bundle, ADR-046),
 `create`,
 `mint`,
 `remint`,
@@ -3247,7 +3247,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`tw notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`tw notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -3292,7 +3292,7 @@ One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 |---|---|---|---|
 | `agent` | boolean | no |  |
 | `class` | string | yes |  |
-| `previewOf` | string | no | `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`. |
+| `previewOf` | string | no | `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`. |
 | `replicaOf` | string | no | `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`. |
 | `replicas` | integer | no | `_workload` only, the workload itself: its replica count when > 1. |
 | `service` | string | no | `_workload` only: the Tailscale Service the workload entry node hosts (`tailworks.jsonc` `tailnet.service`). |
@@ -3445,7 +3445,7 @@ One statement's result, as D1's wire protocol has it.
 | `forceTakeover` | boolean | no | Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there). |
 | `host` | string | no | Pin a host. |
 | `namespaces` | array of `ClassConfig` | no | Override the classes read from `tailworks.jsonc` (tests). |
-| `preview` | boolean | no | Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`. |
+| `preview` | boolean | no | Deploy as a preview (`tw deploy --preview`, ADR-048): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`. |
 | `previewAlias` | string | no | The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview. |
 | `replace` | boolean | no | Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`). |
 | `tenantID` | string | yes |  |
@@ -3481,7 +3481,7 @@ The deployment's public routes (ADR-029); absent when tailnet-only.
 
 #### `DeploymentRecord`
 
-One entry of a workload's deployment history (ADR-deploy-rollback).
+One entry of a workload's deployment history (ADR-046).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -4198,7 +4198,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 
 #### `Preview`
 
-One running preview of a workload (ADR-deploy-preview).
+One running preview of a workload (ADR-048).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -4531,7 +4531,7 @@ One replica of a workload with `tailworks.jsonc` `replicas` > 1.
 #### `RequestRecord`
 
 One line of a workload's request log (`tw logs --json`,
-ADR-observability): a request through hostd's ingress (`kind:
+ADR-045): a request through hostd's ingress (`kind:
 request`), joined with its workerd invocation, or an invocation
 with no ingress half (`kind: invocation`: a DO called from the
 Worker, an alarm, a cron run), or a note that records were dropped
@@ -4575,7 +4575,7 @@ A started rollback.
 |---|---|---|---|
 | `deployment` | `Deployment` | yes |  |
 | `rollbackOf` | string | yes | The deployment whose bundle was redeployed. |
-| `target` | `DeploymentRecord` | yes | One entry of a workload's deployment history (ADR-deploy-rollback). |
+| `target` | `DeploymentRecord` | yes | One entry of a workload's deployment history (ADR-046). |
 
 #### `RollbackCreate`
 
@@ -4721,7 +4721,7 @@ What runs where (ADR-041 §7).
 
 #### `Store`
 
-A platform storage object of a workload (ADR-platform-stores).
+A platform storage object of a workload (ADR-044).
 
 | Field | Type | Required | Description |
 |---|---|---|---|

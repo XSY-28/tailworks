@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Store side of deployment history (ADR-deploy-rollback): newest-first
+// Store side of deployment history (ADR-046): newest-first
 // paging, the recorded hash, active_at, and pruning that keeps the hash and
 // the newest bundles. SQLite always; Postgres with TW_TEST_POSTGRES_DSN
 // (make test-pg).

@@ -1,9 +1,11 @@
-# ADR-observability: Structured request logs, Prometheus metrics and OTLP traces, built from workerd tail events and tailworks' own hops
+# ADR-045: Structured request logs, Prometheus metrics and OTLP traces, built from workerd tail events and tailworks' own hops
 
 **Date:** 2026-11-15
-**Status:** Proposed (branch `observability-logs-metrics-traces-20`; results
-in `status/observability-logs-metrics-traces-20.md`). Phase 1 is
-implemented on the branch; phases 2 and 3 are proposals.
+**Status:** Accepted for phase 1 (2026-11-16, built and shipped in v0.2.0:
+`tw logs`, `tw telemetry`, `/metrics`, [docs/observability.md](../../observability.md);
+results in `status/observability-logs-metrics-traces-20.md`). Phases 2 and 3
+("Phasing" below) are not built and remain proposals. Drafted as
+`ADR-observability`.
 
 **Context.**
 

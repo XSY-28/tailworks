@@ -1,6 +1,6 @@
 package main
 
-// `tw rollback <workload> [<deployment>]` (ADR-deploy-rollback): redeploy
+// `tw rollback <workload> [<deployment>]` (ADR-046): redeploy
 // an earlier deployment's stored bundle as a new deployment (POST
 // /v1/tenants/{id}/workloads/{workload}/rollbacks). mgmt runs it through
 // the same deploy path as `tw deploy` (placement, lease epoch+1, host

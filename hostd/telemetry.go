@@ -1,6 +1,6 @@
 package hostd
 
-// Observability (ADR-observability), host side.
+// Observability (ADR-045), host side.
 //
 //   - Ingress: every request through ingressHandler gets a SERVER span. A
 //     tailnet caller's traceparent is honoured (observability only: the

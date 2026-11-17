@@ -1,6 +1,6 @@
 package main
 
-// `tw deployments <workload>` (ADR-deploy-rollback): a workload's
+// `tw deployments <workload>` (ADR-046): a workload's
 // deployment history, newest first (GET
 // /v1/tenants/{id}/workloads/{workload}/deployments).
 

@@ -2,7 +2,7 @@ package main
 
 // R2 buckets (ADR-036), CLI side: `tw r2 bucket ls|create|rm` and
 // `tw r2 object ls`. A bucket is a platform store of kind "r2", so these
-// use mgmt's stores API (ADR-platform-stores); object ls reads the
+// use mgmt's stores API (ADR-044); object ls reads the
 // bucket's journal (its index) and folds it into the live keys. Object
 // bytes live in the hosts' R2 backend, which mgmt can't reach: object
 // get/put from the CLI is not built yet.

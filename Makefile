@@ -92,7 +92,7 @@ e2e-locks: deps
 .PHONY: e2e-queues
 e2e-queues: deps
 	$(GO) test -tags e2equeues -count=1 -v -timeout 10m ./e2e/queues/...
-## e2e-observability: logs, metrics and traces (ADR-observability), hermetic: real tw-mgmt + tw-hostd processes
+## e2e-observability: logs, metrics and traces (ADR-045), hermetic: real tw-mgmt + tw-hostd processes
 ## on testcontrol + local DERP, a caller, an echo and an OTLP collector node; traceparent, tw logs, /metrics, OTLP.
 .PHONY: e2e-observability
 e2e-observability: deps

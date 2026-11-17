@@ -895,7 +895,7 @@ func (inst *instance) spawn() error {
 	if inst.tier == bundle.TierMicroVM {
 		return inst.bootVM()
 	}
-	// Size-capped: a noisy workload can't fill the disk (ADR-observability).
+	// Size-capped: a noisy workload can't fill the disk (ADR-045).
 	logf, err := obs.OpenRotating(filepath.Join(inst.dir, "workerd.log"), inst.h.tel.opt.AppLogMax)
 	if err != nil {
 		return err

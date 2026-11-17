@@ -14,7 +14,7 @@ import (
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
-// `tw telemetry set|show|rm` from a linked machine (ADR-observability):
+// `tw telemetry set|show|rm` from a linked machine (ADR-045):
 // a real tw-mgmt in process behind its WhoIs gate. A header given by
 // name is read from stdin and never printed again.
 func TestCLITelemetry(t *testing.T) {

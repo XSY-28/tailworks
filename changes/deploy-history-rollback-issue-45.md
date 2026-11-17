@@ -10,7 +10,7 @@ stored bundle as a new deployment, through the same path as `twd deploy`
 to the previous deployment that ran. It is audited as `kind: rollback`. A
 rollback changes code and configuration only: Durable Object storage, D1
 (migrations are forward-only), KV, R2 and queues keep their data, and
-secrets are the workload's current ones (ADR-deploy-rollback).
+secrets are the workload's current ones (ADR-046).
 
 mgmt now keeps the bundles of each workload's newest 10 deployments and
 prunes older ones, keeping their record and hash (twd-mgmt

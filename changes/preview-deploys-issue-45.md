@@ -13,7 +13,7 @@ running previews. `twd promote <workload> <alias>` deploys the preview's
 bundle to the workload through the same path as `twd deploy` (lease epoch,
 host fencing, preflight), audited as `kind: promote`, then undeploys the
 preview (`--keep-preview` keeps it). The preview's data is not copied
-(ADR-deploy-preview).
+(ADR-048).
 
 New API: `POST /v1/deployments` `preview` and `previewAlias`,
 `GET /v1/tenants/{id}/workloads/{workload}/previews` and

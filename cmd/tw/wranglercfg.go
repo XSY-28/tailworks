@@ -218,7 +218,7 @@ func applyWranglerEnv(cfg map[string]any, env, file string) (out map[string]any,
 func wranglerKeyNote(k string, v any, builder string) string {
 	const bindingHint = "no such binding on tailworks: "
 	if bundle.IsStoreKey(k) {
-		return "" // a platform store binding (ADR-platform-stores)
+		return "" // a platform store binding (ADR-044)
 	}
 	switch k {
 	case "name", "main", "compatibility_date", "compatibility_flags", "vars", "durable_objects",

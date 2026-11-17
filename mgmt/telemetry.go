@@ -1,6 +1,6 @@
 package mgmt
 
-// A tenant's OTLP export (ADR-observability). The config, collector
+// A tenant's OTLP export (ADR-045). The config, collector
 // credentials (header values) included, lives only in custody, one entry
 // per tenant, like a worker secret (ADR-034); the store holds nothing. No
 // admin operation returns a header value. Hosts get the whole config

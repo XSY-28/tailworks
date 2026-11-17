@@ -1,6 +1,6 @@
 package main
 
-// `tw notify show|set|test|rm` (ADR-approval-notifications): the tenant's
+// `tw notify show|set|test|rm` (ADR-047): the tenant's
 // notification webhook. When a Workflow starts waiting for an approval,
 // mgmt POSTs a JSON event with a link to the admin UI's approvals row (and
 // a one-line "text" that Slack, Mattermost and Google Chat incoming

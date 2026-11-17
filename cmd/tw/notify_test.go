@@ -15,7 +15,7 @@ import (
 )
 
 // `tw notify set|show|test|rm` from a linked machine
-// (ADR-approval-notifications): a real tw-mgmt behind its WhoIs gate.
+// (ADR-047): a real tw-mgmt behind its WhoIs gate.
 // The webhook URL read from stdin is never printed again, only its origin.
 func TestCLINotify(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "twntf-")

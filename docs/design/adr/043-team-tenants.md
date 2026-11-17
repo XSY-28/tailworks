@@ -189,7 +189,7 @@ guide: [docs/teams.md](../../teams.md).
      - on a shared tailnet, `github.com/rosskukulinski/tailworks/cap/mcp` and `github.com/rosskukulinski/tailworks/cap/approve`
        grants.
 
-     There is no separate `tw policy lint`.
+     A separate `tw policy lint` is not built.
 
 4. **Each tenant has its own owner tag, and its OAuth client is scoped to
    it** (`mgmt/teams.go`, column `tenants.owner_tag`).
