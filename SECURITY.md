@@ -8,7 +8,13 @@ pull request or discussion for them.
 Use GitHub's private vulnerability reporting: on the repository's
 **Security** tab, choose **Report a vulnerability**
 (<https://github.com/rosskukulinski/tailworks/security/advisories/new>). The
-report reaches the maintainers only.
+report reaches the maintainers only. You need a GitHub account.
+
+If you can't use that form, open a public issue that asks for a private
+contact and says nothing else about the problem, and we'll reply with one.
+
+We don't publish a PGP key. Send the details through the private advisory,
+not in the public issue.
 
 Include what you can of:
 
