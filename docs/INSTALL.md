@@ -512,14 +512,17 @@ your user account. On top of that, tw-hostd runs every tenant's workerd
   Fedora). A small launcher in tw-hostd applies the rules, then execs
   workerd or node in place.
 
-Either way a workload can write only its own instance and data dirs, read
-only the OS, its runtime binary and its install prefix, and can't read
-your home dir (including `~/.tailworks`), tailworks' state (node keys, mgmt custody,
-other tenants' storage) or any tenant's API key file, and can't use
-mgmt's or hostd's sockets. **Linux adds more:** with Landlock ABI ≥ 4
-(kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) a workload may open TCP only
-to its own app port and egress proxy, so a malicious Node app can't
-bypass netd's proxy; a seccomp filter refuses ptrace and
+Either way a workload can't read your home dir (including `~/.tailworks`),
+tailworks' state (node keys, mgmt custody, other tenants' storage) or any
+tenant's API key file, and can't use mgmt's or hostd's sockets. The macOS
+profile is a deny list: anything else the user can read or write, the
+workload can too, and it can signal the user's processes
+([security-model.md](security-model.md#what-the-process-tier-sandbox-confines)).
+**Linux adds more:** a workload can write only its own instance and data
+dirs and read only the OS, its runtime binary and its install prefix;
+with Landlock ABI ≥ 4 (kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) it may
+open TCP only to its own app port and egress proxy, so a malicious Node
+app can't bypass netd's proxy (below ABI 4, TCP is unrestricted); a seccomp filter refuses ptrace and
 `process_vm_readv/writev` (so no reading a sibling's memory), kexec,
 mount, bpf, perf_event_open, keyctl, new namespaces, io_uring, and
 UDP/ICMP/raw/MPTCP sockets; and other processes' `/proc` entries (their

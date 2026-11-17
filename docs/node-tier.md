@@ -141,7 +141,7 @@ hostd makes the state visible and refuses the dangerous combination:
   workload there) unless the operator starts the host with
   `tw up --insecure-shared-host` (`tw-hostd -insecure-shared-host`).
   Under Seatbelt or Landlock the deployment runs; status stays honest about
-  whether egress is enforced (`enforced` only under Landlock).
+  whether egress is enforced (`enforced` only under Landlock ABI ≥ 4).
 
 The strongest boundary is the **microVM tier**. There, the guest's only
 network is hostd's gVisor gateway, which exposes only the egress, workload
