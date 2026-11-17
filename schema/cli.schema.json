@@ -619,6 +619,10 @@
         "esbuild": {
           "type": "string"
         },
+        "updateCheck": {
+          "type": "boolean",
+          "description": "the once-a-day update check (api.github.com, after interactive commands other than tw dev and tw init) is on: a release build without CI or TW_NO_UPDATE_CHECK set"
+        },
         "latest": {
           "type": "string",
           "description": "--check: the latest published release"
