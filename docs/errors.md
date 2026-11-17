@@ -328,6 +328,12 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### r2_too_large
 400 · hostd. **When:** an R2 object or part over 5 GiB − 5 MiB. Surfaces as R2's "exceeds the maximum allowed object size" (code 100100). **Fix:** use a multipart upload, parts up to that size each.
 
+### release_bad_signature
+1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release because its `SHA256SUMS.sig` doesn't verify: it is signed by a key that isn't pinned in this `tw` (or in `TW_RELEASE_SIGNERS`), a file changed after signing, a file isn't in the signed `SHA256SUMS`, or this `tw` build pins no release key. Nothing in the release ran. **Fix:** download the release again from GitHub (`tw upgrade [<version>]`); check it by hand as in [INSTALL.md](INSTALL.md), "Verify a release". For a build you made yourself, add `--allow-unsigned`.
+
+### release_unsigned
+1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release (a download or `--from`) that has no `SHA256SUMS.sig` or no `SHA256SUMS` inside it. Nothing in the release ran. **Fix:** upgrade to a published release (`tw upgrade [<version>]`). For a build you made yourself (`make release`), add `--allow-unsigned` (or set `TW_ALLOW_UNSIGNED=1`).
+
 ### remote_unsupported
 400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs`, `tw tenant add`) was run on a linked developer machine. **Fix:** run it on the host.
 

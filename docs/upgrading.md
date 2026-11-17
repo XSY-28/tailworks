@@ -41,7 +41,11 @@ tw upgrade --from tailworks-0.3.1-linux-amd64.tar.gz   # an offline copy (SHA256
 
 `tw upgrade` runs these steps:
 
-1. It downloads the release, or takes `--from`, and checks its SHA-256.
+1. It downloads the release, or takes `--from`, checks its SHA-256, and
+   checks its signature (`SHA256SUMS.sig`) against the release keys built
+   into `tw`. It refuses an unsigned or badly signed release
+   (`release_unsigned`, `release_bad_signature`) before anything in it
+   runs. For a build you made yourself, add `--allow-unsigned`.
 2. It shows the plan from the release's catalog: breaking changes, operator
    actions, contract migrations and the workerd change.
 3. It backs up mgmt's store together with custody (and the ID

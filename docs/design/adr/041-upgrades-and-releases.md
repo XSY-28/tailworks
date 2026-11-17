@@ -280,8 +280,12 @@ per contract:
 ### 8. `tw upgrade`
 
 - **Homelab (`tw up`, ADR-021): `tw upgrade [vX.Y.Z] [--plan] [--yes]`.**
-  1. Resolve and download the release; verify SHA256SUMS and the platform
-     (the `get.sh` logic, moved into Go).
+  1. Resolve and download the release (or take `--from`), extract it, and
+     verify the tarball's `SHA256SUMS.sig` against the release keys pinned
+     in the binary (`internal/releasesig`, the verifier tw-hostd's
+     self-upgrade uses) before anything in it runs, then the platform.
+     An unsigned or badly signed release is refused unless
+     `--allow-unsigned` (issue #98).
   2. **Plan.** Print the from and to versions, the release-note **Breaking**
      and **Upgrade action** items between them, the pending mgmt migrations
      (flagging contract ones), any workerd or compat-date change, and
@@ -416,8 +420,9 @@ per contract:
      and the oldest dropped, in its own PR with a fragment.
 - **Artifacts.**
   - Unchanged: three tarballs, `SHA256SUMS`, draft, maintainer publishes.
-  - New: GitHub artifact attestations for the tarballs and `SHA256SUMS`;
-    `get.sh` and `tw upgrade` verify them when `gh` is present.
+  - New: GitHub artifact attestations for the tarballs and `SHA256SUMS`.
+    Nothing verifies them yet: `get.sh`, `install.sh`, `tw upgrade` and
+    tw-hostd check the release signature (`SHA256SUMS.sig`) instead.
   - npm `@tailworks/*` packages are published at the same version from the same
     tag, after the GitHub release is published.
 - **Deprecation.** A surface deprecated in N warns (a CLI warning, plus a
