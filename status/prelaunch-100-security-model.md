@@ -34,4 +34,15 @@ Out of scope: tightening the Seatbelt profile (#121).
 
 ## Tests
 
-See the PR body for the commands run and their results.
+- `make lint`: ok.
+- `make changes-check`: ok (no upgrade-relevant paths).
+- `make test` (macOS): all packages ok except two hostd tests on the
+  first run: `TestWorkersKVMove` (data race in `hostd/host.go:403` /
+  `objects.go:454`, code this branch doesn't touch) and
+  `TestLockTemplate/KillHolderReleases` (timing). Both pass on rerun:
+  `go test -race ./hostd -run 'TestWorkersKVMove|TestLockTemplate'` ok.
+- New tests: `hostd.TestEgressEnforcementByABI`,
+  `netd.TestRT3_H18_StripByPrefix`: pass.
+- `GOOS=linux go vet ./hostd ./netd`, `go vet -tags nodetier ./e2e/node`: ok.
+- Not run: `make test-node` and the Linux Landlock e2e (need Linux with
+  Landlock; no ABI 1–3 kernel here).
