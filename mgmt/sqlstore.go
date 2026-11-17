@@ -1746,6 +1746,12 @@ func (s *SQLStore) appendAuditTx(ctx context.Context, tx *sql.Tx, rec AuditRecor
 }
 
 func (s *SQLStore) ListAudit(ctx context.Context, f AuditFilter) ([]AuditRecord, error) {
+	return s.listAudit(ctx, s.db, f)
+}
+
+// listAudit runs the ListAudit query on qr (the pool, or a read
+// transaction: see AuditChainSnapshot).
+func (s *SQLStore) listAudit(ctx context.Context, qr queryer, f AuditFilter) ([]AuditRecord, error) {
 	var where []string
 	var args []any
 	add := func(cond string, v any) { where = append(where, cond); args = append(args, v) }
@@ -1805,7 +1811,7 @@ func (s *SQLStore) ListAudit(ctx context.Context, f AuditFilter) ([]AuditRecord,
 	if lim := max(f.Limit, f.Page.Limit); lim > 0 {
 		q += fmt.Sprintf(" LIMIT %d", lim)
 	}
-	rows, err := s.db.QueryContext(ctx, s.q(q), args...)
+	rows, err := qr.QueryContext(ctx, s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}
