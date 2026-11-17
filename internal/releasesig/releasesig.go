@@ -143,6 +143,11 @@ func Sign(priv ed25519.PrivateKey, msg []byte) []byte {
 // ErrNoKeys is Verify's error when no signing key is pinned.
 var ErrNoKeys = errors.New("no release signing key is pinned")
 
+// ErrUnsigned is VerifyTree's error (wrapped) when the release carries no
+// SHA256SUMS or no SHA256SUMS.sig at all, as opposed to a signature that
+// doesn't verify.
+var ErrUnsigned = errors.New("release is not signed")
+
 // Verify checks that armored is a tw-release SSH signature of msg by one of
 // keys.
 func Verify(keys []ed25519.PublicKey, msg, armored []byte) error {
@@ -214,11 +219,11 @@ func Verify(keys []ed25519.PublicKey, msg, armored []byte) error {
 func VerifyTree(dir string, keys []ed25519.PublicKey) error {
 	sums, err := os.ReadFile(filepath.Join(dir, SumsFile))
 	if err != nil {
-		return fmt.Errorf("release has no %s: %w", SumsFile, err)
+		return fmt.Errorf("%w: release has no %s", ErrUnsigned, SumsFile)
 	}
 	sig, err := os.ReadFile(filepath.Join(dir, SigFile))
 	if err != nil {
-		return fmt.Errorf("release is not signed (no %s)", SigFile)
+		return fmt.Errorf("%w (no %s)", ErrUnsigned, SigFile)
 	}
 	if err := Verify(keys, sums, sig); err != nil {
 		return fmt.Errorf("%s: %w", SigFile, err)

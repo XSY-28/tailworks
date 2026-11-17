@@ -160,6 +160,12 @@ release workflow.
   - tw-hostd's self-upgrade checks the tarball's signature in Go, against
     the keys built into the running binary, before it runs `install.sh`.
     The keys are never taken from tw-mgmt or the release.
+  - `tw upgrade` on a `tw up` machine checks the tarball's signature with
+    the same Go verifier and the keys built into the running `tw`, after
+    extracting it and before it runs the release's `install.sh`, for a
+    download and for `--from` alike. `--allow-unsigned` (or
+    `TW_ALLOW_UNSIGNED=1`) installs a build you made yourself, with a
+    warning in the plan.
 - **Where the keys are pinned.** `internal/releasesig/allowed_signers` is
   the source of truth. `scripts/get.sh` and `scripts/install.sh` carry
   copies, and `make test` fails if they differ.

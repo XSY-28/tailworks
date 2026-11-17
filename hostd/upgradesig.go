@@ -25,3 +25,6 @@ func (h *Host) verifyRelease(dir string) error {
 	}
 	return nil
 }
+
+// extractTarGz is the shared hardened extractor (tw upgrade uses it too).
+func extractTarGz(src, dir string) error { return releasesig.ExtractTarGz(src, dir) }
