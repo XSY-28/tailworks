@@ -126,12 +126,15 @@ func isIdentityHeader(k string) bool {
 	k = strings.ToLower(k)
 	switch {
 	case strings.HasPrefix(k, "x-tw-"), strings.HasPrefix(k, "tw-"), strings.HasPrefix(k, "cf-"),
-		strings.HasPrefix(k, "x-forwarded-"), strings.HasPrefix(k, "x-poi"):
+		strings.HasPrefix(k, "x-forwarded-"), strings.HasPrefix(k, "x-poi"),
+		// Underscore spellings (X_TW_CF) and every Tailscale-* header
+		// (Tailscale-Ingress-Src, Tailscale-Node-Caps, …): RT3-18 / H18.
+		strings.HasPrefix(k, "x_tw_"), strings.HasPrefix(k, "tw_"),
+		strings.HasPrefix(k, "tailscale-"):
 		return true
 	}
 	switch k {
-	case "tailnet-assertion", "forwarded", "x-real-ip", "true-client-ip", "proxy-authorization",
-		"tailscale-user-login", "tailscale-user-name", "tailscale-user-profile-pic", "tailscale-app-capabilities":
+	case "tailnet-assertion", "forwarded", "x-real-ip", "true-client-ip", "proxy-authorization":
 		return true
 	}
 	return false
