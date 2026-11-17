@@ -106,11 +106,12 @@ test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
 
 ## e2e-upgrade: the upgrade release gate (ADR-041 §9), hermetic: the previous
-## release's tw-mgmt + tw-hostd (TW_UPGRADE_FROM: a git ref, default the last v* tag before
-## HEAD, built in a temporary worktree; "self" stamps this tree TW_UPGRADE_FROM_VERSION) serve a
+## release's tw-mgmt + tw-hostd (TW_UPGRADE_FROM: a git ref, default the newest published
+## GitHub release (scripts/upgrade-from.sh), built in a temporary worktree; "self", the default
+## while none is published, stamps this tree TW_UPGRADE_FROM_VERSION) serve a
 ## Durable Object workload; mgmt then the host move to this tree on the same state; storage, node
 ## identity and the store must survive, the old mgmt must still open the store, a 9.0.0 host is refused.
-TW_UPGRADE_FROM ?= $(shell git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || echo self)
+TW_UPGRADE_FROM ?= $(shell sh scripts/upgrade-from.sh)
 .PHONY: e2e-upgrade
 e2e-upgrade: deps
 	TW_UPGRADE_FROM="$(TW_UPGRADE_FROM)" $(GO) test -tags e2eupgrade -count=1 -v -timeout 20m ./e2e/upgrade/...

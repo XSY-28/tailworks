@@ -11,8 +11,8 @@
 // outside the version window is refused.
 //
 // TW_UPGRADE_FROM names the previous release: a git ref (default, from
-// the Makefile: the last v* tag before HEAD) built in a temporary git
-// worktree, or "self" (this tree stamped TW_UPGRADE_FROM_VERSION, a fast
+// the Makefile: the newest published GitHub release, scripts/upgrade-from.sh)
+// built in a temporary git worktree, or "self" (this tree stamped TW_UPGRADE_FROM_VERSION, a fast
 // local check of the machinery).
 package upgrade
 

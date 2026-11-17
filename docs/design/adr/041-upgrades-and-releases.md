@@ -472,7 +472,7 @@ Built on this branch, with tests:
   - `install.sh --rollback`, with `.prev` kept.
   - `tw-mgmt migrate --check|--apply` and `restore-fence`.
   - The embedded catalog, `GET /v1/releases`, and `tw release ls|import`.
-  - `make e2e-upgrade`: the previous release tag, built in a temporary
+  - `make e2e-upgrade`: the newest published release, built in a temporary
     worktree, upgraded to the candidate (also the downgrade check), wired
     into `release.yml`'s `gates` job.
 - **Phase 2:**
