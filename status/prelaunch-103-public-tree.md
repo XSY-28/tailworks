@@ -23,8 +23,8 @@ Remove private agent-workflow residue from the public tree.
   spec and e2e allow-lists) stay.
 - **`scripts/check-secrets.sh` (run by `make lint`)** now also fails on:
   any `/Users/<name>` or `/home/<name>` path whose user isn't a placeholder
-  (`me`, `u`, `x`, `you`, `user`, `runner`, `node`, …); and
-  "push only to private". Names that must never be published, and so
+  (`me`, `u`, `x`, `you`, `user`, `runner`, `node`, …); and the
+  private-repo push note LINUX-PLAN.md carried. Names that must never be published, and so
   can't be listed in the script either (a personal tailnet name), go in
   the untracked `.git/info/private-patterns`, one extended regex per line;
   the check reads it when present.
@@ -40,9 +40,9 @@ Remove private agent-workflow residue from the public tree.
 
 ## Tests
 
-- `git grep -n 'private repos\|/Users/ross'`: empty.
+- The acceptance `git grep` from #103 (its phrase and home path): empty.
 - `sh scripts/check-secrets.sh`: ok; with a temporary intent-to-add file
-  containing `/Users/jdoe/x` and "push only to private repos" it fails and
-  names both lines.
+  containing a non-placeholder home path and the private-repo push note,
+  it fails and names both lines.
 - `make lint`: pass. `make changes-check`: ok (no upgrade-relevant paths).
 - `make test`: pass (exit 0, 45 packages ok).
