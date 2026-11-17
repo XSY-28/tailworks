@@ -29,7 +29,7 @@ Roles: see `security/LOOP.md`.
 | H15 | Low | Tailnet insider | A pending `tw host add` row is claimable by any unregistered `tag:tw-host` node | RT3-15 | open | `TestRT3_H15_PendingHostClaim` |
 | H16 | Low | Infra attacker | vmhelper accepts a loaded tenant VM as a snapshot base (only hostd prevents it) | RT3-16 | open | `TestRT3_H16_BaseGuard` (linux) |
 | H17 | Low | Hostile tenant code | A `scheduled()` that outlives the 15-min timeout overlaps with the next run | RT3-17 | open | `TestRT3_H17_CronOverlap` |
-| H18 | Low | Internet attacker | `Tailscale-Ingress-Src`, `Tailscale-Node-Caps`, `X_TW_CF`, `Via` reach upstream | RT3-18 | open (probe) | `TestRT3_H18_StripByPrefix` |
+| H18 | Low | Internet attacker | `Tailscale-Ingress-Src`, `Tailscale-Node-Caps`, `X_TW_CF`, `Via` reach upstream | RT3-18 | **fixed** (F11 strip part, 2026-11-16; `Via` is not an identity header and still passes) | `netd.TestRT3_H18_StripByPrefix` |
 | H19 | Low | Hostile tenant code | Admit cache lets a previously admitted plain-DO name re-mint after kill+purge | RT3-19 | open | `TestRT3_H19_AdmitCacheAfterKill` |
 | H20 | Low | Tailnet insider | RT2-L1: whitespace-padded `tag:tw ` passes `policy.Check` | RT2-L1 | open (test exists, skipped: `rt06_policy_json_tricks_test.go:51`) | `TestRT2L1_CheckAcceptsWhitespacePaddedTag` |
 | H21 | Info | Hostile tenant code | Public-request double-decoding differential: an app that decodes twice sees `/` or `..` | RT3-22 | open (app-side; pin netd's once-decoded gate) | `TestRT3_H21_OnceDecoded` |
@@ -47,7 +47,7 @@ Roles: see `security/LOOP.md`.
 | C03 | "a refused flood can't grow the chain" (docs/public-ingress.md Audit) | `netd/public_serve.go` rolls up 429/413/431 and `not_public`/`bad_request` (F2) | `netd.TestPublicRoutes` | pinned |
 | C04 | "`actingFor` comes from the platform" (STATUS.md:554, :612) | spawn `principal` is inherit/none only; `actingFor` stripped from tenant args (F4); Host DO `principalOf(req.cf)` still forgeable in-process | — | **partially overstated** (H08, F5) |
 | C05 | "request.cf caller comes only from WhoIs" (THREAT-MODEL §5) | netd strips headers; in-process `cf` not sealed | — | **overstated** (H08) |
-| C06 | "Client copies of every identity header are stripped: Tailscale-*" (docs/public-ingress.md) | `ingress.go:125` strips five names | — | **overstated** (H18) |
+| C06 | "Client copies of every identity header are stripped: Tailscale-*" (docs/public-ingress.md) | `ingress.go:125` strips five names | — | **resolved** (H18 fixed by F11: netd strips `tailscale-*`, `x_tw_*`, `tw_*` by prefix) |
 | C07 | "pool node serves nothing" (STATUS Fast identity) | `http.go:59`; but `paths.go:169` probes from it | — | minor (RT3-22) |
 | C08 | `lim` narrows a child: `CapMap ∩ lim` at the receiver (RT-01 fix) | `netd/ingress.go:applyCert` | `rt01_*_test.go` | pinned |
 | C09 | Tenant audit is `tenant_note`/`source: tenant` only (RT-02 fix) | `hostd/http.go:171`, `mgmt/service.go:2548` | `rt02_*_test.go` | pinned |
@@ -77,7 +77,7 @@ Roles: see `security/LOOP.md`.
 | F8 | `validateRegions` in `uffd_linux.go` + `recover()` per session; `Base` flag in vmhelper sessions | H11, H16 | `TestRT3_H11_*`, `H16_*` | queued |
 | F9 | `strconv.Quote`/C0 stripping in every `cmd/tw` renderer; refuse control bytes in `CanonicalPath` and object names | H13 | `TestRT3_H13_*` | queued |
 | F10 | Scope host reads to leased tenants; bind pending host rows to the join key's node | H14, H15 | `TestRT3_H14_*`, `H15_*` | queued |
-| F11 | Strip by prefix `tailscale-`, `x_tw`, `tw_`; `okTag` boundary + no whitespace | H18, H20 | `TestRT3_H18_*`, `TestRT2L1_*` | queued |
+| F11 | Strip by prefix `tailscale-`, `x_tw`, `tw_`; `okTag` boundary + no whitespace | H18, H20 | `TestRT3_H18_*`, `TestRT2L1_*` | strip by prefix **DONE 2026-11-16** (#100); `okTag` part queued |
 | F12 | Cron: abort/restart instance on timeout or hold the running mark until the platform answers; evict admit cache on kill | H17, H19 | `TestRT3_H17_*`, `H19_*` | queued |
 
 ## Run log
