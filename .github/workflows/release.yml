@@ -8,13 +8,17 @@
 #                             kernel, firecracker + jailer (pinned, checked).
 #   vz-assets                 arm64 Linux: `make vz-assets`, the macOS
 #                             (Virtualization.framework) guest kernel + image.
-#   gates                     Linux: `make lint test`, a dry run of the npm
+#   gates                     Linux: scripts/release-check.sh (tag = VERSION,
+#                             notes finalized, a signing key pinned), `make
+#                             lint test`, a dry run of the npm
 #                             publish (scripts/npm-publish.sh; the packages
 #                             and templates at the tag's version), the
 #                             install.sh rollback
 #                             test, and `make e2e-upgrade` (upgrade from the
-#                             previous release to this tag: data, rejoin, old
-#                             bundles; ADR-041 §9). No draft
+#                             newest published release to this tag: data,
+#                             rejoin, old bundles; ADR-041 §9; from this tree
+#                             while none is published: scripts/upgrade-from.sh).
+#                             No draft
 #                             unless every gate passes.
 #   release                   macOS (the darwin binaries are ad-hoc signed,
 #                             tw-vz with the virtualization entitlement):
@@ -66,13 +70,17 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
+      # First, and cheap: the tag matches VERSION and the npm versions, its
+      # notes are finalized with nothing pending, and a signing key is pinned.
+      - name: Ready to release (scripts/release-check.sh)
+        run: sh scripts/release-check.sh "$TAG"
       - name: make lint test
         run: make lint test
       - name: npm packages at the tag's version (dry run; npm-publish.yml publishes)
         run: sh scripts/npm-publish.sh "${TAG#v}" --dry-run
       - name: install.sh upgrade and rollback
         run: make install-test
-      - name: make e2e-upgrade (previous release → this tag)
+      - name: make e2e-upgrade (newest published release → this tag)
         run: make e2e-upgrade
 
   # The Headscale profile against every supported Headscale minor, in Docker

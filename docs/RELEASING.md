@@ -72,16 +72,27 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    dependencies on each other and the templates' `^0.2.0` ranges together.
    `make test` (`TestNPMVersions`) fails if any of them differs from
    `VERSION`.
-4. **Tag and push.**
+4. **Check, tag and push.** After the release commit is on master (or
+   `release-0.N`), from a checkout of it:
 
    ```sh
+   sh scripts/release-check.sh v0.2.0
    git tag -a v0.2.0 -m "tw v0.2.0" && git push origin v0.2.0
    ```
 
+   `release-check.sh` fails if the tag doesn't match `VERSION` or the npm
+   versions, if the notes aren't finalized for the tag or a fragment is
+   still pending in `changes/`, or if no signing key is pinned. The
+   `gates` job runs it again on the tag.
 5. **Watch `.github/workflows/release.yml`.** It runs:
-   - `gates`: `make lint test`, the install.sh rollback test, and
-     `make e2e-upgrade`, which upgrades from the previous release to this
-     commit and checks data, rejoin and old bundles;
+   - `gates`: `scripts/release-check.sh`, `make lint test`, the npm
+     publish dry run, the install.sh rollback test, and
+     `make e2e-upgrade`, which upgrades from the newest published release
+     to this commit and checks data, rejoin and old bundles. While no
+     release is published it upgrades from this tree stamped an older
+     version (`scripts/upgrade-from.sh`);
+   - `headscale`: `make e2e-headscale` against each supported Headscale
+     minor;
    - `vm-assets` and `vz-assets`: the microVM guests for each arch;
    - `release`: the three tarballs with `SHA256SUMS`, `SHA256SUMS.sig`
      (see [Signing](#signing)) and the catalog, and a **draft** GitHub
@@ -91,11 +102,28 @@ scripts/release-notes.sh v0.1.0 v0.2.0
 6. **Review the draft.**
    - Check that the notes read well, and that the Breaking and Upgrade
      actions sections are complete.
-   - Check the tarball list.
-   - Install one tarball by hand with `scripts/get.sh v0.2.0` after you
-     publish, or from the draft's assets before.
+   - Check the asset list: `tailworks-0.2.0-{darwin-arm64,linux-arm64,linux-amd64}.tar.gz`,
+     `SHA256SUMS` and `SHA256SUMS.sig`. `get.sh` refuses a release without
+     the signature.
+   - Install from the draft's assets (a draft's download URLs aren't
+     public, so fetch them first):
+
+     ```sh
+     gh release download v0.2.0 -D /tmp/tw-v0.2.0
+     TW_HOME=/tmp/tw-home TW_RELEASE_BASE=file:///tmp/tw-v0.2.0 sh scripts/get.sh v0.2.0
+     ```
+
 7. **Publish** the draft. `scripts/get.sh` and `tw upgrade` install the
    latest published release.
+
+   ```sh
+   gh release edit v0.2.0 --draft=false --latest
+   gh api repos/rosskukulinski/tailworks/releases/latest --jq .tag_name   # v0.2.0
+   ```
+
+   Then smoke it as a newcomer would, on a clean Mac (Apple silicon) and a
+   clean Linux machine:
+   `curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/tailworks/master/scripts/get.sh && sh get.sh && ~/.tailworks/bin/tw doctor`.
 8. **Publish npm.** Publishing the GitHub release starts
    `.github/workflows/npm-publish.yml`. It runs `scripts/npm-publish.sh`
    from the tag, which publishes `@tailworks/tailnet`, `@tailworks/node`, `@tailworks/mcp`
@@ -173,9 +201,30 @@ upgrade, so tell operators to upgrade with `get.sh` from master.
 ## If a release is bad
 
 - **Before publishing:** delete the draft and the tag, fix the problem on
-  master, then release again.
+  master, then release again. If more changes landed meanwhile, re-finalize
+  the notes (below) so they are in this release.
 - **After publishing:** ship a patch. Never move a published tag.
 - **For users:** `tw upgrade` rolls back on a failed health check. To roll
   back by hand, run `~/.tailworks/install.sh --rollback` and restore the mgmt
   backup that `tw upgrade` took. Contract migrations can't be undone by a
   rollback, which is why they ship a release after their expand step.
+
+## Re-finalizing an unpublished release
+
+Finalized notes are for one commit. If changes land after you finalize a
+version but before it is published (or its draft is deleted), those
+fragments are pending again: `release-check.sh` fails, and if you tagged
+anyway they would be missing from this release's notes and catalog entry
+and turn up in the next release's. Fold them in, for a version that was
+never published only:
+
+```sh
+git mv changes/released/v0.2.0/*.md changes/ && rmdir changes/released/v0.2.0
+git rm internal/catalog/releases/v0.2.0.json
+scripts/release-notes.sh --finalize v0.1.0 v0.2.0
+git commit -m "Release v0.2.0 (re-finalized)"
+```
+
+`--finalize` writes the entry again with today's date and re-renders
+CHANGELOG.md. A published release's notes never change: ship the
+changes in the next version.

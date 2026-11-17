@@ -2,18 +2,17 @@
 # Download a published tw release from GitHub, verify it, and install it.
 #
 #   sh get.sh                    the latest release, into ~/.tailworks
-#   sh get.sh v0.1.0             a given release
-#   TW_HOME=DIR sh get.sh       install into DIR
-#   TW_RELEASE_BASE=URL sh get.sh v0.1.0   download from a mirror instead of GitHub
-#   TW_ALLOW_UNSIGNED=1 sh get.sh v0.3.0   skip the signature check (not recommended)
+#   sh get.sh vX.Y.Z             a given release
+#   TW_HOME=DIR sh get.sh        install into DIR
+#   TW_RELEASE_BASE=URL sh get.sh vX.Y.Z   download from a mirror instead of GitHub
+#   TW_ALLOW_UNSIGNED=1 sh get.sh vX.Y.Z   skip the signature check (your own builds only)
 #
 # It downloads tailworks-<version>-<os>-<arch>.tar.gz, SHA256SUMS and
 # SHA256SUMS.sig, checks that SHA256SUMS is signed by a tailworks release key
-# pinned below (ssh-keygen -Y verify; releases before v0.3.0 are unsigned
-# and get the checksum only), checks the tarball's hash, extracts it into a
-# fresh temporary directory, and runs its install.sh (no sudo; touches
-# nothing outside ~/.tailworks, your shell profile included). Read it first:
-# it's short.
+# pinned below (ssh-keygen -Y verify; an unsigned release is refused),
+# checks the tarball's hash, extracts it into a fresh temporary directory,
+# and runs its install.sh (no sudo; touches nothing outside ~/.tailworks,
+# your shell profile included). Read it first: it's short.
 set -eu
 REPO=${TW_REPO:-rosskukulinski/tailworks}
 TAG=${1:-latest}
