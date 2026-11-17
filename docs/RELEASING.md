@@ -105,6 +105,10 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    - Check the asset list: `tailworks-0.2.0-{darwin-arm64,linux-arm64,linux-amd64}.tar.gz`,
      `SHA256SUMS` and `SHA256SUMS.sig`. `get.sh` refuses a release without
      the signature.
+   - Check that private vulnerability reporting is still on, since
+     [SECURITY.md](../SECURITY.md) sends reporters there:
+     `gh api repos/rosskukulinski/tailworks/private-vulnerability-reporting`
+     must print `{"enabled":true}`.
    - Install from the draft's assets (a draft's download URLs aren't
      public, so fetch them first):
 
