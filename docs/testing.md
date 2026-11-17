@@ -17,6 +17,12 @@ cd myapp && npm install
 npm test            # needs tw on PATH (or TW_BIN=/path/to/tw)
 ```
 
+The test imports `@tailworks/tailnet/testing/dev`, so `npm install` must
+succeed first. Each tailworks release publishes `@tailworks/*` to npm at its
+version; until the first release that does, `npm install` fails with
+`404 Not Found` and `npm test` can't run outside this repository
+([wrangler.md](wrangler.md#types-tw-types)).
+
 ## Black-box tests: `tw dev --caller` and `startDev`
 
 `tw dev` runs your app on the same tw-hostd, netd and workerd as a

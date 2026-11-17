@@ -3,9 +3,9 @@
 // node (tag:tw-wl-hello); names resolve from the netmap only.
 import { getCaller, isTailnetError } from "@tailworks/tailnet";
 
-interface Env {
-  UPSTREAM?: string; // e.g. "http://inventory-db/items"
-}
+// Env (here: UPSTREAM, e.g. "http://inventory-db/items") is the global
+// interface `tw types` writes to worker-configuration.d.ts from wrangler.jsonc
+// and tailworks.jsonc. Run `tw types` again after changing either.
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {

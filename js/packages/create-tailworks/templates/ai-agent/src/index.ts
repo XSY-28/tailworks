@@ -14,10 +14,9 @@ import { getCaller, principalKey, isTailnetError, type Caller } from "@tailworks
 import { mcpFetch } from "@tailworks/mcp";
 import { model } from "./model";
 
-interface Env {
-  AiAgent: any;
-  MCP_URL: string;
-}
+// Env (MCP_URL and the AiAgent namespace) is the global interface `tw types`
+// writes to worker-configuration.d.ts. Run `tw types` again after changing
+// wrangler.jsonc or tailworks.jsonc.
 
 // A typed tailworks error (peer_not_visible, cap_missing, namespace_conflict…),
 // possibly wrapped by the MCP client, becomes its catalog response.
