@@ -170,6 +170,58 @@ release later. **If the key leaks:** remove its line, add a new key and
 ship a patch. Hosts on older releases still trust the leaked key until they
 upgrade, so tell operators to upgrade with `get.sh` from master.
 
+## Licenses and notices
+
+Each tarball redistributes third-party software (issue #102). `release.sh`
+runs `scripts/third-party-notices.mjs` on every staged tarball, which writes:
+
+- `LICENSE`: the project's BSD-3-Clause license. Clause 2 requires it in
+  binary distributions.
+- `THIRD_PARTY_NOTICES` covers:
+  - workerd (Apache-2.0);
+  - every Go module compiled into `bin/`, and into tw-guestd, with the
+    module's own license files (found with `go version -m` and the module
+    cache);
+  - the Go standard library;
+  - the vendored `share/tailworks/node_modules` (paths to each package's
+    license file);
+  - with a microVM guest, Firecracker + jailer (Apache-2.0, with
+    Firecracker's NOTICE), the kernel and the rootfs's Ubuntu packages;
+  - the Apache-2.0, GPL-2.0 and LGPL-2.1 texts.
+- With a microVM guest, `share/tailworks/vm/KERNEL-SOURCE.md` and
+  `ROOTFS-SOURCE.md`: the exact corresponding source (the kernel.org tarball
+  and its sha256, the config inputs and build script at the release commit,
+  the Ubuntu source packages and versions) and a written offer for it.
+
+Texts that the upstream artifacts don't ship are vendored in
+`third_party/licenses/`. The workerd npm package has no LICENSE, and
+Firecracker's release tarball has no NOTICE. When you bump Firecracker or
+Go, check those copies against upstream.
+
+`guest/build-image.sh` records the Ubuntu packages behind every file it
+copies from ubuntu-base in `manifest.json` `"packages"`
+(`guest/rootfs-packages.sh`), and copies each package's
+`/usr/share/doc/<pkg>/copyright` into the image. A file that no package
+owns fails the build.
+
+**The build fails when** a Go module has no license file, or a guest's
+`manifest.json` has no package list. **It warns when** a vendored npm
+package has no license file. `scripts/check-release-notices.sh` fails a
+tarball without the files above. `release.sh` runs it on each tarball, and
+`release.yml` runs it again before the upload.
+
+**Review before a release.** This tooling is a compliance aid, not legal
+advice. On each release, check:
+
+- Warnings about npm packages without license files.
+- workerd's notices. Its binary links V8, ICU, BoringSSL, SQLite and
+  others, and the npm package carries none of their notices. Upstream
+  publishes no NOTICE file for them.
+- That the written offer's contact (an issue on this repository) is still
+  how you want source requests to arrive.
+- Whether to attach the kernel source tarball to the GitHub release, which
+  is more robust than relying on the offer.
+
 ## If a release is bad
 
 - **Before publishing:** delete the draft and the tag, fix the problem on
