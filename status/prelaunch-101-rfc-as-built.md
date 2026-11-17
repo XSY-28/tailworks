@@ -47,6 +47,7 @@ shipped.
 ## Tests run
 
 - `make lint test`: pass (exit 0; includes the new `cmd/tw:TestDesignDocsNameRealCommands` and `docs:TestADRIndex`).
+- After merging origin/master (SECURITY.md, RELEASING.md only): `make lint test` failed once on `hostd:TestWorkersKVMove` with a data race in `hostd/mgmtapi.(*Client).setHeaders` (client.go:197, untouched here; pre-existing). `go test ./hostd -run TestWorkersKVMove -count=3` passed. CI (`ci-ok`) passed on the pre-merge commit after one rerun of an unrelated `cmd/tw:TestCLIOAuth` audit flake.
 - `CI=true go test ./docs -run TestADRIndex`: pass; with a dummy `adr/zz-draft.md` it fails under CI=true and only logs without it.
 
 ## Not done / follow-ups
