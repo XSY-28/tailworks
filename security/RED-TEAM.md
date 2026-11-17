@@ -156,7 +156,7 @@ tier. Document process/Node Linux tiers as single-tenant until then.
 **STATUS accuracy:** STATUS is candid ("0700 is not isolation"; M7 "a hostd compromise
 exposes every tenant's node keys"; integration "the Node tier on Linux has no per-tenant
 confinement"). But the **E2E-MULTI isolation headline is macOS-specific** and should say so
-loudly, since `LINUX-PLAN` presents Linux as first-class.
+loudly, since the docs present Linux as first-class (docs/install-testing.md, "Linux requirements").
 
 ---
 
@@ -299,7 +299,7 @@ whitespace check, so a `src`/`tagOwners` entry like `"tag:tw-wl-x "`
 (trailing space, tab or newline) passes `Check`. *Impact is bounded:* the
 accepted string is still inside tailworks' own `tag:tw*` namespace, a grant to a
 space-padded tag matches no real device, and every policy write is validated
-by Tailscale before apply (BUILD-PLAN safety rule). So this is input-validation
+by Tailscale before apply (docs/install-testing.md, safety rule 2). So this is input-validation
 leniency, not a cross-principal widening. *Fix:* require a boundary after the
 prefix (exact `tag:tw` or `tag:tw-…`) and reject tags containing
 whitespace/control characters. Regression: `TestRT2L1_CheckAcceptsWhitespacePaddedTag`

@@ -2,7 +2,7 @@
 
 > The project was renamed twd → tailworks (issue #86). This file is frozen history and keeps the old names.
 
-`BUILD-PLAN.md` and `MORNING.md` referenced below were removed before publication (see commit 84b4246); their safety rules are summarised in security/THREAT-MODEL.md.
+`BUILD-PLAN.md` and `MORNING.md` referenced below were removed before publication (see commit 84b4246); the safety rules for the real-tailnet suites are in docs/install-testing.md, "Safety rules for the real-tailnet suites".
 
 Last update: 2026-11-07 23:55 PT. M0 and M1 by the first run; M2 (`twd-mgmt`) on branch `m2-mgmt`.
 Last update: 2026-11-08 00:10 PT. M0, M1 (main) and M3 (branch `m3-hostd`).
@@ -552,7 +552,7 @@ Final run: `e2e/vm/results/m8-20261108T083524Z.json`.
   3. `tag:twd-wl-agent`, `tag:twd-agent-support` and `tag:twd-agent-support-sub` → `tag:ttest` (the echo);
   4. `tag:twd-agent-support` → `tag:twd-wl-mcp`, app `{tools:[lookup_order, refund]}`;
   5. `tag:twd-agent-support-sub` → `tag:twd-wl-mcp`, app `{tools:[lookup_order]}`.
-- The snippet is `cliflow.Policy()` in `e2e/cliflow`. **Ross's personal tailnet was not touched**, and the system tailscaled was never used.
+- The snippet is `cliflow.Policy()` in `e2e/cliflow`. **The maintainer's personal tailnet was not touched**, and the system tailscaled was never used.
 
 ### Known gaps (M4)
 - **Not yet run on `mbp`:** that needs M6 (release tarball, `install.sh`). twd finds `twd-mgmt`/`twd-hostd` next to itself, and workerd and create-twd via `$TWD_WORKERD`/`$TWD_CREATE_TWD`, next to the binary, or by walking up to a repo checkout. A release must ship `share/twd/create-twd` plus its `node_modules`. Deploy also needs `node` on the machine (esbuild).
@@ -612,7 +612,7 @@ Final run: `e2e/vm/results/m8-20261108T083524Z.json`.
 | `twd down` (purge + device deletes) · uninstall + cleanup | 0.5–3.1 s · 2.3 s |
 
 ### Safety
-- **Ross's personal tailnet was not touched.** mbp's Tailscale.app was never used, queried or read: the test never runs `tailscale`, and twd on mbp runs only tsnet nodes of tailnet 1 (`twd doctor`'s lsof check passed in every run).
+- **The maintainer's personal tailnet was not touched.** mbp's Tailscale.app was never used, queried or read: the test never runs `tailscale`, and twd on mbp runs only tsnet nodes of tailnet 1 (`twd doctor`'s lsof check passed in every run).
 - **No policy change in M6** (read-only check that M4's grants exist). No sudo on mbp; nothing installed outside `~/.twd` and `~/.twd-e2e`, and both are removed at the end. No Homebrew installs.
 - Keys: the key file goes over ssh stdin (never on a command line), mode 0600, deleted at the end even on failure. No `tskey-*` in logs or results (check-secrets).
 
@@ -655,7 +655,7 @@ Full matrix: `docs/COMPAT.md`.
   - `twd init` and `create-twd` now list `ai-agent`.
 
 ### Test results (measured 2026-11-08)
-- **`make test-sdk`: PASS on macOS** (this Mac, 28.7 s) **and in Lima `twd-dev`** (Ubuntu arm64, cloned from `/Users/ross/dev/twd` at `m5-sdk`; 82.7 s, because node joins are slower there).
+- **`make test-sdk`: PASS on macOS** (this Mac, 28.7 s) **and in Lima `twd-dev`** (Ubuntu arm64, cloned from the Mac's checkout at `m5-sdk`; 82.7 s, because node joins are slower there).
 
   | Check | Result |
   |---|---|
@@ -762,7 +762,7 @@ Full matrix: `docs/COMPAT.md`.
     3. the agent tags → `tag:ttest`;
     4. `tag:twd-agent-support` → `tag:twd-wl-mcp` `{tools:[lookup_order, refund]}`;
     5. `tag:twd-agent-support-sub` → `tag:twd-wl-mcp` `{tools:[lookup_order]}`.
-- **Tailnet 1:** not written (it already had all of this from M4). **Ross's personal tailnet was not touched**, and the system tailscaled was never used.
+- **Tailnet 1:** not written (it already had all of this from M4). **The maintainer's personal tailnet was not touched**, and the system tailscaled was never used.
 
 ### Findings
 1. **Two tailnets on one host are isolated by netd's netmap-only egress guard, with no extra code.** A tenant's registry has only its own tailnet's netmap, so another tenant's names don't resolve and its IPs aren't peers: the answer is a typed `peer_not_visible` in about 1 ms, never a timeout. Cross-tenant IP collisions are possible in principle (both tailnets draw from CGNAT space). On production they didn't happen; on testcontrol they always happen (sequential numbering). The scenario skips, and notes, an IP that is also a node of the source tenant.
@@ -912,7 +912,7 @@ Result files: `e2e/node/results/m9-*.json`.
 Earlier runs, kept for the record: on merge commit `a219532`, `make e2e-mac` (`8c1592`) and `make e2e-multi` ×2 (`1dc500`, `4ba728`) passed, and `make e2e-mbp` failed in `make release` (fix 1). On a dirty tree with fix 1, e2e-mbp passed once (`acd614`).
 
 ### Safety
-- Policy: **no writes** (both tailnets already had the scenario's rules, as e2e-multi reports). Ross's personal tailnet and mbp's Tailscale.app were not touched (doctor's lsof check passed).
+- Policy: **no writes** (both tailnets already had the scenario's rules, as e2e-multi reports). The maintainer's personal tailnet and mbp's Tailscale.app were not touched (doctor's lsof check passed).
 - Every run deleted its own devices by ID and revoked its keys (0 left). No `tskey-` in results (check-secrets).
 
 ### Gaps (integration)
@@ -1271,7 +1271,7 @@ Measured on `l3-reboot-447bf5` with the new client-side sampler (the test client
 - Not twd-side and not trivial: a client can't be told to re-handshake by the server; tailscale's own disco path discovery is what eventually rescues it. Options if it matters: (a) have twd's workload nodes **re-mint on host reboot** (new node key; costs a device churn and ~5 s instead of ~15 s), (b) clients using a short WireGuard persistent keepalive would notice in ≤ 10 s, (c) leave it: a reboot already means ≥ 6 s of downtime before twd even starts, and the node is correct and reachable over DERP for any *new* client the moment it is up (first-time clients saw it at +2–3 s in L3's e2e-linux-vm). Recorded, not fixed.
 
 ### Safety
-- Only tailnet 1 and tailnet-2; **no policy written** (every run reported the rules already present, read-only). Every run deleted its own devices by ID and revoked its keys (0 left, see each row); no `tskey-` in any log or result (check-secrets in `make lint`). `sudo` only inside Lima VMs (`twd host setup --microvm`, `enable-linger`). Ross's personal tailnet untouched.
+- Only tailnet 1 and tailnet-2; **no policy written** (every run reported the rules already present, read-only). Every run deleted its own devices by ID and revoked its keys (0 left, see each row); no `tskey-` in any log or result (check-secrets in `make lint`). `sudo` only inside Lima VMs (`twd host setup --microvm`, `enable-linger`). The maintainer's personal tailnet untouched.
 - **VMs:** all matrix VMs are stopped and kept (`twdl-ubuntu24-arm64`, `twdl-debian12-arm64`, `twdl-ubuntu24-amd64`, `twdl-kvm-u24`; the others untouched and stopped); `twd-dev` is running. Each row's harness cleaned the VM (`twd down --purge --service`, uninstall, `rm -rf ~/.twd-e2e`; `setup --undo` on the kvm VM). `twd-dev` has a copy of the tree in `/tmp/twd-int` (no mounts used).
 
 ### Gaps (integration)
@@ -1317,7 +1317,7 @@ Tree: master `4a8e0d9` (Linux integration + `rt-fixes`) + master `63a4eb3` (`rt2
 - Timing context, not a failure: the rows that overlapped (mbp #3 with twd-dev `make test -race` + the Ubuntu release build; Ubuntu run 1 with e2e-linux-vm) show slower `twd up` / spawn numbers (e.g. up 2.7 s vs 0.66 s, spawn 3.8 s vs 1.8 s); every bound held.
 
 ### Safety
-- Only tailnet 1 and tailnet-2; **no policy written** in any run (each reported the grants already present, read-only). Every run deleted its own devices by ID and revoked its keys (0 left, per row); prefixes `ttest-fv-*` / `twd-fv-*` (hostnames) and the harness run IDs above; no `tskey-` in any log or result (`check-secrets` in `make lint`). `sudo` only inside Lima VMs (`twd host setup --microvm`, `enable-linger`, `e2e-vm`). On `mbp` only `~/.twd` / `~/.twd-e2e`, no sudo; `mbp_clean: true` after each run. Ross's personal tailnet untouched.
+- Only tailnet 1 and tailnet-2; **no policy written** in any run (each reported the grants already present, read-only). Every run deleted its own devices by ID and revoked its keys (0 left, per row); prefixes `ttest-fv-*` / `twd-fv-*` (hostnames) and the harness run IDs above; no `tskey-` in any log or result (`check-secrets` in `make lint`). `sudo` only inside Lima VMs (`twd host setup --microvm`, `enable-linger`, `e2e-vm`). On `mbp` only `~/.twd` / `~/.twd-e2e`, no sudo; `mbp_clean: true` after each run. The maintainer's personal tailnet untouched.
 - **VMs:** `twdl-ubuntu24-arm64` and `twdl-kvm-u24` were started (≤ 2 at a time), cleaned by their harness traps (`twd down --purge [--service]`, uninstall, `rm -rf ~/.twd-e2e`, `setup --undo` on the kvm VM) and **stopped** (kept); the other `twdl-*` VMs were not started; `twd-dev` is running with a copy of this tree in `/tmp/twd-fv` (and `/tmp/twd-vm-assets` from the release's guest build). The lead's red-team worktree/VMs (`twd-rt2*`, `twdl-rt*`) were not touched.
 
 ### Gaps (final verification)
@@ -1327,7 +1327,7 @@ Tree: master `4a8e0d9` (Linux integration + `rt-fixes`) + master `63a4eb3` (`rt2
 
 ## M10: keyless by default (branch `m10-keyless`, 2026-11-08) — ADR-026
 
-Ross: "We shouldn't have to use an API key. We've got Tailscale identity built into the connection." The M4 flow (`--api-key-file`, CLI only on the local unix socket, interactive login refused) was a test-harness shortcut. M10 makes the keyless path the product flow and keeps API-key mode as a labelled alternative.
+The maintainer: "We shouldn't have to use an API key. We've got Tailscale identity built into the connection." The M4 flow (`--api-key-file`, CLI only on the local unix socket, interactive login refused) was a test-harness shortcut. M10 makes the keyless path the product flow and keeps API-key mode as a labelled alternative.
 
 ### What's built
 - **`twd up` (no flags) is keyless.** mgmt's own tailnet node (`twd-mgmt`, `tag:twd-mgmt`) is joined **in the CLI** by tsnet interactive login (`cmd/twd/login.go`: the login URL is printed, the IPN bus is watched until Running, the netmap gives the tailnet name, DNS name, HTTPS and the funnel attribute), then the node's state dir (`<state>/mgmt/tsnet`) is handed to twd-mgmt, which re-opens it without any login (`twd-mgmt` fails fast with the login URL if a state ever needs one again, instead of hanging). Later `twd up` runs need no login. `--tailnet` is an override; the policy snippet (tagOwners `tag:twd`, `tag:twd-mgmt`, `tag:twd-host`; `nodeAttrs` funnel for `tag:twd-mgmt`; the `autogroup:admin → tag:twd-mgmt` grant with app cap `twd.dev/cap/admin`) is printed **before** the login URL. `https_required` / `funnel_required` stop with the exact console fix and keep the joined node. `--mgmt-authkey-file` is the unattended join (tests). The system tailscaled is still never used: mgmt's node is a tsnet node.
@@ -1356,14 +1356,14 @@ Ross: "We shouldn't have to use an API key. We've got Tailscale identity built i
 - **`make e2e-mac`: PASS 12/12** (`m4-53b7c4`, 50 s: up 1.22 s, deploy→ready 2.0 s, first object node 1.67 s, spawn 3.3 s, kill CLI 67 ms, 410 in 1 ms, 0 leftovers; the harness check `up_interactive_refused` became `up_apikey_needs_tailnet`: `twd up --yes --api-key-file f` without `--tailnet` → `tailnet_required`). **`make e2e-multi`: PASS 15/15** (`m7-c74ce8`, 75 s, 0 leftovers in both tailnets).
 
 ### Policy change on tailnet 1 (recorded per BUILD-PLAN safety rule 2)
-Applied once by `make e2e-keyless` run `2fd12c` (2026-11-08 13:30 PT) through `internal/policy.ApplyWith` (additions only; validated; `If-Match: "14e4bab4…"`; previous copy `~/.config/tailnet-agents-design/tailnet1_acl.pre-m10-2fd12c.hujson`). Added: tagOwners `tag:ttest-noadmin: ["autogroup:admin"]`; grants `autogroup:admin → tag:twd-mgmt` tcp:443,80 app `twd.dev/cap/admin`, `tag:ttest → tag:twd-mgmt` tcp:443,80 app `twd.dev/cap/admin`, `tag:ttest-noadmin → tag:twd-mgmt` tcp:443,80. `tag:twd-mgmt`/`tag:twd-host` tagOwners and the funnel nodeAttr were already there. Later runs found nothing missing and wrote nothing. **Ross's personal tailnet and the system tailscaled were never touched**; the API key was used only for policy, trust credentials, the test nodes' keys and cleanup by ID.
+Applied once by `make e2e-keyless` run `2fd12c` (2026-11-08 13:30 PT) through `internal/policy.ApplyWith` (additions only; validated; `If-Match: "14e4bab4…"`; previous copy `~/.config/tailnet-agents-design/tailnet1_acl.pre-m10-2fd12c.hujson`). Added: tagOwners `tag:ttest-noadmin: ["autogroup:admin"]`; grants `autogroup:admin → tag:twd-mgmt` tcp:443,80 app `twd.dev/cap/admin`, `tag:ttest → tag:twd-mgmt` tcp:443,80 app `twd.dev/cap/admin`, `tag:ttest-noadmin → tag:twd-mgmt` tcp:443,80. `tag:twd-mgmt`/`tag:twd-host` tagOwners and the funnel nodeAttr were already there. Later runs found nothing missing and wrote nothing. **The maintainer's personal tailnet and the system tailscaled were never touched**; the API key was used only for policy, trust credentials, the test nodes' keys and cleanup by ID.
 
 ### Limitation stated plainly
 An interactive browser login cannot be automated, so **the login-URL branch of `joinMgmtNode` (print the URL, wait for the browser) has not been run against a real control plane**; it follows tsnet's own `Up` logic (IPN bus, `BrowseToURL`, Running) but is untested beyond compiling. The e2e substitutes `--mgmt-authkey-file`, the flag the product also offers for unattended joins. Everything after the join (Funnel issuer, trust credential, WIF mint, WhoIs admin, remote CLI) ran for real.
 
 ## M11: REST v1 (spec-first) + tsnet-only operation (branch `m11-rest-tsnet`, 2026-11-08)
 
-Ross: "Normal operation should be tsnet only." · "Please add pagination now." · "All POST seems like an anti-pattern in sound REST design." Pre-release, so `/v1` is a **breaking** replacement and `/v0` goes away with no shim. Process change from the lead: **spec first**; Ross reviews the spec before any handler is written.
+The maintainer: "Normal operation should be tsnet only." · "Please add pagination now." · "All POST seems like an anti-pattern in sound REST design." Pre-release, so `/v1` is a **breaking** replacement and `/v0` goes away with no shim. Process change from the lead: **spec first**; the maintainer reviews the spec before any handler is written.
 
 ### Phase 1 (DONE, this commit): the spec is the source of truth
 - **`api/openapi.yaml`** (OpenAPI 3.1, ~2000 lines) specifies every `/v1` route and the public OIDC paths. Components: `Tenant`/`TenantCreate`/`TenantPatch`/`WIFInfo`/`WIFCheckResult`, `Host`/`HostRegistration`/`HostStatus`/`HostStatusResponse`/`HostPush`/`Lease`, `Deployment`/`DeploymentCreate`/`Assignment`/`ClassConfig`/`Endpoint`/`PreflightResult`, `Object`/`ObjectCreate`/`ObjectPatch`/`ObjectStatus`/`Tombstone`/`KillResult`, `Credential`, `NodeCertificate`(+`Payload`), `AuditRecord`/`AuditKind`/`AuditSource`/`AuditBatch`/`ChainStatus`/`AuditVerification`, `VolumeKeyGrant`, `Error`/`ErrorCode` (the full typed catalog, 35 codes, with examples per status)/`TombstoneError`, `Page` + typed `*Page` envelopes (`items`, `nextCursor: string|null`), `limit`/`cursor`/`If-Match`/`If-None-Match`/`epoch` parameters, `ETag`/`Location` headers, `Status`/`WhoAmI`/`Health`. Security: `tailnetWhoIs` (documented as WhoIs on the tsnet listener, not a token; `mutualTLS` is the nearest scheme type) and `localHostToken` (`--local-dev` only). Every operation carries `x-twd-role` (`admin` / `host` / `admin|host` / `any`); every mutating operation `x-twd-audit: true` (exceptions, recorded in the test: the 3 s heartbeat and the wif-check diagnostic). `operationId`s read as Go methods (`ListTenants`, `CreateObjectCredential`, `ReportHostStatus`, …).
@@ -1372,7 +1372,7 @@ Ross: "Normal operation should be tsnet only." · "Please add pagination now." �
 - **Validation in tests:** `mgmt/api/v1/validate.go` wraps kin-openapi `openapi3filter` (`Validator.Middleware` checks every request and response of a handler against the spec; hermetic suites will wrap mgmt's handler with it in Phase 2). `spec_test.go` proves it rejects `limit=0/501`, bad ID patterns, a missing `epoch`, unknown enum values, `additionalProperties`, a `/v0` path, a response missing required fields, an unknown error code and an undocumented status, and accepts the valid cases; `TestSpecConventions` enforces operationId / role / audit / paging / merge-patch / `If-Match`+`412` / `202`+`Location` / no DELETE bodies on every operation.
 - **Not done in Phase 1 (by instruction):** no handlers, no hostd/CLI/fakemgmt/e2e migration, no tsnet-only transport work, no store migrations. `/v0` still serves; the old `hostd/mgmtapi` (hand-written) is still what hostd compiles against; `hostd/mgmtapi/v1` is the generated replacement it will move to.
 
-### Phase 2 (pending Ross's spec review)
+### Phase 2 (pending the maintainer's spec review)
 Implement the strict-server interface in `mgmt` from the generated types; delete `/v0`; migrate hostd, fakemgmt, the CLI (`ls --limit/--all`, `kill` → DELETE, `tenant set` → PATCH, `tenant rm`, `undeploy`), the wrapper's spawn path and every e2e harness; `(created_at, id)` indexes for cursor pagination (SQLite + Postgres migrations); hostd's own `tag:twd-host` tsnet node, `twd host add` → WIF-minted single-use join key, `twd link --tsnet`, local socket only behind `--local-dev`, `twd doctor transport`.
 
 ### Phase 2 (this tree): implementation
@@ -1391,7 +1391,7 @@ Implement the strict-server interface in `mgmt` from the generated types; delete
   - Two product bugs found by this run and fixed: (1) `twd status` said host `""` before the join (now `pending`); (2) the mint of the host join key was refused by the control plane (`tags [tag:twd-host] … not permitted`) because tailnet 1's `tag:twd-host` owners were `[autogroup:admin, tag:twd-mgmt]` from an earlier milestone and `internal/policy.Missing` never added owners to an *existing* tag. Merges are now additive at the owner level (`Missing`/`Merge`/`VerifyAdditive`), which also matters for real deployments whose policies predate a snippet change.
 
 ### Policy changes on tailnet 1 (recorded per BUILD-PLAN safety rule 2)
-Applied by `make e2e-keyless` through `internal/policy.ApplyWith` (additions only; validated; `If-Match`; previous copies kept): run `a83272` (2026-11-08 22:05 PT) added the grant `tag:twd-mgmt → tag:twd-host tcp:7474` (kill push to the host's node; previous copy `~/.config/tailnet-agents-design/tailnet1_acl.pre-m10-a83272.hujson`); run `93bf7b` (22:06 PT, `If-Match "87d6044e…"`) added the owner `tag:twd` to `tagOwners["tag:twd-host"]` (previous copy `…/tailnet1_acl.pre-m10-93bf7b.hujson`). The grant `tag:twd-host → tag:twd-mgmt tcp:80,443` and the `tag:twd-mgmt`/`tag:twd-host` tagOwners were already present. **Ross's personal tailnet and this Mac's system tailscaled were never touched**; the API key was used only for policy, trust credentials, the test nodes' keys and cleanup by ID.
+Applied by `make e2e-keyless` through `internal/policy.ApplyWith` (additions only; validated; `If-Match`; previous copies kept): run `a83272` (2026-11-08 22:05 PT) added the grant `tag:twd-mgmt → tag:twd-host tcp:7474` (kill push to the host's node; previous copy `~/.config/tailnet-agents-design/tailnet1_acl.pre-m10-a83272.hujson`); run `93bf7b` (22:06 PT, `If-Match "87d6044e…"`) added the owner `tag:twd` to `tagOwners["tag:twd-host"]` (previous copy `…/tailnet1_acl.pre-m10-93bf7b.hujson`). The grant `tag:twd-host → tag:twd-mgmt tcp:80,443` and the `tag:twd-mgmt`/`tag:twd-host` tagOwners were already present. **The maintainer's personal tailnet and this Mac's system tailscaled were never touched**; the API key was used only for policy, trust credentials, the test nodes' keys and cleanup by ID.
 - **`make e2e-mac` (tailnet 1, apikey mode, run `8a7e51`): PASS 13/13** in 65 s, **tsnet only in apikey mode too**: the API key minted mgmt's node key in-process (no browser login), `POST /v1/hosts` minted the host join key, `transport_tsnet_only` passed (`doctor ok tsnet: … hostd on its own tag:twd-host node twd-host-twd-e2e-8a7e51`, no `mgmt.sock`), up 13.6 s (incl. both node joins), deploy→ready 4.6 s, first object node 1.9 s, kill CLI 156 ms, down 2.9 s; cleanup by ID: 9 devices deleted (5 object nodes + mgmt node + host node + 2 test nodes), **0 left, 0 untracked**.
 - **`make e2e-multi` (tailnet 1 + tailnet-2, run `02d7b2`): PASS 16/16** in 97 s (tenant A on mgmt's/the host's tailnet, tenant B added with its API key; isolation checks a–f; the sandbox check now asserts **no mgmt unix socket**, and that mgmt's loopback credential and the host node's state are unreadable from a tenant's workerd). Cleanup by ID in both tailnets: **0 devices left** (verified read-only after the run: no `twd-*`/`ttest-*` device on either test tailnet). The first run of the day found a harness gap, not a product one: the multi harness tracked mgmt's and the host's own nodes on the overall results, not on tenant A's per-tailnet cleanup list, so those two nodes outlived the run; they were deleted by ID and the harness fixed.
 
@@ -1406,7 +1406,7 @@ Applied by `make e2e-keyless` through `internal/policy.ApplyWith` (additions onl
 
 ## M12: OAuth client mint mode, the self-hosted default (branch `m12-oauth`, 2026-11-09)
 
-Ross, installing on his prod tailnet: WIF needs Funnel + HTTPS + a public OIDC issuer just to get a secretless `auth_keys` credential; move to an **OAuth client** (scope `auth_keys`, tag `tag:twd`, never expires; the mechanism of the k8s operator / GitHub Action) as the default. WIF stays (hosted / multi-tenant), API key stays as the explicit fallback.
+The maintainer, installing on a production tailnet: WIF needs Funnel + HTTPS + a public OIDC issuer just to get a secretless `auth_keys` credential; move to an **OAuth client** (scope `auth_keys`, tag `tag:twd`, never expires; the mechanism of the k8s operator / GitHub Action) as the default. WIF stays (hosted / multi-tenant), API key stays as the explicit fallback.
 
 ### What's built
 - **Mint mode `oauth` in mgmt** (`mgmt/broker.go`, `internal/tsapi/oauth.go`). Tenant fields `oauthClientID` (public) + `oauthClientFile` (absolute path; the secret is never stored or returned). The file (`TS_OAUTH_CLIENT_ID=…`, `TS_OAUTH_CLIENT_SECRET=tskey-client-…`) is **re-read at every token exchange** and refused if `mode & 0o077 != 0` (at tenant create/patch and at every exchange). Client-credentials grant at `POST /api/v2/oauth/token`; the access token is cached until ~90 % of its life; a **401 invalidates it and the request is retried once** with a fresh exchange (`tsapi.Client.Tokens`). Keys are minted exactly as in apikey mode (single use, preauthorized, ≤ 5 min, tagged). Device deletes use the same token: a **403 → `device_delete_unavailable`** in `KillResult.warnings` (code, objects, fix) and in the kill / `device_delete` audit detail; the kill itself never fails; later kills warn up front; the tombstone reports `deviceDeleted: false`. A tag refusal at the host join key mint → **`403 policy_missing_tag_owners`** with the tagOwners snippet. Secrets/tokens never logged (tests assert it; `netd.Redact` covers `tskey-client-`). hostd's sandbox denies every tenant's `oauthClientFile` (and `twd up` adds it to `-sandbox-deny`).
@@ -1419,7 +1419,7 @@ Ross, installing on his prod tailnet: WIF needs Funnel + HTTPS + a public OIDC i
 - **Docs:** `docs/INSTALL.md` "Recommended: OAuth client" first (policy, console steps, file, `twd up`), "Alternative: workload identity federation (`twd up --wif`)" second, "Last resort: API-key mode" last; troubleshooting for the new codes; `MORNING.md` command list; `install.sh` hint.
 
 ### Safety fix found on the way (product bug)
-`twd up`/`twd down` checked *any* installed LaunchAgent/systemd unit, not the one for their state dir. This Mac now runs Ross's real twd as `dev.twd.up` (`~/.twd`), so every hermetic/e2e `twd up --state-dir /tmp/…` failed `service_running`, and **a test's `twd down` would have stopped Ross's service** (`serviceStop()`). Now `serviceOf(s)` only counts a unit whose `--state-dir` is `s.Dir`, and `down --service` only removes its own. Ross's service was never stopped (checked `launchctl print`: running throughout). Also: `TestCLILink`'s "auto-discovery fails" case resolved `twd-mgmt` through this Mac's MagicDNS and **reached Ross's real mgmt on the personal tailnet** with one read-only `GET /v1/whoami` (the link was saved only in a temp dir, nothing written anywhere); the test now sets `TWD_LINK_DISCOVER_NAME` to an unresolvable name.
+`twd up`/`twd down` checked *any* installed LaunchAgent/systemd unit, not the one for their state dir. This Mac now runs the maintainer's real twd as `dev.twd.up` (`~/.twd`), so every hermetic/e2e `twd up --state-dir /tmp/…` failed `service_running`, and **a test's `twd down` would have stopped the maintainer's service** (`serviceStop()`). Now `serviceOf(s)` only counts a unit whose `--state-dir` is `s.Dir`, and `down --service` only removes its own. The maintainer's service was never stopped (checked `launchctl print`: running throughout). Also: `TestCLILink`'s "auto-discovery fails" case resolved `twd-mgmt` through this Mac's MagicDNS and **reached the maintainer's real mgmt on the personal tailnet** with one read-only `GET /v1/whoami` (the link was saved only in a temp dir, nothing written anywhere); the test now sets `TWD_LINK_DISCOVER_NAME` to an unresolvable name.
 
 ### Test results (2026-11-09, this Mac)
 - **Hermetic:** `internal/tsapi` `TestLoadOAuthFile` (0600 enforcement, ID from the secret, mismatch, no secret in errors/`%#v`, redaction), `TestOAuthSourceCacheRefreshRetry` (cache, refresh near expiry, 401 → one retry, persistent 401 → exactly one retry, wrong secret, mode loosened later), `TestIsTagsNotPermitted`; `mgmt.TestOAuthMintPath` (spec-validated: create refusals, no secret in responses, host + object keys via OAuth, 1 exchange cached, revoked token → retry, kill with devices:core deletes, without → `device_delete_unavailable` in result + audit + tombstone, deferred delete audit with code + fix, `policy_missing_tag_owners` + snippet, group-readable file refused, no secret/token in logs); `cmd/twd.TestOperatorSnippet`, `TestModeChoiceAndTypedErrors`; **`cmd/twd.TestCLIOAuth`** (real binaries on testcontrol + fake API with an OAuth token endpoint: 0644 → `credential_file_insecure`; policy without `tag:twd` owners → `policy_missing_tag_owners`, **0 keys minted, mgmt not joined**; then the whole (a)–(f) scenario in oauth mode, 3 exchanges, 0 API-key requests, doctor ok/warn, no secret in logs) 12.6 s.
@@ -1429,7 +1429,7 @@ Ross, installing on his prod tailnet: WIF needs Funnel + HTTPS + a public OIDC i
 - **`make e2e-mac`: PASS** (61 s, apikey mode, 0 left). **`make e2e-multi`: PASS 16/16** (103 s, 0 left in both tailnets).
 
 ### Policy change on tailnet 1 (BUILD-PLAN safety rule 2)
-Run `e6d03b` (2026-11-08 23:56 PT) via `policy.ApplyWith` (additions only, validated, `If-Match "07e9f510…"`, previous copy `~/.config/tailnet-agents-design/tailnet1_acl.pre-m12-e6d03b.hujson`): added owner **`tag:twd` to `tagOwners["tag:twd-mgmt"]`**. Later runs wrote nothing. No other tailnet's policy was read or written; Ross's personal tailnet was touched only by the hermetic test bug described above (one read-only whoami to his twd-mgmt, now fixed).
+Run `e6d03b` (2026-11-08 23:56 PT) via `policy.ApplyWith` (additions only, validated, `If-Match "07e9f510…"`, previous copy `~/.config/tailnet-agents-design/tailnet1_acl.pre-m12-e6d03b.hujson`): added owner **`tag:twd` to `tagOwners["tag:twd-mgmt"]`**. Later runs wrote nothing. No other tailnet's policy was read or written; the maintainer's personal tailnet was touched only by the hermetic test bug described above (one read-only whoami to his twd-mgmt, now fixed).
 
 ### Gaps (M12)
 - `twd tenant add` (a second tenant) is still apikey-only; oauth for a second tenant is a PATCH away in the API (`mintMode: oauth`, `oauthClientFile`) but has no CLI flag yet.
