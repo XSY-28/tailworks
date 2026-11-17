@@ -56,7 +56,7 @@ it.
 |---|---|---|---|
 | Profile shape | `(allow default)` plus a deny list (`seatbeltProfile` in `hostd/seatbelt.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
 | Reads | denied under your home dir, tailworks' state and run dirs, hostd's data and run dirs, and every tenant's credential files; **everything else is readable** (`/etc`, `/tmp`, …) | only the OS dirs (`/usr`, `/lib`, `/bin`, `/etc`, `/opt`, …), the runtime binary (and a Node install prefix), a few global `/proc` and `/sys` files, the process's own `/proc` entries and its own dirs | same as ABI ≥ 4 |
-| Writes | denied under the same paths; **allowed everywhere else** the user can write (`/tmp`, `/Users/Shared`, …) | own dirs only | own dirs only (ABI 1 also refuses renames and links across directories) |
+| Writes | denied under the same paths; **allowed everywhere else** the user can write (`/tmp`, for example) | own dirs only | own dirs only (ABI 1 also refuses renames and links across directories) |
 | Unix sockets | connects denied under the same paths; others (for example the system tailscaled socket) are reachable | none: seccomp refuses `socket(AF_UNIX)` (except a Node app in `listen: "unix"` mode) | same as ABI ≥ 4 |
 | TCP | **unrestricted**: any address, including loopback, the LAN and the internet | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); bind only its own port. Landlock matches port numbers, not addresses | **unrestricted** (Landlock has no TCP rules before ABI 4) |
 | Other sockets | unrestricted (UDP and so on) | TCP only for IPv4/IPv6 (no UDP, ICMP, raw or MPTCP); netlink route only | same as ABI ≥ 4 |
