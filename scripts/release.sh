@@ -11,7 +11,9 @@
 # package-lock.json), share/tailworks/create-tailworks (templates + build.mjs),
 # share/tailworks/node_modules (the templates' runtime deps, vendored: deploy works
 # offline, no npm/node), share/tailworks/catalog.json (the release catalog,
-# internal/catalog), install.sh, VERSION, SHA256SUMS (+ SHA256SUMS.sig), INSTALL.md.
+# internal/catalog), install.sh, VERSION, SHA256SUMS (+ SHA256SUMS.sig), INSTALL.md,
+# LICENSE and THIRD_PARTY_NOTICES (+ share/tailworks/vm/{KERNEL,ROOTFS}-SOURCE.md
+# with a microVM guest; scripts/third-party-notices.mjs, issue #102).
 # linux tarballs also hold bin/tw-vmhelper (the microVM tier's privileged
 # helper; `sudo tw host setup --microvm` installs a root-owned copy) and,
 # if TW_VM_ASSETS_<arch> names a directory (make vm-assets, in Lima), the
@@ -181,6 +183,8 @@ for t in $TARGETS; do
 	cat >"$st/share/tailworks/release.json" <<EOF
 {"version":"$VERSION","os":"$os","arch":"$arch","workerd":"$WORKERD_VERSION","esbuild":"built into tw","sandbox":"$( [ "$os" = darwin ] && echo seatbelt || echo landlock )","microvm":$microvm,"commit":"$COMMIT","schema":"$SCHEMA","protocols":$PROTOCOLS,"built":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 EOF
+	# LICENSE, THIRD_PARTY_NOTICES and the guest's source offers (issue #102).
+	node scripts/third-party-notices.mjs "$st"
 
 	if [ "$os" = darwin ]; then
 		if [ "$(uname -s)" != Darwin ]; then
@@ -223,6 +227,7 @@ EOF
 	(cd "$st" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | sed 's|^\./||' | while IFS= read -r f; do sha256 "$f"; done >SHA256SUMS)
 	sign "$st/SHA256SUMS"
 	COPYFILE_DISABLE=1 tar -czf "$DIST/$name.tar.gz" -C "$DIST/stage" "$name"
+	sh scripts/check-release-notices.sh "$DIST/$name.tar.gz"
 	ls -lh "$DIST/$name.tar.gz" | awk '{print "release: " $NF " " $5}'
 done
 (cd "$DIST" && sha256 tailworks-"$VERSION"-*.tar.gz >SHA256SUMS && cat SHA256SUMS)
