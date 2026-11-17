@@ -92,6 +92,10 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    - Check that the notes read well, and that the Breaking and Upgrade
      actions sections are complete.
    - Check the tarball list.
+   - Check that private vulnerability reporting is still on, since
+     [SECURITY.md](../SECURITY.md) sends reporters there:
+     `gh api repos/rosskukulinski/tailworks/private-vulnerability-reporting`
+     must print `{"enabled":true}`.
    - Install one tarball by hand with `scripts/get.sh v0.2.0` after you
      publish, or from the draft's assets before.
 7. **Publish** the draft. `scripts/get.sh` and `tw upgrade` install the
