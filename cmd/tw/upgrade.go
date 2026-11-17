@@ -1,9 +1,7 @@
 package main
 
 import (
-	"archive/tar"
 	"bufio"
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -20,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/tailworks/internal/catalog"
+	"github.com/rosskukulinski/tailworks/internal/releasesig"
 	twversion "github.com/rosskukulinski/tailworks/internal/version"
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
@@ -35,7 +34,7 @@ import (
 //     plan and start an upgrade run that mgmt drives (pause, resume, abort,
 //     status as subcommands).
 
-const upgradeUsage = "upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--fleet] [--hosts h1,h2] [--canary h] [--soak 5m] [--settle 5m] [--no-wait] | upgrade status|pause|resume|abort [<run-id>]"
+const upgradeUsage = "upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned] [--fleet] [--hosts h1,h2] [--canary h] [--soak 5m] [--settle 5m] [--no-wait] | upgrade status|pause|resume|abort [<run-id>]"
 
 func cmdUpgrade(args []string) error {
 	for i, a := range args {
@@ -61,6 +60,7 @@ func cmdUpgrade(args []string) error {
 	health := f.Duration("health-timeout", 3*time.Minute, "homelab: how long the upgraded tw may take to report healthy before it is rolled back")
 	noRollback := f.Bool("no-rollback", false, "homelab: keep the new release even if the health check fails")
 	prefixFlag := f.String("prefix", "", "homelab: the install.sh prefix to upgrade (default: the one that owns --state-dir)")
+	allowUnsigned := f.Bool("allow-unsigned", false, "homelab: install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -86,7 +86,8 @@ func cmdUpgrade(args []string) error {
 		req.SoakSeconds, req.SettleSeconds = &so, &se
 		return fleetUpgrade(f, s, req, *planOnly, *yes, *noWait)
 	}
-	return homelabUpgrade(f, s, want, *from, *prefixFlag, *planOnly, *yes, *health, *noRollback)
+	return homelabUpgrade(f, s, want, *from, *prefixFlag, *planOnly, *yes, *health, *noRollback,
+		*allowUnsigned || allowUnsignedEnv())
 }
 
 func splitComma(s string) []string {
@@ -371,7 +372,8 @@ type localResult struct {
 	NotActiveBefore []string `json:"notActiveBefore,omitempty"`
 }
 
-func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly, yes bool, healthTimeout time.Duration, noRollback bool) error {
+func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly, yes bool, healthTimeout time.Duration, noRollback bool,
+	allowUnsigned bool) error {
 	pc, err := resolvePrefix(prefixFlag, installPrefixOf(), statePrefixCandidates(s))
 	if err != nil {
 		return err
@@ -399,6 +401,10 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	if err != nil {
 		return err
 	}
+	sigWarning, err := verifyUpgradeRelease(rel, allowUnsigned) // before anything in it runs (upgradesig.go)
+	if err != nil {
+		return err
+	}
 	meta, err := readReleaseMeta(rel)
 	if err != nil {
 		return err
@@ -408,6 +414,12 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	}
 	cur := installedVersion(prefix)
 	plan := localPlanFor(cur, meta, rel, source, s)
+	if sigWarning != "" {
+		plan.Warnings = append(plan.Warnings, sigWarning)
+	}
+	if want != "" && meta.Version != want {
+		return fail("bad_request", fmt.Sprintf("the release is tailworks %s, not the %s you asked for", meta.Version, want))
+	}
 	if pc.Mismatch != "" {
 		plan.Warnings = append(plan.Warnings, pc.Mismatch+": the run needs --prefix "+prefix)
 	}
@@ -460,7 +472,11 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	if err := stopTw(s, prefix, wasService, wasRunning); err != nil {
 		return err
 	}
-	inst := exec.CommandContext(ctx, "sh", filepath.Join(rel, "install.sh"), "--prefix", prefix, "--force")
+	instArgs := []string{filepath.Join(rel, "install.sh"), "--prefix", prefix, "--force"}
+	if allowUnsigned {
+		instArgs = append(instArgs, "--allow-unsigned")
+	}
+	inst := exec.CommandContext(ctx, "sh", instArgs...)
 	if out, err := inst.CombinedOutput(); err != nil {
 		startTw(s, prefix, wasService, wasRunning) // the old release is still in place
 		return fail("upgrade_failed", "install.sh failed: "+err.Error(), lastLinesOf(string(out), 5)...)
@@ -749,52 +765,13 @@ func checkSum(path string, sums []byte) error {
 }
 
 // extractRelease unpacks a release tarball into stage/x and returns its
-// tw-<v>-<os>-<arch> directory.
+// tailworks-<v>-<os>-<arch> directory. It uses the hardened extractor
+// tw-hostd uses (releasesig.ExtractTarGz): it runs before the signature
+// check, on input that may be hostile.
 func extractRelease(tgz, stage string) (string, error) {
-	f, err := os.Open(tgz)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	zr, err := gzip.NewReader(f)
-	if err != nil {
-		return "", fail("bad_request", tgz+": "+err.Error())
-	}
 	root := filepath.Join(stage, "x")
-	tr := tar.NewReader(zr)
-	for {
-		hd, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
-		p := filepath.Join(root, hd.Name)
-		if !strings.HasPrefix(p, root+string(os.PathSeparator)) {
-			return "", fail("bad_request", "the tarball has an entry outside its directory: "+hd.Name)
-		}
-		switch hd.Typeflag {
-		case tar.TypeDir:
-			os.MkdirAll(p, 0o755)
-		case tar.TypeReg:
-			os.MkdirAll(filepath.Dir(p), 0o755)
-			out, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hd.Mode)&0o755|0o600)
-			if err != nil {
-				return "", err
-			}
-			_, err = io.Copy(out, io.LimitReader(tr, 1<<30))
-			out.Close()
-			if err != nil {
-				return "", err
-			}
-		case tar.TypeSymlink:
-			if filepath.IsAbs(hd.Linkname) || strings.Contains(hd.Linkname, "..") {
-				return "", fail("bad_request", "the tarball has a symlink outside its directory: "+hd.Name)
-			}
-			os.MkdirAll(filepath.Dir(p), 0o755)
-			os.Symlink(hd.Linkname, p)
-		}
+	if err := releasesig.ExtractTarGz(tgz, root); err != nil {
+		return "", fail("bad_request", filepath.Base(tgz)+": "+err.Error())
 	}
 	ds, _ := filepath.Glob(filepath.Join(root, "tailworks-*"))
 	if len(ds) != 1 {
