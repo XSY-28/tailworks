@@ -93,10 +93,12 @@ type ChainStatus struct {
 
 // VerifyChain recomputes every hash and link of a chain, and checks the
 // chain head (detects truncation of the tail). pubKey (optional) verifies
-// hostSig on every record.
+// hostSig on every record. The records and the head come from one
+// snapshot (AuditChainSnapshot), so a concurrent append is not mistaken
+// for tampering.
 func VerifyChain(ctx context.Context, s Store, chain string, pubKey ed25519.PublicKey) ChainStatus {
 	st := ChainStatus{Chain: chain, OK: true}
-	recs, err := s.ListAudit(ctx, AuditFilter{Chain: chain})
+	recs, hseq, hhash, err := s.AuditChainSnapshot(ctx, chain)
 	if err != nil {
 		return ChainStatus{Chain: chain, Error: err.Error()}
 	}
@@ -132,10 +134,6 @@ func VerifyChain(ctx context.Context, s Store, chain string, pubKey ed25519.Publ
 			}
 		}
 		prev, lastSeq = r.Hash, r.Seq
-	}
-	hseq, hhash, err := s.AuditHead(ctx, chain)
-	if err != nil {
-		return fail(0, "head: %v", err)
 	}
 	if hseq != lastSeq || hhash != prev {
 		return fail(lastSeq+1, "chain head mismatch (records removed or appended out of band)")
