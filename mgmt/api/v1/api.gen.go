@@ -471,6 +471,7 @@ const (
 	ErrorCodeLeaseLost               ErrorCode = "lease_lost"
 	ErrorCodeMintModeRemoved         ErrorCode = "mint_mode_removed"
 	ErrorCodeMirrorDisabled          ErrorCode = "mirror_disabled"
+	ErrorCodeMisdirectedRequest      ErrorCode = "misdirected_request"
 	ErrorCodeMoveUnconfirmed         ErrorCode = "move_unconfirmed"
 	ErrorCodeNamePrefixRequired      ErrorCode = "name_prefix_required"
 	ErrorCodeNamespaceAmbiguous      ErrorCode = "namespace_ambiguous"
@@ -593,6 +594,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeMintModeRemoved:
 		return true
 	case ErrorCodeMirrorDisabled:
+		return true
+	case ErrorCodeMisdirectedRequest:
 		return true
 	case ErrorCodeMoveUnconfirmed:
 		return true
@@ -2313,6 +2316,7 @@ type Error struct {
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 	// | `killed` | 410 | tombstone (`TombstoneError`) |
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
+	// | `misdirected_request` | 421 | a tailnet request whose `Host` is not one of mgmt's own names or an IP literal (DNS-rebinding guard) |
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
@@ -2407,6 +2411,7 @@ type Error struct {
 // | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 // | `killed` | 410 | tombstone (`TombstoneError`) |
 // | `precondition_failed` | 412 | `If-Match` mismatch |
+// | `misdirected_request` | 421 | a tailnet request whose `Host` is not one of mgmt's own names or an IP literal (DNS-rebinding guard) |
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 // | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
@@ -2620,6 +2625,7 @@ type HostDrainResult struct {
 		// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 		// | `killed` | 410 | tombstone (`TombstoneError`) |
 		// | `precondition_failed` | 412 | `If-Match` mismatch |
+		// | `misdirected_request` | 421 | a tailnet request whose `Host` is not one of mgmt's own names or an IP literal (DNS-rebinding guard) |
 		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
@@ -4292,6 +4298,7 @@ type TombstoneError struct {
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
 	// | `killed` | 410 | tombstone (`TombstoneError`) |
 	// | `precondition_failed` | 412 | `If-Match` mismatch |
+	// | `misdirected_request` | 421 | a tailnet request whose `Host` is not one of mgmt's own names or an IP literal (DNS-rebinding guard) |
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |

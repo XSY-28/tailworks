@@ -45,6 +45,14 @@ paper threat model and the code disagree, the code wins.
   the local admin socket trusts same-uid peercred.
 - **B5 Platform ↔ Tailscale control.** mint broker (OAuth client; Headscale API key). Keys are single-use,
   ≤300 s, ephemeral for children.
+- **B6 Admin's browser ↔ mgmt.** An admin's browser is on the tailnet and carries the
+  admin's WhoIs identity to mgmt's `/ui` and `/v1` (plain HTTP on :80, HTTPS on :443 when the
+  tailnet has certificates). Any web page the admin opens runs in that browser. A cross-origin page
+  must not drive mgmt as the admin (CSRF), and neither may a page on a DNS name rebound to mgmt's
+  tailnet IP, which is same-origin with mgmt. Held by the Host allowlist on every tailnet
+  listener (`mgmt/hostguard.go`: mgmt's own names or an IP literal, every method, before WhoIs;
+  421 `misdirected_request`) and `browserGuard` (`Sec-Fetch-Site`, `Origin` equal to `Host`
+  and on the allowlist, `X-Tw-UI` for `/v1` mutations). The UI holds no cookies or tokens.
 
 ## 3. Attacker capabilities per tier
 
