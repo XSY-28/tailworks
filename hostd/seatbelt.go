@@ -332,6 +332,26 @@ func SandboxCommand(profile string, args ...string) (*exec.Cmd, error) {
 	return nil, fmt.Errorf("no sandbox profile %q", profile)
 }
 
+// landlockTCPABI is the first Landlock ABI with TCP connect/bind rules.
+const landlockTCPABI = 4
+
+// landlockABI is the kernel's Landlock ABI when sandbox is Landlock, else 0.
+func landlockABI(sandbox string) int {
+	if sandbox != SandboxLandlock {
+		return 0
+	}
+	abi, _ := procsb.ABI()
+	return abi
+}
+
+// egressEnforcement is EgressEnforcement for a given Landlock ABI.
+func egressEnforcement(sandbox string, abi int) string {
+	if sandbox == SandboxLandlock && abi >= landlockTCPABI {
+		return EgressEnforced
+	}
+	return EgressUnenforced
+}
+
 // SandboxInfo describes this host's process sandbox for logs and status:
 // "seatbelt", "landlock (ABI n)" or "none".
 func (h *Host) SandboxInfo() string {
