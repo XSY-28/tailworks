@@ -4,7 +4,7 @@
 // mgmt mints a single-use tag:ttest key → a tsnet node joins with it → a
 // cascade kill deletes the device via the API → the device is verified gone.
 //
-// Safety (BUILD-PLAN): tailnet allow-list; policy is only READ (spawn check);
+// Safety (docs/install-testing.md): tailnet allow-list; policy is only READ (spawn check);
 // node names are ttest-m2-<runid>-*; keys are never printed; cleanup deletes
 // only the device and key IDs this run created (never a prefix/tag sweep —
 // another engineer runs e2e on the same tailnet).

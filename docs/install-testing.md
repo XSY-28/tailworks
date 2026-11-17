@@ -13,6 +13,40 @@ Apple-silicon Mac with nothing installed (`mbp`, M2 Pro, macOS 26.6), by
 `make e2e-mbp`. The measured numbers are in STATUS.md, "M6: release
 packaging + E2E-MAC on a different, clean Mac".
 
+## Linux requirements
+
+Linux is a host platform on a par with macOS. These are the requirements
+the Linux work was built and tested against; code comments cite them by
+number.
+
+1. **Releases:** `linux-arm64` and `linux-amd64` tarballs, both built and
+   tested. `install.sh` installs into `~/.tailworks` without root, on any
+   supported distro.
+2. **E2E-LINUX:** the full e2e flow (checks a–f, plus multi-tenant
+   isolation) passes from the installed release on fresh VMs: Ubuntu 24.04
+   arm64, Debian 12 arm64, Ubuntu 22.04 arm64, Ubuntu 24.04 amd64 (process
+   tier only) and Fedora arm64. The test client and echo run on another
+   machine over the test tailnet (`make e2e-linux`; results in the
+   [support matrix](#linux-support-matrix)).
+3. **Process-tier sandbox:** each tenant's workerd and Node app runs under
+   Landlock (unprivileged), plus seccomp where cheap, with the same
+   guarantees as the macOS Seatbelt profile and the same cross-tenant
+   attack tests. Without Landlock, `tw doctor` warns and multi-tenant use
+   is refused unless `--insecure-shared-host` is passed.
+4. **microVM tier:** Durable Object storage persists across VM restart and
+   redeploy; Firecracker's jailer is used; one-time
+   `sudo tw host setup --microvm` is the only privileged step, and without
+   it tailworks falls back to the process tier and `tw doctor` explains.
+5. **Service management:** `tw up --service` installs a systemd *user* unit
+   so tailworks survives logout (with `loginctl enable-linger`) and reboot;
+   `tw down --service` removes it.
+6. **`tw doctor` on Linux** checks glibc, the kernel and Landlock ABI,
+   `/dev/kvm`, the jailer, cgroups v2, systemd, and that the system
+   tailscaled is not used, with clear errors for unsupported hosts
+   (musl/Alpine, glibc < 2.35, no Landlock).
+7. **[INSTALL.md](INSTALL.md#linux)** covers Linux as a peer of macOS, with
+   per-distro notes and the measured support matrix below.
+
 ## Linux support matrix
 
 `make e2e-linux`, 2026-11-08, release `0.1.0-bb3a3296`. Every VM was **fresh**:
@@ -123,3 +157,22 @@ before each step, are in
   the guest through Lima on a Mac, or warns, and the GitHub release
   workflow refuses to publish without it (see
   [INSTALL.md](INSTALL.md#linux-the-microvm-tier-firecracker-kvm)).
+
+## Safety rules for the real-tailnet suites
+
+The suites that join real tailnets (`e2e-real`, `e2e-mac`, `e2e-mbp`,
+`e2e-multi`, `e2e-linux`, `e2e-oauth`, `e2e-public` and the like) follow
+these rules, and new ones must too:
+
+1. **Dedicated test tailnets only.** Each suite allow-lists the tailnets it
+   may touch and refuses any other. Never point one at a personal or
+   production tailnet, and never use the machine's system `tailscaled` or
+   Tailscale app: tailworks' own nodes are tsnet nodes.
+2. **Policy changes are additions only,** validated before they are
+   applied, applied with `If-Match`, and only after a copy of the previous
+   policy has been saved next to the credentials. Record each change in
+   your `status/<branch>.md`.
+3. **Never print keys** (auth keys, OAuth secrets, node keys) in test
+   output, logs or status files.
+4. **Clean up what you created:** delete your own devices and revoke your
+   own keys by ID, even when the test fails.
