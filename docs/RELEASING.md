@@ -113,6 +113,24 @@ scripts/release-notes.sh v0.1.0 v0.2.0
      packages: `make templates-typecheck` (every template's
      `tw init && npm install && npx tsc --noEmit`, with `@tailworks/*` from
      `npm pack` tarballs).
+   - One-time setup, before the first publish:
+     1. On npmjs.com, create the `tailworks` organization (that owns the
+        `@tailworks` scope) and check that the unscoped name
+        `create-tailworks` is still free.
+     2. Create a granular access token that can publish `@tailworks/*` and
+        `create-tailworks` (an automation token also works), and add it to
+        the repository as the `NPM_TOKEN` secret:
+        `gh secret set NPM_TOKEN`.
+     3. Cut the next release as above; publishing it runs the workflow.
+        Only tags made after the rename to tailworks carry the
+        `@tailworks/*` names, so don't publish an older tag. For a release
+        already published before the secret existed:
+        `gh workflow run npm-publish.yml -f tag=v<VERSION>`. Then check
+        `npm view @tailworks/tailnet version` and that
+        `npm create tailworks@latest x && cd x && npm install && npx tsc --noEmit`
+        passes on a machine without this checkout.
+     4. Remove the "until the first release that publishes them" notes from
+        `docs/wrangler.md` and `docs/testing.md`.
 
 ## Signing
 
