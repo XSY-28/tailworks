@@ -9,12 +9,9 @@
 import { Agent, getAgentByName, routeAgentRequest, type Connection, type ConnectionContext } from "agents";
 import { getCaller, tailnet, principalKey } from "@tailworks/tailnet";
 
-interface Env {
-  SupportAgent: DurableObjectNamespace;
-  LookupAgent: DurableObjectNamespace;
-  UPSTREAM?: string;
-}
-type DurableObjectNamespace = any;
+// Env (UPSTREAM and the SupportAgent / LookupAgent namespaces) is the global
+// interface `tw types` writes to worker-configuration.d.ts. Run `tw types`
+// again after changing wrangler.jsonc or tailworks.jsonc.
 
 interface State {
   visits: number;

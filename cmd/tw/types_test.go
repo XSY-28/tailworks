@@ -144,6 +144,33 @@ func TestTypesTemplates(t *testing.T) {
 	}
 }
 
+// TestTemplatesUseGeneratedEnv: no template declares its own Env. Every
+// template file is an ES module, so a local `interface Env` shadows (rather
+// than merges with) the global one `tw types` generates, and the generated
+// binding types would go unused (issue #41).
+func TestTemplatesUseGeneratedEnv(t *testing.T) {
+	ct, err := createTailworksDir()
+	if err != nil {
+		t.Skip("create-tailworks not found:", err)
+	}
+	files, _ := filepath.Glob(filepath.Join(ct, "templates", "*", "src", "*.ts"))
+	if len(files) == 0 {
+		t.Fatal("no template sources found")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			l := strings.TrimSpace(line)
+			if strings.HasPrefix(l, "interface Env ") || strings.HasPrefix(l, "type Env ") || strings.HasPrefix(l, "export interface Env ") {
+				t.Errorf("%s:%d declares its own Env; use the global one from %s (tw types)", f, i+1, typesFile)
+			}
+		}
+	}
+}
+
 // TestNPMVersions: the npm packages and the templates' dependencies on
 // them are at VERSION (scripts/npm-versions.mjs; the release publishes
 // them at the tag's version).

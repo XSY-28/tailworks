@@ -11,9 +11,9 @@
 // and what tailworks guarantees when a host fails.
 export { Lock } from "./lock";
 
-interface Env {
-  LOCK: { getByName(name: string): { fetch(req: Request): Promise<Response> } };
-}
+// Env (the LOCK namespace, DEFAULT_TTL_MS, MAX_TTL_MS) is the global
+// interface `tw types` writes to worker-configuration.d.ts. Run `tw types`
+// again after changing wrangler.jsonc or tailworks.jsonc.
 
 const ROUTE = /^\/locks\/([^/]+)(?:\/(acquire|renew|release))?\/?$/;
 const NAME = /^[A-Za-z0-9._:@-]{1,200}$/;
