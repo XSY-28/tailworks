@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Platform stores (ADR-platform-stores): one row per store, and its
+// Platform stores (ADR-044): one row per store, and its
 // journal. Entries are keyed by the store's incarnation (random per
 // creation), so deleting a store and creating it again never mixes their
 // entries, and a delete is two statements.

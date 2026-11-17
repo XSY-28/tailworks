@@ -15,7 +15,7 @@ import (
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
-// Platform stores (ADR-platform-stores), in memory: the journal a store
+// Platform stores (ADR-044), in memory: the journal a store
 // object appends to and catches up from, fenced by the workload's lease
 // like secret grants, with ckey compaction. Not sealed (nothing here is
 // persisted).

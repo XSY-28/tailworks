@@ -52,7 +52,7 @@ func allowLoopbackNotify(t *testing.T) {
 	t.Cleanup(func() { notifyAllowLoopback, notifyBackoff = oldL, oldB })
 }
 
-// TestNotificationsConfig (ADR-approval-notifications): PUT/GET/DELETE of
+// TestNotificationsConfig (ADR-047): PUT/GET/DELETE of
 // a tenant's webhook. The URL's path and the header values are secrets:
 // never returned, audited or logged.
 func TestNotificationsConfig(t *testing.T) {

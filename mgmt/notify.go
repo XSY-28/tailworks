@@ -1,6 +1,6 @@
 package mgmt
 
-// Tenant notifications (ADR-approval-notifications): when a Workflow
+// Tenant notifications (ADR-047): when a Workflow
 // starts waiting for an approval, mgmt POSTs a JSON event with a deep link
 // to the admin UI's approvals page to the tenant's webhook. Nobody else is
 // told today (docs/approvals.md), so an approval waits until someone

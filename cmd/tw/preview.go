@@ -1,6 +1,6 @@
 package main
 
-// Preview deploys (ADR-deploy-preview). `tw deploy --preview` (app.go)
+// Preview deploys (ADR-048). `tw deploy --preview` (app.go)
 // runs a bundle as the workload `<workload>--preview-<alias>` next to the
 // workload, which it doesn't touch. `tw previews <workload>` lists them
 // (GET /v1/tenants/{id}/workloads/{workload}/previews); `tw promote

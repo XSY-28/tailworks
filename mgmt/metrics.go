@@ -8,7 +8,7 @@ import (
 	"github.com/rosskukulinski/tailworks/internal/obs"
 )
 
-// mgmt's own metrics (ADR-observability), served on GET /metrics on mgmt's
+// mgmt's own metrics (ADR-045), served on GET /metrics on mgmt's
 // tailnet node (internal/mgmtd). One registry per process: replicas are
 // separate processes, each scraped on its own node.
 var metrics = newMgmtMetrics()

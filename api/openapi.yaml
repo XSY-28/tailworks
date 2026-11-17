@@ -144,9 +144,9 @@ tags:
   - name: secrets
     description: Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
   - name: stores
-    description: Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
+    description: Platform storage objects (ADR-044) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
   - name: telemetry
-    description: A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
+    description: A tenant's OTLP export (ADR-045). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
   - name: queues
     description: Cloudflare-style Queues (ADR-039). A queue belongs to the tenant; its messages are sealed rows here. Producers send through their host, push consumers' hosts claim batches with a visibility timeout and settle them, and admins can pull, peek, purge and delete.
   - name: audit
@@ -452,7 +452,7 @@ paths:
           description: |
             `console`: the app's raw output (workerd's stdout, the node
             tier's `app.log`, the microVM console). `requests`: the
-            workload's structured request records (ADR-observability), as
+            workload's structured request records (ADR-045), as
             JSON Lines (`application/x-ndjson`), one `RequestRecord` per
             line; `n` and the filters below then count records, not lines.
           schema: { type: string, enum: [console, requests], default: console }
@@ -590,7 +590,7 @@ paths:
       operationId: GetTenantNotifications
       summary: Read the tenant's notification webhook (`tw notify`), without secrets
       description: |
-        ADR-approval-notifications. The webhook URL is shown as its origin
+        ADR-047. The webhook URL is shown as its origin
         only (scheme and host): a chat webhook's path or query is its
         credential. Header names only. A tenant that sends nothing has no
         `webhook`. `404 unknown_tenant`.
@@ -609,7 +609,7 @@ paths:
       operationId: PutTenantNotifications
       summary: Set the tenant's notification webhook (`tw notify set`)
       description: |
-        ADR-approval-notifications. When one of `events` happens in the
+        ADR-047. When one of `events` happens in the
         tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
         `Tw-Event`), with a deep link to the admin UI. `approval_requested`
         fires when a Workflow starts waiting for an approval (when mgmt
@@ -690,7 +690,7 @@ paths:
       operationId: ListWorkloadDeployments
       summary: A workload's deployment history, newest first (`tw deployments`)
       description: |
-        ADR-deploy-rollback. Every deployment of the workload, newest first:
+        ADR-046. Every deployment of the workload, newest first:
         who deployed it, when, the bundle's SHA-256, its status (the current
         one is `assigned`, `starting`, `active` or `failed`; older ones are
         `superseded` or `stopped`), the host's last report (`hostStatus`)
@@ -724,7 +724,7 @@ paths:
       operationId: CreateRollback
       summary: Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
       description: |
-        ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+        ADR-046. Redeploys the bundle of an earlier deployment
         as a **new** deployment, through the same code path as
         `POST /v1/deployments`: the same validation, placement, lease at
         `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -789,7 +789,7 @@ paths:
       operationId: ListWorkloadPreviews
       summary: A workload's running previews (`tw previews`)
       description: |
-        ADR-deploy-preview. The previews of the workload that are not
+        ADR-048. The previews of the workload that are not
         stopped, newest first. A preview is created by
         `POST /v1/deployments` with `preview: true`: it runs as a workload
         of its own, `<workload>--preview-<alias>`, with its own lease,
@@ -817,7 +817,7 @@ paths:
       operationId: CreatePromotion
       summary: Promote a preview to the workload (`tw promote`), or preflight it with dryRun
       description: |
-        ADR-deploy-preview. Deploys the bundle the preview runs to the
+        ADR-048. Deploys the bundle the preview runs to the
         workload itself, as a **new** deployment, through the same code
         path as `POST /v1/deployments`: the same validation, placement
         (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -1786,7 +1786,7 @@ paths:
       description: |
         hostd calls this when it starts a workload, and every minute while
         it runs it, to export the workload's logs, metrics and spans
-        (ADR-observability). As with secrets (ADR-034), the config, header
+        (ADR-045). As with secrets (ADR-034), the config, header
         values included, is released only to the host holding the
         workload's lease at `epoch` (`409 lease_lost`), with
         `Cache-Control: no-store`, and is never logged. `otlp` is absent
@@ -1821,7 +1821,7 @@ paths:
       operationId: GetTenantTelemetry
       summary: Read the tenant's OTLP export (`tw telemetry`), without header values
       description: |
-        ADR-observability. Header names only: no admin operation returns a
+        ADR-045. Header names only: no admin operation returns a
         header value. A tenant that exports nothing has no `otlp`.
         `404 unknown_tenant`.
       x-tw-role: admin|tenant:read
@@ -5248,7 +5248,7 @@ components:
         previewOf:
           type: string
           description: >-
-            `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview),
+            `_workload` only, previews: the workload this deployment is a preview of (ADR-048),
             deployed as the workload `<workload>--preview-<alias>`.
     ReplicaRef:
       type: object
@@ -5335,7 +5335,7 @@ components:
         preview:
           type: boolean
           description: >-
-            Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own,
+            Deploy as a preview (`tw deploy --preview`, ADR-048): a workload of its own,
             `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores,
             the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is
             not touched. A bundle with queue bindings is `400 preview_unsupported`.
@@ -5353,7 +5353,7 @@ components:
       additionalProperties: false
     DeploymentRecord:
       type: object
-      description: One entry of a workload's deployment history (ADR-deploy-rollback).
+      description: One entry of a workload's deployment history (ADR-046).
       required: [deploymentID, workload, host, epoch, status, createdAt, bundleSHA256, bundleRetained]
       properties:
         deploymentID: { type: string, examples: [dp_3f9a1c2b7d8e4f50] }
@@ -5397,7 +5397,7 @@ components:
         deployment: { $ref: "#/components/schemas/Deployment" }
     Preview:
       type: object
-      description: One running preview of a workload (ADR-deploy-preview).
+      description: One running preview of a workload (ADR-048).
       required: [workload, alias, previewOf, deployment]
       properties:
         workload: { type: string, description: "The preview's own workload name.", examples: [web--preview-3f9a1c2b] }
@@ -5721,7 +5721,7 @@ components:
         `upgrade_abort`,
         `deploy`,
         `undeploy`,
-        `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
+        `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046),
         `create`,
         `mint`,
         `remint`,
@@ -6015,7 +6015,7 @@ components:
       type: object
       description: |
         One line of a workload's request log (`tw logs --json`,
-        ADR-observability): a request through hostd's ingress (`kind:
+        ADR-045): a request through hostd's ingress (`kind:
         request`), joined with its workerd invocation, or an invocation
         with no ingress half (`kind: invocation`: a DO called from the
         Worker, an alarm, a cron run), or a note that records were dropped
@@ -6094,7 +6094,7 @@ components:
       description: A storage binding type (`kv`, `r2`, `d1`; later `queue`, …).
     Store:
       type: object
-      description: A platform storage object of a workload (ADR-platform-stores).
+      description: A platform storage object of a workload (ADR-044).
       required: [tenantID, workload, kind, name, incarnation, head, entries, bytes, createdAt, updatedAt]
       properties:
         tenantID: { type: string }

@@ -322,7 +322,7 @@ type deployResult struct {
 	// Warnings: wrangler config tailworks ignores, one line per key.
 	Warnings []string `json:"warnings,omitempty"`
 
-	// Preview (--preview, ADR-deploy-preview): the preview's own workload
+	// Preview (--preview, ADR-048): the preview's own workload
 	// name; Workload is the workload it previews.
 	Preview string `json:"preview,omitempty"`
 }

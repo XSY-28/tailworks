@@ -18,7 +18,7 @@ import (
 )
 
 // TestPlatformStore exercises the platform-store substrate
-// (ADR-platform-stores) end to end with the test-only "probe" kind on real
+// (ADR-044) end to end with the test-only "probe" kind on real
 // workerd: the platform's Store object behind a binding in the worker and
 // in a facet, journal-first writes through hostd to (fake) mgmt, catch-up
 // after another writer (an admin) appended, an admin delete starting a new

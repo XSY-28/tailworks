@@ -8,7 +8,7 @@ import (
 )
 
 // MetricsHandler is GET /metrics: mgmt's registry and every registry added
-// with AddMetrics (ADR-observability).
+// with AddMetrics (ADR-045).
 func (rt *Runtime) MetricsHandler() http.Handler {
 	return mgmt.MetricsHandler(func() obs.Gatherers {
 		rt.metricsMu.Lock()

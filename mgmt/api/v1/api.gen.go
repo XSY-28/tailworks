@@ -1624,7 +1624,7 @@ type AuditBatch struct {
 // `upgrade_abort`,
 // `deploy`,
 // `undeploy`,
-// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
+// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046),
 // `create`,
 // `mint`,
 // `remint`,
@@ -1741,7 +1741,7 @@ type AuditRecord struct {
 	// `upgrade_abort`,
 	// `deploy`,
 	// `undeploy`,
-	// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
+	// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046),
 	// `create`,
 	// `mint`,
 	// `remint`,
@@ -1848,7 +1848,7 @@ type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
-	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`.
+	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`.
 	PreviewOf *string `json:"previewOf,omitempty"`
 
 	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
@@ -2089,7 +2089,7 @@ type DeploymentCreate struct {
 	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 
-	// Preview Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
+	// Preview Deploy as a preview (`tw deploy --preview`, ADR-048): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
 	Preview *bool `json:"preview,omitempty"`
 
 	// PreviewAlias The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview.
@@ -2132,7 +2132,7 @@ type DeploymentPublic struct {
 	URL string `json:"url"`
 }
 
-// DeploymentRecord One entry of a workload's deployment history (ADR-deploy-rollback).
+// DeploymentRecord One entry of a workload's deployment history (ADR-046).
 type DeploymentRecord struct {
 	// ActiveAt When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history.
 	ActiveAt *int64 `json:"activeAt,omitempty"`
@@ -3245,7 +3245,7 @@ type PreflightResult struct {
 	Unchecked *[]string `json:"unchecked,omitempty"`
 }
 
-// Preview One running preview of a workload (ADR-deploy-preview).
+// Preview One running preview of a workload (ADR-048).
 type Preview struct {
 	// Alias Examples: 3f9a1c2b
 	Alias string `json:"alias"`
@@ -3673,7 +3673,7 @@ type ReplicaRef struct {
 }
 
 // RequestRecord One line of a workload's request log (`tw logs --json`,
-// ADR-observability): a request through hostd's ingress (`kind:
+// ADR-045): a request through hostd's ingress (`kind:
 // request`), joined with its workerd invocation, or an invocation
 // with no ingress half (`kind: invocation`: a DO called from the
 // Worker, an alarm, a cron run), or a note that records were dropped
@@ -3745,7 +3745,7 @@ type Rollback struct {
 	// RollbackOf The deployment whose bundle was redeployed.
 	RollbackOf string `json:"rollbackOf"`
 
-	// Target One entry of a workload's deployment history (ADR-deploy-rollback).
+	// Target One entry of a workload's deployment history (ADR-046).
 	Target DeploymentRecord `json:"target"`
 }
 
@@ -3929,7 +3929,7 @@ type StatusVersions struct {
 	Skewed *[]string `json:"skewed,omitempty"`
 }
 
-// Store A platform storage object of a workload (ADR-platform-stores).
+// Store A platform storage object of a workload (ADR-044).
 type Store struct {
 	// Bytes Plaintext bytes of the kept entries.
 	Bytes     int64 `json:"bytes"`
@@ -4961,7 +4961,7 @@ type GetWorkloadLogsParams struct {
 
 	// Source `console`: the app's raw output (workerd's stdout, the node
 	// tier's `app.log`, the microVM console). `requests`: the
-	// workload's structured request records (ADR-observability), as
+	// workload's structured request records (ADR-045), as
 	// JSON Lines (`application/x-ndjson`), one `RequestRecord` per
 	// line; `n` and the filters below then count records, not lines.
 	Source *GetWorkloadLogsParamsSource `form:"source,omitempty" json:"source,omitempty"`

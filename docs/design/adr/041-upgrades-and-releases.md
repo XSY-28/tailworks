@@ -1,8 +1,8 @@
 # ADR-041: One release train, declared skew, expand/contract state, tested upgrades
 
 **Date:** 2026-11-15
-**Status:** Proposed. Built, except where "Not built" says otherwise (first
-shipped in tailworks 0.2.0); results in
+**Status:** Accepted (2026-11-16). Built, except where "Not built" says
+otherwise (first shipped in tailworks 0.2.0); results in
 `status/design-component-upgrade-release-process.md`.
 
 ## Context
@@ -32,7 +32,7 @@ today (2026-11-15, 46ff0c3):
   nodes rejoin and nothing re-registers.
 - **Missing verbs.** There is no `tw upgrade`. There is no graceful drain:
   `host rm --drain` kills the host's objects and deletes the host. There is
-  no `tw mgmt migrate` either.
+  no `tw mgmt migrate` either (still not built).
 - **`install.sh`** swaps `bin/` and `share/` but doesn't restart anything,
   and it deletes the previous copy. The root-owned vmhelper changes only when
   `sudo tw host setup --microvm` is re-run.
@@ -358,7 +358,7 @@ per contract:
     of its embedded mgmt.
 - **Restore must not reuse lease epochs.** Lock fencing tokens (#26) and the
   ADR-028 fences are built from epochs. Every restore, including the
-  automatic rollback and the future SQLite→Postgres `tw mgmt migrate`,
+  automatic rollback and a future SQLite→Postgres `tw mgmt migrate` (not built),
   raises each lease's epoch past anything handed out before the backup by
   writing a restore generation into `schema_meta`.
 

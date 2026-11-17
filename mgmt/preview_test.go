@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Preview deploys and promotion (ADR-deploy-preview): a preview is a
+// Preview deploys and promotion (ADR-048): a preview is a
 // workload of its own next to the workload, which it never touches; it
 // takes no Service or replicas, gets the workload's secrets, and promote
 // deploys its bundle to the workload through Deploy, then undeploys it.

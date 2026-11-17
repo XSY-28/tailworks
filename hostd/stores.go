@@ -1,6 +1,6 @@
 package hostd
 
-// Platform stores (ADR-platform-stores), host side. The platform's Store
+// Platform stores (ADR-044), host side. The platform's Store
 // Durable Object (hostd/gen/js/store.js) reaches mgmt's store journal only
 // through hostd's local host API (its HOSTD binding, which tenant code
 // can't reach):

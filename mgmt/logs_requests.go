@@ -6,7 +6,7 @@ import (
 )
 
 // logsSource reads GET …/logs' source and record filters into q
-// (ADR-observability). hostd applies the filters; mgmt only checks them.
+// (ADR-045). hostd applies the filters; mgmt only checks them.
 func logsSource(q *LogsQuery, p v1.GetWorkloadLogsParams) error {
 	if p.Source != nil {
 		switch s := string(*p.Source); s {

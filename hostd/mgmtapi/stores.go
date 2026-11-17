@@ -7,7 +7,7 @@ import (
 	v1 "github.com/rosskukulinski/tailworks/hostd/mgmtapi/v1"
 )
 
-// Platform stores (ADR-platform-stores): the journal of a workload's
+// Platform stores (ADR-044): the journal of a workload's
 // store, read and appended by the lease holder at its epoch.
 
 // CodeStoreConflict: an append's after/incarnation is not the head.

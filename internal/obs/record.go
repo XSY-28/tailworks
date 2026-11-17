@@ -20,7 +20,7 @@ const (
 	KindDropped = "dropped"
 )
 
-// Record bounds (per record; ADR-observability "Safety").
+// Record bounds (per record; ADR-045 "Safety").
 const (
 	MaxLogLines     = 100
 	MaxLogLineBytes = 4 << 10

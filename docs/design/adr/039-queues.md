@@ -1,7 +1,9 @@
 # ADR-039: Queues are a sealed, fenced broker in mgmt; hostd runs push consumers
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/implement-queues-issue-18.md`).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `queues`,
+`tw queues`, [docs/queues.md](../../queues.md); results in
+`status/implement-queues-issue-18.md`).
 
 **Context.**
 
@@ -25,7 +27,7 @@
   not an API. The default `contentType` at tailworks' compatibility dates is
   `json`; `v8` is opt-in. Userland can't decode `v8` (`node:v8`
   `serialize` is not implemented), but `Fetcher.queue` can.
-- **ADR-platform-stores** gives a platform SQLite DO per store with a
+- **ADR-044** gives a platform SQLite DO per store with a
   fenced, sealed journal in mgmt, scoped to one workload. Every write is
   already a round trip to mgmt; reads are local.
 

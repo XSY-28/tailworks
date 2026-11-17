@@ -82,7 +82,7 @@ type Options struct {
 	// (off by default, process-wide: netd.DisablePortMapping).
 	PortMapping bool
 	// MetricsPort serves GET /metrics on the host's own node
-	// (ADR-observability; 0 = off; flag default obs.DefaultMetricsPort).
+	// (ADR-045; 0 = off; flag default obs.DefaultMetricsPort).
 	// Without a node of its own (Client, LocalDev) the host serves none:
 	// mgmt's process serves the embedded host's metrics.
 	MetricsPort int

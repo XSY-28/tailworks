@@ -1,7 +1,9 @@
 # ADR-036: R2 buckets as a platform store: the index in the journal, the bytes in an operator-configured blob backend that hostd talks to
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/r2-bucket-binding-issue-16.md`).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `r2_buckets`,
+`tw r2`, [docs/r2.md](../../r2.md); results in
+`status/r2-bucket-binding-issue-16.md`).
 
 **Context.**
 
@@ -18,7 +20,7 @@
   errors carry `cf-r2-error`. Argument checking, `R2Object`, `.text()`,
   `writeHttpMetadata()` and so on are all workerd's. miniflare implements
   the backend side for `wrangler dev`; tailworks has to supply one.
-- **ADR-platform-stores** gives a storage binding a platform-owned SQLite
+- **ADR-044** gives a storage binding a platform-owned SQLite
   Durable Object, fed by a fenced, sealed journal in mgmt, so its data
   survives a move and two hosts never both write. It says R2 fits only for
   small objects there: mgmt's database is no place for large blobs.
@@ -36,7 +38,7 @@
 **Decision.**
 
 1. **Split R2 into an index and a blob store.** An R2 bucket is a platform
-   store of kind `r2` (ADR-platform-stores). The store's Durable Object
+   store of kind `r2` (ADR-044). The store's Durable Object
    holds the **index**: key → version, size, etag, upload time, HTTP and
    custom metadata, checksums, and the blob(s) holding the bytes. The
    index is journaled to mgmt like any store, so it is durable off-host,
@@ -58,7 +60,7 @@
    - Reads are strongly consistent: a read catches up with the journal
      first (a cheap call when nothing changed), as R2 is
      read-after-write consistent. If mgmt can't be reached, the store
-     serves its local index (fail static, ADR-platform-stores §8).
+     serves its local index (fail static, ADR-044 §8).
 
 2. **The backend is per host, set by the operator.** `tw-hostd
    -r2-backend fs|s3` (default `fs`):
@@ -147,7 +149,7 @@
    might already be writing blobs for the new incarnation there.
 
 8. **Operator surface.** A bucket is a store of kind `r2`, so the stores
-   API (ADR-platform-stores) already covers it: `tw r2 bucket list|create|
+   API (ADR-044) already covers it: `tw r2 bucket list|create|
    delete <workload> [<bucket>]` call `GET|PUT|DELETE
    …/workloads/{w}/stores/r2/{bucket}`, and `tw r2 object list` reads the
    bucket's journal (admin) and folds it into the live keys. No new mgmt

@@ -211,7 +211,7 @@ type ClassConfig struct {
 	Replicas  int    `json:"replicas,omitempty"`
 
 	// PreviewOf (the _workload namespace of previews only) names the
-	// workload this deployment previews (ADR-deploy-preview).
+	// workload this deployment previews (ADR-048).
 	PreviewOf string `json:"previewOf,omitempty"`
 }
 

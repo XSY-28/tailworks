@@ -1622,7 +1622,7 @@ type AuditBatch struct {
 // `upgrade_abort`,
 // `deploy`,
 // `undeploy`,
-// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
+// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046),
 // `create`,
 // `mint`,
 // `remint`,
@@ -1739,7 +1739,7 @@ type AuditRecord struct {
 	// `upgrade_abort`,
 	// `deploy`,
 	// `undeploy`,
-	// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback),
+	// `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046),
 	// `create`,
 	// `mint`,
 	// `remint`,
@@ -1846,7 +1846,7 @@ type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
-	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`.
+	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`.
 	PreviewOf *string `json:"previewOf,omitempty"`
 
 	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
@@ -2087,7 +2087,7 @@ type DeploymentCreate struct {
 	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 
-	// Preview Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
+	// Preview Deploy as a preview (`tw deploy --preview`, ADR-048): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
 	Preview *bool `json:"preview,omitempty"`
 
 	// PreviewAlias The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview.
@@ -2130,7 +2130,7 @@ type DeploymentPublic struct {
 	URL string `json:"url"`
 }
 
-// DeploymentRecord One entry of a workload's deployment history (ADR-deploy-rollback).
+// DeploymentRecord One entry of a workload's deployment history (ADR-046).
 type DeploymentRecord struct {
 	// ActiveAt When the host first reported it `active` (unix ms). Absent if it never was, or the record predates history.
 	ActiveAt *int64 `json:"activeAt,omitempty"`
@@ -3243,7 +3243,7 @@ type PreflightResult struct {
 	Unchecked *[]string `json:"unchecked,omitempty"`
 }
 
-// Preview One running preview of a workload (ADR-deploy-preview).
+// Preview One running preview of a workload (ADR-048).
 type Preview struct {
 	// Alias Examples: 3f9a1c2b
 	Alias string `json:"alias"`
@@ -3671,7 +3671,7 @@ type ReplicaRef struct {
 }
 
 // RequestRecord One line of a workload's request log (`tw logs --json`,
-// ADR-observability): a request through hostd's ingress (`kind:
+// ADR-045): a request through hostd's ingress (`kind:
 // request`), joined with its workerd invocation, or an invocation
 // with no ingress half (`kind: invocation`: a DO called from the
 // Worker, an alarm, a cron run), or a note that records were dropped
@@ -3743,7 +3743,7 @@ type Rollback struct {
 	// RollbackOf The deployment whose bundle was redeployed.
 	RollbackOf string `json:"rollbackOf"`
 
-	// Target One entry of a workload's deployment history (ADR-deploy-rollback).
+	// Target One entry of a workload's deployment history (ADR-046).
 	Target DeploymentRecord `json:"target"`
 }
 
@@ -3927,7 +3927,7 @@ type StatusVersions struct {
 	Skewed *[]string `json:"skewed,omitempty"`
 }
 
-// Store A platform storage object of a workload (ADR-platform-stores).
+// Store A platform storage object of a workload (ADR-044).
 type Store struct {
 	// Bytes Plaintext bytes of the kept entries.
 	Bytes     int64 `json:"bytes"`
@@ -4959,7 +4959,7 @@ type GetWorkloadLogsParams struct {
 
 	// Source `console`: the app's raw output (workerd's stdout, the node
 	// tier's `app.log`, the microVM console). `requests`: the
-	// workload's structured request records (ADR-observability), as
+	// workload's structured request records (ADR-045), as
 	// JSON Lines (`application/x-ndjson`), one `RequestRecord` per
 	// line; `n` and the filters below then count records, not lines.
 	Source *GetWorkloadLogsParamsSource `form:"source,omitempty" json:"source,omitempty"`
@@ -6388,7 +6388,7 @@ type ClientInterface interface {
 
 	// GetTenantNotifications Read the tenant's notification webhook (`tw notify`), without secrets
 	//
-	// ADR-approval-notifications. The webhook URL is shown as its origin
+	// ADR-047. The webhook URL is shown as its origin
 	// only (scheme and host): a chat webhook's path or query is its
 	// credential. Header names only. A tenant that sends nothing has no
 	// `webhook`. `404 unknown_tenant`.
@@ -6398,7 +6398,7 @@ type ClientInterface interface {
 
 	// PutTenantNotificationsWithBody Set the tenant's notification webhook (`tw notify set`)
 	//
-	// ADR-approval-notifications. When one of `events` happens in the
+	// ADR-047. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
@@ -6420,7 +6420,7 @@ type ClientInterface interface {
 
 	// PutTenantNotifications Set the tenant's notification webhook (`tw notify set`)
 	//
-	// ADR-approval-notifications. When one of `events` happens in the
+	// ADR-047. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
@@ -6666,7 +6666,7 @@ type ClientInterface interface {
 
 	// GetTenantTelemetry Read the tenant's OTLP export (`tw telemetry`), without header values
 	//
-	// ADR-observability. Header names only: no admin operation returns a
+	// ADR-045. Header names only: no admin operation returns a
 	// header value. A tenant that exports nothing has no `otlp`.
 	// `404 unknown_tenant`.
 	//
@@ -6818,7 +6818,7 @@ type ClientInterface interface {
 
 	// ListWorkloadDeployments A workload's deployment history, newest first (`tw deployments`)
 	//
-	// ADR-deploy-rollback. Every deployment of the workload, newest first:
+	// ADR-046. Every deployment of the workload, newest first:
 	// who deployed it, when, the bundle's SHA-256, its status (the current
 	// one is `assigned`, `starting`, `active` or `failed`; older ones are
 	// `superseded` or `stopped`), the host's last report (`hostStatus`)
@@ -6859,7 +6859,7 @@ type ClientInterface interface {
 
 	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	//
-	// ADR-deploy-preview. The previews of the workload that are not
+	// ADR-048. The previews of the workload that are not
 	// stopped, newest first. A preview is created by
 	// `POST /v1/deployments` with `preview: true`: it runs as a workload
 	// of its own, `<workload>--preview-<alias>`, with its own lease,
@@ -6872,7 +6872,7 @@ type ClientInterface interface {
 
 	// CreatePromotionWithBody Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
-	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// ADR-048. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
 	// path as `POST /v1/deployments`: the same validation, placement
 	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -6897,7 +6897,7 @@ type ClientInterface interface {
 
 	// CreatePromotion Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
-	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// ADR-048. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
 	// path as `POST /v1/deployments`: the same validation, placement
 	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -6975,7 +6975,7 @@ type ClientInterface interface {
 
 	// CreateRollbackWithBody Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
-	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// ADR-046. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
 	// `POST /v1/deployments`: the same validation, placement, lease at
 	// `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -7008,7 +7008,7 @@ type ClientInterface interface {
 
 	// CreateRollback Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
-	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// ADR-046. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
 	// `POST /v1/deployments`: the same validation, placement, lease at
 	// `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -7279,7 +7279,7 @@ type ClientInterface interface {
 	//
 	// hostd calls this when it starts a workload, and every minute while
 	// it runs it, to export the workload's logs, metrics and spans
-	// (ADR-observability). As with secrets (ADR-034), the config, header
+	// (ADR-045). As with secrets (ADR-034), the config, header
 	// values included, is released only to the host holding the
 	// workload's lease at `epoch` (`409 lease_lost`), with
 	// `Cache-Control: no-store`, and is never logged. `otlp` is absent
@@ -9024,7 +9024,7 @@ func (c *Client) DeleteTenantNotifications(ctx context.Context, id TenantID, req
 
 // GetTenantNotifications Read the tenant's notification webhook (`tw notify`), without secrets
 //
-// ADR-approval-notifications. The webhook URL is shown as its origin
+// ADR-047. The webhook URL is shown as its origin
 // only (scheme and host): a chat webhook's path or query is its
 // credential. Header names only. A tenant that sends nothing has no
 // `webhook`. `404 unknown_tenant`.
@@ -9044,7 +9044,7 @@ func (c *Client) GetTenantNotifications(ctx context.Context, id TenantID, reqEdi
 
 // PutTenantNotificationsWithBody Set the tenant's notification webhook (`tw notify set`)
 //
-// ADR-approval-notifications. When one of `events` happens in the
+// ADR-047. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 // `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
@@ -9076,7 +9076,7 @@ func (c *Client) PutTenantNotificationsWithBody(ctx context.Context, id TenantID
 
 // PutTenantNotifications Set the tenant's notification webhook (`tw notify set`)
 //
-// ADR-approval-notifications. When one of `events` happens in the
+// ADR-047. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 // `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
@@ -9502,7 +9502,7 @@ func (c *Client) DeleteTenantTelemetry(ctx context.Context, id TenantID, reqEdit
 
 // GetTenantTelemetry Read the tenant's OTLP export (`tw telemetry`), without header values
 //
-// ADR-observability. Header names only: no admin operation returns a
+// ADR-045. Header names only: no admin operation returns a
 // header value. A tenant that exports nothing has no `otlp`.
 // `404 unknown_tenant`.
 //
@@ -9734,7 +9734,7 @@ func (c *Client) QueryD1(ctx context.Context, id TenantID, workload WorkloadName
 
 // ListWorkloadDeployments A workload's deployment history, newest first (`tw deployments`)
 //
-// ADR-deploy-rollback. Every deployment of the workload, newest first:
+// ADR-046. Every deployment of the workload, newest first:
 // who deployed it, when, the bundle's SHA-256, its status (the current
 // one is `assigned`, `starting`, `active` or `failed`; older ones are
 // `superseded` or `stopped`), the host's last report (`hostStatus`)
@@ -9795,7 +9795,7 @@ func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload Work
 
 // ListWorkloadPreviews A workload's running previews (`tw previews`)
 //
-// ADR-deploy-preview. The previews of the workload that are not
+// ADR-048. The previews of the workload that are not
 // stopped, newest first. A preview is created by
 // `POST /v1/deployments` with `preview: true`: it runs as a workload
 // of its own, `<workload>--preview-<alias>`, with its own lease,
@@ -9818,7 +9818,7 @@ func (c *Client) ListWorkloadPreviews(ctx context.Context, id TenantID, workload
 
 // CreatePromotionWithBody Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
-// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// ADR-048. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
 // path as `POST /v1/deployments`: the same validation, placement
 // (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -9853,7 +9853,7 @@ func (c *Client) CreatePromotionWithBody(ctx context.Context, id TenantID, workl
 
 // CreatePromotion Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
-// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// ADR-048. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
 // path as `POST /v1/deployments`: the same validation, placement
 // (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -9981,7 +9981,7 @@ func (c *Client) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx c
 
 // CreateRollbackWithBody Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
-// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// ADR-046. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
 // `POST /v1/deployments`: the same validation, placement, lease at
 // `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -10024,7 +10024,7 @@ func (c *Client) CreateRollbackWithBody(ctx context.Context, id TenantID, worklo
 
 // CreateRollback Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
-// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// ADR-046. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
 // `POST /v1/deployments`: the same validation, placement, lease at
 // `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -10475,7 +10475,7 @@ func (c *Client) AppendStoreJournal(ctx context.Context, id TenantID, workload W
 //
 // hostd calls this when it starts a workload, and every minute while
 // it runs it, to export the workload's logs, metrics and spans
-// (ADR-observability). As with secrets (ADR-034), the config, header
+// (ADR-045). As with secrets (ADR-034), the config, header
 // values included, is released only to the host holding the
 // workload's lease at `epoch` (`409 lease_lost`), with
 // `Cache-Control: no-store`, and is never logged. `otlp` is absent
@@ -17607,7 +17607,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`tw notify`), without secrets
 	//
-	// ADR-approval-notifications. The webhook URL is shown as its origin
+	// ADR-047. The webhook URL is shown as its origin
 	// only (scheme and host): a chat webhook's path or query is its
 	// credential. Header names only. A tenant that sends nothing has no
 	// `webhook`. `404 unknown_tenant`.
@@ -17619,7 +17619,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`tw notify set`)
 	//
-	// ADR-approval-notifications. When one of `events` happens in the
+	// ADR-047. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
@@ -17641,7 +17641,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`tw notify set`)
 	//
-	// ADR-approval-notifications. When one of `events` happens in the
+	// ADR-047. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
@@ -17909,7 +17909,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`tw telemetry`), without header values
 	//
-	// ADR-observability. Header names only: no admin operation returns a
+	// ADR-045. Header names only: no admin operation returns a
 	// header value. A tenant that exports nothing has no `otlp`.
 	// `404 unknown_tenant`.
 	//
@@ -18065,7 +18065,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`tw deployments`)
 	//
-	// ADR-deploy-rollback. Every deployment of the workload, newest first:
+	// ADR-046. Every deployment of the workload, newest first:
 	// who deployed it, when, the bundle's SHA-256, its status (the current
 	// one is `assigned`, `starting`, `active` or `failed`; older ones are
 	// `superseded` or `stopped`), the host's last report (`hostStatus`)
@@ -18110,7 +18110,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
 	//
-	// ADR-deploy-preview. The previews of the workload that are not
+	// ADR-048. The previews of the workload that are not
 	// stopped, newest first. A preview is created by
 	// `POST /v1/deployments` with `preview: true`: it runs as a workload
 	// of its own, `<workload>--preview-<alias>`, with its own lease,
@@ -18125,7 +18125,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
-	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// ADR-048. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
 	// path as `POST /v1/deployments`: the same validation, placement
 	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -18150,7 +18150,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreatePromotionWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
-	// ADR-deploy-preview. Deploys the bundle the preview runs to the
+	// ADR-048. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
 	// path as `POST /v1/deployments`: the same validation, placement
 	// (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -18230,7 +18230,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
-	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// ADR-046. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
 	// `POST /v1/deployments`: the same validation, placement, lease at
 	// `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -18263,7 +18263,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateRollbackWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
-	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+	// ADR-046. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
 	// `POST /v1/deployments`: the same validation, placement, lease at
 	// `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -18556,7 +18556,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// hostd calls this when it starts a workload, and every minute while
 	// it runs it, to export the workload's logs, metrics and spans
-	// (ADR-observability). As with secrets (ADR-034), the config, header
+	// (ADR-045). As with secrets (ADR-034), the config, header
 	// values included, is released only to the host holding the
 	// workload's lease at `epoch` (`409 lease_lost`), with
 	// `Cache-Control: no-store`, and is never logged. `otlp` is absent
@@ -29557,7 +29557,7 @@ func (c *ClientWithResponses) DeleteTenantNotificationsWithResponse(ctx context.
 
 // GetTenantNotificationsWithResponse Read the tenant's notification webhook (`tw notify`), without secrets
 //
-// ADR-approval-notifications. The webhook URL is shown as its origin
+// ADR-047. The webhook URL is shown as its origin
 // only (scheme and host): a chat webhook's path or query is its
 // credential. Header names only. A tenant that sends nothing has no
 // `webhook`. `404 unknown_tenant`.
@@ -29575,7 +29575,7 @@ func (c *ClientWithResponses) GetTenantNotificationsWithResponse(ctx context.Con
 
 // PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`tw notify set`)
 //
-// ADR-approval-notifications. When one of `events` happens in the
+// ADR-047. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 // `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
@@ -29603,7 +29603,7 @@ func (c *ClientWithResponses) PutTenantNotificationsWithBodyWithResponse(ctx con
 
 // PutTenantNotificationsWithResponse Set the tenant's notification webhook (`tw notify set`)
 //
-// ADR-approval-notifications. When one of `events` happens in the
+// ADR-047. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
 // `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
@@ -29979,7 +29979,7 @@ func (c *ClientWithResponses) DeleteTenantTelemetryWithResponse(ctx context.Cont
 
 // GetTenantTelemetryWithResponse Read the tenant's OTLP export (`tw telemetry`), without header values
 //
-// ADR-observability. Header names only: no admin operation returns a
+// ADR-045. Header names only: no admin operation returns a
 // header value. A tenant that exports nothing has no `otlp`.
 // `404 unknown_tenant`.
 //
@@ -30183,7 +30183,7 @@ func (c *ClientWithResponses) QueryD1WithResponse(ctx context.Context, id Tenant
 
 // ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`tw deployments`)
 //
-// ADR-deploy-rollback. Every deployment of the workload, newest first:
+// ADR-046. Every deployment of the workload, newest first:
 // who deployed it, when, the bundle's SHA-256, its status (the current
 // one is `assigned`, `starting`, `active` or `failed`; older ones are
 // `superseded` or `stopped`), the host's last report (`hostStatus`)
@@ -30240,7 +30240,7 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 
 // ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
 //
-// ADR-deploy-preview. The previews of the workload that are not
+// ADR-048. The previews of the workload that are not
 // stopped, newest first. A preview is created by
 // `POST /v1/deployments` with `preview: true`: it runs as a workload
 // of its own, `<workload>--preview-<alias>`, with its own lease,
@@ -30261,7 +30261,7 @@ func (c *ClientWithResponses) ListWorkloadPreviewsWithResponse(ctx context.Conte
 
 // CreatePromotionWithBodyWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
-// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// ADR-048. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
 // path as `POST /v1/deployments`: the same validation, placement
 // (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -30292,7 +30292,7 @@ func (c *ClientWithResponses) CreatePromotionWithBodyWithResponse(ctx context.Co
 
 // CreatePromotionWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
-// ADR-deploy-preview. Deploys the bundle the preview runs to the
+// ADR-048. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
 // path as `POST /v1/deployments`: the same validation, placement
 // (sticky), lease at `epoch+1`, host fencing and refusals, and the
@@ -30402,7 +30402,7 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithApplicationMergePatchPlusJ
 
 // CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
-// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// ADR-046. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
 // `POST /v1/deployments`: the same validation, placement, lease at
 // `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -30441,7 +30441,7 @@ func (c *ClientWithResponses) CreateRollbackWithBodyWithResponse(ctx context.Con
 
 // CreateRollbackWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
-// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
+// ADR-046. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
 // `POST /v1/deployments`: the same validation, placement, lease at
 // `epoch+1` and host fencing, and the same `409 lease_held`,
@@ -30842,7 +30842,7 @@ func (c *ClientWithResponses) AppendStoreJournalWithResponse(ctx context.Context
 //
 // hostd calls this when it starts a workload, and every minute while
 // it runs it, to export the workload's logs, metrics and spans
-// (ADR-observability). As with secrets (ADR-034), the config, header
+// (ADR-045). As with secrets (ADR-034), the config, header
 // values included, is released only to the host holding the
 // workload's lease at `epoch` (`409 lease_lost`), with
 // `Cache-Control: no-store`, and is never logged. `otlp` is absent

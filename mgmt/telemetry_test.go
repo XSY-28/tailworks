@@ -11,7 +11,7 @@ import (
 
 const otlpToken = "Bearer otlp-s3cret-0123456789"
 
-// TestTelemetryConfig (ADR-observability): PUT/GET/DELETE of a tenant's
+// TestTelemetryConfig (ADR-045): PUT/GET/DELETE of a tenant's
 // OTLP export. Header values go to custody only: never returned, logged
 // or audited.
 func TestTelemetryConfig(t *testing.T) {

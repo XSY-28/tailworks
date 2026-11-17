@@ -71,7 +71,7 @@ type Options struct {
 	// QueueVisibility is passed to hostd (how long a claimed queue batch
 	// stays hidden; short in tests of crash recovery).
 	QueueVisibility time.Duration
-	// Telemetry is passed to hostd (ADR-observability).
+	// Telemetry is passed to hostd (ADR-045).
 	Telemetry hostd.TelemetryOptions
 
 	// R2 is passed to hostd (R2 bucket blobs; nil: its default, files

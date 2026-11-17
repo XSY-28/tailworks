@@ -74,7 +74,7 @@ func TestRemoteLogs(t *testing.T) {
 		queries = append(queries, r.URL.RawQuery)
 		mu.Unlock()
 		if q.Get("source") == "requests" {
-			// Structured records (ADR-observability), filtered by hostd.
+			// Structured records (ADR-045), filtered by hostd.
 			w.Header().Set("Content-Type", "application/x-ndjson")
 			fmt.Fprintf(w, `{"time":"2026-11-15T10:00:00.123Z","kind":"request","workload":%q,"method":"GET","path":"/a","status":500,"durationMs":12.5,"outcome":"exception","class":"Counter","name":"alice","caller":{"user":"ross@example.com"},"traceId":"4bf92f3577b34da6a3ce929d0e0e4736","logs":[{"level":"error","message":"boom"}]}`+"\n", q.Get("workload"))
 			return

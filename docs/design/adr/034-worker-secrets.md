@@ -1,7 +1,8 @@
 # ADR-034: Worker secrets in mgmt custody, released only to the workload's lease holder
 
 **Date:** 2026-11-14
-**Status:** Proposed (results in `status/worker-secrets.md`).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `tw secret`,
+[docs/secrets.md](../../secrets.md); results in `status/worker-secrets.md`).
 
 **Context.**
 

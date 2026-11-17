@@ -730,7 +730,7 @@ type DeployRequest struct {
 	rollbackOf string
 
 	// Preview / PreviewAlias: deploy as a preview workload (tw deploy
-	// --preview, ADR-deploy-preview); preview is set by preview.go.
+	// --preview, ADR-048); preview is set by preview.go.
 	Preview      bool   `json:"preview,omitempty"`
 	PreviewAlias string `json:"previewAlias,omitempty"`
 	preview      *previewCtx
@@ -2905,8 +2905,8 @@ var PrivilegedKinds = map[string]bool{"allow": true, "deny": true, "egress": tru
 	"create": true, "mint": true, "ready": true, "credential": true, "principal": true, "device_delete": true,
 	"tenant": true, "deploy": true, "obo_root": true, "container_start": true, "container_stop": true,
 	"image_push": true, "image_pin": true, "image_public": true,
-	"rollback": true, // ADR-deploy-rollback: a deploy, from mgmt only
-	"promote":  true, // ADR-deploy-preview: a deploy, from mgmt only
+	"rollback": true, // ADR-046: a deploy, from mgmt only
+	"promote":  true, // ADR-048: a deploy, from mgmt only
 	// RT3-03: hostd reports records it refused before chaining them.
 	"audit_dropped": true,
 	// ADR-029: public ingress records come from netd/hostd only.

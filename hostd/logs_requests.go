@@ -11,7 +11,7 @@ import (
 )
 
 // requestLogsHandler is GET /v1/logs?source=requests: the workload's
-// structured request records (ADR-observability) as JSON Lines, the last
+// structured request records (ADR-045) as JSON Lines, the last
 // n that pass the filters, then (follow) new ones. Like the console, the
 // file is resolved from the host's own record of the tenant's workload.
 func (h *Host) requestLogsHandler(w http.ResponseWriter, r *http.Request, tenantID, workload string, n int, follow bool) {

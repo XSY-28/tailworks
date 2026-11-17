@@ -1,10 +1,10 @@
 # ADR-033: Smart placement: put a workload on the host with the best measured tailnet path to what it connects to
 
 **Date:** 2026-11-13
-**Status:** Proposed (tailworks branch `smart-placement`, uncommitted here). If
-accepted, it replaces DX.md's "Location hints … ❌ Ignored. Placement is per
-host" row: placement stays per host, but it now reads the workload's
-declared dependencies.
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `mgmt/placement.go`;
+`tw deploy` prints why it placed a workload). Placement stays per host, but it
+now reads the workload's declared dependencies. (The draft cited a `DX.md`
+compatibility row; the matrix is [docs/COMPAT.md](../../COMPAT.md).)
 
 **Context.**
 - Before this, `pickHost` did three things:

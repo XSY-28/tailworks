@@ -1,8 +1,9 @@
 # ADR-038: D1 databases are platform-store Durable Objects behind workerd's own D1 API, with statement journals in mgmt
 
 **Date:** 2026-11-15
-**Status:** Proposed (results in `status/d1-databases.md`). Builds on
-[ADR-platform-stores](platform-stores.md).
+**Status:** Accepted (2026-11-16, built and shipped in v0.2.0: `d1_databases`,
+`tw d1`, [docs/d1.md](../../d1.md); results in `status/d1-databases.md`). Builds on
+[ADR-044](044-platform-stores.md).
 
 **Context.**
 
@@ -19,7 +20,7 @@
   workerd (1.20261108.1): the wrapped binding works without the
   `experimental` flag, and `props` on the inner service binding reach the
   entrypoint unchanged.
-- **The substrate exists.** ADR-platform-stores gives every platform-owned
+- **The substrate exists.** ADR-044 gives every platform-owned
   storage binding a SQLite Durable Object in the platform worker, a
   journal in mgmt (conditional appends, fenced to the lease holder, sealed
   under a per-store custody key) and catch-up on start, on conflict and on
@@ -158,7 +159,7 @@
 - *Run D1's SQL in mgmt* (mgmt's database or a SQLite per database in
   mgmt). Every read crosses the tailnet and an mgmt outage takes reads
   down; it also puts tenant SQL execution in the control plane.
-- *Ship the SQLite file* (or its WAL) off-host. ADR-platform-stores
+- *Ship the SQLite file* (or its WAL) off-host. ADR-044
   rejected it: it needs workerd's private layout and a blob store, and
   loses writes acknowledged between two shipments.
 - *Row-change journal via triggers.* Exact replay and compaction by row,

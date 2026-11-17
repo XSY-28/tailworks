@@ -9,7 +9,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
-// A tenant's OTLP export (ADR-observability), in memory: tests set it
+// A tenant's OTLP export (ADR-045), in memory: tests set it
 // directly; hosts read it with the lease-fenced grant, like secrets.
 
 // SetTelemetry sets (nil: clears) tenantID's OTLP export.

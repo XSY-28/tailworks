@@ -280,7 +280,7 @@ function makeHost(cls) {
             modules: FACET_MODULES,
             globalOutbound: exp.Egress({ props: { class: cls, name } }),
             // The facet's console.*, exceptions and outcomes, attested as
-            // this object (ADR-observability).
+            // this object (ADR-045).
             tails: [exp.Tail({ props: { kind: "object", class: cls, name } })],
             env,
           };
@@ -362,7 +362,7 @@ function makeHost(cls) {
 
 //@@HOST_CLASSES@@
 
-// Platform stores (tw-store.js; ADR-platform-stores), when the app has
+// Platform stores (tw-store.js; ADR-044), when the app has
 // storage bindings.
 //@@STORES@@
 
@@ -549,7 +549,7 @@ export class TailnetApi extends WorkerEntrypoint {
       }
     }
     if (op === "spans") {
-      // The runtime's DO-call spans (ADR-observability): observability
+      // The runtime's DO-call spans (ADR-045): observability
       // data only, attributed to the attested caller.
       if (!Array.isArray(args.spans)) return { ok: false, error: errBody("bad_request", "spans must be an array") };
       try {
@@ -571,7 +571,7 @@ export class TailnetApi extends WorkerEntrypoint {
   }
 }
 
-// ---- observability (ADR-observability) ----
+// ---- observability (ADR-045) ----
 
 const TAIL_MAX_LOGS = 100;
 const TAIL_MAX_LINE = 4096;

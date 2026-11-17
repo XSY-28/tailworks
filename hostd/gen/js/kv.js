@@ -1,6 +1,6 @@
 // tailworks Workers KV (TRUSTED; runs in the platform worker, never in a tenant
 // isolate). ADR-037, on the platform-store substrate
-// (ADR-platform-stores, tw-store.js).
+// (ADR-044, tw-store.js).
 //
 // A tenant's env.<BINDING> is workerd's own `kvNamespace` binding, so the
 // API (get/getWithMetadata/put/delete/list, types, bulk get) and its

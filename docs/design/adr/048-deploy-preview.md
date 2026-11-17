@@ -1,9 +1,10 @@
-# ADR-deploy-preview: A preview is a workload of its own next to the workload; promote deploys its bundle to the workload
+# ADR-048: A preview is a workload of its own next to the workload; promote deploys its bundle to the workload
 
 **Date:** 2026-11-15
-**Status:** Proposed (branch `preview-deploys-issue-45`, issue #45 item 3;
-results in `status/preview-deploys-issue-45.md`). Builds on
-ADR-deploy-rollback (history, retention, rollback), which is Proposed too.
+**Status:** Accepted (2026-11-16, built on master after v0.2.0: `tw deploy
+--preview`, `tw previews`, `tw promote`; issue #45 item 3;
+results in `status/preview-deploys-issue-45.md`). Drafted as
+`ADR-deploy-preview`. Builds on ADR-046 (history, retention, rollback).
 
 **Context.**
 

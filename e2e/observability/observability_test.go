@@ -1,7 +1,7 @@
 //go:build e2eobs
 
 // Package observability is the hermetic logs/metrics/traces e2e
-// (ADR-observability): real tw-mgmt and tw-hostd processes on
+// (ADR-045): real tw-mgmt and tw-hostd processes on
 // testcontrol + a local DERP, a tsnet caller, an echo node (an egress
 // destination) and an OTLP collector node. The tenant's OTLP export is set
 // through mgmt's API (custody) and released to the host as the workload's

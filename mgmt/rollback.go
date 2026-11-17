@@ -10,7 +10,7 @@ import (
 	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
-// Rollback (ADR-deploy-rollback): redeploy the stored bundle of an earlier
+// Rollback (ADR-046): redeploy the stored bundle of an earlier
 // deployment as a new deployment. It is a deploy: the request goes through
 // Mgmt.Deploy, so validation, placement (sticky unless Replace or Host),
 // the lease at epoch+1, host fencing and every deploy refusal apply

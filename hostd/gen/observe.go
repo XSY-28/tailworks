@@ -2,7 +2,7 @@ package gen
 
 import "slices"
 
-// Observability (ADR-observability): the tenant service and every facet
+// Observability (ADR-045): the tenant service and every facet
 // object have the platform's Tail entrypoint as their tail worker, and
 // tenant code runs with the nodejs_als compatibility flag, which the
 // runtime's trace propagation needs (AsyncLocalStorage, node:async_hooks).

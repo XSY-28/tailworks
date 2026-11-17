@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// Platform storage bindings (ADR-platform-stores): wrangler.jsonc keys such
+// Platform storage bindings (ADR-044): wrangler.jsonc keys such
 // as kv_namespaces whose data lives in a platform-owned store. Each
 // binding type registers a StoreKind (KV in kv.go; D1, Queues and R2 are
 // expected to follow); the parser finds every registered key in

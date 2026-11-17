@@ -41,7 +41,7 @@ type LogsQuery struct {
 	N      int
 	Follow bool
 	Host   string // only the replica on this host ("" = all)
-	// Source is "console" (default) or "requests" (ADR-observability), and
+	// Source is "console" (default) or "requests" (ADR-045), and
 	// Filter the record filters hostd applies (obs.Filter's parameters).
 	Source string
 	Filter url.Values

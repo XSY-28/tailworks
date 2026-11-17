@@ -80,7 +80,7 @@ type App struct {
 	ModuleTypes map[string]string
 
 	// Stores are the platform storage bindings (kv_namespaces, …;
-	// stores.go, ADR-platform-stores), in wrangler order.
+	// stores.go, ADR-044), in wrangler order.
 	Stores []StoreBinding
 
 	// Queues is wrangler.jsonc "queues" (queues.go, ADR-039); nil: none.

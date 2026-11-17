@@ -9,7 +9,7 @@ import (
 	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
-// Preview deploys and promotion (ADR-deploy-preview).
+// Preview deploys and promotion (ADR-048).
 //
 // `tw deploy --preview` (POST /v1/deployments with "preview": true) runs a
 // bundle as a workload of its own, PreviewName(workload, alias) =

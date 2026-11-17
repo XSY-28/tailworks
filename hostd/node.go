@@ -186,7 +186,7 @@ func (h *Host) startNodeInstance(w *workload, depID string, app *bundle.App, n i
 // spawnNode starts (or restarts) the node process with fresh secrets.
 func (inst *instance) spawnNode() error {
 	np := inst.node
-	logf, err := obs.OpenRotating(np.logPath, inst.h.tel.opt.AppLogMax) // size-capped (ADR-observability)
+	logf, err := obs.OpenRotating(np.logPath, inst.h.tel.opt.AppLogMax) // size-capped (ADR-045)
 	if err != nil {
 		return err
 	}

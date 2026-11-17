@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Deployment history and bundle retention (ADR-deploy-rollback), SQL side.
+// Deployment history and bundle retention (ADR-046), SQL side.
 // The columns are migrations/202611152330_deploy_history.sql.
 
 var _ deployHistoryStore = (*SQLStore)(nil)

@@ -1,4 +1,4 @@
-// Package obs is tailworks' observability core (ADR-observability): W3C trace
+// Package obs is tailworks' observability core (ADR-045): W3C trace
 // context, a small metrics registry with Prometheus text exposition,
 // OTLP/HTTP (JSON encoding) for logs, metrics and traces, the structured
 // request record behind `tw logs`, and the volume bounds (rotating files,

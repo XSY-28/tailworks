@@ -1,6 +1,6 @@
 package main
 
-// `tw telemetry show|set|rm` (ADR-observability): the tenant's OTLP
+// `tw telemetry show|set|rm` (ADR-045): the tenant's OTLP
 // export. Every workload of the tenant then exports its request records,
 // metrics and spans with OTLP/HTTP (JSON) from its own tailnet node, so the
 // collector must be a tailnet peer the policy lets the workloads reach.

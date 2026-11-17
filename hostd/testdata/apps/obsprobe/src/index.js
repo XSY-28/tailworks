@@ -1,4 +1,4 @@
-// Test fixture for observability (ADR-observability): console output,
+// Test fixture for observability (ADR-045): console output,
 // exceptions, a DO call from the Worker and egress from the DO, so the Go
 // tests can check request records, metrics, OTLP export and traceparent
 // propagation. Deliberately without nodejs_compat (tailworks adds nodejs_als).

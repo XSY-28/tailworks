@@ -11,7 +11,7 @@ Nothing needs configuring for the first two:
 - Every host and mgmt serve `GET /metrics` on their own tailnet node.
 
 Export to a collector is one command: `tw telemetry set`. The design is
-[ADR-observability](design/adr/observability.md).
+[ADR-045](design/adr/045-observability.md).
 
 ## Request logs: `tw logs`
 

@@ -1,7 +1,7 @@
 package main
 
 // `tw logs <workload>` shows the workload's structured request records
-// (ADR-observability): one line per request (time, method, path, status,
+// (ADR-045): one line per request (time, method, path, status,
 // duration, object, caller, trace) with its console.* lines and exceptions
 // indented under it; --json prints the records as JSON Lines; --object,
 // --status, --outcome, --errors, --caller and --trace filter them (on the

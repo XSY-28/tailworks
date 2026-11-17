@@ -168,7 +168,7 @@ tailnet has several.
 ### Notifications: a webhook per tenant
 
 A tailworks admin can have mgmt tell people as soon as a Workflow starts
-waiting ([ADR-approval-notifications](design/adr/approval-notifications.md)):
+waiting ([ADR-047](design/adr/047-approval-notifications.md)):
 
 ```sh
 tw notify set --webhook -        # paste the URL: it is a secret, shown again only as its origin

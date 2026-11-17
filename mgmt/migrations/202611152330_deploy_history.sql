@@ -1,4 +1,4 @@
--- ADR-deploy-rollback: deployment history and bundle retention.
+-- ADR-046: deployment history and bundle retention.
 -- bundle_sha256 is recorded at deploy (and before a bundle is pruned), so
 -- history keeps the hash after the bytes are gone; bundle_pruned_at is when
 -- retention dropped the bundle (0 = kept); active_at is when the host first
