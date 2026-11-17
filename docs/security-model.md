@@ -147,6 +147,31 @@ On a single-machine install all three are usually you. When you run
 tailworks for other people, they trust the operators of mgmt and of every
 host their workloads are placed on.
 
+## Telemetry and the update check
+
+tailworks sends no telemetry, usage data or crash reports anywhere. (`tw
+telemetry` configures OTLP export from your workloads to a collector you
+run on your tailnet; nothing goes to the tailworks project.)
+
+The only request the CLI makes without being asked is the update check:
+
+- **What:** `GET https://api.github.com/repos/rosskukulinski/tailworks/releases/latest`
+  with a `tw/<version>` User-Agent. Nothing else is sent: no identifiers,
+  no tailnet or workload names. GitHub sees your IP address and the version.
+- **When:** after a successful interactive command, at most once every 24
+  hours. The answer is cached in `<state>/update-check.json`
+  (`~/.tailworks` by default); when a newer release is out, `tw` prints a
+  one-line notice on stderr.
+- **Never:** after `tw init` or `tw dev` (both run with no tailnet, no
+  credentials and no outbound request), `tw version`, `tw completion` or
+  `tw mcp`; with `--json`; when stderr isn't a terminal; with `CI` set; or
+  in a development build.
+- **Off:** `TW_NO_UPDATE_CHECK=1`. `tw version --json` reports whether it
+  is on (`updateCheck`).
+
+Commands you run about releases (`tw version --check`, `tw upgrade`) also
+contact GitHub, to look up and download the release.
+
 ## Known gaps
 
 The red team's open items are tracked in
