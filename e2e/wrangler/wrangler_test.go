@@ -58,7 +58,7 @@ func TestDevWrangler(t *testing.T) {
 		"notes":    "# notes\n\nShipped as a Text module.\n",
 		"hello":    "plain text module\n",
 		"wasm":     true,
-		"buffer":   "dHdk",
+		"buffer":   "dHc=",
 		"count":    float64(1),
 		"cache":    "undefined",
 	}
