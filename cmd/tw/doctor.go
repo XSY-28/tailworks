@@ -39,8 +39,10 @@ func cmdVersion(args []string) error {
 	if *check {
 		return cmdVersionCheck(f) // updatecheck.go
 	}
-	v := map[string]string{"tw": version, "go": runtime.Version(), "os": runtime.GOOS + "/" + runtime.GOARCH,
-		"workerdPin": workerdPin, "esbuild": esbundle.Version}
+	v := map[string]any{"tw": version, "go": runtime.Version(), "os": runtime.GOOS + "/" + runtime.GOARCH,
+		"workerdPin": workerdPin, "esbuild": esbundle.Version,
+		"updateCheck": updateCheckOn(), // updatecheck.go
+	}
 	emit(f, v, func() {
 		fmt.Printf("tw %s (%s, %s) · workerd %s · esbuild %s (built in)\n", version, v["os"], v["go"], workerdPin, esbundle.Version)
 	})

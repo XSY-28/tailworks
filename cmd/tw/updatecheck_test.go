@@ -2,12 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"github.com/rosskukulinski/tailworks/schema"
 )
 
@@ -118,5 +124,90 @@ func TestUpdateNotice(t *testing.T) {
 	t.Setenv("CI", "1")
 	if updateNoticeEnabled("ls", nil) {
 		t.Fatal("notice enabled under CI")
+	}
+}
+
+// TestNoUpdateCheckAfterLocalCommands (#104): tw init and tw dev make no
+// outbound request, even as an interactive release build whose daily check
+// is due. The check is pointed at a counting server via TW_RELEASE_API; a
+// command that does run it (ls) is the control.
+func TestNoUpdateCheckAfterLocalCommands(t *testing.T) {
+	var hits atomic.Int32
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		json.NewEncoder(w).Encode(map[string]string{"tag_name": "v0.3.0"})
+	}))
+	defer gh.Close()
+	t.Setenv("TW_RELEASE_API", gh.URL)
+	t.Setenv("TW_REPO", "")
+	t.Setenv("CI", "")
+	t.Setenv("TW_NO_UPDATE_CHECK", "")
+	state := t.TempDir()
+	t.Setenv("TW_STATE_DIR", state)
+	oldV, oldTerm, oldJSON := version, stderrIsTerminal, jsonOut
+	t.Cleanup(func() { version, stderrIsTerminal, jsonOut = oldV, oldTerm, oldJSON })
+	version = "0.2.0"
+	stderrIsTerminal = func(io.Writer) bool { return true }
+
+	// The whole commands through run(), as main calls them.
+	app := filepath.Join(t.TempDir(), "hello")
+	var stdout, stderr strings.Builder
+	if code := run([]string{"init", app, "--template", "hello"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("tw init: exit %d: %s%s", code, stdout.String(), stderr.String())
+	}
+	if wd, err := nettest.WorkerdBinary(); err == nil && hostdtest.HasNode() {
+		t.Setenv("TW_WORKERD", wd)
+		if code := run([]string{"dev", app, "--once", "--port", "0"}, &stdout, &stderr); code != 0 {
+			t.Fatalf("tw dev --once: exit %d: %s%s", code, stdout.String(), stderr.String())
+		}
+	} else {
+		t.Log("no workerd/node (make deps): tw dev --once not run, only its update-check gate")
+	}
+	jsonOut = false
+	for _, cmd := range []string{"init", "dev"} {
+		if updateNoticeEnabled(cmd, nil) {
+			t.Fatalf("update check enabled after tw %s", cmd)
+		}
+		updateNotice(cmd, &stderr)
+	}
+	if n := hits.Load(); n != 0 {
+		t.Fatalf("tw init / tw dev made %d update-check request(s)", n)
+	}
+	if _, err := os.Stat(updateCachePath(state)); err == nil {
+		t.Fatal("update-check.json written after tw init / tw dev")
+	}
+
+	// Control: the same setup does check after a command that talks to mgmt.
+	os.MkdirAll(state, 0o700)
+	updateNotice("ls", &stderr)
+	if n := hits.Load(); n != 1 || !strings.Contains(stderr.String(), "tw 0.3.0 is out") {
+		t.Fatalf("control (ls): %d request(s), stderr %q", n, stderr.String())
+	}
+}
+
+// TestVersionReportsUpdateCheck: tw version --json says whether the check
+// is on (#104).
+func TestVersionReportsUpdateCheck(t *testing.T) {
+	old := version
+	t.Cleanup(func() { version = old })
+	t.Setenv("CI", "")
+	for _, tc := range []struct {
+		version, optOut string
+		want            bool
+	}{
+		{"0.2.0", "", true},
+		{"0.2.0", "1", false},
+		{"0.2.0-dev", "", false},
+		{"dev", "", false},
+	} {
+		version = tc.version
+		t.Setenv("TW_NO_UPDATE_CHECK", tc.optOut)
+		out, err := captureStdout(t, func() error { return cmdVersion([]string{"--json"}) })
+		var v struct {
+			UpdateCheck *bool `json:"updateCheck"`
+		}
+		if err != nil || json.Unmarshal([]byte(out), &v) != nil || v.UpdateCheck == nil || *v.UpdateCheck != tc.want {
+			t.Fatalf("%+v: %v %q", tc, err, out)
+		}
 	}
 }
