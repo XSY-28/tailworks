@@ -56,7 +56,24 @@ base64 integrity hashes in the lock files.
 
 ## Tests
 
-See the PR body for the final command list and results.
+Run on macOS arm64, branch up to date with origin/master (b2bfcc8):
+
+- `make lint test`: pass (final run). An earlier run failed once in
+  `hostd` (`TestWorkersKVMove`: a data race on `mgmtapi.Client.HostID`;
+  `TestQueues/FencedHostConsumesNothing`: a 30 s delivery timeout). Both
+  passed on rerun under `-race`; the race is in code the rename only touched
+  for import paths and a header name, so it looks pre-existing.
+- `make templates-typecheck test-sdk e2e-wrangler e2e-placement e2e-locks
+  e2e-queues e2e-observability test-pg install-test`: all pass.
+- `npm pack --dry-run`: `@tailworks/tailnet`, `@tailworks/node`,
+  `@tailworks/mcp`, `create-tailworks` (all 0.2.0).
+- Not run (need a real tailnet, credentials, KVM or a release build):
+  `e2e-real`, `e2e-public`, `e2e-vm`, `e2e-vz`, `e2e-headscale`, and the
+  fresh-install-from-tarball check. `e2e-upgrade` is N/A: there is no
+  earlier tailworks release to upgrade from.
+- Leftovers: `git grep -I -i twd` finds 1966 occurrences in 90 files, all
+  intended (history files listed above, `os.Getwd`, lock-file hashes, this
+  file and the rename script).
 
 ## Not done here (needs the owner)
 
