@@ -43,7 +43,7 @@ func TestRT06_UnicodeHomoglyphTagRefused(t *testing.T) {
 // such as "tag:tw-wl-x " is accepted as a tailworks tag. Impact is bounded —
 // the accepted string is still inside tailworks' own tag:tw* namespace, grants
 // to a space-padded tag match no real device, and every policy write is
-// validated by Tailscale before apply (BUILD-PLAN safety rule) — so this is
+// validated by Tailscale before apply (docs/install-testing.md safety rule 2) — so this is
 // input-validation leniency, not a cross-principal widening. Fix: require a
 // boundary after the prefix (exact "tag:tw" or "tag:tw-"...) and reject
 // tags containing whitespace/control characters. Skip-marked until fixed.

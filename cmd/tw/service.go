@@ -15,9 +15,9 @@ import (
 
 // `tw up --service` / `tw down --service`: run the same supervisor
 // (`tw __supervise`) as a service that starts at login: a systemd *user*
-// unit on Linux (LINUX-PLAN DoD 5; survives logout with lingering and
-// reboot) or a LaunchAgent on macOS (M10; survives logout only if the
-// Mac doesn't sleep). Nothing here uses sudo: enabling lingering or
+// unit on Linux (docs/install-testing.md, "Linux requirements" item 5;
+// survives logout with lingering and reboot) or a LaunchAgent on macOS
+// (M10; survives logout only if the Mac doesn't sleep). Nothing here uses sudo: enabling lingering or
 // disabling sleep is printed for the user to run. The systemd half is in
 // this file, the launchd half in service_launchd.go; the functions the
 // commands call dispatch on the OS.
