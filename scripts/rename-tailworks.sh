@@ -18,7 +18,8 @@
 # Not rewritten (history): changes/*.md and changes/released/ (except
 # changes/README.md), status/*.md (except status/README.md), STATUS.md
 # (frozen), CHANGELOG.md and the release catalog built from it
-# (internal/catalog/releases/). Replacements are case-sensitive (twd, Twd,
+# (internal/catalog/releases/), and the mgmt migrations (append-only;
+# only comments mention twd). Replacements are case-sensitive (twd, Twd,
 # TWD), so base64 like the "…ytWd/…" in package-lock.json is untouched.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -30,7 +31,7 @@ CAP_NS=github.com/rosskukulinski/tailworks/cap
 skip() { # history files that keep saying twd
 	case "$1" in
 	changes/README.md | status/README.md) return 1 ;;
-	changes/* | status/* | STATUS.md | CHANGELOG.md | internal/catalog/releases/* | scripts/rename-tailworks.sh) return 0 ;;
+	changes/* | status/* | STATUS.md | CHANGELOG.md | internal/catalog/releases/* | mgmt/migrations/*.sql | scripts/rename-tailworks.sh) return 0 ;;
 	esac
 	return 1
 }
