@@ -7,7 +7,7 @@
 #      upgrade-relevant path, a fragment added or changed in that diff names
 #      the matching upgrade kind:
 #        mgmt/migrations/            schema-expand or schema-contract
-#                                    (schema-contract if an added migration has a "-- tailworks:contract" line)
+#                                    (schema-contract if an added migration has a "-- tw:contract" line)
 #        api/openapi.yaml            protocol
 #        schema/cli.schema.json      cli-json
 #        package-lock.json workerd   workerd

@@ -12,6 +12,9 @@ explained in [docs/concepts.md](docs/concepts.md)):
   policy governs what each object can reach;
 - `tw kill` cuts an object off in under a second.
 
+tailworks is a community project and is not affiliated with or endorsed by
+Tailscale Inc. Tailscale is a registered trademark of Tailscale Inc.
+
 It runs Cloudflare Agents SDK agents, MCP servers and Vercel AI SDK agents
 unmodified. What works and what doesn't, surface by surface:
 [Compatibility at a glance](#compatibility-at-a-glance). All the docs, by
@@ -44,7 +47,7 @@ Or build the release yourself (needs Go ≥ 1.27 and Node.js ≥ 20; the
 installed tailworks needs neither):
 
 ```sh
-git clone https://github.com/rosskukulinski/tailworks && cd tw
+git clone https://github.com/rosskukulinski/tailworks && cd tailworks
 make release RELEASE_TARGETS=$(go env GOOS)-$(go env GOARCH)   # → dist/tailworks-<version>-<os>-<arch>.tar.gz
 mkdir -p /tmp/tailworks && tar -xzf dist/tailworks-*-$(go env GOOS)-$(go env GOARCH).tar.gz -C /tmp/tailworks
 /tmp/tailworks/tailworks-*/install.sh

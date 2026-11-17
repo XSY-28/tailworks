@@ -15,7 +15,7 @@
 #
 # prev-tag ("-" = none) bounds the contract migrations listed in the
 # catalog entry: mgmt/migrations/*.sql files added since prev-tag that have
-# a "-- tailworks:contract" line. --finalize leaves the changes for you to
+# a "-- tw:contract" line. --finalize leaves the changes for you to
 # commit (docs/RELEASING.md).
 set -eu
 FINALIZE=0

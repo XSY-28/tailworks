@@ -110,7 +110,7 @@ sub prose { # one run of prose text
 	# after an article or determiner it is the project, whatever follows
 	s{\b(the|The|one|per|a|an|each|every|this|that|any|your|its|of) twd\b(?![\w"'/=-])(?!\.\w)(?!\s+(?:up|dev|deploy|init|link)\b)}{$1 tailworks}g;
 	# standalone "twd": not part of a path, flag, tag, identifier or hyphenated name
-	s{(?<![\w./\@:\$~"'`<>=\{-])twd(?![\w"'/=-])(?!\.\w)(?!\s+(?:$CMDS)\b)(?!\s+[-<\[])}{tailworks}g;
+	s{(?<![\w./\@:\$~"'`<>=\{-])twd(?![\w"'/=-])(?!\.\w)(?!:\w)(?!\s+(?:$CMDS)\b)(?!\s+[-<\[])}{tailworks}g;
 	s{(?<=[.!?]\s)tailworks\b(?![.\w-])}{Tailworks}g;
 	return $_;
 }
