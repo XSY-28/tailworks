@@ -54,4 +54,16 @@ identity.
   pass, and `/ui/` still renders.
 - New: `mgmt.TestBrowserGuardOriginAllowlist`, `mgmt.TestHostAllowlistAllowed`
   and `mgmt.TestMgmtHostNames`.
-- Commands run: see the PR's Tests section.
+- `make lint`: pass.
+- `make test`:
+  - test-js: pass.
+  - Go: everything passed except one failure in `hostd`: `TestWorkersKVMove`
+    hit a `-race` DATA RACE at `hostd/host.go:403`. That code is untouched
+    here and unrelated. Rerunning `go test -race ./hostd -run
+    TestWorkersKVMove -count=3` passed. `mgmt`, `cmd/tw` and
+    `internal/inproc` pass.
+- `make e2e-placement`: pass. It reaches mgmt over the unix socket, so this
+  is a regression check only.
+- Skipped: the real-tailnet suites (`e2e-real`, `e2e-svc`, `e2e-oauth`,
+  `e2e-mac`), which need credentials. They are the only ones that drive the
+  tsnet listener end to end.
