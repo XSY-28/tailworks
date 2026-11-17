@@ -7,10 +7,9 @@ import { z } from "zod";
 import { withTailnet, caller, authorizeTool, budget } from "@tailworks/mcp";
 export { TwBudget } from "@tailworks/mcp/budget-do";
 
-interface Env {
-  BUDGET: any;
-  MCP_CAP?: string;
-}
+// Env (MCP_CAP and the BUDGET namespace) is the global interface `tw types`
+// writes to worker-configuration.d.ts. Run `tw types` again after changing
+// wrangler.jsonc or tailworks.jsonc.
 
 const ORDERS: Record<string, { total: number; status: string }> = {
   o1: { total: 42, status: "shipped" },
