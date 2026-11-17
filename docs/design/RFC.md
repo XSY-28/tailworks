@@ -1066,7 +1066,7 @@ Headscale: tailworks needs no Headscale changes, only the profile (§7.2).
 | workerd | Unmodified upstream release, redistributed in the guest image | Apache-2.0 (LICENSE and NOTICE shipped; CLA for upstream PRs) |
 | Coordination server | Tailscale SaaS or Headscale; nothing tw-specific | — |
 
-Releases and images ship a THIRD_PARTY/NOTICE file. "Workers", "Durable Objects" and "wrangler" are used nominatively.
+Release tarballs ship LICENSE and THIRD_PARTY_NOTICES, and source offers for the guest kernel and rootfs (docs/RELEASING.md, "Licenses and notices"). "Workers", "Durable Objects" and "wrangler" are used nominatively.
 
 **Repository layout** (as built, v0.2.0; the design also had a `tw-stord`,
 Go and Python verifiers, `policy/profiles/` and `rfcs/`, none of them built)

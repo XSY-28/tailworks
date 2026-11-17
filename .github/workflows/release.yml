@@ -248,6 +248,10 @@ jobs:
           ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I tw-release -n tw-release -s dist/SHA256SUMS.sig <dist/SHA256SUMS
           t=$(ls -d "$RUNNER_TEMP"/t/tailworks-*)
           ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I tw-release -n tw-release -s "$t/SHA256SUMS.sig" <"$t/SHA256SUMS"
+      # Issue #102: LICENSE + THIRD_PARTY_NOTICES in every tarball, and the
+      # kernel's and rootfs's source offers next to a microVM guest.
+      - name: License files in every tarball
+        run: sh scripts/check-release-notices.sh dist/*.tar.gz
       - name: Draft the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
