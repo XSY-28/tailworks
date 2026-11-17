@@ -1,7 +1,7 @@
 //go:build e2elinux
 
-// E2E-LINUX (LINUX-PLAN DoD 2): the e2e-mbp flow against a fresh Lima VM
-// that mounts nothing from this Mac. From here: `limactl copy` the linux
+// E2E-LINUX (docs/install-testing.md, "Linux requirements" item 2): the
+// e2e-mbp flow against a fresh Lima VM that mounts nothing from this Mac. From here: `limactl copy` the linux
 // release tarball and the tailnet-1 API key file into the VM
 // (~/.tailworks-e2e, 0700 dir, 0600 key), run install.sh and `tw doctor`
 // there, then `tw up --service` (a systemd user unit) / `tw init` /

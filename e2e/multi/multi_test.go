@@ -1,6 +1,6 @@
 //go:build e2emulti
 
-// E2E-MULTI (BUILD-PLAN definition of done 2) on this machine: one tailworks host
+// E2E-MULTI (the multi-tenant acceptance test) on this machine: one tailworks host
 // (process tier) serves tenant A on tailnet 1 (`tw up`) and tenant B on
 // tailnet-2 (`tw tenant add`), with the same agent app deployed to both;
 // e2e/cliflow MultiEnv checks (a)–(f), then `tw down` and zero leftovers

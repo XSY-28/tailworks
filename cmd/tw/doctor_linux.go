@@ -20,9 +20,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Linux host checks for tw doctor (LINUX-PLAN DoD 6). Each reads the
-// kernel or the filesystem directly; none needs root, none changes the
-// machine. The microvm_tier line sums up whether Firecracker microVMs can
+// Linux host checks for tw doctor (docs/install-testing.md, "Linux
+// requirements" item 6). Each reads the kernel or the filesystem
+// directly; none needs root, none changes the machine. The microvm_tier line sums up whether Firecracker microVMs can
 // run here (KVM, the release's guest assets, the tw-vmhelper service from
 // `sudo tw host setup --microvm`) and why not.
 
