@@ -50,6 +50,8 @@ shipped.
 - After merging origin/master (SECURITY.md, RELEASING.md only): `make lint test` failed once on `hostd:TestWorkersKVMove` with a data race in `hostd/mgmtapi.(*Client).setHeaders` (client.go:197, untouched here; pre-existing). `go test ./hostd -run TestWorkersKVMove -count=3` passed. CI (`ci-ok`) passed on the pre-merge commit after one rerun of an unrelated `cmd/tw:TestCLIOAuth` audit flake.
 - `CI=true go test ./docs -run TestADRIndex`: pass; with a dummy `adr/zz-draft.md` it fails under CI=true and only logs without it.
 
+- Later merges of origin/master: `make lint test` passed twice; on the last one `hostd:TestQueues/FencedHostConsumesNothing` failed once and passed on `go test ./hostd -run TestQueues -count=2`. CI hit an unrelated `cmd/tw:TestCLIOAuth` audit flake twice.
+
 ## Not done / follow-ups
 
 - The RFC body below the As built table is the original design; only the
