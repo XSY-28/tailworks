@@ -17,11 +17,9 @@ import { AgentWorkflow, type AgentWorkflowEvent, type AgentWorkflowStep } from "
 import { NonRetryableError } from "cloudflare:workflows";
 import { getCaller } from "@tailworks/tailnet";
 
-interface Env {
-  APP_NAME: string;
-  RefundAgent: any;
-  REFUND_WORKFLOW: any;
-}
+// Env (APP_NAME, the RefundAgent namespace and REFUND_WORKFLOW) is the global
+// interface `tw types` writes to worker-configuration.d.ts. Run `tw types`
+// again after changing wrangler.jsonc or tailworks.jsonc.
 
 type RefundParams = { order: string; amount: number; requester: string };
 
