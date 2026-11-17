@@ -45,7 +45,7 @@ our $CAP = $ENV{CAP_NS};
 our $IS_MD = 0;     # Markdown: prose outside code spans/blocks
 our $IS_CODE = 0;   # source with comment lines worth treating as prose
 # Subcommands of `tw`: "twd <one of these>" is the command, not the project.
-our $CMDS = join '|', qw(up down link whoami status tenant init dev types deploy policy
+our $CMDS = join '|', qw(up down d1 r2 link whoami status tenant init dev types deploy policy
 	deployments previews promote rollback ls undeploy expose secret kv queues telemetry
 	kill approvals approve notify audit logs doctor docs completion mcp agent host image
 	upgrade release version help);
@@ -109,12 +109,12 @@ sub prose { # one run of prose text
 	# after an article or determiner it is the project, whatever follows
 	s{\b(the|The|one|per|a|an|each|every|this|that|any|your|its|of) twd\b(?![\w"'/=-])(?!\.\w)(?!\s+(?:up|dev|deploy|init|link)\b)}{$1 tailworks}g;
 	# standalone "twd": not part of a path, flag, tag, identifier or hyphenated name
-	s{(?<![\w./\@:\$~"'<>=\{-])twd(?![\w"'/=-])(?!\.\w)(?!\s+(?:$CMDS)\b)(?!\s+[-<\[])}{tailworks}g;
+	s{(?<![\w./\@:\$~"'`<>=\{-])twd(?![\w"'/=-])(?!\.\w)(?!\s+(?:$CMDS)\b)(?!\s+[-<\[])}{tailworks}g;
 	s{(?<=[.!?]\s)tailworks\b(?![.\w-])}{Tailworks}g;
 	return $_;
 }
 
-sub md_line { # split on `code` spans; prose outside them
+sub md_line { # split on `code` spans (which may wrap lines); prose outside them
 	my $l = shift;
 	my @p = split /(`+[^`]*`+)/, $l;
 	for (@p) { $_ = prose($_) unless /^`/ }
@@ -130,11 +130,14 @@ sub generic {
 sub rewrite {
 	my $s = long(shift);
 	if ($IS_MD) {
-		my $fence = 0; my @out;
+		my $fence = 0; my @out; my $para = '';
 		for my $l (split /(?<=\n)/, $s) {
-			if ($l =~ /^\s*(```|~~~)/) { $fence = !$fence; push @out, $l; next }
-			push @out, $fence ? $l : md_line($l);
+			if ($l =~ /^\s*(```|~~~)/) {
+				push @out, md_line($para), $l; $para = ''; $fence = !$fence; next;
+			}
+			if ($fence) { push @out, $l } else { $para .= $l }
 		}
+		push @out, md_line($para);
 		$s = join '', @out;
 	} elsif ($IS_CODE) {
 		# comment-only lines: //, #, * (block comment bodies)
@@ -176,7 +179,7 @@ git grep -lE "twdocs|createTwDir|TestTwDevWrangler" -- ":!scripts/rename-tailwor
 # into "… on tw"; where tw means the project, not the command, say tailworks.
 # Comment lines were already handled by the prose pass.
 cat >/tmp/rename-tailworks-strings.pl <<'PERL'
-our $CMDS = 'up|down|link|whoami|status|tenant|init|dev|types|deploy|policy|deployments|previews|promote|rollback|ls|undeploy|expose|secret|kv|queues|telemetry|kill|approvals|approve|notify|audit|logs|doctor|docs|completion|mcp|agent|host|image|upgrade|release|version|help';
+our $CMDS = 'up|down|d1|r2|link|whoami|status|tenant|init|dev|types|deploy|policy|deployments|previews|promote|rollback|ls|undeploy|expose|secret|kv|queues|telemetry|kill|approvals|approve|notify|audit|logs|doctor|docs|completion|mcp|agent|host|image|upgrade|release|version|help';
 our $NB = qr{(?![\w.\-/])(?!\s+(?:$CMDS)\b)(?!\s+(?:binary|CLI|command|commands)\b)};
 sub fix {
 	local $_ = shift;
