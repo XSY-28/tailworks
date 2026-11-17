@@ -4266,6 +4266,7 @@ components:
         | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
         | `killed` | 410 | tombstone (`TombstoneError`) |
         | `precondition_failed` | 412 | `If-Match` mismatch |
+        | `misdirected_request` | 421 | a tailnet request whose `Host` is not one of mgmt's own names or an IP literal (DNS-rebinding guard) |
         | `object_quota_exceeded` | 429 | tenant `maxObjects` |
         | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
         | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
@@ -4344,6 +4345,7 @@ components:
         - upgrade_state
         - killed
         - precondition_failed
+        - misdirected_request
         - object_quota_exceeded
         - spawn_budget_exceeded
         - container_quota_exceeded

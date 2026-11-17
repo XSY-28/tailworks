@@ -304,6 +304,9 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	if len(o.Admins) > 0 {
 		api.Admins = o.Admins
 	}
+	// DNS-rebinding guard: the tailnet listeners answer only to mgmt's own
+	// names (and IP literals); set before Handler(), whose Origin check uses it.
+	api.Hosts = mgmt.NewHostAllowlist(mgmt.MgmtHostNames(self, o.TSNetHostname, o.TSNetService)...)
 	rt.Server, rt.Self = api, self
 	rt.handler = api.Handler()
 	if ts == nil && !o.LocalDev {
