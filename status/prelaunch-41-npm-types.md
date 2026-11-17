@@ -31,12 +31,13 @@ critique listed.
 
 - `make lint`: ok.
 - `make changes-check`: ok (no upgrade-relevant paths changed).
-- `make test`: see the PR.
+- `make test`: Go packages ok except `netd` `TestEgressWaitsForNewPeerPath` (timing, 5.2s vs a 5s bound under load from parallel worktrees; netd untouched here; passed on rerun with `go test ./netd -run TestEgressWaitsForNewPeerPath`). `cmd/tw` ok incl. `TestTemplatesUseGeneratedEnv`. `make test-js`: ok (fail 0 in all three suites).
 - `make templates-typecheck`: all 7 templates ok (npm install from packed
   tarballs, `npx tsc --noEmit`, `tw types --check`).
 - `sh scripts/npm-publish.sh 0.2.0 --dry-run`: all four packages pack,
   each with LICENSE and README.md.
-- `make test-sdk`: see the PR.
+- `make test-sdk`: ok (TestAgentTemplate, TestRefundApprovalTemplate, TestCloudflareAgents, TestVercelAI, …).
+- Not run: `make e2e-wrangler` (no bundling or wrangler config change).
 
 ## Gaps / maintainer
 
