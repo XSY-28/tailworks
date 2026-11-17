@@ -2042,9 +2042,11 @@ upgrade tailworks on this machine or the fleet
 ```text
 tw upgrade: upgrade tailworks: on a tw up machine, back up, install a newer release and roll back if it isn't healthy; against a linked tw-mgmt (or --fleet), plan and run a fleet upgrade (status, pause, resume, abort)
 
-usage: tw upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--fleet] [--hosts h1,h2] [--canary h] [--soak 5m] [--settle 5m] [--no-wait] | upgrade status|pause|resume|abort [<run-id>]
+usage: tw upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned] [--fleet] [--hosts h1,h2] [--canary h] [--soak 5m] [--settle 5m] [--no-wait] | upgrade status|pause|resume|abort [<run-id>]
 
 flags:
+  -allow-unsigned
+    	homelab: install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)
   -canary string
     	fleet: the canary host (default: the first)
   -fleet
