@@ -38,7 +38,7 @@ short:
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/rosskukulinski/tailworks/master/scripts/get.sh
-sh get.sh                                      # or: sh get.sh v0.1.0
+sh get.sh                                      # or a given release: sh get.sh vX.Y.Z
 export PATH="$HOME/.tailworks/bin:$PATH"             # add this to your shell profile too
 tw doctor                                     # every check prints a fix if it fails
 ```
