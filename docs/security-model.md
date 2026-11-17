@@ -70,6 +70,7 @@ with `tw up --insecure-shared-host`.
 | Tenant ↔ tenant on one host | neither | per-tenant netd registries (one tailnet's netmap each), per-workload sandboxes and 0700 state directories; one tenant only without a sandbox |
 | Object ↔ object in a workload | the workload's code | per-object nodes and egress attribution; a sub-agent's capabilities are narrowed to what its spawner allowed (`lim`) |
 | Host ↔ mgmt | mgmt | WhoIs `tag:tw-host`; every host write is fenced by its lease epoch |
+| Admin's browser ↔ mgmt | mgmt's own pages only | every tailnet request must name mgmt in `Host` (its MagicDNS names or an IP literal), which defeats DNS rebinding; browser mutations need a same-origin `Origin`/`Sec-Fetch-Site` ([ADMIN-UI.md](ADMIN-UI.md#browser-origin-guard-csrf-dns-rebinding)) |
 | tailworks ↔ Tailscale control | the tailnet admin | one revocable mint credential; tags you own in `tagOwners` |
 | Internet ↔ workload | nobody | tailnet-only by default; public routes are opt-in paths over Funnel on `tag:tw-public`, and `getCaller` throws on a public request ([public-ingress.md](public-ingress.md)) |
 

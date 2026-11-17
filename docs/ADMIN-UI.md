@@ -168,16 +168,43 @@ dialog need it.
 
 The API has no cookies, so a classic CSRF cannot carry a credential; the
 risk is a page on another origin (or a rebound DNS name) driving the
-admin's tailnet connection. `mgmt.Server.Handler` wraps everything,
-API and UI, in a guard (`browserGuard`, `mgmt/server.go`):
+admin's tailnet connection. Two guards stand between the admin's browser
+and mgmt.
+
+**Host allowlist (DNS rebinding).** An attacker who controls a DNS name
+can rebind it to mgmt's tailnet IP. A script on the attacker's page is then
+same-origin with mgmt, so `Origin` and `Sec-Fetch-Site` look legitimate,
+and its requests carry the admin's WhoIs identity. What the browser can't
+hide is the `Host` header: it names the attacker's domain. So every request
+on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP and the
+operator console's loopback proxy), for **every method and path**, must
+name mgmt itself, before WhoIs runs (`HostAllowlist`, `mgmt/hostguard.go`;
+set by tw-mgmt at start):
+
+- the node's MagicDNS FQDN and its short name;
+- `-tsnet-hostname` and `-tsnet-service`, short and under the tailnet's
+  MagicDNS suffix;
+- any IP literal. Rebinding needs a DNS name the attacker controls, and a
+  page loaded from an IP literal is not same-origin with anything the
+  attacker serves. The `tw` CLI dials mgmt's tailnet IP through the loopback
+  proxy, and `tw up` points the embedded host at it.
+
+Anything else is 421 `misdirected_request`, naming the expected hosts.
+Reaching mgmt through a CNAME or another DNS name you own is refused the
+same way. The unix socket (`-local-dev`) and the in-process host aren't
+checked because no browser can reach them.
+
+**Origin / Sec-Fetch.** `mgmt.Server.Handler` wraps everything, API and UI,
+in a second guard (`browserGuard`, `mgmt/server.go`):
 
 - Requests that are not browser-originated (no `Sec-Fetch-Mode`, no
   `Origin`) are untouched: the `tw` CLI and `tw-hostd` send neither and
   are never affected.
-- `GET`, `HEAD` and `OPTIONS` are never guarded.
+- `GET`, `HEAD` and `OPTIONS` pass this guard (the Host allowlist above
+  still applies to them).
 - A browser-originated mutation must have `Sec-Fetch-Site` in
   `{same-origin, none}` (when present) **and** an `Origin` whose host equals
-  the request's `Host` (when present); `/v1` mutations must additionally
+  the request's `Host` and is on the Host allowlist (when present); `/v1` mutations must additionally
   carry `X-Tw-UI: 1`. A custom header forces a CORS preflight that mgmt
   never answers, so cross-origin JavaScript cannot reach the handler at
   all. The UI's own `/ui/...` form posts are covered by the
@@ -193,6 +220,14 @@ Every UI response carries
 `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
 `X-Frame-Options: DENY` and `Cache-Control: no-store`. The UI stores nothing
 client-side: no cookies, no localStorage, no tokens.
+
+**Why plain HTTP on :80.** mgmt always serves the API and UI on `:80` over
+the tailnet. Hosts reach mgmt there, and so does `tw link` on tailnets
+without HTTPS certificates. The connection is WireGuard-encrypted and
+WhoIs-authenticated, so TLS would add no confidentiality between tailnet
+nodes. HTTPS on `:443` is served as well when the tailnet has certificates.
+Plain HTTP is what made rebinding cheap (no certificate mismatch to stop
+it), and the Host allowlist closes that gap on both ports.
 
 ## Tests
 

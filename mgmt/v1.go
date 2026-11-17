@@ -1598,7 +1598,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	// The admin UI (mgmt/ui) rides on the same principal; browserGuard
 	// refuses cross-site browser mutations (CSRF) for the UI and the API.
-	return versionHeader(s.M.Version(), browserGuard(s.mountUI(api, embeddedUI(api))))
+	return versionHeader(s.M.Version(), browserGuard(s.Hosts, s.mountUI(api, embeddedUI(api))))
 }
 
 // mountUI dispatches the admin UI (mgmt/ui) next to the API: /ui/* goes to
