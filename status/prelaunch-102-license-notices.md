@@ -21,7 +21,8 @@ Last update: 2026-11-17 PT. Issue #102: LICENSE, THIRD_PARTY_NOTICES and guest s
 - `make release RELEASE_VM_ASSETS=0 RELEASE_TARGETS="darwin-arm64 linux-amd64"` (local, unsigned): both tarballs built. The notices covered 62 and 64 Go modules and 175 npm packages, and `check-release-notices` passed for both. Two warnings: `@ai-sdk/provider-utils` (Apache-2.0) and `@cfworker/json-schema` (MIT) ship no license file.
 - The generator on that linux-amd64 stage plus a fake `share/tailworks/vm` produced KERNEL-SOURCE.md and ROOTFS-SOURCE.md. I read both.
 - `guest/build-image.sh` (TARGETARCH=amd64) in an `ubuntu:24.04` Docker container, using the real pinned ubuntu-base and ca-certificates downloads and a prebuilt tw-guestd: the build succeeded. `manifest.json` is valid JSON with 7 packages (e2fsprogs, libblkid1, libc6, libcom-err2, libext2fs2t64, libuuid1, ca-certificates). `debugfs` shows `/usr/share/doc/<pkg>/copyright` in the image.
-- `make lint test`: see the PR.
+- `make lint`: ok.
+- `make test`: every Go package passed except `netd` `TestEgressWaitsForNewPeerPath`, which also fails alone on this Mac ("connection was refused" to 100.64.0.3:80). This branch doesn't touch `netd`, and the likely cause is the host's own Tailscale on 100.64/10; CI on Linux is the check. `make test-js`: 32/32 passed.
 - Not run: `make vm-assets`, `make vz-assets` and a full release with guests, which need Lima or Linux with KVM. The kernel builds are unchanged.
 
 ## For the maintainer (not legal advice)
