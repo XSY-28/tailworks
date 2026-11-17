@@ -3622,7 +3622,7 @@ paths:
         in: path
         required: true
         description: "`tailworks-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`."
-        schema: { type: string, pattern: "^(SHA256SUMS|tw-[0-9]+\\.[0-9]+\\.[0-9]+-(darwin|linux)-(amd64|arm64)\\.tar\\.gz)$" }
+        schema: { type: string, pattern: "^(SHA256SUMS|tailworks-[0-9]+\\.[0-9]+\\.[0-9]+-(darwin|linux)-(amd64|arm64)\\.tar\\.gz)$" }
     put:
       tags: [upgrades]
       operationId: PutReleaseArtifact

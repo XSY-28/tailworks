@@ -42,7 +42,7 @@ type UpgradeOrder struct {
 }
 
 var (
-	artifactNameRE = regexp.MustCompile(`^tw-[0-9]+\.[0-9]+\.[0-9]+-(darwin|linux)-(amd64|arm64)\.tar\.gz$`)
+	artifactNameRE = regexp.MustCompile(`^tailworks-[0-9]+\.[0-9]+\.[0-9]+-(darwin|linux)-(amd64|arm64)\.tar\.gz$`)
 	sha256RE       = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 

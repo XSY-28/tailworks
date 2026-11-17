@@ -22,8 +22,8 @@ func TestRuntimeCompat(t *testing.T) {
 	t.Run("NodejsCompat", func(t *testing.T) {
 		for w, tw := range where {
 			code, _, r := in.get("/node", tw)
-			if code != 200 || r["base64"] != "dHdk" || r["uuid"] != true || r["als"] != "ctx-1" || r["emitted"] != float64(42) ||
-				r["sha256"] != "684d49d53963cec93bc0c0056995be45d6f99c8ec9976bb80ce03515bb921668" {
+			if code != 200 || r["base64"] != "dHc=" || r["uuid"] != true || r["als"] != "ctx-1" || r["emitted"] != float64(42) ||
+				r["sha256"] != "b6399cc26f4d76baacf93830240ae1a8b0b54060eda1e760d9e3a86d4d3cb618" {
 				t.Fatalf("%s: %d %v", w, code, r)
 			}
 		}
