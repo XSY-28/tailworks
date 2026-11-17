@@ -11,7 +11,7 @@ import (
 func TestModuleTypes(t *testing.T) {
 	files := map[string][]byte{
 		"wrangler.jsonc":   []byte(`{"name":"w","main":"src/index.ts"}`),
-		"tw-bundle.json":  []byte(`{"main":"dist/index.js","modules":{"dist/aa-notes.md":"text","dist/bb-q.sql":"text","dist/cc-m.wasm":"wasm"}}`),
+		"tw-bundle.json":   []byte(`{"main":"dist/index.js","modules":{"dist/aa-notes.md":"text","dist/bb-q.sql":"text","dist/cc-m.wasm":"wasm"}}`),
 		"dist/index.js":    []byte("export default {}"),
 		"dist/aa-notes.md": []byte("# notes"),
 		"dist/bb-q.sql":    []byte("select 1"),

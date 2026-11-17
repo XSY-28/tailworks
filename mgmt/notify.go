@@ -61,7 +61,7 @@ var notifyAllowLoopback = false
 
 // notifyReservedHeaders are set by mgmt itself.
 var notifyReservedHeaders = map[string]bool{
-	"tw-event":  true,
+	"tw-event":   true,
 	"user-agent": true,
 }
 

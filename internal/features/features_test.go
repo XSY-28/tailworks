@@ -24,7 +24,7 @@ func TestRequired(t *testing.T) {
 		"wrangler.jsonc": []byte(`{"name":"app","main":"index.js","compatibility_date":"2026-04-01",
 			"kv_namespaces":[{"binding":"CACHE","id":"cache"}],
 			"r2_buckets":[{"binding":"B","bucket_name":"b"}]}`),
-		"index.js":  []byte(`export default { fetch() { return new Response("ok") } }`),
+		"index.js":        []byte(`export default { fetch() { return new Response("ok") } }`),
 		"tailworks.jsonc": []byte(`{"tailnet":{"tags":["tag:app"]}}`),
 	}
 	b, err := bundle.Pack(files)

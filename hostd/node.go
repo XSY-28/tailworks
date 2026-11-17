@@ -376,7 +376,7 @@ func (h *Host) nodeIngress(inst *instance, tr http.RoundTripper) http.Handler {
 			} `json:"tailscale"`
 			ObjectID string `json:"objectId"`
 			TraceID  string `json:"traceId"`
-			Tw      struct {
+			Tw       struct {
 				ObjectID string `json:"objectID"`
 			} `json:"tw"`
 		}

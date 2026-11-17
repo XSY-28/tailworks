@@ -364,11 +364,11 @@ func TestOpenArchiveDockerSave(t *testing.T) {
 
 func TestNormalizeAndAlias(t *testing.T) {
 	for in, want := range map[string]string{
-		"debian:trixie":                              "docker.io/library/debian:trixie",
-		"cloudflare/sandbox:0.12.14":                 "docker.io/cloudflare/sandbox:0.12.14",
-		"docker.io/cloudflare/sandbox:0.12.14":       "docker.io/cloudflare/sandbox:0.12.14",
-		"ubuntu":                                     "docker.io/library/ubuntu:latest",
-		"localhost:5000/x/y:1":                       "localhost:5000/x/y:1",
+		"debian:trixie":                             "docker.io/library/debian:trixie",
+		"cloudflare/sandbox:0.12.14":                "docker.io/cloudflare/sandbox:0.12.14",
+		"docker.io/cloudflare/sandbox:0.12.14":      "docker.io/cloudflare/sandbox:0.12.14",
+		"ubuntu":                                    "docker.io/library/ubuntu:latest",
+		"localhost:5000/x/y:1":                      "localhost:5000/x/y:1",
 		"tw.local/cloudflare-sandbox:0.12.14-arm64": "tw.local/cloudflare-sandbox:0.12.14-arm64",
 	} {
 		if g := NormalizeRef(in); g != want {

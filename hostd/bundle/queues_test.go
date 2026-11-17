@@ -40,8 +40,8 @@ func TestParseQueues(t *testing.T) {
 		t.Fatalf("empty queues: %v %+v", err, a)
 	}
 	_, err = bundle.Parse(map[string][]byte{
-		"tailworks.jsonc":      []byte(`{ "runtime": "node" }`),
-		"wrangler.jsonc": []byte(`{ "name": "n", "queues": { "producers": [{ "binding": "Q", "queue": "q" }] } }`),
+		"tailworks.jsonc": []byte(`{ "runtime": "node" }`),
+		"wrangler.jsonc":  []byte(`{ "name": "n", "queues": { "producers": [{ "binding": "Q", "queue": "q" }] } }`),
 	})
 	if err == nil || !strings.Contains(err.Error(), "workerd runtime") {
 		t.Fatalf("node runtime with queues: %v", err)

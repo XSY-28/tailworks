@@ -37,7 +37,7 @@ func TestContainerPlacement(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		hosts    []host
-		tw      string
+		tw       string
 		wrangler string
 		pin      string
 		want     string

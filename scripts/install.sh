@@ -169,6 +169,8 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 trap 'rm -rf "$STAGE"' EXIT
 cp -R "$SRC/bin" "$SRC/share" "$SRC/VERSION" "$STAGE/"
+# The long name works too: tailworks → tw.
+ln -sf tw "$STAGE/bin/tailworks"
 if [ "$os" = darwin ]; then
 	# Release binaries are ad-hoc signed; files fetched by a browser carry
 	# com.apple.quarantine (scp/curl don't). Clear it on our copy only.

@@ -10324,7 +10324,7 @@ type NotModifiedResponse struct {
 }
 
 type PreconditionFailedResponseHeaders struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 type PreconditionFailedJSONResponse struct {

@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	tw "github.com/rosskukulinski/tailworks"
+	"github.com/rosskukulinski/tailworks"
 )
 
 //go:embed *.md contracts/*.md design/RFC.md design/adr/*.md
@@ -58,8 +58,8 @@ func List() []Doc {
 		out = append(out, Doc{Path: p, Title: title(string(b), p)})
 		return nil
 	})
-	for _, n := range tw.RootDocNames {
-		b, _ := tw.RootDocs.ReadFile(n)
+	for _, n := range tailworks.RootDocNames {
+		b, _ := tailworks.RootDocs.ReadFile(n)
 		out = append(out, Doc{Path: rootPrefix + n, Title: title(string(b), n)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
@@ -80,10 +80,10 @@ func title(s, p string) string {
 func Read(name string) (string, bool) {
 	name = strings.TrimPrefix(path.Clean(strings.TrimPrefix(name, "./")), "docs/")
 	if n, ok := strings.CutPrefix(name, rootPrefix); ok {
-		if !slices.Contains(tw.RootDocNames, n) {
+		if !slices.Contains(tailworks.RootDocNames, n) {
 			return "", false
 		}
-		b, err := tw.RootDocs.ReadFile(n)
+		b, err := tailworks.RootDocs.ReadFile(n)
 		return string(b), err == nil
 	}
 	b, err := files.ReadFile(name)

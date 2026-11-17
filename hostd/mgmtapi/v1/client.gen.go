@@ -19496,7 +19496,7 @@ type DeleteDeploymentResponse409Headers struct {
 
 // DeleteDeploymentResponse412Headers the declared response headers of an HTTP 412 response for DeleteDeployment
 type DeleteDeploymentResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 
@@ -20137,7 +20137,7 @@ type DeleteHostResponse404Headers struct {
 
 // DeleteHostResponse412Headers the declared response headers of an HTTP 412 response for DeleteHost
 type DeleteHostResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 
@@ -21600,7 +21600,7 @@ type DeleteObjectResponse410Headers struct {
 
 // DeleteObjectResponse412Headers the declared response headers of an HTTP 412 response for DeleteObject
 type DeleteObjectResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 
@@ -21838,7 +21838,7 @@ type UpdateObjectResponse410Headers struct {
 
 // UpdateObjectResponse412Headers the declared response headers of an HTTP 412 response for UpdateObject
 type UpdateObjectResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 
@@ -22790,7 +22790,7 @@ type DeleteTenantResponse404Headers struct {
 
 // DeleteTenantResponse412Headers the declared response headers of an HTTP 412 response for DeleteTenant
 type DeleteTenantResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 
@@ -23002,7 +23002,7 @@ type UpdateTenantResponse404Headers struct {
 
 // UpdateTenantResponse412Headers the declared response headers of an HTTP 412 response for UpdateTenant
 type UpdateTenantResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 
@@ -25809,7 +25809,7 @@ type UpdateWorkloadPublicResponse404Headers struct {
 
 // UpdateWorkloadPublicResponse412Headers the declared response headers of an HTTP 412 response for UpdateWorkloadPublic
 type UpdateWorkloadPublicResponse412Headers struct {
-	ETag     *string
+	ETag    *string
 	TwError *string
 }
 

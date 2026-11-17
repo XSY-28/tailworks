@@ -319,7 +319,8 @@ func pidAlive(pid int) bool {
 	// on Linux, only a tailworks binary counts.
 	if b, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid)); err == nil {
 		argv0, _, _ := strings.Cut(string(b), "\x00")
-		return strings.HasPrefix(filepath.Base(argv0), "tw")
+		b := filepath.Base(argv0)
+		return strings.HasPrefix(b, "tw") || b == "tailworks" // the install.sh symlink
 	}
 	return true
 }

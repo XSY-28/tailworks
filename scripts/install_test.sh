@@ -47,6 +47,7 @@ sh "$T/rel-0.1.0/install.sh" >/dev/null
 [ "$(cat "$P/VERSION")" = 0.1.0 ] || fail "first install"
 [ ! -e "$P/bin.prev" ] || fail "first install made a .prev"
 [ -x "$P/install.sh" ] || fail "install.sh not copied to the prefix"
+[ "$("$P/bin/tailworks")" = "tw 0.1.0" ] || fail "the tailworks → tw symlink"
 
 sh "$T/rel-0.2.0/install.sh" >/dev/null
 [ "$(cat "$P/VERSION")" = 0.2.0 ] || fail "upgrade"

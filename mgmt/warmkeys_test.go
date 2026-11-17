@@ -330,7 +330,7 @@ func TestWarmKeyRefillRespectsThrottle(t *testing.T) {
 	classOf := map[string]string{
 		PoolName([]string{"tag:tw-agent-support"}, false):     "SupportAgent",
 		PoolName([]string{"tag:tw-agent-support-sub"}, false): "LookupAgent",
-		PoolName([]string{"tag:crm"}, false):                   "Rogue",
+		PoolName([]string{"tag:crm"}, false):                  "Rogue",
 	}
 	var pool string
 	for dl := time.Now().Add(5 * time.Second); pool == ""; time.Sleep(20 * time.Millisecond) {

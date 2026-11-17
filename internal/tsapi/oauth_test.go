@@ -180,8 +180,8 @@ func TestOAuthSourceCacheRefreshRetry(t *testing.T) {
 func TestIsTagsNotPermitted(t *testing.T) {
 	for msg, want := range map[string]bool{
 		"tailscale api: 400 requested tags [tag:tw-mgmt] are invalid or not permitted": true,
-		"tailscale api: 403 insufficient scope":                                         false,
-		"tailscale api: 429 rate limited":                                               false,
+		"tailscale api: 403 insufficient scope":                                        false,
+		"tailscale api: 429 rate limited":                                              false,
 	} {
 		if got := IsTagsNotPermitted(fmt.Errorf("%s", msg)); got != want {
 			t.Fatalf("%q: %v", msg, got)

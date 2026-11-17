@@ -16,7 +16,9 @@ import (
 	"github.com/rosskukulinski/tailworks/internal/kvwire"
 )
 
-func devStoresFile(appDir string) string { return filepath.Join(appDir, ".tailworks", "dev-stores.json") }
+func devStoresFile(appDir string) string {
+	return filepath.Join(appDir, ".tailworks", "dev-stores.json")
+}
 
 // loadDevStores imports the saved stores into tenantID (none saved: none).
 func loadDevStores(fm *fakemgmt.Server, tenantID, appDir string) (int, error) {

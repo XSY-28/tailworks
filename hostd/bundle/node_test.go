@@ -7,8 +7,8 @@ import (
 
 func TestParseNode(t *testing.T) {
 	files := map[string][]byte{
-		"tailworks.jsonc":               []byte(`{"name":"n","runtime":"node","main":"src/s.ts","node":{"env":{"A":"1"}},"tailnet":{"tags":["tag:x"]}}`),
-		"tw-bundle.json":         []byte(`{"main":"dist/server.mjs","env":{"B":"2"}}`),
+		"tailworks.jsonc":         []byte(`{"name":"n","runtime":"node","main":"src/s.ts","node":{"env":{"A":"1"}},"tailnet":{"tags":["tag:x"]}}`),
+		"tw-bundle.json":          []byte(`{"main":"dist/server.mjs","env":{"B":"2"}}`),
 		"dist/server.mjs":         []byte(`console.log(1)`),
 		"node_modules/x/index.js": []byte(`1`),
 	}
@@ -26,9 +26,9 @@ func TestParseNode(t *testing.T) {
 		`{"runtime":"node"}`:                   `needs "main"`,
 		`{"runtime":"node","main":"nope.mjs"}`: "not in bundle",
 		`{"runtime":"node","main":"dist/server.mjs","node":{"env":{"TW_X":"1"}}}`: "reserved",
-		`{"runtime":"node","main":"dist/server.mjs","node":{"args":["-e","x"]}}`:   "--flags",
-		`{"runtime":"node","main":"dist/server.mjs","node":{"listen":"udp"}}`:      "node.listen",
-		`{"runtime":"deno","main":"dist/server.mjs"}`:                              "runtime",
+		`{"runtime":"node","main":"dist/server.mjs","node":{"args":["-e","x"]}}`:  "--flags",
+		`{"runtime":"node","main":"dist/server.mjs","node":{"listen":"udp"}}`:     "node.listen",
+		`{"runtime":"deno","main":"dist/server.mjs"}`:                             "runtime",
 	}
 	for cfg, want := range bad {
 		_, err := Parse(map[string][]byte{"tailworks.jsonc": []byte(cfg), "dist/server.mjs": []byte("1")})

@@ -13,8 +13,8 @@ func testApp(t *testing.T, tw string) *bundle.App {
 	t.Helper()
 	app, err := bundle.Parse(map[string][]byte{
 		"wrangler.jsonc":  []byte(`{"name":"g","main":"dist/index.js","compatibility_date":"2026-04-01"}`),
-		"tailworks.jsonc":       []byte(tw),
-		"tw-bundle.json": []byte(`{"main":"dist/index.js"}`),
+		"tailworks.jsonc": []byte(tw),
+		"tw-bundle.json":  []byte(`{"main":"dist/index.js"}`),
 		"dist/index.js":   []byte(`export default { fetch() { return new Response("ok") } }`),
 	})
 	if err != nil {
@@ -56,9 +56,9 @@ func TestGuestNet(t *testing.T) {
 
 func TestBadTier(t *testing.T) {
 	_, err := bundle.Parse(map[string][]byte{
-		"wrangler.jsonc": []byte(`{"name":"g","main":"dist/index.js","compatibility_date":"2026-04-01"}`),
-		"tailworks.jsonc":      []byte(`{"tier":"gvisor"}`),
-		"dist/index.js":  []byte(`export default {}`),
+		"wrangler.jsonc":  []byte(`{"name":"g","main":"dist/index.js","compatibility_date":"2026-04-01"}`),
+		"tailworks.jsonc": []byte(`{"tier":"gvisor"}`),
+		"dist/index.js":   []byte(`export default {}`),
 	})
 	if err == nil || !strings.Contains(err.Error(), "tier") {
 		t.Fatalf("want a tier error, got %v", err)

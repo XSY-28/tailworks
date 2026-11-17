@@ -33,7 +33,7 @@ func TestParseStores(t *testing.T) {
 		`[{ "binding": "V", "name": "x" }]`:                                  "a var",
 		`[{ "binding": "P", "name": "x" }, { "binding": "P", "name": "y" }]`: "another storage binding",
 		`[{ "binding": "1P", "name": "x" }]`:                                 "bad binding name",
-		`[{ "binding": "__TW_X", "name": "x" }]`:                            "bad binding name",
+		`[{ "binding": "__TW_X", "name": "x" }]`:                             "bad binding name",
 		`[{ "binding": "P", "name": "a/b" }]`:                                "store name",
 		`[{ "binding": "P", "name": "" }]`:                                   "store name",
 		`{"no": "array"}`:                                                    "tw_test_probes",

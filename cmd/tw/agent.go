@@ -171,8 +171,8 @@ func cmdAgentSetup(args []string, remove bool) error {
 
 type agentSetupResult struct {
 	*twagent.Plan
-	DryRun  bool                 `json:"dryRun"`
-	Applied bool                 `json:"applied"`
+	DryRun  bool                `json:"dryRun"`
+	Applied bool                `json:"applied"`
 	Agents  []twagent.Detection `json:"agents"`
 }
 

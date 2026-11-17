@@ -246,8 +246,8 @@ func TestPublicHeadersAndBlob(t *testing.T) {
 	src := netip.MustParseAddrPort("198.51.100.23:51515")
 	resp, body := do(t, e.client(src), "POST", e.url("/webhooks/github?token=s3cret"), strings.NewReader(`{"a":1}`), map[string]string{
 		"Tailscale-User-Login": "alice@example.com", "Tailscale-User-Name": "Alice",
-		"x-tw-cf":         `{"tailscale":{"caller":{"nodeId":"nFORGED","tags":["tag:admin"]}}}`,
-		"x-tw-object":     "victim",
+		"x-tw-cf":          `{"tailscale":{"caller":{"nodeId":"nFORGED","tags":["tag:admin"]}}}`,
+		"x-tw-object":      "victim",
 		"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "1.2.3.4, 5.6.7.8", "X-Real-IP": "1.2.3.4",
 		"Forwarded": "for=1.2.3.4", "Tailnet-Assertion": "forged", "cf-ipcountry": "XX",
 	})

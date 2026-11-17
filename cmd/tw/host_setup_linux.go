@@ -23,11 +23,11 @@ import (
 // What `tw host setup --microvm` installs (and --undo removes). Nothing
 // else on the system is changed.
 const (
-	setupLibexec = "/usr/local/libexec/tailworks"                   // root-owned copies: tw-vmhelper, firecracker, jailer
-	setupEtc     = "/etc/tailworks"                                 // vmhelper.json (allowed uids), setup.json (what to undo)
+	setupLibexec = "/usr/local/libexec/tailworks"            // root-owned copies: tw-vmhelper, firecracker, jailer
+	setupEtc     = "/etc/tailworks"                          // vmhelper.json (allowed uids), setup.json (what to undo)
 	setupUnit    = "/etc/systemd/system/tw-vmhelper.service" // the helper service
 	setupSysctl  = "/etc/sysctl.d/60-tw-microvm.conf"        // vm.nr_hugepages (guest RAM)
-	setupState   = "/var/lib/tailworks-vm"                          // the helper's jails and volume epoch fence
+	setupState   = "/var/lib/tailworks-vm"                   // the helper's jails and volume epoch fence
 	unitName     = "tw-vmhelper.service"
 )
 

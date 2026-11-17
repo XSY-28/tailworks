@@ -66,9 +66,9 @@ func TestFeatureGatedPlacementAndCordon(t *testing.T) {
 	// h-old is a 0.1 host (no features); h-new offers kv.
 	e.asHost("h-old").ok("PUT", "/v1/hosts/h-old", map[string]any{"capacityNodes": 1000, "tiers": []string{"process"}}, nil)
 	kvBundle := makeBundle(t, map[string]string{
-		"tailworks.jsonc":      `{"tailnet": {"tags": ["tag:w"]}}`,
-		"wrangler.jsonc": `{"name": "w", "main": "dist/index.js", "kv_namespaces": [{"binding": "CACHE", "id": "cache"}]}`,
-		"dist/index.js":  "export default {}",
+		"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`,
+		"wrangler.jsonc":  `{"name": "w", "main": "dist/index.js", "kv_namespaces": [{"binding": "CACHE", "id": "cache"}]}`,
+		"dist/index.js":   "export default {}",
 	})
 	plain := makeBundle(t, map[string]string{"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`, "dist/index.js": "export default {}"})
 	r := e.c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "kvw", "bundle": kvBundle}, 409, "feature_unavailable")
@@ -276,9 +276,9 @@ func TestReleaseArtifacts(t *testing.T) {
 // Workflows app is stateful (fenced, and a drain doesn't move it).
 func TestBundleStatefulWorkflows(t *testing.T) {
 	b := makeBundle(t, map[string]string{
-		"tailworks.jsonc":      `{"tailnet": {"tags": ["tag:w"]}}`,
-		"wrangler.jsonc": `{"name": "w", "main": "dist/index.js", "workflows": [{"name": "refunds", "binding": "R", "class_name": "Refund"}]}`,
-		"dist/index.js":  "export default {}",
+		"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`,
+		"wrangler.jsonc":  `{"name": "w", "main": "dist/index.js", "workflows": [{"name": "refunds", "binding": "R", "class_name": "Refund"}]}`,
+		"dist/index.js":   "export default {}",
 	})
 	if st, why := BundleStateful(b); !st || !strings.Contains(why, "workflow refunds") {
 		t.Fatalf("stateful %v %q", st, why)

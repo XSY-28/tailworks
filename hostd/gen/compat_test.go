@@ -78,8 +78,8 @@ export default { fetch() { return sum(); } };
 		"wrangler.jsonc": []byte(`{"name": "wasm", "main": "index.js", "compatibility_date": "2026-04-01",
   "durable_objects": {"bindings": [{"name": "FACET", "class_name": "Facet"}, {"name": "PLAIN", "class_name": "Plain"}]}}`),
 		"tailworks.jsonc": []byte(`{"tailnet": {"objects": {"Plain": {"egress": "workload"}}}}`),
-		"index.js":  []byte(js),
-		"add.wasm":  addWasm,
+		"index.js":        []byte(js),
+		"add.wasm":        addWasm,
 	}
 	in := startFiles(t, files)
 	for w, tw := range map[string]map[string]any{"Worker": wl, "Facet": obj("Facet", "w1"), "Plain": obj("Plain", "w2")} {
