@@ -1,6 +1,6 @@
 # Changelog
 
-What changed in each twd release, newest first. This file is generated
+What changed in each tailworks release, newest first. This file is generated
 from the release catalog (`internal/catalog/releases/`, written from the
 fragments in `changes/released/`); don't edit it by hand. How versions
 work and what may break: [docs/RELEASING.md](docs/RELEASING.md#versions).

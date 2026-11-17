@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rosskukulinski/twd/internal/registry"
+	"github.com/rosskukulinski/tailworks/internal/registry"
 )
 
 // TestStoreRegistryMeta (ADR-032 D3), on SQLite and Postgres: links are

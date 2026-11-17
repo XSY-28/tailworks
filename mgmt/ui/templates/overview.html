@@ -45,7 +45,7 @@
       <td>{{or .DeployedBy "—"}}</td>
       <td class="small">{{since .CreatedAt}}</td>
       <td class="mono muted">{{.DeploymentID}}</td>
-    </tr>{{else}}<tr><td colspan="8" class="empty">There are no deployments yet. Run <span class="mono">twd deploy</span> to create one.</td></tr>{{end}}
+    </tr>{{else}}<tr><td colspan="8" class="empty">There are no deployments yet. Run <span class="mono">tw deploy</span> to create one.</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -70,7 +70,7 @@
       <td class="mono">{{.PushTransport}}</td>
       <td class="mono">{{len .Leases}}</td>
       <td class="mono muted" title="{{.NodeID}}">{{if .NodeID}}{{short .NodeID}}{{else}}—{{end}}</td>
-    </tr>{{else}}<tr><td colspan="9" class="empty">There are no hosts: add one with <span class="mono">twd host add</span>, then run twd-hostd on it.</td></tr>{{end}}
+    </tr>{{else}}<tr><td colspan="9" class="empty">There are no hosts: add one with <span class="mono">tw host add</span>, then run tw-hostd on it.</td></tr>{{end}}
     </tbody>
   </table>
   </div>
@@ -103,7 +103,7 @@
 <section id="objects" data-live="objects">
   <div class="sect-head"><div>
     <h2>Objects <span class="count">{{len .Objects}}</span></h2>
-    <p class="hint">Every tailnet node twd has created, across all tenants. Children are indented under the object that created them; greyed rows are gone.</p>
+    <p class="hint">Every tailnet node tailworks has created, across all tenants. Children are indented under the object that created them; greyed rows are gone.</p>
   </div></div>
   <div class="tbl">
   <table class="objects">
@@ -127,7 +127,7 @@
   {{if .Who.Admin}}<p class="chains">{{template "chains" .Verification.Chains}}</p>{{end}}
 </section>
 
-{{if not .Who.Admin}}<p class="hint">You're a tenant admin: this shows the tenants your <span class="mono">twd.dev/cap/tenant-admin</span> grant names. Hosts and the control plane are the admins'.</p>{{else}}<details class="more card">
+{{if not .Who.Admin}}<p class="hint">You're a tenant admin: this shows the tenants your <span class="mono">github.com/rosskukulinski/tailworks/cap/tenant-admin</span> grant names. Hosts and the control plane are the admins'.</p>{{else}}<details class="more card">
   <summary>Control plane details</summary>
   <dl class="kv">
     <dt>DNS name</dt><dd class="mono">{{or .Who.Mgmt.DNSName "—"}}</dd>

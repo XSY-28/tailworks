@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/container"
 )
 
 // TestStoreContainerReservations (ADR-032 D9), on SQLite and Postgres: the

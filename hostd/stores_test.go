@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -71,7 +71,7 @@ func TestPlatformStore(t *testing.T) {
 		t.Fatalf("journal: %v", page)
 	}
 
-	// Another writer (an admin, twd kv key put) appends: the store object
+	// Another writer (an admin, tw kv key put) appends: the store object
 	// catches up on its next read that wants fresh data, and its next
 	// write conflicts once, catches up and retries.
 	var ar mgmtapi.StoreAppendResult

@@ -6,13 +6,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
 )
 
 // Access warnings (ADR-043 D2): the deploy preflight, which
 // already reads the tenant's tailnet policy, also reports grants to
-// tag:twd-mgmt that don't do what they look like they do. `twd policy` and
-// `twd deploy` print them; they never fail a deploy.
+// tag:tw-mgmt that don't do what they look like they do. `tw policy` and
+// `tw deploy` print them; they never fail a deploy.
 
 // accessWarnings inspects pol's grants to mgmt for tenant t.
 func (m *Mgmt) accessWarnings(ctx context.Context, t Tenant, pol *Policy) []string {
@@ -53,7 +53,7 @@ func (m *Mgmt) accessWarnings(ctx context.Context, t Tenant, pol *Policy) []stri
 		for _, tg := range grants {
 			for _, id := range tg.Tenants {
 				if !known[id] {
-					add("%s → %s: %s names %q, which is not a tenant on this twd (tenant IDs: twd tenant ls)", src, MgmtTag, TenantAdminCap, id)
+					add("%s → %s: %s names %q, which is not a tenant on this tailworks (tenant IDs: tw tenant ls)", src, MgmtTag, TenantAdminCap, id)
 				}
 			}
 		}

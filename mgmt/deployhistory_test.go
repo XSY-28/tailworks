@@ -11,7 +11,7 @@ import (
 
 // Store side of deployment history (ADR-deploy-rollback): newest-first
 // paging, the recorded hash, active_at, and pruning that keeps the hash and
-// the newest bundles. SQLite always; Postgres with TWD_TEST_POSTGRES_DSN
+// the newest bundles. SQLite always; Postgres with TW_TEST_POSTGRES_DSN
 // (make test-pg).
 func TestStoreDeploymentHistory(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
@@ -134,7 +134,7 @@ func TestV1DeployHistoryRollback(t *testing.T) {
 	built := map[string][]byte{} // makeBundle's tar order varies: build each version once
 	bundleOf := func(v string) []byte {
 		if built[v] == nil {
-			built[v] = makeBundle(t, map[string]string{"twd.jsonc": `{ "tailnet": { "tags": ["tag:twd-web"] } }`, "dist/index.js": "export default {} // " + v})
+			built[v] = makeBundle(t, map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"] } }`, "dist/index.js": "export default {} // " + v})
 		}
 		return built[v]
 	}

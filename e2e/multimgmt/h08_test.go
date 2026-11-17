@@ -11,7 +11,7 @@ import (
 // TestMM_H08_DeploymentStatusPerReplica probes H08: the host-reported
 // deployment status (heartbeat "deployments") is kept in memory on the
 // replica that received the heartbeat (m.depStatus), so other replicas
-// report "assigned" for an active deployment. `twd deploy` waits for
+// report "assigned" for an active deployment. `tw deploy` waits for
 // "active", so behind a load-balanced mgmt it can wait on the wrong replica.
 // Invariant I10: every replica reports the same status.
 func TestMM_H08_DeploymentStatusPerReplica(t *testing.T) {
@@ -33,7 +33,7 @@ func TestMM_H08_DeploymentStatusPerReplica(t *testing.T) {
 		Epoch        int64
 	}
 	c.must(0, "", "POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w",
-		"bundle": makeBundle(map[string]string{"twd.jsonc": twdJSONC, "dist/index.js": "export default {}"})}, &dep)
+		"bundle": makeBundle(map[string]string{"tailworks.jsonc": twJSONC, "dist/index.js": "export default {}"})}, &dep)
 	// The host reports the deployment active, to r0 only.
 	c.must(0, "h1", "PUT", "/v1/hosts/h1/status", map[string]any{"liveNodes": 1,
 		"leases":      []map[string]any{{"namespace": "w", "epoch": dep.Epoch}},

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
 )
 
 // publicFirstRequestTimeout is how long a new public connection may take

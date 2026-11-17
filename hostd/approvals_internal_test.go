@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 func approvalsHost(t *testing.T, dir string) (*Host, *instance) {
@@ -135,32 +135,32 @@ func TestServeApprovalsRefusals(t *testing.T) {
 		t.Fatal("other paths are the app's")
 	}
 	pub := map[string]any{"tailscale": map[string]any{"requester": map[string]any{"kind": "public"}}}
-	if _, c, r := serve("GET", "/_twd/approvals", "", "", pub); c != http.StatusForbidden || r["code"] != "public_request" {
+	if _, c, r := serve("GET", "/_tw/approvals", "", "", pub); c != http.StatusForbidden || r["code"] != "public_request" {
 		t.Fatalf("public: %d %v", c, r)
 	}
-	if _, c, r := serve("GET", "/_twd/approvals", "", "", map[string]any{}); c != 401 || r["code"] != "no_identity" {
+	if _, c, r := serve("GET", "/_tw/approvals", "", "", map[string]any{}); c != 401 || r["code"] != "no_identity" {
 		t.Fatalf("no caller: %d %v", c, r)
 	}
-	if _, c, r := serve("GET", "/_twd/approvals", "", "", caller(nil)); c != 403 || r["code"] != "cap_missing" {
+	if _, c, r := serve("GET", "/_tw/approvals", "", "", caller(nil)); c != 403 || r["code"] != "cap_missing" {
 		t.Fatalf("list without grant: %d %v", c, r)
 	}
 	granted := caller(map[string]any{ApproveCap: []any{map[string]any{"workflows": []string{"refund"}}}})
-	if _, c, r := serve("GET", "/_twd/approvals", "", "", granted); c != 200 || len(r["approvals"].([]any)) != 1 {
+	if _, c, r := serve("GET", "/_tw/approvals", "", "", granted); c != 200 || len(r["approvals"].([]any)) != 1 {
 		t.Fatalf("list: %d %v", c, r)
 	}
-	if _, c, _ := serve("POST", "/_twd/approvals/refund/wf1", "text/plain", `{"decision":"approve"}`, granted); c != 400 {
+	if _, c, _ := serve("POST", "/_tw/approvals/refund/wf1", "text/plain", `{"decision":"approve"}`, granted); c != 400 {
 		t.Fatalf("not JSON: %d", c)
 	}
-	if _, c, _ := serve("OPTIONS", "/_twd/approvals/refund/wf1", "", "", granted); c != 400 {
+	if _, c, _ := serve("OPTIONS", "/_tw/approvals/refund/wf1", "", "", granted); c != 400 {
 		t.Fatalf("preflight: %d", c)
 	}
-	if _, c, r := serve("POST", "/_twd/approvals/refund/wf1", "application/json", `{"decision":"approve"}`, caller(nil)); c != 403 || r["code"] != "cap_missing" {
+	if _, c, r := serve("POST", "/_tw/approvals/refund/wf1", "application/json", `{"decision":"approve"}`, caller(nil)); c != 403 || r["code"] != "cap_missing" {
 		t.Fatalf("approve without grant: %d %v", c, r)
 	}
-	if _, c, r := serve("POST", "/_twd/approvals/refund/nope", "application/json", `{"decision":"approve"}`, granted); c != 409 || r["code"] != "approval_not_pending" {
+	if _, c, r := serve("POST", "/_tw/approvals/refund/nope", "application/json", `{"decision":"approve"}`, granted); c != 409 || r["code"] != "approval_not_pending" {
 		t.Fatalf("nothing waiting: %d %v", c, r)
 	}
-	if _, c, _ := serve("POST", "/_twd/approvals/refund/wf1", "application/json", `{"decision":"maybe"}`, granted); c != 400 {
+	if _, c, _ := serve("POST", "/_tw/approvals/refund/wf1", "application/json", `{"decision":"maybe"}`, granted); c != 400 {
 		t.Fatalf("bad decision: %d", c)
 	}
 	if k := auditKinds(h); k[kindApprovalDenied] != 1 {

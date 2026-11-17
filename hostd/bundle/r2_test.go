@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // TestParseR2Buckets: r2_buckets entries are stores of kind "r2" named by

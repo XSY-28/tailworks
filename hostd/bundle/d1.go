@@ -9,13 +9,13 @@ import (
 
 // D1 (ADR-038): wrangler.jsonc "d1_databases" entries are platform stores
 // of kind "d1", one per database_name. The migration settings are read by
-// the CLI (`twd d1 migrations …`), not by hostd.
+// the CLI (`tw d1 migrations …`), not by hostd.
 
 // D1Database is one d1_databases entry.
 type D1Database struct {
 	Binding      string `json:"binding"`
 	DatabaseName string `json:"database_name"`
-	// DatabaseID is wrangler's database UUID. twd names a database by
+	// DatabaseID is wrangler's database UUID. Tailworks names a database by
 	// DatabaseName within the workload, so it is accepted and ignored.
 	DatabaseID        string `json:"database_id,omitempty"`
 	PreviewDatabaseID string `json:"preview_database_id,omitempty"`

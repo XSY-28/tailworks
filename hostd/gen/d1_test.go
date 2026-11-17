@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
 )
 
 // TestGenerateD1: a d1_databases binding is workerd's own D1 API (a
@@ -30,19 +30,19 @@ func TestGenerateD1(t *testing.T) {
 	c := string(cfg)
 	for _, want := range []string{
 		`(name = "DB", wrapped = (moduleName = "cloudflare-internal:d1-api", innerBindings = [(name = "fetcher", service = (name = "platform", entrypoint = "D1Backend", props = (json = "{\"kind\":\"d1\",\"name\":\"prod-db\"}")))]))`,
-		`(name = "twd-store-d1.js", esModule = embed "twd-store-d1.js")`,
-		`(className = "Store", uniqueKey = "twd-w-__twd_store", enableSql = true)`,
+		`(name = "tw-store-d1.js", esModule = embed "tw-store-d1.js")`,
+		`(className = "Store", uniqueKey = "tw-w-__tw_store", enableSql = true)`,
 	} {
 		if !strings.Contains(c, want) {
 			t.Errorf("config.capnp lacks %s", want)
 		}
 	}
-	if strings.Contains(c, "__TWD_STORE_") {
+	if strings.Contains(c, "__TW_STORE_") {
 		t.Error("D1 needs no platform-side native binding")
 	}
-	idx, _ := os.ReadFile(filepath.Join(dir, "twd-stores.js"))
-	if !strings.Contains(string(idx), `export { D1Backend } from "twd-store-d1.js";`) {
-		t.Errorf("twd-stores.js: %s", idx)
+	idx, _ := os.ReadFile(filepath.Join(dir, "tw-stores.js"))
+	if !strings.Contains(string(idx), `export { D1Backend } from "tw-store-d1.js";`) {
+		t.Errorf("tw-stores.js: %s", idx)
 	}
 	var tc struct {
 		Stores []struct {
@@ -50,8 +50,8 @@ func TestGenerateD1(t *testing.T) {
 			Props                map[string]string
 		} `json:"stores"`
 	}
-	b, _ := os.ReadFile(filepath.Join(dir, "twd-config.json"))
+	b, _ := os.ReadFile(filepath.Join(dir, "tw-config.json"))
 	if err := json.Unmarshal(b, &tc); err != nil || len(tc.Stores) != 1 || tc.Stores[0].Facet != "D1Backend" || tc.Stores[0].Wrap != "d1" || tc.Stores[0].Props["name"] != "prod-db" {
-		t.Fatalf("twd-config.json stores: %+v %v", tc.Stores, err)
+		t.Fatalf("tw-config.json stores: %+v %v", tc.Stores, err)
 	}
 }

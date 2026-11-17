@@ -1,13 +1,13 @@
-// Package hostdrun runs the twd host agent (hostd) as a library: the
-// standalone twd-hostd binary is a flag parser over New/Start, and the
-// single-process `twd up` embeds it next to mgmt (internal/mgmtd) with an
+// Package hostdrun runs the tailworks host agent (hostd) as a library: the
+// standalone tw-hostd binary is a flag parser over New/Start, and the
+// single-process `tw up` embeds it next to mgmt (internal/mgmtd) with an
 // in-process transport (internal/inproc).
 //
 // Three transports:
-//   - tsnet (normal standalone operation): the host's own tag:twd-host
-//     node, joined once with the single-use key `twd host add` minted; mgmt
+//   - tsnet (normal standalone operation): the host's own tag:tw-host
+//     node, joined once with the single-use key `tw host add` minted; mgmt
 //     is reached over the tailnet and pushes to the node's PushPort;
-//   - local-dev: mgmt's unix socket with the per-host token (twd dev, tests);
+//   - local-dev: mgmt's unix socket with the per-host token (tw dev, tests);
 //   - embedded (Options.Client set): a caller-provided client, no node of
 //     its own, pushes served in-process (hostd.Config.PushInProcess).
 package hostdrun
@@ -25,43 +25,43 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/image"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/r2"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/hostd/vm/helperapi"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/image"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/r2"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/netd"
 	"tailscale.com/tsnet"
 )
 
 // HostTag is the tag hosts' own nodes carry (mgmt.HostTag).
-const HostTag = "tag:twd-host"
+const HostTag = "tag:tw-host"
 
-// Flag defaults twd-hostd and the single-process twd up share (an Options
+// Flag defaults tw-hostd and the single-process tw up share (an Options
 // zero value means "off" for these, so callers pass the default explicitly).
 const (
 	// DefaultPoolNodes is the pre-joined node pool per hot class
-	// (twd-hostd -pool-nodes); hostd treats 0 as off.
+	// (tw-hostd -pool-nodes); hostd treats 0 as off.
 	DefaultPoolNodes = 1
 	// DefaultPushPort is where mgmt pushes to this host's node (-push-port).
 	DefaultPushPort = 7474
 )
 
 // HostNodeName is the tsnet hostname of a host's own node (mgmt.HostNodeName).
-func HostNodeName(hostID string) string { return "twd-host-" + hostID }
+func HostNodeName(hostID string) string { return "tw-host-" + hostID }
 
-// Options mirrors twd-hostd's flags, one field per flag (see cmd/twd-hostd).
+// Options mirrors tw-hostd's flags, one field per flag (see cmd/tw-hostd).
 type Options struct {
-	// MgmtAddr is twd-mgmt's address: http(s)://… over the host's node, or
+	// MgmtAddr is tw-mgmt's address: http(s)://… over the host's node, or
 	// unix:///path with LocalDev. Ignored when Client is set.
 	MgmtAddr string
 	// LocalDev talks to mgmt over its unix socket with the per-host token
 	// (MgmtTokenFile) instead of a node of its own.
 	LocalDev      bool
 	MgmtTokenFile string
-	// Client, when set, is the transport (single-process twd up:
+	// Client, when set, is the transport (single-process tw up:
 	// internal/inproc); no node is joined and no push listener opened,
 	// and the host registers with hostd.EmbeddedPushURL.
 	Client *mgmtapi.Client
@@ -74,7 +74,7 @@ type Options struct {
 	JoinTokenFile   string
 	PushPort        int
 
-	// TSNetKeyTagsOnly: the host's node takes tag:twd-host from its join
+	// TSNetKeyTagsOnly: the host's node takes tag:tw-host from its join
 	// key alone (Headscale refuses a pre-auth-key join that requests tags).
 	TSNetKeyTagsOnly bool
 
@@ -156,13 +156,13 @@ type Options struct {
 
 // VMOptions configures the microVM tier (Firecracker on Linux + KVM,
 // Virtualization.framework on macOS; see vmBackend). Zero values take
-// twd-hostd's flag defaults (withDefaults).
+// tw-hostd's flag defaults (withDefaults).
 type VMOptions struct {
 	// Kernel and Rootfs are the guest kernel and image (VMAsset); Helper
-	// the twd-vmhelper socket; Firecracker and Jailer the binaries used as
+	// the tw-vmhelper socket; Firecracker and Jailer the binaries used as
 	// root without the helper; HugePages "auto" | "on" | "off";
 	// ContainerKernel the erofs-capable kernel for containers (default
-	// Kernel); VzVMM the twd-vz VMM on macOS.
+	// Kernel); VzVMM the tw-vz VMM on macOS.
 	Kernel, Rootfs, Firecracker, Jailer, Helper, HugePages, ContainerKernel, VzVMM string
 	// MemMiB and VCPUs size a guest; VolumeMiB new DO volumes.
 	MemMiB, VCPUs, VolumeMiB int
@@ -179,8 +179,8 @@ type VMOptions struct {
 	Rosetta bool
 }
 
-// withDefaults fills VMOptions like twd-hostd's flag defaults: the release's
-// guest assets (VMAsset), the twd-vmhelper socket, /usr/local/bin
+// withDefaults fills VMOptions like tw-hostd's flag defaults: the release's
+// guest assets (VMAsset), the tw-vmhelper socket, /usr/local/bin
 // firecracker + jailer, 512 MiB, 2 vCPUs, huge pages auto, 1 GiB volumes,
 // hourly snapshot rotation.
 func (v VMOptions) withDefaults(home string) VMOptions {
@@ -248,7 +248,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		o.HostID, _ = os.Hostname()
 	}
 	if o.DataDir == "" {
-		o.DataDir = filepath.Join(home, ".twd", "hostd")
+		o.DataDir = filepath.Join(home, ".tailworks", "hostd")
 	}
 	if o.Heartbeat == 0 {
 		o.Heartbeat = 3 * time.Second
@@ -277,7 +277,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		return nil, err
 	}
 	if o.NodeBin == "" {
-		o.NodeBin = os.Getenv("TWD_NODE")
+		o.NodeBin = os.Getenv("TW_NODE")
 	}
 	rt = &Runtime{log: log, Workerd: wd}
 	defer func() {
@@ -294,7 +294,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	case o.LocalDev:
 		rt.Transport = "local-dev"
 		if o.MgmtAddr == "" {
-			o.MgmtAddr = "unix://" + filepath.Join(home, ".twd", "run", "mgmt.sock")
+			o.MgmtAddr = "unix://" + filepath.Join(home, ".tailworks", "run", "mgmt.sock")
 		}
 		if mc, err = mgmtapi.NewClient(o.MgmtAddr); err != nil {
 			return nil, err
@@ -308,7 +308,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 			return nil, errors.New("-tsnet-control-url is required (normal operation is tsnet only; -local-dev for the unix socket)")
 		}
 		if o.MgmtAddr == "" {
-			return nil, errors.New("-mgmt is required: http(s)://twd-mgmt.<tailnet>")
+			return nil, errors.New("-mgmt is required: http(s)://tw-mgmt.<tailnet>")
 		}
 		if o.TSNetDir == "" {
 			o.TSNetDir = filepath.Join(o.DataDir, "tsnet")
@@ -332,7 +332,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 				break // any answer from mgmt means the path is open
 			} else if wctx.Err() != nil {
 				cancel()
-				return nil, fmt.Errorf("mgmt %s unreachable over the tailnet: %w (does the policy grant tag:twd-host → tag:twd-mgmt?)", o.MgmtAddr, err)
+				return nil, fmt.Errorf("mgmt %s unreachable over the tailnet: %w (does the policy grant tag:tw-host → tag:tw-mgmt?)", o.MgmtAddr, err)
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
@@ -440,7 +440,7 @@ func (rt *Runtime) Close() error {
 
 // JoinHostNode opens (or joins) this host's own tailnet node. A node with
 // saved state re-opens without a key. Otherwise it needs the single-use
-// join key: from joinFile, which is waited for (twd up writes it after
+// join key: from joinFile, which is waited for (tw up writes it after
 // mgmt minted it) and deleted once the node is up. The key never reaches
 // the log. keyTagsOnly: advertise no tags (Headscale; the key carries them).
 func JoinHostNode(ctx context.Context, dir, hostname, control, joinFile string, keyTagsOnly bool, log *slog.Logger) (*tsnet.Server, error) {
@@ -458,7 +458,7 @@ func JoinHostNode(ctx context.Context, dir, hostname, control, joinFile string, 
 	}
 	if !hasState {
 		if joinFile == "" {
-			return nil, errors.New("this host's node has no state yet: run `twd-hostd join --token-file <file>` (twd host add mints the key) or pass -join-token-file")
+			return nil, errors.New("this host's node has no state yet: run `tw-hostd join --token-file <file>` (tw host add mints the key) or pass -join-token-file")
 		}
 		log.Info("waiting for the join key", "file", joinFile, "node", hostname)
 		for {
@@ -498,11 +498,11 @@ func JoinHostNode(ctx context.Context, dir, hostname, control, joinFile string, 
 // needs the secret on the host ID's first PUT /v1/hosts/{id} (M1).
 func registrationSecretFile(tsDir string) string { return filepath.Join(tsDir, "registration.secret") }
 
-// PersistRegistrationSecret copies TWD_REGISTRATION_SECRET from a join
-// file to the node state dir. A join file without one (an older twd host
+// PersistRegistrationSecret copies TW_REGISTRATION_SECRET from a join
+// file to the node state dir. A join file without one (an older tw host
 // add) leaves things as they are. The secret is never logged.
 func PersistRegistrationSecret(joinFile, tsDir string) {
-	s, err := tsapi.LoadEnvFile(joinFile, "TWD_REGISTRATION_SECRET")
+	s, err := tsapi.LoadEnvFile(joinFile, "TW_REGISTRATION_SECRET")
 	if err != nil || s == "" {
 		return
 	}
@@ -510,12 +510,12 @@ func PersistRegistrationSecret(joinFile, tsDir string) {
 }
 
 // RegistrationSecret is the secret hostd presents when it registers: from
-// the join file if it is still there (a fresh `twd host add` for a pending
+// the join file if it is still there (a fresh `tw host add` for a pending
 // host), else the copy PersistRegistrationSecret kept. "" when there is
 // none (a host bound before secrets existed; mgmt then ignores it).
 func RegistrationSecret(joinFile, tsDir string) string {
 	if joinFile != "" {
-		if s, err := tsapi.LoadEnvFile(joinFile, "TWD_REGISTRATION_SECRET"); err == nil && s != "" {
+		if s, err := tsapi.LoadEnvFile(joinFile, "TW_REGISTRATION_SECRET"); err == nil && s != "" {
 			return s
 		}
 	}
@@ -527,21 +527,21 @@ func RegistrationSecret(joinFile, tsDir string) string {
 }
 
 // VMAsset finds a microVM asset: next to the installed release
-// (<prefix>/share/twd/vm, e.g. ~/.twd), else ~/.twd/vm.
+// (<prefix>/share/tailworks/vm, e.g. ~/.tailworks), else ~/.tailworks/vm.
 func VMAsset(home, name string) string {
 	if exe, err := os.Executable(); err == nil {
-		p := filepath.Join(filepath.Dir(filepath.Dir(exe)), "share", "twd", "vm", name)
+		p := filepath.Join(filepath.Dir(filepath.Dir(exe)), "share", "tailworks", "vm", name)
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	return filepath.Join(home, ".twd", "vm", name)
+	return filepath.Join(home, ".tailworks", "vm", name)
 }
 
-// FindWorkerd resolves the workerd binary: flagVal, $TWD_WORKERD,
-// ~/.twd/bin/workerd, then PATH.
+// FindWorkerd resolves the workerd binary: flagVal, $TW_WORKERD,
+// ~/.tailworks/bin/workerd, then PATH.
 func FindWorkerd(flagVal, home string) (string, error) {
-	for _, c := range []string{flagVal, os.Getenv("TWD_WORKERD"), filepath.Join(home, ".twd", "bin", "workerd")} {
+	for _, c := range []string{flagVal, os.Getenv("TW_WORKERD"), filepath.Join(home, ".tailworks", "bin", "workerd")} {
 		if c == "" {
 			continue
 		}
@@ -552,7 +552,7 @@ func FindWorkerd(flagVal, home string) (string, error) {
 	if p, err := exec.LookPath("workerd"); err == nil {
 		return p, nil
 	}
-	return "", errors.New("workerd not found (use -workerd or $TWD_WORKERD)")
+	return "", errors.New("workerd not found (use -workerd or $TW_WORKERD)")
 }
 
 // SplitList splits a comma-separated flag value, dropping blanks.

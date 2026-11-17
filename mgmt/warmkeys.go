@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
 // Warm-key pool (RFC §4: "keeps warm keys per (tenant, tag set)"). Measured
@@ -51,7 +51,7 @@ const (
 )
 
 func poolCustodyName(tenantID, keyID string) string {
-	return "twd/" + tenantID + "/_pool/authkey/" + keyID // "_pool" is never an object ID (DNS label)
+	return "tw/" + tenantID + "/_pool/authkey/" + keyID // "_pool" is never an object ID (DNS label)
 }
 
 func (m *Mgmt) warmStore() warmKeyStore {
@@ -220,7 +220,7 @@ func (m *Mgmt) mintWarm(ctx context.Context, ws warmKeyStore, t Tenant, p poolTa
 	ttl := m.cfg.WarmKeyTTL
 	t0 := time.Now()
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: p.tags, Ephemeral: p.ephemeral, Preauthorized: true,
-		ExpirySeconds: int(ttl / time.Second), Description: "twd pool " + t.ID})
+		ExpirySeconds: int(ttl / time.Second), Description: "tw pool " + t.ID})
 	if err != nil {
 		return err
 	}

@@ -1,10 +1,10 @@
-// Workflows on twd (ADR-040): the runtime side.
+// Workflows on tailworks (ADR-040): the runtime side.
 //
 // - wrapWorkflowClass wraps each WorkflowEntrypoint class the engine runs
 //   (the tenant service's exports). Its run() reports every approval wait
 //   (step.waitForEvent with type "approval" or "approval-*", which is what
-//   the Agents SDK's waitForApproval() does) to twd, so the wait is listed
-//   (`twd approvals`) and audited, and twd can deliver the decision. The
+//   the Agents SDK's waitForApproval() does) to tailworks, so the wait is listed
+//   (`tw approvals`) and audited, and tailworks can deliver the decision. The
 //   reports are durable steps: a run() that runs again (after a restart, a
 //   long wait or an event) does not report twice.
 // - workflowClient is env.<binding> inside a facet-mode object: the Workflow
@@ -13,7 +13,7 @@
 
 import { guardTailnetEnv, type BindingMap, type TailnetApiStub } from "./runtime.js";
 
-/** isApprovalType: the event types twd treats as approvals. */
+/** isApprovalType: the event types tailworks treats as approvals. */
 export function isApprovalType(t: unknown): boolean {
   return t === "approval" || (typeof t === "string" && t.startsWith("approval-"));
 }
@@ -40,7 +40,7 @@ function isTimeout(e: unknown): boolean {
 }
 
 async function report(tw: TailnetApiStub | undefined, args: Record<string, unknown>): Promise<boolean> {
-  if (!tw) return false; // not on twd (tests): nothing to report to
+  if (!tw) return false; // not on tailworks (tests): nothing to report to
   const r = await tw.call("approval", args);
   if (!r.ok) throw new Error(`[${r.error?.code ?? "hostd_unavailable"}] approval ${args.op}: ${r.error?.message ?? "refused"}`);
   return true;
@@ -65,13 +65,13 @@ export function installApprovalWaits(step: any, tw: TailnetApiStub | undefined, 
     const type = opts?.type;
     if (!isApprovalType(type) || !instance) return wait(name, opts);
     const base = { workflow, instance, step: name, type, timeout: opts?.timeout ?? "24 hours", facts };
-    await doStep(`__twd_approval_requested:${name}`, REPORT_STEP, () => report(tw, { ...base, op: "requested" }));
+    await doStep(`__tw_approval_requested:${name}`, REPORT_STEP, () => report(tw, { ...base, op: "requested" }));
     try {
       return await wait(name, opts);
     } catch (e) {
       // waitForEvent's timeout: the default is "rejected" (nothing was
       // approved). Record it, then let the Workflow see the error.
-      if (isTimeout(e)) await doStep(`__twd_approval_timeout:${name}`, REPORT_STEP, () => report(tw, { ...base, op: "timeout" }));
+      if (isTimeout(e)) await doStep(`__tw_approval_timeout:${name}`, REPORT_STEP, () => report(tw, { ...base, op: "timeout" }));
       throw e;
     }
   };
@@ -80,18 +80,18 @@ export function installApprovalWaits(step: any, tw: TailnetApiStub | undefined, 
 
 /** wrapWorkflowClass wraps a Workflow class (wrangler "workflows" class_name) for the engine. */
 export function wrapWorkflowClass(C: any, name: string, workflow: string, _binding: string, bindings: BindingMap) {
-  if (typeof C !== "function") throw new Error(`twd: workflows class ${name} (Workflow ${workflow}) is not exported by the main module`);
+  if (typeof C !== "function") throw new Error(`tw: workflows class ${name} (Workflow ${workflow}) is not exported by the main module`);
   const W: any = {
     [name]: class extends C {
       constructor(ctx: any, env: any) {
-        const tw = env?.__TWD;
+        const tw = env?.__TW;
         // A Workflow reaches objects as the Worker does without a request:
-        // existing objects only (no create ticket), and never __TWD.
+        // existing objects only (no create ticket), and never __TW.
         super(ctx, guardTailnetEnv(env, bindings));
-        Object.defineProperty(this, "__twd_tw", { value: tw });
+        Object.defineProperty(this, "__tw_tw", { value: tw });
       }
       async run(event: any, step: any) {
-        installApprovalWaits(step, (this as any).__twd_tw, workflow, event);
+        installApprovalWaits(step, (this as any).__tw_tw, workflow, event);
         try {
           return await super.run(event, step);
         } catch (e) {

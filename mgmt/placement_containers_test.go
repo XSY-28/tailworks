@@ -152,8 +152,8 @@ func TestDeployContainersCapacityAndReplace(t *testing.T) {
 	hb("hx", &HostUsage{VMs: 2, VMMemMiB: 2048}) // the roomiest container host has no free VM
 	hb("hy", &HostUsage{})
 
-	twd := `{ "tailnet": { "tags": ["tag:twd-web"] } }`
-	withCtr := map[string]string{"twd.jsonc": twd, "index.js": "export default {}",
+	tw := `{ "tailnet": { "tags": ["tag:tw-web"] } }`
+	withCtr := map[string]string{"tailworks.jsonc": tw, "index.js": "export default {}",
 		"wrangler.jsonc": `{ "name": "w", "main": "index.js", "containers": [{ "class_name": "S", "image": "i" }],
 			"durable_objects": { "bindings": [{ "name": "S", "class_name": "S" }] } }`}
 	dep, err := m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "c", Bundle: makeBundle(t, withCtr)})
@@ -174,7 +174,7 @@ func TestDeployContainersCapacityAndReplace(t *testing.T) {
 
 	// A workload without containers on the process host...
 	hb("hy", &HostUsage{})
-	plain := map[string]string{"twd.jsonc": twd, "index.js": "export default {}"}
+	plain := map[string]string{"tailworks.jsonc": tw, "index.js": "export default {}"}
 	if dep, err = m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w", Bundle: makeBundle(t, plain)}); err != nil || dep.Host != "hp" {
 		t.Fatalf("first deploy: %+v %v", dep, err)
 	}
@@ -198,6 +198,6 @@ func statelessCtr(files map[string]string) map[string]string {
 	for k, v := range files {
 		out[k] = v
 	}
-	out["twd.jsonc"] = `{ "tailnet": { "tags": ["tag:twd-web"], "objects": { "S": { "tags": ["tag:twd-web"], "fence": "never" } } } }`
+	out["tailworks.jsonc"] = `{ "tailnet": { "tags": ["tag:tw-web"], "objects": { "S": { "tags": ["tag:tw-web"], "fence": "never" } } } }`
 	return out
 }

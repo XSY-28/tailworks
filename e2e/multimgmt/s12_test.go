@@ -62,7 +62,7 @@ func TestMM_S12_SmartPlacement(t *testing.T) {
 			}
 		}
 	}()
-	stateless := makeBundle(map[string]string{"twd.jsonc": `{"tailnet": {"tags": ["tag:w"], "connects": ["tag:db"]}}`, "dist/index.js": "export default {}"})
+	stateless := makeBundle(map[string]string{"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"], "connects": ["tag:db"]}}`, "dist/index.js": "export default {}"})
 	type dep struct {
 		DeploymentID, Host string
 		Epoch              int64

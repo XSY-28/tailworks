@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // TestParseD1: wrangler's d1_databases become "d1" stores named by

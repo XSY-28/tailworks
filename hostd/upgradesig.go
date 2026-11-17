@@ -3,12 +3,12 @@ package hostd
 import (
 	"fmt"
 
-	"github.com/rosskukulinski/twd/internal/releasesig"
+	"github.com/rosskukulinski/tailworks/internal/releasesig"
 )
 
 // verifyRelease checks an extracted release directory before its
 // install.sh runs (issue #71): SHA256SUMS must be signed by a release key
-// pinned in this binary (internal/releasesig), not one twd-mgmt names, and
+// pinned in this binary (internal/releasesig), not one tw-mgmt names, and
 // every file must match it. The SHA-256 in the upgrade order only proves
 // the download matches what mgmt holds; a compromised mgmt could send a
 // matching tarball and hash, but it can't sign one.

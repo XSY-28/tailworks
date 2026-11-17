@@ -1,6 +1,6 @@
 # Cron triggers
 
-twd runs Cloudflare-style cron triggers: declare them in `wrangler.jsonc`, and
+tailworks runs Cloudflare-style cron triggers: declare them in `wrangler.jsonc`, and
 the host runs your Worker's `scheduled()` handler on that schedule.
 
 ```jsonc
@@ -51,7 +51,7 @@ granularity.
 
 The limits are 10 triggers per workload, no duplicates, and 128 bytes per
 expression. A schedule that can never fire (e.g. `0 0 30 2 *`) is rejected.
-Validation happens when you upload: `twd deploy` fails with `400 bad_bundle`
+Validation happens when you upload: `tw deploy` fails with `400 bad_bundle`
 and names the bad expression. The host checks again before it runs anything.
 
 The `node` runtime has no `scheduled()` handler, so it does not support cron
@@ -90,8 +90,8 @@ Delivery is best effort. Like Cloudflare's, it is not exactly once.
   governs what a cron job can reach.
 - Nobody on the tailnet can trigger `scheduled()`. hostd sends the
   invocation over the instance's private ingress socket as
-  `cf.twd.kind = "scheduled"`, and only hostd can set `cf.twd`: netd strips
-  client identity headers, and hostd overwrites `cf.twd` on every tailnet
+  `cf.tw.kind = "scheduled"`, and only hostd can set `cf.tw`: netd strips
+  client identity headers, and hostd overwrites `cf.tw` on every tailnet
   request. Paths such as `/__scheduled` and `/cdn-cgi/handler/scheduled`
   reach your `fetch()` handler like any other path. The trusted platform
   wrapper also checks that the cron is one the running deployment declares.
@@ -101,15 +101,15 @@ Delivery is best effort. Like Cloudflare's, it is not exactly once.
 
 ## Local development
 
-`twd dev --test-scheduled` serves wrangler's test route on the local dev
+`tw dev --test-scheduled` serves wrangler's test route on the local dev
 port. The port is on 127.0.0.1 only:
 
 ```sh
-twd dev --test-scheduled
+tw dev --test-scheduled
 curl 'http://127.0.0.1:8787/__scheduled?cron=*/5+*+*+*+*'                 # run it now
 curl 'http://127.0.0.1:8787/__scheduled?cron=*/5+*+*+*+*&time=1700000000000'  # with a scheduledTime
 ```
 
 With no `cron` parameter, the route runs the first declared trigger. Only
-declared triggers run. `twd dev` also runs the triggers on their real
+declared triggers run. `tw dev` also runs the triggers on their real
 schedule.

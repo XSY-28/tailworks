@@ -29,7 +29,7 @@ func TestRT3_H10_PublicNameSquat(t *testing.T) {
 	a := v1Tenant(t, e, "t.ts.net", allow)
 	b := legacySharedTenant(t, e, a, "t.ts.net")
 	other := v1Tenant(t, e, "other.ts.net", allow)
-	pub := publicBundle(t, publicTwdJSONC)
+	pub := publicBundle(t, publicTwJSONC)
 	deploy := func(tn string) map[string]any {
 		return map[string]any{"tenantID": tn, "workload": "support", "bundle": pub}
 	}
@@ -57,7 +57,7 @@ func TestRT3_H10_PublicNameSquat(t *testing.T) {
 	b2 := legacySharedTenant(t, e, a, "T.ts.net.")
 	c.fail("POST", "/v1/deployments", deploy(b2), 409, "public_name_owned")
 	// A tailnet-only deploy of the same name is unaffected (no public node).
-	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": b, "workload": "support", "bundle": publicBundle(t, tailnetOnlyTwdJSONC)}, nil)
+	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": b, "workload": "support", "bundle": publicBundle(t, tailnetOnlyTwJSONC)}, nil)
 	// ...and so is a tenant on another tailnet.
 	c.ok("POST", "/v1/deployments", deploy(other), nil)
 
@@ -111,7 +111,7 @@ func TestRT3_H10_PublicNameLegacyOwner(t *testing.T) {
 	allow := map[string]any{"publicIngress": "allow"}
 	a := v1Tenant(t, e, "t.ts.net", allow)
 	b := legacySharedTenant(t, e, a, "t.ts.net")
-	pub := publicBundle(t, publicTwdJSONC)
+	pub := publicBundle(t, publicTwJSONC)
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": a, "workload": "support", "bundle": pub}, nil)
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": a, "workload": "support", "namespace": PublicNamespace, "objectName": "support"}, nil)
 	// Before this fix there was no claim table: drop A's row.

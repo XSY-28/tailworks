@@ -1,7 +1,7 @@
-// The lock template's Worker and Lock class, plus Pulse (see twd.jsonc).
+// The lock template's Worker and Lock class, plus Pulse (see tailworks.jsonc).
 import { DurableObject } from "cloudflare:workers";
-import lockWorker from "../../../../../js/packages/create-twd/templates/lock/src/index";
-export { Lock } from "../../../../../js/packages/create-twd/templates/lock/src/lock";
+import lockWorker from "../../../../../js/packages/create-tailworks/templates/lock/src/index";
+export { Lock } from "../../../../../js/packages/create-tailworks/templates/lock/src/lock";
 
 export class Pulse extends DurableObject {
   async fetch(req) {

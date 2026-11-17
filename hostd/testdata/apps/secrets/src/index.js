@@ -1,5 +1,5 @@
 // Test fixture for worker secrets: GET / echoes env from the worker, GET
-// /do from a facet Durable Object (its env comes from twd-config.json).
+// /do from a facet Durable Object (its env comes from tw-config.json).
 import { DurableObject } from "cloudflare:workers";
 
 const view = (env) => ({ apiKey: env.API_KEY, type: typeof env.API_KEY, greeting: env.GREETING, multi: env.MULTI ?? null });

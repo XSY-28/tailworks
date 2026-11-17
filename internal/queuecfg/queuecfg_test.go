@@ -41,7 +41,7 @@ func TestParseRejects(t *testing.T) {
 		{`{"producers":[{"binding":"Q","queue":"Bad_Name"}]}`, "bad queue name"},
 		{`{"producers":[{"binding":"Q","queue":"-x"}]}`, "bad queue name"},
 		{`{"producers":[{"binding":"1Q","queue":"q"}]}`, "bad binding name"},
-		{`{"producers":[{"binding":"__TWD_Q","queue":"q"}]}`, "bad binding name"},
+		{`{"producers":[{"binding":"__TW_Q","queue":"q"}]}`, "bad binding name"},
 		{`{"producers":[{"binding":"Q","queue":"q"},{"binding":"Q","queue":"r"}]}`, "declared twice"},
 		{`{"producers":[{"binding":"Q","queue":"q","delivery_delay":43201}]}`, "delivery_delay"},
 		{`{"consumers":[{"queue":"q"},{"queue":"q"}]}`, "two consumers"},

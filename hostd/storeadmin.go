@@ -1,7 +1,7 @@
 package hostd
 
 // Operator operations on platform stores (ADR-platform-stores, ADR-038):
-// `twd d1 execute`, `twd d1 migrations apply`, `twd d1 export`. A store's
+// `tw d1 execute`, `tw d1 migrations apply`, `tw d1 export`. A store's
 // data lives in its Store object in the workload's workerd, so mgmt asks
 // the host holding the workload's lease (the push API, like logs):
 //
@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 const (
@@ -59,10 +59,10 @@ func (h *Host) StoreAdmin(ctx context.Context, tenantID, workload, kind, name, a
 	if !declared {
 		return nil, &apiError{Code: "unknown_store", Detail: fmt.Sprintf("the running deployment of %s binds no %s store %q", workload, kind, name)}
 	}
-	blob, _ := json.Marshal(map[string]any{"twd": map[string]any{"kind": "admin", "op": "store", "storeKind": kind, "name": name, "action": action}})
+	blob, _ := json.Marshal(map[string]any{"tw": map[string]any{"kind": "admin", "op": "store", "storeKind": kind, "name": name, "action": action}})
 	ctx, cancel := context.WithTimeout(ctx, storeAdminTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://platform/_twd/admin", bytes.NewReader(arg))
+	req, err := http.NewRequestWithContext(ctx, "POST", "http://platform/_tw/admin", bytes.NewReader(arg))
 	if err != nil {
 		return nil, err
 	}

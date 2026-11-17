@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/catalog"
-	"github.com/rosskukulinski/twd/internal/version"
+	"github.com/rosskukulinski/tailworks/internal/catalog"
+	"github.com/rosskukulinski/tailworks/internal/version"
 )
 
 // Releases and upgrade runs (ADR-041 §8).
@@ -176,7 +176,7 @@ func (m *Mgmt) PlanUpgrade(ctx context.Context, req UpgradeRequest) (UpgradePlan
 	es := entries(cat)
 	target, ok := catalog.Find(es, p.To)
 	if !ok {
-		return p, errf(400, "bad_request", "release %s is not in the catalog: import it first (twd release import twd-%s-<os>-<arch>.tar.gz)", p.To, p.To)
+		return p, errf(400, "bad_request", "release %s is not in the catalog: import it first (tw release import tailworks-%s-<os>-<arch>.tar.gz)", p.To, p.To)
 	}
 
 	// From: every live replica and every host in scope.
@@ -226,7 +226,7 @@ func (m *Mgmt) PlanUpgrade(ctx context.Context, req UpgradeRequest) (UpgradePlan
 		consider(h.Version)
 	}
 	if mv, err := version.Parse(m.Version()); err == nil && tv.Compare(mv) < 0 {
-		p.Blockers = append(p.Blockers, fmt.Sprintf("%s is older than this twd-mgmt (%s): a downgrade is a restore from the pre-upgrade backup, not an upgrade", p.To, mv))
+		p.Blockers = append(p.Blockers, fmt.Sprintf("%s is older than this tw-mgmt (%s): a downgrade is a restore from the pre-upgrade backup, not an upgrade", p.To, mv))
 	}
 	between := catalog.Between(es, oldest.String(), p.To)
 	if oldest.LinesBehind(tv) > 1 {
@@ -270,10 +270,10 @@ func (m *Mgmt) PlanUpgrade(ctx context.Context, req UpgradeRequest) (UpgradePlan
 	p.Steps = append(p.Steps, UpgradeStep{Kind: "backup", Status: "skipped",
 		Detail: "mgmt can't verify a backup: before you start, back up the store (point-in-time recovery, or a dump) together with custody"})
 	p.Warnings = append(p.Warnings, "take a store + custody backup before starting (restoring it is the only rollback once a contract migration ran)")
-	ms := UpgradeStep{Kind: "mgmt", Status: "pending", Detail: "every live twd-mgmt replica must report " + p.To}
+	ms := UpgradeStep{Kind: "mgmt", Status: "pending", Detail: "every live tw-mgmt replica must report " + p.To}
 	for id, v := range vs.Mgmt {
 		if !atLeast(v, tv) {
-			ms.NeedsOperator = "roll every twd-mgmt replica to " + p.To + " with your deployment system; the run waits (replica " + id + " runs " + orLegacy(v) + ")"
+			ms.NeedsOperator = "roll every tw-mgmt replica to " + p.To + " with your deployment system; the run waits (replica " + id + " runs " + orLegacy(v) + ")"
 			break
 		}
 	}
@@ -305,19 +305,19 @@ func (m *Mgmt) PlanUpgrade(ctx context.Context, req UpgradeRequest) (UpgradePlan
 		st.Method = m.hostMethod(ctx, h)
 		st.SelfUpgrade = slices.Contains(h.Features, "self-upgrade") && h.OS != ""
 		if st.SelfUpgrade {
-			st.Artifact = fmt.Sprintf("twd-%s-%s-%s.tar.gz", p.To, h.OS, h.Arch)
+			st.Artifact = fmt.Sprintf("tailworks-%s-%s-%s.tar.gz", p.To, h.OS, h.Arch)
 			if !slices.Contains(m.artifactNames(p.To), st.Artifact) {
-				p.Blockers = append(p.Blockers, fmt.Sprintf("host %s upgrades itself but this twd-mgmt has no %s: twd release import %s", h.ID, st.Artifact, st.Artifact))
+				p.Blockers = append(p.Blockers, fmt.Sprintf("host %s upgrades itself but this tw-mgmt has no %s: tw release import %s", h.ID, st.Artifact, st.Artifact))
 			}
 			st.Detail = "the host installs " + st.Artifact + " and restarts"
 		} else {
-			st.NeedsOperator = fmt.Sprintf("install twd %s on host %s and restart twd-hostd (it can't upgrade itself: run twd-hostd with -self-upgrade under a service manager)", p.To, h.ID)
+			st.NeedsOperator = fmt.Sprintf("install tw %s on host %s and restart tw-hostd (it can't upgrade itself: run tw-hostd with -self-upgrade under a service manager)", p.To, h.ID)
 		}
 		if !h.Live(now) {
 			p.Warnings = append(p.Warnings, fmt.Sprintf("host %s is not live: its step will wait for it", h.ID))
 		}
 		if slices.Contains(h.Tiers, "microvm") && target.Protocols["helper"] > h.Protocols["helper"] && h.Protocols["helper"] > 0 {
-			p.Warnings = append(p.Warnings, fmt.Sprintf("host %s: the vmhelper protocol changes (%d → %d): run `sudo twd host setup --microvm` on it as part of its upgrade", h.ID, h.Protocols["helper"], target.Protocols["helper"]))
+			p.Warnings = append(p.Warnings, fmt.Sprintf("host %s: the vmhelper protocol changes (%d → %d): run `sudo tw host setup --microvm` on it as part of its upgrade", h.ID, h.Protocols["helper"], target.Protocols["helper"]))
 		}
 		if st.Method == "bounce" {
 			st.Detail += "; workloads with host-local state restart in place (about a minute of unavailability)"
@@ -407,7 +407,7 @@ func (m *Mgmt) StartUpgrade(ctx context.Context, req UpgradeRequest, by string) 
 	b, _ := json.Marshal(run)
 	if err := us.CreateUpgradeRun(ctx, run.ID, run.To, run.State, string(b), now); err != nil {
 		if errors.Is(err, ErrExists) {
-			return UpgradeRun{}, errf(409, "exists", "an upgrade run is already active: twd upgrade status")
+			return UpgradeRun{}, errf(409, "exists", "an upgrade run is already active: tw upgrade status")
 		}
 		return UpgradeRun{}, err
 	}
@@ -621,7 +621,7 @@ func (m *Mgmt) advanceStep(ctx context.Context, run *UpgradeRun, st *UpgradeStep
 		for id, v := range m.versionStatus(ctx, hosts).Mgmt {
 			if !atLeast(v, tv) {
 				st.Status = "waiting"
-				st.NeedsOperator = fmt.Sprintf("roll every twd-mgmt replica to %s (replica %s runs %s)", run.To, id, orLegacy(v))
+				st.NeedsOperator = fmt.Sprintf("roll every tw-mgmt replica to %s (replica %s runs %s)", run.To, id, orLegacy(v))
 				return false, nil
 			}
 		}
@@ -690,7 +690,7 @@ func (m *Mgmt) advanceHost(ctx context.Context, run *UpgradeRun, st *UpgradeStep
 			st.Detail = "pushed " + st.Artifact
 		} else {
 			st.Status = "waiting"
-			st.NeedsOperator = fmt.Sprintf("install twd %s on host %s and restart twd-hostd; the run continues when it re-registers", run.To, h.ID)
+			st.NeedsOperator = fmt.Sprintf("install tw %s on host %s and restart tw-hostd; the run continues when it re-registers", run.To, h.ID)
 		}
 		phase("wait")
 		return false, nil

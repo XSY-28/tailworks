@@ -105,7 +105,7 @@ type placementInput struct {
 	Workload string
 	Pinned   string
 	Replace  bool
-	Config   *TwdConfig
+	Config   *TwConfig
 	// Need carries what the bundle's containers need (ADR-032: the
 	// "containers" capability for the images' arch); its Tier is set here
 	// from Config and the tenant.
@@ -148,7 +148,7 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 	}
 	req.Capacity = placementCapacity(req.Tiers, req.Containers)
 	if h, ok := byID[in.Pinned]; ok && live[in.Pinned] && !h.offers(need) {
-		return PlacementDecision{}, nil, errf(409, "tier_unavailable", "host %q does not offer %s (it offers %s); deploy without --host, or pick a host set up with `sudo twd host setup --microvm`", in.Pinned, need, tierList(h))
+		return PlacementDecision{}, nil, errf(409, "tier_unavailable", "host %q does not offer %s (it offers %s); deploy without --host, or pick a host set up with `sudo tw host setup --microvm`", in.Pinned, need, tierList(h))
 	}
 	var held *Lease
 	if l, err := m.store.GetLease(ctx, LeaseName(t.ID, in.Workload)); err == nil && l.Holder != "" && live[l.Holder] {
@@ -161,7 +161,7 @@ func (m *Mgmt) place(ctx context.Context, t Tenant, in placementInput) (Placemen
 			return PlacementDecision{}, held, errf(409, "feature_unavailable", "workload %q runs on host %s, which %s; upgrade that host first, or redeploy with --replace to move the workload", in.Workload, h.ID, featureGap(h, need.Features))
 		}
 		if h := byID[l.Holder]; !h.offers(need) && !in.Replace {
-			return PlacementDecision{}, held, errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer %s it now asks for (the host offers %s); redeploy with --replace to move it to a host that does, or run `twd undeploy %s` and deploy again", in.Workload, h.ID, need, tierList(h), in.Workload)
+			return PlacementDecision{}, held, errf(409, "tier_unavailable", "workload %q runs on host %s, which does not offer %s it now asks for (the host offers %s); redeploy with --replace to move it to a host that does, or run `tw undeploy %s` and deploy again", in.Workload, h.ID, need, tierList(h), in.Workload)
 		}
 	}
 	var ms []PathMeasurement
@@ -310,9 +310,9 @@ func (m *Mgmt) pushJSON(ctx context.Context, hostID, path string, body, out any)
 }
 
 // bundlePlacement fills cfg.Placement from wrangler.jsonc / wrangler.json
-// when twd.jsonc has no placement block (a Cloudflare project keeps its
+// when tailworks.jsonc has no placement block (a Cloudflare project keeps its
 // `placement` where wrangler reads it).
-func bundlePlacement(bundle []byte, cfg *TwdConfig) {
+func bundlePlacement(bundle []byte, cfg *TwConfig) {
 	p := cfg.Placement
 	if p.Mode != "" || len(p.Targets) > 0 || p.Host != "" || p.Hostname != "" || p.Region != "" {
 		return

@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // TestE2EVMKV: Workers KV (ADR-037) on the microVM tier. The
@@ -25,9 +25,9 @@ import (
 // the binding behaves as on the process tier (worker and facet), and the
 // data survives a hostd restart (a new VM).
 func TestE2EVMKV(t *testing.T) {
-	kernel, rootfs := os.Getenv("TWD_VM_KERNEL"), os.Getenv("TWD_VM_ROOTFS")
+	kernel, rootfs := os.Getenv("TW_VM_KERNEL"), os.Getenv("TW_VM_ROOTFS")
 	if kernel == "" || rootfs == "" {
-		t.Skip("TWD_VM_KERNEL and TWD_VM_ROOTFS must be set (make e2e-vm / e2e-vz)")
+		t.Skip("TW_VM_KERNEL and TW_VM_ROOTFS must be set (make e2e-vm / e2e-vz)")
 	}
 	be, _, err := newBackend(kernel, rootfs, 2, 0, false)
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Replicas (twd.jsonc "replicas": N) run one stateless workload on N
+// Replicas (tailworks.jsonc "replicas": N) run one stateless workload on N
 // distinct hosts, usually behind one Tailscale Service (tailnet.service).
 //
 // Each extra replica is deployed as a workload of its own, named
@@ -26,7 +26,7 @@ import (
 // enforce. A bundle with any DO class not marked "fence": "never" is
 // refused.
 
-// MaxReplicas bounds twd.jsonc "replicas".
+// MaxReplicas bounds tailworks.jsonc "replicas".
 const MaxReplicas = 16
 
 const replicaSep = "--r"
@@ -66,15 +66,15 @@ func replicaGroup(classes []ClassConfig) string {
 	return ""
 }
 
-// checkReplicas validates twd.jsonc "replicas" for a deploy of r.Workload
+// checkReplicas validates tailworks.jsonc "replicas" for a deploy of r.Workload
 // and returns the replica count.
-func (m *Mgmt) checkReplicas(ctx context.Context, t Tenant, r DeployRequest, cfg *TwdConfig, classes []ClassConfig, stateful bool) (int, error) {
+func (m *Mgmt) checkReplicas(ctx context.Context, t Tenant, r DeployRequest, cfg *TwConfig, classes []ClassConfig, stateful bool) (int, error) {
 	n := 1
 	if cfg != nil && cfg.Replicas != 0 {
 		n = cfg.Replicas
 	}
 	if n < 1 || n > MaxReplicas {
-		return 0, errf(400, "bad_bundle", "twd.jsonc: replicas must be 1..%d (got %d)", MaxReplicas, n)
+		return 0, errf(400, "bad_bundle", "tailworks.jsonc: replicas must be 1..%d (got %d)", MaxReplicas, n)
 	}
 	latest, err := m.store.LatestDeployments(ctx, t.ID)
 	if err != nil {
@@ -89,7 +89,7 @@ func (m *Mgmt) checkReplicas(ctx context.Context, t Tenant, r DeployRequest, cfg
 	// A replica is deployed through its workload, never by its own name.
 	if d, ok := live[r.Workload]; ok {
 		if g := replicaGroup(d.Namespaces); g != "" {
-			return 0, errf(409, "replica_conflict", "%q is replica %d of workload %q; deploy %q instead (twd.jsonc \"replicas\")",
+			return 0, errf(409, "replica_conflict", "%q is replica %d of workload %q; deploy %q instead (tailworks.jsonc \"replicas\")",
 				r.Workload, replicaIndex(g, r.Workload)+1, g, g)
 		}
 	}
@@ -99,7 +99,7 @@ func (m *Mgmt) checkReplicas(ctx context.Context, t Tenant, r DeployRequest, cfg
 	if stateful {
 		_, why := BundleStateful(r.Bundle)
 		return 0, errf(400, "bad_bundle",
-			"twd.jsonc: replicas: %d needs a stateless workload, but this bundle has Durable Objects (%s) that must run in exactly one place; drop \"replicas\", or mark classes that tolerate several instances \"fence\": \"never\"",
+			"tailworks.jsonc: replicas: %d needs a stateless workload, but this bundle has Durable Objects (%s) that must run in exactly one place; drop \"replicas\", or mark classes that tolerate several instances \"fence\": \"never\"",
 			n, why)
 	}
 	if r.Host != "" {
@@ -109,7 +109,7 @@ func (m *Mgmt) checkReplicas(ctx context.Context, t Tenant, r DeployRequest, cfg
 		return 0, errf(400, "bad_request", "workload name %q is too long for %d replicas (replica names are <workload>%s<n>, ≤ 63 characters)", r.Workload, n, replicaSep)
 	}
 	if !hasWorkloadNode(classes) {
-		return 0, errf(400, "bad_bundle", "twd.jsonc: replicas needs tailnet.tags: each replica is reached through its own workload node")
+		return 0, errf(400, "bad_bundle", "tailworks.jsonc: replicas needs tailnet.tags: each replica is reached through its own workload node")
 	}
 	for i := 1; i < n; i++ {
 		name := ReplicaName(r.Workload, i)
@@ -200,7 +200,7 @@ func (rc *replicaCtx) owner(workload string) string {
 	return rc.group
 }
 
-// deployGroup is Deploy's entry point: it reads twd.jsonc "replicas",
+// deployGroup is Deploy's entry point: it reads tailworks.jsonc "replicas",
 // places every replica on a distinct host (smart placement, ADR-033, with
 // the other replicas' hosts excluded) before writing anything, deploys each
 // replica as its own workload, then stops replicas past N.
@@ -213,7 +213,7 @@ func (m *Mgmt) deployGroup(ctx context.Context, r DeployRequest) (DeployResponse
 	if !validName(r.Workload) {
 		return resp, errf(400, "bad_request", "workload must be a DNS label ([a-z0-9-], ≤63)")
 	}
-	var cfg *TwdConfig
+	var cfg *TwConfig
 	classes := slices.Clone(r.Namespaces)
 	stateful := true
 	if len(r.Bundle) > 0 {

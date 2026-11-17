@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // v1api implements the generated v1.ServerInterface (api/openapi.yaml is
@@ -268,11 +268,11 @@ type goneError struct {
 
 func (a *v1api) writeGone(w http.ResponseWriter, r *http.Request, o Object) {
 	e := *errf(410, "killed", "object %s was killed (%s)", o.ID, o.KillReason)
-	e.TraceID = r.Header.Get("Twd-Trace-ID")
+	e.TraceID = r.Header.Get("Tw-Trace-ID")
 	if e.TraceID == "" {
 		e.TraceID = traceID()
 	}
-	w.Header().Set("Twd-Error", "killed")
+	w.Header().Set("Tw-Error", "killed")
 	writeJSON(w, 410, goneError{Error: e, Tombstone: a.tombstoneOf(o)})
 }
 
@@ -299,7 +299,7 @@ func (a *v1api) WhoAmI(w http.ResponseWriter, r *http.Request) {
 	}
 	who := WhoAmI{Kind: kind, Login: p.Login, NodeID: p.NodeID, Tags: p.Tags, HostID: p.HostID,
 		Admin: a.s.allowed(p, roleAdmin), Actor: p.Actor(r), Mgmt: self,
-		Caps: twdCaps(p), Approver: p.Kind == "user" && isApprover(p), MCPTools: a.s.mcpToolNames(p)}
+		Caps: twCaps(p), Approver: p.Kind == "user" && isApprover(p), MCPTools: a.s.mcpToolNames(p)}
 	a.s.whoamiScope(r.Context(), p, &who) // whoami_tenants.go
 	writeJSON(w, 200, who)
 }
@@ -942,7 +942,7 @@ func (a *v1api) CreateObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.TraceID == "" {
-		req.TraceID = r.Header.Get("Twd-Trace-ID")
+		req.TraceID = r.Header.Get("Tw-Trace-ID")
 	}
 	if p := principalOf(r.Context()); p.Kind == "host" {
 	}
@@ -1305,7 +1305,7 @@ func (a *v1api) AppendAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	host := hostOf(r)
 	if host == "" {
-		writeErr(w, r, errf(400, "bad_request", "audit records need a host (Twd-Host-ID header on the local-dev socket)"))
+		writeErr(w, r, errf(400, "bad_request", "audit records need a host (Tw-Host-ID header on the local-dev socket)"))
 		return
 	}
 	n, st, err := a.s.M.IngestAudit(r.Context(), host, req.Records)
@@ -1438,7 +1438,7 @@ func (a *v1api) ListContainerReservations(w http.ResponseWriter, r *http.Request
 		return
 	}
 	f := ContainerFilter{TenantID: str(params.Tenant), HostID: str(params.Host)}
-	if p := principalOf(r.Context()); p.Kind == "host" || r.Header.Get("Twd-Host-ID") != "" {
+	if p := principalOf(r.Context()); p.Kind == "host" || r.Header.Get("Tw-Host-ID") != "" {
 		f.HostID = hostOf(r) // a host sees its own reservations only
 	}
 	rs, err := a.s.M.store.ListContainerReservations(r.Context(), f, pg)
@@ -1453,7 +1453,7 @@ func (a *v1api) DeleteContainerReservation(w http.ResponseWriter, r *http.Reques
 	p := principalOf(r.Context())
 	host := ""
 	if p.Kind == "host" || p.Kind == "local" {
-		host = hostOf(r) // "" for a local admin (twd CLI): any host's
+		host = hostOf(r) // "" for a local admin (tw CLI): any host's
 	}
 	if err := a.s.M.ReleaseContainer(r.Context(), id, host, p.Actor(r)); err != nil {
 		writeErr(w, r, err)
@@ -1465,7 +1465,7 @@ func (a *v1api) DeleteContainerReservation(w http.ResponseWriter, r *http.Reques
 // ---- role middleware ----
 
 // roleAllowed decides whether principal p may call an operation whose
-// x-twd-role is role ("admin", "host", "admin|host", "any", "public").
+// x-tw-role is role ("admin", "host", "admin|host", "any", "public").
 func (s *Server) roleAllowed(p Principal, role string) bool {
 	if role == "public" {
 		return true
@@ -1494,7 +1494,7 @@ func (s *Server) roleAllowed(p Principal, role string) bool {
 // is exempt (readJSON's 64 MiB applies there, as to admin bundle uploads).
 const hostBodyLimit = 1 << 20
 
-// roleGate gates every generated route by the spec's x-twd-role and binds
+// roleGate gates every generated route by the spec's x-tw-role and binds
 // tsnet hosts to their own /v1/hosts/{id} records. It runs before the
 // generated parameter binding (mux.Handler resolves the pattern without
 // serving), so a malformed request from the wrong role is a 403, not a 400.
@@ -1566,7 +1566,7 @@ func (s *Server) Handler() http.Handler {
 	// api/openapi.yaml documents its routes and roles (tag "registry",
 	// excluded from code generation); the registry enforces them.
 	reg := s.M.Registry()
-	mcp := s.mcpHandler(gate) // mcp.go: twd's MCP server, tools over the /v1 handlers
+	mcp := s.mcpHandler(gate) // mcp.go: tailworks' MCP server, tools over the /v1 handlers
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == MCPPath {
 			mcp.ServeHTTP(w, r)
@@ -1574,7 +1574,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		if r.URL.Path == "/v2" || strings.HasPrefix(r.URL.Path, "/v2/") {
 			if reg == nil {
-				writeErr(w, r, errf(404, "registry_unavailable", "this twd-mgmt serves no registry (start it with -registry-dir)"))
+				writeErr(w, r, errf(404, "registry_unavailable", "this tw-mgmt serves no registry (start it with -registry-dir)"))
 				return
 			}
 			p := principalOf(r.Context())

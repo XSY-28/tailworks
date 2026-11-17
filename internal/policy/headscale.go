@@ -13,7 +13,7 @@ import (
 //   - no postures and no srcPosture ("unknown field");
 //   - no svc: destinations ("invalid alias format") and no
 //     autoApprovers.services ("unknown field");
-//   - no nodeAttrs: twd's only one is funnel, which Headscale doesn't
+//   - no nodeAttrs: tailworks' only one is funnel, which Headscale doesn't
 //     support, and Headscale's nodeAttrs take no app caps;
 //   - no autogroup:admin, as an owner ("invalid owner format") or a source:
 //     tagOwners are users, groups or tags.
@@ -21,7 +21,7 @@ import (
 // Caps travel in grants' app field, which Headscale accepts.
 
 // Headscale adapts s to the Headscale profile: autogroup:admin is dropped
-// from every tagOwners list, so twd's tags are owned by tag:twd and tag:twd
+// from every tagOwners list, so tailworks' tags are owned by tag:tw and tag:tw
 // itself has no owners (only the API key mints it; nobody can tag their
 // own device with it). Grants from autogroup:admin and all nodeAttrs are
 // dropped. The result passes Check with Options{Headscale: true}.
@@ -34,8 +34,8 @@ func Headscale(s Snippet) Snippet {
 				keep = append(keep, o)
 			}
 		}
-		if len(keep) == 0 && t != TwdTagPrefix {
-			keep = []string{TwdTagPrefix}
+		if len(keep) == 0 && t != TwTagPrefix {
+			keep = []string{TwTagPrefix}
 		}
 		if keep == nil {
 			keep = []string{}

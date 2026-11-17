@@ -30,7 +30,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/rosskukulinski/twd/hostd/r2"
+	"github.com/rosskukulinski/tailworks/hostd/r2"
 )
 
 // replicaSuffixRE is a replica's suffix ("<workload>--r<n>", n ≥ 2): a

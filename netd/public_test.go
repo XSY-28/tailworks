@@ -19,9 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/publicspec"
-	"github.com/rosskukulinski/twd/netd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
 )
@@ -246,8 +246,8 @@ func TestPublicHeadersAndBlob(t *testing.T) {
 	src := netip.MustParseAddrPort("198.51.100.23:51515")
 	resp, body := do(t, e.client(src), "POST", e.url("/webhooks/github?token=s3cret"), strings.NewReader(`{"a":1}`), map[string]string{
 		"Tailscale-User-Login": "alice@example.com", "Tailscale-User-Name": "Alice",
-		"x-twd-cf":         `{"tailscale":{"caller":{"nodeId":"nFORGED","tags":["tag:admin"]}}}`,
-		"x-twd-object":     "victim",
+		"x-tw-cf":          `{"tailscale":{"caller":{"nodeId":"nFORGED","tags":["tag:admin"]}}}`,
+		"x-tw-object":      "victim",
 		"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "1.2.3.4, 5.6.7.8", "X-Real-IP": "1.2.3.4",
 		"Forwarded": "for=1.2.3.4", "Tailnet-Assertion": "forged", "cf-ipcountry": "XX",
 	})
@@ -270,7 +270,7 @@ func TestPublicHeadersAndBlob(t *testing.T) {
 		t.Errorf("X-Forwarded-Proto %q", got)
 	}
 	if got := r.Header.Get(netd.HeaderObject); got != "wl-entry" {
-		t.Errorf("x-twd-object %q, want the DeliverTo node", got)
+		t.Errorf("x-tw-object %q, want the DeliverTo node", got)
 	}
 	var blob map[string]any
 	if err := json.Unmarshal([]byte(r.Header.Get(netd.HeaderCF)), &blob); err != nil {
@@ -316,11 +316,11 @@ func TestPublicRoutes(t *testing.T) {
 		{"/", "not_public", 404}, {"/admin", "not_public", 404}, {"/webhooksx", "not_public", 404},
 		{"/oauth/callback/x", "not_public", 404},
 		{"/webhooks/../admin", "bad_request", 400}, {"/webhooks//x", "bad_request", 400},
-		{"/webhooks%2F..%2Fadmin", "bad_request", 400}, {"/_twd/o/Room/lobby", "bad_request", 400},
+		{"/webhooks%2F..%2Fadmin", "bad_request", 400}, {"/_tw/o/Room/lobby", "bad_request", 400},
 	} {
 		resp, body := do(t, c, "GET", e.url(tc.path), nil, nil)
-		if resp.StatusCode != tc.status || resp.Header.Get("twd-error") != tc.code {
-			t.Errorf("%s: %d %s %s, want %d %s", tc.path, resp.StatusCode, resp.Header.Get("twd-error"), body, tc.status, tc.code)
+		if resp.StatusCode != tc.status || resp.Header.Get("tw-error") != tc.code {
+			t.Errorf("%s: %d %s %s, want %d %s", tc.path, resp.StatusCode, resp.Header.Get("tw-error"), body, tc.status, tc.code)
 		}
 	}
 	if n := e.seenCount(); n != before {
@@ -354,7 +354,7 @@ func TestPublicCatchAllStillRefusesPlatformPaths(t *testing.T) {
 	if resp, _ := do(t, c, "GET", e.url("/anything/at/all"), nil, nil); resp.StatusCode != 200 {
 		t.Fatalf("/* did not match: %d", resp.StatusCode)
 	}
-	for _, p := range []string{"/_twd/o/Room/lobby", "/_twd", "/_twd/o/Room/lobby/x"} {
+	for _, p := range []string{"/_tw/o/Room/lobby", "/_tw", "/_tw/o/Room/lobby/x"} {
 		resp, _ := do(t, c, "GET", e.url(p), nil, nil)
 		if resp.StatusCode != 400 {
 			t.Errorf("%s: %d", p, resp.StatusCode)
@@ -370,8 +370,8 @@ func TestPublicUpgrade(t *testing.T) {
 	c := e.client(defaultSrc())
 	h := map[string]string{"Connection": "Upgrade", "Upgrade": "websocket"}
 	resp, _ := do(t, c, "GET", e.url("/api/x"), nil, h)
-	if resp.StatusCode != 403 || resp.Header.Get("twd-error") != "upgrade_not_allowed" {
-		t.Errorf("upgrade on /api: %d %s", resp.StatusCode, resp.Header.Get("twd-error"))
+	if resp.StatusCode != 403 || resp.Header.Get("tw-error") != "upgrade_not_allowed" {
+		t.Errorf("upgrade on /api: %d %s", resp.StatusCode, resp.Header.Get("tw-error"))
 	}
 	if e.seenCount() != 0 {
 		t.Error("refused upgrade reached upstream")
@@ -399,8 +399,8 @@ func TestPublicRateLimits(t *testing.T) {
 	}
 	resp, _ := do(t, a, "GET", e.url("/x"), nil, nil)
 	ra, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
-	if resp.StatusCode != 429 || resp.Header.Get("twd-error") != "rate_limited" || ra < 1 {
-		t.Fatalf("a #3 (per-IP): %d %s Retry-After %q", resp.StatusCode, resp.Header.Get("twd-error"), resp.Header.Get("Retry-After"))
+	if resp.StatusCode != 429 || resp.Header.Get("tw-error") != "rate_limited" || ra < 1 {
+		t.Fatalf("a #3 (per-IP): %d %s Retry-After %q", resp.StatusCode, resp.Header.Get("tw-error"), resp.Header.Get("Retry-After"))
 	}
 	// Another IP still has its own bucket; the node bucket (burst 4) has 2 left.
 	for i := range 2 {
@@ -443,8 +443,8 @@ func TestPublicBodyLimits(t *testing.T) {
 		t.Fatalf("at the cap: %d", resp.StatusCode)
 	}
 	resp, _ := do(t, c, "POST", e.url("/big"), bytes.NewReader(make([]byte, 2048)), nil)
-	if resp.StatusCode != 413 || resp.Header.Get("twd-error") != "payload_too_large" {
-		t.Errorf("Content-Length over: %d %s", resp.StatusCode, resp.Header.Get("twd-error"))
+	if resp.StatusCode != 413 || resp.Header.Get("tw-error") != "payload_too_large" {
+		t.Errorf("Content-Length over: %d %s", resp.StatusCode, resp.Header.Get("tw-error"))
 	}
 	if e.seenCount() != 1 {
 		t.Errorf("Content-Length over reached upstream")
@@ -463,8 +463,8 @@ func TestPublicBodyLimits(t *testing.T) {
 	}
 	io.Copy(io.Discard, r2.Body)
 	r2.Body.Close()
-	if r2.StatusCode != 413 || r2.Header.Get("twd-error") != "payload_too_large" {
-		t.Errorf("chunked over: %d %s", r2.StatusCode, r2.Header.Get("twd-error"))
+	if r2.StatusCode != 413 || r2.Header.Get("tw-error") != "payload_too_large" {
+		t.Errorf("chunked over: %d %s", r2.StatusCode, r2.Header.Get("tw-error"))
 	}
 	if r2.Header.Get("x-upstream") != "" {
 		t.Error("upstream's response leaked after a body overflow")
@@ -472,8 +472,8 @@ func TestPublicBodyLimits(t *testing.T) {
 	// Header limit.
 	e2 := newPubEnv(t, netd.PublicOptions{Routes: []string{"/*"}, Limits: limits(func(l *publicspec.Limits) { l.MaxHeaderBytes = 512 }), Enabled: true}, nil)
 	resp, _ = do(t, e2.client(defaultSrc()), "GET", e2.url("/h"), nil, map[string]string{"X-Big": strings.Repeat("a", 1000)})
-	if resp.StatusCode != 431 || resp.Header.Get("twd-error") != "header_too_large" {
-		t.Errorf("header over: %d %s", resp.StatusCode, resp.Header.Get("twd-error"))
+	if resp.StatusCode != 431 || resp.Header.Get("tw-error") != "header_too_large" {
+		t.Errorf("header over: %d %s", resp.StatusCode, resp.Header.Get("tw-error"))
 	}
 }
 
@@ -481,8 +481,8 @@ func TestPublicTimeout(t *testing.T) {
 	e := newPubEnv(t, netd.PublicOptions{Routes: []string{"/*"}, Limits: limits(func(l *publicspec.Limits) { l.TimeoutSeconds = 1 }), Enabled: true}, nil)
 	st := time.Now()
 	resp, _ := do(t, e.client(defaultSrc()), "GET", e.url("/slow/hang"), nil, nil)
-	if resp.StatusCode != 504 || resp.Header.Get("twd-error") != "request_timeout" {
-		t.Errorf("timeout: %d %s", resp.StatusCode, resp.Header.Get("twd-error"))
+	if resp.StatusCode != 504 || resp.Header.Get("tw-error") != "request_timeout" {
+		t.Errorf("timeout: %d %s", resp.StatusCode, resp.Header.Get("tw-error"))
 	}
 	if d := time.Since(st); d < 900*time.Millisecond || d > 4*time.Second {
 		t.Errorf("timeout after %v", d)

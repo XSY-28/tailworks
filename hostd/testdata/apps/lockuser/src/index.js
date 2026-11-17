@@ -1,5 +1,5 @@
 // Test fixture for the lock template's client (docs/locks.md).
-import { lockClient } from "../../../../../js/packages/create-twd/templates/lock/src/client";
+import { lockClient } from "../../../../../js/packages/create-tailworks/templates/lock/src/client";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 

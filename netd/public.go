@@ -33,7 +33,7 @@ package netd
 //     DeliverTo (the workload node's netd ID, so hostd routes the request
 //     to the workload's default export);
 //     5. Config.Upstream.ServeHTTP.
-//   - Error bodies use WriteError (catalog shape, twd-error header).
+//   - Error bodies use WriteError (catalog shape, tw-error header).
 //   - After each request that matched a route (step 2) and was not refused
 //     by a limit, Config.OnPublicRequest (if set) is called with a
 //     PublicRequestRecord. Requests refused at step 1, and path refusals at
@@ -49,7 +49,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
 )
 
 // PublicOptions make a node a public (Funnel) node.
@@ -62,7 +62,7 @@ type PublicOptions struct {
 	// DeliverTo is the netd object ID stamped as HeaderObject/objectId:
 	// the workload entry node this public node fronts.
 	DeliverTo string `json:"deliverTo"`
-	// Enabled opens the listener once the node is ready (`twd expose`).
+	// Enabled opens the listener once the node is ready (`tw expose`).
 	// It is persisted but NOT restored by a rejoin from saved state alone
 	// (Registry.Rejoin, or Create without Public): such a node comes back
 	// public but closed until SetPublicEnabled(id, true) (fail closed).
@@ -86,7 +86,7 @@ type PublicRequestRecord struct {
 	Path     string // canonical path, never the query string
 	Route    string // matched pattern
 	Status   int
-	Code     string // twd-error code when netd refused it
+	Code     string // tw-error code when netd refused it
 	ClientIP netip.Addr
 	BytesIn  int64
 	BytesOut int64

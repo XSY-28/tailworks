@@ -6,7 +6,7 @@
 **Context.**
 
 - Workers KV (issue #15), Queues, D1 and R2 are all bindings whose data
-  belongs to the platform, not to one Durable Object of the app. twd had
+  belongs to the platform, not to one Durable Object of the app. Tailworks had
   none of them. Each needs the same things: a place for the data, a way for
   it to outlive the host, fencing so two hosts never both write, encryption
   at rest, and a binding the tenant can't point at someone else's data.
@@ -22,7 +22,7 @@
 - **DO storage does not move.** A workload's DO storage is a directory on
   its host (`<data>/tenants/<t>/workloads/<w>/do`; dm-crypt on the microVM
   tier, ADR-024). The RFC's asynchronous encrypted backup (§failover) is not
-  built. A workload that moves host (`twd deploy --replace`, a forced
+  built. A workload that moves host (`tw deploy --replace`, a forced
   takeover after a host loss, ADR-028) starts its Durable Objects empty. A
   KV namespace has to survive that.
 - **Leases and fencing exist.** mgmt releases secrets and volume keys only
@@ -63,7 +63,7 @@
    and its argument handling are workerd's, and the store a binding reaches
    is fixed at deploy. Facets get an RPC stub to a per-kind proxy
    entrypoint, which forwards each call to a native binding of the same
-   store held by the platform worker (`__TWD_STORE_<Binding>`).
+   store held by the platform worker (`__TW_STORE_<Binding>`).
 
 3. **Journal first, then apply.** A change is one or more opaque entries.
    `Store.commit` sends them to mgmt (`POST
@@ -81,7 +81,7 @@
      RPO 0 for a host loss or a move. The new host's object starts empty
      and replays the journal.
    - The journal is linearizable across writers: replicas of a workload,
-     an admin writing through the API (`twd kv key put`), or two copies of
+     an admin writing through the API (`tw kv key put`), or two copies of
      one object during a move. A writer that is behind can't overwrite
      anything.
 
@@ -90,7 +90,7 @@
    holding that lease at that epoch (`409 lease_lost`, audited `deny`),
    exactly as for secret grants. A host that lost the workload can neither
    read nor write. Admins read and write without an epoch; the role gate
-   (`x-twd-role: admin|host`) keeps everyone else out. hostd lets the
+   (`x-tw-role: admin|host`) keeps everyone else out. hostd lets the
    platform reach only the stores the running deployment declares.
 
 5. **Compaction by key, not by snapshot.** An entry may carry a compaction
@@ -103,7 +103,7 @@
 
 6. **Sealed at rest, crypto-shredded on delete.** Each store has a random
    `incarnation` and a 32-byte data key in custody
-   (`twd/<tenant>/stores/<incarnation>/key`). mgmt seals each entry with
+   (`tw/<tenant>/stores/<incarnation>/key`). mgmt seals each entry with
    AES-256-GCM, bound to the incarnation and seq. It keeps an HMAC of the
    `ckey`, never the key itself. Deleting a store deletes its rows and its
    key, so a database backup taken earlier can't be read. A store object
@@ -144,8 +144,8 @@
   grow with the stores.
 - The store object's copy is a cache of the journal plus local indexes, so
   losing a host's DO storage loses nothing acknowledged.
-- `twd dev` uses the in-memory fake mgmt, so dev stores last as long as the
-  `twd dev` process. They aren't persisted between runs.
+- `tw dev` uses the in-memory fake mgmt, so dev stores last as long as the
+  `tw dev` process. They aren't persisted between runs.
 
 **Open.**
 

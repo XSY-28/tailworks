@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/publicspec"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // dialAs opens a raw connection to the public listener that netd sees as

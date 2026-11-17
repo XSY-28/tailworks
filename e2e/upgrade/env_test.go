@@ -1,8 +1,8 @@
 //go:build e2eupgrade
 
 // Package upgrade is the release gate for upgrades
-// (ADR-041 §9): the previous release's twd-mgmt and
-// twd-hostd, real processes on testcontrol (hermetic), serve a workload
+// (ADR-041 §9): the previous release's tw-mgmt and
+// tw-hostd, real processes on testcontrol (hermetic), serve a workload
 // with Durable Object storage; then mgmt and the host are replaced by the
 // candidate, in order, on the same state, and the test checks nothing was
 // lost: DO storage, the workload's node identity (rejoined, never
@@ -10,9 +10,9 @@
 // opens the expanded store (expand-only migrations); and that a host
 // outside the version window is refused.
 //
-// TWD_UPGRADE_FROM names the previous release: a git ref (default, from
+// TW_UPGRADE_FROM names the previous release: a git ref (default, from
 // the Makefile: the last v* tag before HEAD) built in a temporary git
-// worktree, or "self" (this tree stamped TWD_UPGRADE_FROM_VERSION, a fast
+// worktree, or "self" (this tree stamped TW_UPGRADE_FROM_VERSION, a fast
 // local check of the machinery).
 package upgrade
 
@@ -35,8 +35,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/mgmt"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/mgmt"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 const fakeToken = "tskey-api-upgrade-test"
@@ -105,9 +105,9 @@ func (e *env) start(name string, extraEnv []string, args ...string) *proc {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	bin := "twd-hostd"
+	bin := "tw-hostd"
 	if name == "mgmt" {
-		bin = "twd-mgmt"
+		bin = "tw-mgmt"
 	}
 	dir := e.bin
 	if d, ok := e.binOf[name]; ok {

@@ -10,7 +10,7 @@ test("TailnetError wire shape and catalog statuses", async () => {
   assert.deepEqual(e.toJSON().missing, { cap: "x", tool: "refund" });
   const r = e.toResponse();
   assert.equal(r.status, 403);
-  assert.equal(r.headers.get("twd-error"), "cap_missing");
+  assert.equal(r.headers.get("tw-error"), "cap_missing");
   const back = await fromResponse(r);
   assert.equal(back.code, "cap_missing");
   assert.equal(back.detail, "tool refund not granted");
@@ -53,9 +53,9 @@ test("ctx.tailnet.spawn resolves the binding's class and passes self", async () 
   await assert.rejects(tn.kill(), (e) => isTailnetError(e) && e.code === "killed");
 });
 
-test("ctx.tailnet.fetch throws typed errors for twd-error responses", async () => {
+test("ctx.tailnet.fetch throws typed errors for tw-error responses", async () => {
   const orig = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ code: "peer_not_visible", detail: "no peer named db" }), { status: 403, headers: { "twd-error": "peer_not_visible" } });
+  globalThis.fetch = async () => new Response(JSON.stringify({ code: "peer_not_visible", detail: "no peer named db" }), { status: 403, headers: { "tw-error": "peer_not_visible" } });
   try {
     const tn = createTailnetContext(fakeTw([]), {}, {});
     await assert.rejects(tn.fetch("http://db/"), (e) => e.code === "peer_not_visible" && e.status === 403 && /no peer/.test(e.message));
@@ -64,14 +64,14 @@ test("ctx.tailnet.fetch throws typed errors for twd-error responses", async () =
   }
 });
 
-test("wrapHandler installs ctx.tailnet; wrapFacetClass hides __TWD", async () => {
+test("wrapHandler installs ctx.tailnet; wrapFacetClass hides __TW", async () => {
   const H = wrapHandler({ async fetch(req, env, ctx) { return typeof ctx.tailnet.spawn; } }, {});
-  assert.equal(await H.fetch({}, { __TWD: fakeTw([]) }, {}), "function");
+  assert.equal(await H.fetch({}, { __TW: fakeTw([]) }, {}), "function");
   class Base { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }
   const W = wrapFacetClass(Base, "Counter", {});
   assert.equal(W.name, "Counter");
-  const w = new W({}, { __TWD: fakeTw([]), X: 1 });
-  assert.equal(w.env.__TWD, undefined);
+  const w = new W({}, { __TW: fakeTw([]), X: 1 });
+  assert.equal(w.env.__TW, undefined);
   assert.equal(w.env.X, 1);
   assert.equal(typeof w.ctx.tailnet.fetch, "function");
 });
@@ -88,6 +88,6 @@ test("wrapHandler keeps handler methods of a class instance (export default new 
   assert.equal(typeof H.fetch, "function");
   assert.equal(typeof H.scheduled, "function");
   assert.equal(H.helper, undefined);
-  assert.equal(await H.fetch({}, { __TWD: fakeTw([]) }, {}), "1:function");
+  assert.equal(await H.fetch({}, { __TW: fakeTw([]) }, {}), "1:function");
   assert.equal(p.n, 1); // called with the instance as this
 });

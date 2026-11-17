@@ -4,7 +4,7 @@
 //
 // tsnet's own ListenService forwards Service traffic to a host loopback
 // socket: the backend then sees 127.0.0.1 as the caller (or has to trust a
-// PROXY header that any local process could forge). twd authenticates every
+// PROXY header that any local process could forge). Tailworks authenticates every
 // request by WhoIs on the connection's source address, so that is not usable.
 //
 // Instead, a Host:

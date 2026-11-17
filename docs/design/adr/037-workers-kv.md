@@ -6,7 +6,7 @@ Builds on [ADR-platform-stores](platform-stores.md).
 
 **Context.**
 
-- Issue #15: twd had no Workers KV binding. `kv_namespaces` in
+- Issue #15: tailworks had no Workers KV binding. `kv_namespaces` in
   `wrangler.jsonc` was ignored, `env.KV` was `undefined`, and libraries
   that need KV didn't run. The most common one is
   `@cloudflare/workers-oauth-provider`, which keeps clients, grants and
@@ -85,8 +85,8 @@ Builds on [ADR-platform-stores](platform-stores.md).
    a `kv` capability naming the namespace and `read`/`write`). mgmt would
    check it when the binder deploys and on every journal read and append,
    with the binder's own lease as the fence. That is tag-based identity,
-   not a token, as everywhere else in twd. It is deferred until someone
-   needs it. Cloudflare shares by account; on twd, call the owning workload
+   not a token, as everywhere else in tailworks. It is deferred until someone
+   needs it. Cloudflare shares by account; on tailworks, call the owning workload
    over the tailnet instead (`getCaller` tells it who is asking).
 
 3. **Consistency: read-your-writes per host, bounded staleness across
@@ -94,7 +94,7 @@ Builds on [ADR-platform-stores](platform-stores.md).
    - A namespace's reads and writes on one host go through one object, so
      a workload always reads its own writes. Cloudflare KV only promises
      that in the same location, and typically within 60 s elsewhere.
-   - A write by another writer (another replica, `twd kv key put`) is seen
+   - A write by another writer (another replica, `tw kv key put`) is seen
      on the next read that wants data fresher than the object's last sync:
      60 s by default (Cloudflare's `cacheTtl` default), or the read's
      `cacheTtl` (at least 30 s, as on Cloudflare). The object's next write
@@ -125,8 +125,8 @@ Builds on [ADR-platform-stores](platform-stores.md).
    `413`, `414`). Store failures are `503`.
 
 5. **Operator surface.**
-   - **CLI:** `twd kv namespace create|list|delete` and
-     `twd kv key put|get|delete|list`, like `wrangler kv`. Key commands
+   - **CLI:** `tw kv namespace create|list|delete` and
+     `tw kv key put|get|delete|list`, like `wrangler kv`. Key commands
      name the namespace with `--binding` (looked up in the app's
      `wrangler.jsonc`) or `--namespace`. A value comes from an argument,
      `--path` or stdin, with `--ttl`, `--expiration` and `--metadata`.
@@ -141,20 +141,20 @@ Builds on [ADR-platform-stores](platform-stores.md).
      not the key: key names can be sensitive, and mgmt keeps them only
      sealed and HMACed. A binding's writes are not audited (high volume),
      like every journal append. Namespace create and delete are audited.
-   - **`twd dev`:** namespaces live in the dev process's in-memory mgmt.
-     They are saved to `<app>/.twd/dev-stores.json` (owner-only, and the
-     directory git-ignores itself) when `twd dev` stops, and loaded when it
+   - **`tw dev`:** namespaces live in the dev process's in-memory mgmt.
+     They are saved to `<app>/.tailworks/dev-stores.json` (owner-only, and the
+     directory git-ignores itself) when `tw dev` stops, and loaded when it
      starts, so local KV lasts between runs, as `wrangler dev`'s local
      state does.
 
 **Consequences.**
 
-- `workers-oauth-provider` runs unmodified, with `OAUTH_KV` on twd.
+- `workers-oauth-provider` runs unmodified, with `OAUTH_KV` on tailworks.
   Running it surfaced a runtime bug, now fixed: a default export that is a
   class instance (`export default new OAuthProvider(...)`) lost its
   prototype `fetch()`. It also surfaced a difference worth documenting:
   the provider compares `request.url`'s origin with its HTTPS resource,
-  and twd hands Workers `http://` URLs.
+  and tailworks hands Workers `http://` URLs.
 - KV writes need mgmt. That is the right trade for KV, which is read-heavy
   with slow writes on Cloudflare too. Write-heavy state belongs in a
   Durable Object.
@@ -168,5 +168,5 @@ Builds on [ADR-platform-stores](platform-stores.md).
 - Sharing a namespace between workloads, gated by tailnet grants (above).
 - Tombstone compaction (substrate).
 - Values above 2 MiB (with an object store).
-- Bulk REST writes (`wrangler kv bulk put/delete`) and a `twd kv` import
+- Bulk REST writes (`wrangler kv bulk put/delete`) and a `tw kv` import
   from a Cloudflare export.

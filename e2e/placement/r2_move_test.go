@@ -16,16 +16,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/r2/r2test"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/r2/r2test"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/ipn/store/mem"
 	"tailscale.com/tsnet"
 )
 
 // TestR2MoveBetweenHosts is the R2 binding (ADR-036) across real
-// processes: twd-mgmt and two twd-hostd processes, both started with
+// processes: tw-mgmt and two tw-hostd processes, both started with
 // -r2-backend s3 pointing at one hermetic S3 server (credentials in their
 // environment only). An app writes objects on h1, is re-placed onto h2
 // (deploy --replace), and reads them back there: the index comes from the
@@ -39,12 +39,12 @@ func TestR2MoveBetweenHosts(t *testing.T) {
 	if !hostdtest.HasNode() {
 		t.Skip("node not available (needed to bundle the app)")
 	}
-	dir, err := hostdtest.ShortDir("twd-r2-")
+	dir, err := hostdtest.ShortDir("tw-r2-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if !t.Failed() || os.Getenv("TWD_KEEP") == "" {
+		if !t.Failed() || os.Getenv("TW_KEEP") == "" {
 			os.RemoveAll(dir)
 		}
 	})
@@ -84,7 +84,7 @@ func TestR2MoveBetweenHosts(t *testing.T) {
 	}
 	var tn struct{ TenantID string }
 	e.must("POST", "/v1/tenants", map[string]any{"tailnet": nettest.MagicDNSDomain, "controlURL": ctl.URL, "mintMode": "oauth", "oauthClientFile": keyFile}, &tn)
-	creds := []string{"TWD_R2_S3_ACCESS_KEY_ID=" + s3.Creds.AccessKeyID, "TWD_R2_S3_SECRET_ACCESS_KEY=" + s3.Creds.SecretAccessKey}
+	creds := []string{"TW_R2_S3_ACCESS_KEY_ID=" + s3.Creds.AccessKeyID, "TW_R2_S3_SECRET_ACCESS_KEY=" + s3.Creds.SecretAccessKey}
 	for _, id := range []string{"h1", "h2"} {
 		hd := filepath.Join(dir, id)
 		e.start(id, creds, "-local-dev", "-mgmt", "unix://"+e.sock, "-mgmt-token-file", filepath.Join(dir, "token"),

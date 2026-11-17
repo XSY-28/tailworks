@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-15
 **Status:** Proposed. Built, except where "Not built" says otherwise (first
-shipped in twd 0.2.0); results in
+shipped in tailworks 0.2.0); results in
 `status/design-component-upgrade-release-process.md`.
 
 ## Context
@@ -14,10 +14,10 @@ and `host drain` as day-2 verbs. None of this is built. What master does
 today (2026-11-15, 46ff0c3):
 
 - **Version identity.**
-  - Only `cmd/twd` has a `main.version`. `release.sh` passes
+  - Only `cmd/tw` has a `main.version`. `release.sh` passes
     `-X main.version` to the other binaries, but they have no such variable,
-    so the flag does nothing there. `twd-vz` gets no version at all.
-  - `twd-mgmt` learns its version from a `-version` flag.
+    so the flag does nothing there. `tw-vz` gets no version at all.
+  - `tw-mgmt` learns its version from a `-version` flag.
 - **Skew detection.** Hosts, guests and mgmt replicas report no version.
   The only checked protocol is hostd ↔ vmhelper (`helperapi.Version = 2`),
   and that check is strict equality.
@@ -26,21 +26,21 @@ today (2026-11-15, 46ff0c3):
   `addIndexes`. There is no schema version, so nothing stops an old binary
   from opening a newer database, and nothing guards a downgrade.
 - **Persisted formats** carry no version marker. That covers `objects.json`,
-  netd `object.json`, `twd.json`, and (on branches) the R2 index journal.
+  netd `object.json`, `tw.json`, and (on branches) the R2 index journal.
 - **hostd restart** stops every workload and VM, then rebuilds them from mgmt
   assignments and saved node state. Node identity survives the restart:
   nodes rejoin and nothing re-registers.
-- **Missing verbs.** There is no `twd upgrade`. There is no graceful drain:
+- **Missing verbs.** There is no `tw upgrade`. There is no graceful drain:
   `host rm --drain` kills the host's objects and deletes the host. There is
-  no `twd mgmt migrate` either.
+  no `tw mgmt migrate` either.
 - **`install.sh`** swaps `bin/` and `share/` but doesn't restart anything,
   and it deletes the previous copy. The root-owned vmhelper changes only when
-  `sudo twd host setup --microvm` is re-run.
+  `sudo tw host setup --microvm` is re-run.
 - **workerd pin.** It is pinned twice: in `package-lock.json` and by hand in
-  `cmd/twd/doctor.go`. The guest image carries its own copy, and nothing
+  `cmd/tw/doctor.go`. The guest image carries its own copy, and nothing
   checks it against the host's.
-- **Platform runtime.** `platform.js` and `__twd_rt.js` are embedded in
-  hostd, but `@twd/*` client code is frozen into each bundle at deploy time.
+- **Platform runtime.** `platform.js` and `__tw_rt.js` are embedded in
+  hostd, but `@tailworks/*` client code is frozen into each bundle at deploy time.
   Upgrading a host therefore changes the runtime under old bundles.
 - **Releases.** A `v*` tag builds three tarballs into a draft GitHub release,
   and a maintainer publishes it. Nothing installs the previous release and
@@ -53,7 +53,7 @@ an upgrade must carry:
   because the local state is a replay of the journal.
 - Queues (#18) adds mgmt tables.
 - Observability (#20) adds telemetry grants, host API routes and a new
-  `twd logs` default.
+  `tw logs` default.
 - Workflows (#24) bumps workerd and keeps instances in upstream's
   experimental on-disk format.
 - Agent DX (#25) adds a stable `--json` schema and version-stamped skills.
@@ -67,22 +67,22 @@ The per-branch list is in the status file.
 ### 1. One release train, one version
 
 - **Every artifact in a tarball shares one SemVer version.** That includes
-  `twd`, `twd-mgmt`, `twd-hostd`, `twd-netd`, `twd-vmhelper`, `twd-vz`, the
-  guest image (rootfs with `twd-guestd` and workerd, plus the kernel), the
-  embedded platform JS, the admin UI, the create-twd templates and the
-  `@twd/*` npm packages.
+  `tw`, `tw-mgmt`, `tw-hostd`, `tw-netd`, `tw-vmhelper`, `tw-vz`, the
+  guest image (rootfs with `tw-guestd` and workerd, plus the kernel), the
+  embedded platform JS, the admin UI, the create-tailworks templates and the
+  `@tailworks/*` npm packages.
 - No component is released on its own. A component's version is the
   release's version.
 - **`internal/version`** is the single place a binary reads its version,
   commit, workerd pin and the protocol and schema versions it speaks. It is
   set by `-ldflags -X` in `release.sh` and the Makefile, for every binary
-  including `twd-vz`.
-  - The `-version` flag on `twd-mgmt` goes away.
+  including `tw-vz`.
+  - The `-version` flag on `tw-mgmt` goes away.
   - The hand-kept `workerdPin` in `doctor.go` is generated from
     `package-lock.json`.
 - **`release.json`** gains `protocols` (`push`, `guest`, `helper`, `rest`),
   `schema` (the newest mgmt migration ID) and `formats` (the newest version of
-  each persisted format). The guest `manifest.json` gains `twd_version`.
+  each persisted format). The guest `manifest.json` gains `tw_version`.
 
 ### 2. Each contract has its own version and its own rule
 
@@ -95,10 +95,10 @@ per contract:
 | mgmt → hostd push API | `push` integer + host `features` | Same additive rule; mgmt sends a message only to hosts whose `features` include it. |
 | hostd ↔ guestd (vsock) | `hello` gains `proto` + `version` | hostd and its guest image ship together (§5), so skew only occurs mid-restart; guestd answers `unknown op` and hostd treats that as "feature absent". |
 | hostd ↔ vmhelper | `helperapi.Version` + `Features` | Helper serves its version and the one before it; hostd requires a minimum, not equality (`vm_linux.go` check becomes a range). |
-| hostd ↔ twd-vz | `vzapi` gains a version in the stdin config | Shipped in the same tarball; refuse on mismatch with a "reinstall" hint. |
-| hostd runtime ↔ deployed bundle | deployment records the building CLI's version (`builtBy`) | hostd must run bundles built by the current and the previous minor. Older bundles keep running but `twd ls` flags them `rebuild_recommended`. |
+| hostd ↔ tw-vz | `vzapi` gains a version in the stdin config | Shipped in the same tarball; refuse on mismatch with a "reinstall" hint. |
+| hostd runtime ↔ deployed bundle | deployment records the building CLI's version (`builtBy`) | hostd must run bundles built by the current and the previous minor. Older bundles keep running but `tw ls` flags them `rebuild_recommended`. |
 | mgmt store schema | `schema_migrations` table (§3) | Expand in N, contract no earlier than N+1. |
-| Persisted formats (journals, `objects.json`, `object.json`, `twd.json`, queue bodies) | a version field in every record or file | Read all supported versions; write a new version only one release after readers exist (§4). |
+| Persisted formats (journals, `objects.json`, `object.json`, `tw.json`, queue bodies) | a version field in every record or file | Read all supported versions; write a new version only one release after readers exist (§4). |
 | CLI `--json` (`schema/cli.schema.json`) | `$id` carries a schema major | Additive within a major; a breaking change is a new major and a release-note **Breaking** item. |
 | workerd + `compatibility_date` | pin in `package-lock.json` | One pin per minor release; patch releases don't bump it except for security fixes (§6). |
 
@@ -129,7 +129,7 @@ per contract:
   - A contract migration raises `min_binary_version`.
 - **Downgrade guard.**
   - A binary that finds migration IDs it doesn't know (applied by a newer
-    twd-mgmt) still opens the store: those are expand migrations, which an
+    tw-mgmt) still opens the store: those are expand migrations, which an
     N−1 binary tolerates by construction. `/v1/status` lists them under
     `versions.schema.ahead`. (The draft had such a binary serve reads only;
     the minimum-version rule below already covers the unsafe case, and a
@@ -139,14 +139,14 @@ per contract:
   - **Contract migrations wait.** Opening the store applies expand
     migrations at once but defers contract ones while a replica on an older
     version is live (the `replicas` table). An upgrade run's `contract` step,
-    or `twd-mgmt migrate --apply`, applies them once every replica runs the
+    or `tw-mgmt migrate --apply`, applies them once every replica runs the
     new version.
   - Rolling back means restoring the pre-upgrade backup (§8), never
     down-migrating.
-- **`twd-mgmt migrate --check`** prints the pending migrations and whether
+- **`tw-mgmt migrate --check`** prints the pending migrations and whether
   any is a contract migration. `--apply` runs them, contract ones included,
-  without serving. `twd-mgmt restore-fence` fences a restored store (§8).
-  `twd upgrade --plan` (§8) calls the check.
+  without serving. `tw-mgmt restore-fence` fences a restored store (§8).
+  `tw upgrade --plan` (§8) calls the check.
 - **Tenant D1 migrations are not affected.** They stay inside the tenant's
   store, use wrangler's `d1_migrations` table, and are never called "schema
   migrations" in release notes.
@@ -157,7 +157,7 @@ per contract:
   - The KV wire format already has a version byte (`0x01`), and D1 entries
     have `v:1`.
   - **R2 index entries must gain `v` before #16 merges.**
-  - `objects.json`, netd `object.json`, `twd.json`, `approvals.json` and
+  - `objects.json`, netd `object.json`, `tw.json`, `approvals.json` and
     queue message rows gain `v` as well; a missing `v` means version 0.
 - **Journals are permanent.** Compaction keeps old entries, so readers keep
   every version they have ever written. The alternative is a rewrite
@@ -176,7 +176,7 @@ per contract:
 
 ### 5. Host upgrades: same-version bundle, cordon, bounce or drain
 
-- **hostd always runs the guest image from its own `share/twd/vm`.** The
+- **hostd always runs the guest image from its own `share/tailworks/vm`.** The
   guest therefore moves with hostd and never on its own; workerd follows from
   §6.
 - **Snapshots never cross versions.** ADR-030 bases are already rebuilt at
@@ -184,10 +184,10 @@ per contract:
   `manifest.json` hash, so a base snapshot can never be restored under a
   different guest.
 - **New verbs:**
-  - `twd host cordon <id>` and `twd host uncordon <id>` mark a host
+  - `tw host cordon <id>` and `tw host uncordon <id>` mark a host
     unschedulable, which is the "draining state" ADR-033 lacks. Placement
     skips cordoned hosts.
-  - `twd host drain <id>` cordons the host, then moves what it can:
+  - `tw host drain <id>` cordons the host, then moves what it can:
     - Stateless replicated workloads: start the replacement elsewhere first,
       then stop the local one.
     - Stateful namespaces whose storage is all mgmt-backed (platform stores,
@@ -197,7 +197,7 @@ per contract:
       `fs` blobs, `approvals.json`, request logs) are refused unless
       `--allow-local-state-loss` is given. On a single-host MVP namespace
       there is nowhere to move them, so the answer is a bounce, not a drain.
-  - **Bounce** (the default for `twd host upgrade` on a host that can't
+  - **Bounce** (the default for `tw host upgrade` on a host that can't
     drain):
     1. Install the new tarball side by side.
     2. Upgrade vmhelper first. It speaks old and new (§2), and the VMs restart
@@ -227,7 +227,7 @@ per contract:
 
   The workerd bump on `workflows-approvals` is extracted under this rule
   (AGENTS.md rule 6: land the shared change first).
-- **A tenant's `compatibility_date` is never changed by twd.**
+- **A tenant's `compatibility_date` is never changed by tailworks.**
   - At deploy, mgmt refuses a date newer than the pinned workerd supports
     (`compatibility_date_unsupported`).
   - Platform-owned dates (`PlatformCompatDate`, the deny worker, VM warm-up)
@@ -256,8 +256,8 @@ per contract:
     decision), and `/v1/status` lists it under `versions.skewed`.
   - The `Replica` record gains `version`. `/v1/status` reports
     `versions: {mgmt: [...], hosts: {v: count}}`.
-  - The CLI sends `User-Agent: twd/<v>`, and mgmt answers with
-    `Twd-Version`. On a mismatch outside the window the CLI warns on stderr,
+  - The CLI sends `User-Agent: tw/<v>`, and mgmt answers with
+    `Tw-Version`. On a mismatch outside the window the CLI warns on stderr,
     once. It doesn't warn in `--json` mode, whose stderr carries only the
     error line, and it never fails a command over skew: mgmt's own checks
     refuse what is unsafe.
@@ -277,9 +277,9 @@ per contract:
   - This is what makes the in-flight features safe to merge in any order
     and to roll out host by host.
 
-### 8. `twd upgrade`
+### 8. `tw upgrade`
 
-- **Homelab (`twd up`, ADR-021): `twd upgrade [vX.Y.Z] [--plan] [--yes]`.**
+- **Homelab (`tw up`, ADR-021): `tw upgrade [vX.Y.Z] [--plan] [--yes]`.**
   1. Resolve and download the release; verify SHA256SUMS and the platform
      (the `get.sh` logic, moved into Go).
   2. **Plan.** Print the from and to versions, the release-note **Breaking**
@@ -287,7 +287,7 @@ per contract:
      (flagging contract ones), any workerd or compat-date change, and
      whether vmhelper needs `sudo`.
   3. **Back up.** SQLite `VACUUM INTO`, plus a copy of `custody/` and
-     `issuer.key`, as one timestamped bundle under `~/.twd/backups/`. The
+     `issuer.key`, as one timestamped bundle under `~/.tailworks/backups/`. The
      database and custody are only valid together: platform store, queue
      and secret data is sealed by custody keys.
   4. Stage the release; `install.sh` keeps the previous copy as `bin.prev`
@@ -298,28 +298,28 @@ per contract:
   6. **Roll back automatically** if the health check fails *and* no
      contract migration ran: swap `.prev` back, restore the backup, and
      restart. Otherwise stop and print the restore command.
-- **Skipping versions.** `twd upgrade` walks through every intermediate
+- **Skipping versions.** `tw upgrade` walks through every intermediate
   minor that has a contract migration, so a skip never jumps a contract
   step.
 - **Release catalog in mgmt.** mgmt keeps a catalog of releases, so
   planning needs no network access.
-  - Each release embeds its catalog entries in `twd-mgmt`: its own
+  - Each release embeds its catalog entries in `tw-mgmt`: its own
     `release.json` plus the assembled release notes (§9) for itself and
     every earlier release. Entries carry `upgrade` kinds, contract
     migrations, protocol and format versions, and the workerd pin.
-  - A newer target is added with `twd release import <tarball>…`, which
+  - A newer target is added with `tw release import <tarball>…`, which
     verifies the tarball against `SHA256SUMS`, posts its
-    `share/twd/catalog.json` (the `releases` table), and uploads
+    `share/tailworks/catalog.json` (the `releases` table), and uploads
     `SHA256SUMS` and the tarball to mgmt's release directory (`-release-dir`,
     default `<state-dir>/releases`; an upload must match `SHA256SUMS`).
     Replicas that don't share that directory each need the import. Not
     built: opt-in `--release-source github`, which would have mgmt fetch
     new entries itself.
-  - `GET /v1/releases` lists the catalog; `twd release ls` shows it.
+  - `GET /v1/releases` lists the catalog; `tw release ls` shows it.
 - **Production: a mgmt-side upgrade orchestrator.** The fleet upgrade runs
   in mgmt, not in the CLI, so it survives a laptop disconnecting and is
   visible to every operator.
-  - `twd upgrade --plan --to vX.Y.Z` asks mgmt for a plan
+  - `tw upgrade --plan --to vX.Y.Z` asks mgmt for a plan
     (`POST /v1/upgrades?dryRun=true`). mgmt computes it from the catalog
     and the fleet's reported versions and features:
     1. Check the store backup (point-in-time recovery is on).
@@ -330,7 +330,7 @@ per contract:
 
     The plan flags hosts that lack a feature some deployment needs, and
     every intermediate minor that has a contract migration.
-  - `twd upgrade --to vX.Y.Z` creates an **upgrade run**
+  - `tw upgrade --to vX.Y.Z` creates an **upgrade run**
     (`POST /v1/upgrades`), a durable record in the store: the plan, the
     current step, and per-host state. Its steps are driven by the existing
     stateless-replica model (ADR-011): whichever replica holds the run's
@@ -339,10 +339,10 @@ per contract:
     - **Hosts:** mgmt pushes `POST /v1/push/upgrade` with the release and
       artifact digest. hostd downloads the tarball from mgmt over the
       tailnet, verifies it, stages it, and asks its supervisor to restart
-      it on the new version: the systemd unit, or `twd up`'s supervisor.
+      it on the new version: the systemd unit, or `tw up`'s supervisor.
       The host reports back by heartbeat, with its new `version`.
     - **vmhelper** is root-owned. The run pauses on hosts whose helper
-      needs an upgrade (`needs_operator: sudo twd host setup --microvm`)
+      needs an upgrade (`needs_operator: sudo tw host setup --microvm`)
       unless the host was set up with `--allow-helper-upgrade`, which
       installs a root-run updater limited to a release's helper binary.
     - **mgmt replicas** run under the operator's own deployment system, so
@@ -351,14 +351,14 @@ per contract:
   - **Gates between steps:** each host must settle (`syncAssignments` done,
     objects rejoined, no new device registrations) before the next host
     starts. The canary waits a configurable soak time. A failed gate pauses
-    the run (`paused: <reason>`). `twd upgrade status|pause|resume|abort`
+    the run (`paused: <reason>`). `tw upgrade status|pause|resume|abort`
     controls the run, and every transition is audited (AuditKinds
     `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_abort`).
-  - The homelab `twd upgrade` uses the same plan code, through the catalog
+  - The homelab `tw upgrade` uses the same plan code, through the catalog
     of its embedded mgmt.
 - **Restore must not reuse lease epochs.** Lock fencing tokens (#26) and the
   ADR-028 fences are built from epochs. Every restore, including the
-  automatic rollback and the future SQLite→Postgres `twd mgmt migrate`,
+  automatic rollback and the future SQLite→Postgres `tw mgmt migrate`,
   raises each lease's epoch past anything handed out before the backup by
   writing a restore generation into `schema_meta`.
 
@@ -395,11 +395,11 @@ per contract:
 - **Release gates** in `release.yml`, ahead of the draft:
   1. `make lint test` and the hermetic e2e suites, as today.
   2. **Upgrade test** (new, `e2e/upgrade`):
-     - Download the previous published release, `twd up`.
+     - Download the previous published release, `tw up`.
      - Deploy the fixture app, which exercises DO storage, a secret, KV, D1,
        R2, a queue with a pending message, a workflow waiting on approval, a
        cron and a public route. Each part is added as its feature merges.
-     - Run `twd upgrade` to the candidate, then assert: data intact, nodes
+     - Run `tw upgrade` to the candidate, then assert: data intact, nodes
        rejoined without re-registering (device count unchanged), old bundles
        still serving, the pending message delivered and the workflow
        resumable.
@@ -408,7 +408,7 @@ per contract:
   4. **Downgrade guard test:** the previous binary against the migrated
      store must fail with `version_skew`, not corrupt it.
   5. **microVM upgrade test** on an amd64 Linux KVM machine and in
-     Lima twd-dev (arm64): the same flow on the microVM tier, including vmhelper
+     Lima tw-dev (arm64): the same flow on the microVM tier, including vmhelper
      protocol N−1 → N.
   6. **Headscale:** gates 2 and 3 also run against each of the two supported
      Headscale minor releases (RFC "Compatibility promise"), pinned in CI,
@@ -417,8 +417,8 @@ per contract:
 - **Artifacts.**
   - Unchanged: three tarballs, `SHA256SUMS`, draft, maintainer publishes.
   - New: GitHub artifact attestations for the tarballs and `SHA256SUMS`;
-    `get.sh` and `twd upgrade` verify them when `gh` is present.
-  - npm `@twd/*` packages are published at the same version from the same
+    `get.sh` and `tw upgrade` verify them when `gh` is present.
+  - npm `@tailworks/*` packages are published at the same version from the same
     tag, after the GitHub release is published.
 - **Deprecation.** A surface deprecated in N warns (a CLI warning, plus a
   `Deprecation` header on REST) and is removed in N+2 at the earliest, with a
@@ -432,8 +432,8 @@ Locks (#31) and Workflows (#34, ADR-040) merged. This branch retrofits them:
 
 | Feature | Done here |
 |---|---|
-| KV (ADR-037) | Feature `kv` (a registered store kind). Golden fixtures for the wire format, decoded by both the Go and the JS reader; a newer version byte is refused with "written by a newer twd". |
-| R2 (ADR-036) | **Index entries now carry `v:1`**, and a missing `v` reads as v1. The JS replay and `twd r2` refuse a newer `v`. The replay also refuses unknown ops, which it used to skip. Feature `r2`. |
+| KV (ADR-037) | Feature `kv` (a registered store kind). Golden fixtures for the wire format, decoded by both the Go and the JS reader; a newer version byte is refused with "written by a newer tw". |
+| R2 (ADR-036) | **Index entries now carry `v:1`**, and a missing `v` reads as v1. The JS replay and `tw r2` refuse a newer `v`. The replay also refuses unknown ops, which it used to skip. Feature `r2`. |
 | D1 (ADR-038) | Feature `d1`. The journal replay refuses a newer `v`; it used to skip it silently, which loses writes. Release notes say "D1 migrations" for tenant migrations. |
 | Observability | Feature `telemetry`. |
 | Queues (ADR-039) | Feature `queues` (static: queues are a mgmt broker, not a store kind), required by any bundle with producers or consumers. Its tables went into the baseline DDL before `mgmt/migrations/` existed, which is fine: the baseline is idempotent. **Still open:** a format version on stored `v8` bodies, since V8 serialization can change with workerd. |
@@ -462,22 +462,22 @@ Built on this branch, with tests:
   - `changes/` fragments and `make changes-check`.
 - **Phase 1:**
   - Skew enforcement and feature-gated placement.
-  - Homelab `twd upgrade`: plan, backup, install, restart, health check,
+  - Homelab `tw upgrade`: plan, backup, install, restart, health check,
     automatic rollback with a restore fence.
   - `install.sh --rollback`, with `.prev` kept.
-  - `twd-mgmt migrate --check|--apply` and `restore-fence`.
-  - The embedded catalog, `GET /v1/releases`, and `twd release ls|import`.
+  - `tw-mgmt migrate --check|--apply` and `restore-fence`.
+  - The embedded catalog, `GET /v1/releases`, and `tw release ls|import`.
   - `make e2e-upgrade`: the previous release tag, built in a temporary
     worktree, upgraded to the candidate (also the downgrade check), wired
     into `release.yml`'s `gates` job.
 - **Phase 2:**
-  - `twd host cordon|uncordon|drain`.
-  - vmhelper protocol ranges; guest `hello` and `twd-vz` protocol fields;
+  - `tw host cordon|uncordon|drain`.
+  - vmhelper protocol ranges; guest `hello` and `tw-vz` protocol fields;
     base snapshots keyed by guest identity.
   - The fleet plan from mgmt.
 - **Phase 3:**
-  - Upgrade runs, `POST /v1/push/upgrade` and `twd-hostd -self-upgrade`.
-  - `twd upgrade status|pause|resume|abort`.
+  - Upgrade runs, `POST /v1/push/upgrade` and `tw-hostd -self-upgrade`.
+  - `tw upgrade status|pause|resume|abort`.
   - Restore-generation epochs (`RestoreFence`).
 
 Not built:
@@ -492,8 +492,8 @@ Not built:
 - **The microVM upgrade gate (gate 5).** It needs a KVM runner in CI.
   `make e2e-upgrade` covers the process tier.
 - **GitHub artifact attestations** and `--release-source github`.
-- **A stale-skills check in `twd doctor`.** `twd upgrade` reminds you to
-  re-run `twd agent setup`.
+- **A stale-skills check in `tw doctor`.** `tw upgrade` reminds you to
+  re-run `tw agent setup`.
 - **The schema major carried in `$id` of `schema/cli.schema.json`.** It is
   `internal/version.CLIJSONMajor`, reported in `protocols.cliJSON`; the
   file's URL is unchanged.

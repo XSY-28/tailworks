@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
 // fake mimics Headscale v0.29's REST gateway (responses as observed from
@@ -43,7 +43,7 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == "POST" && r.URL.Path == "/api/v1/preauthkey":
-		io.WriteString(w, `{"preAuthKey":{"user":null,"id":"7","key":"hskey-auth-secret","reusable":false,"ephemeral":false,"used":false,"aclTags":["tag:twd"]}}`)
+		io.WriteString(w, `{"preAuthKey":{"user":null,"id":"7","key":"hskey-auth-secret","reusable":false,"ephemeral":false,"used":false,"aclTags":["tag:tw"]}}`)
 	case r.Method == "POST" && r.URL.Path == "/api/v1/preauthkey/expire":
 		if body["id"] == "404" {
 			grpcErr(404, 5, "not found")
@@ -60,7 +60,7 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.deleted = append(f.deleted, id)
 		io.WriteString(w, `{}`)
 	case r.Method == "GET" && r.URL.Path == "/api/v1/node":
-		io.WriteString(w, `{"nodes":[{"id":"3","name":"twd-room-abc","givenName":"twd-room-abc","tags":["tag:twd-agent"]}]}`)
+		io.WriteString(w, `{"nodes":[{"id":"3","name":"tw-room-abc","givenName":"tw-room-abc","tags":["tag:tw-agent"]}]}`)
 	case r.Method == "GET" && r.URL.Path == "/api/v1/policy":
 		if f.policy == "" {
 			grpcErr(500, 2, "loading ACL from database: acl policy not found")
@@ -91,7 +91,7 @@ func newClient(t *testing.T) (*Client, *fake) {
 
 func TestCreateKey(t *testing.T) {
 	c, f := newClient(t)
-	k, err := c.CreateKey(context.Background(), tsapi.KeyOptions{Tags: []string{"tag:twd"}, Preauthorized: true, ExpirySeconds: 300, Description: "twd o_1"})
+	k, err := c.CreateKey(context.Background(), tsapi.KeyOptions{Tags: []string{"tag:tw"}, Preauthorized: true, ExpirySeconds: 300, Description: "tw o_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestCreateKey(t *testing.T) {
 	if b["expiration"] != "2026-11-15T12:05:00Z" || b["reusable"] != false || b["ephemeral"] != false {
 		t.Errorf("body = %v", b)
 	}
-	if tags, _ := b["aclTags"].([]any); len(tags) != 1 || tags[0] != "tag:twd" {
+	if tags, _ := b["aclTags"].([]any); len(tags) != 1 || tags[0] != "tag:tw" {
 		t.Errorf("aclTags = %v", b["aclTags"])
 	}
 	if _, ok := b["user"]; ok {
@@ -145,7 +145,7 @@ func TestListDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(devs) != 1 || devs[0].ID != "3" || devs[0].NodeID != "3" || devs[0].Name != "twd-room-abc.hs.example.test" || devs[0].Tags[0] != "tag:twd-agent" {
+	if len(devs) != 1 || devs[0].ID != "3" || devs[0].NodeID != "3" || devs[0].Name != "tw-room-abc.hs.example.test" || devs[0].Tags[0] != "tag:tw-agent" {
 		t.Fatalf("devices = %+v", devs)
 	}
 }
@@ -161,7 +161,7 @@ func TestPolicyRoundTrip(t *testing.T) {
 	if err := c.ValidatePolicy(ctx, []byte(`{"postures":{}}`)); err == nil || !strings.Contains(err.Error(), "headscale api: 400") {
 		t.Errorf("ValidatePolicy(postures) = %v", err)
 	}
-	next := "{\n  // twd\n  \"tagOwners\": {\"tag:twd\": []},\n}"
+	next := "{\n  // tw\n  \"tagOwners\": {\"tag:tw\": []},\n}"
 	ne, err := c.SetPolicy(ctx, []byte(next), "")
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestPolicyRoundTrip(t *testing.T) {
 func TestErrorsDontLeakTheAPIKey(t *testing.T) {
 	c, _ := newClient(t)
 	c.APIKey = "hskey-api-wrong"
-	_, err := c.CreateKey(context.Background(), tsapi.KeyOptions{Tags: []string{"tag:twd"}})
+	_, err := c.CreateKey(context.Background(), tsapi.KeyOptions{Tags: []string{"tag:tw"}})
 	if !tsapi.IsUnauthorized(err) || strings.Contains(err.Error(), "hskey-api-wrong") {
 		t.Fatalf("err = %v", err)
 	}

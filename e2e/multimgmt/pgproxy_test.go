@@ -120,7 +120,7 @@ func viaProxy(t *testing.T, dsn, addr string) string {
 	}
 	u.Host = addr
 	out := u.String()
-	if extra := os.Getenv("TWD_MM_DSN_SUFFIX"); extra != "" { // e.g. &twd_max_conns=2
+	if extra := os.Getenv("TW_MM_DSN_SUFFIX"); extra != "" { // e.g. &tw_max_conns=2
 		out += extra
 	}
 	return out

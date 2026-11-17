@@ -1,7 +1,7 @@
 // Test fixture for observability (ADR-observability): console output,
 // exceptions, a DO call from the Worker and egress from the DO, so the Go
 // tests can check request records, metrics, OTLP export and traceparent
-// propagation. Deliberately without nodejs_compat (twd adds nodejs_als).
+// propagation. Deliberately without nodejs_compat (tailworks adds nodejs_als).
 import { DurableObject } from "cloudflare:workers";
 
 async function echo(env, from) {

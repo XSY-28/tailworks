@@ -5,7 +5,7 @@ package hostdrun
 import (
 	"log/slog"
 
-	"github.com/rosskukulinski/twd/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
 )
 
 // vmBackend: the microVM tier needs Linux + KVM or macOS; this OS offers the

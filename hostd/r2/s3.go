@@ -24,7 +24,7 @@ type S3 struct {
 	Endpoint *url.URL
 	Bucket   string
 	Region   string // default "us-east-1" (most S3-compatible servers accept it)
-	// Prefix is prepended to every blob name ("twd/" keeps twd's blobs in
+	// Prefix is prepended to every blob name ("tw/" keeps tailworks' blobs in
 	// one folder of a shared bucket).
 	Prefix string
 	// VirtualHost addresses the bucket as <bucket>.<endpoint host> instead

@@ -1,6 +1,6 @@
-// Package container holds what mgmt and twd-hostd share about containers
+// Package container holds what mgmt and tw-hostd share about containers
 // and code sandboxes on the microVM tier (ADR-032): the container classes a
-// bundle declares (wrangler "containers", twd.jsonc "containers"), Cloudflare's
+// bundle declares (wrangler "containers", tailworks.jsonc "containers"), Cloudflare's
 // instance types and the resource vector a running container reserves.
 package container
 
@@ -65,16 +65,16 @@ const (
 type Class struct {
 	Class string `json:"class"`
 	// Source is the wrangler "image" as written: an image reference or a
-	// Dockerfile path / build dir that twd deploy builds.
+	// Dockerfile path / build dir that tw deploy builds.
 	Source string `json:"source,omitempty"`
 	// Image is the default image reference ctx.container.start() runs: the
-	// wrangler image when it is a reference, else the twd.jsonc pin ("" =
-	// a Dockerfile twd deploy has not built and pinned yet).
+	// wrangler image when it is a reference, else the tailworks.jsonc pin ("" =
+	// a Dockerfile tw deploy has not built and pinned yet).
 	Image string `json:"image,omitempty"`
 	// Images are the named images (Sandbox SDK 1.0 ctx.container images,
 	// wrangler "images"), name -> reference ("" = not built yet).
 	Images map[string]string `json:"images,omitempty"`
-	// ImageSources are the named images twd deploy builds: name -> the
+	// ImageSources are the named images tw deploy builds: name -> the
 	// wrangler Dockerfile (or build dir), as written.
 	ImageSources map[string]string `json:"imageSources,omitempty"`
 	// InstanceType is a named type ("" = DefaultInstanceType) or "custom".
@@ -87,23 +87,23 @@ type Class struct {
 	// stated: any host offering containers; pinning at deploy fills it).
 	Arch string `json:"arch,omitempty"`
 	// Pins are what mgmt resolved every image reference to at deploy, per
-	// architecture (ADR-032 D3): a repository in twd's registry and an
+	// architecture (ADR-032 D3): a repository in tailworks' registry and an
 	// image manifest digest. Hosts pull exactly these and nothing else.
 	Pins []Pin `json:"pins,omitempty"`
 }
 
 // Pin is one image reference of a class, resolved once at deploy for one
 // architecture. Retagging the upstream ref later changes nothing: hosts
-// pull Repository@Digest from twd's registry.
+// pull Repository@Digest from tailworks' registry.
 type Pin struct {
 	// Name is the class's image name (wrangler "images" key; "" = the
 	// default image).
 	Name string `json:"name,omitempty"`
 	// Ref is the reference as ctx.container sees it (the wrangler image,
-	// or the twd.local ref twd deploy built).
+	// or the tw.local ref tw deploy built).
 	Ref  string `json:"ref"`
 	Arch string `json:"arch"`
-	// Repository is in twd's registry: "<tenantID>/…" or "public/…".
+	// Repository is in tailworks' registry: "<tenantID>/…" or "public/…".
 	Repository string `json:"repository"`
 	// Digest is the linux/Arch image manifest (never an index).
 	Digest string `json:"digest"`
@@ -176,7 +176,7 @@ func IsBuildSource(s string) bool {
 }
 
 // entry is one "containers" element as written in wrangler.jsonc
-// (class_name, image, images, instance_type, max_instances) or twd.jsonc
+// (class_name, image, images, instance_type, max_instances) or tailworks.jsonc
 // (the same keys, plus "arch"; "class" is accepted for class_name, and
 // "images" maps a name straight to a pinned reference).
 type entry struct {
@@ -195,8 +195,8 @@ var (
 )
 
 // entries reads a "containers" value: an array of entries (Cloudflare's
-// shape), or, in twd.jsonc, an object keyed by class ({"<Class>": {"image":
-// ref, "images": {name: ref}}}: the pins twd deploy writes).
+// shape), or, in tailworks.jsonc, an object keyed by class ({"<Class>": {"image":
+// ref, "images": {name: ref}}}: the pins tw deploy writes).
 func entries(src string, b []byte) ([]entry, error) {
 	var doc struct {
 		Containers json.RawMessage `json:"containers"`
@@ -230,17 +230,17 @@ func entries(src string, b []byte) ([]entry, error) {
 	return list, nil
 }
 
-// Parse reads the "containers" of wrangler and twd (plain JSON, comments
-// already stripped; either may be nil). A twd.jsonc entry replaces the
+// Parse reads the "containers" of wrangler and tailworks (plain JSON, comments
+// already stripped; either may be nil). A tailworks.jsonc entry replaces the
 // wrangler entry of the same class field by field (the fields it sets), and
 // may add a class. The result is sorted by class.
-func Parse(wrangler, twd []byte) ([]Class, error) {
+func Parse(wrangler, tw []byte) ([]Class, error) {
 	byClass := map[string]*Class{}
 	fromWrangler := map[string]bool{} // classes wrangler declares
 	for _, src := range []struct {
 		name string
 		b    []byte
-	}{{"wrangler", wrangler}, {"twd.jsonc", twd}} {
+	}{{"wrangler", wrangler}, {"tailworks.jsonc", tw}} {
 		if len(src.b) == 0 {
 			continue
 		}
@@ -274,7 +274,7 @@ func Parse(wrangler, twd []byte) ([]Class, error) {
 				if !IsBuildSource(e.Image) {
 					c.Image = e.Image
 				} else if src.name != "wrangler" {
-					return nil, fmt.Errorf("%s: containers.%s: image %q must be an image reference (twd.jsonc pins what twd deploy built)", src.name, name, e.Image)
+					return nil, fmt.Errorf("%s: containers.%s: image %q must be an image reference (tailworks.jsonc pins what tw deploy built)", src.name, name, e.Image)
 				}
 			}
 			if err := c.setImages(src.name, e.Images, fromWrangler); err != nil {
@@ -315,8 +315,8 @@ func Parse(wrangler, twd []byte) ([]Class, error) {
 	return out, nil
 }
 
-// setImages takes wrangler's {name: {dockerfile | image}} or twd.jsonc's
-// {name: ref} pins. A twd.jsonc pin of a class wrangler declares must name
+// setImages takes wrangler's {name: {dockerfile | image}} or tailworks.jsonc's
+// {name: ref} pins. A tailworks.jsonc pin of a class wrangler declares must name
 // one of its wrangler images (a typo is an error, not a new image).
 func (c *Class) setImages(src string, raw json.RawMessage, fromWrangler map[string]bool) error {
 	if len(raw) == 0 || string(raw) == "null" {

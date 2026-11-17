@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
 // TailnetAPI is the per-tenant Tailscale API surface mgmt uses.

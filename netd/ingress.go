@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/caps"
+	"github.com/rosskukulinski/tailworks/internal/caps"
 	"tailscale.com/client/tailscale/apitype"
 )
 
@@ -27,9 +27,9 @@ type Caller struct {
 	Tags     []string                     `json:"tags"`
 	User     string                       `json:"user,omitempty"` // login, untagged (human) callers only
 	CapMap   map[string][]json.RawMessage `json:"capMap"`
-	// Object is set when the caller is a twd object with a node certificate
+	// Object is set when the caller is a tailworks object with a node certificate
 	// (ADR-010): CapMap has already been narrowed to CapMap ∩ Object.Lim.
-	Object *CallerObject `json:"twd,omitempty"`
+	Object *CallerObject `json:"tw,omitempty"`
 	// CapsWithheld is true when a certificate lookup failed and netd failed
 	// closed: CapMap is empty regardless of the policy (RT-01).
 	CapsWithheld bool `json:"capsWithheld,omitempty"`
@@ -44,15 +44,15 @@ type CallerObject struct {
 }
 
 // CertSource resolves a caller's node certificate (RT-01). Lookup returns
-// the verified certificate of the twd object whose node is stableNodeID,
-// ErrNoCert if that node is not a twd object of this tenant (the WhoIs
+// the verified certificate of the tailworks object whose node is stableNodeID,
+// ErrNoCert if that node is not a tailworks object of this tenant (the WhoIs
 // CapMap then applies unchanged), or any other error, on which netd FAILS
 // CLOSED: the caller's caps are withheld.
 type CertSource interface {
 	Lookup(ctx context.Context, stableNodeID string) (*CallerObject, error)
 }
 
-// ErrNoCert: the peer is not a twd object (a human, a plain tailnet node,
+// ErrNoCert: the peer is not a tailworks object (a human, a plain tailnet node,
 // an MCP server...). Its policy caps apply as WhoIs reports them.
 var ErrNoCert = errors.New("netd: no node certificate for this peer")
 
@@ -125,7 +125,7 @@ func CallerFromWhoIs(w *apitype.WhoIsResponse) Caller {
 func isIdentityHeader(k string) bool {
 	k = strings.ToLower(k)
 	switch {
-	case strings.HasPrefix(k, "x-twd"), strings.HasPrefix(k, "twd-"), strings.HasPrefix(k, "cf-"),
+	case strings.HasPrefix(k, "x-tw-"), strings.HasPrefix(k, "tw-"), strings.HasPrefix(k, "cf-"),
 		strings.HasPrefix(k, "x-forwarded-"), strings.HasPrefix(k, "x-poi"):
 		return true
 	}

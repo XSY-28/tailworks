@@ -14,10 +14,10 @@ import (
 	"strings"
 	"sync"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
-// Workload logs for linked machines (`twd logs <workload>` over `twd
+// Workload logs for linked machines (`tw logs <workload>` over `tw
 // link`): GET /v1/tenants/{id}/workloads/{workload}/logs. The log is a file
 // on the host that runs the workload, so mgmt finds the lease holder of the
 // workload (and of each replica) and reads hostd's GET /v1/logs over the
@@ -117,7 +117,7 @@ func (m *Mgmt) hostLogs(ctx context.Context, tenantID string, src logSource, q L
 		}
 		var tr http.RoundTripper = &http.Transport{DialContext: dial, DisableKeepAlives: true}
 		if target == EmbeddedPushURL {
-			// A host agent in this process (single-process twd up): its push
+			// A host agent in this process (single-process tw up): its push
 			// handler, no dial (logs_inproc.go).
 			m.mu.Lock()
 			tr, base = handlerTransport{m.inprocPush[src.host]}, "http://hostd"
@@ -221,7 +221,7 @@ func (m *Mgmt) streamLogs(ctx context.Context, w http.ResponseWriter, tenantID s
 	}
 	for i, src := range srcs {
 		if resps[i] == nil {
-			out.write([]byte("[" + src.host + "] twd: " + asHostUnavailable(src, errs[i]).Error() + "\n"))
+			out.write([]byte("[" + src.host + "] tw: " + asHostUnavailable(src, errs[i]).Error() + "\n"))
 		}
 	}
 	copyOne := func(i int) {

@@ -1,6 +1,6 @@
 {
   // SDK conformance (e2e/sdk/oauthkv_test.go): @cloudflare/workers-oauth-provider
-  // unmodified, with its OAUTH_KV on twd's Workers KV binding.
+  // unmodified, with its OAUTH_KV on tailworks' Workers KV binding.
   "name": "oauthkv",
   "main": "src/index.ts",
   "compatibility_date": "2026-04-01",

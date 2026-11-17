@@ -1483,7 +1483,7 @@ type ApprovalDecisionRequest struct {
 	Comment  *string                         `json:"comment,omitempty"`
 	Decision ApprovalDecisionRequestDecision `json:"decision"`
 
-	// Metadata Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by twd's.
+	// Metadata Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by tailworks'.
 	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
 	// Step Which wait, when the instance waits for several.
@@ -1507,7 +1507,7 @@ type ApprovalList struct {
 	Unreachable *[]string `json:"unreachable,omitempty"`
 }
 
-// ApproveGrant One value of a `twd.dev/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
+// ApproveGrant One value of a `github.com/rosskukulinski/tailworks/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
 type ApproveGrant struct {
 	Decisions *[]string           `json:"decisions,omitempty"`
 	Limits    *map[string]float32 `json:"limits,omitempty"`
@@ -1528,11 +1528,11 @@ type Approver struct {
 	// User Login (untagged nodes).
 	User *string `json:"user,omitempty"`
 
-	// Via `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+	// Via `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `tw approve` or the admin UI.
 	Via ApproverVia `json:"via"`
 }
 
-// ApproverVia `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+// ApproverVia `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `tw approve` or the admin UI.
 type ApproverVia string
 
 // Arch A Go GOARCH. Container images must match their host's.
@@ -1544,7 +1544,7 @@ type Assignment struct {
 
 	// Containers The workload's container classes as mgmt resolved them at deploy (ADR-032 D3): the image
 	// refs `ctx.container` sees and their per-arch pins. hostd starts a container only from the
-	// pin for its own arch, pulled by digest from twd's registry.
+	// pin for its own arch, pulled by digest from tailworks' registry.
 	Containers   *[]ContainerClass `json:"containers,omitempty"`
 	ControlURL   *string           `json:"controlURL,omitempty"`
 	CreatedAt    int64             `json:"createdAt"`
@@ -1650,7 +1650,7 @@ type AuditBatch struct {
 // `notification_put` (the tenant's notification webhook set; its host and header names only),
 // `notification_delete`,
 // `notification_failed` (a notification was not delivered; the webhook's host and the error),
-// `notification_test` (`twd notify test`; the origin and the outcome),
+// `notification_test` (`tw notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1767,7 +1767,7 @@ type AuditRecord struct {
 	// `notification_put` (the tenant's notification webhook set; its host and header names only),
 	// `notification_delete`,
 	// `notification_failed` (a notification was not delivered; the webhook's host and the error),
-	// `notification_test` (`twd notify test`; the origin and the outcome),
+	// `notification_test` (`tw notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1843,7 +1843,7 @@ type ChainStatus struct {
 	Records  int     `json:"records"`
 }
 
-// ClassConfig One DO namespace from `twd.jsonc` `tailnet.objects`.
+// ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
@@ -1851,13 +1851,13 @@ type ClassConfig struct {
 	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`.
 	PreviewOf *string `json:"previewOf,omitempty"`
 
-	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
+	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
 	ReplicaOf *string `json:"replicaOf,omitempty"`
 
 	// Replicas `_workload` only, the workload itself: its replica count when > 1.
 	Replicas *int `json:"replicas,omitempty"`
 
-	// Service `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc` `tailnet.service`).
+	// Service `_workload` only: the Tailscale Service the workload entry node hosts (`tailworks.jsonc` `tailnet.service`).
 	Service *string  `json:"service,omitempty"`
 	Tags    []string `json:"tags"`
 
@@ -1865,7 +1865,7 @@ type ClassConfig struct {
 	TTL *string `json:"ttl,omitempty"`
 }
 
-// ContainerClass A container class of a deployment (a wrangler `containers` entry plus twd.jsonc overrides) and its pinned images.
+// ContainerClass A container class of a deployment (a wrangler `containers` entry plus tailworks.jsonc overrides) and its pinned images.
 type ContainerClass struct {
 	Arch  *ContainerClassArch `json:"arch,omitempty"`
 	Class string              `json:"class"`
@@ -1876,7 +1876,7 @@ type ContainerClass struct {
 	// Image The default image reference `start()` runs.
 	Image *string `json:"image,omitempty"`
 
-	// ImageSources Named images twd deploy builds: name → the wrangler Dockerfile, as written.
+	// ImageSources Named images tw deploy builds: name → the wrangler Dockerfile, as written.
 	ImageSources *map[string]string `json:"imageSources,omitempty"`
 
 	// Images Named images (`ctx.container.images`): name → reference.
@@ -1893,7 +1893,7 @@ type ContainerClass struct {
 type ContainerClassArch string
 
 // ContainerImagePin One image reference of a container class, resolved once at deploy for one arch (ADR-032 D3):
-// hosts pull exactly `repository@digest` from twd's registry and nothing else. Retagging the
+// hosts pull exactly `repository@digest` from tailworks' registry and nothing else. Retagging the
 // upstream ref later changes nothing until the next deploy.
 type ContainerImagePin struct {
 	Arch ContainerImagePinArch `json:"arch"`
@@ -1901,13 +1901,13 @@ type ContainerImagePin struct {
 	// Digest The linux/`arch` image manifest (never an index).
 	Digest string `json:"digest"`
 
-	// From What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the twd.local ref.
+	// From What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the tw.local ref.
 	From *string `json:"from,omitempty"`
 
 	// Name The class's image name (wrangler `images` key); absent for the default image.
 	Name *string `json:"name,omitempty"`
 
-	// Ref The reference as `ctx.container` sees it (the wrangler image, or the `twd.local/<tenant>/…@sha256:…` ref `twd deploy` built).
+	// Ref The reference as `ctx.container` sees it (the wrangler image, or the `tw.local/<tenant>/…@sha256:…` ref `tw deploy` built).
 	Ref string `json:"ref"`
 
 	// Repository `<tenantID>/…` (the tenant's builds and mirrors) or `public/…` (public bases, alias targets).
@@ -1917,8 +1917,8 @@ type ContainerImagePin struct {
 // ContainerImagePinArch defines model for ContainerImagePin.Arch.
 type ContainerImagePinArch string
 
-// ContainerImages Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
-// with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+// ContainerImages Images `tw deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+// with `tw.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
 // replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
 type ContainerImages map[string]struct {
 	Image  *string            `json:"image,omitempty"`
@@ -2047,7 +2047,7 @@ type Deployment struct {
 	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
 	Public *DeploymentPublic `json:"public,omitempty"`
 
-	// Replicas A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
+	// Replicas A workload with `tailworks.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
 	Replicas *[]ReplicaRef `json:"replicas,omitempty"`
 
 	// Status - `assigned`: mgmt placed it; the host has not reported yet.
@@ -2072,11 +2072,11 @@ type Deployment struct {
 
 // DeploymentCreate defines model for DeploymentCreate.
 type DeploymentCreate struct {
-	// Bundle tar (optionally gzipped) of the built worker + `twd.jsonc` + `wrangler.jsonc`.
+	// Bundle tar (optionally gzipped) of the built worker + `tailworks.jsonc` + `wrangler.jsonc`.
 	Bundle []byte `json:"bundle"`
 
-	// ContainerImages Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
-	// with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+	// ContainerImages Images `tw deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+	// with `tw.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
 	// replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
 	ContainerImages *ContainerImages `json:"containerImages,omitempty"`
 
@@ -2086,10 +2086,10 @@ type DeploymentCreate struct {
 	// Host Pin a host.
 	Host *string `json:"host,omitempty"`
 
-	// Namespaces Override the classes read from `twd.jsonc` (tests).
+	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 
-	// Preview Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
+	// Preview Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
 	Preview *bool `json:"preview,omitempty"`
 
 	// PreviewAlias The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview.
@@ -2124,7 +2124,7 @@ type DeploymentPublic struct {
 	// Allowed The tenant's `publicIngress` is `allow`; false: declared but not served.
 	Allowed bool `json:"allowed"`
 
-	// Exposed `twd expose` setting.
+	// Exposed `tw expose` setting.
 	Exposed bool     `json:"exposed"`
 	Routes  []string `json:"routes"`
 
@@ -2242,7 +2242,7 @@ type Endpoint struct {
 // Error The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Error struct {
 	// Code The catalog. Status in parentheses.
@@ -2251,27 +2251,27 @@ type Error struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+	// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
-	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+	// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
-	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 	// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 	// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+	// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -2292,14 +2292,14 @@ type Error struct {
 	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
 	// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -2307,7 +2307,7 @@ type Error struct {
 	// | `superseded` | 409 | undeploy of a non-latest deployment |
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
-	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -2316,9 +2316,9 @@ type Error struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -2345,27 +2345,27 @@ type Error struct {
 // |---|---|---|
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
-// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
-// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
-// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 // | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 // | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 // | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 // | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 // | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 // | `not_found` | 404 | — |
 // | `unknown_tenant` | 404 | — |
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -2386,14 +2386,14 @@ type Error struct {
 // | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 // | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 // | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 // | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 // | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 // | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 // | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 // | `already_joined` | 409 | credential for an object that has a node |
 // | `identity_conflict` | 409 | object ID collision across identities |
 // | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -2401,7 +2401,7 @@ type Error struct {
 // | `superseded` | 409 | undeploy of a non-latest deployment |
 // | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 // | `host_holds_leases` | 409 | host delete without `drain` |
-// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 // | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 // | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 // | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -2410,9 +2410,9 @@ type Error struct {
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 // | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
 // | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -2453,7 +2453,7 @@ type Host struct {
 	CordonedBy *string `json:"cordonedBy,omitempty"`
 	CreatedAt  int64   `json:"createdAt"`
 
-	// DNSName `twd-host-<hostID>.<tailnet>`.
+	// DNSName `tw-host-<hostID>.<tailnet>`.
 	DNSName *string `json:"dnsName,omitempty"`
 
 	// Features Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses.
@@ -2467,7 +2467,7 @@ type Host struct {
 	Leases    *[]Lease `json:"leases,omitempty"`
 	LiveNodes int      `json:"liveNodes"`
 
-	// NodeID Stable node ID of the host's `tag:twd-host` tsnet node (bound at registration).
+	// NodeID Stable node ID of the host's `tag:tw-host` tsnet node (bound at registration).
 	NodeID *string `json:"nodeID,omitempty"`
 	Os     *string `json:"os,omitempty"`
 	Pool   *string `json:"pool,omitempty"`
@@ -2484,7 +2484,7 @@ type Host struct {
 	// Skew Why the host is outside the version window (placement skips it); absent when it is within.
 	Skew *string `json:"skew,omitempty"`
 
-	// Status `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
+	// Status `pending`: created by `tw host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 	Status    HostStatusEnum `json:"status"`
 	Tiers     []HostTier     `json:"tiers"`
 	UpdatedAt int64          `json:"updatedAt"`
@@ -2492,7 +2492,7 @@ type Host struct {
 	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
 	Usage *HostUsage `json:"usage,omitempty"`
 
-	// Version The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x).
+	// Version The host's tw version, from its last registration (absent: a hostd from before version reporting, 0.1.x).
 	Version *string `json:"version,omitempty"`
 }
 
@@ -2558,27 +2558,27 @@ type HostDrainResult struct {
 		// |---|---|---|
 		// | `bad_request` | 400 | malformed body, parameter or filter |
 		// | `bad_cursor` | 400 | `cursor` does not decode |
-		// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-		// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+		// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+		// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 		// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 		// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 		// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 		// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 		// | `no_identity` | 401 | WhoIs failed for the connection |
-		// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+		// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 		// | `host_token_invalid` | 403 | local-dev socket, wrong token |
-		// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+		// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 		// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-		// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+		// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 		// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-		// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-		// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+		// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+		// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 		// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-		// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+		// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 		// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 		// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 		// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-		// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+		// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 		// | `not_found` | 404 | — |
 		// | `unknown_tenant` | 404 | — |
 		// | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -2599,14 +2599,14 @@ type HostDrainResult struct {
 		// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 		// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 		// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 		// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 		// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 		// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 		// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 		// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 		// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 		// | `already_joined` | 409 | credential for an object that has a node |
 		// | `identity_conflict` | 409 | object ID collision across identities |
 		// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -2614,7 +2614,7 @@ type HostDrainResult struct {
 		// | `superseded` | 409 | undeploy of a non-latest deployment |
 		// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 		// | `host_holds_leases` | 409 | host delete without `drain` |
-		// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+		// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 		// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 		// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 		// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -2623,9 +2623,9 @@ type HostDrainResult struct {
 		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-		// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-		// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+		// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+		// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 		// | `bootstrap_failed` | 502 | control plane refused the mint |
 		// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 		// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -2641,7 +2641,7 @@ type HostDrainResult struct {
 	} `json:"refused"`
 }
 
-// HostJoin A single-use join key for a host's `tag:twd-host` node. Never logged.
+// HostJoin A single-use join key for a host's `tag:tw-host` node. Never logged.
 type HostJoin struct {
 	AuthKey    string  `json:"authKey"`
 	ControlURL *string `json:"controlURL,omitempty"`
@@ -2650,7 +2650,7 @@ type HostJoin struct {
 	ExpiresAt int64 `json:"expiresAt"`
 	Host      Host  `json:"host"`
 
-	// Hostname `twd-host-<hostID>`
+	// Hostname `tw-host-<hostID>`
 	Hostname string `json:"hostname"`
 
 	// RegistrationSecret One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound.
@@ -2679,7 +2679,7 @@ type HostPathReport struct {
 type HostPush struct {
 	Port *int `json:"port,omitempty"`
 
-	// URL `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport).
+	// URL `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `tw up`; accepted only from the in-process transport).
 	URL *string `json:"url,omitempty"`
 }
 
@@ -2718,7 +2718,7 @@ type HostRegistration struct {
 	RegistrationSecret *string    `json:"registrationSecret,omitempty"`
 	Tiers              []HostTier `json:"tiers"`
 
-	// Version The host's twd version. A host outside the version window is refused: `409 version_skew`.
+	// Version The host's tw version. A host outside the version window is refused: `409 version_skew`.
 	Version *string `json:"version,omitempty"`
 }
 
@@ -2742,7 +2742,7 @@ type HostStatus struct {
 	Usage *HostUsage `json:"usage,omitempty"`
 }
 
-// HostStatusEnum `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
+// HostStatusEnum `pending`: created by `tw host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 type HostStatusEnum string
 
 // HostStatusResponse defines model for HostStatusResponse.
@@ -2867,7 +2867,7 @@ type Lease struct {
 	Namespace string `json:"namespace"`
 }
 
-// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 type MintMode string
 
 // NodeCertificate defines model for NodeCertificate.
@@ -2924,7 +2924,7 @@ type NotificationConfig struct {
 }
 
 // NotificationEventKind `approval_requested` (a Workflow instance started waiting for an approval),
-// `test` (`twd notify test`; never subscribed to).
+// `test` (`tw notify test`; never subscribed to).
 type NotificationEventKind string
 
 // NotificationTestResult defines model for NotificationTestResult.
@@ -3210,11 +3210,11 @@ type PreflightMissing struct {
 
 // PreflightResult defines model for PreflightResult.
 type PreflightResult struct {
-	// AccessWarnings Grants to `tag:twd-mgmt` that don't do what they look like: values on `twd.dev/cap/admin` (they don't narrow it), invalid `twd.dev/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `twd.dev/cap/mcp` or `twd.dev/cap/approve` grants (they apply to every tenant). Never make `ok` false.
+	// AccessWarnings Grants to `tag:tw-mgmt` that don't do what they look like: values on `github.com/rosskukulinski/tailworks/cap/admin` (they don't narrow it), invalid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `github.com/rosskukulinski/tailworks/cap/mcp` or `github.com/rosskukulinski/tailworks/cap/approve` grants (they apply to every tenant). Never make `ok` false.
 	AccessWarnings *[]string          `json:"accessWarnings,omitempty"`
 	Missing        []PreflightMissing `json:"missing"`
 
-	// MissingNodeAttrs Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes.
+	// MissingNodeAttrs Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:tw-public` for a workload with public routes.
 	MissingNodeAttrs *[]string `json:"missingNodeAttrs,omitempty"`
 	MissingTagOwners []string  `json:"missingTagOwners"`
 
@@ -3316,7 +3316,7 @@ type PublicAssignment struct {
 	// Routes Examples: ["/webhooks/*","/oauth/callback"]
 	Routes []string `json:"routes"`
 
-	// Tags Examples: ["tag:twd-public"]
+	// Tags Examples: ["tag:tw-public"]
 	Tags []string `json:"tags"`
 
 	// Upgrade Routes on which WebSocket/SSE upgrades are allowed.
@@ -3335,7 +3335,7 @@ type PublicImage struct {
 	// ID Examples: pi_3f9a1c2b7d8e4f50
 	ID string `json:"id"`
 
-	// Ref The normalised upstream ref (or twd.local ref) deploys match.
+	// Ref The normalised upstream ref (or tw.local ref) deploys match.
 	Ref string `json:"ref"`
 
 	// Repository `public/…`
@@ -3372,10 +3372,10 @@ type PublicImagePage struct {
 }
 
 // PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+// tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 // a deploy that declares them is refused `403 public_ingress_not_allowed`,
 // and setting `deny` later makes hosts close every public listener.
-// `twd up` (single-tenant) creates its tenant with `allow`.
+// `tw up` (single-tenant) creates its tenant with `allow`.
 type PublicIngress string
 
 // PublicLimits netd's limits on a public listener (ADR-029 D5); defaults filled in.
@@ -3649,7 +3649,7 @@ type ReleaseNote struct {
 // ReleaseNoteKind defines model for ReleaseNote.Kind.
 type ReleaseNoteKind string
 
-// ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
+// ReplicaRef One replica of a workload with `tailworks.jsonc` `replicas` > 1.
 type ReplicaRef struct {
 	DeploymentID string `json:"deploymentID"`
 	Host         string `json:"host"`
@@ -3672,7 +3672,7 @@ type ReplicaRef struct {
 	Workload string `json:"workload"`
 }
 
-// RequestRecord One line of a workload's request log (`twd logs --json`,
+// RequestRecord One line of a workload's request log (`tw logs --json`,
 // ADR-observability): a request through hostd's ingress (`kind:
 // request`), joined with its workerd invocation, or an invocation
 // with no ingress half (`kind: invocation`: a DO called from the
@@ -3719,7 +3719,7 @@ type RequestRecord struct {
 	Method *string `json:"method,omitempty"`
 	Name   *string `json:"name,omitempty"`
 
-	// Object The twd object ID.
+	// Object The tailworks object ID.
 	Object       *string `json:"object,omitempty"`
 	Outcome      *string `json:"outcome,omitempty"`
 	ParentSpanID *string `json:"parentSpanId,omitempty"`
@@ -3789,7 +3789,7 @@ type SchemaStatus struct {
 	// Latest The newest migration this replica knows.
 	Latest string `json:"latest"`
 
-	// MinBinary The oldest twd-mgmt that may open the store.
+	// MinBinary The oldest tw-mgmt that may open the store.
 	MinBinary *string   `json:"minBinary,omitempty"`
 	Pending   *[]string `json:"pending,omitempty"`
 
@@ -3837,7 +3837,7 @@ type SecretPut struct {
 
 // SelfInfo defines model for SelfInfo.
 type SelfInfo struct {
-	// DNSName `twd-mgmt.<tailnet>`
+	// DNSName `tw-mgmt.<tailnet>`
 	DNSName *string `json:"dnsName,omitempty"`
 	HTTPS   bool    `json:"https"`
 	Tailnet *string `json:"tailnet,omitempty"`
@@ -3867,7 +3867,7 @@ type Status struct {
 		Total int `json:"total"`
 	} `json:"hosts"`
 
-	// Listeners e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.twd/run/mgmt.sock`.
+	// Listeners e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.tailworks/run/mgmt.sock`.
 	Listeners *[]string `json:"listeners,omitempty"`
 
 	// Objects Count per `ObjectStatus`.
@@ -4052,10 +4052,10 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
-	// NamePrefix Goes in front of every tailnet name twd generates for this tenant (object
+	// NamePrefix Goes in front of every tailnet name tailworks generates for this tenant (object
 	// and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11
 	// of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most
 	// one may go without (`409 name_prefix_required`). Fixed once the tenant
@@ -4072,7 +4072,7 @@ type Tenant struct {
 	OboPublicKey *string `json:"oboPublicKey,omitempty"`
 
 	// OwnerTag The tag that owns this tenant's workload and object tags, and that its
-	// OAuth client is scoped to. Default `tag:twd`. Two tenants on one
+	// OAuth client is scoped to. Default `tag:tw`. Two tenants on one
 	// tailnet need their own, so neither's client can mint the other's tags
 	// (`409 shared_owner_tag`). See docs/teams.md (ADR-043).
 	OwnerTag *string `json:"ownerTag,omitempty"`
@@ -4081,10 +4081,10 @@ type Tenant struct {
 	Pool *string `json:"pool,omitempty"`
 
 	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+	// tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 	// a deploy that declares them is refused `403 public_ingress_not_allowed`,
 	// and setting `deny` later makes hosts close every public listener.
-	// `twd up` (single-tenant) creates its tenant with `allow`.
+	// `tw up` (single-tenant) creates its tenant with `allow`.
 	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute int            `json:"registrationsPerMinute"`
 
@@ -4106,7 +4106,7 @@ type TenantCreate struct {
 	MaxContainers      *int     `json:"maxContainers,omitempty"`
 	MaxObjects         *int     `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
 	// NamePrefix Default none (see `Tenant.namePrefix`).
@@ -4114,15 +4114,15 @@ type TenantCreate struct {
 	OauthClientFile *string `json:"oauthClientFile,omitempty"`
 	OauthClientID   *string `json:"oauthClientID,omitempty"`
 
-	// OwnerTag Default `tag:twd` (see `Tenant.ownerTag`).
+	// OwnerTag Default `tag:tw` (see `Tenant.ownerTag`).
 	OwnerTag *string `json:"ownerTag,omitempty"`
 	Pool     *string `json:"pool,omitempty"`
 
 	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+	// tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 	// a deploy that declares them is refused `403 public_ingress_not_allowed`,
 	// and setting `deny` later makes hosts close every public listener.
-	// `twd up` (single-tenant) creates its tenant with `allow`.
+	// `tw up` (single-tenant) creates its tenant with `allow`.
 	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int           `json:"registrationsPerMinute,omitempty"`
 	Tailnet                string         `json:"tailnet"`
@@ -4141,11 +4141,11 @@ type TenantDeleteResult struct {
 	TenantID           string    `json:"tenantID"`
 }
 
-// TenantGrant One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it names.
+// TenantGrant One valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` value. Allows each action in each tenant it names.
 type TenantGrant struct {
 	Actions []TenantGrantActions `json:"actions"`
 
-	// Approve `twd.dev/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md).
+	// Approve `github.com/rosskukulinski/tailworks/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md).
 	Approve *[]ApproveGrant `json:"approve,omitempty"`
 
 	// Mcp Admits the caller to `/mcp` for these tenants. The read tools need `read`; each write or destructive tool must be named here and its action held in `actions`.
@@ -4174,7 +4174,7 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode *MintMode `json:"mintMode,omitempty"`
 
 	// NamePrefix Only before the tenant's first deploy (`400 immutable_field` after).
@@ -4182,7 +4182,7 @@ type TenantPatch struct {
 	OauthClientFile nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
 	OauthClientID   nullable.Nullable[string] `json:"oauthClientID,omitempty"`
 
-	// OwnerTag Move the tenant to its own owner tag (`null` = back to `tag:twd`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch.
+	// OwnerTag Move the tenant to its own owner tag (`null` = back to `tag:tw`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch.
 	OwnerTag nullable.Nullable[string] `json:"ownerTag,omitempty"`
 	Pool     nullable.Nullable[string] `json:"pool,omitempty"`
 
@@ -4230,27 +4230,27 @@ type TombstoneError struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+	// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
-	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+	// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
-	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 	// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 	// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+	// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -4271,14 +4271,14 @@ type TombstoneError struct {
 	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
 	// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -4286,7 +4286,7 @@ type TombstoneError struct {
 	// | `superseded` | 409 | undeploy of a non-latest deployment |
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
-	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -4295,9 +4295,9 @@ type TombstoneError struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -4449,24 +4449,24 @@ type WhoAmI struct {
 	Actor string `json:"actor"`
 	Admin bool   `json:"admin"`
 
-	// ApproveGrants The values of the caller's `twd.dev/cap/approve` grants toward
-	// `tag:twd-mgmt` (docs/approvals.md): what it may decide through
-	// `twd approve` and the admin UI. Empty when it holds none.
+	// ApproveGrants The values of the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward
+	// `tag:tw-mgmt` (docs/approvals.md): what it may decide through
+	// `tw approve` and the admin UI. Empty when it holds none.
 	ApproveGrants *[]ApproveGrant `json:"approveGrants,omitempty"`
 
-	// Approver The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+	// Approver The caller holds `github.com/rosskukulinski/tailworks/cap/approve` and may decide Workflow approvals its grants cover (`tw approve`). Always false for the local operator, which has no personal identity.
 	Approver *bool `json:"approver,omitempty"`
 
-	// Caps The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+	// Caps The `github.com/rosskukulinski/tailworks/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
 	Caps   *[]string `json:"caps,omitempty"`
 	HostID *string   `json:"hostID,omitempty"`
 
-	// InvalidTenantGrants The caller's `twd.dev/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard).
+	// InvalidTenantGrants The caller's `github.com/rosskukulinski/tailworks/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard).
 	InvalidTenantGrants *[]string  `json:"invalidTenantGrants,omitempty"`
 	Kind                WhoAmIKind `json:"kind"`
 	Login               *string    `json:"login,omitempty"`
 
-	// McpTools The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
+	// McpTools The MCP tools `/mcp` lets the caller use without a `Tw-MCP-Tools` header, in `tools/list` order.
 	McpTools *[]string `json:"mcpTools,omitempty"`
 	Mgmt     SelfInfo  `json:"mgmt"`
 	NodeID   *string   `json:"nodeID,omitempty"`
@@ -4475,7 +4475,7 @@ type WhoAmI struct {
 	// Tailnet The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts.
 	Tailnet *string `json:"tailnet,omitempty"`
 
-	// TenantGrants The caller's valid `twd.dev/cap/tenant-admin` values: the tenants
+	// TenantGrants The caller's valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values: the tenants
 	// it may act in, and how. Empty when it holds none. An admin's
 	// values are listed too but don't narrow it.
 	TenantGrants *[]TenantGrant `json:"tenantGrants,omitempty"`
@@ -4483,7 +4483,7 @@ type WhoAmI struct {
 	// Tenants The tenants the caller can act in without knowing their IDs:
 	// those whose `tailnet` is the caller's own tailnet. The local
 	// operator gets every tenant; hosts get none. The admin UI's
-	// approvals page and `twd approvals` / `twd approve` default to
+	// approvals page and `tw approvals` / `tw approve` default to
 	// these. A tailnet admin can still list every tenant
 	// (`GET /v1/tenants`).
 	Tenants *[]WhoAmITenant `json:"tenants,omitempty"`
@@ -4500,7 +4500,7 @@ type WhoAmITenant struct {
 
 // WorkloadPublic defines model for WorkloadPublic.
 type WorkloadPublic struct {
-	// Exposed `twd expose on` (true, the default) or `off`.
+	// Exposed `tw expose on` (true, the default) or `off`.
 	Exposed   bool   `json:"exposed"`
 	TenantID  string `json:"tenantID"`
 	UpdatedAt *int64 `json:"updatedAt,omitempty"`
@@ -4578,21 +4578,21 @@ type WorkloadName = string
 // BadRequest The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type BadRequest = Error
 
 // Conflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Conflict = Error
 
 // Forbidden The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Forbidden = Error
 
@@ -4602,42 +4602,42 @@ type Gone = TombstoneError
 // LeaseLost The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type LeaseLost = Error
 
 // NotFound The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type NotFound = Error
 
 // PreconditionFailed The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type PreconditionFailed = Error
 
 // ReadyConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type ReadyConflict = Error
 
 // StoreConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type StoreConflict = Error
 
 // Unauthorized The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Unauthorized = Error
 
@@ -4702,7 +4702,7 @@ type ListDeploymentsParams struct {
 	Workload *string `form:"workload,omitempty" json:"workload,omitempty"`
 	Host     *string `form:"host,omitempty" json:"host,omitempty"`
 
-	// Latest Only the newest deployment of each `(tenant, workload)` (what `twd ls` shows).
+	// Latest Only the newest deployment of each `(tenant, workload)` (what `tw ls` shows).
 	Latest *bool `form:"latest,omitempty" json:"latest,omitempty"`
 }
 
@@ -5435,7 +5435,7 @@ type ServerInterface interface {
 	// ListReleases The release catalog
 	// (GET /v1/releases)
 	ListReleases(w http.ResponseWriter, r *http.Request)
-	// ImportReleases Import catalog entries (from a release's share/twd/catalog.json)
+	// ImportReleases Import catalog entries (from a release's share/tailworks/catalog.json)
 	// (POST /v1/releases)
 	ImportReleases(w http.ResponseWriter, r *http.Request)
 	// GetReleaseArtifact Download a release tarball (hosts upgrading themselves)
@@ -5462,19 +5462,19 @@ type ServerInterface interface {
 	// UpdateTenant Update a tenant (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id})
 	UpdateTenant(w http.ResponseWriter, r *http.Request, id TenantID, params UpdateTenantParams)
-	// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	// ListApprovals The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 	// (GET /v1/tenants/{id}/approvals)
 	ListApprovals(w http.ResponseWriter, r *http.Request, id TenantID, params ListApprovalsParams)
-	// DeleteTenantNotifications Stop the tenant's notifications (`twd notify rm`)
+	// DeleteTenantNotifications Stop the tenant's notifications (`tw notify rm`)
 	// (DELETE /v1/tenants/{id}/notifications)
 	DeleteTenantNotifications(w http.ResponseWriter, r *http.Request, id TenantID)
-	// GetTenantNotifications Read the tenant's notification webhook (`twd notify`), without secrets
+	// GetTenantNotifications Read the tenant's notification webhook (`tw notify`), without secrets
 	// (GET /v1/tenants/{id}/notifications)
 	GetTenantNotifications(w http.ResponseWriter, r *http.Request, id TenantID)
-	// PutTenantNotifications Set the tenant's notification webhook (`twd notify set`)
+	// PutTenantNotifications Set the tenant's notification webhook (`tw notify set`)
 	// (PUT /v1/tenants/{id}/notifications)
 	PutTenantNotifications(w http.ResponseWriter, r *http.Request, id TenantID)
-	// TestTenantNotifications Send a test notification now (`twd notify test`)
+	// TestTenantNotifications Send a test notification now (`tw notify test`)
 	// (POST /v1/tenants/{id}/notifications/test)
 	TestTenantNotifications(w http.ResponseWriter, r *http.Request, id TenantID)
 	// PurgeTenantObjects Purge terminal objects of a tenant
@@ -5513,43 +5513,43 @@ type ServerInterface interface {
 	// PurgeQueue Delete every message of a queue, keeping the queue
 	// (POST /v1/tenants/{id}/queues/{queue}/purge)
 	PurgeQueue(w http.ResponseWriter, r *http.Request, id TenantID, queue QueueName)
-	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`tw telemetry rm`)
 	// (DELETE /v1/tenants/{id}/telemetry)
 	DeleteTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
-	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// GetTenantTelemetry Read the tenant's OTLP export (`tw telemetry`), without header values
 	// (GET /v1/tenants/{id}/telemetry)
 	GetTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
-	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// PutTenantTelemetry Set the tenant's OTLP export (`tw telemetry set`)
 	// (PUT /v1/tenants/{id}/telemetry)
 	PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
-	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// DecideApproval Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string)
-	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// ExportD1 Export a D1 database as SQL (`tw d1 export`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
 	ExportD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
-	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// QueryD1 Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
 	QueryD1(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name StoreName)
-	// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+	// ListWorkloadDeployments A workload's deployment history, newest first (`tw deployments`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/deployments)
 	ListWorkloadDeployments(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadDeploymentsParams)
-	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
-	// ListWorkloadPreviews A workload's running previews (`twd previews`)
+	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/previews)
 	ListWorkloadPreviews(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName)
-	// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	// CreatePromotion Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	// (POST /v1/tenants/{id}/workloads/{workload}/promotions)
 	CreatePromotion(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreatePromotionParams)
-	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
+	// GetWorkloadPublic Read a workload's public-ingress exposure (`tw expose`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/public)
 	GetWorkloadPublic(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName)
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id}/workloads/{workload}/public)
 	UpdateWorkloadPublic(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params UpdateWorkloadPublicParams)
-	// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// CreateRollback Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	// (POST /v1/tenants/{id}/workloads/{workload}/rollbacks)
 	CreateRollback(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateRollbackParams)
 	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
@@ -5558,10 +5558,10 @@ type ServerInterface interface {
 	// ListWorkloadSecrets List a workload's secrets (names and times, never values)
 	// (GET /v1/tenants/{id}/workloads/{workload}/secrets)
 	ListWorkloadSecrets(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadSecretsParams)
-	// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+	// DeleteWorkloadSecret Delete a workload secret (`tw secret rm`)
 	// (DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	DeleteWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName)
-	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+	// PutWorkloadSecret Create or replace a workload secret (`tw secret put`)
 	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	PutWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName)
 	// ListWorkloadStores List a workload's stores
@@ -10254,7 +10254,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type BadRequestResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type BadRequestJSONResponse struct {
 	Body Error
@@ -10263,7 +10263,7 @@ type BadRequestJSONResponse struct {
 }
 
 type ConflictResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type ConflictJSONResponse struct {
 	Body Error
@@ -10272,7 +10272,7 @@ type ConflictJSONResponse struct {
 }
 
 type ErrorResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type ErrorJSONResponse struct {
 	Body Error
@@ -10281,7 +10281,7 @@ type ErrorJSONResponse struct {
 }
 
 type ForbiddenResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type ForbiddenJSONResponse struct {
 	Body Error
@@ -10290,7 +10290,7 @@ type ForbiddenJSONResponse struct {
 }
 
 type GoneResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type GoneJSONResponse struct {
 	Body TombstoneError
@@ -10299,7 +10299,7 @@ type GoneJSONResponse struct {
 }
 
 type LeaseLostResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type LeaseLostJSONResponse struct {
 	Body Error
@@ -10308,7 +10308,7 @@ type LeaseLostJSONResponse struct {
 }
 
 type NotFoundResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type NotFoundJSONResponse struct {
 	Body Error
@@ -10324,8 +10324,8 @@ type NotModifiedResponse struct {
 }
 
 type PreconditionFailedResponseHeaders struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 type PreconditionFailedJSONResponse struct {
 	Body Error
@@ -10334,7 +10334,7 @@ type PreconditionFailedJSONResponse struct {
 }
 
 type ReadyConflictResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type ReadyConflictJSONResponse struct {
 	Body Error
@@ -10343,7 +10343,7 @@ type ReadyConflictJSONResponse struct {
 }
 
 type StoreConflictResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type StoreConflictJSONResponse struct {
 	Body Error
@@ -10352,7 +10352,7 @@ type StoreConflictJSONResponse struct {
 }
 
 type UnauthorizedResponseHeaders struct {
-	TwdError *string
+	TwError *string
 }
 type UnauthorizedJSONResponse struct {
 	Body Error
@@ -10391,8 +10391,8 @@ func (response ListAudit400JSONResponse) VisitListAuditResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -10408,8 +10408,8 @@ func (response ListAudit403JSONResponse) VisitListAuditResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10429,8 +10429,8 @@ func (response ListAuditdefaultJSONResponse) VisitListAuditResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -10482,8 +10482,8 @@ func (response AppendAudit403JSONResponse) VisitAppendAuditResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10503,8 +10503,8 @@ func (response AppendAuditdefaultJSONResponse) VisitAppendAuditResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -10541,8 +10541,8 @@ func (response GetAuditVerification403JSONResponse) VisitGetAuditVerificationRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10562,8 +10562,8 @@ func (response GetAuditVerificationdefaultJSONResponse) VisitGetAuditVerificatio
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -10612,8 +10612,8 @@ func (response GetCertificate400JSONResponse) VisitGetCertificateResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -10629,8 +10629,8 @@ func (response GetCertificate403JSONResponse) VisitGetCertificateResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10646,8 +10646,8 @@ func (response GetCertificate404JSONResponse) VisitGetCertificateResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -10663,8 +10663,8 @@ func (response GetCertificate410JSONResponse) VisitGetCertificateResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -10684,8 +10684,8 @@ func (response GetCertificatedefaultJSONResponse) VisitGetCertificateResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -10723,8 +10723,8 @@ func (response ListContainerReservations400JSONResponse) VisitListContainerReser
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -10740,8 +10740,8 @@ func (response ListContainerReservations403JSONResponse) VisitListContainerReser
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10761,8 +10761,8 @@ func (response ListContainerReservationsdefaultJSONResponse) VisitListContainerR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -10824,8 +10824,8 @@ func (response CreateContainerReservation400JSONResponse) VisitCreateContainerRe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -10841,8 +10841,8 @@ func (response CreateContainerReservation403JSONResponse) VisitCreateContainerRe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10872,8 +10872,8 @@ func (response CreateContainerReservation409JSONResponse) VisitCreateContainerRe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -10907,8 +10907,8 @@ func (response CreateContainerReservationdefaultJSONResponse) VisitCreateContain
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -10940,8 +10940,8 @@ func (response DeleteContainerReservation403JSONResponse) VisitDeleteContainerRe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -10957,8 +10957,8 @@ func (response DeleteContainerReservation404JSONResponse) VisitDeleteContainerRe
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -10978,8 +10978,8 @@ func (response DeleteContainerReservationdefaultJSONResponse) VisitDeleteContain
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11017,8 +11017,8 @@ func (response ListDeployments400JSONResponse) VisitListDeploymentsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -11034,8 +11034,8 @@ func (response ListDeployments403JSONResponse) VisitListDeploymentsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11055,8 +11055,8 @@ func (response ListDeploymentsdefaultJSONResponse) VisitListDeploymentsResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11133,8 +11133,8 @@ func (response CreateDeployment403JSONResponse) VisitCreateDeploymentResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11182,8 +11182,8 @@ func (response CreateDeploymentdefaultJSONResponse) VisitCreateDeploymentRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11222,8 +11222,8 @@ func (response DeleteDeployment403JSONResponse) VisitDeleteDeploymentResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11239,8 +11239,8 @@ func (response DeleteDeployment404JSONResponse) VisitDeleteDeploymentResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -11256,8 +11256,8 @@ func (response DeleteDeployment409JSONResponse) VisitDeleteDeploymentResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -11276,8 +11276,8 @@ func (response DeleteDeployment412JSONResponse) VisitDeleteDeploymentResponse(w 
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -11297,8 +11297,8 @@ func (response DeleteDeploymentdefaultJSONResponse) VisitDeleteDeploymentRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11357,8 +11357,8 @@ func (response GetDeployment403JSONResponse) VisitGetDeploymentResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11374,8 +11374,8 @@ func (response GetDeployment404JSONResponse) VisitGetDeploymentResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -11395,8 +11395,8 @@ func (response GetDeploymentdefaultJSONResponse) VisitGetDeploymentResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11472,8 +11472,8 @@ func (response GetDeploymentBundle403JSONResponse) VisitGetDeploymentBundleRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11489,8 +11489,8 @@ func (response GetDeploymentBundle404JSONResponse) VisitGetDeploymentBundleRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -11510,8 +11510,8 @@ func (response GetDeploymentBundledefaultJSONResponse) VisitGetDeploymentBundleR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11548,8 +11548,8 @@ func (response CreateDeviceDeleteRun403JSONResponse) VisitCreateDeviceDeleteRunR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11569,8 +11569,8 @@ func (response CreateDeviceDeleteRundefaultJSONResponse) VisitCreateDeviceDelete
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11607,8 +11607,8 @@ func (response GetHealthz401JSONResponse) VisitGetHealthzResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
@@ -11628,8 +11628,8 @@ func (response GetHealthzdefaultJSONResponse) VisitGetHealthzResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11667,8 +11667,8 @@ func (response ListHosts400JSONResponse) VisitListHostsResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -11684,8 +11684,8 @@ func (response ListHosts403JSONResponse) VisitListHostsResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11705,8 +11705,8 @@ func (response ListHostsdefaultJSONResponse) VisitListHostsResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11782,8 +11782,8 @@ func (response CreateHost400JSONResponse) VisitCreateHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -11799,8 +11799,8 @@ func (response CreateHost403JSONResponse) VisitCreateHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11830,8 +11830,8 @@ func (response CreateHost409JSONResponse) VisitCreateHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -11865,8 +11865,8 @@ func (response CreateHostdefaultJSONResponse) VisitCreateHostResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -11913,8 +11913,8 @@ func (response DeleteHost403JSONResponse) VisitDeleteHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -11930,8 +11930,8 @@ func (response DeleteHost404JSONResponse) VisitDeleteHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -11964,8 +11964,8 @@ func (response DeleteHost412JSONResponse) VisitDeleteHostResponse(w http.Respons
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -11985,8 +11985,8 @@ func (response DeleteHostdefaultJSONResponse) VisitDeleteHostResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12045,8 +12045,8 @@ func (response GetHost403JSONResponse) VisitGetHostResponse(w http.ResponseWrite
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12062,8 +12062,8 @@ func (response GetHost404JSONResponse) VisitGetHostResponse(w http.ResponseWrite
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -12083,8 +12083,8 @@ func (response GetHostdefaultJSONResponse) VisitGetHostResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12157,8 +12157,8 @@ func (response RegisterHost400JSONResponse) VisitRegisterHostResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -12192,8 +12192,8 @@ func (response RegisterHostdefaultJSONResponse) VisitRegisterHostResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12232,8 +12232,8 @@ func (response ListHostAssignments400JSONResponse) VisitListHostAssignmentsRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -12249,8 +12249,8 @@ func (response ListHostAssignments403JSONResponse) VisitListHostAssignmentsRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12266,8 +12266,8 @@ func (response ListHostAssignments404JSONResponse) VisitListHostAssignmentsRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -12287,8 +12287,8 @@ func (response ListHostAssignmentsdefaultJSONResponse) VisitListHostAssignmentsR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12326,8 +12326,8 @@ func (response UncordonHost403JSONResponse) VisitUncordonHostResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12343,8 +12343,8 @@ func (response UncordonHost404JSONResponse) VisitUncordonHostResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -12364,8 +12364,8 @@ func (response UncordonHostdefaultJSONResponse) VisitUncordonHostResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12403,8 +12403,8 @@ func (response CordonHost403JSONResponse) VisitCordonHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12420,8 +12420,8 @@ func (response CordonHost404JSONResponse) VisitCordonHostResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -12441,8 +12441,8 @@ func (response CordonHostdefaultJSONResponse) VisitCordonHostResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12481,8 +12481,8 @@ func (response DrainHost403JSONResponse) VisitDrainHostResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12498,8 +12498,8 @@ func (response DrainHost404JSONResponse) VisitDrainHostResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -12519,8 +12519,8 @@ func (response DrainHostdefaultJSONResponse) VisitDrainHostResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12562,8 +12562,8 @@ func (response ReportHostPaths400JSONResponse) VisitReportHostPathsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -12579,8 +12579,8 @@ func (response ReportHostPaths403JSONResponse) VisitReportHostPathsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12614,8 +12614,8 @@ func (response ReportHostPathsdefaultJSONResponse) VisitReportHostPathsResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12655,8 +12655,8 @@ func (response GetHostSandboxDeny403JSONResponse) VisitGetHostSandboxDenyRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12672,8 +12672,8 @@ func (response GetHostSandboxDeny404JSONResponse) VisitGetHostSandboxDenyRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -12693,8 +12693,8 @@ func (response GetHostSandboxDenydefaultJSONResponse) VisitGetHostSandboxDenyRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12733,8 +12733,8 @@ func (response ReportHostStatus400JSONResponse) VisitReportHostStatusResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -12750,8 +12750,8 @@ func (response ReportHostStatus403JSONResponse) VisitReportHostStatusResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12785,8 +12785,8 @@ func (response ReportHostStatusdefaultJSONResponse) VisitReportHostStatusRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12823,8 +12823,8 @@ func (response ListImageAliases403JSONResponse) VisitListImageAliasesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12844,8 +12844,8 @@ func (response ListImageAliasesdefaultJSONResponse) VisitListImageAliasesRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12883,8 +12883,8 @@ func (response ListPublicImages400JSONResponse) VisitListPublicImagesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -12900,8 +12900,8 @@ func (response ListPublicImages403JSONResponse) VisitListPublicImagesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -12921,8 +12921,8 @@ func (response ListPublicImagesdefaultJSONResponse) VisitListPublicImagesRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -12960,8 +12960,8 @@ func (response CreatePublicImage400JSONResponse) VisitCreatePublicImageResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -12977,8 +12977,8 @@ func (response CreatePublicImage403JSONResponse) VisitCreatePublicImageResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13026,8 +13026,8 @@ func (response CreatePublicImagedefaultJSONResponse) VisitCreatePublicImageRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13059,8 +13059,8 @@ func (response DeletePublicImage403JSONResponse) VisitDeletePublicImageResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13076,8 +13076,8 @@ func (response DeletePublicImage404JSONResponse) VisitDeletePublicImageResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -13097,8 +13097,8 @@ func (response DeletePublicImagedefaultJSONResponse) VisitDeletePublicImageRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13136,8 +13136,8 @@ func (response ListObjects400JSONResponse) VisitListObjectsResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -13153,8 +13153,8 @@ func (response ListObjects403JSONResponse) VisitListObjectsResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13174,8 +13174,8 @@ func (response ListObjectsdefaultJSONResponse) VisitListObjectsResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13247,8 +13247,8 @@ func (response CreateObject400JSONResponse) VisitCreateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -13306,8 +13306,8 @@ func (response CreateObject410JSONResponse) VisitCreateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -13341,8 +13341,8 @@ func (response CreateObjectdefaultJSONResponse) VisitCreateObjectResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13381,8 +13381,8 @@ func (response DeleteObject403JSONResponse) VisitDeleteObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13398,8 +13398,8 @@ func (response DeleteObject404JSONResponse) VisitDeleteObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -13415,8 +13415,8 @@ func (response DeleteObject410JSONResponse) VisitDeleteObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -13435,8 +13435,8 @@ func (response DeleteObject412JSONResponse) VisitDeleteObjectResponse(w http.Res
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -13456,8 +13456,8 @@ func (response DeleteObjectdefaultJSONResponse) VisitDeleteObjectResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13516,8 +13516,8 @@ func (response GetObject403JSONResponse) VisitGetObjectResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13533,8 +13533,8 @@ func (response GetObject404JSONResponse) VisitGetObjectResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -13550,8 +13550,8 @@ func (response GetObject410JSONResponse) VisitGetObjectResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -13571,8 +13571,8 @@ func (response GetObjectdefaultJSONResponse) VisitGetObjectResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13623,8 +13623,8 @@ func (response UpdateObject400JSONResponse) VisitUpdateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -13640,8 +13640,8 @@ func (response UpdateObject403JSONResponse) VisitUpdateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13657,8 +13657,8 @@ func (response UpdateObject404JSONResponse) VisitUpdateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -13674,8 +13674,8 @@ func (response UpdateObject409JSONResponse) VisitUpdateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -13691,8 +13691,8 @@ func (response UpdateObject410JSONResponse) VisitUpdateObjectResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -13711,8 +13711,8 @@ func (response UpdateObject412JSONResponse) VisitUpdateObjectResponse(w http.Res
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -13732,8 +13732,8 @@ func (response UpdateObjectdefaultJSONResponse) VisitUpdateObjectResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13781,8 +13781,8 @@ func (response GetObjectCertificate403JSONResponse) VisitGetObjectCertificateRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13798,8 +13798,8 @@ func (response GetObjectCertificate404JSONResponse) VisitGetObjectCertificateRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -13829,8 +13829,8 @@ func (response GetObjectCertificate410JSONResponse) VisitGetObjectCertificateRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -13850,8 +13850,8 @@ func (response GetObjectCertificatedefaultJSONResponse) VisitGetObjectCertificat
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -13900,8 +13900,8 @@ func (response CreateObjectCredential400JSONResponse) VisitCreateObjectCredentia
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -13917,8 +13917,8 @@ func (response CreateObjectCredential403JSONResponse) VisitCreateObjectCredentia
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -13934,8 +13934,8 @@ func (response CreateObjectCredential404JSONResponse) VisitCreateObjectCredentia
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -13965,8 +13965,8 @@ func (response CreateObjectCredential410JSONResponse) VisitCreateObjectCredentia
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(410)
 	_, err := buf.WriteTo(w)
@@ -14024,8 +14024,8 @@ func (response CreateObjectCredentialdefaultJSONResponse) VisitCreateObjectCrede
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14062,8 +14062,8 @@ func (response ListReleases403JSONResponse) VisitListReleasesResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14083,8 +14083,8 @@ func (response ListReleasesdefaultJSONResponse) VisitListReleasesResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14122,8 +14122,8 @@ func (response ImportReleases400JSONResponse) VisitImportReleasesResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -14139,8 +14139,8 @@ func (response ImportReleases403JSONResponse) VisitImportReleasesResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14160,8 +14160,8 @@ func (response ImportReleasesdefaultJSONResponse) VisitImportReleasesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14206,8 +14206,8 @@ func (response GetReleaseArtifact403JSONResponse) VisitGetReleaseArtifactRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14223,8 +14223,8 @@ func (response GetReleaseArtifact404JSONResponse) VisitGetReleaseArtifactRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -14244,8 +14244,8 @@ func (response GetReleaseArtifactdefaultJSONResponse) VisitGetReleaseArtifactRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14285,8 +14285,8 @@ func (response PutReleaseArtifact400JSONResponse) VisitPutReleaseArtifactRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -14302,8 +14302,8 @@ func (response PutReleaseArtifact403JSONResponse) VisitPutReleaseArtifactRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14323,8 +14323,8 @@ func (response PutReleaseArtifactdefaultJSONResponse) VisitPutReleaseArtifactRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14361,8 +14361,8 @@ func (response GetStatus403JSONResponse) VisitGetStatusResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14382,8 +14382,8 @@ func (response GetStatusdefaultJSONResponse) VisitGetStatusResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14421,8 +14421,8 @@ func (response ListTenants400JSONResponse) VisitListTenantsResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -14438,8 +14438,8 @@ func (response ListTenants403JSONResponse) VisitListTenantsResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14459,8 +14459,8 @@ func (response ListTenantsdefaultJSONResponse) VisitListTenantsResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14512,8 +14512,8 @@ func (response CreateTenant400JSONResponse) VisitCreateTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -14529,8 +14529,8 @@ func (response CreateTenant403JSONResponse) VisitCreateTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14546,8 +14546,8 @@ func (response CreateTenant409JSONResponse) VisitCreateTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -14567,8 +14567,8 @@ func (response CreateTenantdefaultJSONResponse) VisitCreateTenantResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14615,8 +14615,8 @@ func (response DeleteTenant403JSONResponse) VisitDeleteTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14632,8 +14632,8 @@ func (response DeleteTenant404JSONResponse) VisitDeleteTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -14666,8 +14666,8 @@ func (response DeleteTenant412JSONResponse) VisitDeleteTenantResponse(w http.Res
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -14687,8 +14687,8 @@ func (response DeleteTenantdefaultJSONResponse) VisitDeleteTenantResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14747,8 +14747,8 @@ func (response GetTenant403JSONResponse) VisitGetTenantResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14764,8 +14764,8 @@ func (response GetTenant404JSONResponse) VisitGetTenantResponse(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -14785,8 +14785,8 @@ func (response GetTenantdefaultJSONResponse) VisitGetTenantResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14837,8 +14837,8 @@ func (response UpdateTenant400JSONResponse) VisitUpdateTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -14854,8 +14854,8 @@ func (response UpdateTenant403JSONResponse) VisitUpdateTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14871,8 +14871,8 @@ func (response UpdateTenant404JSONResponse) VisitUpdateTenantResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -14891,8 +14891,8 @@ func (response UpdateTenant412JSONResponse) VisitUpdateTenantResponse(w http.Res
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -14912,8 +14912,8 @@ func (response UpdateTenantdefaultJSONResponse) VisitUpdateTenantResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -14952,8 +14952,8 @@ func (response ListApprovals403JSONResponse) VisitListApprovalsResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -14969,8 +14969,8 @@ func (response ListApprovals404JSONResponse) VisitListApprovalsResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -14990,8 +14990,8 @@ func (response ListApprovalsdefaultJSONResponse) VisitListApprovalsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15023,8 +15023,8 @@ func (response DeleteTenantNotifications403JSONResponse) VisitDeleteTenantNotifi
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15040,8 +15040,8 @@ func (response DeleteTenantNotifications404JSONResponse) VisitDeleteTenantNotifi
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15061,8 +15061,8 @@ func (response DeleteTenantNotificationsdefaultJSONResponse) VisitDeleteTenantNo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15100,8 +15100,8 @@ func (response GetTenantNotifications403JSONResponse) VisitGetTenantNotification
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15117,8 +15117,8 @@ func (response GetTenantNotifications404JSONResponse) VisitGetTenantNotification
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15138,8 +15138,8 @@ func (response GetTenantNotificationsdefaultJSONResponse) VisitGetTenantNotifica
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15178,8 +15178,8 @@ func (response PutTenantNotifications400JSONResponse) VisitPutTenantNotification
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -15195,8 +15195,8 @@ func (response PutTenantNotifications403JSONResponse) VisitPutTenantNotification
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15212,8 +15212,8 @@ func (response PutTenantNotifications404JSONResponse) VisitPutTenantNotification
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15233,8 +15233,8 @@ func (response PutTenantNotificationsdefaultJSONResponse) VisitPutTenantNotifica
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15272,8 +15272,8 @@ func (response TestTenantNotifications403JSONResponse) VisitTestTenantNotificati
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15289,8 +15289,8 @@ func (response TestTenantNotifications404JSONResponse) VisitTestTenantNotificati
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15310,8 +15310,8 @@ func (response TestTenantNotificationsdefaultJSONResponse) VisitTestTenantNotifi
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15350,8 +15350,8 @@ func (response PurgeTenantObjects400JSONResponse) VisitPurgeTenantObjectsRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -15367,8 +15367,8 @@ func (response PurgeTenantObjects403JSONResponse) VisitPurgeTenantObjectsRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15384,8 +15384,8 @@ func (response PurgeTenantObjects404JSONResponse) VisitPurgeTenantObjectsRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15405,8 +15405,8 @@ func (response PurgeTenantObjectsdefaultJSONResponse) VisitPurgeTenantObjectsRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15445,8 +15445,8 @@ func (response ListPublicNames400JSONResponse) VisitListPublicNamesResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -15462,8 +15462,8 @@ func (response ListPublicNames403JSONResponse) VisitListPublicNamesResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15479,8 +15479,8 @@ func (response ListPublicNames404JSONResponse) VisitListPublicNamesResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15500,8 +15500,8 @@ func (response ListPublicNamesdefaultJSONResponse) VisitListPublicNamesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15534,8 +15534,8 @@ func (response ReleasePublicName403JSONResponse) VisitReleasePublicNameResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15551,8 +15551,8 @@ func (response ReleasePublicName404JSONResponse) VisitReleasePublicNameResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15568,8 +15568,8 @@ func (response ReleasePublicName409JSONResponse) VisitReleasePublicNameResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -15589,8 +15589,8 @@ func (response ReleasePublicNamedefaultJSONResponse) VisitReleasePublicNameRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15629,8 +15629,8 @@ func (response ListQueues400JSONResponse) VisitListQueuesResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -15646,8 +15646,8 @@ func (response ListQueues403JSONResponse) VisitListQueuesResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15663,8 +15663,8 @@ func (response ListQueues404JSONResponse) VisitListQueuesResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15684,8 +15684,8 @@ func (response ListQueuesdefaultJSONResponse) VisitListQueuesResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15718,8 +15718,8 @@ func (response DeleteQueue403JSONResponse) VisitDeleteQueueResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15735,8 +15735,8 @@ func (response DeleteQueue404JSONResponse) VisitDeleteQueueResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15756,8 +15756,8 @@ func (response DeleteQueuedefaultJSONResponse) VisitDeleteQueueResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15797,8 +15797,8 @@ func (response GetQueue400JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -15814,8 +15814,8 @@ func (response GetQueue403JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15831,8 +15831,8 @@ func (response GetQueue404JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15848,8 +15848,8 @@ func (response GetQueue409JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -15869,8 +15869,8 @@ func (response GetQueuedefaultJSONResponse) VisitGetQueueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -15923,8 +15923,8 @@ func (response PutQueue400JSONResponse) VisitPutQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -15940,8 +15940,8 @@ func (response PutQueue403JSONResponse) VisitPutQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -15957,8 +15957,8 @@ func (response PutQueue404JSONResponse) VisitPutQueueResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -15978,8 +15978,8 @@ func (response PutQueuedefaultJSONResponse) VisitPutQueueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16029,8 +16029,8 @@ func (response PeekQueueMessages400JSONResponse) VisitPeekQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16046,8 +16046,8 @@ func (response PeekQueueMessages403JSONResponse) VisitPeekQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16063,8 +16063,8 @@ func (response PeekQueueMessages404JSONResponse) VisitPeekQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16084,8 +16084,8 @@ func (response PeekQueueMessagesdefaultJSONResponse) VisitPeekQueueMessagesRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16126,8 +16126,8 @@ func (response SendQueueMessages400JSONResponse) VisitSendQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16143,8 +16143,8 @@ func (response SendQueueMessages403JSONResponse) VisitSendQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16160,8 +16160,8 @@ func (response SendQueueMessages404JSONResponse) VisitSendQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16177,8 +16177,8 @@ func (response SendQueueMessages409JSONResponse) VisitSendQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -16198,8 +16198,8 @@ func (response SendQueueMessagesdefaultJSONResponse) VisitSendQueueMessagesRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16240,8 +16240,8 @@ func (response AckQueueMessages400JSONResponse) VisitAckQueueMessagesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16257,8 +16257,8 @@ func (response AckQueueMessages403JSONResponse) VisitAckQueueMessagesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16274,8 +16274,8 @@ func (response AckQueueMessages404JSONResponse) VisitAckQueueMessagesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16291,8 +16291,8 @@ func (response AckQueueMessages409JSONResponse) VisitAckQueueMessagesResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -16312,8 +16312,8 @@ func (response AckQueueMessagesdefaultJSONResponse) VisitAckQueueMessagesRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16364,8 +16364,8 @@ func (response PullQueueMessages400JSONResponse) VisitPullQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16381,8 +16381,8 @@ func (response PullQueueMessages403JSONResponse) VisitPullQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16398,8 +16398,8 @@ func (response PullQueueMessages404JSONResponse) VisitPullQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16415,8 +16415,8 @@ func (response PullQueueMessages409JSONResponse) VisitPullQueueMessagesResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -16436,8 +16436,8 @@ func (response PullQueueMessagesdefaultJSONResponse) VisitPullQueueMessagesRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16476,8 +16476,8 @@ func (response PurgeQueue403JSONResponse) VisitPurgeQueueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16493,8 +16493,8 @@ func (response PurgeQueue404JSONResponse) VisitPurgeQueueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16514,8 +16514,8 @@ func (response PurgeQueuedefaultJSONResponse) VisitPurgeQueueResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16547,8 +16547,8 @@ func (response DeleteTenantTelemetry403JSONResponse) VisitDeleteTenantTelemetryR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16564,8 +16564,8 @@ func (response DeleteTenantTelemetry404JSONResponse) VisitDeleteTenantTelemetryR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16585,8 +16585,8 @@ func (response DeleteTenantTelemetrydefaultJSONResponse) VisitDeleteTenantTeleme
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16624,8 +16624,8 @@ func (response GetTenantTelemetry403JSONResponse) VisitGetTenantTelemetryRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16641,8 +16641,8 @@ func (response GetTenantTelemetry404JSONResponse) VisitGetTenantTelemetryRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16662,8 +16662,8 @@ func (response GetTenantTelemetrydefaultJSONResponse) VisitGetTenantTelemetryRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16702,8 +16702,8 @@ func (response PutTenantTelemetry400JSONResponse) VisitPutTenantTelemetryRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16719,8 +16719,8 @@ func (response PutTenantTelemetry403JSONResponse) VisitPutTenantTelemetryRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16736,8 +16736,8 @@ func (response PutTenantTelemetry404JSONResponse) VisitPutTenantTelemetryRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16757,8 +16757,8 @@ func (response PutTenantTelemetrydefaultJSONResponse) VisitPutTenantTelemetryRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16800,8 +16800,8 @@ func (response DecideApproval400JSONResponse) VisitDecideApprovalResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16817,8 +16817,8 @@ func (response DecideApproval403JSONResponse) VisitDecideApprovalResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16834,8 +16834,8 @@ func (response DecideApproval404JSONResponse) VisitDecideApprovalResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16851,8 +16851,8 @@ func (response DecideApproval409JSONResponse) VisitDecideApprovalResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -16872,8 +16872,8 @@ func (response DecideApprovaldefaultJSONResponse) VisitDecideApprovalResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -16920,8 +16920,8 @@ func (response ExportD1400JSONResponse) VisitExportD1Response(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -16937,8 +16937,8 @@ func (response ExportD1403JSONResponse) VisitExportD1Response(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -16954,8 +16954,8 @@ func (response ExportD1404JSONResponse) VisitExportD1Response(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -16975,8 +16975,8 @@ func (response ExportD1defaultJSONResponse) VisitExportD1Response(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17017,8 +17017,8 @@ func (response QueryD1400JSONResponse) VisitQueryD1Response(w http.ResponseWrite
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17034,8 +17034,8 @@ func (response QueryD1403JSONResponse) VisitQueryD1Response(w http.ResponseWrite
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17051,8 +17051,8 @@ func (response QueryD1404JSONResponse) VisitQueryD1Response(w http.ResponseWrite
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17072,8 +17072,8 @@ func (response QueryD1defaultJSONResponse) VisitQueryD1Response(w http.ResponseW
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17113,8 +17113,8 @@ func (response ListWorkloadDeployments400JSONResponse) VisitListWorkloadDeployme
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17130,8 +17130,8 @@ func (response ListWorkloadDeployments403JSONResponse) VisitListWorkloadDeployme
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17147,8 +17147,8 @@ func (response ListWorkloadDeployments404JSONResponse) VisitListWorkloadDeployme
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17168,8 +17168,8 @@ func (response ListWorkloadDeploymentsdefaultJSONResponse) VisitListWorkloadDepl
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17263,8 +17263,8 @@ func (response GetWorkloadLogs400JSONResponse) VisitGetWorkloadLogsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17280,8 +17280,8 @@ func (response GetWorkloadLogs403JSONResponse) VisitGetWorkloadLogsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17297,8 +17297,8 @@ func (response GetWorkloadLogs404JSONResponse) VisitGetWorkloadLogsResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17318,8 +17318,8 @@ func (response GetWorkloadLogsdefaultJSONResponse) VisitGetWorkloadLogsResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17358,8 +17358,8 @@ func (response ListWorkloadPreviews400JSONResponse) VisitListWorkloadPreviewsRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17375,8 +17375,8 @@ func (response ListWorkloadPreviews403JSONResponse) VisitListWorkloadPreviewsRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17392,8 +17392,8 @@ func (response ListWorkloadPreviews404JSONResponse) VisitListWorkloadPreviewsRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17413,8 +17413,8 @@ func (response ListWorkloadPreviewsdefaultJSONResponse) VisitListWorkloadPreview
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17479,8 +17479,8 @@ func (response CreatePromotion400JSONResponse) VisitCreatePromotionResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17496,8 +17496,8 @@ func (response CreatePromotion403JSONResponse) VisitCreatePromotionResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17513,8 +17513,8 @@ func (response CreatePromotion404JSONResponse) VisitCreatePromotionResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17530,8 +17530,8 @@ func (response CreatePromotion409JSONResponse) VisitCreatePromotionResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -17551,8 +17551,8 @@ func (response CreatePromotiondefaultJSONResponse) VisitCreatePromotionResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17601,8 +17601,8 @@ func (response GetWorkloadPublic403JSONResponse) VisitGetWorkloadPublicResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17618,8 +17618,8 @@ func (response GetWorkloadPublic404JSONResponse) VisitGetWorkloadPublicResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17639,8 +17639,8 @@ func (response GetWorkloadPublicdefaultJSONResponse) VisitGetWorkloadPublicRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17692,8 +17692,8 @@ func (response UpdateWorkloadPublic400JSONResponse) VisitUpdateWorkloadPublicRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17709,8 +17709,8 @@ func (response UpdateWorkloadPublic403JSONResponse) VisitUpdateWorkloadPublicRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17726,8 +17726,8 @@ func (response UpdateWorkloadPublic404JSONResponse) VisitUpdateWorkloadPublicRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17746,8 +17746,8 @@ func (response UpdateWorkloadPublic412JSONResponse) VisitUpdateWorkloadPublicRes
 	if response.Headers.ETag != nil {
 		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
 	}
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
@@ -17767,8 +17767,8 @@ func (response UpdateWorkloadPublicdefaultJSONResponse) VisitUpdateWorkloadPubli
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17833,8 +17833,8 @@ func (response CreateRollback400JSONResponse) VisitCreateRollbackResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17850,8 +17850,8 @@ func (response CreateRollback403JSONResponse) VisitCreateRollbackResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17867,8 +17867,8 @@ func (response CreateRollback404JSONResponse) VisitCreateRollbackResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -17884,8 +17884,8 @@ func (response CreateRollback409JSONResponse) VisitCreateRollbackResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -17905,8 +17905,8 @@ func (response CreateRollbackdefaultJSONResponse) VisitCreateRollbackResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -17956,8 +17956,8 @@ func (response CreateWorkloadSecretGrant400JSONResponse) VisitCreateWorkloadSecr
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -17973,8 +17973,8 @@ func (response CreateWorkloadSecretGrant403JSONResponse) VisitCreateWorkloadSecr
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -17990,8 +17990,8 @@ func (response CreateWorkloadSecretGrant404JSONResponse) VisitCreateWorkloadSecr
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18007,8 +18007,8 @@ func (response CreateWorkloadSecretGrant409JSONResponse) VisitCreateWorkloadSecr
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -18028,8 +18028,8 @@ func (response CreateWorkloadSecretGrantdefaultJSONResponse) VisitCreateWorkload
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18069,8 +18069,8 @@ func (response ListWorkloadSecrets400JSONResponse) VisitListWorkloadSecretsRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18086,8 +18086,8 @@ func (response ListWorkloadSecrets403JSONResponse) VisitListWorkloadSecretsRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18103,8 +18103,8 @@ func (response ListWorkloadSecrets404JSONResponse) VisitListWorkloadSecretsRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18124,8 +18124,8 @@ func (response ListWorkloadSecretsdefaultJSONResponse) VisitListWorkloadSecretsR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18159,8 +18159,8 @@ func (response DeleteWorkloadSecret403JSONResponse) VisitDeleteWorkloadSecretRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18176,8 +18176,8 @@ func (response DeleteWorkloadSecret404JSONResponse) VisitDeleteWorkloadSecretRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18197,8 +18197,8 @@ func (response DeleteWorkloadSecretdefaultJSONResponse) VisitDeleteWorkloadSecre
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18253,8 +18253,8 @@ func (response PutWorkloadSecret400JSONResponse) VisitPutWorkloadSecretResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18270,8 +18270,8 @@ func (response PutWorkloadSecret403JSONResponse) VisitPutWorkloadSecretResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18287,8 +18287,8 @@ func (response PutWorkloadSecret404JSONResponse) VisitPutWorkloadSecretResponse(
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18308,8 +18308,8 @@ func (response PutWorkloadSecretdefaultJSONResponse) VisitPutWorkloadSecretRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18349,8 +18349,8 @@ func (response ListWorkloadStores400JSONResponse) VisitListWorkloadStoresRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18366,8 +18366,8 @@ func (response ListWorkloadStores403JSONResponse) VisitListWorkloadStoresRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18383,8 +18383,8 @@ func (response ListWorkloadStores404JSONResponse) VisitListWorkloadStoresRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18404,8 +18404,8 @@ func (response ListWorkloadStoresdefaultJSONResponse) VisitListWorkloadStoresRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18456,8 +18456,8 @@ func (response ListKVKeys400JSONResponse) VisitListKVKeysResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18473,8 +18473,8 @@ func (response ListKVKeys403JSONResponse) VisitListKVKeysResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18490,8 +18490,8 @@ func (response ListKVKeys404JSONResponse) VisitListKVKeysResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18511,8 +18511,8 @@ func (response ListKVKeysdefaultJSONResponse) VisitListKVKeysResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18547,8 +18547,8 @@ func (response DeleteKVValue400JSONResponse) VisitDeleteKVValueResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18564,8 +18564,8 @@ func (response DeleteKVValue403JSONResponse) VisitDeleteKVValueResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18581,8 +18581,8 @@ func (response DeleteKVValue404JSONResponse) VisitDeleteKVValueResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18598,8 +18598,8 @@ func (response DeleteKVValue409JSONResponse) VisitDeleteKVValueResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -18619,8 +18619,8 @@ func (response DeleteKVValuedefaultJSONResponse) VisitDeleteKVValueResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18671,8 +18671,8 @@ func (response GetKVValue400JSONResponse) VisitGetKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18688,8 +18688,8 @@ func (response GetKVValue403JSONResponse) VisitGetKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18705,8 +18705,8 @@ func (response GetKVValue404JSONResponse) VisitGetKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18726,8 +18726,8 @@ func (response GetKVValuedefaultJSONResponse) VisitGetKVValueResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18769,8 +18769,8 @@ func (response PutKVValue400JSONResponse) VisitPutKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -18786,8 +18786,8 @@ func (response PutKVValue403JSONResponse) VisitPutKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18803,8 +18803,8 @@ func (response PutKVValue404JSONResponse) VisitPutKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18820,8 +18820,8 @@ func (response PutKVValue409JSONResponse) VisitPutKVValueResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -18841,8 +18841,8 @@ func (response PutKVValuedefaultJSONResponse) VisitPutKVValueResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18877,8 +18877,8 @@ func (response DeleteWorkloadStore403JSONResponse) VisitDeleteWorkloadStoreRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18894,8 +18894,8 @@ func (response DeleteWorkloadStore404JSONResponse) VisitDeleteWorkloadStoreRespo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18915,8 +18915,8 @@ func (response DeleteWorkloadStoredefaultJSONResponse) VisitDeleteWorkloadStoreR
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -18957,8 +18957,8 @@ func (response GetWorkloadStore403JSONResponse) VisitGetWorkloadStoreResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -18974,8 +18974,8 @@ func (response GetWorkloadStore404JSONResponse) VisitGetWorkloadStoreResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -18995,8 +18995,8 @@ func (response GetWorkloadStoredefaultJSONResponse) VisitGetWorkloadStoreRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19051,8 +19051,8 @@ func (response PutWorkloadStore400JSONResponse) VisitPutWorkloadStoreResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -19068,8 +19068,8 @@ func (response PutWorkloadStore403JSONResponse) VisitPutWorkloadStoreResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19085,8 +19085,8 @@ func (response PutWorkloadStore404JSONResponse) VisitPutWorkloadStoreResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19106,8 +19106,8 @@ func (response PutWorkloadStoredefaultJSONResponse) VisitPutWorkloadStoreRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19159,8 +19159,8 @@ func (response ReadStoreJournal400JSONResponse) VisitReadStoreJournalResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -19176,8 +19176,8 @@ func (response ReadStoreJournal403JSONResponse) VisitReadStoreJournalResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19193,8 +19193,8 @@ func (response ReadStoreJournal404JSONResponse) VisitReadStoreJournalResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19210,8 +19210,8 @@ func (response ReadStoreJournal409JSONResponse) VisitReadStoreJournalResponse(w 
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -19231,8 +19231,8 @@ func (response ReadStoreJournaldefaultJSONResponse) VisitReadStoreJournalRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19275,8 +19275,8 @@ func (response AppendStoreJournal400JSONResponse) VisitAppendStoreJournalRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -19292,8 +19292,8 @@ func (response AppendStoreJournal403JSONResponse) VisitAppendStoreJournalRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19309,8 +19309,8 @@ func (response AppendStoreJournal404JSONResponse) VisitAppendStoreJournalRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19326,8 +19326,8 @@ func (response AppendStoreJournal409JSONResponse) VisitAppendStoreJournalRespons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -19347,8 +19347,8 @@ func (response AppendStoreJournaldefaultJSONResponse) VisitAppendStoreJournalRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19398,8 +19398,8 @@ func (response CreateTelemetryGrant400JSONResponse) VisitCreateTelemetryGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -19415,8 +19415,8 @@ func (response CreateTelemetryGrant403JSONResponse) VisitCreateTelemetryGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19432,8 +19432,8 @@ func (response CreateTelemetryGrant404JSONResponse) VisitCreateTelemetryGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19449,8 +19449,8 @@ func (response CreateTelemetryGrant409JSONResponse) VisitCreateTelemetryGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -19470,8 +19470,8 @@ func (response CreateTelemetryGrantdefaultJSONResponse) VisitCreateTelemetryGran
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19510,8 +19510,8 @@ func (response ListUpgrades403JSONResponse) VisitListUpgradesResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19531,8 +19531,8 @@ func (response ListUpgradesdefaultJSONResponse) VisitListUpgradesResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19584,8 +19584,8 @@ func (response CreateUpgrade400JSONResponse) VisitCreateUpgradeResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -19601,8 +19601,8 @@ func (response CreateUpgrade403JSONResponse) VisitCreateUpgradeResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19618,8 +19618,8 @@ func (response CreateUpgrade409JSONResponse) VisitCreateUpgradeResponse(w http.R
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -19639,8 +19639,8 @@ func (response CreateUpgradedefaultJSONResponse) VisitCreateUpgradeResponse(w ht
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19678,8 +19678,8 @@ func (response GetUpgrade403JSONResponse) VisitGetUpgradeResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19695,8 +19695,8 @@ func (response GetUpgrade404JSONResponse) VisitGetUpgradeResponse(w http.Respons
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19716,8 +19716,8 @@ func (response GetUpgradedefaultJSONResponse) VisitGetUpgradeResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19756,8 +19756,8 @@ func (response ActOnUpgrade403JSONResponse) VisitActOnUpgradeResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19773,8 +19773,8 @@ func (response ActOnUpgrade404JSONResponse) VisitActOnUpgradeResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19790,8 +19790,8 @@ func (response ActOnUpgrade409JSONResponse) VisitActOnUpgradeResponse(w http.Res
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -19811,8 +19811,8 @@ func (response ActOnUpgradedefaultJSONResponse) VisitActOnUpgradeResponse(w http
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19861,8 +19861,8 @@ func (response CreateVolumeKeyGrant400JSONResponse) VisitCreateVolumeKeyGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
@@ -19878,8 +19878,8 @@ func (response CreateVolumeKeyGrant403JSONResponse) VisitCreateVolumeKeyGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19895,8 +19895,8 @@ func (response CreateVolumeKeyGrant404JSONResponse) VisitCreateVolumeKeyGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
@@ -19912,8 +19912,8 @@ func (response CreateVolumeKeyGrant409JSONResponse) VisitCreateVolumeKeyGrantRes
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
@@ -19933,8 +19933,8 @@ func (response CreateVolumeKeyGrantdefaultJSONResponse) VisitCreateVolumeKeyGran
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -19971,8 +19971,8 @@ func (response WhoAmI403JSONResponse) VisitWhoAmIResponse(w http.ResponseWriter)
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
@@ -19992,8 +19992,8 @@ func (response WhoAmIdefaultJSONResponse) VisitWhoAmIResponse(w http.ResponseWri
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if response.Headers.TwdError != nil {
-		w.Header().Set("Twd-Error", fmt.Sprint(*response.Headers.TwdError))
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
 	}
 	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
@@ -20116,7 +20116,7 @@ type StrictServerInterface interface {
 	// ListReleases The release catalog
 	// (GET /v1/releases)
 	ListReleases(ctx context.Context, request ListReleasesRequestObject) (ListReleasesResponseObject, error)
-	// ImportReleases Import catalog entries (from a release's share/twd/catalog.json)
+	// ImportReleases Import catalog entries (from a release's share/tailworks/catalog.json)
 	// (POST /v1/releases)
 	ImportReleases(ctx context.Context, request ImportReleasesRequestObject) (ImportReleasesResponseObject, error)
 	// GetReleaseArtifact Download a release tarball (hosts upgrading themselves)
@@ -20143,19 +20143,19 @@ type StrictServerInterface interface {
 	// UpdateTenant Update a tenant (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id})
 	UpdateTenant(ctx context.Context, request UpdateTenantRequestObject) (UpdateTenantResponseObject, error)
-	// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	// ListApprovals The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 	// (GET /v1/tenants/{id}/approvals)
 	ListApprovals(ctx context.Context, request ListApprovalsRequestObject) (ListApprovalsResponseObject, error)
-	// DeleteTenantNotifications Stop the tenant's notifications (`twd notify rm`)
+	// DeleteTenantNotifications Stop the tenant's notifications (`tw notify rm`)
 	// (DELETE /v1/tenants/{id}/notifications)
 	DeleteTenantNotifications(ctx context.Context, request DeleteTenantNotificationsRequestObject) (DeleteTenantNotificationsResponseObject, error)
-	// GetTenantNotifications Read the tenant's notification webhook (`twd notify`), without secrets
+	// GetTenantNotifications Read the tenant's notification webhook (`tw notify`), without secrets
 	// (GET /v1/tenants/{id}/notifications)
 	GetTenantNotifications(ctx context.Context, request GetTenantNotificationsRequestObject) (GetTenantNotificationsResponseObject, error)
-	// PutTenantNotifications Set the tenant's notification webhook (`twd notify set`)
+	// PutTenantNotifications Set the tenant's notification webhook (`tw notify set`)
 	// (PUT /v1/tenants/{id}/notifications)
 	PutTenantNotifications(ctx context.Context, request PutTenantNotificationsRequestObject) (PutTenantNotificationsResponseObject, error)
-	// TestTenantNotifications Send a test notification now (`twd notify test`)
+	// TestTenantNotifications Send a test notification now (`tw notify test`)
 	// (POST /v1/tenants/{id}/notifications/test)
 	TestTenantNotifications(ctx context.Context, request TestTenantNotificationsRequestObject) (TestTenantNotificationsResponseObject, error)
 	// PurgeTenantObjects Purge terminal objects of a tenant
@@ -20194,43 +20194,43 @@ type StrictServerInterface interface {
 	// PurgeQueue Delete every message of a queue, keeping the queue
 	// (POST /v1/tenants/{id}/queues/{queue}/purge)
 	PurgeQueue(ctx context.Context, request PurgeQueueRequestObject) (PurgeQueueResponseObject, error)
-	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`tw telemetry rm`)
 	// (DELETE /v1/tenants/{id}/telemetry)
 	DeleteTenantTelemetry(ctx context.Context, request DeleteTenantTelemetryRequestObject) (DeleteTenantTelemetryResponseObject, error)
-	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// GetTenantTelemetry Read the tenant's OTLP export (`tw telemetry`), without header values
 	// (GET /v1/tenants/{id}/telemetry)
 	GetTenantTelemetry(ctx context.Context, request GetTenantTelemetryRequestObject) (GetTenantTelemetryResponseObject, error)
-	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// PutTenantTelemetry Set the tenant's OTLP export (`tw telemetry set`)
 	// (PUT /v1/tenants/{id}/telemetry)
 	PutTenantTelemetry(ctx context.Context, request PutTenantTelemetryRequestObject) (PutTenantTelemetryResponseObject, error)
-	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// DecideApproval Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(ctx context.Context, request DecideApprovalRequestObject) (DecideApprovalResponseObject, error)
-	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// ExportD1 Export a D1 database as SQL (`tw d1 export`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export)
 	ExportD1(ctx context.Context, request ExportD1RequestObject) (ExportD1ResponseObject, error)
-	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// QueryD1 Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 	// (POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query)
 	QueryD1(ctx context.Context, request QueryD1RequestObject) (QueryD1ResponseObject, error)
-	// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+	// ListWorkloadDeployments A workload's deployment history, newest first (`tw deployments`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/deployments)
 	ListWorkloadDeployments(ctx context.Context, request ListWorkloadDeploymentsRequestObject) (ListWorkloadDeploymentsResponseObject, error)
-	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
-	// ListWorkloadPreviews A workload's running previews (`twd previews`)
+	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/previews)
 	ListWorkloadPreviews(ctx context.Context, request ListWorkloadPreviewsRequestObject) (ListWorkloadPreviewsResponseObject, error)
-	// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	// CreatePromotion Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	// (POST /v1/tenants/{id}/workloads/{workload}/promotions)
 	CreatePromotion(ctx context.Context, request CreatePromotionRequestObject) (CreatePromotionResponseObject, error)
-	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
+	// GetWorkloadPublic Read a workload's public-ingress exposure (`tw expose`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/public)
 	GetWorkloadPublic(ctx context.Context, request GetWorkloadPublicRequestObject) (GetWorkloadPublicResponseObject, error)
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	// (PATCH /v1/tenants/{id}/workloads/{workload}/public)
 	UpdateWorkloadPublic(ctx context.Context, request UpdateWorkloadPublicRequestObject) (UpdateWorkloadPublicResponseObject, error)
-	// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// CreateRollback Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	// (POST /v1/tenants/{id}/workloads/{workload}/rollbacks)
 	CreateRollback(ctx context.Context, request CreateRollbackRequestObject) (CreateRollbackResponseObject, error)
 	// CreateWorkloadSecretGrant Release a workload's secret values to the lease holder
@@ -20239,10 +20239,10 @@ type StrictServerInterface interface {
 	// ListWorkloadSecrets List a workload's secrets (names and times, never values)
 	// (GET /v1/tenants/{id}/workloads/{workload}/secrets)
 	ListWorkloadSecrets(ctx context.Context, request ListWorkloadSecretsRequestObject) (ListWorkloadSecretsResponseObject, error)
-	// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+	// DeleteWorkloadSecret Delete a workload secret (`tw secret rm`)
 	// (DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	DeleteWorkloadSecret(ctx context.Context, request DeleteWorkloadSecretRequestObject) (DeleteWorkloadSecretResponseObject, error)
-	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+	// PutWorkloadSecret Create or replace a workload secret (`tw secret put`)
 	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	PutWorkloadSecret(ctx context.Context, request PutWorkloadSecretRequestObject) (PutWorkloadSecretResponseObject, error)
 	// ListWorkloadStores List a workload's stores

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
 func getPath(v any, path ...string) any {
@@ -188,7 +188,7 @@ func TestOAuthMintPath(t *testing.T) {
 	e.ts.refuseTags[HostTag] = true
 	e.ts.mu.Unlock()
 	body := c.fail("POST", "/v1/hosts", map[string]any{"hostID": "h-p", "tenantID": tn.TenantID}, 403, "policy_missing_tag_owners")
-	if sn, _ := body["snippet"].(string); !strings.Contains(sn, `"`+HostTag+`": ["autogroup:admin", "tag:twd"]`) {
+	if sn, _ := body["snippet"].(string); !strings.Contains(sn, `"`+HostTag+`": ["autogroup:admin", "tag:tw"]`) {
 		t.Fatalf("policy_missing_tag_owners without the snippet: %v", body)
 	}
 

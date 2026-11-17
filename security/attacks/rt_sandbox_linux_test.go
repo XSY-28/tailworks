@@ -3,7 +3,7 @@
 package attacks
 
 // Pass 2 (live), Linux process tier — the sandbox-escape battery the first
-// pass could not run (it worked from macOS). It drives twd's real Landlock +
+// pass could not run (it worked from macOS). It drives tailworks' real Landlock +
 // seccomp profile (internal/procsb, the exact rules, filter and
 // no_new_privs a tenant workerd/Node app gets) and attempts every escape the
 // brief lists: read/list/write outside the instance dir, raw TCP to the
@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/internal/procsb"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
 )
 
 func sbSelf(t *testing.T) string {
@@ -203,7 +203,7 @@ func TestRT08_LinuxSandboxEscapeBattery(t *testing.T) {
 func findWorkerdOrSkip(t *testing.T) string {
 	t.Helper()
 	for _, c := range []string{
-		filepath.Join(os.Getenv("HOME"), ".twd/bin/workerd"),
+		filepath.Join(os.Getenv("HOME"), ".tailworks/bin/workerd"),
 		"/usr/local/bin/workerd",
 	} {
 		if _, err := os.Stat(c); err == nil {

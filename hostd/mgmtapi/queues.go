@@ -3,7 +3,7 @@ package mgmtapi
 import (
 	"context"
 
-	v1 "github.com/rosskukulinski/twd/hostd/mgmtapi/v1"
+	v1 "github.com/rosskukulinski/tailworks/hostd/mgmtapi/v1"
 )
 
 // Queues (ADR-039): a workload's host sends for its producer bindings

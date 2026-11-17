@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/tssvc"
+	"github.com/rosskukulinski/tailworks/internal/tssvc"
 )
 
 // Several tenants on one tailnet, one per team (ADR-043 D4, D5,
@@ -18,14 +18,14 @@ import (
 //     owns, so one team's client can't mint another team's tags, even if
 //     mgmt is wrong. mgmt checks ownership too, as a second layer.
 //   - its own name prefix (Tenant.NamePrefix), in front of every tailnet
-//     name twd generates for it, so two teams' "api" workloads don't
+//     name tailworks generates for it, so two teams' "api" workloads don't
 //     collide.
 //
-// A tenant alone on its tailnet needs neither: OwnerTag "" means tag:twd,
+// A tenant alone on its tailnet needs neither: OwnerTag "" means tag:tw,
 // as before, and NamePrefix "" means no prefix.
 
 // DefaultOwnerTag owns a tenant's tags unless it names its own.
-const DefaultOwnerTag = "tag:twd"
+const DefaultOwnerTag = "tag:tw"
 
 // maxNamePrefix keeps prefixed object names within a DNS label: an object
 // ID is at most 51 characters (objectID), plus "-" and the prefix.
@@ -39,7 +39,7 @@ func (t Tenant) Owner() string {
 	return t.OwnerTag
 }
 
-// Name is a tailnet name twd generates for t: name with t's prefix.
+// Name is a tailnet name tailworks generates for t: name with t's prefix.
 func (t Tenant) Name(name string) string {
 	if t.NamePrefix == "" || name == "" {
 		return name
@@ -47,8 +47,8 @@ func (t Tenant) Name(name string) string {
 	return t.NamePrefix + "-" + name
 }
 
-// twdOwnTags are twd's infrastructure tags: never a tenant's owner tag.
-var twdOwnTags = []string{DefaultOwnerTag, MgmtTag, HostTag, "tag:twd-issuer", PublicTag}
+// twOwnTags are tailworks' infrastructure tags: never a tenant's owner tag.
+var twOwnTags = []string{DefaultOwnerTag, MgmtTag, HostTag, "tag:tw-issuer", PublicTag}
 
 func validOwnerTag(tag string) *Error {
 	switch {
@@ -56,8 +56,8 @@ func validOwnerTag(tag string) *Error {
 		return nil
 	case !validTagSyntax(tag):
 		return errf(400, "bad_request", "ownerTag %q is not a tag (want tag:[a-zA-Z0-9][a-zA-Z0-9._-]*)", tag)
-	case slices.ContainsFunc(twdOwnTags, func(o string) bool { return strings.EqualFold(o, tag) }):
-		return errf(400, "reserved_tag", "ownerTag %s is one of twd's own tags (%s); name the team's own, e.g. tag:twd-t-payments", tag, strings.Join(twdOwnTags, ", "))
+	case slices.ContainsFunc(twOwnTags, func(o string) bool { return strings.EqualFold(o, tag) }):
+		return errf(400, "reserved_tag", "ownerTag %s is one of tailworks' own tags (%s); name the team's own, e.g. tag:tw-t-payments", tag, strings.Join(twOwnTags, ", "))
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (m *Mgmt) checkTeamFields(ctx context.Context, t Tenant) error {
 				"either one could mint the other's tags", o.ID, t.Tailnet, DefaultOwnerTag, o.Owner(), o.ID, t.Owner())
 			e.Missing = map[string]any{"tenant": o.ID, "ownerTag": o.Owner()}
 			if o.Owner() == DefaultOwnerTag {
-				e.Snippet = "twd tenant set " + o.ID + " --owner-tag tag:twd-t-<team> --oauth-client-file <a client scoped to that tag>"
+				e.Snippet = "tw tenant set " + o.ID + " --owner-tag tag:tw-t-<team> --oauth-client-file <a client scoped to that tag>"
 			}
 			return e
 		}
@@ -201,7 +201,7 @@ func tagOwnerProblem(pol *Policy, t Tenant, tag string, others []string) string 
 		return ""
 	}
 	for _, o := range owners {
-		// tag:twd-public is shared by design: every public workload node
+		// tag:tw-public is shared by design: every public workload node
 		// carries it, and each is its own node (ADR-029).
 		if tag != PublicTag && slices.Contains(others, o) {
 			return fmt.Sprintf("%s is owned by %s, another tenant's owner tag on this tailnet: either tenant could mint it", tag, o)
@@ -214,12 +214,12 @@ func tagOwnerProblem(pol *Policy, t Tenant, tag string, others []string) string 
 }
 
 // publicFunnelSnippet is PublicFunnelSnippet with t's owner tag among
-// tag:twd-public's owners, so t's OAuth client can mint public nodes.
+// tag:tw-public's owners, so t's OAuth client can mint public nodes.
 func publicFunnelSnippet(t Tenant) string {
 	if t.OwnerTag == "" {
 		return PublicFunnelSnippet
 	}
-	return strings.Replace(PublicFunnelSnippet, `"tag:twd"]`, `"tag:twd", "`+t.OwnerTag+`"]`, 1)
+	return strings.Replace(PublicFunnelSnippet, `"tag:tw"]`, `"tag:tw", "`+t.OwnerTag+`"]`, 1)
 }
 
 // checkDeployTeam is Deploy's team check: the workload name against other
@@ -302,7 +302,7 @@ func (m *Mgmt) patchTeamFields(ctx context.Context, t *Tenant, p TenantPatch, ch
 
 // applyTeamService is applyService with t's name prefix in the Service's
 // name: svc:<prefix>-<name>.
-func applyTeamService(t Tenant, cfg *TwdConfig, workload string, classes []ClassConfig) (string, error) {
+func applyTeamService(t Tenant, cfg *TwConfig, workload string, classes []ClassConfig) (string, error) {
 	name, err := applyService(cfg, workload, classes)
 	if err != nil || name == "" || t.NamePrefix == "" {
 		return name, err

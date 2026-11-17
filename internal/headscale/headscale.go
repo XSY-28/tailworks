@@ -1,6 +1,6 @@
 // Package headscale is the Headscale profile's control-plane API client
 // (ADR-015, RFC §7.2): the subset of Headscale's REST API (/api/v1, the
-// gRPC gateway on the server's own listener) that twd needs, shaped like
+// gRPC gateway on the server's own listener) that tailworks needs, shaped like
 // the Tailscale API client in internal/tsapi so mgmt and the CLI can use
 // either.
 //
@@ -10,7 +10,7 @@
 //     pre-authorized; descriptions don't exist.
 //   - DeleteKey → POST /api/v1/preauthkey/expire.
 //   - DeleteDevice → DELETE /api/v1/node/{id}. A Headscale node's
-//     StableNodeID is its decimal node ID, so the IDs twd records from the
+//     StableNodeID is its decimal node ID, so the IDs tailworks records from the
 //     netmap work unchanged.
 //   - ListDevices → GET /api/v1/node.
 //   - policy → GET/PUT /api/v1/policy, POST /api/v1/policy/check. The ETag
@@ -38,7 +38,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"github.com/tailscale/hujson"
 )
 
@@ -54,7 +54,7 @@ const DefaultKeyExpiry = time.Hour
 type Client struct {
 	BaseURL string // the server_url, e.g. https://hs.example.com (required)
 	APIKey  string // required
-	// BaseDomain is the server's dns.base_domain (twd's "tailnet" for a
+	// BaseDomain is the server's dns.base_domain (tailworks' "tailnet" for a
 	// Headscale tenant); it completes device names in ListDevices.
 	BaseDomain string
 	HTTP       *http.Client
@@ -192,7 +192,7 @@ func (c *Client) GetPolicy(ctx context.Context, etag string) ([]byte, string, bo
 }
 
 // MinVersion is the oldest Headscale the profile supports: grants (where
-// twd's caps travel) and POST /api/v1/policy/check arrived in v0.29;
+// tailworks' caps travel) and POST /api/v1/policy/check arrived in v0.29;
 // v0.28's parser rejects "grants" outright.
 const MinVersion = "v0.29"
 

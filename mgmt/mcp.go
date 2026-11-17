@@ -1,8 +1,8 @@
 package mgmt
 
-// twd's own MCP server (issue #25, ADR-035): POST /mcp on the same
+// tailworks' own MCP server (issue #25, ADR-035): POST /mcp on the same
 // listeners and behind the same WhoIs gate as /v1, so a coding agent on
-// any tailnet machine can operate twd with no credentials on disk.
+// any tailnet machine can operate tailworks with no credentials on disk.
 //
 // Transport: MCP Streamable HTTP, stateless: every POST is one JSON-RPC
 // request (or notification), answered with application/json. No sessions,
@@ -11,17 +11,17 @@ package mgmt
 // Tools call the /v1 handlers in process (mcpCall), so validation, roles,
 // audit and error codes are exactly the API's. Who may call which tool:
 //
-//   - read tools (whoami, status, ls, logs, audit): a twd admin (AdminCap)
+//   - read tools (whoami, status, ls, logs, audit): a tailworks admin (AdminCap)
 //     or any holder of MCPCap;
 //   - deploy, kill, undeploy: only when an MCPCap grant names them
 //     ({"tools": ["kill"]}, or "*"). Being an admin is not enough: an agent
 //     gets destructive tools only from a grant that says so;
-//   - the local operator (mgmt's own node, the unix socket: the `twd mcp`
-//     bridge on the twd host) gets the read tools, or exactly the tools the
-//     bridge lists in Twd-MCP-Tools (`twd mcp --allow kill` sends the read
+//   - the local operator (mgmt's own node, the unix socket: the `tw mcp`
+//     bridge on the tailworks host) gets the read tools, or exactly the tools the
+//     bridge lists in Tw-MCP-Tools (`tw mcp --allow kill` sends the read
 //     tools and kill). The operator already holds every power; this keeps
 //     an agent on that machine read-only unless the operator opted in;
-//   - for a tailnet caller, Twd-MCP-Tools only narrows the granted set;
+//   - for a tailnet caller, Tw-MCP-Tools only narrows the granted set;
 //   - hosts get nothing.
 //
 // A caller holding only MCPCap reaches /mcp and nothing else
@@ -46,15 +46,15 @@ import (
 // MCPCap is the app capability that admits a tailnet caller to /mcp and
 // grants it tools: [{"tools": ["kill", "undeploy"]}] ("*" = every tool).
 // With no tools listed it grants the read tools.
-const MCPCap = "twd.dev/cap/mcp"
+const MCPCap = "github.com/rosskukulinski/tailworks/cap/mcp"
 
 // MCPPath is where the MCP server is mounted.
 const MCPPath = "/mcp"
 
-// MCPToolsHeader narrows the tools of one request (the `twd mcp` bridge's
+// MCPToolsHeader narrows the tools of one request (the `tw mcp` bridge's
 // --allow); for the local operator it is also what enables the
 // destructive tools.
-const MCPToolsHeader = "Twd-MCP-Tools"
+const MCPToolsHeader = "Tw-MCP-Tools"
 
 // mcpProtocolVersions are the MCP revisions this server speaks, newest
 // first; initialize echoes the client's if listed.
@@ -86,7 +86,7 @@ type mcpCtx struct {
 	s   *Server
 	api http.Handler
 	p   Principal
-	hdr http.Header // the caller's request headers (Twd-Actor on the bridge)
+	hdr http.Header // the caller's request headers (Tw-Actor on the bridge)
 
 	// scoped: a tenant admin's tool, run as the caller rather than as an
 	// admin (tenantscope_mcp.go).
@@ -110,7 +110,7 @@ func obj(required []string, props map[string]any) map[string]any {
 	return o
 }
 
-var tenantArg = strProp("tenant: its tailnet (example.ts.net) or tenant ID; optional when twd serves one tenant")
+var tenantArg = strProp("tenant: its tailnet (example.ts.net) or tenant ID; optional when tailworks serves one tenant")
 
 // mcpTools is every tool, in tools/list order (set in init: whoami
 // lists the tools itself).
@@ -120,19 +120,19 @@ func init() { mcpTools = mcpToolList() }
 
 func mcpToolList() []mcpTool {
 	return []mcpTool{
-		{Name: "whoami", Kind: "read", Description: "Who twd thinks you are on the tailnet, and which twd tools you may call (and the grant that would add the others).",
+		{Name: "whoami", Kind: "read", Description: "Who tw thinks you are on the tailnet, and which tw tools you may call (and the grant that would add the others).",
 			Input: obj(nil, map[string]any{}), run: mcpWhoami},
-		{Name: "status", Kind: "read", Description: "Health of twd: mgmt, hosts, tenants, deployments (GET /v1/status).",
+		{Name: "status", Kind: "read", Description: "Health of tailworks: mgmt, hosts, tenants, deployments (GET /v1/status).",
 			Input: obj(nil, map[string]any{}), run: mcpStatus},
-		{Name: "ls", Kind: "read", Description: "Deployments and objects (each Durable Object instance with its own tailnet node) of a tenant, like `twd ls`.",
+		{Name: "ls", Kind: "read", Description: "Deployments and objects (each Durable Object instance with its own tailnet node) of a tenant, like `tw ls`.",
 			Input: obj(nil, map[string]any{"tenant": tenantArg, "workload": strProp("only this workload"), "all": boolProp("include killed objects and stopped deployments")}), run: mcpLs},
-		{Name: "logs", Kind: "read", Description: "A workload's request records (one per request: method, path, status, outcome, caller, its console output and exceptions), or with console=true its raw output, like `twd logs`.",
+		{Name: "logs", Kind: "read", Description: "A workload's request records (one per request: method, path, status, outcome, caller, its console output and exceptions), or with console=true its raw output, like `tw logs`.",
 			Input: obj([]string{"workload"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "n": intProp("how many records (or lines with console) from the end; default 50", 1000),
 				"console": boolProp("the app's raw output instead of request records"), "errors": boolProp("only failed requests (status >= 400, exceptions)"),
 				"status": strProp("only this status (404) or class (5xx)"), "object": strProp("only this object (ID, Class/name, Class or name)"), "trace": strProp("only this trace ID")}), run: mcpLogs},
-		{Name: "audit", Kind: "read", Description: "The hash-chained audit trail: who created, called, spawned or killed what, like `twd audit`.",
+		{Name: "audit", Kind: "read", Description: "The hash-chained audit trail: who created, called, spawned or killed what, like `tw audit`.",
 			Input: obj(nil, map[string]any{"tenant": tenantArg, "object": strProp("records about this object ID"), "trace": strProp("records of this trace ID"), "limit": intProp("at most this many records; default 100", 500)}), run: mcpAudit},
-		{Name: "deploy", Kind: "write", Description: "Deploy a workload. With bundle (base64 of the tar `twd deploy` uploads) it deploys that; without, it redeploys the workload's current bundle (with replace=true, re-placed on the best host). Returns at once; poll ls for status.",
+		{Name: "deploy", Kind: "write", Description: "Deploy a workload. With bundle (base64 of the tar `tw deploy` uploads) it deploys that; without, it redeploys the workload's current bundle (with replace=true, re-placed on the best host). Returns at once; poll ls for status.",
 			Input: obj([]string{"workload"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "bundle": strProp("base64 bundle tar (optional)"),
 				"replace": boolProp("re-place the workload on a better host"), "dryRun": boolProp("only preflight the bundle against the tailnet policy")}), run: mcpDeploy},
 		{Name: "kill", Kind: "destructive", Description: "Kill an object: cut it off the tailnet in under a second and delete its node. No undo. Only after the user agreed to kill this object.",
@@ -189,7 +189,7 @@ func (s *Server) mcpAllowed(p Principal, hdr http.Header) map[string]bool {
 	}
 	switch p.Kind {
 	case "local":
-		// The operator's own bridge: what it asks for (`twd mcp` sends the
+		// The operator's own bridge: what it asks for (`tw mcp` sends the
 		// read tools plus --allow), else the read tools.
 		for _, t := range mcpTools {
 			if (narrow == nil && t.Kind == "read") || (narrow != nil && (narrow[t.Name] || narrow["*"])) {
@@ -298,11 +298,11 @@ func (s *Server) mcpHandler(api http.Handler) http.Handler {
 			writeRPC(w, req.ID, map[string]any{
 				"protocolVersion": v,
 				"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-				"serverInfo":      map[string]any{"name": "twd", "version": s.Version},
-				"instructions": "twd runs Workers and Durable Objects on a tailnet; each object is its own tailnet node. " +
+				"serverInfo":      map[string]any{"name": "tw", "version": s.Version},
+				"instructions": "tw runs Workers and Durable Objects on a tailnet; each object is its own tailnet node. " +
 					"Use ls to find workloads and object IDs, logs to read request records, audit to see who did what. " +
 					"kill and undeploy have no undo: call them only after the user agreed to that specific action. " +
-					"Errors carry a twd code (docs/errors.md) and a hint.",
+					"Errors carry a tailworks code (docs/errors.md) and a hint.",
 			}, nil)
 		case "ping":
 			writeRPC(w, req.ID, map[string]any{}, nil)
@@ -365,7 +365,7 @@ func (s *Server) mcpHandler(api http.Handler) http.Handler {
 func (s *Server) mcpNotGranted(p Principal, t mcpTool) *Error {
 	if p.Kind == "local" {
 		e := errf(403, "cap_missing", "%s is not enabled on this bridge: the operator enables %s tools explicitly", t.Name, t.Kind)
-		e.Snippet = "twd mcp --allow " + t.Name
+		e.Snippet = "tw mcp --allow " + t.Name
 		return e
 	}
 	if s.tenantScoped(p) && !s.mcpPlainTools(p)[t.Name] {
@@ -392,14 +392,14 @@ func toolResult(v any) map[string]any {
 	return res
 }
 
-// toolError is a failed tools/call: the twd error ({code, message, hint,
+// toolError is a failed tools/call: the tailworks error ({code, message, hint,
 // doc_url, …}) the agent acts on.
 func toolError(err error) map[string]any {
 	e, ok := err.(*Error)
 	if !ok {
 		e = errf(500, "internal", "%v", err)
 	}
-	body := map[string]any{"code": e.Code, "message": e.Message, "doc_url": "https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#" + e.Code}
+	body := map[string]any{"code": e.Code, "message": e.Message, "doc_url": "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#" + e.Code}
 	hint := "see the doc_url"
 	if e.Snippet != "" {
 		body["snippet"] = e.Snippet
@@ -443,11 +443,11 @@ func (c *mcpCtx) call(method, path string, in any, out any) error {
 		p.Kind = "user"
 		p.Caps = append(slices.Clone(p.Caps), AdminCap)
 	case p.Kind == "local":
-		actor := c.hdr.Get("Twd-Actor")
+		actor := c.hdr.Get("Tw-Actor")
 		if actor == "" {
 			actor = "operator"
 		}
-		req.Header.Set("Twd-Actor", actor+" (mcp)")
+		req.Header.Set("Tw-Actor", actor+" (mcp)")
 	}
 	req = req.WithContext(WithPrincipal(c.ctx, p))
 	rec := httptest.NewRecorder()
@@ -518,7 +518,7 @@ func (c *mcpCtx) tenant(a map[string]any) (Tenant, error) {
 		return pg.Items[0], nil
 	}
 	if want == "" {
-		return Tenant{}, errf(400, "bad_request", "twd serves %d tenants: pass tenant (one of %s)", len(pg.Items), strings.Join(names, ", "))
+		return Tenant{}, errf(400, "bad_request", "tw serves %d tenants: pass tenant (one of %s)", len(pg.Items), strings.Join(names, ", "))
 	}
 	return Tenant{}, errf(404, "unknown_tenant", "no tenant %q (tenants: %s)", want, strings.Join(names, ", "))
 }
@@ -550,7 +550,7 @@ func mcpWhoami(c *mcpCtx, _ map[string]any) (any, error) {
 	out := map[string]any{"kind": c.p.Kind, "login": c.p.Login, "nodeID": c.p.NodeID, "tags": c.p.Tags, "tools": have, "notGranted": missing}
 	if len(missing) > 0 {
 		if c.p.Kind == "local" {
-			out["howToGrant"] = "twd mcp --allow " + strings.Join(missing, ",")
+			out["howToGrant"] = "tw mcp --allow " + strings.Join(missing, ",")
 		} else {
 			src := c.p.Login
 			if len(c.p.Tags) > 0 {

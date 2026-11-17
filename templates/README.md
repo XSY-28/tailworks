@@ -1,7 +1,7 @@
 # templates
 
-The app templates live in `js/packages/create-twd/templates/` so they ship
-with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow`):
+The app templates live in `js/packages/create-tailworks/templates/` so they ship
+with `create-tailworks` (`npm create tailworks@latest <dir> -- --template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow`):
 
 - `hello`: a Worker that returns its verified caller and does a private fetch.
 - `agent`: a Cloudflare Agents SDK `Agent` (state, `this.sql`, per-object node
@@ -11,8 +11,8 @@ with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai
   wrapped in `withTailnet`, with `authorizeTool`, a DO-backed `budget` and a
   `whoami` tool.
 - `ai-agent`: a Vercel AI SDK `ToolLoopAgent` in a Durable Object (one agent,
-  one node per caller) whose tools are a twd MCP server's tools over the
-  tailnet (`@ai-sdk/mcp` + `@twd/mcp` `mcpFetch`); it streams a UI message
+  one node per caller) whose tools are a tailworks MCP server's tools over the
+  tailnet (`@ai-sdk/mcp` + `@tailworks/mcp` `mcpFetch`); it streams a UI message
   response. It ships with a scripted mock model (`src/model.ts`, no keys);
   swap in a real provider.
 - `lock`: a lease-based lock and leader-election service: one Durable
@@ -21,16 +21,16 @@ with `create-twd` (`npm create twd@latest <dir> -- --template hello|agent|mcp|ai
   (`src/client.ts`: `acquire`, `renew`, `release`, `withLock`). See
   `docs/locks.md`.
 - `refund-approval`: a Cloudflare Workflow (`AgentWorkflow`) started by an
-  Agent that waits for a person's approval (`waitForApproval`). twd delivers
-  the approval only from a tailnet identity holding `twd.dev/cap/approve`
-  (`twd approve`, the admin UI, or the page at `/`), and the Workflow sees
+  Agent that waits for a person's approval (`waitForApproval`). Tailworks delivers
+  the approval only from a tailnet identity holding `github.com/rosskukulinski/tailworks/cap/approve`
+  (`tw approve`, the admin UI, or the page at `/`), and the Workflow sees
   who approved; it also refuses an approval by the requester. See
   `docs/approvals.md`.
 - `node-workflow`: the opt-in Node process tier (`docs/node-tier.md`): a
   `node:http` server with a Vercel Workflow (`"use workflow"`) behind
-  `@twd/node`. Needs Node.js and `npm install` on the deploying machine; it is
+  `@tailworks/node`. Needs Node.js and `npm install` on the deploying machine; it is
   not deployable offline from the release.
 
 The verified SDK surface and its gaps are in `docs/COMPAT.md`.
 
-`create-twd build <dir>` bundles an app into `dist/index.js`.
+`create-tailworks build <dir>` bundles an app into `dist/index.js`.

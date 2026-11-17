@@ -7,7 +7,7 @@ import (
 	"sort"
 )
 
-// CLISchema is cli.schema.json: the shape of every twd command's --json
+// CLISchema is cli.schema.json: the shape of every tailworks command's --json
 // output (docs/cli-json.md). Its $defs are named after the command
 // ("deploy", "tenant ls"); "<command>.event" is one NDJSON event and
 // "error" is the error object every command prints on stderr.

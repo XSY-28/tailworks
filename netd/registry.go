@@ -20,7 +20,7 @@ import (
 	"tailscale.com/envknob"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tssvc"
+	"github.com/rosskukulinski/tailworks/internal/tssvc"
 	"tailscale.com/client/local"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
@@ -31,13 +31,13 @@ import (
 // Header names shared with the platform wrapper running in workerd.
 const (
 	// HeaderCF carries the JSON cf blob; workerd's socket is configured with
-	// http.cfBlobHeader = "x-twd-cf", strips it, and exposes it as request.cf.
-	HeaderCF = "x-twd-cf"
+	// http.cfBlobHeader = "x-tw-cf", strips it, and exposes it as request.cf.
+	HeaderCF = "x-tw-cf"
 	// HeaderObject names the object on ingress (set by netd) and on egress
 	// (set by the trusted platform Egress entrypoint, never by tenant code).
-	HeaderObject = "x-twd-object"
+	HeaderObject = "x-tw-object"
 	// HeaderError carries the error code on typed netd refusals.
-	HeaderError = "twd-error"
+	HeaderError = "tw-error"
 )
 
 // State is an object's node lifecycle state.
@@ -71,7 +71,7 @@ type Config struct {
 	// workerd ingress socket). Nil answers 503 upstream_unavailable.
 	Upstream http.Handler
 	// CallerCerts resolves callers' node certificates (RT-01, ADR-010): a
-	// twd object's WhoIs CapMap is narrowed to CapMap ∩ cert.lim before it
+	// tailworks object's WhoIs CapMap is narrowed to CapMap ∩ cert.lim before it
 	// reaches Upstream; a lookup failure withholds the caps. Nil: callers'
 	// policy caps apply unchanged (no spawn narrowing is enforced).
 	CallerCerts CertSource
@@ -87,7 +87,7 @@ type Config struct {
 	// Ephemeral and Tags are defaults for objects that don't override them.
 	Ephemeral bool
 	Tags      []string
-	// Hostname maps an object ID to its node hostname. Default "twd-"+id.
+	// Hostname maps an object ID to its node hostname. Default "tw-"+id.
 	Hostname func(objectID string) string
 	// AllowSiblings lets an object's egress reach other objects hosted by this
 	// registry. Default false: same-host object calls must go through the
@@ -173,7 +173,7 @@ func New(cfg Config) (*Registry, error) {
 		cfg.KillFlushDelay = 50 * time.Millisecond
 	}
 	if cfg.Hostname == nil {
-		cfg.Hostname = func(id string) string { return "twd-" + id }
+		cfg.Hostname = func(id string) string { return "tw-" + id }
 	}
 	var h slog.Handler = slog.DiscardHandler
 	if cfg.Logger != nil {
@@ -407,14 +407,14 @@ func readMeta(dir string) (*objectMeta, error) {
 const ObjectMetaVersion = 1
 
 // decodeMeta parses an object.json, refusing a version newer than this
-// netd knows (a newer twd wrote it: rolling back past a format change).
+// netd knows (a newer tailworks wrote it: rolling back past a format change).
 func decodeMeta(b []byte) (*objectMeta, error) {
 	var m objectMeta
 	if err := json.Unmarshal(b, &m); err != nil {
 		return &m, err
 	}
 	if m.V > ObjectMetaVersion {
-		return &m, fmt.Errorf("object.json format v%d was written by a newer twd (this one reads up to v%d); upgrade twd", m.V, ObjectMetaVersion)
+		return &m, fmt.Errorf("object.json format v%d was written by a newer tailworks (this one reads up to v%d); upgrade tw", m.V, ObjectMetaVersion)
 	}
 	return &m, nil
 }
@@ -790,7 +790,7 @@ func (r *Registry) forgetIPs(o *Object) {
 }
 
 // Get returns the object with the given ID, or nil.
-// RemoveState deletes a killed object's saved node state (twd down
+// RemoveState deletes a killed object's saved node state (tw down
 // --purge). A kill with a tombstone removes the dir only when the tombstone
 // expires; if the host stops before that, the next object of the same ID
 // would find the dead node's state and spend a re-mint round trip on it.

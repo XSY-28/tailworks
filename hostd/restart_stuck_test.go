@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // stuckExits is how many exits in a row the old policy survived: it gave
@@ -48,7 +48,7 @@ exec %q "$@"
 	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TWD_WORKERD", wrapper)
+	t.Setenv("TW_WORKERD", wrapper)
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.Sandbox = "none" })
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("probe"), "probe", nil)

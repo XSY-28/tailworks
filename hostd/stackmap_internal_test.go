@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // TestInstanceMapStack: an instance maps exception stacks with its bundle's
@@ -18,9 +18,9 @@ func TestInstanceMapStack(t *testing.T) {
 		"dist/broken.js.map": []byte(`{"version":3,"sources":[],"mappings":"!"}`),
 	}}
 	inst := &instance{h: h, w: &workload{name: "w"}, app: app}
-	stack := "Error: x\n    at f (dist/index.js:1:12)\n    at g (dist/broken.js:1:1)\n    at __twd_rt.js:5:6"
+	stack := "Error: x\n    at f (dist/index.js:1:12)\n    at g (dist/broken.js:1:1)\n    at __tw_rt.js:5:6"
 	got := inst.mapStack(stack)
-	want := "Error: x\n    at f (src/index.ts:3:5)\n    at g (dist/broken.js:1:1)\n    at __twd_rt.js:5:6"
+	want := "Error: x\n    at f (src/index.ts:3:5)\n    at g (dist/broken.js:1:1)\n    at __tw_rt.js:5:6"
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}

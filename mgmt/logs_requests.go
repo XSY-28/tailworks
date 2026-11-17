@@ -1,8 +1,8 @@
 package mgmt
 
 import (
-	"github.com/rosskukulinski/twd/internal/obs"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // logsSource reads GET …/logs' source and record filters into q

@@ -1,4 +1,4 @@
-module github.com/rosskukulinski/twd
+module github.com/rosskukulinski/tailworks
 
 go 1.27.3
 

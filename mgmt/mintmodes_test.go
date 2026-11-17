@@ -25,7 +25,7 @@ func writeTestOAuthFile(t *testing.T, path string) string {
 
 // TestRemovedMintModes: mgmt refuses to create a tenant in, or switch one
 // to, a removed mint mode (apikey, wif) with mint_mode_removed; a tenant an
-// older twd stored in one fails to mint with the same code, stays
+// older tailworks stored in one fails to mint with the same code, stays
 // patchable, and mints again once switched to oauth.
 func TestRemovedMintModes(t *testing.T) {
 	e := newTestEnv(t)
@@ -45,7 +45,7 @@ func TestRemovedMintModes(t *testing.T) {
 		t.Fatalf("wifClientID patch: %d %v", st, eb)
 	}
 
-	// A row an older twd wrote in apikey mode.
+	// A row an older tailworks wrote in apikey mode.
 	ctx := context.Background()
 	old := Tenant{ID: "tn_old", Tailnet: "old.ts.net", MintMode: mintRemovedAPIKey, APIKeyFile: "/nonexistent/api.env",
 		RegistrationsPerMinute: 10, MaxObjects: 10, CreatedAt: time.Now().UnixMilli()}

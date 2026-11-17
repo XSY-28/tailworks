@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/rosskukulinski/twd/internal/headscale"
-	"github.com/rosskukulinski/twd/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/headscale"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
 // MintHeadscale is the Headscale profile (ADR-015, RFC §7.2): the tenant's
@@ -19,7 +19,7 @@ import (
 // What the profile leaves out, because Headscale has no equivalent:
 //   - WIF: the API key is a long-lived secret (rotate it; ADR-015);
 //   - Tailscale Services: a workload is reached at its own workload
-//     node's MagicDNS name, so twd.jsonc tailnet.service is refused;
+//     node's MagicDNS name, so tailworks.jsonc tailnet.service is refused;
 //   - Funnel: public routes (ADR-029) are refused, publicIngress is
 //     always deny;
 //   - posture: kill Tier 3 doesn't exist; Tiers 1 (netd) and 2 (node
@@ -74,10 +74,10 @@ func errHeadscaleNoPublic() error {
 		"public routes need Tailscale Funnel, which Headscale doesn't have: a Headscale-profile tenant's publicIngress is always deny (ADR-015)")
 }
 
-// errHeadscaleNoService refuses twd.jsonc tailnet.service on Headscale.
+// errHeadscaleNoService refuses tailworks.jsonc tailnet.service on Headscale.
 func errHeadscaleNoService(name string) error {
 	return errf(400, "profile_unsupported",
-		"twd.jsonc tailnet.service %q needs Tailscale Services, which Headscale doesn't have; remove tailnet.service: on the Headscale profile a workload is reached at its own workload node's MagicDNS name (ADR-015)", name)
+		"tailworks.jsonc tailnet.service %q needs Tailscale Services, which Headscale doesn't have; remove tailnet.service: on the Headscale profile a workload is reached at its own workload node's MagicDNS name (ADR-015)", name)
 }
 
 // headscalePreflight refuses, up front, the parts of a deploy the
@@ -95,13 +95,13 @@ func headscalePreflight(t Tenant, r PreflightRequest) error {
 	return nil
 }
 
-// tagOwnersFor is the owners list of a twd tag in a preflight snippet.
+// tagOwnersFor is the owners list of a tailworks tag in a preflight snippet.
 // Headscale's policy parser rejects autogroup:admin (owners are users,
-// groups or tags), so there twd's tags are owned by tag:twd alone: the
+// groups or tags), so there tailworks' tags are owned by tag:tw alone: the
 // API key mints them, no person tags a device with them.
 func tagOwnersFor(t Tenant) string {
 	if t.Headscale() {
-		return `["tag:twd"]`
+		return `["tag:tw"]`
 	}
 	return `["autogroup:admin", "` + t.Owner() + `"]` // teams.go
 }

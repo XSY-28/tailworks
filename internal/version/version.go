@@ -1,9 +1,9 @@
-// Package version is the one place a twd binary learns its release
+// Package version is the one place a tailworks binary learns its release
 // version, commit and the contracts it speaks (ADR-041
 // §1). Version and Commit are set by the linker:
 //
-//	go build -ldflags "-X github.com/rosskukulinski/twd/internal/version.Version=0.2.0 \
-//	    -X github.com/rosskukulinski/twd/internal/version.Commit=<sha>"
+//	go build -ldflags "-X github.com/rosskukulinski/tailworks/internal/version.Version=0.2.0 \
+//	    -X github.com/rosskukulinski/tailworks/internal/version.Commit=<sha>"
 //
 // scripts/release.sh and `make build` do this for every binary. A plain
 // `go build` or `go test` leaves Version "dev", which skew checks treat as
@@ -26,16 +26,16 @@ var Commit = ""
 // Dev is the Version of an unstamped build.
 const Dev = "dev"
 
-// Protocol versions twd speaks (ADR-041 §2). Each is
+// Protocol versions tailworks speaks (ADR-041 §2). Each is
 // an integer bumped only on an incompatible change to that contract;
 // additive changes (new optional fields, new messages gated by a feature)
 // keep it.
 const (
 	// PushProtocol is mgmt → hostd's push API (hostd/http.go /v1/push/*).
 	PushProtocol = 1
-	// GuestProtocol is hostd ↔ twd-guestd over vsock (guest/proto).
+	// GuestProtocol is hostd ↔ tw-guestd over vsock (guest/proto).
 	GuestProtocol = 1
-	// VZProtocol is hostd ↔ twd-vz (hostd/vm/vzapi).
+	// VZProtocol is hostd ↔ tw-vz (hostd/vm/vzapi).
 	VZProtocol = 1
 	// RESTMajor is the mgmt REST API's path major (/v1).
 	RESTMajor = 1
@@ -127,7 +127,7 @@ func (s Semver) LineName() string {
 }
 
 // Legacy is the version assumed for a component that reports none: every
-// twd before version reporting was 0.1.x.
+// tailworks before version reporting was 0.1.x.
 const Legacy = "0.1.0"
 
 // String is "<name> <Version> (<commit>)", what every binary's --version
@@ -152,7 +152,7 @@ func Asked(args []string) bool {
 
 // Protocols is the protocol map a component reports (HostRegistration
 // "protocols", release.json "protocols"). helper is hostd/vm/helperapi's
-// Version (passed in: this package imports nothing of twd's).
+// Version (passed in: this package imports nothing of tailworks').
 func Protocols(helper int) map[string]int {
 	return map[string]int{
 		"cliJSON": CLIJSONMajor,

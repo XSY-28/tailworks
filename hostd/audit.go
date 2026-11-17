@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // auditLog is this host's hash-chained audit log (contract POST /v1/audit):

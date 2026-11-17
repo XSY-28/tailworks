@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Public-name ownership (ADR-029, red-team H10 / RT3-10).
@@ -73,7 +73,7 @@ func publicTailnet(t Tenant) string {
 
 func errPublicNameOwned(name, tailnet string) *Error {
 	e := errf(409, "public_name_owned",
-		"workload %q can't serve public routes: %s.%s is another tenant's public name. twd keeps a public name with the first tenant on the tailnet that deployed public routes under it, across undeploys, until that tenant releases it. Deploy under another workload name, or ask the operator to have the owner release it",
+		"workload %q can't serve public routes: %s.%s is another tenant's public name. tailworks keeps a public name with the first tenant on the tailnet that deployed public routes under it, across undeploys, until that tenant releases it. Deploy under another workload name, or ask the operator to have the owner release it",
 		name, name, tailnet)
 	e.Missing = map[string]any{"publicName": name}
 	return e
@@ -228,7 +228,7 @@ func (m *Mgmt) ReleasePublicName(ctx context.Context, tenantID, name, by string)
 	}
 	if inUse {
 		return errf(409, "public_name_in_use",
-			"workload %q still serves public routes as %s.%s; undeploy it (twd undeploy %s), or remove \"public\" from its twd.jsonc and redeploy, then release the name",
+			"workload %q still serves public routes as %s.%s; undeploy it (tw undeploy %s), or remove \"public\" from its tailworks.jsonc and redeploy, then release the name",
 			name, name, key, name)
 	}
 	actx, ai := m.intend(ctx, AuditRecord{TenantID: t.ID, Kind: "public_name_release", ActingFor: by},

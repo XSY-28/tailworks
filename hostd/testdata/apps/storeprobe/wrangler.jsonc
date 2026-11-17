@@ -4,7 +4,7 @@
   "name": "storeprobe",
   "main": "src/index.js",
   "compatibility_date": "2026-04-01",
-  "twd_test_probes": [{ "binding": "P", "name": "main" }],
+  "tw_test_probes": [{ "binding": "P", "name": "main" }],
   "durable_objects": {
     "bindings": [{ "name": "BOX", "class_name": "Box" }],
   },

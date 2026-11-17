@@ -3,7 +3,7 @@ package hostd
 import (
 	"sync"
 
-	"github.com/rosskukulinski/twd/internal/srcmap"
+	"github.com/rosskukulinski/tailworks/internal/srcmap"
 )
 
 // stackMaps are an instance's parsed source maps (bundle.App.SourceMaps),

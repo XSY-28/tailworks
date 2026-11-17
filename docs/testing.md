@@ -1,34 +1,34 @@
-# Testing a twd app
+# Testing a tailworks app
 
-A twd app is a Cloudflare Worker (plus Durable Objects) whose callers are
+A tailworks app is a Cloudflare Worker (plus Durable Objects) whose callers are
 tailnet identities. Test it at two levels:
 
 | Level | Runs in | Use it for | Tools |
 |---|---|---|---|
-| Unit | workerd (vitest-plugin) or Node | your Worker and Durable Object logic, with callers and `ctx.tailnet` faked | [`@cloudflare/vitest-plugin`](#unit-tests-with-cloudflarevitest-plugin), [`@twd/tailnet/testing`](#twdtailnettesting) |
-| Black box | a real local twd (`twd dev`) | the app as deployed: `getCaller` verified by netd, real `ctx.tailnet`, per-object nodes, approvals, typed denials | [`twd dev --caller`, `@twd/tailnet/testing/dev`](#black-box-tests-twd-dev---caller-and-startdev) |
+| Unit | workerd (vitest-plugin) or Node | your Worker and Durable Object logic, with callers and `ctx.tailnet` faked | [`@cloudflare/vitest-plugin`](#unit-tests-with-cloudflarevitest-plugin), [`@tailworks/tailnet/testing`](#twtailnettesting) |
+| Black box | a real local tailworks (`tw dev`) | the app as deployed: `getCaller` verified by netd, real `ctx.tailnet`, per-object nodes, approvals, typed denials | [`tw dev --caller`, `@tailworks/tailnet/testing/dev`](#black-box-tests-tw-dev---caller-and-startdev) |
 
 Every template ships one black-box test, `test/app.test.js`, and an
 `npm test` script that runs it:
 
 ```sh
-twd init myapp --template lock
+tw init myapp --template lock
 cd myapp && npm install
-npm test            # needs twd on PATH (or TWD_BIN=/path/to/twd)
+npm test            # needs tw on PATH (or TW_BIN=/path/to/tw)
 ```
 
-## Black-box tests: `twd dev --caller` and `startDev`
+## Black-box tests: `tw dev --caller` and `startDev`
 
-`twd dev` runs your app on the same twd-hostd, netd and workerd as a
+`tw dev` runs your app on the same tw-hostd, netd and workerd as a
 deployment, against an embedded control plane on 127.0.0.1. By default it
 calls the app from one dev node ("you"). `--caller` adds more identities,
 each its own dev node with its own local URL:
 
 ```sh
-twd dev --port 0 --json --caller alice --caller ci=tag:ci
+tw dev --port 0 --json --caller alice --caller ci=tag:ci
 ```
 
-The `ready` event (and `twd dev --once --json`) lists them:
+The `ready` event (and `tw dev --once --json`) lists them:
 
 ```json
 "callers": [
@@ -42,15 +42,15 @@ A request to a caller's URL reaches the app over that caller's node, so
 Nothing is forged. A caller without tags is a user's node (`user.login` is
 set); one with tags has no user.
 
-`@twd/tailnet/testing/dev` wraps this for Node tests. `startDev()` starts
-`twd dev <dir> --port 0 --json` as a child process, waits for `ready`, and
-`stop()` sends SIGTERM and waits for it to exit (twd dev stops its own
+`@tailworks/tailnet/testing/dev` wraps this for Node tests. `startDev()` starts
+`tw dev <dir> --port 0 --json` as a child process, waits for `ready`, and
+`stop()` sends SIGTERM and waits for it to exit (tw dev stops its own
 workerd). Children still running when the test process exits are killed.
 
 ```js
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { startDev } from "@twd/tailnet/testing/dev";
+import { startDev } from "@tailworks/tailnet/testing/dev";
 
 let app;
 before(async () => {
@@ -66,18 +66,18 @@ test("only the holder can release", async () => {
 });
 ```
 
-`startDev` options: `dir`, `callers` (names, or `{name: {tags}}`), `twd` (the
-binary; default `$TWD_BIN`, then `twd`), `args` (more `twd dev` flags, such
+`startDev` options: `dir`, `callers` (names, or `{name: {tags}}`), `tw` (the
+binary; default `$TW_BIN`, then `tw`), `args` (more `tw dev` flags, such
 as `["--env", "staging"]`), `env`, `readyTimeoutMs`, `stopTimeoutMs`,
 `onLog`. Each caller has `url`, `login` or `tags`, `nodeId`, `node` and
 `fetch(path, init)`; `app.fetch` calls as "you".
 
-Limits of `twd dev` today:
+Limits of `tw dev` today:
 
 - The embedded control plane names users itself (`user-<n>@…`). You can't
   pick a caller's login, so compare against `caller.login` / `caller.nodeId`
   instead of a fixed string. To test logic that depends on a specific login,
-  use a [unit test with `withCaller`](#twdtailnettesting).
+  use a [unit test with `withCaller`](#twtailnettesting).
 - There's no policy evaluator yet: every dev node can reach every other, and
   the only app capability granted is a test one. A tool or approval gated on
   your own capability is refused (`cap_missing`), which is what the `mcp` and
@@ -87,7 +87,7 @@ Limits of `twd dev` today:
 ## Unit tests with `@cloudflare/vitest-plugin`
 
 [`@cloudflare/vitest-plugin`](https://developers.cloudflare.com/workers/testing/vitest-integration/)
-(formerly `@cloudflare/vitest-pool-workers`) works with a twd app's
+(formerly `@cloudflare/vitest-pool-workers`) works with a tailworks app's
 `wrangler.jsonc` as is. Measured with `@cloudflare/vitest-plugin` 1.8.2 and
 vitest 5.1.0 on the `lock`, `agent`, `mcp` and `refund-approval` templates
 (`make test-vitest`, `e2e/vitest`):
@@ -98,21 +98,21 @@ vitest 5.1.0 on the `lock`, `agent`, `mcp` and `refund-approval` templates
 | Durable Objects: storage (KV and SQLite), alarms, `runInDurableObject`, `runDurableObjectAlarm` | |
 | Cloudflare Agents SDK: state, SQL, `routeAgentRequest` | `agent`, `refund-approval` |
 | Workflows binding: a Workflow instance starts and waits | `refund-approval` |
-| `createMcpHandler` + `@twd/mcp` authorization (caps, limits, budget DO) | with `withCaller({caps})` |
+| `createMcpHandler` + `@tailworks/mcp` authorization (caps, limits, budget DO) | with `withCaller({caps})` |
 | `request.cf` from `new Request(url, { cf })` | survives a service binding and a Durable Object stub's `fetch()`, so `withCaller` reaches `getCaller` in your objects |
 
-What it can't do on its own, because these are twd's, not workerd's:
+What it can't do on its own, because these are tailworks', not workerd's:
 
 - **`getCaller(req)`** throws `no_identity`: nothing delivers a caller.
   Use `withCaller` (below).
 - **`ctx.tailnet`** is absent (`tailnet(ctx)` throws `no_identity`; the `lock`
   template falls back to epoch 0). Attach the fake one (below).
 - **Approvals** (`waitForApproval` decided by a tailnet identity) and
-  per-object egress: only on twd. Use a black-box test.
+  per-object egress: only on tailworks. Use a black-box test.
 
-Its miniflare brings its own workerd build; it doesn't use twd's pinned one.
+Its miniflare brings its own workerd build; it doesn't use tailworks' pinned one.
 
-A `vitest.config.ts` for a twd app:
+A `vitest.config.ts` for a tailworks app:
 
 ```ts
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
@@ -123,57 +123,57 @@ export default defineConfig({
 });
 ```
 
-## `@twd/tailnet/testing`
+## `@tailworks/tailnet/testing`
 
 Works in workerd (vitest-plugin) and in Node.
 
 ```ts
 import { exports } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { createTestTailnet } from "@twd/tailnet/testing";
+import { createTestTailnet } from "@tailworks/tailnet/testing";
 
-const twd = createTestTailnet({ self: { epoch: 7 } });
+const tw = createTestTailnet({ self: { epoch: 7 } });
 
 // a request getCaller() sees as alice's node
-const r = await exports.default.fetch(twd.withCaller("http://app/locks/a/acquire", { login: "alice@example.com" }));
+const r = await exports.default.fetch(tw.withCaller("http://app/locks/a/acquire", { login: "alice@example.com" }));
 
 // a tagged caller with an app capability
-twd.withCaller(req, { tags: ["tag:agent"], caps: { "example.com/cap/mcp": [{ tools: ["lookup_order"] }] } });
+tw.withCaller(req, { tags: ["tag:agent"], caps: { "example.com/cap/mcp": [{ tools: ["lookup_order"] }] } });
 
 // a public (Funnel) request: getCaller throws public_request, getRequester says public
-twd.withPublic(req, { ip: "198.51.100.1" });
+tw.withPublic(req, { ip: "198.51.100.1" });
 
 // ctx.tailnet on a Durable Object (records spawn, kill, audit; answers self())
-await runInDurableObject(env.LOCK.getByName("a"), (_obj, state) => { twd.attach(state); });
+await runInDurableObject(env.LOCK.getByName("a"), (_obj, state) => { tw.attach(state); });
 // ctx.tailnet for a Worker handler
-await worker.fetch(req, env, twd.ctx());
+await worker.fetch(req, env, tw.ctx());
 
-twd.spawned;  // [{class, name, caps, ttl, principal, objectId}]
-twd.killed;   // [{reason, cascade, target, killed}]
-twd.audits;   // records passed to ctx.tailnet.audit()
-twd.fetches;  // requests sent through ctx.tailnet.fetch()/forward()
+tw.spawned;  // [{class, name, caps, ttl, principal, objectId}]
+tw.killed;   // [{reason, cascade, target, killed}]
+tw.audits;   // records passed to ctx.tailnet.audit()
+tw.fetches;  // requests sent through ctx.tailnet.fetch()/forward()
 ```
 
 `withCaller(req, who)`: `who` is `{login}` (a user's node) or `{tags}` (a
 tagged node), never both, plus optional `nodeId`, `hostname`, `node`,
-`addrs`, `caps`, `twd`, `capsWithheld`, `objectId`, `traceId`. Defaults are
+`addrs`, `caps`, `tw`, `capsWithheld`, `objectId`, `traceId`. Defaults are
 derived from the login or tag (`alice@example.com` → node ID `test-alice`,
 node `alice.test.ts.net`).
 
 `createTestTailnet(opts)`: `self` (what `self()` answers; default epoch 1),
 `fetch` (answers `ctx.tailnet.fetch`; by default every destination is
-refused with `forbidden_destination`, and any response with a `twd-error`
-header is thrown as a `TailnetError`, as on twd), `onSpawn` (throw to fail a
+refused with `forbidden_destination`, and any response with a `tw-error`
+header is thrown as a `TailnetError`, as on tailworks), `onSpawn` (throw to fail a
 spawn), and `env` + `bindings` (to name spawned classes). A spawn's `stub` is
 the real one from `ns.getByName(name)`, so the child object runs.
 
 ### Why this can't weaken a deployed app
 
-On twd, `request.cf` is not something a client can send. netd, the only
-process that can connect to workerd's ingress socket, drops any `x-twd-cf`
+On tailworks, `request.cf` is not something a client can send. netd, the only
+process that can connect to workerd's ingress socket, drops any `x-tw-cf`
 header a client sent and writes its own from WireGuard and WhoIs; workerd
 turns that header into `request.cf` (`cfBlobHeader`) and removes it. The
-runtime shim (`__twd_rt.js`) and `getCaller` only read `request.cf`.
+runtime shim (`__tw_rt.js`) and `getCaller` only read `request.cf`.
 
 `withCaller` adds no header and opens no socket. It returns a new in-memory
 `Request` with `cf` set, in the test's own process; a request that arrives
@@ -186,5 +186,5 @@ a deployed app. As a guard against a stray import, the top-level
 ## The Node tier
 
 The `node-workflow` template's test is a black-box test too
-(`startDev`, `/whoami` as a caller). `@twd/node` verifies a signed caller
+(`startDev`, `/whoami` as a caller). `@tailworks/node` verifies a signed caller
 header; there's no `withCaller` for it yet.

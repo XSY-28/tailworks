@@ -21,8 +21,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/rosskukulinski/twd/internal/obs"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Telemetry config limits.
@@ -101,7 +101,7 @@ func (g TelemetryGrant) String() string {
 
 var telemetryMu sync.Mutex
 
-func telemetryCustodyName(tenantID string) string { return "twd/" + tenantID + "/telemetry" }
+func telemetryCustodyName(tenantID string) string { return "tw/" + tenantID + "/telemetry" }
 
 // ValidateOTLPExport checks and normalises o (signals default to all,
 // header names lowercase).

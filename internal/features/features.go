@@ -6,7 +6,7 @@
 //
 // A feature string is added here when its hostd code lands, one per line
 // in sorted position (AGENTS.md rule 3). Features that predate version
-// reporting (twd 0.1.x: workerd, DOs, cron, public ingress, containers,
+// reporting (tailworks 0.1.x: workerd, DOs, cron, public ingress, containers,
 // secrets) are not listed: every host has them, and tiers and the
 // "containers" capability already gate placement for those.
 package features
@@ -14,7 +14,7 @@ package features
 import (
 	"slices"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // Feature strings. A platform store kind (hostd/bundle RegisterStoreKind)

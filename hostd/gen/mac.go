@@ -14,18 +14,18 @@ import (
 
 // Headers set by the platform Egress entrypoint.
 const (
-	HeaderClass = "x-twd-class"
-	HeaderName  = "x-twd-name"
-	HeaderTS    = "x-twd-ts"
-	HeaderNonce = "x-twd-nonce"
-	HeaderMAC   = "x-twd-mac"
+	HeaderClass = "x-tw-class"
+	HeaderName  = "x-tw-name"
+	HeaderTS    = "x-tw-ts"
+	HeaderNonce = "x-tw-nonce"
+	HeaderMAC   = "x-tw-mac"
 )
 
 // MACSkew is how far a MAC timestamp may be from now.
 const MACSkew = 2 * time.Minute
 
 // objectKeyDomain separates per-object key derivation from the MAC itself.
-const objectKeyDomain = "twd-egress-object-key-v1\n"
+const objectKeyDomain = "tw-egress-object-key-v1\n"
 
 // ObjectMACKey derives the per-object egress key from the instance root key
 // (RT-04): hex(HMAC-SHA256(root, domain + class + "\n" + name)). The
@@ -132,17 +132,17 @@ func StripPlatformHeaders(h http.Header) {
 //
 // Every new Durable Object name is a tailnet node, so creating one must be
 // a platform decision, not a side effect of tenant code reaching a raw
-// binding. hostd stamps a ticket into cf.twd for each request it forwards
+// binding. hostd stamps a ticket into cf.tw for each request it forwards
 // from the tailnet (and each cron run); only the guarded env the runtime
 // hands tenant code presents it back ("admit"), so a public request, a
-// cached raw binding or a direct __TWD call cannot create. The ticket is
+// cached raw binding or a direct __TW call cannot create. The ticket is
 // hostd-issued and hostd-verified; it never leaves the host.
 
 // TicketTTL bounds how long a ticket admits creates (a request's lifetime
 // plus slack; the same window as the egress MAC skew).
 const TicketTTL = 2 * time.Minute
 
-const ticketDomain = "twd-create-ticket-v1\n"
+const ticketDomain = "tw-create-ticket-v1\n"
 
 func ticketMAC(root, exp, traceID string) string {
 	m := hmac.New(sha256.New, []byte(root))

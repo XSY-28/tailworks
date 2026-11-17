@@ -20,7 +20,7 @@ import (
 
 // MgmtTag is mgmt's own node tag (the same value as mgmt.MgmtTag; hostd
 // does not import mgmt). Only a node carrying it may push to a host.
-const MgmtTag = "tag:twd-mgmt"
+const MgmtTag = "tag:tw-mgmt"
 
 // WhoIsFunc resolves a tailnet peer by its remote address (tsnet
 // LocalClient.WhoIs).
@@ -84,7 +84,7 @@ func (a *pushAuth) lookup(ctx context.Context) (tailcfg.StableNodeID, error) {
 		return "", errors.New("no mgmt host to resolve")
 	}
 	if net.ParseIP(a.mgmtHost) != nil {
-		// twd up passes mgmt's tailnet IP: WhoIs resolves it directly.
+		// tw up passes mgmt's tailnet IP: WhoIs resolves it directly.
 		if a.whois == nil {
 			return "", errors.New("no WhoIs")
 		}
@@ -173,7 +173,7 @@ func (a *pushAuth) check(ctx context.Context, remoteAddr string) error {
 	if a.pinned == id {
 		return nil
 	}
-	// Another tag:twd-mgmt node. Only legitimate if mgmt's node was
+	// Another tag:tw-mgmt node. Only legitimate if mgmt's node was
 	// recreated: re-resolve the -mgmt address (rate-limited) and re-pin
 	// when it now names the caller.
 	if time.Since(a.lastLookup) >= pushRelookupEvery {

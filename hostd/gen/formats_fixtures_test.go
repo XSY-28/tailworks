@@ -19,7 +19,7 @@ const jsHooks = `
 const stub = (src) => ({ url: "data:text/javascript," + encodeURIComponent(src), shortCircuit: true });
 export async function resolve(spec, ctx, next) {
   if (spec === "cloudflare:workers") return stub("export class WorkerEntrypoint {}; export class DurableObject {};");
-  if (spec === "twd-store.js")
+  if (spec === "tw-store.js")
     return stub(` + "`" + `export function registerStoreKind(k, d) { (globalThis.__kinds ??= {})[k] = d; }
 export const utf8 = (u) => new TextDecoder().decode(u);
 export const toBytes = (x) => (x instanceof Uint8Array ? x : new Uint8Array(x));
@@ -102,7 +102,7 @@ func TestJSFormatFixtures(t *testing.T) {
 	}
 	eq("kv put", out.KV["kv-entry-v1-put.bin"], `{"h":{"k":"greeting","x":1893456000,"m":"{\"lang\":\"en\"}"},"v":"hello"}`)
 	eq("kv del", out.KV["kv-entry-v1-del.bin"], `{"h":{"k":"greeting","d":true},"v":""}`)
-	if !strings.Contains(string(out.KV["v2"]), "newer twd") {
+	if !strings.Contains(string(out.KV["v2"]), "newer tailworks") {
 		t.Errorf("kv v2: %s", out.KV["v2"])
 	}
 	// v0 (no v) and v1 replay to the same index operations.
@@ -115,13 +115,13 @@ func TestJSFormatFixtures(t *testing.T) {
 		}
 	}
 	for _, k := range []string{"v2", "unknownOp"} {
-		if !strings.Contains(string(out.R2[k]), "newer twd") {
+		if !strings.Contains(string(out.R2[k]), "newer tailworks") {
 			t.Errorf("r2 %s: %s", k, out.R2[k])
 		}
 	}
 	eq("d1 v1", out.D1["v1"], `{"id":"7c9e6679-7425-40de-944b-e07fc1f90ae7","stmts":[{"sql":"INSERT INTO t (a, b) VALUES (?, ?)","params":[1,"bytes:hi"],"empty":false},{"sql":"SELECT 1","params":[],"empty":false}]}`)
 	for _, k := range []string{"v2", "v2apply"} {
-		if !strings.Contains(string(out.D1[k]), "newer twd") {
+		if !strings.Contains(string(out.D1[k]), "newer tailworks") {
 			t.Errorf("d1 %s (a newer entry must not be skipped): %s", k, out.D1[k])
 		}
 	}

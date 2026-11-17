@@ -10,7 +10,7 @@ import (
 // TestStoreSharedThrottle (mm-loop F7, H03): two replicas' throttles for one
 // tenant share the bucket through the store, so together they get one burst
 // and one rate; a backoff seen by one pauses the other. On SQLite and (with
-// TWD_TEST_POSTGRES_DSN, via make test-pg) Postgres.
+// TW_TEST_POSTGRES_DSN, via make test-pg) Postgres.
 func TestStoreSharedThrottle(t *testing.T) {
 	forEachStore(t, func(t *testing.T, s *SQLStore) {
 		clk := newFakeClock()

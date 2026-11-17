@@ -82,7 +82,7 @@ func TestNotificationsConfig(t *testing.T) {
 		map[string]any{"webhook": map[string]any{"url": "https://u:p@x/y"}},
 		map[string]any{"webhook": map[string]any{"url": "https://x/y#frag"}},
 		map[string]any{"webhook": map[string]any{"url": "https://x/y", "events": []string{"deploy"}}},
-		map[string]any{"webhook": map[string]any{"url": "https://x/y", "headers": map[string]string{"twd-event": "x"}}},
+		map[string]any{"webhook": map[string]any{"url": "https://x/y", "headers": map[string]string{"tw-event": "x"}}},
 		map[string]any{"webhook": map[string]any{"url": "https://x/y", "headers": map[string]string{"a": "line\nbreak tok-s3cret"}}},
 		map[string]any{"webhook": map[string]any{"url": "https://x/" + hookSecret}, "extra": 1},
 	} {
@@ -103,13 +103,13 @@ func TestNotificationsConfig(t *testing.T) {
 }
 
 // TestApprovalRequestedNotification: a stored approval_requested host
-// record POSTs one event with the deep link and the twd approve command;
+// record POSTs one event with the deep link and the tailworks approve command;
 // a failing webhook is retried and then audited, without the secret path.
 func TestApprovalRequestedNotification(t *testing.T) {
 	allowLoopbackNotify(t)
 	e := newTestEnv(t)
 	tn := v1Tenant(t, e, "t.ts.net", nil)
-	e.m.SetConsoleURL(SelfInfo{DNSName: "twd-mgmt.t.ts.net.", HTTPS: true}.ConsoleURL())
+	e.m.SetConsoleURL(SelfInfo{DNSName: "tw-mgmt.t.ts.net.", HTTPS: true}.ConsoleURL())
 	sink, srv := newSink(t)
 	e.c.ok("PUT", "/v1/tenants/"+tn+"/notifications", map[string]any{"webhook": map[string]any{"url": srv.URL + "/hook/" + hookSecret, "headers": map[string]string{"authorization": "Bearer tok"}}}, nil)
 
@@ -136,13 +136,13 @@ func TestApprovalRequestedNotification(t *testing.T) {
 		t.Fatalf("sent %d events, want 2", sink.count())
 	}
 	ev, h := sink.got[1], sink.hdrs[1]
-	wantLink := "https://twd-mgmt.t.ts.net/ui/approvals?tenant=" + tn + "#inst%201"
+	wantLink := "https://tw-mgmt.t.ts.net/ui/approvals?tenant=" + tn + "#inst%201"
 	if ev.Event != "approval_requested" || ev.TenantID != tn || ev.Workload != "refunds" || ev.Instance != "inst 1" || ev.Link != wantLink ||
-		ev.CLI != "twd approve refunds inst 1 --workflow refund" || ev.Facts["amount"] != 120 || !strings.Contains(ev.Text, wantLink) ||
+		ev.CLI != "tw approve refunds inst 1 --workflow refund" || ev.Facts["amount"] != 120 || !strings.Contains(ev.Text, wantLink) ||
 		!strings.Contains(ev.Text, "amount=120") {
 		t.Fatalf("event: %+v", ev)
 	}
-	if h.Get("Twd-Event") != "approval_requested" || h.Get("Authorization") != "Bearer tok" || h.Get("Content-Type") != "application/json" {
+	if h.Get("Tw-Event") != "approval_requested" || h.Get("Authorization") != "Bearer tok" || h.Get("Content-Type") != "application/json" {
 		t.Fatalf("headers: %v", h)
 	}
 

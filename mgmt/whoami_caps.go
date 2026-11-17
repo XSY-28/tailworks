@@ -6,17 +6,17 @@ import (
 	"strings"
 )
 
-// twdCaps are the twd.dev/cap/* capabilities p holds toward mgmt (WhoIs
+// twCaps are the github.com/rosskukulinski/tailworks/cap/* capabilities p holds toward mgmt (WhoIs
 // CapMap), sorted; [] for the local operator and hosts, which hold none.
-func twdCaps(p Principal) []string {
+func twCaps(p Principal) []string {
 	seen := map[string]bool{}
 	for _, c := range p.Caps {
-		if strings.HasPrefix(c, "twd.dev/cap/") {
+		if strings.HasPrefix(c, "github.com/rosskukulinski/tailworks/cap/") {
 			seen[c] = true
 		}
 	}
 	for c := range p.CapValues {
-		if strings.HasPrefix(c, "twd.dev/cap/") {
+		if strings.HasPrefix(c, "github.com/rosskukulinski/tailworks/cap/") {
 			seen[c] = true
 		}
 	}
@@ -29,7 +29,7 @@ func twdCaps(p Principal) []string {
 }
 
 // mcpToolNames are the MCP tools p may call on /mcp without a
-// Twd-MCP-Tools header, in tools/list order ([] if none).
+// Tw-MCP-Tools header, in tools/list order ([] if none).
 func (s *Server) mcpToolNames(p Principal) []string {
 	allowed := s.mcpAllowed(p, http.Header{})
 	out := []string{}

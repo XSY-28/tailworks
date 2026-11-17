@@ -1,10 +1,10 @@
-// Package releasesig verifies twd release signatures (issue #71).
+// Package releasesig verifies tw release signatures (issue #71).
 //
 // A release's SHA256SUMS is signed with an SSH signature (the format
 // `ssh-keygen -Y sign` writes, OpenSSH's PROTOCOL.sshsig) by an Ed25519 key,
-// in the namespace "twd-release". The public keys are pinned in this
+// in the namespace "tw-release". The public keys are pinned in this
 // package (allowed_signers, embedded), in scripts/get.sh and in
-// scripts/install.sh, never taken from the release or from twd-mgmt. SSH
+// scripts/install.sh, never taken from the release or from tw-mgmt. SSH
 // signatures verify offline with a tool every macOS and Linux host already
 // has (ssh-keygen), which is why they were picked over minisign or Sigstore.
 //
@@ -32,9 +32,9 @@ import (
 	"strings"
 )
 
-// Namespace is the ssh-keygen -n namespace of a twd release signature, and
+// Namespace is the ssh-keygen -n namespace of a tailworks release signature, and
 // the principal of its allowed_signers lines.
-const Namespace = "twd-release"
+const Namespace = "tw-release"
 
 // SumsFile and SigFile are the checksum list and its signature, at the root
 // of a release tarball (and of a GitHub release's assets).
@@ -53,8 +53,8 @@ func PinnedFile() []byte { return bytes.Clone(pinned) }
 func Pinned() ([]ed25519.PublicKey, error) { return ParseAllowedSigners(pinned) }
 
 // ParseAllowedSigners reads ssh-keygen allowed_signers lines for the
-// twd-release principal (with no namespaces option, or one that includes
-// twd-release). Other principals, comments and blank lines are skipped.
+// tw-release principal (with no namespaces option, or one that includes
+// tw-release). Other principals, comments and blank lines are skipped.
 func ParseAllowedSigners(b []byte) ([]ed25519.PublicKey, error) {
 	var keys []ed25519.PublicKey
 	sc := bufio.NewScanner(bytes.NewReader(b))
@@ -124,7 +124,7 @@ func AuthorizedKey(k ed25519.PublicKey, comment string) string {
 }
 
 // Sign returns an armored SSH signature of msg (what
-// `ssh-keygen -Y sign -n twd-release` writes). Releases are signed with
+// `ssh-keygen -Y sign -n tw-release` writes). Releases are signed with
 // ssh-keygen; this is for tests.
 func Sign(priv ed25519.PrivateKey, msg []byte) []byte {
 	h := sha512.Sum512(msg)
@@ -143,7 +143,7 @@ func Sign(priv ed25519.PrivateKey, msg []byte) []byte {
 // ErrNoKeys is Verify's error when no signing key is pinned.
 var ErrNoKeys = errors.New("no release signing key is pinned")
 
-// Verify checks that armored is a twd-release SSH signature of msg by one of
+// Verify checks that armored is a tw-release SSH signature of msg by one of
 // keys.
 func Verify(keys []ed25519.PublicKey, msg, armored []byte) error {
 	if len(keys) == 0 {

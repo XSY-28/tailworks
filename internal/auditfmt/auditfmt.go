@@ -1,5 +1,5 @@
 // Package auditfmt renders an audit record's detail as one line of text.
-// `twd audit` (cmd/twd) and the admin console (mgmt/ui) both use it, so a
+// `tw audit` (cmd/tw) and the admin console (mgmt/ui) both use it, so a
 // new audit kind reads the same in both.
 package auditfmt
 

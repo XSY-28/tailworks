@@ -1,6 +1,6 @@
 # Workers KV
 
-twd runs Cloudflare's Workers KV binding. Declare namespaces in
+tailworks runs Cloudflare's Workers KV binding. Declare namespaces in
 `wrangler.jsonc` as you would for Cloudflare, and use `env.<BINDING>` with
 the same API: `get` (with `text`, `json`, `arrayBuffer` and `stream`),
 `getWithMetadata`, bulk `get`, `put` with `expiration`, `expirationTtl` and
@@ -30,20 +30,20 @@ To share data, call the owning workload over the tailnet.
 A namespace's first write creates it, or you can create it first:
 
 ```sh
-twd kv namespace create oauth          # for the app in the current directory
-twd kv namespace list
-twd kv namespace delete oauth          # deletes the data, irrecoverably
+tw kv namespace create oauth          # for the app in the current directory
+tw kv namespace list
+tw kv namespace delete oauth          # deletes the data, irrecoverably
 ```
 
 ## Keys
 
 ```sh
-twd kv key put client:1 '{"name":"app"}' --binding OAUTH_KV --metadata '{"kind":"client"}'
-twd kv key put grant:1 --path grant.json --namespace oauth --ttl 3600
-printf %s "$TOKEN" | twd kv key put token:1 --binding OAUTH_KV
-twd kv key get client:1 --binding OAUTH_KV        # the raw value on stdout
-twd kv key list --binding OAUTH_KV --prefix grant:
-twd kv key delete token:1 --binding OAUTH_KV
+tw kv key put client:1 '{"name":"app"}' --binding OAUTH_KV --metadata '{"kind":"client"}'
+tw kv key put grant:1 --path grant.json --namespace oauth --ttl 3600
+printf %s "$TOKEN" | tw kv key put token:1 --binding OAUTH_KV
+tw kv key get client:1 --binding OAUTH_KV        # the raw value on stdout
+tw kv key list --binding OAUTH_KV --prefix grant:
+tw kv key delete token:1 --binding OAUTH_KV
 ```
 
 `--binding` is looked up in the app's `wrangler.jsonc`; `--namespace`
@@ -52,22 +52,22 @@ app in the current directory. Every command takes `--json`. The same
 operations are on mgmt's REST API (`GET …/stores/kv/{name}/keys`,
 `GET|PUT|DELETE …/stores/kv/{name}/value?key=`; see
 [mgmt-api.md](contracts/mgmt-api.md)). Only admins can use them. Each
-write is in the audit trail (`twd audit --all`) with the namespace and who
+write is in the audit trail (`tw audit --all`) with the namespace and who
 made it, but not the key.
 
 ## Where the data is, and what that means
 
 Each namespace is served by a platform-owned SQLite Durable Object on the
 workload's host, so reads are local. Every write is first appended to a
-journal in twd-mgmt, sealed with the namespace's own key. Only the host
+journal in tw-mgmt, sealed with the namespace's own key. Only the host
 holding the workload's lease can append. So:
 
 - **Durable.** An acknowledged write survives a hostd restart, a lost disk,
-  and a move to another host (`twd deploy --replace`, a forced takeover
+  and a move to another host (`tw deploy --replace`, a forced takeover
   after a host failure). A new host rebuilds the namespace from the
   journal.
 - **Read-your-writes.** A workload always reads its own writes. A write by
-  another writer (another replica, `twd kv key put`) shows up on the next
+  another writer (another replica, `tw kv key put`) shows up on the next
   read that wants fresher data than the last sync: within 60 s by default,
   or the read's `cacheTtl`. Cloudflare KV is eventually consistent, with
   about 60 s between locations.
@@ -79,7 +79,7 @@ holding the workload's lease can append. So:
 
 ## Limits
 
-| | twd | Cloudflare |
+| | tailworks | Cloudflare |
 |---|---|---|
 | Key | 1 to 512 bytes, not `.` / `..` | same |
 | Value | 2 MiB − 4 KiB | 25 MiB |
@@ -91,8 +91,8 @@ holding the workload's lease can append. So:
 
 ## Local development
 
-`twd dev` gives the app its namespaces, in the dev process. They are saved
-to `<app>/.twd/dev-stores.json` when `twd dev` stops and loaded when it
+`tw dev` gives the app its namespaces, in the dev process. They are saved
+to `<app>/.tailworks/dev-stores.json` when `tw dev` stops and loaded when it
 starts, so local data lasts between runs (as `wrangler dev`'s local state
 does). The file is readable by its owner only and is not encrypted. The
-`.twd` directory git-ignores itself. Delete the file to start empty.
+`.tailworks` directory git-ignores itself. Delete the file to start empty.

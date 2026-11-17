@@ -22,14 +22,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rosskukulinski/twd/guest/proto"
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/internal/obs"
-	"github.com/rosskukulinski/twd/internal/procsb"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/guest/proto"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // workload is one deployed app of a tenant on this host. At most one
@@ -255,7 +255,7 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 			if others := h.otherTenants(w.tenantID); len(others) > 0 {
 				w.fail(a.DeploymentID, &apiError{Code: "egress_unenforced", Detail: fmt.Sprintf(
 					"runtime \"node\" on a host serving %d other tenant(s) (%s) with no process sandbox: the Node tier's egress proxy is not an enforcement boundary here (raw sockets bypass it); "+
-						"use the workerd runtime, a single-tenant host, Linux with Landlock, or start twd-hostd with -insecure-shared-host (twd up --insecure-shared-host)",
+						"use the workerd runtime, a single-tenant host, Linux with Landlock, or start tw-hostd with -insecure-shared-host (tw up --insecure-shared-host)",
 					len(others), strings.Join(others, ","))})
 				return
 			}
@@ -503,12 +503,12 @@ type instance struct {
 	startErr error
 }
 
-// tierFor picks a deployment's isolation tier: the bundle's twd.jsonc
+// tierFor picks a deployment's isolation tier: the bundle's tailworks.jsonc
 // "tier", else the tenant's, else the host default. It never downgrades: a
 // microvm deployment on a host without a microVM backend (macOS, no KVM, the
 // backend gone since registration) is refused with tier_unavailable, which
 // the host reports to mgmt as the deployment's error (ADR-032 D5b). The one
-// exception is explicit local development (Config.ForceProcessTier, twd
+// exception is explicit local development (Config.ForceProcessTier, tailworks
 // dev), which runs everything in the process tier and says so.
 func (h *Host) tierFor(app *bundle.App, t *tenant) (string, error) {
 	if app.Runtime == bundle.RuntimeNode {
@@ -539,8 +539,8 @@ func (h *Host) tierFor(app *bundle.App, t *tenant) (string, error) {
 // for VM isolation (ADR-032 D5b).
 func errTierUnavailable(app string) *apiError {
 	return &apiError{Code: "tier_unavailable", Detail: fmt.Sprintf(
-		"%q asks for the microvm tier, but this host has no microVM backend (Linux with KVM and twd-vmhelper); it is not run in the process tier instead. "+
-			"Set the tier up here (`sudo twd host setup --microvm`, then restart twd-hostd), deploy to a host that offers it, or set \"tier\": \"process\" in twd.jsonc", app)}
+		"%q asks for the microvm tier, but this host has no microVM backend (Linux with KVM and tw-vmhelper); it is not run in the process tier instead. "+
+			"Set the tier up here (`sudo tw host setup --microvm`, then restart tw-hostd), deploy to a host that offers it, or set \"tier\": \"process\" in tailworks.jsonc", app)}
 }
 
 func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier string) (*instance, error) {
@@ -642,7 +642,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 			}
 			return vm.DialGuest(ctx)
 		}}}
-		hc, _ := json.Marshal(map[string]any{"twd": map[string]any{"kind": "admin", "op": "health"}})
+		hc, _ := json.Marshal(map[string]any{"tw": map[string]any{"kind": "admin", "op": "health"}})
 		inst.spec = sandbox.Spec{
 			ID:          fmt.Sprintf("i%d", n),
 			AppDir:      dir,
@@ -736,7 +736,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 //     keeps AF_UNIX). With every workload denied AF_UNIX, tailscaled's
 //     socket is out of reach and the host may be shared.
 //
-// Config.InsecureSharedHost (twd-hostd -insecure-shared-host) allows all.
+// Config.InsecureSharedHost (tw-hostd -insecure-shared-host) allows all.
 func (h *Host) sharedHostCheck(tenant string, app *bundle.App) error {
 	if h.cfg.InsecureSharedHost {
 		return nil
@@ -747,7 +747,7 @@ func (h *Host) sharedHostCheck(tenant string, app *bundle.App) error {
 	case h.sandbox == SandboxNone:
 		why = "this host has no process sandbox (" + h.noSandboxReason() + ")"
 	case len(hs.Hard) > 0:
-		why = "this user can reach " + strings.Join(hs.Hard, ", ") + " (root-equivalent for twd-hostd itself)"
+		why = "this user can reach " + strings.Join(hs.Hard, ", ") + " (root-equivalent for tw-hostd itself)"
 	case hs.Tailscaled != "" && h.sandbox != SandboxLandlock:
 		why = "this user can reach " + hs.Tailscaled + " (the host's tailnet identity) and the " + h.sandbox + " sandbox doesn't deny unix sockets"
 	case hs.Tailscaled != "" && (nodeListensUnix(app) || h.anyNodeListensUnix()):
@@ -765,7 +765,7 @@ func (h *Host) sharedHostCheck(tenant string, app *bundle.App) error {
 		busy := o.active != nil && o.active.tier != bundle.TierMicroVM
 		o.mu.Unlock()
 		if busy {
-			return fmt.Errorf("sandbox_unavailable: %s, so it runs process-tier workloads of one tenant only, and tenant %s already runs here; fix: run twd as a dedicated user that can't reach those sockets and isn't in the docker/podman/lxd groups, enable Landlock, use TCP listen mode for Node apps, or deploy with tier \"microvm\"; or start twd-hostd with -insecure-shared-host (tenants are then NOT isolated from each other)", why, o.tenantID)
+			return fmt.Errorf("sandbox_unavailable: %s, so it runs process-tier workloads of one tenant only, and tenant %s already runs here; fix: run tailworks as a dedicated user that can't reach those sockets and isn't in the docker/podman/lxd groups, enable Landlock, use TCP listen mode for Node apps, or deploy with tier \"microvm\"; or start tw-hostd with -insecure-shared-host (tenants are then NOT isolated from each other)", why, o.tenantID)
 		}
 	}
 	return nil
@@ -971,10 +971,10 @@ func (inst *instance) waitHealthy(d time.Duration) error {
 	}
 }
 
-// admin sends a platform admin request (cf.twd.kind = admin).
-func (inst *instance) admin(twd map[string]any) (int, []byte) {
-	blob, _ := json.Marshal(map[string]any{"twd": twd})
-	req, _ := http.NewRequest("POST", "http://platform/_twd/admin", nil)
+// admin sends a platform admin request (cf.tw.kind = admin).
+func (inst *instance) admin(tw map[string]any) (int, []byte) {
+	blob, _ := json.Marshal(map[string]any{"tw": tw})
+	req, _ := http.NewRequest("POST", "http://platform/_tw/admin", nil)
 	req.Header.Set(netd.HeaderCF, string(blob))
 	resp, err := inst.direct.Do(req)
 	if err != nil {
@@ -1012,7 +1012,7 @@ func (inst *instance) stop() {
 	}
 	if inst.node != nil {
 		inst.stopNode()
-		if os.Getenv("TWD_KEEP_INSTANCES") == "" {
+		if os.Getenv("TW_KEEP_INSTANCES") == "" {
 			os.RemoveAll(inst.dir)
 		}
 		return
@@ -1038,7 +1038,7 @@ func (inst *instance) stop() {
 	if inst.ingressLn != nil {
 		inst.ingressLn.Close()
 	}
-	if os.Getenv("TWD_KEEP_INSTANCES") == "" {
+	if os.Getenv("TW_KEEP_INSTANCES") == "" {
 		os.RemoveAll(inst.dir)
 	}
 }

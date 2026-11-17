@@ -1,12 +1,12 @@
 package hostd
 
-// The opt-in Node.js process tier (twd.jsonc "runtime": "node", ADR-022).
+// The opt-in Node.js process tier (tailworks.jsonc "runtime": "node", ADR-022).
 //
 // One supervised `node` process per deployment, with one tailnet identity:
 // the workload node. There are no per-object nodes in this tier.
 //
-//	caller ─WG─▶ workload node (netd: WhoIs, strip x-twd-*, cf blob) ─▶ hostd ingress
-//	       ─▶ nodeIngress: x-twd-caller = v1.<claims>.<HMAC(TWD_CALLER_KEY)> ─▶ app (127.0.0.1:PORT or unix socket)
+//	caller ─WG─▶ workload node (netd: WhoIs, strip x-tw-*, cf blob) ─▶ hostd ingress
+//	       ─▶ nodeIngress: x-tw-caller = v1.<claims>.<HMAC(TW_CALLER_KEY)> ─▶ app (127.0.0.1:PORT or unix socket)
 //	app fetch()/http ─▶ HTTP(S)_PROXY = hostd egress proxy (127.0.0.1, Basic auth per process)
 //	       ─▶ netd egress (workload node, ADR-019) ─WG─▶ destination
 //
@@ -45,14 +45,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/obs"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // CallerHeader carries the signed verified caller to Node apps.
-const CallerHeader = "x-twd-caller"
+const CallerHeader = "x-tw-caller"
 
 // nodeProc is the Node-tier state of an instance.
 type nodeProc struct {
@@ -66,7 +66,7 @@ type nodeProc struct {
 	psrv    *http.Server
 
 	mu       sync.Mutex
-	key      []byte // HMAC key for x-twd-caller (per process start)
+	key      []byte // HMAC key for x-tw-caller (per process start)
 	token    string // egress proxy password (per process start)
 	pid      int
 	starts   int // total process starts
@@ -88,10 +88,10 @@ func randB64(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// SignCaller builds the x-twd-caller value for claims under key (tests).
+// SignCaller builds the x-tw-caller value for claims under key (tests).
 func SignCaller(key []byte, claims any) string { return signCaller(key, claims) }
 
-// signCaller builds the x-twd-caller value for claims under key.
+// signCaller builds the x-tw-caller value for claims under key.
 func signCaller(key []byte, claims any) string {
 	b, _ := json.Marshal(claims)
 	p := base64.RawURLEncoding.EncodeToString(b)
@@ -106,7 +106,7 @@ func (h *Host) nodeBin() (string, error) {
 	}
 	p, err := exec.LookPath("node")
 	if err != nil {
-		return "", errors.New("runtime \"node\": no node binary on PATH (set twd-hostd -node)")
+		return "", errors.New("runtime \"node\": no node binary on PATH (set tw-hostd -node)")
 	}
 	return p, nil
 }
@@ -193,7 +193,7 @@ func (inst *instance) spawnNode() error {
 	key := make([]byte, 32)
 	rand.Read(key)
 	token := randB64(24)
-	proxy := (&url.URL{Scheme: "http", User: url.UserPassword("twd", token), Host: np.proxy.Addr().String()}).String()
+	proxy := (&url.URL{Scheme: "http", User: url.UserPassword("tw", token), Host: np.proxy.Addr().String()}).String()
 	env := map[string]string{
 		"PATH":     os.Getenv("PATH"),
 		"HOME":     np.dataDir,
@@ -202,14 +202,14 @@ func (inst *instance) spawnNode() error {
 		// fetch()/http honour HTTP(S)_PROXY with this (Node ≥ 24).
 		"NODE_USE_ENV_PROXY": "1",
 		"HTTP_PROXY":         proxy, "HTTPS_PROXY": proxy, "http_proxy": proxy, "https_proxy": proxy,
-		"TWD_EGRESS_PROXY": proxy,
-		"TWD_CALLER_KEY":   base64.RawURLEncoding.EncodeToString(key),
-		"TWD_DATA_DIR":     np.dataDir,
-		"TWD_WORKLOAD":     inst.w.name,
-		"TWD_DEPLOYMENT":   inst.depID,
+		"TW_EGRESS_PROXY": proxy,
+		"TW_CALLER_KEY":   base64.RawURLEncoding.EncodeToString(key),
+		"TW_DATA_DIR":     np.dataDir,
+		"TW_WORKLOAD":     inst.w.name,
+		"TW_DEPLOYMENT":   inst.depID,
 	}
 	if np.listen == "unix" {
-		env["TWD_SOCKET"] = np.addr
+		env["TW_SOCKET"] = np.addr
 		env["NO_PROXY"] = np.proxy.Addr().String()
 	} else {
 		p := strconv.Itoa(np.port)
@@ -220,7 +220,7 @@ func (inst *instance) spawnNode() error {
 		env["no_proxy"] = env["NO_PROXY"]
 	}
 	if wl := inst.w.currentWL(); wl != nil {
-		env["TWD_NODE_NAME"] = wl.MagicDNS
+		env["TW_NODE_NAME"] = wl.MagicDNS
 	}
 	for k, v := range nodeEnv(inst.app) { // node.env, deploy vars
 		if _, reserved := env[k]; !reserved {
@@ -352,7 +352,7 @@ func (inst *instance) waitNodeHealthy(d time.Duration) error {
 }
 
 // nodeIngress forwards a tailnet request (netd has done WhoIs and set the
-// cf blob; hostd added routing) to the app with a signed x-twd-caller.
+// cf blob; hostd added routing) to the app with a signed x-tw-caller.
 func (h *Host) nodeIngress(inst *instance, tr http.RoundTripper) http.Handler {
 	rp := &httputil.ReverseProxy{
 		Transport:     tr,
@@ -376,9 +376,9 @@ func (h *Host) nodeIngress(inst *instance, tr http.RoundTripper) http.Handler {
 			} `json:"tailscale"`
 			ObjectID string `json:"objectId"`
 			TraceID  string `json:"traceId"`
-			Twd      struct {
+			Tw       struct {
 				ObjectID string `json:"objectID"`
-			} `json:"twd"`
+			} `json:"tw"`
 		}
 		if err := json.Unmarshal([]byte(r.Header.Get(netd.HeaderCF)), &blob); err != nil || len(blob.Tailscale.Caller) == 0 {
 			writeAPIError(w, &apiError{Code: "no_identity", Detail: "missing cf blob"})
@@ -390,31 +390,31 @@ func (h *Host) nodeIngress(inst *instance, tr http.RoundTripper) http.Handler {
 			return
 		}
 		// Nothing identity-shaped from the client survives (netd already
-		// stripped x-twd-*; this is defence in depth), and the platform's own
+		// stripped x-tw-*; this is defence in depth), and the platform's own
 		// headers are replaced by the one signed header.
 		for k := range r.Header {
-			if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-twd") || strings.HasPrefix(lk, "twd-") {
+			if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-tw-") || strings.HasPrefix(lk, "tw-") {
 				r.Header.Del(k)
 			}
 		}
 		// The caller's capMap was already narrowed by netd (RT-01); the
-		// sender's certificate summary rides inside `caller.twd` and its lim
-		// is repeated at the top level. The nonce lets @twd/node refuse a
+		// sender's certificate summary rides inside `caller.tw` and its lim
+		// is repeated at the top level. The nonce lets @tailworks/node refuse a
 		// replayed header (RT-05).
 		claims := map[string]any{
-			"v": 1, "caller": blob.Tailscale.Caller, "objectId": blob.Twd.ObjectID, "workload": inst.w.name,
+			"v": 1, "caller": blob.Tailscale.Caller, "objectId": blob.Tw.ObjectID, "workload": inst.w.name,
 			"traceId": blob.TraceID, "iat": time.Now().UnixMilli(), "nonce": randB64(16),
 		}
 		var sender struct {
-			Twd *struct {
+			Tw *struct {
 				ObjectID string          `json:"objectId"`
 				Lim      json.RawMessage `json:"lim"`
-			} `json:"twd"`
+			} `json:"tw"`
 		}
-		if json.Unmarshal(blob.Tailscale.Caller, &sender) == nil && sender.Twd != nil {
-			claims["callerObjectId"] = sender.Twd.ObjectID
-			if len(sender.Twd.Lim) > 0 {
-				claims["lim"] = sender.Twd.Lim
+		if json.Unmarshal(blob.Tailscale.Caller, &sender) == nil && sender.Tw != nil {
+			claims["callerObjectId"] = sender.Tw.ObjectID
+			if len(sender.Tw.Lim) > 0 {
+				claims["lim"] = sender.Tw.Lim
 			}
 		}
 		r.Header.Set(CallerHeader, signCaller(key, claims))
@@ -430,8 +430,8 @@ func (h *Host) nodeEgress(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, token := inst.node.secrets()
 		user, pass, ok := parseProxyAuth(r.Header.Get("Proxy-Authorization"))
-		if !ok || token == "" || user != "twd" || subtle.ConstantTimeCompare([]byte(pass), []byte(token)) != 1 {
-			w.Header().Set("Proxy-Authenticate", `Basic realm="twd egress"`)
+		if !ok || token == "" || user != "tw" || subtle.ConstantTimeCompare([]byte(pass), []byte(token)) != 1 {
+			w.Header().Set("Proxy-Authenticate", `Basic realm="tw egress"`)
 			w.Header().Set(netd.HeaderError, "no_identity")
 			w.Header().Set("content-type", "application/json")
 			w.WriteHeader(http.StatusProxyAuthRequired)

@@ -106,7 +106,7 @@ class D1Database extends D1AlwaysPrimary {
     return new D1Session(this.fetcher, t ? t : FIRST_UNCONSTRAINED);
   }
   async dump(): Promise<ArrayBuffer> {
-    throw d1Error("D1_DUMP_ERROR", "dump() is not supported on twd; use `twd d1 export`");
+    throw d1Error("D1_DUMP_ERROR", "dump() is not supported on tailworks; use `tw d1 export`");
   }
 }
 
@@ -174,14 +174,14 @@ export function makeD1(fetcher: Fetcher): D1Database {
 const WRAPS: Record<string, (stub: Fetcher) => unknown> = { d1: makeD1 };
 
 /**
- * wrapStores replaces each env entry named in env.__TWD_WRAP (set by the
+ * wrapStores replaces each env entry named in env.__TW_WRAP (set by the
  * platform for a facet's storage bindings) with its API, and drops the
  * marker. Outside a facet there is no marker and env is unchanged.
  */
 export function wrapStores(env: Record<string, unknown>): void {
-  const w = env.__TWD_WRAP as Record<string, string> | undefined;
+  const w = env.__TW_WRAP as Record<string, string> | undefined;
   if (!w || typeof w !== "object") return;
-  delete env.__TWD_WRAP;
+  delete env.__TW_WRAP;
   for (const [k, kind] of Object.entries(w)) {
     const f = WRAPS[kind];
     if (f && env[k]) env[k] = f(env[k] as Fetcher);

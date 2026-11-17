@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/tssvc"
-	"github.com/rosskukulinski/twd/netd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/internal/tssvc"
+	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // TestService: an object node hosts a Tailscale Service. Flows to the VIP

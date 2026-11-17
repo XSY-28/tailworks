@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // fakeKeys is the Tailscale key API for testcontrol (which accepts any key).
@@ -54,22 +54,22 @@ func TestColdIdentityLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ctl.Close()
-	lat, _ := time.ParseDuration(os.Getenv("TWD_COLDID_API_LATENCY"))
+	lat, _ := time.ParseDuration(os.Getenv("TW_COLDID_API_LATENCY"))
 	api := fakeKeys(t, lat)
 	kf := cliflow.WriteFakeOAuthFile(t, filepath.Join(t.TempDir(), "oauth.env"))
 	e := env{name: "local", controlURL: ctl.URL, tailnet: "ttest.example", apiBase: api.URL, oauthFile: kf,
-		tags: []string{"tag:ttest"}, prefix: "ttest-fi-local", n: envInt("TWD_COLDID_N", 30),
+		tags: []string{"tag:ttest"}, prefix: "ttest-fi-local", n: envInt("TW_COLDID_N", 30),
 		callerKey: func(context.Context) (string, error) { return nettest.DummyKey, nil },
-		dial:      os.Getenv("TWD_COLDID_DIAL")}
+		dial:      os.Getenv("TW_COLDID_DIAL")}
 	if e.dial == "ready" {
 		e.name += "-dialready" // the Phase 1 name
 	} else if e.dial != "" && e.dial != "netmap" {
 		e.name += "-dial" + e.dial
 	}
-	if os.Getenv("TWD_COLDID_WARM") != "" {
+	if os.Getenv("TW_COLDID_WARM") != "" {
 		e.name += "-warm"
 	}
-	if os.Getenv("TWD_COLDID_PREJOINED") != "" {
+	if os.Getenv("TW_COLDID_PREJOINED") != "" {
 		e.prejoined = true
 		e.name += "-prejoined"
 	}

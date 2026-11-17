@@ -1481,7 +1481,7 @@ type ApprovalDecisionRequest struct {
 	Comment  *string                         `json:"comment,omitempty"`
 	Decision ApprovalDecisionRequestDecision `json:"decision"`
 
-	// Metadata Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by twd's.
+	// Metadata Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by tailworks'.
 	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
 	// Step Which wait, when the instance waits for several.
@@ -1505,7 +1505,7 @@ type ApprovalList struct {
 	Unreachable *[]string `json:"unreachable,omitempty"`
 }
 
-// ApproveGrant One value of a `twd.dev/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
+// ApproveGrant One value of a `github.com/rosskukulinski/tailworks/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
 type ApproveGrant struct {
 	Decisions *[]string           `json:"decisions,omitempty"`
 	Limits    *map[string]float32 `json:"limits,omitempty"`
@@ -1526,11 +1526,11 @@ type Approver struct {
 	// User Login (untagged nodes).
 	User *string `json:"user,omitempty"`
 
-	// Via `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+	// Via `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `tw approve` or the admin UI.
 	Via ApproverVia `json:"via"`
 }
 
-// ApproverVia `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI.
+// ApproverVia `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `tw approve` or the admin UI.
 type ApproverVia string
 
 // Arch A Go GOARCH. Container images must match their host's.
@@ -1542,7 +1542,7 @@ type Assignment struct {
 
 	// Containers The workload's container classes as mgmt resolved them at deploy (ADR-032 D3): the image
 	// refs `ctx.container` sees and their per-arch pins. hostd starts a container only from the
-	// pin for its own arch, pulled by digest from twd's registry.
+	// pin for its own arch, pulled by digest from tailworks' registry.
 	Containers   *[]ContainerClass `json:"containers,omitempty"`
 	ControlURL   *string           `json:"controlURL,omitempty"`
 	CreatedAt    int64             `json:"createdAt"`
@@ -1648,7 +1648,7 @@ type AuditBatch struct {
 // `notification_put` (the tenant's notification webhook set; its host and header names only),
 // `notification_delete`,
 // `notification_failed` (a notification was not delivered; the webhook's host and the error),
-// `notification_test` (`twd notify test`; the origin and the outcome),
+// `notification_test` (`tw notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
 // `host_add`,
@@ -1765,7 +1765,7 @@ type AuditRecord struct {
 	// `notification_put` (the tenant's notification webhook set; its host and header names only),
 	// `notification_delete`,
 	// `notification_failed` (a notification was not delivered; the webhook's host and the error),
-	// `notification_test` (`twd notify test`; the origin and the outcome),
+	// `notification_test` (`tw notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
 	// `host_add`,
@@ -1841,7 +1841,7 @@ type ChainStatus struct {
 	Records  int     `json:"records"`
 }
 
-// ClassConfig One DO namespace from `twd.jsonc` `tailnet.objects`.
+// ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 type ClassConfig struct {
 	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
@@ -1849,13 +1849,13 @@ type ClassConfig struct {
 	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`.
 	PreviewOf *string `json:"previewOf,omitempty"`
 
-	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
+	// ReplicaOf `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`.
 	ReplicaOf *string `json:"replicaOf,omitempty"`
 
 	// Replicas `_workload` only, the workload itself: its replica count when > 1.
 	Replicas *int `json:"replicas,omitempty"`
 
-	// Service `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc` `tailnet.service`).
+	// Service `_workload` only: the Tailscale Service the workload entry node hosts (`tailworks.jsonc` `tailnet.service`).
 	Service *string  `json:"service,omitempty"`
 	Tags    []string `json:"tags"`
 
@@ -1863,7 +1863,7 @@ type ClassConfig struct {
 	TTL *string `json:"ttl,omitempty"`
 }
 
-// ContainerClass A container class of a deployment (a wrangler `containers` entry plus twd.jsonc overrides) and its pinned images.
+// ContainerClass A container class of a deployment (a wrangler `containers` entry plus tailworks.jsonc overrides) and its pinned images.
 type ContainerClass struct {
 	Arch  *ContainerClassArch `json:"arch,omitempty"`
 	Class string              `json:"class"`
@@ -1874,7 +1874,7 @@ type ContainerClass struct {
 	// Image The default image reference `start()` runs.
 	Image *string `json:"image,omitempty"`
 
-	// ImageSources Named images twd deploy builds: name → the wrangler Dockerfile, as written.
+	// ImageSources Named images tw deploy builds: name → the wrangler Dockerfile, as written.
 	ImageSources *map[string]string `json:"imageSources,omitempty"`
 
 	// Images Named images (`ctx.container.images`): name → reference.
@@ -1891,7 +1891,7 @@ type ContainerClass struct {
 type ContainerClassArch string
 
 // ContainerImagePin One image reference of a container class, resolved once at deploy for one arch (ADR-032 D3):
-// hosts pull exactly `repository@digest` from twd's registry and nothing else. Retagging the
+// hosts pull exactly `repository@digest` from tailworks' registry and nothing else. Retagging the
 // upstream ref later changes nothing until the next deploy.
 type ContainerImagePin struct {
 	Arch ContainerImagePinArch `json:"arch"`
@@ -1899,13 +1899,13 @@ type ContainerImagePin struct {
 	// Digest The linux/`arch` image manifest (never an index).
 	Digest string `json:"digest"`
 
-	// From What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the twd.local ref.
+	// From What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the tw.local ref.
 	From *string `json:"from,omitempty"`
 
 	// Name The class's image name (wrangler `images` key); absent for the default image.
 	Name *string `json:"name,omitempty"`
 
-	// Ref The reference as `ctx.container` sees it (the wrangler image, or the `twd.local/<tenant>/…@sha256:…` ref `twd deploy` built).
+	// Ref The reference as `ctx.container` sees it (the wrangler image, or the `tw.local/<tenant>/…@sha256:…` ref `tw deploy` built).
 	Ref string `json:"ref"`
 
 	// Repository `<tenantID>/…` (the tenant's builds and mirrors) or `public/…` (public bases, alias targets).
@@ -1915,8 +1915,8 @@ type ContainerImagePin struct {
 // ContainerImagePinArch defines model for ContainerImagePin.Arch.
 type ContainerImagePinArch string
 
-// ContainerImages Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
-// with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+// ContainerImages Images `tw deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+// with `tw.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
 // replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
 type ContainerImages map[string]struct {
 	Image  *string            `json:"image,omitempty"`
@@ -2045,7 +2045,7 @@ type Deployment struct {
 	// Public The deployment's public routes (ADR-029); absent when tailnet-only.
 	Public *DeploymentPublic `json:"public,omitempty"`
 
-	// Replicas A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
+	// Replicas A workload with `tailworks.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas.
 	Replicas *[]ReplicaRef `json:"replicas,omitempty"`
 
 	// Status - `assigned`: mgmt placed it; the host has not reported yet.
@@ -2070,11 +2070,11 @@ type Deployment struct {
 
 // DeploymentCreate defines model for DeploymentCreate.
 type DeploymentCreate struct {
-	// Bundle tar (optionally gzipped) of the built worker + `twd.jsonc` + `wrangler.jsonc`.
+	// Bundle tar (optionally gzipped) of the built worker + `tailworks.jsonc` + `wrangler.jsonc`.
 	Bundle []byte `json:"bundle"`
 
-	// ContainerImages Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
-	// with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+	// ContainerImages Images `tw deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+	// with `tw.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
 	// replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
 	ContainerImages *ContainerImages `json:"containerImages,omitempty"`
 
@@ -2084,10 +2084,10 @@ type DeploymentCreate struct {
 	// Host Pin a host.
 	Host *string `json:"host,omitempty"`
 
-	// Namespaces Override the classes read from `twd.jsonc` (tests).
+	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 
-	// Preview Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
+	// Preview Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`.
 	Preview *bool `json:"preview,omitempty"`
 
 	// PreviewAlias The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview.
@@ -2122,7 +2122,7 @@ type DeploymentPublic struct {
 	// Allowed The tenant's `publicIngress` is `allow`; false: declared but not served.
 	Allowed bool `json:"allowed"`
 
-	// Exposed `twd expose` setting.
+	// Exposed `tw expose` setting.
 	Exposed bool     `json:"exposed"`
 	Routes  []string `json:"routes"`
 
@@ -2240,7 +2240,7 @@ type Endpoint struct {
 // Error The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Error struct {
 	// Code The catalog. Status in parentheses.
@@ -2249,27 +2249,27 @@ type Error struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+	// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
-	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+	// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
-	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 	// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 	// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+	// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -2290,14 +2290,14 @@ type Error struct {
 	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
 	// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -2305,7 +2305,7 @@ type Error struct {
 	// | `superseded` | 409 | undeploy of a non-latest deployment |
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
-	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -2314,9 +2314,9 @@ type Error struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -2343,27 +2343,27 @@ type Error struct {
 // |---|---|---|
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
-// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 // | `too_many_secrets` | 400 | a workload already has 128 secrets |
 // | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 // | `no_identity` | 401 | WhoIs failed for the connection |
-// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 // | `host_token_invalid` | 403 | local-dev socket, wrong token |
-// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 // | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 // | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 // | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 // | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 // | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 // | `not_found` | 404 | — |
 // | `unknown_tenant` | 404 | — |
 // | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -2384,14 +2384,14 @@ type Error struct {
 // | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 // | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 // | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 // | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 // | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 // | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 // | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 // | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 // | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 // | `already_joined` | 409 | credential for an object that has a node |
 // | `identity_conflict` | 409 | object ID collision across identities |
 // | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -2399,7 +2399,7 @@ type Error struct {
 // | `superseded` | 409 | undeploy of a non-latest deployment |
 // | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 // | `host_holds_leases` | 409 | host delete without `drain` |
-// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 // | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 // | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 // | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -2408,9 +2408,9 @@ type Error struct {
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 // | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 // | `bootstrap_failed` | 502 | control plane refused the mint |
 // | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 // | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -2451,7 +2451,7 @@ type Host struct {
 	CordonedBy *string `json:"cordonedBy,omitempty"`
 	CreatedAt  int64   `json:"createdAt"`
 
-	// DNSName `twd-host-<hostID>.<tailnet>`.
+	// DNSName `tw-host-<hostID>.<tailnet>`.
 	DNSName *string `json:"dnsName,omitempty"`
 
 	// Features Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses.
@@ -2465,7 +2465,7 @@ type Host struct {
 	Leases    *[]Lease `json:"leases,omitempty"`
 	LiveNodes int      `json:"liveNodes"`
 
-	// NodeID Stable node ID of the host's `tag:twd-host` tsnet node (bound at registration).
+	// NodeID Stable node ID of the host's `tag:tw-host` tsnet node (bound at registration).
 	NodeID *string `json:"nodeID,omitempty"`
 	Os     *string `json:"os,omitempty"`
 	Pool   *string `json:"pool,omitempty"`
@@ -2482,7 +2482,7 @@ type Host struct {
 	// Skew Why the host is outside the version window (placement skips it); absent when it is within.
 	Skew *string `json:"skew,omitempty"`
 
-	// Status `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
+	// Status `pending`: created by `tw host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 	Status    HostStatusEnum `json:"status"`
 	Tiers     []HostTier     `json:"tiers"`
 	UpdatedAt int64          `json:"updatedAt"`
@@ -2490,7 +2490,7 @@ type Host struct {
 	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
 	Usage *HostUsage `json:"usage,omitempty"`
 
-	// Version The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x).
+	// Version The host's tw version, from its last registration (absent: a hostd from before version reporting, 0.1.x).
 	Version *string `json:"version,omitempty"`
 }
 
@@ -2556,27 +2556,27 @@ type HostDrainResult struct {
 		// |---|---|---|
 		// | `bad_request` | 400 | malformed body, parameter or filter |
 		// | `bad_cursor` | 400 | `cursor` does not decode |
-		// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-		// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+		// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+		// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 		// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 		// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 		// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 		// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 		// | `no_identity` | 401 | WhoIs failed for the connection |
-		// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+		// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 		// | `host_token_invalid` | 403 | local-dev socket, wrong token |
-		// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+		// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 		// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-		// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+		// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 		// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-		// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-		// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+		// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+		// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 		// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-		// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+		// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 		// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 		// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 		// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-		// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+		// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 		// | `not_found` | 404 | — |
 		// | `unknown_tenant` | 404 | — |
 		// | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -2597,14 +2597,14 @@ type HostDrainResult struct {
 		// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 		// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 		// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+		// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 		// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 		// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 		// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 		// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 		// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 		// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+		// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 		// | `already_joined` | 409 | credential for an object that has a node |
 		// | `identity_conflict` | 409 | object ID collision across identities |
 		// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -2612,7 +2612,7 @@ type HostDrainResult struct {
 		// | `superseded` | 409 | undeploy of a non-latest deployment |
 		// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 		// | `host_holds_leases` | 409 | host delete without `drain` |
-		// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+		// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 		// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 		// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 		// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -2621,9 +2621,9 @@ type HostDrainResult struct {
 		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-		// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-		// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+		// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+		// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 		// | `bootstrap_failed` | 502 | control plane refused the mint |
 		// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 		// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -2639,7 +2639,7 @@ type HostDrainResult struct {
 	} `json:"refused"`
 }
 
-// HostJoin A single-use join key for a host's `tag:twd-host` node. Never logged.
+// HostJoin A single-use join key for a host's `tag:tw-host` node. Never logged.
 type HostJoin struct {
 	AuthKey    string  `json:"authKey"`
 	ControlURL *string `json:"controlURL,omitempty"`
@@ -2648,7 +2648,7 @@ type HostJoin struct {
 	ExpiresAt int64 `json:"expiresAt"`
 	Host      Host  `json:"host"`
 
-	// Hostname `twd-host-<hostID>`
+	// Hostname `tw-host-<hostID>`
 	Hostname string `json:"hostname"`
 
 	// RegistrationSecret One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound.
@@ -2677,7 +2677,7 @@ type HostPathReport struct {
 type HostPush struct {
 	Port *int `json:"port,omitempty"`
 
-	// URL `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport).
+	// URL `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `tw up`; accepted only from the in-process transport).
 	URL *string `json:"url,omitempty"`
 }
 
@@ -2716,7 +2716,7 @@ type HostRegistration struct {
 	RegistrationSecret *string    `json:"registrationSecret,omitempty"`
 	Tiers              []HostTier `json:"tiers"`
 
-	// Version The host's twd version. A host outside the version window is refused: `409 version_skew`.
+	// Version The host's tw version. A host outside the version window is refused: `409 version_skew`.
 	Version *string `json:"version,omitempty"`
 }
 
@@ -2740,7 +2740,7 @@ type HostStatus struct {
 	Usage *HostUsage `json:"usage,omitempty"`
 }
 
-// HostStatusEnum `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
+// HostStatusEnum `pending`: created by `tw host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 type HostStatusEnum string
 
 // HostStatusResponse defines model for HostStatusResponse.
@@ -2865,7 +2865,7 @@ type Lease struct {
 	Namespace string `json:"namespace"`
 }
 
-// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 type MintMode string
 
 // NodeCertificate defines model for NodeCertificate.
@@ -2922,7 +2922,7 @@ type NotificationConfig struct {
 }
 
 // NotificationEventKind `approval_requested` (a Workflow instance started waiting for an approval),
-// `test` (`twd notify test`; never subscribed to).
+// `test` (`tw notify test`; never subscribed to).
 type NotificationEventKind string
 
 // NotificationTestResult defines model for NotificationTestResult.
@@ -3208,11 +3208,11 @@ type PreflightMissing struct {
 
 // PreflightResult defines model for PreflightResult.
 type PreflightResult struct {
-	// AccessWarnings Grants to `tag:twd-mgmt` that don't do what they look like: values on `twd.dev/cap/admin` (they don't narrow it), invalid `twd.dev/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `twd.dev/cap/mcp` or `twd.dev/cap/approve` grants (they apply to every tenant). Never make `ok` false.
+	// AccessWarnings Grants to `tag:tw-mgmt` that don't do what they look like: values on `github.com/rosskukulinski/tailworks/cap/admin` (they don't narrow it), invalid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `github.com/rosskukulinski/tailworks/cap/mcp` or `github.com/rosskukulinski/tailworks/cap/approve` grants (they apply to every tenant). Never make `ok` false.
 	AccessWarnings *[]string          `json:"accessWarnings,omitempty"`
 	Missing        []PreflightMissing `json:"missing"`
 
-	// MissingNodeAttrs Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes.
+	// MissingNodeAttrs Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:tw-public` for a workload with public routes.
 	MissingNodeAttrs *[]string `json:"missingNodeAttrs,omitempty"`
 	MissingTagOwners []string  `json:"missingTagOwners"`
 
@@ -3314,7 +3314,7 @@ type PublicAssignment struct {
 	// Routes Examples: ["/webhooks/*","/oauth/callback"]
 	Routes []string `json:"routes"`
 
-	// Tags Examples: ["tag:twd-public"]
+	// Tags Examples: ["tag:tw-public"]
 	Tags []string `json:"tags"`
 
 	// Upgrade Routes on which WebSocket/SSE upgrades are allowed.
@@ -3333,7 +3333,7 @@ type PublicImage struct {
 	// ID Examples: pi_3f9a1c2b7d8e4f50
 	ID string `json:"id"`
 
-	// Ref The normalised upstream ref (or twd.local ref) deploys match.
+	// Ref The normalised upstream ref (or tw.local ref) deploys match.
 	Ref string `json:"ref"`
 
 	// Repository `public/…`
@@ -3370,10 +3370,10 @@ type PublicImagePage struct {
 }
 
 // PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+// tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 // a deploy that declares them is refused `403 public_ingress_not_allowed`,
 // and setting `deny` later makes hosts close every public listener.
-// `twd up` (single-tenant) creates its tenant with `allow`.
+// `tw up` (single-tenant) creates its tenant with `allow`.
 type PublicIngress string
 
 // PublicLimits netd's limits on a public listener (ADR-029 D5); defaults filled in.
@@ -3647,7 +3647,7 @@ type ReleaseNote struct {
 // ReleaseNoteKind defines model for ReleaseNote.Kind.
 type ReleaseNoteKind string
 
-// ReplicaRef One replica of a workload with `twd.jsonc` `replicas` > 1.
+// ReplicaRef One replica of a workload with `tailworks.jsonc` `replicas` > 1.
 type ReplicaRef struct {
 	DeploymentID string `json:"deploymentID"`
 	Host         string `json:"host"`
@@ -3670,7 +3670,7 @@ type ReplicaRef struct {
 	Workload string `json:"workload"`
 }
 
-// RequestRecord One line of a workload's request log (`twd logs --json`,
+// RequestRecord One line of a workload's request log (`tw logs --json`,
 // ADR-observability): a request through hostd's ingress (`kind:
 // request`), joined with its workerd invocation, or an invocation
 // with no ingress half (`kind: invocation`: a DO called from the
@@ -3717,7 +3717,7 @@ type RequestRecord struct {
 	Method *string `json:"method,omitempty"`
 	Name   *string `json:"name,omitempty"`
 
-	// Object The twd object ID.
+	// Object The tailworks object ID.
 	Object       *string `json:"object,omitempty"`
 	Outcome      *string `json:"outcome,omitempty"`
 	ParentSpanID *string `json:"parentSpanId,omitempty"`
@@ -3787,7 +3787,7 @@ type SchemaStatus struct {
 	// Latest The newest migration this replica knows.
 	Latest string `json:"latest"`
 
-	// MinBinary The oldest twd-mgmt that may open the store.
+	// MinBinary The oldest tw-mgmt that may open the store.
 	MinBinary *string   `json:"minBinary,omitempty"`
 	Pending   *[]string `json:"pending,omitempty"`
 
@@ -3835,7 +3835,7 @@ type SecretPut struct {
 
 // SelfInfo defines model for SelfInfo.
 type SelfInfo struct {
-	// DNSName `twd-mgmt.<tailnet>`
+	// DNSName `tw-mgmt.<tailnet>`
 	DNSName *string `json:"dnsName,omitempty"`
 	HTTPS   bool    `json:"https"`
 	Tailnet *string `json:"tailnet,omitempty"`
@@ -3865,7 +3865,7 @@ type Status struct {
 		Total int `json:"total"`
 	} `json:"hosts"`
 
-	// Listeners e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.twd/run/mgmt.sock`.
+	// Listeners e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.tailworks/run/mgmt.sock`.
 	Listeners *[]string `json:"listeners,omitempty"`
 
 	// Objects Count per `ObjectStatus`.
@@ -4050,10 +4050,10 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
-	// NamePrefix Goes in front of every tailnet name twd generates for this tenant (object
+	// NamePrefix Goes in front of every tailnet name tailworks generates for this tenant (object
 	// and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11
 	// of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most
 	// one may go without (`409 name_prefix_required`). Fixed once the tenant
@@ -4070,7 +4070,7 @@ type Tenant struct {
 	OboPublicKey *string `json:"oboPublicKey,omitempty"`
 
 	// OwnerTag The tag that owns this tenant's workload and object tags, and that its
-	// OAuth client is scoped to. Default `tag:twd`. Two tenants on one
+	// OAuth client is scoped to. Default `tag:tw`. Two tenants on one
 	// tailnet need their own, so neither's client can mint the other's tags
 	// (`409 shared_owner_tag`). See docs/teams.md (ADR-043).
 	OwnerTag *string `json:"ownerTag,omitempty"`
@@ -4079,10 +4079,10 @@ type Tenant struct {
 	Pool *string `json:"pool,omitempty"`
 
 	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+	// tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 	// a deploy that declares them is refused `403 public_ingress_not_allowed`,
 	// and setting `deny` later makes hosts close every public listener.
-	// `twd up` (single-tenant) creates its tenant with `allow`.
+	// `tw up` (single-tenant) creates its tenant with `allow`.
 	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute int            `json:"registrationsPerMinute"`
 
@@ -4104,7 +4104,7 @@ type TenantCreate struct {
 	MaxContainers      *int     `json:"maxContainers,omitempty"`
 	MaxObjects         *int     `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
 	// NamePrefix Default none (see `Tenant.namePrefix`).
@@ -4112,15 +4112,15 @@ type TenantCreate struct {
 	OauthClientFile *string `json:"oauthClientFile,omitempty"`
 	OauthClientID   *string `json:"oauthClientID,omitempty"`
 
-	// OwnerTag Default `tag:twd` (see `Tenant.ownerTag`).
+	// OwnerTag Default `tag:tw` (see `Tenant.ownerTag`).
 	OwnerTag *string `json:"ownerTag,omitempty"`
 	Pool     *string `json:"pool,omitempty"`
 
 	// PublicIngress Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-	// tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+	// tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 	// a deploy that declares them is refused `403 public_ingress_not_allowed`,
 	// and setting `deny` later makes hosts close every public listener.
-	// `twd up` (single-tenant) creates its tenant with `allow`.
+	// `tw up` (single-tenant) creates its tenant with `allow`.
 	PublicIngress          *PublicIngress `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int           `json:"registrationsPerMinute,omitempty"`
 	Tailnet                string         `json:"tailnet"`
@@ -4139,11 +4139,11 @@ type TenantDeleteResult struct {
 	TenantID           string    `json:"tenantID"`
 }
 
-// TenantGrant One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it names.
+// TenantGrant One valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` value. Allows each action in each tenant it names.
 type TenantGrant struct {
 	Actions []TenantGrantActions `json:"actions"`
 
-	// Approve `twd.dev/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md).
+	// Approve `github.com/rosskukulinski/tailworks/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md).
 	Approve *[]ApproveGrant `json:"approve,omitempty"`
 
 	// Mcp Admits the caller to `/mcp` for these tenants. The read tools need `read`; each write or destructive tool must be named here and its action held in `actions`.
@@ -4172,7 +4172,7 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
-	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode *MintMode `json:"mintMode,omitempty"`
 
 	// NamePrefix Only before the tenant's first deploy (`400 immutable_field` after).
@@ -4180,7 +4180,7 @@ type TenantPatch struct {
 	OauthClientFile nullable.Nullable[string] `json:"oauthClientFile,omitempty"`
 	OauthClientID   nullable.Nullable[string] `json:"oauthClientID,omitempty"`
 
-	// OwnerTag Move the tenant to its own owner tag (`null` = back to `tag:twd`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch.
+	// OwnerTag Move the tenant to its own owner tag (`null` = back to `tag:tw`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch.
 	OwnerTag nullable.Nullable[string] `json:"ownerTag,omitempty"`
 	Pool     nullable.Nullable[string] `json:"pool,omitempty"`
 
@@ -4228,27 +4228,27 @@ type TombstoneError struct {
 	// |---|---|---|
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
-	// | `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-	// | `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+	// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 	// | `too_many_secrets` | 400 | a workload already has 128 secrets |
 	// | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 	// | `no_identity` | 401 | WhoIs failed for the connection |
-	// | `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+	// | `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 	// | `host_token_invalid` | 403 | local-dev socket, wrong token |
-	// | `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+	// | `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 	// | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+	// | `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 	// | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-	// | `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-	// | `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+	// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+	// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-	// | `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+	// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 	// | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+	// | `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 	// | `not_found` | 404 | — |
 	// | `unknown_tenant` | 404 | — |
 	// | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -4269,14 +4269,14 @@ type TombstoneError struct {
 	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 	// | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+	// | `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 	// | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 	// | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 	// | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 	// | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 	// | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 	// | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+	// | `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 	// | `already_joined` | 409 | credential for an object that has a node |
 	// | `identity_conflict` | 409 | object ID collision across identities |
 	// | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -4284,7 +4284,7 @@ type TombstoneError struct {
 	// | `superseded` | 409 | undeploy of a non-latest deployment |
 	// | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 	// | `host_holds_leases` | 409 | host delete without `drain` |
-	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+	// | `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 	// | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 	// | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 	// | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -4293,9 +4293,9 @@ type TombstoneError struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-	// | `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-	// | `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 	// | `bootstrap_failed` | 502 | control plane refused the mint |
 	// | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 	// | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -4447,24 +4447,24 @@ type WhoAmI struct {
 	Actor string `json:"actor"`
 	Admin bool   `json:"admin"`
 
-	// ApproveGrants The values of the caller's `twd.dev/cap/approve` grants toward
-	// `tag:twd-mgmt` (docs/approvals.md): what it may decide through
-	// `twd approve` and the admin UI. Empty when it holds none.
+	// ApproveGrants The values of the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward
+	// `tag:tw-mgmt` (docs/approvals.md): what it may decide through
+	// `tw approve` and the admin UI. Empty when it holds none.
 	ApproveGrants *[]ApproveGrant `json:"approveGrants,omitempty"`
 
-	// Approver The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity.
+	// Approver The caller holds `github.com/rosskukulinski/tailworks/cap/approve` and may decide Workflow approvals its grants cover (`tw approve`). Always false for the local operator, which has no personal identity.
 	Approver *bool `json:"approver,omitempty"`
 
-	// Caps The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
+	// Caps The `github.com/rosskukulinski/tailworks/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts.
 	Caps   *[]string `json:"caps,omitempty"`
 	HostID *string   `json:"hostID,omitempty"`
 
-	// InvalidTenantGrants The caller's `twd.dev/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard).
+	// InvalidTenantGrants The caller's `github.com/rosskukulinski/tailworks/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard).
 	InvalidTenantGrants *[]string  `json:"invalidTenantGrants,omitempty"`
 	Kind                WhoAmIKind `json:"kind"`
 	Login               *string    `json:"login,omitempty"`
 
-	// McpTools The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order.
+	// McpTools The MCP tools `/mcp` lets the caller use without a `Tw-MCP-Tools` header, in `tools/list` order.
 	McpTools *[]string `json:"mcpTools,omitempty"`
 	Mgmt     SelfInfo  `json:"mgmt"`
 	NodeID   *string   `json:"nodeID,omitempty"`
@@ -4473,7 +4473,7 @@ type WhoAmI struct {
 	// Tailnet The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts.
 	Tailnet *string `json:"tailnet,omitempty"`
 
-	// TenantGrants The caller's valid `twd.dev/cap/tenant-admin` values: the tenants
+	// TenantGrants The caller's valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values: the tenants
 	// it may act in, and how. Empty when it holds none. An admin's
 	// values are listed too but don't narrow it.
 	TenantGrants *[]TenantGrant `json:"tenantGrants,omitempty"`
@@ -4481,7 +4481,7 @@ type WhoAmI struct {
 	// Tenants The tenants the caller can act in without knowing their IDs:
 	// those whose `tailnet` is the caller's own tailnet. The local
 	// operator gets every tenant; hosts get none. The admin UI's
-	// approvals page and `twd approvals` / `twd approve` default to
+	// approvals page and `tw approvals` / `tw approve` default to
 	// these. A tailnet admin can still list every tenant
 	// (`GET /v1/tenants`).
 	Tenants *[]WhoAmITenant `json:"tenants,omitempty"`
@@ -4498,7 +4498,7 @@ type WhoAmITenant struct {
 
 // WorkloadPublic defines model for WorkloadPublic.
 type WorkloadPublic struct {
-	// Exposed `twd expose on` (true, the default) or `off`.
+	// Exposed `tw expose on` (true, the default) or `off`.
 	Exposed   bool   `json:"exposed"`
 	TenantID  string `json:"tenantID"`
 	UpdatedAt *int64 `json:"updatedAt,omitempty"`
@@ -4576,21 +4576,21 @@ type WorkloadName = string
 // BadRequest The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type BadRequest = Error
 
 // Conflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Conflict = Error
 
 // Forbidden The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Forbidden = Error
 
@@ -4600,42 +4600,42 @@ type Gone = TombstoneError
 // LeaseLost The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type LeaseLost = Error
 
 // NotFound The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type NotFound = Error
 
 // PreconditionFailed The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type PreconditionFailed = Error
 
 // ReadyConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type ReadyConflict = Error
 
 // StoreConflict The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type StoreConflict = Error
 
 // Unauthorized The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 // `missing` names what is absent (grant, cap, field, quota); `snippet`
 // is policy HuJSON to paste when a grant is missing; `doc_url` is
-// `https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+// `https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 // code's heading in the typed error catalog); `trace_id` correlates with audit.
 type Unauthorized = Error
 
@@ -4700,7 +4700,7 @@ type ListDeploymentsParams struct {
 	Workload *string `form:"workload,omitempty" json:"workload,omitempty"`
 	Host     *string `form:"host,omitempty" json:"host,omitempty"`
 
-	// Latest Only the newest deployment of each `(tenant, workload)` (what `twd ls` shows).
+	// Latest Only the newest deployment of each `(tenant, workload)` (what `tw ls` shows).
 	Latest *bool `form:"latest,omitempty" json:"latest,omitempty"`
 }
 
@@ -5439,10 +5439,10 @@ type ClientInterface interface {
 
 	// GetCertificate Look up a node certificate by stable node ID
 	//
-	// The receiver-side lookup: "is the peer that just connected a twd
+	// The receiver-side lookup: "is the peer that just connected a tailworks
 	// object, and what is its `lim`?" `404 not_found` when no live object
 	// of the tenant has that node (the receiver then applies the WhoIs caps
-	// unchanged: the peer is not a twd object); `410 killed` for a tombstone.
+	// unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 	//
 	// Corresponds with GET /v1/certificates/{stableNodeID} (the `GetCertificate` operationId).
 	GetCertificate(ctx context.Context, stableNodeID string, params *GetCertificateParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5536,8 +5536,8 @@ type ClientInterface interface {
 
 	// CreateDeploymentWithBody Deploy a workload (async), or preflight it with dryRun
 	//
-	// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -5547,8 +5547,8 @@ type ClientInterface interface {
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
 	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+	// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -5574,7 +5574,7 @@ type ClientInterface interface {
 	//    "sum" over several targets). Hosts without a fresh measurement are
 	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 	//
-	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// `replace: true` (`tw deploy --replace`) re-places a running workload:
 	// it moves only if an eligible host is clearly better (a better path
 	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 	// `epoch+1` in one conditional write. A stateful workload's move also
@@ -5597,8 +5597,8 @@ type ClientInterface interface {
 
 	// CreateDeployment Deploy a workload (async), or preflight it with dryRun
 	//
-	// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -5608,8 +5608,8 @@ type ClientInterface interface {
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
 	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+	// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -5635,7 +5635,7 @@ type ClientInterface interface {
 	//    "sum" over several targets). Hosts without a fresh measurement are
 	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 	//
-	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// `replace: true` (`tw deploy --replace`) re-places a running workload:
 	// it moves only if an eligible host is clearly better (a better path
 	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 	// `epoch+1` in one conditional write. A stateful workload's move also
@@ -5683,7 +5683,7 @@ type ClientInterface interface {
 	// CreateDeviceDeleteRun Run the scheduled device deletes now
 	//
 	// Kill tier 2 is deferred by `-device-delete-delay`; this creates a run
-	// that executes every pending delete immediately (what `twd down` does
+	// that executes every pending delete immediately (what `tw down` does
 	// before stopping mgmt). Each delete is audited (`kind: device_delete`).
 	// Replaces `POST /v0/flush`.
 	//
@@ -5704,14 +5704,14 @@ type ClientInterface interface {
 
 	// CreateHostWithBody Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`), mints a
-	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// `tw host add`: creates the host record (status `pending`), mints a
+	// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's credential (its OAuth client, or the
-	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+	// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+	// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
 	// (delete it first). The key is never logged. Audited
@@ -5724,14 +5724,14 @@ type ClientInterface interface {
 
 	// CreateHost Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`), mints a
-	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// `tw host add`: creates the host record (status `pending`), mints a
+	// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's credential (its OAuth client, or the
-	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+	// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+	// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
 	// (delete it first). The key is never logged. Audited
@@ -5761,7 +5761,7 @@ type ClientInterface interface {
 
 	// RegisterHostWithBody Register or re-register a host (idempotent)
 	//
-	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+	// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 	// is bound to this `hostID` on first registration, which must carry the
 	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 	// `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -5772,10 +5772,10 @@ type ClientInterface interface {
 	// node needs no secret and replaces capacity, tiers and `push`;
 	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 	// it or omit it; a different key is `403 host_identity_mismatch` and
-	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 	// every restart.
 	//
-	// A host that was created through `twd host add` exists before its first
+	// A host that was created through `tw host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
 	//
 	// Takes any type of body and a specified content type.
@@ -5785,7 +5785,7 @@ type ClientInterface interface {
 
 	// RegisterHost Register or re-register a host (idempotent)
 	//
-	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+	// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 	// is bound to this `hostID` on first registration, which must carry the
 	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 	// `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -5796,10 +5796,10 @@ type ClientInterface interface {
 	// node needs no secret and replaces capacity, tiers and `push`;
 	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 	// it or omit it; a different key is `403 host_identity_mismatch` and
-	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 	// every restart.
 	//
-	// A host that was created through `twd host add` exists before its first
+	// A host that was created through `tw host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
 	//
 	// Takes a body of the `application/json` content type.
@@ -5830,7 +5830,7 @@ type ClientInterface interface {
 	// DrainHostWithBody Cordon a host and move its workloads to other hosts
 	//
 	// Cordons the host, then re-places each workload assigned to it on another eligible host
-	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 	//
 	// - a stateless workload (no Durable Objects) moves;
 	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -5839,7 +5839,7 @@ type ClientInterface interface {
 	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 	//
 	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 	// `DELETE /v1/hosts/{id}` removes it.
 	//
 	// Takes any type of body and a specified content type.
@@ -5850,7 +5850,7 @@ type ClientInterface interface {
 	// DrainHost Cordon a host and move its workloads to other hosts
 	//
 	// Cordons the host, then re-places each workload assigned to it on another eligible host
-	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 	//
 	// - a stateless workload (no Durable Objects) moves;
 	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -5859,7 +5859,7 @@ type ClientInterface interface {
 	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 	//
 	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 	// `DELETE /v1/hosts/{id}` removes it.
 	//
 	// Takes a body of the `application/json` content type.
@@ -5954,8 +5954,8 @@ type ClientInterface interface {
 	// ListImageAliases The image alias map
 	//
 	// Upstream refs swapped for another image on one arch (ADR-032 D3: Cloudflare publishes
-	// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get twd's rebuild from the Apache-2.0
-	// source, in `public/`). Deploys apply it when pinning; `twd deploy` applies it as BuildKit named
+	// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get tailworks' rebuild from the Apache-2.0
+	// source, in `public/`). Deploys apply it when pinning; `tw deploy` applies it as BuildKit named
 	// contexts when it builds a Dockerfile, so app source never changes.
 	//
 	// Corresponds with GET /v1/images/aliases (the `ListImageAliases` operationId).
@@ -5973,10 +5973,10 @@ type ClientInterface interface {
 
 	// CreatePublicImageWithBody Mark an image as a public base (mirrors it now)
 	//
-	// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+	// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 	// mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-	// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-	// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+	// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+	// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 	// digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 	//
 	// Takes any type of body and a specified content type.
@@ -5986,10 +5986,10 @@ type ClientInterface interface {
 
 	// CreatePublicImage Mark an image as a public base (mirrors it now)
 	//
-	// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+	// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 	// mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-	// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-	// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+	// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+	// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 	// digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 	//
 	// Takes a body of the `application/json` content type.
@@ -6226,17 +6226,17 @@ type ClientInterface interface {
 
 	// ListReleases The release catalog
 	//
-	// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+	// Every release this tw-mgmt knows: the ones built into it (its own and every earlier
 	// release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
 	// notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
 	//
 	// Corresponds with GET /v1/releases (the `ListReleases` operationId).
 	ListReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ImportReleasesWithBody Import catalog entries (from a release's share/twd/catalog.json)
+	// ImportReleasesWithBody Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
-	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -6245,10 +6245,10 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
 	ImportReleasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ImportReleases Import catalog entries (from a release's share/twd/catalog.json)
+	// ImportReleases Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
-	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -6265,7 +6265,7 @@ type ClientInterface interface {
 	// PutReleaseArtifactWithBody Upload a release tarball (or its SHA256SUMS)
 	//
 	// Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
-	// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+	// Stored in tw-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
 	// replicas that don't share that directory each need the upload. Audited `release_artifact`.
 	//
 	// Takes any type of body and a specified content type.
@@ -6365,7 +6365,7 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/tenants/{id} (the `UpdateTenant` operationId).
 	UpdateTenantWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, params *UpdateTenantParams, body UpdateTenantApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	// ListApprovals The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 	//
 	// A Workflow instance that waits for an event of type `approval` or
 	// `approval-*` (the Agents SDK's `waitForApproval`) is listed here
@@ -6373,20 +6373,20 @@ type ClientInterface interface {
 	// host over the mgmt → hostd channel and merges the answers, oldest
 	// first; a host that does not answer is named in `unreachable`.
 	// Admins see every approval; a tailnet caller holding only
-	// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+	// `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) sees the ones its
 	// grants let it decide. A read, so not audited.
 	//
 	// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
 	ListApprovals(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteTenantNotifications Stop the tenant's notifications (`twd notify rm`)
+	// DeleteTenantNotifications Stop the tenant's notifications (`tw notify rm`)
 	//
 	// Idempotent. Audited (`kind: notification_delete`).
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/notifications (the `DeleteTenantNotifications` operationId).
 	DeleteTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetTenantNotifications Read the tenant's notification webhook (`twd notify`), without secrets
+	// GetTenantNotifications Read the tenant's notification webhook (`tw notify`), without secrets
 	//
 	// ADR-approval-notifications. The webhook URL is shown as its origin
 	// only (scheme and host): a chat webhook's path or query is its
@@ -6396,11 +6396,11 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/notifications (the `GetTenantNotifications` operationId).
 	GetTenantNotifications(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutTenantNotificationsWithBody Set the tenant's notification webhook (`twd notify set`)
+	// PutTenantNotificationsWithBody Set the tenant's notification webhook (`tw notify set`)
 	//
 	// ADR-approval-notifications. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
 	// receives the host's audit record, usually within seconds). mgmt
 	// dials the URL itself: a tailnet name, a `100.x` address or a
@@ -6408,7 +6408,7 @@ type ClientInterface interface {
 	// host's network; loopback and link-local addresses are refused.
 	// Delivery is tried 3 times; a final failure is audited
 	// (`notification_failed`). The config is stored encrypted in mgmt
-	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// custody (custody name `tw/<tenant>/notifications`); the URL's path
 	// and query and the header values are never logged, audited or
 	// returned. Audited (`kind: notification_put`, the URL's host and
 	// header names).
@@ -6418,11 +6418,11 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
 	PutTenantNotificationsWithBody(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutTenantNotifications Set the tenant's notification webhook (`twd notify set`)
+	// PutTenantNotifications Set the tenant's notification webhook (`tw notify set`)
 	//
 	// ADR-approval-notifications. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
 	// receives the host's audit record, usually within seconds). mgmt
 	// dials the URL itself: a tailnet name, a `100.x` address or a
@@ -6430,7 +6430,7 @@ type ClientInterface interface {
 	// host's network; loopback and link-local addresses are refused.
 	// Delivery is tried 3 times; a final failure is audited
 	// (`notification_failed`). The config is stored encrypted in mgmt
-	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// custody (custody name `tw/<tenant>/notifications`); the URL's path
 	// and query and the header values are never logged, audited or
 	// returned. Audited (`kind: notification_put`, the URL's host and
 	// header names).
@@ -6440,7 +6440,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
 	PutTenantNotifications(ctx context.Context, id TenantID, body PutTenantNotificationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// TestTenantNotifications Send a test notification now (`twd notify test`)
+	// TestTenantNotifications Send a test notification now (`tw notify test`)
 	//
 	// POSTs a `NotificationEvent` with `event: test` to the configured
 	// webhook once, synchronously, and reports the outcome. Not retried.
@@ -6483,7 +6483,7 @@ type ClientInterface interface {
 	// a name nothing serves can be released: `409 public_name_in_use`
 	// while the workload's latest deployment declares public routes or
 	// its public node is live (undeploy it, or remove `"public"` from its
-	// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+	// `tailworks.jsonc` and redeploy, first). `404 not_found` when the tenant
 	// does not own the name. Audited (`kind: public_name_release`).
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
@@ -6534,7 +6534,7 @@ type ClientInterface interface {
 	//
 	// The oldest messages, bodies included, without changing them (no
 	// lease, no attempt counted). This is how an operator inspects a
-	// dead-letter queue (`twd queues messages <queue>`).
+	// dead-letter queue (`tw queues messages <queue>`).
 	//
 	// Corresponds with GET /v1/tenants/{id}/queues/{queue}/messages (the `PeekQueueMessages` operationId).
 	PeekQueueMessages(ctx context.Context, id TenantID, queue QueueName, params *PeekQueueMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6542,7 +6542,7 @@ type ClientInterface interface {
 	// SendQueueMessagesWithBody Send messages to a queue
 	//
 	// A producer's `send()` / `sendBatch()` (through its host), or an
-	// operator's `twd queues send`. The messages are durable in mgmt's
+	// operator's `tw queues send`. The messages are durable in mgmt's
 	// database when this answers. Each gets a random ID. A host must give
 	// `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 	// the workload's latest deployment must bind the queue as a producer
@@ -6558,7 +6558,7 @@ type ClientInterface interface {
 	// SendQueueMessages Send messages to a queue
 	//
 	// A producer's `send()` / `sendBatch()` (through its host), or an
-	// operator's `twd queues send`. The messages are durable in mgmt's
+	// operator's `tw queues send`. The messages are durable in mgmt's
 	// database when this answers. Each gets a random ID. A host must give
 	// `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 	// the workload's latest deployment must bind the queue as a producer
@@ -6655,16 +6655,16 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/queues/{queue}/purge (the `PurgeQueue` operationId).
 	PurgeQueue(ctx context.Context, id TenantID, queue QueueName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+	// DeleteTenantTelemetry Stop the tenant's OTLP export (`tw telemetry rm`)
 	//
 	// Hosts stop exporting within a minute. Records stay on the hosts
-	// (`twd logs`) and in `/metrics`. Idempotent. Audited
+	// (`tw logs`) and in `/metrics`. Idempotent. Audited
 	// (`kind: telemetry_delete`).
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
 	DeleteTenantTelemetry(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+	// GetTenantTelemetry Read the tenant's OTLP export (`tw telemetry`), without header values
 	//
 	// ADR-observability. Header names only: no admin operation returns a
 	// header value. A tenant that exports nothing has no `otlp`.
@@ -6673,7 +6673,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/telemetry (the `GetTenantTelemetry` operationId).
 	GetTenantTelemetry(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutTenantTelemetryWithBody Set the tenant's OTLP export (`twd telemetry set`)
+	// PutTenantTelemetryWithBody Set the tenant's OTLP export (`tw telemetry set`)
 	//
 	// Every workload of the tenant exports its request records (as log
 	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -6682,7 +6682,7 @@ type ClientInterface interface {
 	// peer the tailnet policy lets that workload reach (a public
 	// internet endpoint is refused like any other egress). The config
 	// is stored encrypted in mgmt custody (custody name
-	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// `tw/<tenant>/telemetry`); header values (collector credentials)
 	// are never logged, audited or returned. Hosts pick a change up
 	// within a minute. Audited (`kind: telemetry_put`, endpoint and
 	// header names).
@@ -6692,7 +6692,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetryWithBody(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+	// PutTenantTelemetry Set the tenant's OTLP export (`tw telemetry set`)
 	//
 	// Every workload of the tenant exports its request records (as log
 	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -6701,7 +6701,7 @@ type ClientInterface interface {
 	// peer the tailnet policy lets that workload reach (a public
 	// internet endpoint is refused like any other egress). The config
 	// is stored encrypted in mgmt custody (custody name
-	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// `tw/<tenant>/telemetry`); header values (collector credentials)
 	// are never logged, audited or returned. Hosts pick a change up
 	// within a minute. Audited (`kind: telemetry_put`, endpoint and
 	// header names).
@@ -6711,19 +6711,19 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
 	// WhoIs of the connection (user, node, tags). mgmt sends it, with
-	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 	// the host holding the workload's lease; that host checks the grants
 	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
 	// numeric limits a grant names), delivers the event (the Workflow
 	// sees `approver`, never one from the request) and audits the
-	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 	// admin does not let anyone approve: the grant does. The operator
 	// console and the local socket have no personal identity, so they
-	// get `403 no_identity`; use `twd link` from your own machine.
+	// get `403 no_identity`; use `tw link` from your own machine.
 	// `409 approval_not_pending` when nothing waits for this decision.
 	//
 	// Takes any type of body and a specified content type.
@@ -6731,19 +6731,19 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
 	DecideApprovalWithBody(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// DecideApproval Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
 	// WhoIs of the connection (user, node, tags). mgmt sends it, with
-	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 	// the host holding the workload's lease; that host checks the grants
 	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
 	// numeric limits a grant names), delivers the event (the Workflow
 	// sees `approver`, never one from the request) and audits the
-	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 	// admin does not let anyone approve: the grant does. The operator
 	// console and the local socket have no personal identity, so they
-	// get `403 no_identity`; use `twd link` from your own machine.
+	// get `403 no_identity`; use `tw link` from your own machine.
 	// `409 approval_not_pending` when nothing waits for this decision.
 	//
 	// Takes a body of the `application/json` content type.
@@ -6751,7 +6751,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
 	DecideApproval(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+	// ExportD1 Export a D1 database as SQL (`tw d1 export`)
 	//
 	// The database's schema and rows as SQL text, in the shape of
 	// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
@@ -6764,7 +6764,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
 	ExportD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// QueryD1WithBody Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 	//
 	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
@@ -6790,7 +6790,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
 	QueryD1WithBody(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// QueryD1 Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 	//
 	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
@@ -6816,7 +6816,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
 	QueryD1(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+	// ListWorkloadDeployments A workload's deployment history, newest first (`tw deployments`)
 	//
 	// ADR-deploy-rollback. Every deployment of the workload, newest first:
 	// who deployed it, when, the bundle's SHA-256, its status (the current
@@ -6824,7 +6824,7 @@ type ClientInterface interface {
 	// `superseded` or `stopped`), the host's last report (`hostStatus`)
 	// and whether mgmt still holds the bundle (`bundleRetained`). mgmt
 	// keeps the bundles of the newest `bundleRetention` deployments of
-	// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+	// each workload (tw-mgmt `-bundle-retention`) and prunes older ones;
 	// their records stay, without the bundle, so they can't be rolled back
 	// to. `rollbackOf` names the deployment a rollback redeployed. A
 	// workload with no deployment is `404 unknown_workload`.
@@ -6832,7 +6832,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/deployments (the `ListWorkloadDeployments` operationId).
 	ListWorkloadDeployments(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 	//
 	// The app's log is a file on the host that runs it. mgmt finds the
 	// host holding the workload's namespace lease and reads the log from
@@ -6847,7 +6847,7 @@ type ClientInterface interface {
 	// A workload with `replicas` reads every replica's host; each line
 	// is then prefixed with `[<hostID>] `, and `host` selects one
 	// replica. A host that does not answer contributes one
-	// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+	// `[<hostID>] tw: …` line instead (`502 host_unavailable` when no
 	// host answers). `404 unknown_workload` when the workload has no
 	// running replica (on `host`); `404 no_logs` when the host has no
 	// log file for it yet. A read, so not audited; mgmt logs the actor.
@@ -6857,7 +6857,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListWorkloadPreviews A workload's running previews (`twd previews`)
+	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	//
 	// ADR-deploy-preview. The previews of the workload that are not
 	// stopped, newest first. A preview is created by
@@ -6870,7 +6870,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
 	ListWorkloadPreviews(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreatePromotionWithBody Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	// CreatePromotionWithBody Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
 	// ADR-deploy-preview. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
@@ -6895,7 +6895,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
 	CreatePromotionWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	// CreatePromotion Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
 	// ADR-deploy-preview. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
@@ -6920,9 +6920,9 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
 	CreatePromotion(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
+	// GetWorkloadPublic Read a workload's public-ingress exposure (`tw expose`)
 	//
-	// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+	// ADR-029. A workload whose `tailworks.jsonc` declares `public` routes is
 	// served over Funnel from its public node
 	// (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
 	// the tenant's `publicIngress` is `allow`. A workload that was never
@@ -6933,7 +6933,7 @@ type ClientInterface interface {
 
 	// UpdateWorkloadPublicWithBody Expose or unexpose a workload's public routes (JSON Merge Patch)
 	//
-	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// `tw expose on|off` (ADR-029 D1): an operator override that survives
 	// redeploys. `exposed: false` makes the host close the public node's
 	// Funnel listener and reset its flows (the node and its certificate
 	// stay); `true` reopens it. The lease holder is pushed at once.
@@ -6947,7 +6947,7 @@ type ClientInterface interface {
 
 	// UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 	//
-	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// `tw expose on|off` (ADR-029 D1): an operator override that survives
 	// redeploys. `exposed: false` makes the host close the public node's
 	// Funnel listener and reset its flows (the node and its certificate
 	// stay); `true` reopens it. The lease holder is pushed at once.
@@ -6961,7 +6961,7 @@ type ClientInterface interface {
 
 	// UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody Expose or unexpose a workload's public routes (JSON Merge Patch)
 	//
-	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// `tw expose on|off` (ADR-029 D1): an operator override that survives
 	// redeploys. `exposed: false` makes the host close the public node's
 	// Funnel listener and reset its flows (the node and its certificate
 	// stay); `true` reopens it. The lease holder is pushed at once.
@@ -6973,7 +6973,7 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateRollbackWithBody Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// CreateRollbackWithBody Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
 	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
@@ -6983,7 +6983,7 @@ type ClientInterface interface {
 	// is sticky as for any deploy (the workload stays on its host unless
 	// `replace` or `host` say otherwise), so Durable Object storage stays
 	// where it is. Container images the original deploy built and pushed
-	// to twd's registry are reused by digest.
+	// to tailworks' registry are reused by digest.
 	//
 	// Without `deploymentID`, the target is the newest earlier deployment
 	// that ran (the host reported it `active` and it did not fail), whose
@@ -7006,7 +7006,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
 	CreateRollbackWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// CreateRollback Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
 	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
@@ -7016,7 +7016,7 @@ type ClientInterface interface {
 	// is sticky as for any deploy (the workload stays on its host unless
 	// `replace` or `host` say otherwise), so Durable Object storage stays
 	// where it is. Container images the original deploy built and pushed
-	// to twd's registry are reused by digest.
+	// to tailworks' registry are reused by digest.
 	//
 	// Without `deploymentID`, the target is the newest earlier deployment
 	// that ran (the host reported it `active` and it did not fail), whose
@@ -7053,7 +7053,7 @@ type ClientInterface interface {
 
 	// ListWorkloadSecrets List a workload's secrets (names and times, never values)
 	//
-	// `twd secret ls`. No admin operation returns a value; only the lease
+	// `tw secret ls`. No admin operation returns a value; only the lease
 	// holder gets them (`POST …/secret-grants`). Ordered by name. A
 	// workload with no secrets (or never deployed) is an empty page.
 	// `404 unknown_tenant`.
@@ -7061,7 +7061,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/secrets (the `ListWorkloadSecrets` operationId).
 	ListWorkloadSecrets(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+	// DeleteWorkloadSecret Delete a workload secret (`tw secret rm`)
 	//
 	// Takes effect on the workload's next deploy. `404 unknown_secret`
 	// when the workload has no secret of that name. Audited
@@ -7070,16 +7070,16 @@ type ClientInterface interface {
 	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `DeleteWorkloadSecret` operationId).
 	DeleteWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutWorkloadSecretWithBody Create or replace a workload secret (`twd secret put`)
+	// PutWorkloadSecretWithBody Create or replace a workload secret (`tw secret put`)
 	//
 	// ADR-034. Stores the value encrypted at rest in mgmt's
-	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
 	// environment variable `<name>`) on its **next deploy**; running
 	// instances keep the value they started with. At most 128 secrets per
 	// workload and 5 KiB per value. Names are JS identifiers that are also
-	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// environment variable names; `TW_…` and `__TW…` are reserved. The
 	// value is never logged, audited or returned. Audited
 	// (`kind: secret_put`, name only).
 	//
@@ -7088,16 +7088,16 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 	PutWorkloadSecretWithBody(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+	// PutWorkloadSecret Create or replace a workload secret (`tw secret put`)
 	//
 	// ADR-034. Stores the value encrypted at rest in mgmt's
-	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
 	// environment variable `<name>`) on its **next deploy**; running
 	// instances keep the value they started with. At most 128 secrets per
 	// workload and 5 KiB per value. Names are JS identifiers that are also
-	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// environment variable names; `TW_…` and `__TW…` are reserved. The
 	// value is never logged, audited or returned. Audited
 	// (`kind: secret_put`, name only).
 	//
@@ -7118,7 +7118,7 @@ type ClientInterface interface {
 
 	// ListKVKeys List a KV namespace's keys
 	//
-	// Workers KV's `list()` for operators (`twd kv key list`,
+	// Workers KV's `list()` for operators (`tw kv key list`,
 	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -7131,14 +7131,14 @@ type ClientInterface interface {
 
 	// DeleteKVValue Delete one KV value
 	//
-	// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
 	DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetKVValue Get one KV value
 	//
-	// `twd kv key get`. `404 not_found` if the key does not exist or has
+	// `tw kv key get`. `404 not_found` if the key does not exist or has
 	// expired, `404 unknown_store` if the namespace does not.
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `GetKVValue` operationId).
@@ -7146,13 +7146,13 @@ type ClientInterface interface {
 
 	// PutKVValueWithBody Write one KV value
 	//
-	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// `tw kv key put`: a journal append, like a binding's `put()`, so
 	// running workloads see it on their next sync (within 60 s, or a
 	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 	// `400 store_limit`). The namespace must exist (`404
-	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// unknown_store`; `tw kv namespace create`). Audited (`kind:
 	// kv_put`) with the namespace and who wrote, not the key: key names
 	// can be sensitive, and mgmt keeps them only sealed and HMACed.
 	//
@@ -7163,13 +7163,13 @@ type ClientInterface interface {
 
 	// PutKVValue Write one KV value
 	//
-	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// `tw kv key put`: a journal append, like a binding's `put()`, so
 	// running workloads see it on their next sync (within 60 s, or a
 	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 	// `400 store_limit`). The namespace must exist (`404
-	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// unknown_store`; `tw kv namespace create`). Audited (`kind:
 	// kv_put`) with the namespace and who wrote, not the key: key names
 	// can be sensitive, and mgmt keeps them only sealed and HMACed.
 	//
@@ -7216,7 +7216,7 @@ type ClientInterface interface {
 	//
 	// A host must give `epoch`: the data is released only to the holder
 	// of the workload's lease at that epoch (`409 lease_lost`, as for
-	// secrets). An admin reads without it (`twd kv key get`).
+	// secrets). An admin reads without it (`tw kv key get`).
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `ReadStoreJournal` operationId).
 	ReadStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7230,7 +7230,7 @@ type ClientInterface interface {
 	// `409 store_conflict`, and the writer catches up
 	// (`GET …/journal?after=`) and retries. That makes the journal
 	// linearizable across writers (a workload's replicas, an admin's
-	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 	// entry with the same `ckey`, which mgmt deletes in the same
 	// transaction. The first append creates the store.
 	//
@@ -7257,7 +7257,7 @@ type ClientInterface interface {
 	// `409 store_conflict`, and the writer catches up
 	// (`GET …/journal?after=`) and retries. That makes the journal
 	// linearizable across writers (a workload's replicas, an admin's
-	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 	// entry with the same `ckey`, which mgmt deletes in the same
 	// transaction. The first append creates the store.
 	//
@@ -7358,7 +7358,7 @@ type ClientInterface interface {
 	// CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 	//
 	// Creates a key grant: the 256-bit data key of the `(tenant, workload)`
-	// DO volume (custody name `twd/<tenant>/volumes/<workload>/dek`,
+	// DO volume (custody name `tw/<tenant>/volumes/<workload>/dek`,
 	// created on first use) is released only to the host holding the
 	// workload's lease at `epoch` (`409 lease_lost`). Audited
 	// (`kind: volume_key`). `Cache-Control: no-store`. The key is never
@@ -7369,7 +7369,7 @@ type ClientInterface interface {
 
 	// WhoAmI Who the caller is, as mgmt sees it
 	//
-	// `twd link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
+	// `tw link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
 	//
 	// Corresponds with GET /v1/whoami (the `WhoAmI` operationId).
 	WhoAmI(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7463,10 +7463,10 @@ func (c *Client) GetAuditVerification(ctx context.Context, reqEditors ...Request
 
 // GetCertificate Look up a node certificate by stable node ID
 //
-// The receiver-side lookup: "is the peer that just connected a twd
+// The receiver-side lookup: "is the peer that just connected a tailworks
 // object, and what is its `lim`?" `404 not_found` when no live object
 // of the tenant has that node (the receiver then applies the WhoIs caps
-// unchanged: the peer is not a twd object); `410 killed` for a tombstone.
+// unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 //
 // Corresponds with GET /v1/certificates/{stableNodeID} (the `GetCertificate` operationId).
 func (c *Client) GetCertificate(ctx context.Context, stableNodeID string, params *GetCertificateParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7620,8 +7620,8 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 
 // CreateDeploymentWithBody Deploy a workload (async), or preflight it with dryRun
 //
-// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -7631,8 +7631,8 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
 // Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 // both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -7658,7 +7658,7 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 //     "sum" over several targets). Hosts without a fresh measurement are
 //     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 //
-// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// `replace: true` (`tw deploy --replace`) re-places a running workload:
 // it moves only if an eligible host is clearly better (a better path
 // class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 // `epoch+1` in one conditional write. A stateful workload's move also
@@ -7691,8 +7691,8 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 
 // CreateDeployment Deploy a workload (async), or preflight it with dryRun
 //
-// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -7702,8 +7702,8 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
 // Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 // both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -7729,7 +7729,7 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 //     "sum" over several targets). Hosts without a fresh measurement are
 //     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 //
-// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// `replace: true` (`tw deploy --replace`) re-places a running workload:
 // it moves only if an eligible host is clearly better (a better path
 // class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 // `epoch+1` in one conditional write. A stateful workload's move also
@@ -7817,7 +7817,7 @@ func (c *Client) GetDeploymentBundle(ctx context.Context, id DeploymentID, reqEd
 // CreateDeviceDeleteRun Run the scheduled device deletes now
 //
 // Kill tier 2 is deferred by `-device-delete-delay`; this creates a run
-// that executes every pending delete immediately (what `twd down` does
+// that executes every pending delete immediately (what `tw down` does
 // before stopping mgmt). Each delete is audited (`kind: device_delete`).
 // Replaces `POST /v0/flush`.
 //
@@ -7868,14 +7868,14 @@ func (c *Client) ListHosts(ctx context.Context, params *ListHostsParams, reqEdit
 
 // CreateHostWithBody Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`), mints a
-// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// `tw host add`: creates the host record (status `pending`), mints a
+// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's credential (its OAuth client, or the
-// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
 // (delete it first). The key is never logged. Audited
@@ -7898,14 +7898,14 @@ func (c *Client) CreateHostWithBody(ctx context.Context, contentType string, bod
 
 // CreateHost Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`), mints a
-// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// `tw host add`: creates the host record (status `pending`), mints a
+// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's credential (its OAuth client, or the
-// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
 // (delete it first). The key is never logged. Audited
@@ -7965,7 +7965,7 @@ func (c *Client) GetHost(ctx context.Context, id HostID, params *GetHostParams, 
 
 // RegisterHostWithBody Register or re-register a host (idempotent)
 //
-// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 // is bound to this `hostID` on first registration, which must carry the
 // `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 // `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -7976,10 +7976,10 @@ func (c *Client) GetHost(ctx context.Context, id HostID, params *GetHostParams, 
 // node needs no secret and replaces capacity, tiers and `push`;
 // `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 // it or omit it; a different key is `403 host_identity_mismatch` and
-// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 // every restart.
 //
-// A host that was created through `twd host add` exists before its first
+// A host that was created through `tw host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
 //
 // Takes any type of body and a specified content type.
@@ -7999,7 +7999,7 @@ func (c *Client) RegisterHostWithBody(ctx context.Context, id HostID, contentTyp
 
 // RegisterHost Register or re-register a host (idempotent)
 //
-// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 // is bound to this `hostID` on first registration, which must carry the
 // `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 // `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -8010,10 +8010,10 @@ func (c *Client) RegisterHostWithBody(ctx context.Context, id HostID, contentTyp
 // node needs no secret and replaces capacity, tiers and `push`;
 // `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 // it or omit it; a different key is `403 host_identity_mismatch` and
-// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 // every restart.
 //
-// A host that was created through `twd host add` exists before its first
+// A host that was created through `tw host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
 //
 // Takes a body of the `application/json` content type.
@@ -8084,7 +8084,7 @@ func (c *Client) CordonHost(ctx context.Context, id HostID, reqEditors ...Reques
 // DrainHostWithBody Cordon a host and move its workloads to other hosts
 //
 // Cordons the host, then re-places each workload assigned to it on another eligible host
-// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 //
 //   - a stateless workload (no Durable Objects) moves;
 //   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -8093,7 +8093,7 @@ func (c *Client) CordonHost(ctx context.Context, id HostID, reqEditors ...Reques
 //   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 //
 // `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 // `DELETE /v1/hosts/{id}` removes it.
 //
 // Takes any type of body and a specified content type.
@@ -8114,7 +8114,7 @@ func (c *Client) DrainHostWithBody(ctx context.Context, id HostID, contentType s
 // DrainHost Cordon a host and move its workloads to other hosts
 //
 // Cordons the host, then re-places each workload assigned to it on another eligible host
-// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 //
 //   - a stateless workload (no Durable Objects) moves;
 //   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -8123,7 +8123,7 @@ func (c *Client) DrainHostWithBody(ctx context.Context, id HostID, contentType s
 //   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 //
 // `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 // `DELETE /v1/hosts/{id}` removes it.
 //
 // Takes a body of the `application/json` content type.
@@ -8278,8 +8278,8 @@ func (c *Client) ReportHostStatus(ctx context.Context, id HostID, body ReportHos
 // ListImageAliases The image alias map
 //
 // Upstream refs swapped for another image on one arch (ADR-032 D3: Cloudflare publishes
-// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get twd's rebuild from the Apache-2.0
-// source, in `public/`). Deploys apply it when pinning; `twd deploy` applies it as BuildKit named
+// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get tailworks' rebuild from the Apache-2.0
+// source, in `public/`). Deploys apply it when pinning; `tw deploy` applies it as BuildKit named
 // contexts when it builds a Dockerfile, so app source never changes.
 //
 // Corresponds with GET /v1/images/aliases (the `ListImageAliases` operationId).
@@ -8317,10 +8317,10 @@ func (c *Client) ListPublicImages(ctx context.Context, params *ListPublicImagesP
 
 // CreatePublicImageWithBody Mark an image as a public base (mirrors it now)
 //
-// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 // mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 // digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 //
 // Takes any type of body and a specified content type.
@@ -8340,10 +8340,10 @@ func (c *Client) CreatePublicImageWithBody(ctx context.Context, contentType stri
 
 // CreatePublicImage Mark an image as a public base (mirrors it now)
 //
-// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 // mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 // digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 //
 // Takes a body of the `application/json` content type.
@@ -8702,7 +8702,7 @@ func (c *Client) CreateObjectCredential(ctx context.Context, id ObjectID, params
 
 // ListReleases The release catalog
 //
-// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+// Every release this tw-mgmt knows: the ones built into it (its own and every earlier
 // release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
 // notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
 //
@@ -8719,10 +8719,10 @@ func (c *Client) ListReleases(ctx context.Context, reqEditors ...RequestEditorFn
 	return c.Client.Do(req)
 }
 
-// ImportReleasesWithBody Import catalog entries (from a release's share/twd/catalog.json)
+// ImportReleasesWithBody Import catalog entries (from a release's share/tailworks/catalog.json)
 //
-// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -8741,10 +8741,10 @@ func (c *Client) ImportReleasesWithBody(ctx context.Context, contentType string,
 	return c.Client.Do(req)
 }
 
-// ImportReleases Import catalog entries (from a release's share/twd/catalog.json)
+// ImportReleases Import catalog entries (from a release's share/tailworks/catalog.json)
 //
-// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -8781,7 +8781,7 @@ func (c *Client) GetReleaseArtifact(ctx context.Context, version string, name st
 // PutReleaseArtifactWithBody Upload a release tarball (or its SHA256SUMS)
 //
 // Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
-// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+// Stored in tw-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
 // replicas that don't share that directory each need the upload. Audited `release_artifact`.
 //
 // Takes any type of body and a specified content type.
@@ -8981,7 +8981,7 @@ func (c *Client) UpdateTenantWithApplicationMergePatchPlusJSONBody(ctx context.C
 	return c.Client.Do(req)
 }
 
-// ListApprovals The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+// ListApprovals The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 //
 // A Workflow instance that waits for an event of type `approval` or
 // `approval-*` (the Agents SDK's `waitForApproval`) is listed here
@@ -8989,7 +8989,7 @@ func (c *Client) UpdateTenantWithApplicationMergePatchPlusJSONBody(ctx context.C
 // host over the mgmt → hostd channel and merges the answers, oldest
 // first; a host that does not answer is named in `unreachable`.
 // Admins see every approval; a tailnet caller holding only
-// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+// `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) sees the ones its
 // grants let it decide. A read, so not audited.
 //
 // Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
@@ -9005,7 +9005,7 @@ func (c *Client) ListApprovals(ctx context.Context, id TenantID, params *ListApp
 	return c.Client.Do(req)
 }
 
-// DeleteTenantNotifications Stop the tenant's notifications (`twd notify rm`)
+// DeleteTenantNotifications Stop the tenant's notifications (`tw notify rm`)
 //
 // Idempotent. Audited (`kind: notification_delete`).
 //
@@ -9022,7 +9022,7 @@ func (c *Client) DeleteTenantNotifications(ctx context.Context, id TenantID, req
 	return c.Client.Do(req)
 }
 
-// GetTenantNotifications Read the tenant's notification webhook (`twd notify`), without secrets
+// GetTenantNotifications Read the tenant's notification webhook (`tw notify`), without secrets
 //
 // ADR-approval-notifications. The webhook URL is shown as its origin
 // only (scheme and host): a chat webhook's path or query is its
@@ -9042,11 +9042,11 @@ func (c *Client) GetTenantNotifications(ctx context.Context, id TenantID, reqEdi
 	return c.Client.Do(req)
 }
 
-// PutTenantNotificationsWithBody Set the tenant's notification webhook (`twd notify set`)
+// PutTenantNotificationsWithBody Set the tenant's notification webhook (`tw notify set`)
 //
 // ADR-approval-notifications. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
 // receives the host's audit record, usually within seconds). mgmt
 // dials the URL itself: a tailnet name, a `100.x` address or a
@@ -9054,7 +9054,7 @@ func (c *Client) GetTenantNotifications(ctx context.Context, id TenantID, reqEdi
 // host's network; loopback and link-local addresses are refused.
 // Delivery is tried 3 times; a final failure is audited
 // (`notification_failed`). The config is stored encrypted in mgmt
-// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// custody (custody name `tw/<tenant>/notifications`); the URL's path
 // and query and the header values are never logged, audited or
 // returned. Audited (`kind: notification_put`, the URL's host and
 // header names).
@@ -9074,11 +9074,11 @@ func (c *Client) PutTenantNotificationsWithBody(ctx context.Context, id TenantID
 	return c.Client.Do(req)
 }
 
-// PutTenantNotifications Set the tenant's notification webhook (`twd notify set`)
+// PutTenantNotifications Set the tenant's notification webhook (`tw notify set`)
 //
 // ADR-approval-notifications. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
 // receives the host's audit record, usually within seconds). mgmt
 // dials the URL itself: a tailnet name, a `100.x` address or a
@@ -9086,7 +9086,7 @@ func (c *Client) PutTenantNotificationsWithBody(ctx context.Context, id TenantID
 // host's network; loopback and link-local addresses are refused.
 // Delivery is tried 3 times; a final failure is audited
 // (`notification_failed`). The config is stored encrypted in mgmt
-// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// custody (custody name `tw/<tenant>/notifications`); the URL's path
 // and query and the header values are never logged, audited or
 // returned. Audited (`kind: notification_put`, the URL's host and
 // header names).
@@ -9106,7 +9106,7 @@ func (c *Client) PutTenantNotifications(ctx context.Context, id TenantID, body P
 	return c.Client.Do(req)
 }
 
-// TestTenantNotifications Send a test notification now (`twd notify test`)
+// TestTenantNotifications Send a test notification now (`tw notify test`)
 //
 // POSTs a `NotificationEvent` with `event: test` to the configured
 // webhook once, synchronously, and reports the outcome. Not retried.
@@ -9179,7 +9179,7 @@ func (c *Client) ListPublicNames(ctx context.Context, id TenantID, params *ListP
 // a name nothing serves can be released: `409 public_name_in_use`
 // while the workload's latest deployment declares public routes or
 // its public node is live (undeploy it, or remove `"public"` from its
-// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+// `tailworks.jsonc` and redeploy, first). `404 not_found` when the tenant
 // does not own the name. Audited (`kind: public_name_release`).
 //
 // Corresponds with DELETE /v1/tenants/{id}/public-names/{name} (the `ReleasePublicName` operationId).
@@ -9280,7 +9280,7 @@ func (c *Client) PutQueue(ctx context.Context, id TenantID, queue QueueName, req
 //
 // The oldest messages, bodies included, without changing them (no
 // lease, no attempt counted). This is how an operator inspects a
-// dead-letter queue (`twd queues messages <queue>`).
+// dead-letter queue (`tw queues messages <queue>`).
 //
 // Corresponds with GET /v1/tenants/{id}/queues/{queue}/messages (the `PeekQueueMessages` operationId).
 func (c *Client) PeekQueueMessages(ctx context.Context, id TenantID, queue QueueName, params *PeekQueueMessagesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9298,7 +9298,7 @@ func (c *Client) PeekQueueMessages(ctx context.Context, id TenantID, queue Queue
 // SendQueueMessagesWithBody Send messages to a queue
 //
 // A producer's `send()` / `sendBatch()` (through its host), or an
-// operator's `twd queues send`. The messages are durable in mgmt's
+// operator's `tw queues send`. The messages are durable in mgmt's
 // database when this answers. Each gets a random ID. A host must give
 // `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 // the workload's latest deployment must bind the queue as a producer
@@ -9324,7 +9324,7 @@ func (c *Client) SendQueueMessagesWithBody(ctx context.Context, id TenantID, que
 // SendQueueMessages Send messages to a queue
 //
 // A producer's `send()` / `sendBatch()` (through its host), or an
-// operator's `twd queues send`. The messages are durable in mgmt's
+// operator's `tw queues send`. The messages are durable in mgmt's
 // database when this answers. Each gets a random ID. A host must give
 // `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 // the workload's latest deployment must bind the queue as a producer
@@ -9481,10 +9481,10 @@ func (c *Client) PurgeQueue(ctx context.Context, id TenantID, queue QueueName, r
 	return c.Client.Do(req)
 }
 
-// DeleteTenantTelemetry Stop the tenant's OTLP export (`twd telemetry rm`)
+// DeleteTenantTelemetry Stop the tenant's OTLP export (`tw telemetry rm`)
 //
 // Hosts stop exporting within a minute. Records stay on the hosts
-// (`twd logs`) and in `/metrics`. Idempotent. Audited
+// (`tw logs`) and in `/metrics`. Idempotent. Audited
 // (`kind: telemetry_delete`).
 //
 // Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
@@ -9500,7 +9500,7 @@ func (c *Client) DeleteTenantTelemetry(ctx context.Context, id TenantID, reqEdit
 	return c.Client.Do(req)
 }
 
-// GetTenantTelemetry Read the tenant's OTLP export (`twd telemetry`), without header values
+// GetTenantTelemetry Read the tenant's OTLP export (`tw telemetry`), without header values
 //
 // ADR-observability. Header names only: no admin operation returns a
 // header value. A tenant that exports nothing has no `otlp`.
@@ -9519,7 +9519,7 @@ func (c *Client) GetTenantTelemetry(ctx context.Context, id TenantID, reqEditors
 	return c.Client.Do(req)
 }
 
-// PutTenantTelemetryWithBody Set the tenant's OTLP export (`twd telemetry set`)
+// PutTenantTelemetryWithBody Set the tenant's OTLP export (`tw telemetry set`)
 //
 // Every workload of the tenant exports its request records (as log
 // records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -9528,7 +9528,7 @@ func (c *Client) GetTenantTelemetry(ctx context.Context, id TenantID, reqEditors
 // peer the tailnet policy lets that workload reach (a public
 // internet endpoint is refused like any other egress). The config
 // is stored encrypted in mgmt custody (custody name
-// `twd/<tenant>/telemetry`); header values (collector credentials)
+// `tw/<tenant>/telemetry`); header values (collector credentials)
 // are never logged, audited or returned. Hosts pick a change up
 // within a minute. Audited (`kind: telemetry_put`, endpoint and
 // header names).
@@ -9548,7 +9548,7 @@ func (c *Client) PutTenantTelemetryWithBody(ctx context.Context, id TenantID, co
 	return c.Client.Do(req)
 }
 
-// PutTenantTelemetry Set the tenant's OTLP export (`twd telemetry set`)
+// PutTenantTelemetry Set the tenant's OTLP export (`tw telemetry set`)
 //
 // Every workload of the tenant exports its request records (as log
 // records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -9557,7 +9557,7 @@ func (c *Client) PutTenantTelemetryWithBody(ctx context.Context, id TenantID, co
 // peer the tailnet policy lets that workload reach (a public
 // internet endpoint is refused like any other egress). The config
 // is stored encrypted in mgmt custody (custody name
-// `twd/<tenant>/telemetry`); header values (collector credentials)
+// `tw/<tenant>/telemetry`); header values (collector credentials)
 // are never logged, audited or returned. Hosts pick a change up
 // within a minute. Audited (`kind: telemetry_put`, endpoint and
 // header names).
@@ -9577,19 +9577,19 @@ func (c *Client) PutTenantTelemetry(ctx context.Context, id TenantID, body PutTe
 	return c.Client.Do(req)
 }
 
-// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
 // WhoIs of the connection (user, node, tags). mgmt sends it, with
-// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 // the host holding the workload's lease; that host checks the grants
 // (`cap_missing` otherwise: the workload, Workflow, step, decision and
 // numeric limits a grant names), delivers the event (the Workflow
 // sees `approver`, never one from the request) and audits the
-// decision (`approval_decision`, or `approval_denied`). Being a twd
+// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 // admin does not let anyone approve: the grant does. The operator
 // console and the local socket have no personal identity, so they
-// get `403 no_identity`; use `twd link` from your own machine.
+// get `403 no_identity`; use `tw link` from your own machine.
 // `409 approval_not_pending` when nothing waits for this decision.
 //
 // Takes any type of body and a specified content type.
@@ -9607,19 +9607,19 @@ func (c *Client) DecideApprovalWithBody(ctx context.Context, id TenantID, worklo
 	return c.Client.Do(req)
 }
 
-// DecideApproval Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+// DecideApproval Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
 // WhoIs of the connection (user, node, tags). mgmt sends it, with
-// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 // the host holding the workload's lease; that host checks the grants
 // (`cap_missing` otherwise: the workload, Workflow, step, decision and
 // numeric limits a grant names), delivers the event (the Workflow
 // sees `approver`, never one from the request) and audits the
-// decision (`approval_decision`, or `approval_denied`). Being a twd
+// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 // admin does not let anyone approve: the grant does. The operator
 // console and the local socket have no personal identity, so they
-// get `403 no_identity`; use `twd link` from your own machine.
+// get `403 no_identity`; use `tw link` from your own machine.
 // `409 approval_not_pending` when nothing waits for this decision.
 //
 // Takes a body of the `application/json` content type.
@@ -9637,7 +9637,7 @@ func (c *Client) DecideApproval(ctx context.Context, id TenantID, workload Workl
 	return c.Client.Do(req)
 }
 
-// ExportD1 Export a D1 database as SQL (`twd d1 export`)
+// ExportD1 Export a D1 database as SQL (`tw d1 export`)
 //
 // The database's schema and rows as SQL text, in the shape of
 // `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
@@ -9660,7 +9660,7 @@ func (c *Client) ExportD1(ctx context.Context, id TenantID, workload WorkloadNam
 	return c.Client.Do(req)
 }
 
-// QueryD1WithBody Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+// QueryD1WithBody Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 //
 // A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
@@ -9696,7 +9696,7 @@ func (c *Client) QueryD1WithBody(ctx context.Context, id TenantID, workload Work
 	return c.Client.Do(req)
 }
 
-// QueryD1 Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+// QueryD1 Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 //
 // A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
@@ -9732,7 +9732,7 @@ func (c *Client) QueryD1(ctx context.Context, id TenantID, workload WorkloadName
 	return c.Client.Do(req)
 }
 
-// ListWorkloadDeployments A workload's deployment history, newest first (`twd deployments`)
+// ListWorkloadDeployments A workload's deployment history, newest first (`tw deployments`)
 //
 // ADR-deploy-rollback. Every deployment of the workload, newest first:
 // who deployed it, when, the bundle's SHA-256, its status (the current
@@ -9740,7 +9740,7 @@ func (c *Client) QueryD1(ctx context.Context, id TenantID, workload WorkloadName
 // `superseded` or `stopped`), the host's last report (`hostStatus`)
 // and whether mgmt still holds the bundle (`bundleRetained`). mgmt
 // keeps the bundles of the newest `bundleRetention` deployments of
-// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+// each workload (tw-mgmt `-bundle-retention`) and prunes older ones;
 // their records stay, without the bundle, so they can't be rolled back
 // to. `rollbackOf` names the deployment a rollback redeployed. A
 // workload with no deployment is `404 unknown_workload`.
@@ -9758,7 +9758,7 @@ func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workl
 	return c.Client.Do(req)
 }
 
-// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 //
 // The app's log is a file on the host that runs it. mgmt finds the
 // host holding the workload's namespace lease and reads the log from
@@ -9773,7 +9773,7 @@ func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workl
 // A workload with `replicas` reads every replica's host; each line
 // is then prefixed with `[<hostID>] `, and `host` selects one
 // replica. A host that does not answer contributes one
-// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+// `[<hostID>] tw: …` line instead (`502 host_unavailable` when no
 // host answers). `404 unknown_workload` when the workload has no
 // running replica (on `host`); `404 no_logs` when the host has no
 // log file for it yet. A read, so not audited; mgmt logs the actor.
@@ -9793,7 +9793,7 @@ func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload Work
 	return c.Client.Do(req)
 }
 
-// ListWorkloadPreviews A workload's running previews (`twd previews`)
+// ListWorkloadPreviews A workload's running previews (`tw previews`)
 //
 // ADR-deploy-preview. The previews of the workload that are not
 // stopped, newest first. A preview is created by
@@ -9816,7 +9816,7 @@ func (c *Client) ListWorkloadPreviews(ctx context.Context, id TenantID, workload
 	return c.Client.Do(req)
 }
 
-// CreatePromotionWithBody Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+// CreatePromotionWithBody Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
 // ADR-deploy-preview. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
@@ -9851,7 +9851,7 @@ func (c *Client) CreatePromotionWithBody(ctx context.Context, id TenantID, workl
 	return c.Client.Do(req)
 }
 
-// CreatePromotion Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+// CreatePromotion Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
 // ADR-deploy-preview. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
@@ -9886,9 +9886,9 @@ func (c *Client) CreatePromotion(ctx context.Context, id TenantID, workload Work
 	return c.Client.Do(req)
 }
 
-// GetWorkloadPublic Read a workload's public-ingress exposure (`twd expose`)
+// GetWorkloadPublic Read a workload's public-ingress exposure (`tw expose`)
 //
-// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+// ADR-029. A workload whose `tailworks.jsonc` declares `public` routes is
 // served over Funnel from its public node
 // (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
 // the tenant's `publicIngress` is `allow`. A workload that was never
@@ -9909,7 +9909,7 @@ func (c *Client) GetWorkloadPublic(ctx context.Context, id TenantID, workload Wo
 
 // UpdateWorkloadPublicWithBody Expose or unexpose a workload's public routes (JSON Merge Patch)
 //
-// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// `tw expose on|off` (ADR-029 D1): an operator override that survives
 // redeploys. `exposed: false` makes the host close the public node's
 // Funnel listener and reset its flows (the node and its certificate
 // stay); `true` reopens it. The lease holder is pushed at once.
@@ -9933,7 +9933,7 @@ func (c *Client) UpdateWorkloadPublicWithBody(ctx context.Context, id TenantID, 
 
 // UpdateWorkloadPublic Expose or unexpose a workload's public routes (JSON Merge Patch)
 //
-// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// `tw expose on|off` (ADR-029 D1): an operator override that survives
 // redeploys. `exposed: false` makes the host close the public node's
 // Funnel listener and reset its flows (the node and its certificate
 // stay); `true` reopens it. The lease holder is pushed at once.
@@ -9957,7 +9957,7 @@ func (c *Client) UpdateWorkloadPublic(ctx context.Context, id TenantID, workload
 
 // UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody Expose or unexpose a workload's public routes (JSON Merge Patch)
 //
-// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// `tw expose on|off` (ADR-029 D1): an operator override that survives
 // redeploys. `exposed: false` makes the host close the public node's
 // Funnel listener and reset its flows (the node and its certificate
 // stay); `true` reopens it. The lease holder is pushed at once.
@@ -9979,7 +9979,7 @@ func (c *Client) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx c
 	return c.Client.Do(req)
 }
 
-// CreateRollbackWithBody Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+// CreateRollbackWithBody Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
 // ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
@@ -9989,7 +9989,7 @@ func (c *Client) UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBody(ctx c
 // is sticky as for any deploy (the workload stays on its host unless
 // `replace` or `host` say otherwise), so Durable Object storage stays
 // where it is. Container images the original deploy built and pushed
-// to twd's registry are reused by digest.
+// to tailworks' registry are reused by digest.
 //
 // Without `deploymentID`, the target is the newest earlier deployment
 // that ran (the host reported it `active` and it did not fail), whose
@@ -10022,7 +10022,7 @@ func (c *Client) CreateRollbackWithBody(ctx context.Context, id TenantID, worklo
 	return c.Client.Do(req)
 }
 
-// CreateRollback Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+// CreateRollback Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
 // ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
@@ -10032,7 +10032,7 @@ func (c *Client) CreateRollbackWithBody(ctx context.Context, id TenantID, worklo
 // is sticky as for any deploy (the workload stays on its host unless
 // `replace` or `host` say otherwise), so Durable Object storage stays
 // where it is. Container images the original deploy built and pushed
-// to twd's registry are reused by digest.
+// to tailworks' registry are reused by digest.
 //
 // Without `deploymentID`, the target is the newest earlier deployment
 // that ran (the host reported it `active` and it did not fail), whose
@@ -10089,7 +10089,7 @@ func (c *Client) CreateWorkloadSecretGrant(ctx context.Context, id TenantID, wor
 
 // ListWorkloadSecrets List a workload's secrets (names and times, never values)
 //
-// `twd secret ls`. No admin operation returns a value; only the lease
+// `tw secret ls`. No admin operation returns a value; only the lease
 // holder gets them (`POST …/secret-grants`). Ordered by name. A
 // workload with no secrets (or never deployed) is an empty page.
 // `404 unknown_tenant`.
@@ -10107,7 +10107,7 @@ func (c *Client) ListWorkloadSecrets(ctx context.Context, id TenantID, workload 
 	return c.Client.Do(req)
 }
 
-// DeleteWorkloadSecret Delete a workload secret (`twd secret rm`)
+// DeleteWorkloadSecret Delete a workload secret (`tw secret rm`)
 //
 // Takes effect on the workload's next deploy. `404 unknown_secret`
 // when the workload has no secret of that name. Audited
@@ -10126,16 +10126,16 @@ func (c *Client) DeleteWorkloadSecret(ctx context.Context, id TenantID, workload
 	return c.Client.Do(req)
 }
 
-// PutWorkloadSecretWithBody Create or replace a workload secret (`twd secret put`)
+// PutWorkloadSecretWithBody Create or replace a workload secret (`tw secret put`)
 //
 // ADR-034. Stores the value encrypted at rest in mgmt's
-// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
 // environment variable `<name>`) on its **next deploy**; running
 // instances keep the value they started with. At most 128 secrets per
 // workload and 5 KiB per value. Names are JS identifiers that are also
-// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// environment variable names; `TW_…` and `__TW…` are reserved. The
 // value is never logged, audited or returned. Audited
 // (`kind: secret_put`, name only).
 //
@@ -10154,16 +10154,16 @@ func (c *Client) PutWorkloadSecretWithBody(ctx context.Context, id TenantID, wor
 	return c.Client.Do(req)
 }
 
-// PutWorkloadSecret Create or replace a workload secret (`twd secret put`)
+// PutWorkloadSecret Create or replace a workload secret (`tw secret put`)
 //
 // ADR-034. Stores the value encrypted at rest in mgmt's
-// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
 // environment variable `<name>`) on its **next deploy**; running
 // instances keep the value they started with. At most 128 secrets per
 // workload and 5 KiB per value. Names are JS identifiers that are also
-// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// environment variable names; `TW_…` and `__TW…` are reserved. The
 // value is never logged, audited or returned. Audited
 // (`kind: secret_put`, name only).
 //
@@ -10204,7 +10204,7 @@ func (c *Client) ListWorkloadStores(ctx context.Context, id TenantID, workload W
 
 // ListKVKeys List a KV namespace's keys
 //
-// Workers KV's `list()` for operators (`twd kv key list`,
+// Workers KV's `list()` for operators (`tw kv key list`,
 // ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -10227,7 +10227,7 @@ func (c *Client) ListKVKeys(ctx context.Context, id TenantID, workload WorkloadN
 
 // DeleteKVValue Delete one KV value
 //
-// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 //
 // Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
 func (c *Client) DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10244,7 +10244,7 @@ func (c *Client) DeleteKVValue(ctx context.Context, id TenantID, workload Worklo
 
 // GetKVValue Get one KV value
 //
-// `twd kv key get`. `404 not_found` if the key does not exist or has
+// `tw kv key get`. `404 not_found` if the key does not exist or has
 // expired, `404 unknown_store` if the namespace does not.
 //
 // Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `GetKVValue` operationId).
@@ -10262,13 +10262,13 @@ func (c *Client) GetKVValue(ctx context.Context, id TenantID, workload WorkloadN
 
 // PutKVValueWithBody Write one KV value
 //
-// `twd kv key put`: a journal append, like a binding's `put()`, so
+// `tw kv key put`: a journal append, like a binding's `put()`, so
 // running workloads see it on their next sync (within 60 s, or a
 // read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 // `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 // JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 // `400 store_limit`). The namespace must exist (`404
-// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// unknown_store`; `tw kv namespace create`). Audited (`kind:
 // kv_put`) with the namespace and who wrote, not the key: key names
 // can be sensitive, and mgmt keeps them only sealed and HMACed.
 //
@@ -10289,13 +10289,13 @@ func (c *Client) PutKVValueWithBody(ctx context.Context, id TenantID, workload W
 
 // PutKVValue Write one KV value
 //
-// `twd kv key put`: a journal append, like a binding's `put()`, so
+// `tw kv key put`: a journal append, like a binding's `put()`, so
 // running workloads see it on their next sync (within 60 s, or a
 // read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 // `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 // JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 // `400 store_limit`). The namespace must exist (`404
-// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// unknown_store`; `tw kv namespace create`). Audited (`kind:
 // kv_put`) with the namespace and who wrote, not the key: key names
 // can be sensitive, and mgmt keeps them only sealed and HMACed.
 //
@@ -10382,7 +10382,7 @@ func (c *Client) PutWorkloadStore(ctx context.Context, id TenantID, workload Wor
 //
 // A host must give `epoch`: the data is released only to the holder
 // of the workload's lease at that epoch (`409 lease_lost`, as for
-// secrets). An admin reads without it (`twd kv key get`).
+// secrets). An admin reads without it (`tw kv key get`).
 //
 // Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal (the `ReadStoreJournal` operationId).
 func (c *Client) ReadStoreJournal(ctx context.Context, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params *ReadStoreJournalParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10406,7 +10406,7 @@ func (c *Client) ReadStoreJournal(ctx context.Context, id TenantID, workload Wor
 // `409 store_conflict`, and the writer catches up
 // (`GET …/journal?after=`) and retries. That makes the journal
 // linearizable across writers (a workload's replicas, an admin's
-// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 // entry with the same `ckey`, which mgmt deletes in the same
 // transaction. The first append creates the store.
 //
@@ -10443,7 +10443,7 @@ func (c *Client) AppendStoreJournalWithBody(ctx context.Context, id TenantID, wo
 // `409 store_conflict`, and the writer catches up
 // (`GET …/journal?after=`) and retries. That makes the journal
 // linearizable across writers (a workload's replicas, an admin's
-// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 // entry with the same `ckey`, which mgmt deletes in the same
 // transaction. The first append creates the store.
 //
@@ -10624,7 +10624,7 @@ func (c *Client) ActOnUpgrade(ctx context.Context, id string, body ActOnUpgradeJ
 // CreateVolumeKeyGrant Release a volume's dm-crypt data key to the lease holder
 //
 // Creates a key grant: the 256-bit data key of the `(tenant, workload)`
-// DO volume (custody name `twd/<tenant>/volumes/<workload>/dek`,
+// DO volume (custody name `tw/<tenant>/volumes/<workload>/dek`,
 // created on first use) is released only to the host holding the
 // workload's lease at `epoch` (`409 lease_lost`). Audited
 // (`kind: volume_key`). `Cache-Control: no-store`. The key is never
@@ -10645,7 +10645,7 @@ func (c *Client) CreateVolumeKeyGrant(ctx context.Context, id VolumeID, params *
 
 // WhoAmI Who the caller is, as mgmt sees it
 //
-// `twd link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
+// `tw link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
 //
 // Corresponds with GET /v1/whoami (the `WhoAmI` operationId).
 func (c *Client) WhoAmI(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -16594,10 +16594,10 @@ type ClientWithResponsesInterface interface {
 
 	// GetCertificateWithResponse Look up a node certificate by stable node ID
 	//
-	// The receiver-side lookup: "is the peer that just connected a twd
+	// The receiver-side lookup: "is the peer that just connected a tailworks
 	// object, and what is its `lim`?" `404 not_found` when no live object
 	// of the tenant has that node (the receiver then applies the WhoIs caps
-	// unchanged: the peer is not a twd object); `410 killed` for a tombstone.
+	// unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -16699,8 +16699,8 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDeploymentWithBodyWithResponse Deploy a workload (async), or preflight it with dryRun
 	//
-	// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -16710,8 +16710,8 @@ type ClientWithResponsesInterface interface {
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
 	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+	// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -16737,7 +16737,7 @@ type ClientWithResponsesInterface interface {
 	//    "sum" over several targets). Hosts without a fresh measurement are
 	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 	//
-	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// `replace: true` (`tw deploy --replace`) re-places a running workload:
 	// it moves only if an eligible host is clearly better (a better path
 	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 	// `epoch+1` in one conditional write. A stateful workload's move also
@@ -16760,8 +16760,8 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDeploymentWithResponse Deploy a workload (async), or preflight it with dryRun
 	//
-	// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-	// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -16771,8 +16771,8 @@ type ClientWithResponsesInterface interface {
 	// duplicates, each a valid five-field UTC expression that can fire); an
 	// invalid one is `400 bad_bundle`.
 	// Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-	// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-	// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+	// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+	// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 	// both deploy and preflight enforce this.
 	//
 	// **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -16798,7 +16798,7 @@ type ClientWithResponsesInterface interface {
 	//    "sum" over several targets). Hosts without a fresh measurement are
 	//    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 	//
-	// `replace: true` (`twd deploy --replace`) re-places a running workload:
+	// `replace: true` (`tw deploy --replace`) re-places a running workload:
 	// it moves only if an eligible host is clearly better (a better path
 	// class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 	// `epoch+1` in one conditional write. A stateful workload's move also
@@ -16852,7 +16852,7 @@ type ClientWithResponsesInterface interface {
 	// CreateDeviceDeleteRunWithResponse Run the scheduled device deletes now
 	//
 	// Kill tier 2 is deferred by `-device-delete-delay`; this creates a run
-	// that executes every pending delete immediately (what `twd down` does
+	// that executes every pending delete immediately (what `tw down` does
 	// before stopping mgmt). Each delete is audited (`kind: device_delete`).
 	// Replaces `POST /v0/flush`.
 	//
@@ -16879,14 +16879,14 @@ type ClientWithResponsesInterface interface {
 
 	// CreateHostWithBodyWithResponse Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`), mints a
-	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// `tw host add`: creates the host record (status `pending`), mints a
+	// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's credential (its OAuth client, or the
-	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+	// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+	// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
 	// (delete it first). The key is never logged. Audited
@@ -16899,14 +16899,14 @@ type ClientWithResponsesInterface interface {
 
 	// CreateHostWithResponse Add a host and mint its single-use join key
 	//
-	// `twd host add`: creates the host record (status `pending`), mints a
-	// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+	// `tw host add`: creates the host record (status `pending`), mints a
+	// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 	// and a one-time `registrationSecret` (32 random bytes, base64url; only
 	// its SHA-256 is stored) that the host must present on its first
 	// `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 	// through the operator tenant's credential (its OAuth client, or the
-	// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-	// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+	// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+	// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 	// node to the record. Calling it again for a host that has not bound a
 	// node yet mints a fresh key (`200`); a bound host is `409 exists`
 	// (delete it first). The key is never logged. Audited
@@ -16940,7 +16940,7 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterHostWithBodyWithResponse Register or re-register a host (idempotent)
 	//
-	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+	// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 	// is bound to this `hostID` on first registration, which must carry the
 	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 	// `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -16951,10 +16951,10 @@ type ClientWithResponsesInterface interface {
 	// node needs no secret and replaces capacity, tiers and `push`;
 	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 	// it or omit it; a different key is `403 host_identity_mismatch` and
-	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 	// every restart.
 	//
-	// A host that was created through `twd host add` exists before its first
+	// A host that was created through `tw host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -16964,7 +16964,7 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterHostWithResponse Register or re-register a host (idempotent)
 	//
-	// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+	// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 	// is bound to this `hostID` on first registration, which must carry the
 	// `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 	// `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -16975,10 +16975,10 @@ type ClientWithResponsesInterface interface {
 	// node needs no secret and replaces capacity, tiers and `push`;
 	// `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 	// it or omit it; a different key is `403 host_identity_mismatch` and
-	// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+	// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 	// every restart.
 	//
-	// A host that was created through `twd host add` exists before its first
+	// A host that was created through `tw host add` exists before its first
 	// `PUT` (status `pending`); the `PUT` activates it.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -17015,7 +17015,7 @@ type ClientWithResponsesInterface interface {
 	// DrainHostWithBodyWithResponse Cordon a host and move its workloads to other hosts
 	//
 	// Cordons the host, then re-places each workload assigned to it on another eligible host
-	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 	//
 	// - a stateless workload (no Durable Objects) moves;
 	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -17024,7 +17024,7 @@ type ClientWithResponsesInterface interface {
 	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 	//
 	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 	// `DELETE /v1/hosts/{id}` removes it.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -17035,7 +17035,7 @@ type ClientWithResponsesInterface interface {
 	// DrainHostWithResponse Cordon a host and move its workloads to other hosts
 	//
 	// Cordons the host, then re-places each workload assigned to it on another eligible host
-	// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+	// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 	//
 	// - a stateless workload (no Durable Objects) moves;
 	// - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -17044,7 +17044,7 @@ type ClientWithResponsesInterface interface {
 	// - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 	//
 	// `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-	// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+	// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 	// `DELETE /v1/hosts/{id}` removes it.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -17141,8 +17141,8 @@ type ClientWithResponsesInterface interface {
 	// ListImageAliasesWithResponse The image alias map
 	//
 	// Upstream refs swapped for another image on one arch (ADR-032 D3: Cloudflare publishes
-	// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get twd's rebuild from the Apache-2.0
-	// source, in `public/`). Deploys apply it when pinning; `twd deploy` applies it as BuildKit named
+	// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get tailworks' rebuild from the Apache-2.0
+	// source, in `public/`). Deploys apply it when pinning; `tw deploy` applies it as BuildKit named
 	// contexts when it builds a Dockerfile, so app source never changes.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -17164,10 +17164,10 @@ type ClientWithResponsesInterface interface {
 
 	// CreatePublicImageWithBodyWithResponse Mark an image as a public base (mirrors it now)
 	//
-	// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+	// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 	// mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-	// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-	// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+	// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+	// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 	// digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -17177,10 +17177,10 @@ type ClientWithResponsesInterface interface {
 
 	// CreatePublicImageWithResponse Mark an image as a public base (mirrors it now)
 	//
-	// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+	// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 	// mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-	// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-	// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+	// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+	// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 	// digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -17429,7 +17429,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListReleasesWithResponse The release catalog
 	//
-	// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+	// Every release this tw-mgmt knows: the ones built into it (its own and every earlier
 	// release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
 	// notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
 	//
@@ -17438,10 +17438,10 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/releases (the `ListReleases` operationId).
 	ListReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListReleasesResponse, error)
 
-	// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+	// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
-	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -17450,10 +17450,10 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/releases (the `ImportReleases` operationId).
 	ImportReleasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ImportReleasesResponse, error)
 
-	// ImportReleasesWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+	// ImportReleasesWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
-	// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-	// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -17472,7 +17472,7 @@ type ClientWithResponsesInterface interface {
 	// PutReleaseArtifactWithBodyWithResponse Upload a release tarball (or its SHA256SUMS)
 	//
 	// Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
-	// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+	// Stored in tw-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
 	// replicas that don't share that directory each need the upload. Audited `release_artifact`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -17580,7 +17580,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/tenants/{id} (the `UpdateTenant` operationId).
 	UpdateTenantWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, params *UpdateTenantParams, body UpdateTenantApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTenantResponse, error)
 
-	// ListApprovalsWithResponse The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+	// ListApprovalsWithResponse The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 	//
 	// A Workflow instance that waits for an event of type `approval` or
 	// `approval-*` (the Agents SDK's `waitForApproval`) is listed here
@@ -17588,7 +17588,7 @@ type ClientWithResponsesInterface interface {
 	// host over the mgmt → hostd channel and merges the answers, oldest
 	// first; a host that does not answer is named in `unreachable`.
 	// Admins see every approval; a tailnet caller holding only
-	// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+	// `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) sees the ones its
 	// grants let it decide. A read, so not audited.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -17596,7 +17596,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/approvals (the `ListApprovals` operationId).
 	ListApprovalsWithResponse(ctx context.Context, id TenantID, params *ListApprovalsParams, reqEditors ...RequestEditorFn) (*ListApprovalsResponse, error)
 
-	// DeleteTenantNotificationsWithResponse Stop the tenant's notifications (`twd notify rm`)
+	// DeleteTenantNotificationsWithResponse Stop the tenant's notifications (`tw notify rm`)
 	//
 	// Idempotent. Audited (`kind: notification_delete`).
 	//
@@ -17605,7 +17605,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /v1/tenants/{id}/notifications (the `DeleteTenantNotifications` operationId).
 	DeleteTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantNotificationsResponse, error)
 
-	// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`twd notify`), without secrets
+	// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`tw notify`), without secrets
 	//
 	// ADR-approval-notifications. The webhook URL is shown as its origin
 	// only (scheme and host): a chat webhook's path or query is its
@@ -17617,11 +17617,11 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/notifications (the `GetTenantNotifications` operationId).
 	GetTenantNotificationsWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantNotificationsResponse, error)
 
-	// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`twd notify set`)
+	// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`tw notify set`)
 	//
 	// ADR-approval-notifications. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
 	// receives the host's audit record, usually within seconds). mgmt
 	// dials the URL itself: a tailnet name, a `100.x` address or a
@@ -17629,7 +17629,7 @@ type ClientWithResponsesInterface interface {
 	// host's network; loopback and link-local addresses are refused.
 	// Delivery is tried 3 times; a final failure is audited
 	// (`notification_failed`). The config is stored encrypted in mgmt
-	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// custody (custody name `tw/<tenant>/notifications`); the URL's path
 	// and query and the header values are never logged, audited or
 	// returned. Audited (`kind: notification_put`, the URL's host and
 	// header names).
@@ -17639,11 +17639,11 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
 	PutTenantNotificationsWithBodyWithResponse(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutTenantNotificationsResponse, error)
 
-	// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`twd notify set`)
+	// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`tw notify set`)
 	//
 	// ADR-approval-notifications. When one of `events` happens in the
 	// tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-	// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+	// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 	// fires when a Workflow starts waiting for an approval (when mgmt
 	// receives the host's audit record, usually within seconds). mgmt
 	// dials the URL itself: a tailnet name, a `100.x` address or a
@@ -17651,7 +17651,7 @@ type ClientWithResponsesInterface interface {
 	// host's network; loopback and link-local addresses are refused.
 	// Delivery is tried 3 times; a final failure is audited
 	// (`notification_failed`). The config is stored encrypted in mgmt
-	// custody (custody name `twd/<tenant>/notifications`); the URL's path
+	// custody (custody name `tw/<tenant>/notifications`); the URL's path
 	// and query and the header values are never logged, audited or
 	// returned. Audited (`kind: notification_put`, the URL's host and
 	// header names).
@@ -17661,7 +17661,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/notifications (the `PutTenantNotifications` operationId).
 	PutTenantNotificationsWithResponse(ctx context.Context, id TenantID, body PutTenantNotificationsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantNotificationsResponse, error)
 
-	// TestTenantNotificationsWithResponse Send a test notification now (`twd notify test`)
+	// TestTenantNotificationsWithResponse Send a test notification now (`tw notify test`)
 	//
 	// POSTs a `NotificationEvent` with `event: test` to the configured
 	// webhook once, synchronously, and reports the outcome. Not retried.
@@ -17710,7 +17710,7 @@ type ClientWithResponsesInterface interface {
 	// a name nothing serves can be released: `409 public_name_in_use`
 	// while the workload's latest deployment declares public routes or
 	// its public node is live (undeploy it, or remove `"public"` from its
-	// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+	// `tailworks.jsonc` and redeploy, first). `404 not_found` when the tenant
 	// does not own the name. Audited (`kind: public_name_release`).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -17771,7 +17771,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// The oldest messages, bodies included, without changing them (no
 	// lease, no attempt counted). This is how an operator inspects a
-	// dead-letter queue (`twd queues messages <queue>`).
+	// dead-letter queue (`tw queues messages <queue>`).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17781,7 +17781,7 @@ type ClientWithResponsesInterface interface {
 	// SendQueueMessagesWithBodyWithResponse Send messages to a queue
 	//
 	// A producer's `send()` / `sendBatch()` (through its host), or an
-	// operator's `twd queues send`. The messages are durable in mgmt's
+	// operator's `tw queues send`. The messages are durable in mgmt's
 	// database when this answers. Each gets a random ID. A host must give
 	// `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 	// the workload's latest deployment must bind the queue as a producer
@@ -17797,7 +17797,7 @@ type ClientWithResponsesInterface interface {
 	// SendQueueMessagesWithResponse Send messages to a queue
 	//
 	// A producer's `send()` / `sendBatch()` (through its host), or an
-	// operator's `twd queues send`. The messages are durable in mgmt's
+	// operator's `tw queues send`. The messages are durable in mgmt's
 	// database when this answers. Each gets a random ID. A host must give
 	// `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 	// the workload's latest deployment must bind the queue as a producer
@@ -17896,10 +17896,10 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/queues/{queue}/purge (the `PurgeQueue` operationId).
 	PurgeQueueWithResponse(ctx context.Context, id TenantID, queue QueueName, reqEditors ...RequestEditorFn) (*PurgeQueueResponse, error)
 
-	// DeleteTenantTelemetryWithResponse Stop the tenant's OTLP export (`twd telemetry rm`)
+	// DeleteTenantTelemetryWithResponse Stop the tenant's OTLP export (`tw telemetry rm`)
 	//
 	// Hosts stop exporting within a minute. Records stay on the hosts
-	// (`twd logs`) and in `/metrics`. Idempotent. Audited
+	// (`tw logs`) and in `/metrics`. Idempotent. Audited
 	// (`kind: telemetry_delete`).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -17907,7 +17907,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /v1/tenants/{id}/telemetry (the `DeleteTenantTelemetry` operationId).
 	DeleteTenantTelemetryWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*DeleteTenantTelemetryResponse, error)
 
-	// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`twd telemetry`), without header values
+	// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`tw telemetry`), without header values
 	//
 	// ADR-observability. Header names only: no admin operation returns a
 	// header value. A tenant that exports nothing has no `otlp`.
@@ -17918,7 +17918,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/telemetry (the `GetTenantTelemetry` operationId).
 	GetTenantTelemetryWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantTelemetryResponse, error)
 
-	// PutTenantTelemetryWithBodyWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+	// PutTenantTelemetryWithBodyWithResponse Set the tenant's OTLP export (`tw telemetry set`)
 	//
 	// Every workload of the tenant exports its request records (as log
 	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -17927,7 +17927,7 @@ type ClientWithResponsesInterface interface {
 	// peer the tailnet policy lets that workload reach (a public
 	// internet endpoint is refused like any other egress). The config
 	// is stored encrypted in mgmt custody (custody name
-	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// `tw/<tenant>/telemetry`); header values (collector credentials)
 	// are never logged, audited or returned. Hosts pick a change up
 	// within a minute. Audited (`kind: telemetry_put`, endpoint and
 	// header names).
@@ -17937,7 +17937,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetryWithBodyWithResponse(ctx context.Context, id TenantID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
 
-	// PutTenantTelemetryWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+	// PutTenantTelemetryWithResponse Set the tenant's OTLP export (`tw telemetry set`)
 	//
 	// Every workload of the tenant exports its request records (as log
 	// records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -17946,7 +17946,7 @@ type ClientWithResponsesInterface interface {
 	// peer the tailnet policy lets that workload reach (a public
 	// internet endpoint is refused like any other egress). The config
 	// is stored encrypted in mgmt custody (custody name
-	// `twd/<tenant>/telemetry`); header values (collector credentials)
+	// `tw/<tenant>/telemetry`); header values (collector credentials)
 	// are never logged, audited or returned. Hosts pick a change up
 	// within a minute. Audited (`kind: telemetry_put`, endpoint and
 	// header names).
@@ -17956,19 +17956,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetryWithResponse(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
 
-	// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
 	// WhoIs of the connection (user, node, tags). mgmt sends it, with
-	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 	// the host holding the workload's lease; that host checks the grants
 	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
 	// numeric limits a grant names), delivers the event (the Workflow
 	// sees `approver`, never one from the request) and audits the
-	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 	// admin does not let anyone approve: the grant does. The operator
 	// console and the local socket have no personal identity, so they
-	// get `403 no_identity`; use `twd link` from your own machine.
+	// get `403 no_identity`; use `tw link` from your own machine.
 	// `409 approval_not_pending` when nothing waits for this decision.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -17976,19 +17976,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
 	DecideApprovalWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideApprovalResponse, error)
 
-	// DecideApprovalWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+	// DecideApprovalWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
 	// WhoIs of the connection (user, node, tags). mgmt sends it, with
-	// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+	// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 	// the host holding the workload's lease; that host checks the grants
 	// (`cap_missing` otherwise: the workload, Workflow, step, decision and
 	// numeric limits a grant names), delivers the event (the Workflow
 	// sees `approver`, never one from the request) and audits the
-	// decision (`approval_decision`, or `approval_denied`). Being a twd
+	// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 	// admin does not let anyone approve: the grant does. The operator
 	// console and the local socket have no personal identity, so they
-	// get `403 no_identity`; use `twd link` from your own machine.
+	// get `403 no_identity`; use `tw link` from your own machine.
 	// `409 approval_not_pending` when nothing waits for this decision.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -17996,7 +17996,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance} (the `DecideApproval` operationId).
 	DecideApprovalWithResponse(ctx context.Context, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideApprovalResponse, error)
 
-	// ExportD1WithResponse Export a D1 database as SQL (`twd d1 export`)
+	// ExportD1WithResponse Export a D1 database as SQL (`tw d1 export`)
 	//
 	// The database's schema and rows as SQL text, in the shape of
 	// `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
@@ -18011,7 +18011,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export (the `ExportD1` operationId).
 	ExportD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, reqEditors ...RequestEditorFn) (*ExportD1Response, error)
 
-	// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// QueryD1WithBodyWithResponse Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 	//
 	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
@@ -18037,7 +18037,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
 	QueryD1WithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
 
-	// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+	// QueryD1WithResponse Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 	//
 	// A D1 database (ADR-038) is the workload's platform store of kind
 	// `d1` named after the binding's `database_name`. Its data is served
@@ -18063,7 +18063,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query (the `QueryD1` operationId).
 	QueryD1WithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, body QueryD1JSONRequestBody, reqEditors ...RequestEditorFn) (*QueryD1Response, error)
 
-	// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`twd deployments`)
+	// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`tw deployments`)
 	//
 	// ADR-deploy-rollback. Every deployment of the workload, newest first:
 	// who deployed it, when, the bundle's SHA-256, its status (the current
@@ -18071,7 +18071,7 @@ type ClientWithResponsesInterface interface {
 	// `superseded` or `stopped`), the host's last report (`hostStatus`)
 	// and whether mgmt still holds the bundle (`bundleRetained`). mgmt
 	// keeps the bundles of the newest `bundleRetention` deployments of
-	// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+	// each workload (tw-mgmt `-bundle-retention`) and prunes older ones;
 	// their records stay, without the bundle, so they can't be rolled back
 	// to. `rollbackOf` names the deployment a rollback redeployed. A
 	// workload with no deployment is `404 unknown_workload`.
@@ -18081,7 +18081,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/deployments (the `ListWorkloadDeployments` operationId).
 	ListWorkloadDeploymentsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadDeploymentsParams, reqEditors ...RequestEditorFn) (*ListWorkloadDeploymentsResponse, error)
 
-	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+	// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 	//
 	// The app's log is a file on the host that runs it. mgmt finds the
 	// host holding the workload's namespace lease and reads the log from
@@ -18096,7 +18096,7 @@ type ClientWithResponsesInterface interface {
 	// A workload with `replicas` reads every replica's host; each line
 	// is then prefixed with `[<hostID>] `, and `host` selects one
 	// replica. A host that does not answer contributes one
-	// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+	// `[<hostID>] tw: …` line instead (`502 host_unavailable` when no
 	// host answers). `404 unknown_workload` when the workload has no
 	// running replica (on `host`); `404 no_logs` when the host has no
 	// log file for it yet. A read, so not audited; mgmt logs the actor.
@@ -18108,7 +18108,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error)
 
-	// ListWorkloadPreviewsWithResponse A workload's running previews (`twd previews`)
+	// ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
 	//
 	// ADR-deploy-preview. The previews of the workload that are not
 	// stopped, newest first. A preview is created by
@@ -18123,7 +18123,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/previews (the `ListWorkloadPreviews` operationId).
 	ListWorkloadPreviewsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, reqEditors ...RequestEditorFn) (*ListWorkloadPreviewsResponse, error)
 
-	// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
 	// ADR-deploy-preview. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
@@ -18148,7 +18148,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
 	CreatePromotionWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
 
-	// CreatePromotionWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+	// CreatePromotionWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 	//
 	// ADR-deploy-preview. Deploys the bundle the preview runs to the
 	// workload itself, as a **new** deployment, through the same code
@@ -18173,9 +18173,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/promotions (the `CreatePromotion` operationId).
 	CreatePromotionWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreatePromotionParams, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
 
-	// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
+	// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`tw expose`)
 	//
-	// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+	// ADR-029. A workload whose `tailworks.jsonc` declares `public` routes is
 	// served over Funnel from its public node
 	// (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
 	// the tenant's `publicIngress` is `allow`. A workload that was never
@@ -18188,7 +18188,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateWorkloadPublicWithBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
 	//
-	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// `tw expose on|off` (ADR-029 D1): an operator override that survives
 	// redeploys. `exposed: false` makes the host close the public node's
 	// Funnel listener and reset its flows (the node and its certificate
 	// stay); `true` reopens it. The lease holder is pushed at once.
@@ -18202,7 +18202,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateWorkloadPublicWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
 	//
-	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// `tw expose on|off` (ADR-029 D1): an operator override that survives
 	// redeploys. `exposed: false` makes the host close the public node's
 	// Funnel listener and reset its flows (the node and its certificate
 	// stay); `true` reopens it. The lease holder is pushed at once.
@@ -18216,7 +18216,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
 	//
-	// `twd expose on|off` (ADR-029 D1): an operator override that survives
+	// `tw expose on|off` (ADR-029 D1): an operator override that survives
 	// redeploys. `exposed: false` makes the host close the public node's
 	// Funnel listener and reset its flows (the node and its certificate
 	// stay); `true` reopens it. The lease holder is pushed at once.
@@ -18228,7 +18228,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/tenants/{id}/workloads/{workload}/public (the `UpdateWorkloadPublic` operationId).
 	UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *UpdateWorkloadPublicParams, body UpdateWorkloadPublicApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkloadPublicResponse, error)
 
-	// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
 	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
@@ -18238,7 +18238,7 @@ type ClientWithResponsesInterface interface {
 	// is sticky as for any deploy (the workload stays on its host unless
 	// `replace` or `host` say otherwise), so Durable Object storage stays
 	// where it is. Container images the original deploy built and pushed
-	// to twd's registry are reused by digest.
+	// to tailworks' registry are reused by digest.
 	//
 	// Without `deploymentID`, the target is the newest earlier deployment
 	// that ran (the host reported it `active` and it did not fail), whose
@@ -18261,7 +18261,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/rollbacks (the `CreateRollback` operationId).
 	CreateRollbackWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *CreateRollbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRollbackResponse, error)
 
-	// CreateRollbackWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+	// CreateRollbackWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 	//
 	// ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 	// as a **new** deployment, through the same code path as
@@ -18271,7 +18271,7 @@ type ClientWithResponsesInterface interface {
 	// is sticky as for any deploy (the workload stays on its host unless
 	// `replace` or `host` say otherwise), so Durable Object storage stays
 	// where it is. Container images the original deploy built and pushed
-	// to twd's registry are reused by digest.
+	// to tailworks' registry are reused by digest.
 	//
 	// Without `deploymentID`, the target is the newest earlier deployment
 	// that ran (the host reported it `active` and it did not fail), whose
@@ -18310,7 +18310,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListWorkloadSecretsWithResponse List a workload's secrets (names and times, never values)
 	//
-	// `twd secret ls`. No admin operation returns a value; only the lease
+	// `tw secret ls`. No admin operation returns a value; only the lease
 	// holder gets them (`POST …/secret-grants`). Ordered by name. A
 	// workload with no secrets (or never deployed) is an empty page.
 	// `404 unknown_tenant`.
@@ -18320,7 +18320,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/secrets (the `ListWorkloadSecrets` operationId).
 	ListWorkloadSecretsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ListWorkloadSecretsParams, reqEditors ...RequestEditorFn) (*ListWorkloadSecretsResponse, error)
 
-	// DeleteWorkloadSecretWithResponse Delete a workload secret (`twd secret rm`)
+	// DeleteWorkloadSecretWithResponse Delete a workload secret (`tw secret rm`)
 	//
 	// Takes effect on the workload's next deploy. `404 unknown_secret`
 	// when the workload has no secret of that name. Audited
@@ -18331,16 +18331,16 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `DeleteWorkloadSecret` operationId).
 	DeleteWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, reqEditors ...RequestEditorFn) (*DeleteWorkloadSecretResponse, error)
 
-	// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`twd secret put`)
+	// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`tw secret put`)
 	//
 	// ADR-034. Stores the value encrypted at rest in mgmt's
-	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
 	// environment variable `<name>`) on its **next deploy**; running
 	// instances keep the value they started with. At most 128 secrets per
 	// workload and 5 KiB per value. Names are JS identifiers that are also
-	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// environment variable names; `TW_…` and `__TW…` are reserved. The
 	// value is never logged, audited or returned. Audited
 	// (`kind: secret_put`, name only).
 	//
@@ -18349,16 +18349,16 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 	PutWorkloadSecretWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error)
 
-	// PutWorkloadSecretWithResponse Create or replace a workload secret (`twd secret put`)
+	// PutWorkloadSecretWithResponse Create or replace a workload secret (`tw secret put`)
 	//
 	// ADR-034. Stores the value encrypted at rest in mgmt's
-	// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+	// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 	// The workload need not be deployed yet. The value reaches the
 	// workload as the text binding `env.<name>` (runtime `node`: the
 	// environment variable `<name>`) on its **next deploy**; running
 	// instances keep the value they started with. At most 128 secrets per
 	// workload and 5 KiB per value. Names are JS identifiers that are also
-	// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+	// environment variable names; `TW_…` and `__TW…` are reserved. The
 	// value is never logged, audited or returned. Audited
 	// (`kind: secret_put`, name only).
 	//
@@ -18381,7 +18381,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListKVKeysWithResponse List a KV namespace's keys
 	//
-	// Workers KV's `list()` for operators (`twd kv key list`,
+	// Workers KV's `list()` for operators (`tw kv key list`,
 	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -18396,7 +18396,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteKVValueWithResponse Delete one KV value
 	//
-	// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18405,7 +18405,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetKVValueWithResponse Get one KV value
 	//
-	// `twd kv key get`. `404 not_found` if the key does not exist or has
+	// `tw kv key get`. `404 not_found` if the key does not exist or has
 	// expired, `404 unknown_store` if the namespace does not.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -18415,13 +18415,13 @@ type ClientWithResponsesInterface interface {
 
 	// PutKVValueWithBodyWithResponse Write one KV value
 	//
-	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// `tw kv key put`: a journal append, like a binding's `put()`, so
 	// running workloads see it on their next sync (within 60 s, or a
 	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 	// `400 store_limit`). The namespace must exist (`404
-	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// unknown_store`; `tw kv namespace create`). Audited (`kind:
 	// kv_put`) with the namespace and who wrote, not the key: key names
 	// can be sensitive, and mgmt keeps them only sealed and HMACed.
 	//
@@ -18432,13 +18432,13 @@ type ClientWithResponsesInterface interface {
 
 	// PutKVValueWithResponse Write one KV value
 	//
-	// `twd kv key put`: a journal append, like a binding's `put()`, so
+	// `tw kv key put`: a journal append, like a binding's `put()`, so
 	// running workloads see it on their next sync (within 60 s, or a
 	// read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 	// `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 	// JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 	// `400 store_limit`). The namespace must exist (`404
-	// unknown_store`; `twd kv namespace create`). Audited (`kind:
+	// unknown_store`; `tw kv namespace create`). Audited (`kind:
 	// kv_put`) with the namespace and who wrote, not the key: key names
 	// can be sensitive, and mgmt keeps them only sealed and HMACed.
 	//
@@ -18491,7 +18491,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// A host must give `epoch`: the data is released only to the holder
 	// of the workload's lease at that epoch (`409 lease_lost`, as for
-	// secrets). An admin reads without it (`twd kv key get`).
+	// secrets). An admin reads without it (`tw kv key get`).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18507,7 +18507,7 @@ type ClientWithResponsesInterface interface {
 	// `409 store_conflict`, and the writer catches up
 	// (`GET …/journal?after=`) and retries. That makes the journal
 	// linearizable across writers (a workload's replicas, an admin's
-	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 	// entry with the same `ckey`, which mgmt deletes in the same
 	// transaction. The first append creates the store.
 	//
@@ -18534,7 +18534,7 @@ type ClientWithResponsesInterface interface {
 	// `409 store_conflict`, and the writer catches up
 	// (`GET …/journal?after=`) and retries. That makes the journal
 	// linearizable across writers (a workload's replicas, an admin's
-	// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+	// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 	// entry with the same `ckey`, which mgmt deletes in the same
 	// transaction. The first append creates the store.
 	//
@@ -18641,7 +18641,7 @@ type ClientWithResponsesInterface interface {
 	// CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 	//
 	// Creates a key grant: the 256-bit data key of the `(tenant, workload)`
-	// DO volume (custody name `twd/<tenant>/volumes/<workload>/dek`,
+	// DO volume (custody name `tw/<tenant>/volumes/<workload>/dek`,
 	// created on first use) is released only to the host holding the
 	// workload's lease at `epoch` (`409 lease_lost`). Audited
 	// (`kind: volume_key`). `Cache-Control: no-store`. The key is never
@@ -18654,7 +18654,7 @@ type ClientWithResponsesInterface interface {
 
 	// WhoAmIWithResponse Who the caller is, as mgmt sees it
 	//
-	// `twd link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
+	// `tw link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18664,17 +18664,17 @@ type ClientWithResponsesInterface interface {
 
 // ListAuditResponse400Headers the declared response headers of an HTTP 400 response for ListAudit
 type ListAuditResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListAuditResponse403Headers the declared response headers of an HTTP 403 response for ListAudit
 type ListAuditResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListAuditResponseDefaultHeaders the declared response headers of an HTTP default response for ListAudit
 type ListAuditResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListAuditResponse struct {
@@ -18747,12 +18747,12 @@ func (r ListAuditResponse) ContentType() string {
 
 // AppendAuditResponse403Headers the declared response headers of an HTTP 403 response for AppendAudit
 type AppendAuditResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AppendAuditResponseDefaultHeaders the declared response headers of an HTTP default response for AppendAudit
 type AppendAuditResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type AppendAuditResponse struct {
@@ -18823,12 +18823,12 @@ func (r AppendAuditResponse) ContentType() string {
 
 // GetAuditVerificationResponse403Headers the declared response headers of an HTTP 403 response for GetAuditVerification
 type GetAuditVerificationResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetAuditVerificationResponseDefaultHeaders the declared response headers of an HTTP default response for GetAuditVerification
 type GetAuditVerificationResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetAuditVerificationResponse struct {
@@ -18897,27 +18897,27 @@ type GetCertificateResponse200Headers struct {
 
 // GetCertificateResponse400Headers the declared response headers of an HTTP 400 response for GetCertificate
 type GetCertificateResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetCertificateResponse403Headers the declared response headers of an HTTP 403 response for GetCertificate
 type GetCertificateResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetCertificateResponse404Headers the declared response headers of an HTTP 404 response for GetCertificate
 type GetCertificateResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetCertificateResponse410Headers the declared response headers of an HTTP 410 response for GetCertificate
 type GetCertificateResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetCertificateResponseDefaultHeaders the declared response headers of an HTTP default response for GetCertificate
 type GetCertificateResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetCertificateResponse struct {
@@ -19010,17 +19010,17 @@ func (r GetCertificateResponse) ContentType() string {
 
 // ListContainerReservationsResponse400Headers the declared response headers of an HTTP 400 response for ListContainerReservations
 type ListContainerReservationsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListContainerReservationsResponse403Headers the declared response headers of an HTTP 403 response for ListContainerReservations
 type ListContainerReservationsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListContainerReservationsResponseDefaultHeaders the declared response headers of an HTTP default response for ListContainerReservations
 type ListContainerReservationsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListContainerReservationsResponse struct {
@@ -19098,22 +19098,22 @@ type CreateContainerReservationResponse201Headers struct {
 
 // CreateContainerReservationResponse400Headers the declared response headers of an HTTP 400 response for CreateContainerReservation
 type CreateContainerReservationResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateContainerReservationResponse403Headers the declared response headers of an HTTP 403 response for CreateContainerReservation
 type CreateContainerReservationResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateContainerReservationResponse409Headers the declared response headers of an HTTP 409 response for CreateContainerReservation
 type CreateContainerReservationResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateContainerReservationResponseDefaultHeaders the declared response headers of an HTTP default response for CreateContainerReservation
 type CreateContainerReservationResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateContainerReservationResponse struct {
@@ -19218,17 +19218,17 @@ func (r CreateContainerReservationResponse) ContentType() string {
 
 // DeleteContainerReservationResponse403Headers the declared response headers of an HTTP 403 response for DeleteContainerReservation
 type DeleteContainerReservationResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteContainerReservationResponse404Headers the declared response headers of an HTTP 404 response for DeleteContainerReservation
 type DeleteContainerReservationResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteContainerReservationResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteContainerReservation
 type DeleteContainerReservationResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteContainerReservationResponse struct {
@@ -19294,17 +19294,17 @@ func (r DeleteContainerReservationResponse) ContentType() string {
 
 // ListDeploymentsResponse400Headers the declared response headers of an HTTP 400 response for ListDeployments
 type ListDeploymentsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListDeploymentsResponse403Headers the declared response headers of an HTTP 403 response for ListDeployments
 type ListDeploymentsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListDeploymentsResponseDefaultHeaders the declared response headers of an HTTP default response for ListDeployments
 type ListDeploymentsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListDeploymentsResponse struct {
@@ -19382,12 +19382,12 @@ type CreateDeploymentResponse202Headers struct {
 
 // CreateDeploymentResponse403Headers the declared response headers of an HTTP 403 response for CreateDeployment
 type CreateDeploymentResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateDeploymentResponseDefaultHeaders the declared response headers of an HTTP default response for CreateDeployment
 type CreateDeploymentResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateDeploymentResponse struct {
@@ -19481,28 +19481,28 @@ func (r CreateDeploymentResponse) ContentType() string {
 
 // DeleteDeploymentResponse403Headers the declared response headers of an HTTP 403 response for DeleteDeployment
 type DeleteDeploymentResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteDeploymentResponse404Headers the declared response headers of an HTTP 404 response for DeleteDeployment
 type DeleteDeploymentResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteDeploymentResponse409Headers the declared response headers of an HTTP 409 response for DeleteDeployment
 type DeleteDeploymentResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteDeploymentResponse412Headers the declared response headers of an HTTP 412 response for DeleteDeployment
 type DeleteDeploymentResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // DeleteDeploymentResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteDeployment
 type DeleteDeploymentResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteDeploymentResponse struct {
@@ -19603,17 +19603,17 @@ type GetDeploymentResponse304Headers struct {
 
 // GetDeploymentResponse403Headers the declared response headers of an HTTP 403 response for GetDeployment
 type GetDeploymentResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetDeploymentResponse404Headers the declared response headers of an HTTP 404 response for GetDeployment
 type GetDeploymentResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetDeploymentResponseDefaultHeaders the declared response headers of an HTTP default response for GetDeployment
 type GetDeploymentResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetDeploymentResponse struct {
@@ -19695,17 +19695,17 @@ type GetDeploymentBundleResponse200Headers struct {
 
 // GetDeploymentBundleResponse403Headers the declared response headers of an HTTP 403 response for GetDeploymentBundle
 type GetDeploymentBundleResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetDeploymentBundleResponse404Headers the declared response headers of an HTTP 404 response for GetDeploymentBundle
 type GetDeploymentBundleResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetDeploymentBundleResponseDefaultHeaders the declared response headers of an HTTP default response for GetDeploymentBundle
 type GetDeploymentBundleResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetDeploymentBundleResponse struct {
@@ -19773,12 +19773,12 @@ func (r GetDeploymentBundleResponse) ContentType() string {
 
 // CreateDeviceDeleteRunResponse403Headers the declared response headers of an HTTP 403 response for CreateDeviceDeleteRun
 type CreateDeviceDeleteRunResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateDeviceDeleteRunResponseDefaultHeaders the declared response headers of an HTTP default response for CreateDeviceDeleteRun
 type CreateDeviceDeleteRunResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateDeviceDeleteRunResponse struct {
@@ -19842,12 +19842,12 @@ func (r CreateDeviceDeleteRunResponse) ContentType() string {
 
 // GetHealthzResponse401Headers the declared response headers of an HTTP 401 response for GetHealthz
 type GetHealthzResponse401Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetHealthzResponseDefaultHeaders the declared response headers of an HTTP default response for GetHealthz
 type GetHealthzResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetHealthzResponse struct {
@@ -19911,17 +19911,17 @@ func (r GetHealthzResponse) ContentType() string {
 
 // ListHostsResponse400Headers the declared response headers of an HTTP 400 response for ListHosts
 type ListHostsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListHostsResponse403Headers the declared response headers of an HTTP 403 response for ListHosts
 type ListHostsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListHostsResponseDefaultHeaders the declared response headers of an HTTP default response for ListHosts
 type ListHostsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListHostsResponse struct {
@@ -20005,22 +20005,22 @@ type CreateHostResponse201Headers struct {
 
 // CreateHostResponse400Headers the declared response headers of an HTTP 400 response for CreateHost
 type CreateHostResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateHostResponse403Headers the declared response headers of an HTTP 403 response for CreateHost
 type CreateHostResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateHostResponse409Headers the declared response headers of an HTTP 409 response for CreateHost
 type CreateHostResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateHostResponseDefaultHeaders the declared response headers of an HTTP default response for CreateHost
 type CreateHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateHostResponse struct {
@@ -20127,23 +20127,23 @@ func (r CreateHostResponse) ContentType() string {
 
 // DeleteHostResponse403Headers the declared response headers of an HTTP 403 response for DeleteHost
 type DeleteHostResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteHostResponse404Headers the declared response headers of an HTTP 404 response for DeleteHost
 type DeleteHostResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteHostResponse412Headers the declared response headers of an HTTP 412 response for DeleteHost
 type DeleteHostResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // DeleteHostResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteHost
 type DeleteHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteHostResponse struct {
@@ -20242,17 +20242,17 @@ type GetHostResponse304Headers struct {
 
 // GetHostResponse403Headers the declared response headers of an HTTP 403 response for GetHost
 type GetHostResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetHostResponse404Headers the declared response headers of an HTTP 404 response for GetHost
 type GetHostResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetHostResponseDefaultHeaders the declared response headers of an HTTP default response for GetHost
 type GetHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetHostResponse struct {
@@ -20339,12 +20339,12 @@ type RegisterHostResponse201Headers struct {
 
 // RegisterHostResponse400Headers the declared response headers of an HTTP 400 response for RegisterHost
 type RegisterHostResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // RegisterHostResponseDefaultHeaders the declared response headers of an HTTP default response for RegisterHost
 type RegisterHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type RegisterHostResponse struct {
@@ -20426,22 +20426,22 @@ func (r RegisterHostResponse) ContentType() string {
 
 // ListHostAssignmentsResponse400Headers the declared response headers of an HTTP 400 response for ListHostAssignments
 type ListHostAssignmentsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListHostAssignmentsResponse403Headers the declared response headers of an HTTP 403 response for ListHostAssignments
 type ListHostAssignmentsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListHostAssignmentsResponse404Headers the declared response headers of an HTTP 404 response for ListHostAssignments
 type ListHostAssignmentsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListHostAssignmentsResponseDefaultHeaders the declared response headers of an HTTP default response for ListHostAssignments
 type ListHostAssignmentsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListHostAssignmentsResponse struct {
@@ -20523,17 +20523,17 @@ func (r ListHostAssignmentsResponse) ContentType() string {
 
 // UncordonHostResponse403Headers the declared response headers of an HTTP 403 response for UncordonHost
 type UncordonHostResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UncordonHostResponse404Headers the declared response headers of an HTTP 404 response for UncordonHost
 type UncordonHostResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UncordonHostResponseDefaultHeaders the declared response headers of an HTTP default response for UncordonHost
 type UncordonHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type UncordonHostResponse struct {
@@ -20606,17 +20606,17 @@ func (r UncordonHostResponse) ContentType() string {
 
 // CordonHostResponse403Headers the declared response headers of an HTTP 403 response for CordonHost
 type CordonHostResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CordonHostResponse404Headers the declared response headers of an HTTP 404 response for CordonHost
 type CordonHostResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CordonHostResponseDefaultHeaders the declared response headers of an HTTP default response for CordonHost
 type CordonHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CordonHostResponse struct {
@@ -20689,17 +20689,17 @@ func (r CordonHostResponse) ContentType() string {
 
 // DrainHostResponse403Headers the declared response headers of an HTTP 403 response for DrainHost
 type DrainHostResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DrainHostResponse404Headers the declared response headers of an HTTP 404 response for DrainHost
 type DrainHostResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DrainHostResponseDefaultHeaders the declared response headers of an HTTP default response for DrainHost
 type DrainHostResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DrainHostResponse struct {
@@ -20772,17 +20772,17 @@ func (r DrainHostResponse) ContentType() string {
 
 // ReportHostPathsResponse400Headers the declared response headers of an HTTP 400 response for ReportHostPaths
 type ReportHostPathsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReportHostPathsResponse403Headers the declared response headers of an HTTP 403 response for ReportHostPaths
 type ReportHostPathsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReportHostPathsResponseDefaultHeaders the declared response headers of an HTTP default response for ReportHostPaths
 type ReportHostPathsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ReportHostPathsResponse struct {
@@ -20868,17 +20868,17 @@ func (r ReportHostPathsResponse) ContentType() string {
 
 // GetHostSandboxDenyResponse403Headers the declared response headers of an HTTP 403 response for GetHostSandboxDeny
 type GetHostSandboxDenyResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetHostSandboxDenyResponse404Headers the declared response headers of an HTTP 404 response for GetHostSandboxDeny
 type GetHostSandboxDenyResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetHostSandboxDenyResponseDefaultHeaders the declared response headers of an HTTP default response for GetHostSandboxDeny
 type GetHostSandboxDenyResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetHostSandboxDenyResponse struct {
@@ -20955,17 +20955,17 @@ func (r GetHostSandboxDenyResponse) ContentType() string {
 
 // ReportHostStatusResponse400Headers the declared response headers of an HTTP 400 response for ReportHostStatus
 type ReportHostStatusResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReportHostStatusResponse403Headers the declared response headers of an HTTP 403 response for ReportHostStatus
 type ReportHostStatusResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReportHostStatusResponseDefaultHeaders the declared response headers of an HTTP default response for ReportHostStatus
 type ReportHostStatusResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ReportHostStatusResponse struct {
@@ -21045,12 +21045,12 @@ func (r ReportHostStatusResponse) ContentType() string {
 
 // ListImageAliasesResponse403Headers the declared response headers of an HTTP 403 response for ListImageAliases
 type ListImageAliasesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListImageAliasesResponseDefaultHeaders the declared response headers of an HTTP default response for ListImageAliases
 type ListImageAliasesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListImageAliasesResponse struct {
@@ -21114,17 +21114,17 @@ func (r ListImageAliasesResponse) ContentType() string {
 
 // ListPublicImagesResponse400Headers the declared response headers of an HTTP 400 response for ListPublicImages
 type ListPublicImagesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListPublicImagesResponse403Headers the declared response headers of an HTTP 403 response for ListPublicImages
 type ListPublicImagesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListPublicImagesResponseDefaultHeaders the declared response headers of an HTTP default response for ListPublicImages
 type ListPublicImagesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListPublicImagesResponse struct {
@@ -21197,17 +21197,17 @@ func (r ListPublicImagesResponse) ContentType() string {
 
 // CreatePublicImageResponse400Headers the declared response headers of an HTTP 400 response for CreatePublicImage
 type CreatePublicImageResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreatePublicImageResponse403Headers the declared response headers of an HTTP 403 response for CreatePublicImage
 type CreatePublicImageResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreatePublicImageResponseDefaultHeaders the declared response headers of an HTTP default response for CreatePublicImage
 type CreatePublicImageResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreatePublicImageResponse struct {
@@ -21294,17 +21294,17 @@ func (r CreatePublicImageResponse) ContentType() string {
 
 // DeletePublicImageResponse403Headers the declared response headers of an HTTP 403 response for DeletePublicImage
 type DeletePublicImageResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeletePublicImageResponse404Headers the declared response headers of an HTTP 404 response for DeletePublicImage
 type DeletePublicImageResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeletePublicImageResponseDefaultHeaders the declared response headers of an HTTP default response for DeletePublicImage
 type DeletePublicImageResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeletePublicImageResponse struct {
@@ -21370,17 +21370,17 @@ func (r DeletePublicImageResponse) ContentType() string {
 
 // ListObjectsResponse400Headers the declared response headers of an HTTP 400 response for ListObjects
 type ListObjectsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListObjectsResponse403Headers the declared response headers of an HTTP 403 response for ListObjects
 type ListObjectsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListObjectsResponseDefaultHeaders the declared response headers of an HTTP default response for ListObjects
 type ListObjectsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListObjectsResponse struct {
@@ -21463,17 +21463,17 @@ type CreateObjectResponse202Headers struct {
 
 // CreateObjectResponse400Headers the declared response headers of an HTTP 400 response for CreateObject
 type CreateObjectResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateObjectResponse410Headers the declared response headers of an HTTP 410 response for CreateObject
 type CreateObjectResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateObjectResponseDefaultHeaders the declared response headers of an HTTP default response for CreateObject
 type CreateObjectResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateObjectResponse struct {
@@ -21585,28 +21585,28 @@ func (r CreateObjectResponse) ContentType() string {
 
 // DeleteObjectResponse403Headers the declared response headers of an HTTP 403 response for DeleteObject
 type DeleteObjectResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteObjectResponse404Headers the declared response headers of an HTTP 404 response for DeleteObject
 type DeleteObjectResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteObjectResponse410Headers the declared response headers of an HTTP 410 response for DeleteObject
 type DeleteObjectResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteObjectResponse412Headers the declared response headers of an HTTP 412 response for DeleteObject
 type DeleteObjectResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // DeleteObjectResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteObject
 type DeleteObjectResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteObjectResponse struct {
@@ -21707,22 +21707,22 @@ type GetObjectResponse304Headers struct {
 
 // GetObjectResponse403Headers the declared response headers of an HTTP 403 response for GetObject
 type GetObjectResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetObjectResponse404Headers the declared response headers of an HTTP 404 response for GetObject
 type GetObjectResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetObjectResponse410Headers the declared response headers of an HTTP 410 response for GetObject
 type GetObjectResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetObjectResponseDefaultHeaders the declared response headers of an HTTP default response for GetObject
 type GetObjectResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetObjectResponse struct {
@@ -21813,38 +21813,38 @@ type UpdateObjectResponse200Headers struct {
 
 // UpdateObjectResponse400Headers the declared response headers of an HTTP 400 response for UpdateObject
 type UpdateObjectResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateObjectResponse403Headers the declared response headers of an HTTP 403 response for UpdateObject
 type UpdateObjectResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateObjectResponse404Headers the declared response headers of an HTTP 404 response for UpdateObject
 type UpdateObjectResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateObjectResponse409Headers the declared response headers of an HTTP 409 response for UpdateObject
 type UpdateObjectResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateObjectResponse410Headers the declared response headers of an HTTP 410 response for UpdateObject
 type UpdateObjectResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateObjectResponse412Headers the declared response headers of an HTTP 412 response for UpdateObject
 type UpdateObjectResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // UpdateObjectResponseDefaultHeaders the declared response headers of an HTTP default response for UpdateObject
 type UpdateObjectResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type UpdateObjectResponse struct {
@@ -21960,22 +21960,22 @@ type GetObjectCertificateResponse200Headers struct {
 
 // GetObjectCertificateResponse403Headers the declared response headers of an HTTP 403 response for GetObjectCertificate
 type GetObjectCertificateResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetObjectCertificateResponse404Headers the declared response headers of an HTTP 404 response for GetObjectCertificate
 type GetObjectCertificateResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetObjectCertificateResponse410Headers the declared response headers of an HTTP 410 response for GetObjectCertificate
 type GetObjectCertificateResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetObjectCertificateResponseDefaultHeaders the declared response headers of an HTTP default response for GetObjectCertificate
 type GetObjectCertificateResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetObjectCertificateResponse struct {
@@ -22071,22 +22071,22 @@ type CreateObjectCredentialResponse201Headers struct {
 
 // CreateObjectCredentialResponse400Headers the declared response headers of an HTTP 400 response for CreateObjectCredential
 type CreateObjectCredentialResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateObjectCredentialResponse403Headers the declared response headers of an HTTP 403 response for CreateObjectCredential
 type CreateObjectCredentialResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateObjectCredentialResponse404Headers the declared response headers of an HTTP 404 response for CreateObjectCredential
 type CreateObjectCredentialResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateObjectCredentialResponse410Headers the declared response headers of an HTTP 410 response for CreateObjectCredential
 type CreateObjectCredentialResponse410Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateObjectCredentialResponse503Headers the declared response headers of an HTTP 503 response for CreateObjectCredential
@@ -22096,7 +22096,7 @@ type CreateObjectCredentialResponse503Headers struct {
 
 // CreateObjectCredentialResponseDefaultHeaders the declared response headers of an HTTP default response for CreateObjectCredential
 type CreateObjectCredentialResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateObjectCredentialResponse struct {
@@ -22212,12 +22212,12 @@ func (r CreateObjectCredentialResponse) ContentType() string {
 
 // ListReleasesResponse403Headers the declared response headers of an HTTP 403 response for ListReleases
 type ListReleasesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListReleasesResponseDefaultHeaders the declared response headers of an HTTP default response for ListReleases
 type ListReleasesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListReleasesResponse struct {
@@ -22281,17 +22281,17 @@ func (r ListReleasesResponse) ContentType() string {
 
 // ImportReleasesResponse400Headers the declared response headers of an HTTP 400 response for ImportReleases
 type ImportReleasesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ImportReleasesResponse403Headers the declared response headers of an HTTP 403 response for ImportReleases
 type ImportReleasesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ImportReleasesResponseDefaultHeaders the declared response headers of an HTTP default response for ImportReleases
 type ImportReleasesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ImportReleasesResponse struct {
@@ -22364,17 +22364,17 @@ func (r ImportReleasesResponse) ContentType() string {
 
 // GetReleaseArtifactResponse403Headers the declared response headers of an HTTP 403 response for GetReleaseArtifact
 type GetReleaseArtifactResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetReleaseArtifactResponse404Headers the declared response headers of an HTTP 404 response for GetReleaseArtifact
 type GetReleaseArtifactResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetReleaseArtifactResponseDefaultHeaders the declared response headers of an HTTP default response for GetReleaseArtifact
 type GetReleaseArtifactResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetReleaseArtifactResponse struct {
@@ -22440,17 +22440,17 @@ func (r GetReleaseArtifactResponse) ContentType() string {
 
 // PutReleaseArtifactResponse400Headers the declared response headers of an HTTP 400 response for PutReleaseArtifact
 type PutReleaseArtifactResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutReleaseArtifactResponse403Headers the declared response headers of an HTTP 403 response for PutReleaseArtifact
 type PutReleaseArtifactResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutReleaseArtifactResponseDefaultHeaders the declared response headers of an HTTP default response for PutReleaseArtifact
 type PutReleaseArtifactResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutReleaseArtifactResponse struct {
@@ -22523,12 +22523,12 @@ func (r PutReleaseArtifactResponse) ContentType() string {
 
 // GetStatusResponse403Headers the declared response headers of an HTTP 403 response for GetStatus
 type GetStatusResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetStatusResponseDefaultHeaders the declared response headers of an HTTP default response for GetStatus
 type GetStatusResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetStatusResponse struct {
@@ -22592,17 +22592,17 @@ func (r GetStatusResponse) ContentType() string {
 
 // ListTenantsResponse400Headers the declared response headers of an HTTP 400 response for ListTenants
 type ListTenantsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListTenantsResponse403Headers the declared response headers of an HTTP 403 response for ListTenants
 type ListTenantsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListTenantsResponseDefaultHeaders the declared response headers of an HTTP default response for ListTenants
 type ListTenantsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListTenantsResponse struct {
@@ -22681,22 +22681,22 @@ type CreateTenantResponse201Headers struct {
 
 // CreateTenantResponse400Headers the declared response headers of an HTTP 400 response for CreateTenant
 type CreateTenantResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTenantResponse403Headers the declared response headers of an HTTP 403 response for CreateTenant
 type CreateTenantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTenantResponse409Headers the declared response headers of an HTTP 409 response for CreateTenant
 type CreateTenantResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTenantResponseDefaultHeaders the declared response headers of an HTTP default response for CreateTenant
 type CreateTenantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateTenantResponse struct {
@@ -22780,23 +22780,23 @@ func (r CreateTenantResponse) ContentType() string {
 
 // DeleteTenantResponse403Headers the declared response headers of an HTTP 403 response for DeleteTenant
 type DeleteTenantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteTenantResponse404Headers the declared response headers of an HTTP 404 response for DeleteTenant
 type DeleteTenantResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteTenantResponse412Headers the declared response headers of an HTTP 412 response for DeleteTenant
 type DeleteTenantResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // DeleteTenantResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteTenant
 type DeleteTenantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteTenantResponse struct {
@@ -22895,17 +22895,17 @@ type GetTenantResponse304Headers struct {
 
 // GetTenantResponse403Headers the declared response headers of an HTTP 403 response for GetTenant
 type GetTenantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetTenantResponse404Headers the declared response headers of an HTTP 404 response for GetTenant
 type GetTenantResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetTenantResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenant
 type GetTenantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetTenantResponse struct {
@@ -22987,28 +22987,28 @@ type UpdateTenantResponse200Headers struct {
 
 // UpdateTenantResponse400Headers the declared response headers of an HTTP 400 response for UpdateTenant
 type UpdateTenantResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateTenantResponse403Headers the declared response headers of an HTTP 403 response for UpdateTenant
 type UpdateTenantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateTenantResponse404Headers the declared response headers of an HTTP 404 response for UpdateTenant
 type UpdateTenantResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateTenantResponse412Headers the declared response headers of an HTTP 412 response for UpdateTenant
 type UpdateTenantResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // UpdateTenantResponseDefaultHeaders the declared response headers of an HTTP default response for UpdateTenant
 type UpdateTenantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type UpdateTenantResponse struct {
@@ -23101,17 +23101,17 @@ func (r UpdateTenantResponse) ContentType() string {
 
 // ListApprovalsResponse403Headers the declared response headers of an HTTP 403 response for ListApprovals
 type ListApprovalsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListApprovalsResponse404Headers the declared response headers of an HTTP 404 response for ListApprovals
 type ListApprovalsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListApprovalsResponseDefaultHeaders the declared response headers of an HTTP default response for ListApprovals
 type ListApprovalsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListApprovalsResponse struct {
@@ -23184,17 +23184,17 @@ func (r ListApprovalsResponse) ContentType() string {
 
 // DeleteTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for DeleteTenantNotifications
 type DeleteTenantNotificationsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for DeleteTenantNotifications
 type DeleteTenantNotificationsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteTenantNotifications
 type DeleteTenantNotificationsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteTenantNotificationsResponse struct {
@@ -23260,17 +23260,17 @@ func (r DeleteTenantNotificationsResponse) ContentType() string {
 
 // GetTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for GetTenantNotifications
 type GetTenantNotificationsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for GetTenantNotifications
 type GetTenantNotificationsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenantNotifications
 type GetTenantNotificationsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetTenantNotificationsResponse struct {
@@ -23343,22 +23343,22 @@ func (r GetTenantNotificationsResponse) ContentType() string {
 
 // PutTenantNotificationsResponse400Headers the declared response headers of an HTTP 400 response for PutTenantNotifications
 type PutTenantNotificationsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for PutTenantNotifications
 type PutTenantNotificationsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for PutTenantNotifications
 type PutTenantNotificationsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for PutTenantNotifications
 type PutTenantNotificationsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutTenantNotificationsResponse struct {
@@ -23440,17 +23440,17 @@ func (r PutTenantNotificationsResponse) ContentType() string {
 
 // TestTenantNotificationsResponse403Headers the declared response headers of an HTTP 403 response for TestTenantNotifications
 type TestTenantNotificationsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // TestTenantNotificationsResponse404Headers the declared response headers of an HTTP 404 response for TestTenantNotifications
 type TestTenantNotificationsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // TestTenantNotificationsResponseDefaultHeaders the declared response headers of an HTTP default response for TestTenantNotifications
 type TestTenantNotificationsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type TestTenantNotificationsResponse struct {
@@ -23523,22 +23523,22 @@ func (r TestTenantNotificationsResponse) ContentType() string {
 
 // PurgeTenantObjectsResponse400Headers the declared response headers of an HTTP 400 response for PurgeTenantObjects
 type PurgeTenantObjectsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PurgeTenantObjectsResponse403Headers the declared response headers of an HTTP 403 response for PurgeTenantObjects
 type PurgeTenantObjectsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PurgeTenantObjectsResponse404Headers the declared response headers of an HTTP 404 response for PurgeTenantObjects
 type PurgeTenantObjectsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PurgeTenantObjectsResponseDefaultHeaders the declared response headers of an HTTP default response for PurgeTenantObjects
 type PurgeTenantObjectsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PurgeTenantObjectsResponse struct {
@@ -23620,22 +23620,22 @@ func (r PurgeTenantObjectsResponse) ContentType() string {
 
 // ListPublicNamesResponse400Headers the declared response headers of an HTTP 400 response for ListPublicNames
 type ListPublicNamesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListPublicNamesResponse403Headers the declared response headers of an HTTP 403 response for ListPublicNames
 type ListPublicNamesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListPublicNamesResponse404Headers the declared response headers of an HTTP 404 response for ListPublicNames
 type ListPublicNamesResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListPublicNamesResponseDefaultHeaders the declared response headers of an HTTP default response for ListPublicNames
 type ListPublicNamesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListPublicNamesResponse struct {
@@ -23717,22 +23717,22 @@ func (r ListPublicNamesResponse) ContentType() string {
 
 // ReleasePublicNameResponse403Headers the declared response headers of an HTTP 403 response for ReleasePublicName
 type ReleasePublicNameResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReleasePublicNameResponse404Headers the declared response headers of an HTTP 404 response for ReleasePublicName
 type ReleasePublicNameResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReleasePublicNameResponse409Headers the declared response headers of an HTTP 409 response for ReleasePublicName
 type ReleasePublicNameResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReleasePublicNameResponseDefaultHeaders the declared response headers of an HTTP default response for ReleasePublicName
 type ReleasePublicNameResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ReleasePublicNameResponse struct {
@@ -23807,22 +23807,22 @@ func (r ReleasePublicNameResponse) ContentType() string {
 
 // ListQueuesResponse400Headers the declared response headers of an HTTP 400 response for ListQueues
 type ListQueuesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListQueuesResponse403Headers the declared response headers of an HTTP 403 response for ListQueues
 type ListQueuesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListQueuesResponse404Headers the declared response headers of an HTTP 404 response for ListQueues
 type ListQueuesResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListQueuesResponseDefaultHeaders the declared response headers of an HTTP default response for ListQueues
 type ListQueuesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListQueuesResponse struct {
@@ -23904,17 +23904,17 @@ func (r ListQueuesResponse) ContentType() string {
 
 // DeleteQueueResponse403Headers the declared response headers of an HTTP 403 response for DeleteQueue
 type DeleteQueueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteQueueResponse404Headers the declared response headers of an HTTP 404 response for DeleteQueue
 type DeleteQueueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteQueueResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteQueue
 type DeleteQueueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteQueueResponse struct {
@@ -23980,27 +23980,27 @@ func (r DeleteQueueResponse) ContentType() string {
 
 // GetQueueResponse400Headers the declared response headers of an HTTP 400 response for GetQueue
 type GetQueueResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetQueueResponse403Headers the declared response headers of an HTTP 403 response for GetQueue
 type GetQueueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetQueueResponse404Headers the declared response headers of an HTTP 404 response for GetQueue
 type GetQueueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetQueueResponse409Headers the declared response headers of an HTTP 409 response for GetQueue
 type GetQueueResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetQueueResponseDefaultHeaders the declared response headers of an HTTP default response for GetQueue
 type GetQueueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetQueueResponse struct {
@@ -24091,22 +24091,22 @@ func (r GetQueueResponse) ContentType() string {
 
 // PutQueueResponse400Headers the declared response headers of an HTTP 400 response for PutQueue
 type PutQueueResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutQueueResponse403Headers the declared response headers of an HTTP 403 response for PutQueue
 type PutQueueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutQueueResponse404Headers the declared response headers of an HTTP 404 response for PutQueue
 type PutQueueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutQueueResponseDefaultHeaders the declared response headers of an HTTP default response for PutQueue
 type PutQueueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutQueueResponse struct {
@@ -24200,22 +24200,22 @@ type PeekQueueMessagesResponse200Headers struct {
 
 // PeekQueueMessagesResponse400Headers the declared response headers of an HTTP 400 response for PeekQueueMessages
 type PeekQueueMessagesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PeekQueueMessagesResponse403Headers the declared response headers of an HTTP 403 response for PeekQueueMessages
 type PeekQueueMessagesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PeekQueueMessagesResponse404Headers the declared response headers of an HTTP 404 response for PeekQueueMessages
 type PeekQueueMessagesResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PeekQueueMessagesResponseDefaultHeaders the declared response headers of an HTTP default response for PeekQueueMessages
 type PeekQueueMessagesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PeekQueueMessagesResponse struct {
@@ -24299,27 +24299,27 @@ func (r PeekQueueMessagesResponse) ContentType() string {
 
 // SendQueueMessagesResponse400Headers the declared response headers of an HTTP 400 response for SendQueueMessages
 type SendQueueMessagesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // SendQueueMessagesResponse403Headers the declared response headers of an HTTP 403 response for SendQueueMessages
 type SendQueueMessagesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // SendQueueMessagesResponse404Headers the declared response headers of an HTTP 404 response for SendQueueMessages
 type SendQueueMessagesResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // SendQueueMessagesResponse409Headers the declared response headers of an HTTP 409 response for SendQueueMessages
 type SendQueueMessagesResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // SendQueueMessagesResponseDefaultHeaders the declared response headers of an HTTP default response for SendQueueMessages
 type SendQueueMessagesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type SendQueueMessagesResponse struct {
@@ -24410,27 +24410,27 @@ func (r SendQueueMessagesResponse) ContentType() string {
 
 // AckQueueMessagesResponse400Headers the declared response headers of an HTTP 400 response for AckQueueMessages
 type AckQueueMessagesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AckQueueMessagesResponse403Headers the declared response headers of an HTTP 403 response for AckQueueMessages
 type AckQueueMessagesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AckQueueMessagesResponse404Headers the declared response headers of an HTTP 404 response for AckQueueMessages
 type AckQueueMessagesResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AckQueueMessagesResponse409Headers the declared response headers of an HTTP 409 response for AckQueueMessages
 type AckQueueMessagesResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AckQueueMessagesResponseDefaultHeaders the declared response headers of an HTTP default response for AckQueueMessages
 type AckQueueMessagesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type AckQueueMessagesResponse struct {
@@ -24526,27 +24526,27 @@ type PullQueueMessagesResponse200Headers struct {
 
 // PullQueueMessagesResponse400Headers the declared response headers of an HTTP 400 response for PullQueueMessages
 type PullQueueMessagesResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PullQueueMessagesResponse403Headers the declared response headers of an HTTP 403 response for PullQueueMessages
 type PullQueueMessagesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PullQueueMessagesResponse404Headers the declared response headers of an HTTP 404 response for PullQueueMessages
 type PullQueueMessagesResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PullQueueMessagesResponse409Headers the declared response headers of an HTTP 409 response for PullQueueMessages
 type PullQueueMessagesResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PullQueueMessagesResponseDefaultHeaders the declared response headers of an HTTP default response for PullQueueMessages
 type PullQueueMessagesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PullQueueMessagesResponse struct {
@@ -24639,17 +24639,17 @@ func (r PullQueueMessagesResponse) ContentType() string {
 
 // PurgeQueueResponse403Headers the declared response headers of an HTTP 403 response for PurgeQueue
 type PurgeQueueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PurgeQueueResponse404Headers the declared response headers of an HTTP 404 response for PurgeQueue
 type PurgeQueueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PurgeQueueResponseDefaultHeaders the declared response headers of an HTTP default response for PurgeQueue
 type PurgeQueueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PurgeQueueResponse struct {
@@ -24722,17 +24722,17 @@ func (r PurgeQueueResponse) ContentType() string {
 
 // DeleteTenantTelemetryResponse403Headers the declared response headers of an HTTP 403 response for DeleteTenantTelemetry
 type DeleteTenantTelemetryResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteTenantTelemetryResponse404Headers the declared response headers of an HTTP 404 response for DeleteTenantTelemetry
 type DeleteTenantTelemetryResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteTenantTelemetryResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteTenantTelemetry
 type DeleteTenantTelemetryResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteTenantTelemetryResponse struct {
@@ -24798,17 +24798,17 @@ func (r DeleteTenantTelemetryResponse) ContentType() string {
 
 // GetTenantTelemetryResponse403Headers the declared response headers of an HTTP 403 response for GetTenantTelemetry
 type GetTenantTelemetryResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetTenantTelemetryResponse404Headers the declared response headers of an HTTP 404 response for GetTenantTelemetry
 type GetTenantTelemetryResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetTenantTelemetryResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenantTelemetry
 type GetTenantTelemetryResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetTenantTelemetryResponse struct {
@@ -24881,22 +24881,22 @@ func (r GetTenantTelemetryResponse) ContentType() string {
 
 // PutTenantTelemetryResponse400Headers the declared response headers of an HTTP 400 response for PutTenantTelemetry
 type PutTenantTelemetryResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutTenantTelemetryResponse403Headers the declared response headers of an HTTP 403 response for PutTenantTelemetry
 type PutTenantTelemetryResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutTenantTelemetryResponse404Headers the declared response headers of an HTTP 404 response for PutTenantTelemetry
 type PutTenantTelemetryResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutTenantTelemetryResponseDefaultHeaders the declared response headers of an HTTP default response for PutTenantTelemetry
 type PutTenantTelemetryResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutTenantTelemetryResponse struct {
@@ -24978,27 +24978,27 @@ func (r PutTenantTelemetryResponse) ContentType() string {
 
 // DecideApprovalResponse400Headers the declared response headers of an HTTP 400 response for DecideApproval
 type DecideApprovalResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DecideApprovalResponse403Headers the declared response headers of an HTTP 403 response for DecideApproval
 type DecideApprovalResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DecideApprovalResponse404Headers the declared response headers of an HTTP 404 response for DecideApproval
 type DecideApprovalResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DecideApprovalResponse409Headers the declared response headers of an HTTP 409 response for DecideApproval
 type DecideApprovalResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DecideApprovalResponseDefaultHeaders the declared response headers of an HTTP default response for DecideApproval
 type DecideApprovalResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DecideApprovalResponse struct {
@@ -25094,22 +25094,22 @@ type ExportD1Response200Headers struct {
 
 // ExportD1Response400Headers the declared response headers of an HTTP 400 response for ExportD1
 type ExportD1Response400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ExportD1Response403Headers the declared response headers of an HTTP 403 response for ExportD1
 type ExportD1Response403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ExportD1Response404Headers the declared response headers of an HTTP 404 response for ExportD1
 type ExportD1Response404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ExportD1ResponseDefaultHeaders the declared response headers of an HTTP default response for ExportD1
 type ExportD1ResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ExportD1Response struct {
@@ -25186,22 +25186,22 @@ func (r ExportD1Response) ContentType() string {
 
 // QueryD1Response400Headers the declared response headers of an HTTP 400 response for QueryD1
 type QueryD1Response400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // QueryD1Response403Headers the declared response headers of an HTTP 403 response for QueryD1
 type QueryD1Response403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // QueryD1Response404Headers the declared response headers of an HTTP 404 response for QueryD1
 type QueryD1Response404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // QueryD1ResponseDefaultHeaders the declared response headers of an HTTP default response for QueryD1
 type QueryD1ResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type QueryD1Response struct {
@@ -25283,22 +25283,22 @@ func (r QueryD1Response) ContentType() string {
 
 // ListWorkloadDeploymentsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadDeployments
 type ListWorkloadDeploymentsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadDeploymentsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadDeployments
 type ListWorkloadDeploymentsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadDeploymentsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadDeployments
 type ListWorkloadDeploymentsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadDeploymentsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadDeployments
 type ListWorkloadDeploymentsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListWorkloadDeploymentsResponse struct {
@@ -25385,22 +25385,22 @@ type GetWorkloadLogsResponse200Headers struct {
 
 // GetWorkloadLogsResponse400Headers the declared response headers of an HTTP 400 response for GetWorkloadLogs
 type GetWorkloadLogsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadLogsResponse403Headers the declared response headers of an HTTP 403 response for GetWorkloadLogs
 type GetWorkloadLogsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadLogsResponse404Headers the declared response headers of an HTTP 404 response for GetWorkloadLogs
 type GetWorkloadLogsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadLogsResponseDefaultHeaders the declared response headers of an HTTP default response for GetWorkloadLogs
 type GetWorkloadLogsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetWorkloadLogsResponse struct {
@@ -25477,22 +25477,22 @@ func (r GetWorkloadLogsResponse) ContentType() string {
 
 // ListWorkloadPreviewsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadPreviews
 type ListWorkloadPreviewsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadPreviewsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadPreviews
 type ListWorkloadPreviewsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadPreviewsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadPreviews
 type ListWorkloadPreviewsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadPreviewsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadPreviews
 type ListWorkloadPreviewsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListWorkloadPreviewsResponse struct {
@@ -25579,27 +25579,27 @@ type CreatePromotionResponse202Headers struct {
 
 // CreatePromotionResponse400Headers the declared response headers of an HTTP 400 response for CreatePromotion
 type CreatePromotionResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreatePromotionResponse403Headers the declared response headers of an HTTP 403 response for CreatePromotion
 type CreatePromotionResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreatePromotionResponse404Headers the declared response headers of an HTTP 404 response for CreatePromotion
 type CreatePromotionResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreatePromotionResponse409Headers the declared response headers of an HTTP 409 response for CreatePromotion
 type CreatePromotionResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreatePromotionResponseDefaultHeaders the declared response headers of an HTTP default response for CreatePromotion
 type CreatePromotionResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreatePromotionResponse struct {
@@ -25704,17 +25704,17 @@ type GetWorkloadPublicResponse200Headers struct {
 
 // GetWorkloadPublicResponse403Headers the declared response headers of an HTTP 403 response for GetWorkloadPublic
 type GetWorkloadPublicResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadPublicResponse404Headers the declared response headers of an HTTP 404 response for GetWorkloadPublic
 type GetWorkloadPublicResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadPublicResponseDefaultHeaders the declared response headers of an HTTP default response for GetWorkloadPublic
 type GetWorkloadPublicResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetWorkloadPublicResponse struct {
@@ -25794,28 +25794,28 @@ type UpdateWorkloadPublicResponse200Headers struct {
 
 // UpdateWorkloadPublicResponse400Headers the declared response headers of an HTTP 400 response for UpdateWorkloadPublic
 type UpdateWorkloadPublicResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateWorkloadPublicResponse403Headers the declared response headers of an HTTP 403 response for UpdateWorkloadPublic
 type UpdateWorkloadPublicResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateWorkloadPublicResponse404Headers the declared response headers of an HTTP 404 response for UpdateWorkloadPublic
 type UpdateWorkloadPublicResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // UpdateWorkloadPublicResponse412Headers the declared response headers of an HTTP 412 response for UpdateWorkloadPublic
 type UpdateWorkloadPublicResponse412Headers struct {
-	ETag     *string
-	TwdError *string
+	ETag    *string
+	TwError *string
 }
 
 // UpdateWorkloadPublicResponseDefaultHeaders the declared response headers of an HTTP default response for UpdateWorkloadPublic
 type UpdateWorkloadPublicResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type UpdateWorkloadPublicResponse struct {
@@ -25913,27 +25913,27 @@ type CreateRollbackResponse202Headers struct {
 
 // CreateRollbackResponse400Headers the declared response headers of an HTTP 400 response for CreateRollback
 type CreateRollbackResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateRollbackResponse403Headers the declared response headers of an HTTP 403 response for CreateRollback
 type CreateRollbackResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateRollbackResponse404Headers the declared response headers of an HTTP 404 response for CreateRollback
 type CreateRollbackResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateRollbackResponse409Headers the declared response headers of an HTTP 409 response for CreateRollback
 type CreateRollbackResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateRollbackResponseDefaultHeaders the declared response headers of an HTTP default response for CreateRollback
 type CreateRollbackResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateRollbackResponse struct {
@@ -26038,27 +26038,27 @@ type CreateWorkloadSecretGrantResponse201Headers struct {
 
 // CreateWorkloadSecretGrantResponse400Headers the declared response headers of an HTTP 400 response for CreateWorkloadSecretGrant
 type CreateWorkloadSecretGrantResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateWorkloadSecretGrantResponse403Headers the declared response headers of an HTTP 403 response for CreateWorkloadSecretGrant
 type CreateWorkloadSecretGrantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateWorkloadSecretGrantResponse404Headers the declared response headers of an HTTP 404 response for CreateWorkloadSecretGrant
 type CreateWorkloadSecretGrantResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateWorkloadSecretGrantResponse409Headers the declared response headers of an HTTP 409 response for CreateWorkloadSecretGrant
 type CreateWorkloadSecretGrantResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateWorkloadSecretGrantResponseDefaultHeaders the declared response headers of an HTTP default response for CreateWorkloadSecretGrant
 type CreateWorkloadSecretGrantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateWorkloadSecretGrantResponse struct {
@@ -26151,22 +26151,22 @@ func (r CreateWorkloadSecretGrantResponse) ContentType() string {
 
 // ListWorkloadSecretsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadSecrets
 type ListWorkloadSecretsResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadSecretsResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadSecrets
 type ListWorkloadSecretsResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadSecretsResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadSecrets
 type ListWorkloadSecretsResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadSecretsResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadSecrets
 type ListWorkloadSecretsResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListWorkloadSecretsResponse struct {
@@ -26248,17 +26248,17 @@ func (r ListWorkloadSecretsResponse) ContentType() string {
 
 // DeleteWorkloadSecretResponse403Headers the declared response headers of an HTTP 403 response for DeleteWorkloadSecret
 type DeleteWorkloadSecretResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteWorkloadSecretResponse404Headers the declared response headers of an HTTP 404 response for DeleteWorkloadSecret
 type DeleteWorkloadSecretResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteWorkloadSecretResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteWorkloadSecret
 type DeleteWorkloadSecretResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteWorkloadSecretResponse struct {
@@ -26324,22 +26324,22 @@ func (r DeleteWorkloadSecretResponse) ContentType() string {
 
 // PutWorkloadSecretResponse400Headers the declared response headers of an HTTP 400 response for PutWorkloadSecret
 type PutWorkloadSecretResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutWorkloadSecretResponse403Headers the declared response headers of an HTTP 403 response for PutWorkloadSecret
 type PutWorkloadSecretResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutWorkloadSecretResponse404Headers the declared response headers of an HTTP 404 response for PutWorkloadSecret
 type PutWorkloadSecretResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutWorkloadSecretResponseDefaultHeaders the declared response headers of an HTTP default response for PutWorkloadSecret
 type PutWorkloadSecretResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutWorkloadSecretResponse struct {
@@ -26428,22 +26428,22 @@ func (r PutWorkloadSecretResponse) ContentType() string {
 
 // ListWorkloadStoresResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadStores
 type ListWorkloadStoresResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadStoresResponse403Headers the declared response headers of an HTTP 403 response for ListWorkloadStores
 type ListWorkloadStoresResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadStoresResponse404Headers the declared response headers of an HTTP 404 response for ListWorkloadStores
 type ListWorkloadStoresResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListWorkloadStoresResponseDefaultHeaders the declared response headers of an HTTP default response for ListWorkloadStores
 type ListWorkloadStoresResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListWorkloadStoresResponse struct {
@@ -26530,22 +26530,22 @@ type ListKVKeysResponse200Headers struct {
 
 // ListKVKeysResponse400Headers the declared response headers of an HTTP 400 response for ListKVKeys
 type ListKVKeysResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListKVKeysResponse403Headers the declared response headers of an HTTP 403 response for ListKVKeys
 type ListKVKeysResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListKVKeysResponse404Headers the declared response headers of an HTTP 404 response for ListKVKeys
 type ListKVKeysResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListKVKeysResponseDefaultHeaders the declared response headers of an HTTP default response for ListKVKeys
 type ListKVKeysResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListKVKeysResponse struct {
@@ -26629,27 +26629,27 @@ func (r ListKVKeysResponse) ContentType() string {
 
 // DeleteKVValueResponse400Headers the declared response headers of an HTTP 400 response for DeleteKVValue
 type DeleteKVValueResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteKVValueResponse403Headers the declared response headers of an HTTP 403 response for DeleteKVValue
 type DeleteKVValueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteKVValueResponse404Headers the declared response headers of an HTTP 404 response for DeleteKVValue
 type DeleteKVValueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteKVValueResponse409Headers the declared response headers of an HTTP 409 response for DeleteKVValue
 type DeleteKVValueResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteKVValueResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteKVValue
 type DeleteKVValueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteKVValueResponse struct {
@@ -26738,22 +26738,22 @@ type GetKVValueResponse200Headers struct {
 
 // GetKVValueResponse400Headers the declared response headers of an HTTP 400 response for GetKVValue
 type GetKVValueResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetKVValueResponse403Headers the declared response headers of an HTTP 403 response for GetKVValue
 type GetKVValueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetKVValueResponse404Headers the declared response headers of an HTTP 404 response for GetKVValue
 type GetKVValueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetKVValueResponseDefaultHeaders the declared response headers of an HTTP default response for GetKVValue
 type GetKVValueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetKVValueResponse struct {
@@ -26837,27 +26837,27 @@ func (r GetKVValueResponse) ContentType() string {
 
 // PutKVValueResponse400Headers the declared response headers of an HTTP 400 response for PutKVValue
 type PutKVValueResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutKVValueResponse403Headers the declared response headers of an HTTP 403 response for PutKVValue
 type PutKVValueResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutKVValueResponse404Headers the declared response headers of an HTTP 404 response for PutKVValue
 type PutKVValueResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutKVValueResponse409Headers the declared response headers of an HTTP 409 response for PutKVValue
 type PutKVValueResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutKVValueResponseDefaultHeaders the declared response headers of an HTTP default response for PutKVValue
 type PutKVValueResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutKVValueResponse struct {
@@ -26948,17 +26948,17 @@ func (r PutKVValueResponse) ContentType() string {
 
 // DeleteWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for DeleteWorkloadStore
 type DeleteWorkloadStoreResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteWorkloadStoreResponse404Headers the declared response headers of an HTTP 404 response for DeleteWorkloadStore
 type DeleteWorkloadStoreResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // DeleteWorkloadStoreResponseDefaultHeaders the declared response headers of an HTTP default response for DeleteWorkloadStore
 type DeleteWorkloadStoreResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type DeleteWorkloadStoreResponse struct {
@@ -27024,17 +27024,17 @@ func (r DeleteWorkloadStoreResponse) ContentType() string {
 
 // GetWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for GetWorkloadStore
 type GetWorkloadStoreResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadStoreResponse404Headers the declared response headers of an HTTP 404 response for GetWorkloadStore
 type GetWorkloadStoreResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetWorkloadStoreResponseDefaultHeaders the declared response headers of an HTTP default response for GetWorkloadStore
 type GetWorkloadStoreResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetWorkloadStoreResponse struct {
@@ -27107,22 +27107,22 @@ func (r GetWorkloadStoreResponse) ContentType() string {
 
 // PutWorkloadStoreResponse400Headers the declared response headers of an HTTP 400 response for PutWorkloadStore
 type PutWorkloadStoreResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for PutWorkloadStore
 type PutWorkloadStoreResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutWorkloadStoreResponse404Headers the declared response headers of an HTTP 404 response for PutWorkloadStore
 type PutWorkloadStoreResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // PutWorkloadStoreResponseDefaultHeaders the declared response headers of an HTTP default response for PutWorkloadStore
 type PutWorkloadStoreResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type PutWorkloadStoreResponse struct {
@@ -27216,27 +27216,27 @@ type ReadStoreJournalResponse200Headers struct {
 
 // ReadStoreJournalResponse400Headers the declared response headers of an HTTP 400 response for ReadStoreJournal
 type ReadStoreJournalResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReadStoreJournalResponse403Headers the declared response headers of an HTTP 403 response for ReadStoreJournal
 type ReadStoreJournalResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReadStoreJournalResponse404Headers the declared response headers of an HTTP 404 response for ReadStoreJournal
 type ReadStoreJournalResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReadStoreJournalResponse409Headers the declared response headers of an HTTP 409 response for ReadStoreJournal
 type ReadStoreJournalResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ReadStoreJournalResponseDefaultHeaders the declared response headers of an HTTP default response for ReadStoreJournal
 type ReadStoreJournalResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ReadStoreJournalResponse struct {
@@ -27329,27 +27329,27 @@ func (r ReadStoreJournalResponse) ContentType() string {
 
 // AppendStoreJournalResponse400Headers the declared response headers of an HTTP 400 response for AppendStoreJournal
 type AppendStoreJournalResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AppendStoreJournalResponse403Headers the declared response headers of an HTTP 403 response for AppendStoreJournal
 type AppendStoreJournalResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AppendStoreJournalResponse404Headers the declared response headers of an HTTP 404 response for AppendStoreJournal
 type AppendStoreJournalResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AppendStoreJournalResponse409Headers the declared response headers of an HTTP 409 response for AppendStoreJournal
 type AppendStoreJournalResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // AppendStoreJournalResponseDefaultHeaders the declared response headers of an HTTP default response for AppendStoreJournal
 type AppendStoreJournalResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type AppendStoreJournalResponse struct {
@@ -27445,27 +27445,27 @@ type CreateTelemetryGrantResponse201Headers struct {
 
 // CreateTelemetryGrantResponse400Headers the declared response headers of an HTTP 400 response for CreateTelemetryGrant
 type CreateTelemetryGrantResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTelemetryGrantResponse403Headers the declared response headers of an HTTP 403 response for CreateTelemetryGrant
 type CreateTelemetryGrantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTelemetryGrantResponse404Headers the declared response headers of an HTTP 404 response for CreateTelemetryGrant
 type CreateTelemetryGrantResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTelemetryGrantResponse409Headers the declared response headers of an HTTP 409 response for CreateTelemetryGrant
 type CreateTelemetryGrantResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateTelemetryGrantResponseDefaultHeaders the declared response headers of an HTTP default response for CreateTelemetryGrant
 type CreateTelemetryGrantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateTelemetryGrantResponse struct {
@@ -27558,12 +27558,12 @@ func (r CreateTelemetryGrantResponse) ContentType() string {
 
 // ListUpgradesResponse403Headers the declared response headers of an HTTP 403 response for ListUpgrades
 type ListUpgradesResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ListUpgradesResponseDefaultHeaders the declared response headers of an HTTP default response for ListUpgrades
 type ListUpgradesResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ListUpgradesResponse struct {
@@ -27631,22 +27631,22 @@ func (r ListUpgradesResponse) ContentType() string {
 
 // CreateUpgradeResponse400Headers the declared response headers of an HTTP 400 response for CreateUpgrade
 type CreateUpgradeResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateUpgradeResponse403Headers the declared response headers of an HTTP 403 response for CreateUpgrade
 type CreateUpgradeResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateUpgradeResponse409Headers the declared response headers of an HTTP 409 response for CreateUpgrade
 type CreateUpgradeResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateUpgradeResponseDefaultHeaders the declared response headers of an HTTP default response for CreateUpgrade
 type CreateUpgradeResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateUpgradeResponse struct {
@@ -27735,17 +27735,17 @@ func (r CreateUpgradeResponse) ContentType() string {
 
 // GetUpgradeResponse403Headers the declared response headers of an HTTP 403 response for GetUpgrade
 type GetUpgradeResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetUpgradeResponse404Headers the declared response headers of an HTTP 404 response for GetUpgrade
 type GetUpgradeResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // GetUpgradeResponseDefaultHeaders the declared response headers of an HTTP default response for GetUpgrade
 type GetUpgradeResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type GetUpgradeResponse struct {
@@ -27818,22 +27818,22 @@ func (r GetUpgradeResponse) ContentType() string {
 
 // ActOnUpgradeResponse403Headers the declared response headers of an HTTP 403 response for ActOnUpgrade
 type ActOnUpgradeResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ActOnUpgradeResponse404Headers the declared response headers of an HTTP 404 response for ActOnUpgrade
 type ActOnUpgradeResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ActOnUpgradeResponse409Headers the declared response headers of an HTTP 409 response for ActOnUpgrade
 type ActOnUpgradeResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // ActOnUpgradeResponseDefaultHeaders the declared response headers of an HTTP default response for ActOnUpgrade
 type ActOnUpgradeResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type ActOnUpgradeResponse struct {
@@ -27920,27 +27920,27 @@ type CreateVolumeKeyGrantResponse201Headers struct {
 
 // CreateVolumeKeyGrantResponse400Headers the declared response headers of an HTTP 400 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse400Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateVolumeKeyGrantResponse403Headers the declared response headers of an HTTP 403 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateVolumeKeyGrantResponse404Headers the declared response headers of an HTTP 404 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse404Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateVolumeKeyGrantResponse409Headers the declared response headers of an HTTP 409 response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponse409Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // CreateVolumeKeyGrantResponseDefaultHeaders the declared response headers of an HTTP default response for CreateVolumeKeyGrant
 type CreateVolumeKeyGrantResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type CreateVolumeKeyGrantResponse struct {
@@ -28033,12 +28033,12 @@ func (r CreateVolumeKeyGrantResponse) ContentType() string {
 
 // WhoAmIResponse403Headers the declared response headers of an HTTP 403 response for WhoAmI
 type WhoAmIResponse403Headers struct {
-	TwdError *string
+	TwError *string
 }
 
 // WhoAmIResponseDefaultHeaders the declared response headers of an HTTP default response for WhoAmI
 type WhoAmIResponseDefaultHeaders struct {
-	TwdError *string
+	TwError *string
 }
 
 type WhoAmIResponse struct {
@@ -28176,10 +28176,10 @@ func (c *ClientWithResponses) GetAuditVerificationWithResponse(ctx context.Conte
 
 // GetCertificateWithResponse Look up a node certificate by stable node ID
 //
-// The receiver-side lookup: "is the peer that just connected a twd
+// The receiver-side lookup: "is the peer that just connected a tailworks
 // object, and what is its `lim`?" `404 not_found` when no live object
 // of the tenant has that node (the receiver then applies the WhoIs caps
-// unchanged: the peer is not a twd object); `410 killed` for a tombstone.
+// unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28317,8 +28317,8 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 
 // CreateDeploymentWithBodyWithResponse Deploy a workload (async), or preflight it with dryRun
 //
-// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -28328,8 +28328,8 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
 // Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 // both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -28355,7 +28355,7 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 //     "sum" over several targets). Hosts without a fresh measurement are
 //     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 //
-// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// `replace: true` (`tw deploy --replace`) re-places a running workload:
 // it moves only if an eligible host is clearly better (a better path
 // class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 // `epoch+1` in one conditional write. A stateful workload's move also
@@ -28384,8 +28384,8 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 
 // CreateDeploymentWithResponse Deploy a workload (async), or preflight it with dryRun
 //
-// mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-// the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 // node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -28395,8 +28395,8 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 // duplicates, each a valid five-field UTC expression that can fire); an
 // invalid one is `400 bad_bundle`.
 // Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-// (`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-// `tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+// (`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+// `tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 // both deploy and preflight enforce this.
 //
 // **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -28422,7 +28422,7 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 //     "sum" over several targets). Hosts without a fresh measurement are
 //     asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 //
-// `replace: true` (`twd deploy --replace`) re-places a running workload:
+// `replace: true` (`tw deploy --replace`) re-places a running workload:
 // it moves only if an eligible host is clearly better (a better path
 // class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 // `epoch+1` in one conditional write. A stateful workload's move also
@@ -28500,7 +28500,7 @@ func (c *ClientWithResponses) GetDeploymentBundleWithResponse(ctx context.Contex
 // CreateDeviceDeleteRunWithResponse Run the scheduled device deletes now
 //
 // Kill tier 2 is deferred by `-device-delete-delay`; this creates a run
-// that executes every pending delete immediately (what `twd down` does
+// that executes every pending delete immediately (what `tw down` does
 // before stopping mgmt). Each delete is audited (`kind: device_delete`).
 // Replaces `POST /v0/flush`.
 //
@@ -28545,14 +28545,14 @@ func (c *ClientWithResponses) ListHostsWithResponse(ctx context.Context, params 
 
 // CreateHostWithBodyWithResponse Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`), mints a
-// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// `tw host add`: creates the host record (status `pending`), mints a
+// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's credential (its OAuth client, or the
-// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
 // (delete it first). The key is never logged. Audited
@@ -28571,14 +28571,14 @@ func (c *ClientWithResponses) CreateHostWithBodyWithResponse(ctx context.Context
 
 // CreateHostWithResponse Add a host and mint its single-use join key
 //
-// `twd host add`: creates the host record (status `pending`), mints a
-// **single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+// `tw host add`: creates the host record (status `pending`), mints a
+// **single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 // and a one-time `registrationSecret` (32 random bytes, base64url; only
 // its SHA-256 is stored) that the host must present on its first
 // `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 // through the operator tenant's credential (its OAuth client, or the
-// Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-// with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+// Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+// with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 // node to the record. Calling it again for a host that has not bound a
 // node yet mints a fresh key (`200`); a bound host is `409 exists`
 // (delete it first). The key is never logged. Audited
@@ -28630,7 +28630,7 @@ func (c *ClientWithResponses) GetHostWithResponse(ctx context.Context, id HostID
 
 // RegisterHostWithBodyWithResponse Register or re-register a host (idempotent)
 //
-// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 // is bound to this `hostID` on first registration, which must carry the
 // `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 // `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -28641,10 +28641,10 @@ func (c *ClientWithResponses) GetHostWithResponse(ctx context.Context, id HostID
 // node needs no secret and replaces capacity, tiers and `push`;
 // `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 // it or omit it; a different key is `403 host_identity_mismatch` and
-// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 // every restart.
 //
-// A host that was created through `twd host add` exists before its first
+// A host that was created through `tw host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -28660,7 +28660,7 @@ func (c *ClientWithResponses) RegisterHostWithBodyWithResponse(ctx context.Conte
 
 // RegisterHostWithResponse Register or re-register a host (idempotent)
 //
-// The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+// The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 // is bound to this `hostID` on first registration, which must carry the
 // `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 // `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -28671,10 +28671,10 @@ func (c *ClientWithResponses) RegisterHostWithBodyWithResponse(ctx context.Conte
 // node needs no secret and replaces capacity, tiers and `push`;
 // `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 // it or omit it; a different key is `403 host_identity_mismatch` and
-// rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+// rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 // every restart.
 //
-// A host that was created through `twd host add` exists before its first
+// A host that was created through `tw host add` exists before its first
 // `PUT` (status `pending`); the `PUT` activates it.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -28735,7 +28735,7 @@ func (c *ClientWithResponses) CordonHostWithResponse(ctx context.Context, id Hos
 // DrainHostWithBodyWithResponse Cordon a host and move its workloads to other hosts
 //
 // Cordons the host, then re-places each workload assigned to it on another eligible host
-// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 //
 //   - a stateless workload (no Durable Objects) moves;
 //   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -28744,7 +28744,7 @@ func (c *ClientWithResponses) CordonHostWithResponse(ctx context.Context, id Hos
 //   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 //
 // `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 // `DELETE /v1/hosts/{id}` removes it.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -28761,7 +28761,7 @@ func (c *ClientWithResponses) DrainHostWithBodyWithResponse(ctx context.Context,
 // DrainHostWithResponse Cordon a host and move its workloads to other hosts
 //
 // Cordons the host, then re-places each workload assigned to it on another eligible host
-// (`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+// (`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 //
 //   - a stateless workload (no Durable Objects) moves;
 //   - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -28770,7 +28770,7 @@ func (c *ClientWithResponses) DrainHostWithBodyWithResponse(ctx context.Context,
 //   - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 //
 // `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-// Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+// Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 // `DELETE /v1/hosts/{id}` removes it.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -28903,8 +28903,8 @@ func (c *ClientWithResponses) ReportHostStatusWithResponse(ctx context.Context, 
 // ListImageAliasesWithResponse The image alias map
 //
 // Upstream refs swapped for another image on one arch (ADR-032 D3: Cloudflare publishes
-// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get twd's rebuild from the Apache-2.0
-// source, in `public/`). Deploys apply it when pinning; `twd deploy` applies it as BuildKit named
+// `cloudflare/sandbox` for linux/amd64 only; arm64 hosts get tailworks' rebuild from the Apache-2.0
+// source, in `public/`). Deploys apply it when pinning; `tw deploy` applies it as BuildKit named
 // contexts when it builds a Dockerfile, so app source never changes.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -28938,10 +28938,10 @@ func (c *ClientWithResponses) ListPublicImagesWithResponse(ctx context.Context, 
 
 // CreatePublicImageWithBodyWithResponse Mark an image as a public base (mirrors it now)
 //
-// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 // mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 // digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -28957,10 +28957,10 @@ func (c *ClientWithResponses) CreatePublicImageWithBodyWithResponse(ctx context.
 
 // CreatePublicImageWithResponse Mark an image as a public base (mirrors it now)
 //
-// `twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+// `tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 // mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-// for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-// an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+// for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+// an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 // digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -29283,7 +29283,7 @@ func (c *ClientWithResponses) CreateObjectCredentialWithResponse(ctx context.Con
 
 // ListReleasesWithResponse The release catalog
 //
-// Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+// Every release this tw-mgmt knows: the ones built into it (its own and every earlier
 // release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
 // notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
 //
@@ -29298,10 +29298,10 @@ func (c *ClientWithResponses) ListReleasesWithResponse(ctx context.Context, reqE
 	return ParseListReleasesResponse(rsp)
 }
 
-// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 //
-// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -29316,10 +29316,10 @@ func (c *ClientWithResponses) ImportReleasesWithBodyWithResponse(ctx context.Con
 	return ParseImportReleasesResponse(rsp)
 }
 
-// ImportReleasesWithResponse Import catalog entries (from a release's share/twd/catalog.json)
+// ImportReleasesWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 //
-// Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-// `twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -29350,7 +29350,7 @@ func (c *ClientWithResponses) GetReleaseArtifactWithResponse(ctx context.Context
 // PutReleaseArtifactWithBodyWithResponse Upload a release tarball (or its SHA256SUMS)
 //
 // Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
-// Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+// Stored in tw-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
 // replicas that don't share that directory each need the upload. Audited `release_artifact`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -29518,7 +29518,7 @@ func (c *ClientWithResponses) UpdateTenantWithApplicationMergePatchPlusJSONBodyW
 	return ParseUpdateTenantResponse(rsp)
 }
 
-// ListApprovalsWithResponse The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+// ListApprovalsWithResponse The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 //
 // A Workflow instance that waits for an event of type `approval` or
 // `approval-*` (the Agents SDK's `waitForApproval`) is listed here
@@ -29526,7 +29526,7 @@ func (c *ClientWithResponses) UpdateTenantWithApplicationMergePatchPlusJSONBodyW
 // host over the mgmt → hostd channel and merges the answers, oldest
 // first; a host that does not answer is named in `unreachable`.
 // Admins see every approval; a tailnet caller holding only
-// `twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+// `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) sees the ones its
 // grants let it decide. A read, so not audited.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -29540,7 +29540,7 @@ func (c *ClientWithResponses) ListApprovalsWithResponse(ctx context.Context, id 
 	return ParseListApprovalsResponse(rsp)
 }
 
-// DeleteTenantNotificationsWithResponse Stop the tenant's notifications (`twd notify rm`)
+// DeleteTenantNotificationsWithResponse Stop the tenant's notifications (`tw notify rm`)
 //
 // Idempotent. Audited (`kind: notification_delete`).
 //
@@ -29555,7 +29555,7 @@ func (c *ClientWithResponses) DeleteTenantNotificationsWithResponse(ctx context.
 	return ParseDeleteTenantNotificationsResponse(rsp)
 }
 
-// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`twd notify`), without secrets
+// GetTenantNotificationsWithResponse Read the tenant's notification webhook (`tw notify`), without secrets
 //
 // ADR-approval-notifications. The webhook URL is shown as its origin
 // only (scheme and host): a chat webhook's path or query is its
@@ -29573,11 +29573,11 @@ func (c *ClientWithResponses) GetTenantNotificationsWithResponse(ctx context.Con
 	return ParseGetTenantNotificationsResponse(rsp)
 }
 
-// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`twd notify set`)
+// PutTenantNotificationsWithBodyWithResponse Set the tenant's notification webhook (`tw notify set`)
 //
 // ADR-approval-notifications. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
 // receives the host's audit record, usually within seconds). mgmt
 // dials the URL itself: a tailnet name, a `100.x` address or a
@@ -29585,7 +29585,7 @@ func (c *ClientWithResponses) GetTenantNotificationsWithResponse(ctx context.Con
 // host's network; loopback and link-local addresses are refused.
 // Delivery is tried 3 times; a final failure is audited
 // (`notification_failed`). The config is stored encrypted in mgmt
-// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// custody (custody name `tw/<tenant>/notifications`); the URL's path
 // and query and the header values are never logged, audited or
 // returned. Audited (`kind: notification_put`, the URL's host and
 // header names).
@@ -29601,11 +29601,11 @@ func (c *ClientWithResponses) PutTenantNotificationsWithBodyWithResponse(ctx con
 	return ParsePutTenantNotificationsResponse(rsp)
 }
 
-// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`twd notify set`)
+// PutTenantNotificationsWithResponse Set the tenant's notification webhook (`tw notify set`)
 //
 // ADR-approval-notifications. When one of `events` happens in the
 // tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-// `Twd-Event`), with a deep link to the admin UI. `approval_requested`
+// `Tw-Event`), with a deep link to the admin UI. `approval_requested`
 // fires when a Workflow starts waiting for an approval (when mgmt
 // receives the host's audit record, usually within seconds). mgmt
 // dials the URL itself: a tailnet name, a `100.x` address or a
@@ -29613,7 +29613,7 @@ func (c *ClientWithResponses) PutTenantNotificationsWithBodyWithResponse(ctx con
 // host's network; loopback and link-local addresses are refused.
 // Delivery is tried 3 times; a final failure is audited
 // (`notification_failed`). The config is stored encrypted in mgmt
-// custody (custody name `twd/<tenant>/notifications`); the URL's path
+// custody (custody name `tw/<tenant>/notifications`); the URL's path
 // and query and the header values are never logged, audited or
 // returned. Audited (`kind: notification_put`, the URL's host and
 // header names).
@@ -29629,7 +29629,7 @@ func (c *ClientWithResponses) PutTenantNotificationsWithResponse(ctx context.Con
 	return ParsePutTenantNotificationsResponse(rsp)
 }
 
-// TestTenantNotificationsWithResponse Send a test notification now (`twd notify test`)
+// TestTenantNotificationsWithResponse Send a test notification now (`tw notify test`)
 //
 // POSTs a `NotificationEvent` with `event: test` to the configured
 // webhook once, synchronously, and reports the outcome. Not retried.
@@ -29696,7 +29696,7 @@ func (c *ClientWithResponses) ListPublicNamesWithResponse(ctx context.Context, i
 // a name nothing serves can be released: `409 public_name_in_use`
 // while the workload's latest deployment declares public routes or
 // its public node is live (undeploy it, or remove `"public"` from its
-// `twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+// `tailworks.jsonc` and redeploy, first). `404 not_found` when the tenant
 // does not own the name. Audited (`kind: public_name_release`).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -29787,7 +29787,7 @@ func (c *ClientWithResponses) PutQueueWithResponse(ctx context.Context, id Tenan
 //
 // The oldest messages, bodies included, without changing them (no
 // lease, no attempt counted). This is how an operator inspects a
-// dead-letter queue (`twd queues messages <queue>`).
+// dead-letter queue (`tw queues messages <queue>`).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29803,7 +29803,7 @@ func (c *ClientWithResponses) PeekQueueMessagesWithResponse(ctx context.Context,
 // SendQueueMessagesWithBodyWithResponse Send messages to a queue
 //
 // A producer's `send()` / `sendBatch()` (through its host), or an
-// operator's `twd queues send`. The messages are durable in mgmt's
+// operator's `tw queues send`. The messages are durable in mgmt's
 // database when this answers. Each gets a random ID. A host must give
 // `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 // the workload's latest deployment must bind the queue as a producer
@@ -29825,7 +29825,7 @@ func (c *ClientWithResponses) SendQueueMessagesWithBodyWithResponse(ctx context.
 // SendQueueMessagesWithResponse Send messages to a queue
 //
 // A producer's `send()` / `sendBatch()` (through its host), or an
-// operator's `twd queues send`. The messages are durable in mgmt's
+// operator's `tw queues send`. The messages are durable in mgmt's
 // database when this answers. Each gets a random ID. A host must give
 // `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 // the workload's latest deployment must bind the queue as a producer
@@ -29960,10 +29960,10 @@ func (c *ClientWithResponses) PurgeQueueWithResponse(ctx context.Context, id Ten
 	return ParsePurgeQueueResponse(rsp)
 }
 
-// DeleteTenantTelemetryWithResponse Stop the tenant's OTLP export (`twd telemetry rm`)
+// DeleteTenantTelemetryWithResponse Stop the tenant's OTLP export (`tw telemetry rm`)
 //
 // Hosts stop exporting within a minute. Records stay on the hosts
-// (`twd logs`) and in `/metrics`. Idempotent. Audited
+// (`tw logs`) and in `/metrics`. Idempotent. Audited
 // (`kind: telemetry_delete`).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -29977,7 +29977,7 @@ func (c *ClientWithResponses) DeleteTenantTelemetryWithResponse(ctx context.Cont
 	return ParseDeleteTenantTelemetryResponse(rsp)
 }
 
-// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`twd telemetry`), without header values
+// GetTenantTelemetryWithResponse Read the tenant's OTLP export (`tw telemetry`), without header values
 //
 // ADR-observability. Header names only: no admin operation returns a
 // header value. A tenant that exports nothing has no `otlp`.
@@ -29994,7 +29994,7 @@ func (c *ClientWithResponses) GetTenantTelemetryWithResponse(ctx context.Context
 	return ParseGetTenantTelemetryResponse(rsp)
 }
 
-// PutTenantTelemetryWithBodyWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+// PutTenantTelemetryWithBodyWithResponse Set the tenant's OTLP export (`tw telemetry set`)
 //
 // Every workload of the tenant exports its request records (as log
 // records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -30003,7 +30003,7 @@ func (c *ClientWithResponses) GetTenantTelemetryWithResponse(ctx context.Context
 // peer the tailnet policy lets that workload reach (a public
 // internet endpoint is refused like any other egress). The config
 // is stored encrypted in mgmt custody (custody name
-// `twd/<tenant>/telemetry`); header values (collector credentials)
+// `tw/<tenant>/telemetry`); header values (collector credentials)
 // are never logged, audited or returned. Hosts pick a change up
 // within a minute. Audited (`kind: telemetry_put`, endpoint and
 // header names).
@@ -30019,7 +30019,7 @@ func (c *ClientWithResponses) PutTenantTelemetryWithBodyWithResponse(ctx context
 	return ParsePutTenantTelemetryResponse(rsp)
 }
 
-// PutTenantTelemetryWithResponse Set the tenant's OTLP export (`twd telemetry set`)
+// PutTenantTelemetryWithResponse Set the tenant's OTLP export (`tw telemetry set`)
 //
 // Every workload of the tenant exports its request records (as log
 // records), its metrics and its spans with OTLP/HTTP (JSON encoding)
@@ -30028,7 +30028,7 @@ func (c *ClientWithResponses) PutTenantTelemetryWithBodyWithResponse(ctx context
 // peer the tailnet policy lets that workload reach (a public
 // internet endpoint is refused like any other egress). The config
 // is stored encrypted in mgmt custody (custody name
-// `twd/<tenant>/telemetry`); header values (collector credentials)
+// `tw/<tenant>/telemetry`); header values (collector credentials)
 // are never logged, audited or returned. Hosts pick a change up
 // within a minute. Audited (`kind: telemetry_put`, endpoint and
 // header names).
@@ -30044,19 +30044,19 @@ func (c *ClientWithResponses) PutTenantTelemetryWithResponse(ctx context.Context
 	return ParsePutTenantTelemetryResponse(rsp)
 }
 
-// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
 // WhoIs of the connection (user, node, tags). mgmt sends it, with
-// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 // the host holding the workload's lease; that host checks the grants
 // (`cap_missing` otherwise: the workload, Workflow, step, decision and
 // numeric limits a grant names), delivers the event (the Workflow
 // sees `approver`, never one from the request) and audits the
-// decision (`approval_decision`, or `approval_denied`). Being a twd
+// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 // admin does not let anyone approve: the grant does. The operator
 // console and the local socket have no personal identity, so they
-// get `403 no_identity`; use `twd link` from your own machine.
+// get `403 no_identity`; use `tw link` from your own machine.
 // `409 approval_not_pending` when nothing waits for this decision.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -30070,19 +30070,19 @@ func (c *ClientWithResponses) DecideApprovalWithBodyWithResponse(ctx context.Con
 	return ParseDecideApprovalResponse(rsp)
 }
 
-// DecideApprovalWithResponse Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+// DecideApprovalWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
 // WhoIs of the connection (user, node, tags). mgmt sends it, with
-// the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+// the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 // the host holding the workload's lease; that host checks the grants
 // (`cap_missing` otherwise: the workload, Workflow, step, decision and
 // numeric limits a grant names), delivers the event (the Workflow
 // sees `approver`, never one from the request) and audits the
-// decision (`approval_decision`, or `approval_denied`). Being a twd
+// decision (`approval_decision`, or `approval_denied`). Being a tailworks
 // admin does not let anyone approve: the grant does. The operator
 // console and the local socket have no personal identity, so they
-// get `403 no_identity`; use `twd link` from your own machine.
+// get `403 no_identity`; use `tw link` from your own machine.
 // `409 approval_not_pending` when nothing waits for this decision.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -30096,7 +30096,7 @@ func (c *ClientWithResponses) DecideApprovalWithResponse(ctx context.Context, id
 	return ParseDecideApprovalResponse(rsp)
 }
 
-// ExportD1WithResponse Export a D1 database as SQL (`twd d1 export`)
+// ExportD1WithResponse Export a D1 database as SQL (`tw d1 export`)
 //
 // The database's schema and rows as SQL text, in the shape of
 // `wrangler d1 export` (`PRAGMA defer_foreign_keys=TRUE;`, each
@@ -30117,7 +30117,7 @@ func (c *ClientWithResponses) ExportD1WithResponse(ctx context.Context, id Tenan
 	return ParseExportD1Response(rsp)
 }
 
-// QueryD1WithBodyWithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+// QueryD1WithBodyWithResponse Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 //
 // A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
@@ -30149,7 +30149,7 @@ func (c *ClientWithResponses) QueryD1WithBodyWithResponse(ctx context.Context, i
 	return ParseQueryD1Response(rsp)
 }
 
-// QueryD1WithResponse Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+// QueryD1WithResponse Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 //
 // A D1 database (ADR-038) is the workload's platform store of kind
 // `d1` named after the binding's `database_name`. Its data is served
@@ -30181,7 +30181,7 @@ func (c *ClientWithResponses) QueryD1WithResponse(ctx context.Context, id Tenant
 	return ParseQueryD1Response(rsp)
 }
 
-// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`twd deployments`)
+// ListWorkloadDeploymentsWithResponse A workload's deployment history, newest first (`tw deployments`)
 //
 // ADR-deploy-rollback. Every deployment of the workload, newest first:
 // who deployed it, when, the bundle's SHA-256, its status (the current
@@ -30189,7 +30189,7 @@ func (c *ClientWithResponses) QueryD1WithResponse(ctx context.Context, id Tenant
 // `superseded` or `stopped`), the host's last report (`hostStatus`)
 // and whether mgmt still holds the bundle (`bundleRetained`). mgmt
 // keeps the bundles of the newest `bundleRetention` deployments of
-// each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+// each workload (tw-mgmt `-bundle-retention`) and prunes older ones;
 // their records stay, without the bundle, so they can't be rolled back
 // to. `rollbackOf` names the deployment a rollback redeployed. A
 // workload with no deployment is `404 unknown_workload`.
@@ -30205,7 +30205,7 @@ func (c *ClientWithResponses) ListWorkloadDeploymentsWithResponse(ctx context.Co
 	return ParseListWorkloadDeploymentsResponse(rsp)
 }
 
-// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+// GetWorkloadLogsWithResponse Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 //
 // The app's log is a file on the host that runs it. mgmt finds the
 // host holding the workload's namespace lease and reads the log from
@@ -30220,7 +30220,7 @@ func (c *ClientWithResponses) ListWorkloadDeploymentsWithResponse(ctx context.Co
 // A workload with `replicas` reads every replica's host; each line
 // is then prefixed with `[<hostID>] `, and `host` selects one
 // replica. A host that does not answer contributes one
-// `[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+// `[<hostID>] tw: …` line instead (`502 host_unavailable` when no
 // host answers). `404 unknown_workload` when the workload has no
 // running replica (on `host`); `404 no_logs` when the host has no
 // log file for it yet. A read, so not audited; mgmt logs the actor.
@@ -30238,7 +30238,7 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 	return ParseGetWorkloadLogsResponse(rsp)
 }
 
-// ListWorkloadPreviewsWithResponse A workload's running previews (`twd previews`)
+// ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
 //
 // ADR-deploy-preview. The previews of the workload that are not
 // stopped, newest first. A preview is created by
@@ -30259,7 +30259,7 @@ func (c *ClientWithResponses) ListWorkloadPreviewsWithResponse(ctx context.Conte
 	return ParseListWorkloadPreviewsResponse(rsp)
 }
 
-// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+// CreatePromotionWithBodyWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
 // ADR-deploy-preview. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
@@ -30290,7 +30290,7 @@ func (c *ClientWithResponses) CreatePromotionWithBodyWithResponse(ctx context.Co
 	return ParseCreatePromotionResponse(rsp)
 }
 
-// CreatePromotionWithResponse Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+// CreatePromotionWithResponse Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 //
 // ADR-deploy-preview. Deploys the bundle the preview runs to the
 // workload itself, as a **new** deployment, through the same code
@@ -30321,9 +30321,9 @@ func (c *ClientWithResponses) CreatePromotionWithResponse(ctx context.Context, i
 	return ParseCreatePromotionResponse(rsp)
 }
 
-// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`twd expose`)
+// GetWorkloadPublicWithResponse Read a workload's public-ingress exposure (`tw expose`)
 //
-// ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+// ADR-029. A workload whose `tailworks.jsonc` declares `public` routes is
 // served over Funnel from its public node
 // (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
 // the tenant's `publicIngress` is `allow`. A workload that was never
@@ -30342,7 +30342,7 @@ func (c *ClientWithResponses) GetWorkloadPublicWithResponse(ctx context.Context,
 
 // UpdateWorkloadPublicWithBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
 //
-// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// `tw expose on|off` (ADR-029 D1): an operator override that survives
 // redeploys. `exposed: false` makes the host close the public node's
 // Funnel listener and reset its flows (the node and its certificate
 // stay); `true` reopens it. The lease holder is pushed at once.
@@ -30362,7 +30362,7 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithBodyWithResponse(ctx conte
 
 // UpdateWorkloadPublicWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
 //
-// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// `tw expose on|off` (ADR-029 D1): an operator override that survives
 // redeploys. `exposed: false` makes the host close the public node's
 // Funnel listener and reset its flows (the node and its certificate
 // stay); `true` reopens it. The lease holder is pushed at once.
@@ -30382,7 +30382,7 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithResponse(ctx context.Conte
 
 // UpdateWorkloadPublicWithApplicationMergePatchPlusJSONBodyWithResponse Expose or unexpose a workload's public routes (JSON Merge Patch)
 //
-// `twd expose on|off` (ADR-029 D1): an operator override that survives
+// `tw expose on|off` (ADR-029 D1): an operator override that survives
 // redeploys. `exposed: false` makes the host close the public node's
 // Funnel listener and reset its flows (the node and its certificate
 // stay); `true` reopens it. The lease holder is pushed at once.
@@ -30400,7 +30400,7 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithApplicationMergePatchPlusJ
 	return ParseUpdateWorkloadPublicResponse(rsp)
 }
 
-// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+// CreateRollbackWithBodyWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
 // ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
@@ -30410,7 +30410,7 @@ func (c *ClientWithResponses) UpdateWorkloadPublicWithApplicationMergePatchPlusJ
 // is sticky as for any deploy (the workload stays on its host unless
 // `replace` or `host` say otherwise), so Durable Object storage stays
 // where it is. Container images the original deploy built and pushed
-// to twd's registry are reused by digest.
+// to tailworks' registry are reused by digest.
 //
 // Without `deploymentID`, the target is the newest earlier deployment
 // that ran (the host reported it `active` and it did not fail), whose
@@ -30439,7 +30439,7 @@ func (c *ClientWithResponses) CreateRollbackWithBodyWithResponse(ctx context.Con
 	return ParseCreateRollbackResponse(rsp)
 }
 
-// CreateRollbackWithResponse Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+// CreateRollbackWithResponse Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 //
 // ADR-deploy-rollback. Redeploys the bundle of an earlier deployment
 // as a **new** deployment, through the same code path as
@@ -30449,7 +30449,7 @@ func (c *ClientWithResponses) CreateRollbackWithBodyWithResponse(ctx context.Con
 // is sticky as for any deploy (the workload stays on its host unless
 // `replace` or `host` say otherwise), so Durable Object storage stays
 // where it is. Container images the original deploy built and pushed
-// to twd's registry are reused by digest.
+// to tailworks' registry are reused by digest.
 //
 // Without `deploymentID`, the target is the newest earlier deployment
 // that ran (the host reported it `active` and it did not fail), whose
@@ -30500,7 +30500,7 @@ func (c *ClientWithResponses) CreateWorkloadSecretGrantWithResponse(ctx context.
 
 // ListWorkloadSecretsWithResponse List a workload's secrets (names and times, never values)
 //
-// `twd secret ls`. No admin operation returns a value; only the lease
+// `tw secret ls`. No admin operation returns a value; only the lease
 // holder gets them (`POST …/secret-grants`). Ordered by name. A
 // workload with no secrets (or never deployed) is an empty page.
 // `404 unknown_tenant`.
@@ -30516,7 +30516,7 @@ func (c *ClientWithResponses) ListWorkloadSecretsWithResponse(ctx context.Contex
 	return ParseListWorkloadSecretsResponse(rsp)
 }
 
-// DeleteWorkloadSecretWithResponse Delete a workload secret (`twd secret rm`)
+// DeleteWorkloadSecretWithResponse Delete a workload secret (`tw secret rm`)
 //
 // Takes effect on the workload's next deploy. `404 unknown_secret`
 // when the workload has no secret of that name. Audited
@@ -30533,16 +30533,16 @@ func (c *ClientWithResponses) DeleteWorkloadSecretWithResponse(ctx context.Conte
 	return ParseDeleteWorkloadSecretResponse(rsp)
 }
 
-// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`twd secret put`)
+// PutWorkloadSecretWithBodyWithResponse Create or replace a workload secret (`tw secret put`)
 //
 // ADR-034. Stores the value encrypted at rest in mgmt's
-// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
 // environment variable `<name>`) on its **next deploy**; running
 // instances keep the value they started with. At most 128 secrets per
 // workload and 5 KiB per value. Names are JS identifiers that are also
-// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// environment variable names; `TW_…` and `__TW…` are reserved. The
 // value is never logged, audited or returned. Audited
 // (`kind: secret_put`, name only).
 //
@@ -30557,16 +30557,16 @@ func (c *ClientWithResponses) PutWorkloadSecretWithBodyWithResponse(ctx context.
 	return ParsePutWorkloadSecretResponse(rsp)
 }
 
-// PutWorkloadSecretWithResponse Create or replace a workload secret (`twd secret put`)
+// PutWorkloadSecretWithResponse Create or replace a workload secret (`tw secret put`)
 //
 // ADR-034. Stores the value encrypted at rest in mgmt's
-// custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+// custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 // The workload need not be deployed yet. The value reaches the
 // workload as the text binding `env.<name>` (runtime `node`: the
 // environment variable `<name>`) on its **next deploy**; running
 // instances keep the value they started with. At most 128 secrets per
 // workload and 5 KiB per value. Names are JS identifiers that are also
-// environment variable names; `TWD_…` and `__TWD…` are reserved. The
+// environment variable names; `TW_…` and `__TW…` are reserved. The
 // value is never logged, audited or returned. Audited
 // (`kind: secret_put`, name only).
 //
@@ -30601,7 +30601,7 @@ func (c *ClientWithResponses) ListWorkloadStoresWithResponse(ctx context.Context
 
 // ListKVKeysWithResponse List a KV namespace's keys
 //
-// Workers KV's `list()` for operators (`twd kv key list`,
+// Workers KV's `list()` for operators (`tw kv key list`,
 // ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -30622,7 +30622,7 @@ func (c *ClientWithResponses) ListKVKeysWithResponse(ctx context.Context, id Ten
 
 // DeleteKVValueWithResponse Delete one KV value
 //
-// `twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30637,7 +30637,7 @@ func (c *ClientWithResponses) DeleteKVValueWithResponse(ctx context.Context, id 
 
 // GetKVValueWithResponse Get one KV value
 //
-// `twd kv key get`. `404 not_found` if the key does not exist or has
+// `tw kv key get`. `404 not_found` if the key does not exist or has
 // expired, `404 unknown_store` if the namespace does not.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -30653,13 +30653,13 @@ func (c *ClientWithResponses) GetKVValueWithResponse(ctx context.Context, id Ten
 
 // PutKVValueWithBodyWithResponse Write one KV value
 //
-// `twd kv key put`: a journal append, like a binding's `put()`, so
+// `tw kv key put`: a journal append, like a binding's `put()`, so
 // running workloads see it on their next sync (within 60 s, or a
 // read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 // `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 // JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 // `400 store_limit`). The namespace must exist (`404
-// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// unknown_store`; `tw kv namespace create`). Audited (`kind:
 // kv_put`) with the namespace and who wrote, not the key: key names
 // can be sensitive, and mgmt keeps them only sealed and HMACed.
 //
@@ -30676,13 +30676,13 @@ func (c *ClientWithResponses) PutKVValueWithBodyWithResponse(ctx context.Context
 
 // PutKVValueWithResponse Write one KV value
 //
-// `twd kv key put`: a journal append, like a binding's `put()`, so
+// `tw kv key put`: a journal append, like a binding's `put()`, so
 // running workloads see it on their next sync (within 60 s, or a
 // read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 // `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 // JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 // `400 store_limit`). The namespace must exist (`404
-// unknown_store`; `twd kv namespace create`). Audited (`kind:
+// unknown_store`; `tw kv namespace create`). Audited (`kind:
 // kv_put`) with the namespace and who wrote, not the key: key names
 // can be sensitive, and mgmt keeps them only sealed and HMACed.
 //
@@ -30759,7 +30759,7 @@ func (c *ClientWithResponses) PutWorkloadStoreWithResponse(ctx context.Context, 
 //
 // A host must give `epoch`: the data is released only to the holder
 // of the workload's lease at that epoch (`409 lease_lost`, as for
-// secrets). An admin reads without it (`twd kv key get`).
+// secrets). An admin reads without it (`tw kv key get`).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30781,7 +30781,7 @@ func (c *ClientWithResponses) ReadStoreJournalWithResponse(ctx context.Context, 
 // `409 store_conflict`, and the writer catches up
 // (`GET …/journal?after=`) and retries. That makes the journal
 // linearizable across writers (a workload's replicas, an admin's
-// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 // entry with the same `ckey`, which mgmt deletes in the same
 // transaction. The first append creates the store.
 //
@@ -30814,7 +30814,7 @@ func (c *ClientWithResponses) AppendStoreJournalWithBodyWithResponse(ctx context
 // `409 store_conflict`, and the writer catches up
 // (`GET …/journal?after=`) and retries. That makes the journal
 // linearizable across writers (a workload's replicas, an admin's
-// `twd kv key put`). An entry with a `ckey` supersedes every earlier
+// `tw kv key put`). An entry with a `ckey` supersedes every earlier
 // entry with the same `ckey`, which mgmt deletes in the same
 // transaction. The first append creates the store.
 //
@@ -30969,7 +30969,7 @@ func (c *ClientWithResponses) ActOnUpgradeWithResponse(ctx context.Context, id s
 // CreateVolumeKeyGrantWithResponse Release a volume's dm-crypt data key to the lease holder
 //
 // Creates a key grant: the 256-bit data key of the `(tenant, workload)`
-// DO volume (custody name `twd/<tenant>/volumes/<workload>/dek`,
+// DO volume (custody name `tw/<tenant>/volumes/<workload>/dek`,
 // created on first use) is released only to the host holding the
 // workload's lease at `epoch` (`409 lease_lost`). Audited
 // (`kind: volume_key`). `Cache-Control: no-store`. The key is never
@@ -30988,7 +30988,7 @@ func (c *ClientWithResponses) CreateVolumeKeyGrantWithResponse(ctx context.Conte
 
 // WhoAmIWithResponse Who the caller is, as mgmt sees it
 //
-// `twd link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
+// `tw link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31048,32 +31048,32 @@ func ParseListAuditResponse(rsp *http.Response) (*ListAuditResponse, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListAuditResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListAuditResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListAuditResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31128,22 +31128,22 @@ func ParseAppendAuditResponse(rsp *http.Response) (*AppendAuditResponse, error) 
 	switch {
 	case rsp.StatusCode == 403:
 		var headers AppendAuditResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers AppendAuditResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31191,22 +31191,22 @@ func ParseGetAuditVerificationResponse(rsp *http.Response) (*GetAuditVerificatio
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetAuditVerificationResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers GetAuditVerificationResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31285,52 +31285,52 @@ func ParseGetCertificateResponse(rsp *http.Response) (*GetCertificateResponse, e
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers GetCertificateResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetCertificateResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetCertificateResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 410:
 		var headers GetCertificateResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case true:
 		var headers GetCertificateResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31385,32 +31385,32 @@ func ParseListContainerReservationsResponse(rsp *http.Response) (*ListContainerR
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListContainerReservationsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListContainerReservationsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListContainerReservationsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31503,42 +31503,42 @@ func ParseCreateContainerReservationResponse(rsp *http.Response) (*CreateContain
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateContainerReservationResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateContainerReservationResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateContainerReservationResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateContainerReservationResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31589,32 +31589,32 @@ func ParseDeleteContainerReservationResponse(rsp *http.Response) (*DeleteContain
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteContainerReservationResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteContainerReservationResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeleteContainerReservationResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31669,32 +31669,32 @@ func ParseListDeploymentsResponse(rsp *http.Response) (*ListDeploymentsResponse,
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListDeploymentsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListDeploymentsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListDeploymentsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31780,22 +31780,22 @@ func ParseCreateDeploymentResponse(rsp *http.Response) (*CreateDeploymentRespons
 		response.Headers202 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateDeploymentResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers CreateDeploymentResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31864,32 +31864,32 @@ func ParseDeleteDeploymentResponse(rsp *http.Response) (*DeleteDeploymentRespons
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteDeploymentResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteDeploymentResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers DeleteDeploymentResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case rsp.StatusCode == 412:
@@ -31901,22 +31901,22 @@ func ParseDeleteDeploymentResponse(rsp *http.Response) (*DeleteDeploymentRespons
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers DeleteDeploymentResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -31994,32 +31994,32 @@ func ParseGetDeploymentResponse(rsp *http.Response) (*GetDeploymentResponse, err
 		response.Headers304 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetDeploymentResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetDeploymentResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetDeploymentResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32077,32 +32077,32 @@ func ParseGetDeploymentBundleResponse(rsp *http.Response) (*GetDeploymentBundleR
 		response.Headers200 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetDeploymentBundleResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetDeploymentBundleResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetDeploymentBundleResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32150,22 +32150,22 @@ func ParseCreateDeviceDeleteRunResponse(rsp *http.Response) (*CreateDeviceDelete
 	switch {
 	case rsp.StatusCode == 403:
 		var headers CreateDeviceDeleteRunResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers CreateDeviceDeleteRunResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32213,22 +32213,22 @@ func ParseGetHealthzResponse(rsp *http.Response) (*GetHealthzResponse, error) {
 	switch {
 	case rsp.StatusCode == 401:
 		var headers GetHealthzResponse401Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers401 = &headers
 	case true:
 		var headers GetHealthzResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32283,32 +32283,32 @@ func ParseListHostsResponse(rsp *http.Response) (*ListHostsResponse, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListHostsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListHostsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListHostsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32418,42 +32418,42 @@ func ParseCreateHostResponse(rsp *http.Response) (*CreateHostResponse, error) {
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateHostResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateHostResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateHostResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32525,22 +32525,22 @@ func ParseDeleteHostResponse(rsp *http.Response) (*DeleteHostResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteHostResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteHostResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 412:
@@ -32552,22 +32552,22 @@ func ParseDeleteHostResponse(rsp *http.Response) (*DeleteHostResponse, error) {
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers DeleteHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32645,32 +32645,32 @@ func ParseGetHostResponse(rsp *http.Response) (*GetHostResponse, error) {
 		response.Headers304 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetHostResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetHostResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32752,22 +32752,22 @@ func ParseRegisterHostResponse(rsp *http.Response) (*RegisterHostResponse, error
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers RegisterHostResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case true:
 		var headers RegisterHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32829,42 +32829,42 @@ func ParseListHostAssignmentsResponse(rsp *http.Response) (*ListHostAssignmentsR
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListHostAssignmentsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListHostAssignmentsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListHostAssignmentsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListHostAssignmentsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32919,32 +32919,32 @@ func ParseUncordonHostResponse(rsp *http.Response) (*UncordonHostResponse, error
 	switch {
 	case rsp.StatusCode == 403:
 		var headers UncordonHostResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers UncordonHostResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers UncordonHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -32999,32 +32999,32 @@ func ParseCordonHostResponse(rsp *http.Response) (*CordonHostResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers CordonHostResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CordonHostResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers CordonHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33079,32 +33079,32 @@ func ParseDrainHostResponse(rsp *http.Response) (*DrainHostResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DrainHostResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DrainHostResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DrainHostResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33169,32 +33169,32 @@ func ParseReportHostPathsResponse(rsp *http.Response) (*ReportHostPathsResponse,
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ReportHostPathsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ReportHostPathsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ReportHostPathsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33251,32 +33251,32 @@ func ParseGetHostSandboxDenyResponse(rsp *http.Response) (*GetHostSandboxDenyRes
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetHostSandboxDenyResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetHostSandboxDenyResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetHostSandboxDenyResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33338,32 +33338,32 @@ func ParseReportHostStatusResponse(rsp *http.Response) (*ReportHostStatusRespons
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ReportHostStatusResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ReportHostStatusResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ReportHostStatusResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33411,22 +33411,22 @@ func ParseListImageAliasesResponse(rsp *http.Response) (*ListImageAliasesRespons
 	switch {
 	case rsp.StatusCode == 403:
 		var headers ListImageAliasesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListImageAliasesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33481,32 +33481,32 @@ func ParseListPublicImagesResponse(rsp *http.Response) (*ListPublicImagesRespons
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListPublicImagesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListPublicImagesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListPublicImagesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33575,32 +33575,32 @@ func ParseCreatePublicImageResponse(rsp *http.Response) (*CreatePublicImageRespo
 	switch {
 	case rsp.StatusCode == 400:
 		var headers CreatePublicImageResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreatePublicImageResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers CreatePublicImageResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33651,32 +33651,32 @@ func ParseDeletePublicImageResponse(rsp *http.Response) (*DeletePublicImageRespo
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeletePublicImageResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeletePublicImageResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeletePublicImageResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33731,32 +33731,32 @@ func ParseListObjectsResponse(rsp *http.Response) (*ListObjectsResponse, error) 
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListObjectsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListObjectsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListObjectsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33866,32 +33866,32 @@ func ParseCreateObjectResponse(rsp *http.Response) (*CreateObjectResponse, error
 		response.Headers202 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateObjectResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 410:
 		var headers CreateObjectResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case true:
 		var headers CreateObjectResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -33960,32 +33960,32 @@ func ParseDeleteObjectResponse(rsp *http.Response) (*DeleteObjectResponse, error
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteObjectResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteObjectResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 410:
 		var headers DeleteObjectResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case rsp.StatusCode == 412:
@@ -33997,22 +33997,22 @@ func ParseDeleteObjectResponse(rsp *http.Response) (*DeleteObjectResponse, error
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers DeleteObjectResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34097,42 +34097,42 @@ func ParseGetObjectResponse(rsp *http.Response) (*GetObjectResponse, error) {
 		response.Headers304 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetObjectResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetObjectResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 410:
 		var headers GetObjectResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case true:
 		var headers GetObjectResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34225,52 +34225,52 @@ func ParseUpdateObjectResponse(rsp *http.Response) (*UpdateObjectResponse, error
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers UpdateObjectResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers UpdateObjectResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers UpdateObjectResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers UpdateObjectResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case rsp.StatusCode == 410:
 		var headers UpdateObjectResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case rsp.StatusCode == 412:
@@ -34282,22 +34282,22 @@ func ParseUpdateObjectResponse(rsp *http.Response) (*UpdateObjectResponse, error
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers UpdateObjectResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34376,42 +34376,42 @@ func ParseGetObjectCertificateResponse(rsp *http.Response) (*GetObjectCertificat
 		response.Headers200 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetObjectCertificateResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetObjectCertificateResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 410:
 		var headers GetObjectCertificateResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case true:
 		var headers GetObjectCertificateResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34511,42 +34511,42 @@ func ParseCreateObjectCredentialResponse(rsp *http.Response) (*CreateObjectCrede
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateObjectCredentialResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateObjectCredentialResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CreateObjectCredentialResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 410:
 		var headers CreateObjectCredentialResponse410Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers410 = &headers
 	case rsp.StatusCode == 503:
@@ -34561,12 +34561,12 @@ func ParseCreateObjectCredentialResponse(rsp *http.Response) (*CreateObjectCrede
 		response.Headers503 = &headers
 	case true:
 		var headers CreateObjectCredentialResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34614,22 +34614,22 @@ func ParseListReleasesResponse(rsp *http.Response) (*ListReleasesResponse, error
 	switch {
 	case rsp.StatusCode == 403:
 		var headers ListReleasesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListReleasesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34684,32 +34684,32 @@ func ParseImportReleasesResponse(rsp *http.Response) (*ImportReleasesResponse, e
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ImportReleasesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ImportReleasesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ImportReleasesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34757,32 +34757,32 @@ func ParseGetReleaseArtifactResponse(rsp *http.Response) (*GetReleaseArtifactRes
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetReleaseArtifactResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetReleaseArtifactResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetReleaseArtifactResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34837,32 +34837,32 @@ func ParsePutReleaseArtifactResponse(rsp *http.Response) (*PutReleaseArtifactRes
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutReleaseArtifactResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutReleaseArtifactResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers PutReleaseArtifactResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34910,22 +34910,22 @@ func ParseGetStatusResponse(rsp *http.Response) (*GetStatusResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetStatusResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers GetStatusResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -34980,32 +34980,32 @@ func ParseListTenantsResponse(rsp *http.Response) (*ListTenantsResponse, error) 
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListTenantsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListTenantsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListTenantsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35084,42 +35084,42 @@ func ParseCreateTenantResponse(rsp *http.Response) (*CreateTenantResponse, error
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateTenantResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateTenantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateTenantResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateTenantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35191,22 +35191,22 @@ func ParseDeleteTenantResponse(rsp *http.Response) (*DeleteTenantResponse, error
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteTenantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteTenantResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 412:
@@ -35218,22 +35218,22 @@ func ParseDeleteTenantResponse(rsp *http.Response) (*DeleteTenantResponse, error
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers DeleteTenantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35311,32 +35311,32 @@ func ParseGetTenantResponse(rsp *http.Response) (*GetTenantResponse, error) {
 		response.Headers304 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetTenantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetTenantResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetTenantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35415,32 +35415,32 @@ func ParseUpdateTenantResponse(rsp *http.Response) (*UpdateTenantResponse, error
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers UpdateTenantResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers UpdateTenantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers UpdateTenantResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 412:
@@ -35452,22 +35452,22 @@ func ParseUpdateTenantResponse(rsp *http.Response) (*UpdateTenantResponse, error
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers UpdateTenantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35522,32 +35522,32 @@ func ParseListApprovalsResponse(rsp *http.Response) (*ListApprovalsResponse, err
 	switch {
 	case rsp.StatusCode == 403:
 		var headers ListApprovalsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListApprovalsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListApprovalsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35598,32 +35598,32 @@ func ParseDeleteTenantNotificationsResponse(rsp *http.Response) (*DeleteTenantNo
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteTenantNotificationsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteTenantNotificationsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeleteTenantNotificationsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35678,32 +35678,32 @@ func ParseGetTenantNotificationsResponse(rsp *http.Response) (*GetTenantNotifica
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetTenantNotificationsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetTenantNotificationsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetTenantNotificationsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35765,42 +35765,42 @@ func ParsePutTenantNotificationsResponse(rsp *http.Response) (*PutTenantNotifica
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutTenantNotificationsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutTenantNotificationsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PutTenantNotificationsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PutTenantNotificationsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35855,32 +35855,32 @@ func ParseTestTenantNotificationsResponse(rsp *http.Response) (*TestTenantNotifi
 	switch {
 	case rsp.StatusCode == 403:
 		var headers TestTenantNotificationsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers TestTenantNotificationsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers TestTenantNotificationsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -35942,42 +35942,42 @@ func ParsePurgeTenantObjectsResponse(rsp *http.Response) (*PurgeTenantObjectsRes
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PurgeTenantObjectsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PurgeTenantObjectsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PurgeTenantObjectsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PurgeTenantObjectsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36039,42 +36039,42 @@ func ParseListPublicNamesResponse(rsp *http.Response) (*ListPublicNamesResponse,
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListPublicNamesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListPublicNamesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListPublicNamesResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListPublicNamesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36132,42 +36132,42 @@ func ParseReleasePublicNameResponse(rsp *http.Response) (*ReleasePublicNameRespo
 	switch {
 	case rsp.StatusCode == 403:
 		var headers ReleasePublicNameResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ReleasePublicNameResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers ReleasePublicNameResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers ReleasePublicNameResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36229,42 +36229,42 @@ func ParseListQueuesResponse(rsp *http.Response) (*ListQueuesResponse, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListQueuesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListQueuesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListQueuesResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListQueuesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36315,32 +36315,32 @@ func ParseDeleteQueueResponse(rsp *http.Response) (*DeleteQueueResponse, error) 
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteQueueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteQueueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeleteQueueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36409,52 +36409,52 @@ func ParseGetQueueResponse(rsp *http.Response) (*GetQueueResponse, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers GetQueueResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetQueueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetQueueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers GetQueueResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers GetQueueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36523,42 +36523,42 @@ func ParsePutQueueResponse(rsp *http.Response) (*PutQueueResponse, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutQueueResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutQueueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PutQueueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PutQueueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36630,42 +36630,42 @@ func ParsePeekQueueMessagesResponse(rsp *http.Response) (*PeekQueueMessagesRespo
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers PeekQueueMessagesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PeekQueueMessagesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PeekQueueMessagesResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PeekQueueMessagesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36734,52 +36734,52 @@ func ParseSendQueueMessagesResponse(rsp *http.Response) (*SendQueueMessagesRespo
 	switch {
 	case rsp.StatusCode == 400:
 		var headers SendQueueMessagesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers SendQueueMessagesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers SendQueueMessagesResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers SendQueueMessagesResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers SendQueueMessagesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36848,52 +36848,52 @@ func ParseAckQueueMessagesResponse(rsp *http.Response) (*AckQueueMessagesRespons
 	switch {
 	case rsp.StatusCode == 400:
 		var headers AckQueueMessagesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers AckQueueMessagesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers AckQueueMessagesResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers AckQueueMessagesResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers AckQueueMessagesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -36972,52 +36972,52 @@ func ParsePullQueueMessagesResponse(rsp *http.Response) (*PullQueueMessagesRespo
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers PullQueueMessagesResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PullQueueMessagesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PullQueueMessagesResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers PullQueueMessagesResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers PullQueueMessagesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37072,32 +37072,32 @@ func ParsePurgeQueueResponse(rsp *http.Response) (*PurgeQueueResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers PurgeQueueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PurgeQueueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PurgeQueueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37148,32 +37148,32 @@ func ParseDeleteTenantTelemetryResponse(rsp *http.Response) (*DeleteTenantTeleme
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteTenantTelemetryResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteTenantTelemetryResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeleteTenantTelemetryResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37228,32 +37228,32 @@ func ParseGetTenantTelemetryResponse(rsp *http.Response) (*GetTenantTelemetryRes
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetTenantTelemetryResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetTenantTelemetryResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetTenantTelemetryResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37315,42 +37315,42 @@ func ParsePutTenantTelemetryResponse(rsp *http.Response) (*PutTenantTelemetryRes
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutTenantTelemetryResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutTenantTelemetryResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PutTenantTelemetryResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PutTenantTelemetryResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37419,52 +37419,52 @@ func ParseDecideApprovalResponse(rsp *http.Response) (*DecideApprovalResponse, e
 	switch {
 	case rsp.StatusCode == 400:
 		var headers DecideApprovalResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers DecideApprovalResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DecideApprovalResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers DecideApprovalResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers DecideApprovalResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37529,42 +37529,42 @@ func ParseExportD1Response(rsp *http.Response) (*ExportD1Response, error) {
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers ExportD1Response400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ExportD1Response403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ExportD1Response404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ExportD1ResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37626,42 +37626,42 @@ func ParseQueryD1Response(rsp *http.Response) (*QueryD1Response, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers QueryD1Response400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers QueryD1Response403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers QueryD1Response404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers QueryD1ResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37723,42 +37723,42 @@ func ParseListWorkloadDeploymentsResponse(rsp *http.Response) (*ListWorkloadDepl
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListWorkloadDeploymentsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListWorkloadDeploymentsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListWorkloadDeploymentsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListWorkloadDeploymentsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37823,42 +37823,42 @@ func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse,
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers GetWorkloadLogsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetWorkloadLogsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetWorkloadLogsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadLogsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -37920,42 +37920,42 @@ func ParseListWorkloadPreviewsResponse(rsp *http.Response) (*ListWorkloadPreview
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListWorkloadPreviewsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListWorkloadPreviewsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListWorkloadPreviewsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListWorkloadPreviewsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38041,52 +38041,52 @@ func ParseCreatePromotionResponse(rsp *http.Response) (*CreatePromotionResponse,
 		response.Headers202 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreatePromotionResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreatePromotionResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CreatePromotionResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreatePromotionResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreatePromotionResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38151,32 +38151,32 @@ func ParseGetWorkloadPublicResponse(rsp *http.Response) (*GetWorkloadPublicRespo
 		response.Headers200 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetWorkloadPublicResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetWorkloadPublicResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadPublicResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38255,32 +38255,32 @@ func ParseUpdateWorkloadPublicResponse(rsp *http.Response) (*UpdateWorkloadPubli
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers UpdateWorkloadPublicResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers UpdateWorkloadPublicResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers UpdateWorkloadPublicResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 412:
@@ -38292,22 +38292,22 @@ func ParseUpdateWorkloadPublicResponse(rsp *http.Response) (*UpdateWorkloadPubli
 			}
 			headers.ETag = &value
 		}
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers412 = &headers
 	case true:
 		var headers UpdateWorkloadPublicResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38393,52 +38393,52 @@ func ParseCreateRollbackResponse(rsp *http.Response) (*CreateRollbackResponse, e
 		response.Headers202 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateRollbackResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateRollbackResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CreateRollbackResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateRollbackResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateRollbackResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38517,52 +38517,52 @@ func ParseCreateWorkloadSecretGrantResponse(rsp *http.Response) (*CreateWorkload
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateWorkloadSecretGrantResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateWorkloadSecretGrantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CreateWorkloadSecretGrantResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateWorkloadSecretGrantResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateWorkloadSecretGrantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38624,42 +38624,42 @@ func ParseListWorkloadSecretsResponse(rsp *http.Response) (*ListWorkloadSecretsR
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListWorkloadSecretsResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListWorkloadSecretsResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListWorkloadSecretsResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListWorkloadSecretsResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38710,32 +38710,32 @@ func ParseDeleteWorkloadSecretResponse(rsp *http.Response) (*DeleteWorkloadSecre
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteWorkloadSecretResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteWorkloadSecretResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeleteWorkloadSecretResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38804,42 +38804,42 @@ func ParsePutWorkloadSecretResponse(rsp *http.Response) (*PutWorkloadSecretRespo
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutWorkloadSecretResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutWorkloadSecretResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PutWorkloadSecretResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PutWorkloadSecretResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -38901,42 +38901,42 @@ func ParseListWorkloadStoresResponse(rsp *http.Response) (*ListWorkloadStoresRes
 	switch {
 	case rsp.StatusCode == 400:
 		var headers ListWorkloadStoresResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListWorkloadStoresResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListWorkloadStoresResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListWorkloadStoresResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39008,42 +39008,42 @@ func ParseListKVKeysResponse(rsp *http.Response) (*ListKVKeysResponse, error) {
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers ListKVKeysResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ListKVKeysResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ListKVKeysResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers ListKVKeysResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39108,52 +39108,52 @@ func ParseDeleteKVValueResponse(rsp *http.Response) (*DeleteKVValueResponse, err
 	switch {
 	case rsp.StatusCode == 400:
 		var headers DeleteKVValueResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers DeleteKVValueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteKVValueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers DeleteKVValueResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers DeleteKVValueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39225,42 +39225,42 @@ func ParseGetKVValueResponse(rsp *http.Response) (*GetKVValueResponse, error) {
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers GetKVValueResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers GetKVValueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetKVValueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetKVValueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39329,52 +39329,52 @@ func ParsePutKVValueResponse(rsp *http.Response) (*PutKVValueResponse, error) {
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutKVValueResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutKVValueResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PutKVValueResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers PutKVValueResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers PutKVValueResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39425,32 +39425,32 @@ func ParseDeleteWorkloadStoreResponse(rsp *http.Response) (*DeleteWorkloadStoreR
 	switch {
 	case rsp.StatusCode == 403:
 		var headers DeleteWorkloadStoreResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers DeleteWorkloadStoreResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers DeleteWorkloadStoreResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39505,32 +39505,32 @@ func ParseGetWorkloadStoreResponse(rsp *http.Response) (*GetWorkloadStoreRespons
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetWorkloadStoreResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetWorkloadStoreResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadStoreResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39599,42 +39599,42 @@ func ParsePutWorkloadStoreResponse(rsp *http.Response) (*PutWorkloadStoreRespons
 	switch {
 	case rsp.StatusCode == 400:
 		var headers PutWorkloadStoreResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers PutWorkloadStoreResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers PutWorkloadStoreResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers PutWorkloadStoreResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39713,52 +39713,52 @@ func ParseReadStoreJournalResponse(rsp *http.Response) (*ReadStoreJournalRespons
 		response.Headers200 = &headers
 	case rsp.StatusCode == 400:
 		var headers ReadStoreJournalResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers ReadStoreJournalResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ReadStoreJournalResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers ReadStoreJournalResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers ReadStoreJournalResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39827,52 +39827,52 @@ func ParseAppendStoreJournalResponse(rsp *http.Response) (*AppendStoreJournalRes
 	switch {
 	case rsp.StatusCode == 400:
 		var headers AppendStoreJournalResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers AppendStoreJournalResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers AppendStoreJournalResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers AppendStoreJournalResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers AppendStoreJournalResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -39951,52 +39951,52 @@ func ParseCreateTelemetryGrantResponse(rsp *http.Response) (*CreateTelemetryGran
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateTelemetryGrantResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateTelemetryGrantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CreateTelemetryGrantResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateTelemetryGrantResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateTelemetryGrantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -40046,22 +40046,22 @@ func ParseListUpgradesResponse(rsp *http.Response) (*ListUpgradesResponse, error
 	switch {
 	case rsp.StatusCode == 403:
 		var headers ListUpgradesResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers ListUpgradesResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -40130,42 +40130,42 @@ func ParseCreateUpgradeResponse(rsp *http.Response) (*CreateUpgradeResponse, err
 	switch {
 	case rsp.StatusCode == 400:
 		var headers CreateUpgradeResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateUpgradeResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateUpgradeResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateUpgradeResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -40220,32 +40220,32 @@ func ParseGetUpgradeResponse(rsp *http.Response) (*GetUpgradeResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers GetUpgradeResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers GetUpgradeResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case true:
 		var headers GetUpgradeResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -40307,42 +40307,42 @@ func ParseActOnUpgradeResponse(rsp *http.Response) (*ActOnUpgradeResponse, error
 	switch {
 	case rsp.StatusCode == 403:
 		var headers ActOnUpgradeResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers ActOnUpgradeResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers ActOnUpgradeResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers ActOnUpgradeResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -40421,52 +40421,52 @@ func ParseCreateVolumeKeyGrantResponse(rsp *http.Response) (*CreateVolumeKeyGran
 		response.Headers201 = &headers
 	case rsp.StatusCode == 400:
 		var headers CreateVolumeKeyGrantResponse400Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers400 = &headers
 	case rsp.StatusCode == 403:
 		var headers CreateVolumeKeyGrantResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case rsp.StatusCode == 404:
 		var headers CreateVolumeKeyGrantResponse404Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers404 = &headers
 	case rsp.StatusCode == 409:
 		var headers CreateVolumeKeyGrantResponse409Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers409 = &headers
 	case true:
 		var headers CreateVolumeKeyGrantResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}
@@ -40514,22 +40514,22 @@ func ParseWhoAmIResponse(rsp *http.Response) (*WhoAmIResponse, error) {
 	switch {
 	case rsp.StatusCode == 403:
 		var headers WhoAmIResponse403Headers
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.Headers403 = &headers
 	case true:
 		var headers WhoAmIResponseDefaultHeaders
-		if values := rsp.Header.Values("Twd-Error"); len(values) > 0 {
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Twd-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.TwdError = &value
+			headers.TwError = &value
 		}
 		response.HeadersDefault = &headers
 	}

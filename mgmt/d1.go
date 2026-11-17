@@ -1,7 +1,7 @@
 package mgmt
 
-// D1 operator routes (ADR-038): `twd d1 execute`, `twd d1 migrations
-// apply` and `twd d1 export`. A D1 database is the workload's platform
+// D1 operator routes (ADR-038): `tw d1 execute`, `tw d1 migrations
+// apply` and `tw d1 export`. A D1 database is the workload's platform
 // store of kind "d1" (create, list and delete are the generic store
 // routes); its data is served by the store object in the workload's
 // workerd, so these routes go to the host holding the workload's lease
@@ -21,7 +21,7 @@ import (
 	"net/url"
 	"strings"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 const (

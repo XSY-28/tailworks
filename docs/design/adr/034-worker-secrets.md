@@ -7,7 +7,7 @@
 
 - Workers had no secrets mechanism. The only per-workload configuration was
   `wrangler.jsonc` `vars`, which are plaintext and committed to git, and
-  `twd deploy --var`, which ends up inside the bundle that mgmt stores.
+  `tw deploy --var`, which ends up inside the bundle that mgmt stores.
 - The `ai-agent` template tells users to swap in a real LLM provider, but
   there was nowhere safe to put its API key.
 - Cloudflare's model:
@@ -17,7 +17,7 @@
   - A secret and a var can't share a name on Cloudflare. Locally, `.dev.vars`
     overrides vars in `wrangler dev`.
   - The limits are 128 secrets per Worker and 5 KiB per value.
-- twd already holds key material for workloads. ADR-018 custody is
+- tailworks already holds key material for workloads. ADR-018 custody is
   AES-256-GCM files in homelab mode and setec otherwise. The microVM tier's
   DO volume key (ADR-024) is in custody and is released only to the host
   that holds the workload's namespace lease at its epoch (ADR-011/028
@@ -26,7 +26,7 @@
 **Decision.**
 
 1. **Storage: custody, one entry per workload.**
-   - The entry is `twd/<tenant>/workloads/<workload>/secrets`, a JSON map of
+   - The entry is `tw/<tenant>/workloads/<workload>/secrets`, a JSON map of
      name to `{value, createdAt, updatedAt, updatedBy}`, sealed by custody.
      FileCustody binds the entry name as additional data, so an entry can't
      be swapped for another workload's.
@@ -43,7 +43,7 @@
    - `PUT …/secrets/{name}` (`{"value": …}`; 201 created, 200 replaced) and
      `DELETE …/secrets/{name}` are admin-only and audited. They follow the
      same rules as every other tenant-scoped write: WhoIs plus
-     `twd.dev/cap/admin`, or the local-dev socket.
+     `github.com/rosskukulinski/tailworks/cap/admin`, or the local-dev socket.
    - The workload doesn't need a deployment, so you can put secrets before
      the first deploy.
    - `POST …/secret-grants?epoch=N` is host-only. It releases the values
@@ -66,7 +66,7 @@
      anything of the new deployment starts.
    - workerd: each secret becomes a `text` binding of the tenant worker. It
      replaces a var of the same name. It is also added, as a JSON string, to
-     `twd-config.json` `vars`, which is where the platform builds a facet
+     `tw-config.json` `vars`, which is where the platform builds a facet
      Durable Object's `env`. So `env.NAME` is the same string in the Worker,
      in facet classes and in plain-DO classes.
    - Runtime `node`: secrets are written to a `0600` file in the instance
@@ -74,15 +74,15 @@
      into `process.env` (over `node.env` and deploy vars) and deletes the
      file. They are never in the exec-time environment: on macOS a
      same-user process can read that (`KERN_PROCARGS2`), Seatbelt can't
-     refuse it, and the process tier there runs every tenant as one user. twd's own variables can't be replaced, and
+     refuse it, and the process tier there runs every tenant as one user. Tailworks' own variables can't be replaced, and
      a deploy that tries is refused with `bad_secret_name`.
    - Both files live in the `0700` instance directory, which is removed when
      the instance stops. Nothing is written to hostd's data directory.
    - A crash restart of the same instance reuses the values. New values
-     apply on the next deploy, or when twd-hostd restarts and redeploys.
+     apply on the next deploy, or when tw-hostd restarts and redeploys.
      We considered pushing a restart on `secret put`. We dropped it for now
      because no restart-in-place hook exists, and a blue/green redeploy is
-     what `twd deploy` already does.
+     what `tw deploy` already does.
 
 4. **microVM tier: refused for now** (`secrets_unsupported_tier`).
    - The guest gets the instance directory through the config drive.
@@ -95,7 +95,7 @@
      or the helper). That is follow-up work.
 
 5. **Local development.**
-   - `twd dev` loads `.dev.vars` (dotenv) into its embedded mgmt as the dev
+   - `tw dev` loads `.dev.vars` (dotenv) into its embedded mgmt as the dev
      workload's secrets, on every (re)deploy. Names that are no longer in
      the file are removed.
    - The dev hostd fetches them through the same grant path, so dev and
@@ -117,13 +117,13 @@
 
 | Adversary | Can they read a secret? |
 |---|---|
-| Another tenant's workload on the same host | No, as far as the process sandbox holds. The sandbox (INSTALL.md "Isolation") lets a workload read and write only its own instance and data directories. It can't read twd's state, mgmt custody or another tenant's directories, and on Linux it can't read other processes' `/proc` entries (environment, cmdline) or memory. On macOS (Seatbelt) we have not tested whether a same-uid process can read another process's environment, which matters for runtime `node`. Without a sandbox, twd refuses to host a second tenant on the process tier unless `--insecure-shared-host` is set. |
+| Another tenant's workload on the same host | No, as far as the process sandbox holds. The sandbox (INSTALL.md "Isolation") lets a workload read and write only its own instance and data directories. It can't read tailworks' state, mgmt custody or another tenant's directories, and on Linux it can't read other processes' `/proc` entries (environment, cmdline) or memory. On macOS (Seatbelt) we have not tested whether a same-uid process can read another process's environment, which matters for runtime `node`. Without a sandbox, tailworks refuses to host a second tenant on the process tier unless `--insecure-shared-host` is set. |
 | Another host of the operator | No. It doesn't hold the lease, so it gets `409 lease_lost`. A host that lost its lease (fenced, ADR-028) can't fetch values again. |
 | A tailnet user without the admin cap | No: `403 not_admin`. |
-| A tailnet admin, or a `twd link`ed laptop | Can set, replace and delete secrets, but no API returns a value. They could still deploy code that prints `env.NAME`, which is the same trust as on Cloudflare: whoever can deploy the Worker can read its secrets. |
+| A tailnet admin, or a `tw link`ed laptop | Can set, replace and delete secrets, but no API returns a value. They could still deploy code that prints `env.NAME`, which is the same trust as on Cloudflare: whoever can deploy the Worker can read its secrets. |
 | Tenant code of the same workload | Yes, by design. |
 | Someone who reads mgmt's disk | They need the custody key. FileCustody keeps it in `custody.key` (0600) next to the sealed files, so this only protects against copies of the custody directory without its key, and against the database and backups. Setec moves the key off the box. |
-| Someone who reads the host's disk while the workload runs | Yes, from the instance directory, if they run as the twd user or root. The microVM tier is the answer to that, once item 4 is done. |
+| Someone who reads the host's disk while the workload runs | Yes, from the instance directory, if they run as the tailworks user or root. The microVM tier is the answer to that, once item 4 is done. |
 
 **Consequences.**
 
@@ -133,5 +133,5 @@
   secrets gets an empty map, and there's no audit record for it.
 - The microVM tier and live rotation without a redeploy are open.
 - When a tenant or workload is removed, its secrets entry stays in custody
-  until you `twd secret rm` its names. A follow-up should wipe it in
+  until you `tw secret rm` its names. A follow-up should wipe it in
   `tenant rm`.

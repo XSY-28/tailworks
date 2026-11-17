@@ -96,7 +96,7 @@ func parseStores(wranglerJSON []byte, a *App) ([]StoreBinding, error) {
 		}
 		for _, b := range bs {
 			b.Kind = k.Kind
-			if !identRE.MatchString(b.Binding) || strings.HasPrefix(b.Binding, "__TWD") {
+			if !identRE.MatchString(b.Binding) || strings.HasPrefix(b.Binding, "__TW") {
 				return nil, fmt.Errorf("bundle: wrangler.jsonc %s: bad binding name %q", k.WranglerKey, b.Binding)
 			}
 			if !StoreNameRE.MatchString(b.Name) {

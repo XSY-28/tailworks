@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/container"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // Postgres driver "pgx"
 	_ "modernc.org/sqlite"             // pure-Go SQLite driver "sqlite" (no cgo)
@@ -306,10 +306,10 @@ const (
 )
 
 // DefaultMaxConns bounds each replica's Postgres pool; N replicas use at
-// most N×DefaultMaxConns connections. Override with ?twd_max_conns=K.
+// most N×DefaultMaxConns connections. Override with ?tw_max_conns=K.
 const DefaultMaxConns = 16
 
-// takeMaxConns removes twd's own twd_max_conns parameter from dsn (pgx would
+// takeMaxConns removes tailworks' own tw_max_conns parameter from dsn (pgx would
 // send it to the server) and returns the pool size.
 func takeMaxConns(dsn string) (string, int) {
 	u, err := url.Parse(dsn)
@@ -318,11 +318,11 @@ func takeMaxConns(dsn string) (string, int) {
 	}
 	q := u.Query()
 	n := DefaultMaxConns
-	if v := q.Get("twd_max_conns"); v != "" {
+	if v := q.Get("tw_max_conns"); v != "" {
 		if k, err := strconv.Atoi(v); err == nil && k > 0 {
 			n = k
 		}
-		q.Del("twd_max_conns")
+		q.Del("tw_max_conns")
 		u.RawQuery = q.Encode()
 	}
 	return u.String(), n
@@ -448,10 +448,10 @@ CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT
 `
 
 const pgTriggers = `
-CREATE OR REPLACE FUNCTION twd_audit_append_only() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION tw_audit_append_only() RETURNS trigger AS $$
 BEGIN RAISE EXCEPTION 'audit is append-only'; END; $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS audit_append_only ON audit;
-CREATE TRIGGER audit_append_only BEFORE UPDATE OR DELETE ON audit FOR EACH ROW EXECUTE FUNCTION twd_audit_append_only();
+CREATE TRIGGER audit_append_only BEFORE UPDATE OR DELETE ON audit FOR EACH ROW EXECUTE FUNCTION tw_audit_append_only();
 `
 
 func (s *SQLStore) migrate(ctx context.Context) error {
@@ -465,7 +465,7 @@ func (s *SQLStore) migrate(ctx context.Context) error {
 		defer s.db.ExecContext(context.Background(), "SELECT pg_advisory_unlock(7464)")
 	}
 	// Numbered migrations (migrations.go): refuse a store a newer
-	// twd-mgmt has contracted before touching it.
+	// tw-mgmt has contracted before touching it.
 	if err := s.ensureSchemaTables(ctx); err != nil {
 		return err
 	}
@@ -597,7 +597,7 @@ func (s *SQLStore) addColumns(ctx context.Context) error {
 		{"hosts", "usage_vec", "ALTER TABLE hosts ADD COLUMN usage_vec TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "containers", "ALTER TABLE deployments ADD COLUMN containers TEXT NOT NULL DEFAULT ''"},
 		// ADR-029 public ingress: the tenant gate ('' = deny) and a
-		// deployment's validated twd.jsonc "public" (JSON, '' = none).
+		// deployment's validated tailworks.jsonc "public" (JSON, '' = none).
 		{"tenants", "public_ingress", "ALTER TABLE tenants ADD COLUMN public_ingress TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "public_spec", "ALTER TABLE deployments ADD COLUMN public_spec TEXT NOT NULL DEFAULT ''"},
 		// smart placement (ADR-033): why the deployment is on its host (JSON).
@@ -811,7 +811,7 @@ func jsonStr(v any) string {
 // ---- tenants ----
 
 // tenantCols leaves out wif_client_id and wif_lifecycle_client_id: the
-// columns stay in the schema (rows written by older twd versions; no
+// columns stay in the schema (rows written by older tailworks versions; no
 // migration needed) but nothing reads them since the wif mint mode was
 // removed, and UpdateTenant clears them.
 const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress, owner_tag, name_prefix"
@@ -1910,7 +1910,7 @@ func decodePublic(s string) *DeploymentPublic {
 	return &p
 }
 
-// GetWorkloadPublic returns a workload's `twd expose` setting; a workload
+// GetWorkloadPublic returns a workload's `tw expose` setting; a workload
 // that was never toggled is exposed (it never returns ErrNotFound).
 func (s *SQLStore) GetWorkloadPublic(ctx context.Context, tenantID, workload string) (WorkloadPublic, error) {
 	wp := WorkloadPublic{TenantID: tenantID, Workload: workload, Exposed: true}
@@ -1924,7 +1924,7 @@ func (s *SQLStore) GetWorkloadPublic(ctx context.Context, tenantID, workload str
 	return wp, err
 }
 
-// SetWorkloadPublic upserts a workload's `twd expose` setting (in a
+// SetWorkloadPublic upserts a workload's `tw expose` setting (in a
 // transaction, so an audit intent in ctx commits with it: H22).
 func (s *SQLStore) SetWorkloadPublic(ctx context.Context, wp WorkloadPublic) error {
 	exp := int64(0)

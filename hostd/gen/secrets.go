@@ -7,12 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // Worker secrets (ADR-034): app.Secrets become text bindings of
 // the tenant worker, so `env.NAME` is a string exactly as with Cloudflare
-// secrets, and enter the facets' env (twd-config.json "vars") the same
+// secrets, and enter the facets' env (tw-config.json "vars") the same
 // way. A secret overrides a var of the same name. Both files live only in
 // the 0700 instance directory, which the process sandbox keeps from every
 // other tenant.
@@ -20,15 +20,15 @@ import (
 var secretBindingRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // checkSecrets refuses secret names workerd can't bind or that collide
-// with a DO binding or twd's own names.
+// with a DO binding or tailworks' own names.
 func checkSecrets(app *bundle.App) error {
 	for k := range app.Secrets {
-		if !secretBindingRE.MatchString(k) || strings.HasPrefix(k, "__TWD") || strings.HasPrefix(k, "TWD_") {
+		if !secretBindingRE.MatchString(k) || strings.HasPrefix(k, "__TW") || strings.HasPrefix(k, "TW_") {
 			return fmt.Errorf("gen: bad secret name %q", k)
 		}
 		for _, b := range app.Bindings {
 			if b.Name == k {
-				return fmt.Errorf("gen: secret %q has the name of a Durable Object binding (wrangler.jsonc durable_objects.bindings); rename one (twd secret rm %s)", k, k)
+				return fmt.Errorf("gen: secret %q has the name of a Durable Object binding (wrangler.jsonc durable_objects.bindings); rename one (tw secret rm %s)", k, k)
 			}
 		}
 	}

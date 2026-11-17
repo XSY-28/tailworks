@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/obs"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/obs"
 )
 
 // telHost is a Host with a telemetry pipeline (not started) and tenant
@@ -72,7 +72,7 @@ func TestRecordRateLimit(t *testing.T) {
 	}
 	var b strings.Builder
 	h.tel.reg.WritePrometheus(&b)
-	if !strings.Contains(b.String(), `twd_logs_dropped_total{twd_tenant_id="tnA",twd_workload="web"} 45`) {
+	if !strings.Contains(b.String(), `tw_logs_dropped_total{tw_tenant_id="tnA",tw_workload="web"} 45`) {
 		t.Fatal(b.String())
 	}
 	// Per-record bounds hold before writing.

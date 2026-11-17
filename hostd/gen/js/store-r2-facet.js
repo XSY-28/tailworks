@@ -1,4 +1,4 @@
-// twd R2 binding inside a facet-mode object (a Dynamic Worker; runs with
+// tailworks R2 binding inside a facet-mode object (a Dynamic Worker; runs with
 // the tenant's code). ADR-036.
 //
 // A facet can't be handed workerd's native r2Bucket binding, so its

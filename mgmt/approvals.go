@@ -14,19 +14,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
-// Workflow approvals through mgmt (ADR-040): `twd
-// approvals`, `twd approve` and the admin UI. The approvals live on the
+// Workflow approvals through mgmt (ADR-040): `tw
+// approvals`, `tw approve` and the admin UI. The approvals live on the
 // hosts that run the Workflows; mgmt reads and forwards them over the same
 // mgmt → hostd channel as kills and logs (GET /v1/approvals, POST
 // /v1/approvals/decide on the push API). The host authorises the decision
-// (the caller's twd.dev/cap/approve grants toward mgmt, which mgmt sends
+// (the caller's github.com/rosskukulinski/tailworks/cap/approve grants toward mgmt, which mgmt sends
 // with the caller's WhoIs identity), delivers it and audits it.
 
-// isApprover reports whether a tailnet caller holds twd.dev/cap/approve
+// isApprover reports whether a tailnet caller holds github.com/rosskukulinski/tailworks/cap/approve
 // toward mgmt (admitted to the approvals routes only, unless also admin).
 func isApprover(p Principal) bool {
 	return slices.Contains(p.Caps, approvecap.Cap) || tenantApprovers(p) // tenantscope_approve.go
@@ -180,7 +180,7 @@ func approverOf(p Principal) map[string]any {
 // instance (the workload's, or one of its replicas', lease holder).
 func (m *Mgmt) DecideApproval(ctx context.Context, p Principal, tenantID, workload, workflow, instance string, req v1.ApprovalDecisionRequest) (*v1.Approval, error) {
 	if p.Kind != "user" || p.NodeID == "" {
-		return nil, errf(403, "no_identity", "an approval is a decision by your own tailnet identity; this caller (%s) has none: run `twd link` on your machine, or approve on the workload's node", p.Kind)
+		return nil, errf(403, "no_identity", "an approval is a decision by your own tailnet identity; this caller (%s) has none: run `tw link` on your machine, or approve on the workload's node", p.Kind)
 	}
 	if req.Decision != "approve" && req.Decision != "reject" {
 		return nil, errf(400, "bad_request", `decision must be "approve" or "reject"`)

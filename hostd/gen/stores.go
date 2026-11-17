@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // Platform stores (ADR-platform-stores): every storage binding of the app
@@ -24,7 +24,7 @@ import (
 // native bindings, so a kind with a native binding also names a facet
 // proxy entrypoint: the facet's env.<Binding> is an RPC stub to it, and it
 // forwards each call to a native binding of the platform worker
-// (`__TWD_STORE_<Binding>`), so facets get the same semantics.
+// (`__TW_STORE_<Binding>`), so facets get the same semantics.
 
 //go:embed js/store.js
 var storeJS string
@@ -40,17 +40,17 @@ type StoreKindGen struct {
 	// Backend is the platform entrypoint class the binding targets.
 	Backend string
 	// FacetProxy is the platform entrypoint class a facet's env gets
-	// (props {"binding": name}); it calls env["__TWD_STORE_" + binding].
+	// (props {"binding": name}); it calls env["__TW_STORE_" + binding].
 	// Empty: facets get Backend itself (only for Binding "service").
 	FacetProxy string
-	// JS is the kind's platform module (twd-store-<kind>.js). It imports
-	// from "twd-store.js" and exports Backend (and FacetProxy).
+	// JS is the kind's platform module (tw-store-<kind>.js). It imports
+	// from "tw-store.js" and exports Backend (and FacetProxy).
 	JS string
 
 	// WrappedModule is the module of a "wrapped" binding, e.g.
 	// "cloudflare-internal:d1-api".
 	WrappedModule string
-	// FacetWrap names the shim the facet runtime (twd-rt.js) puts around
+	// FacetWrap names the shim the facet runtime (tw-rt.js) puts around
 	// the facet's stub to Backend, for a "wrapped" binding (which can't be
 	// handed to a Dynamic Worker): "d1".
 	FacetWrap string
@@ -106,7 +106,7 @@ func storeGen(kind string) (StoreKindGen, bool) {
 	return k, ok
 }
 
-// storeCfg is one entry of twd-config.json "stores": what a facet's env
+// storeCfg is one entry of tw-config.json "stores": what a facet's env
 // gets for a binding.
 type storeCfg struct {
 	Binding string         `json:"binding"`
@@ -127,7 +127,7 @@ func checkStores(app *bundle.App) error {
 			return fmt.Errorf("gen: storage binding %s: kind %q is not supported by this hostd", b.Binding, b.Kind)
 		}
 		if _, ok := app.Secrets[b.Binding]; ok {
-			return fmt.Errorf("gen: secret %q has the name of a storage binding; rename one (twd secret rm %s)", b.Binding, b.Binding)
+			return fmt.Errorf("gen: secret %q has the name of a storage binding; rename one (tw secret rm %s)", b.Binding, b.Binding)
 		}
 	}
 	return nil
@@ -153,7 +153,7 @@ func storeProps(b bundle.StoreBinding) string {
 	return string(p)
 }
 
-// storeConfig is twd-config.json "stores".
+// storeConfig is tw-config.json "stores".
 func storeConfig(app *bundle.App) []storeCfg {
 	out := []storeCfg{}
 	for _, b := range app.Stores {
@@ -172,11 +172,11 @@ func storeFiles(app *bundle.App) map[string]string {
 	if len(app.Stores) == 0 {
 		return nil
 	}
-	files := map[string]string{"twd-store.js": storeJS}
+	files := map[string]string{"tw-store.js": storeJS}
 	var idx strings.Builder
-	idx.WriteString("export { Store } from \"twd-store.js\";\n")
+	idx.WriteString("export { Store } from \"tw-store.js\";\n")
 	for _, k := range storeKinds(app) {
-		mod := "twd-store-" + k.Kind + ".js"
+		mod := "tw-store-" + k.Kind + ".js"
 		files[mod] = k.JS
 		cls := []string{k.Backend}
 		if k.FacetProxy != "" && k.FacetProxy != k.Backend {
@@ -184,7 +184,7 @@ func storeFiles(app *bundle.App) map[string]string {
 		}
 		fmt.Fprintf(&idx, "export { %s } from %s;\n", strings.Join(cls, ", "), jsq(mod))
 	}
-	files["twd-stores.js"] = idx.String()
+	files["tw-stores.js"] = idx.String()
 	return files
 }
 
@@ -193,7 +193,7 @@ func storePlatformExports(app *bundle.App) string {
 	if len(app.Stores) == 0 {
 		return ""
 	}
-	return "export * from \"twd-stores.js\";\n"
+	return "export * from \"tw-stores.js\";\n"
 }
 
 // storeModules are the platform worker's module entries.
@@ -216,7 +216,7 @@ func storeNamespace(app *bundle.App, workload string) string {
 	if len(app.Stores) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("    (className = \"Store\", uniqueKey = %s, enableSql = true),\n", cq("twd-"+workload+"-__twd_store"))
+	return fmt.Sprintf("    (className = \"Store\", uniqueKey = %s, enableSql = true),\n", cq("tw-"+workload+"-__tw_store"))
 }
 
 func storeBinding(name string, k StoreKindGen, b bundle.StoreBinding) string {
@@ -234,7 +234,7 @@ func storePlatformBindings(app *bundle.App) string {
 	var s strings.Builder
 	for _, b := range app.Stores {
 		if k, _ := storeGen(b.Kind); k.FacetProxy != "" {
-			s.WriteString(storeBinding("__TWD_STORE_"+b.Binding, k, b))
+			s.WriteString(storeBinding("__TW_STORE_"+b.Binding, k, b))
 		}
 	}
 	return s.String()
@@ -251,7 +251,7 @@ func storeTenantBindings(app *bundle.App) string {
 }
 
 // storeShimModule is the facet module name of kind's FacetShim.
-func storeShimModule(kind string) string { return "__twd_store_" + kind + ".js" }
+func storeShimModule(kind string) string { return "__tw_store_" + kind + ".js" }
 
 // storeFacetShims are the facet modules of app's kinds with a FacetShim
 // (module name → source).
@@ -265,7 +265,7 @@ func storeFacetShims(app *bundle.App) map[string]string {
 	return out
 }
 
-// storeFacetPrelude is __twd_facet.js's code that gives facet classes'
+// storeFacetPrelude is __tw_facet.js's code that gives facet classes'
 // env the shims (storeFacetClass); empty when no binding needs one. The
 // env stays the object the runtime built (a Proxy over it), so its other
 // bindings behave as before.
@@ -274,12 +274,12 @@ func storeFacetPrelude(app *bundle.App) string {
 	var b strings.Builder
 	for _, k := range storeKinds(app) {
 		if k.FacetShim != "" {
-			fmt.Fprintf(&b, "import { wrap as __twd_wrap_%s } from %s;\n", k.Kind, jsq("./"+storeShimModule(k.Kind)))
+			fmt.Fprintf(&b, "import { wrap as __tw_wrap_%s } from %s;\n", k.Kind, jsq("./"+storeShimModule(k.Kind)))
 		}
 	}
 	for _, sb := range app.Stores {
 		if k, _ := storeGen(sb.Kind); k.FacetShim != "" {
-			shims[sb.Binding] = "__twd_wrap_" + k.Kind
+			shims[sb.Binding] = "__tw_wrap_" + k.Kind
 		}
 	}
 	if len(shims) == 0 {
@@ -290,35 +290,35 @@ func storeFacetPrelude(app *bundle.App) string {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	b.WriteString("const __twdShims = {\n")
+	b.WriteString("const __twShims = {\n")
 	for _, n := range names {
 		fmt.Fprintf(&b, "  %s: %s,\n", jsq(n), shims[n])
 	}
 	b.WriteString(`};
-const __twdEnvs = new WeakMap();
-function __twdStoreEnv(env) {
+const __twEnvs = new WeakMap();
+function __twStoreEnv(env) {
   if (!env || typeof env !== "object") return env;
-  let e = __twdEnvs.get(env);
+  let e = __twEnvs.get(env);
   if (!e) {
     const done = new Map();
     e = new Proxy(env, {
       get(t, k, r) {
-        if (typeof k === "string" && Object.hasOwn(__twdShims, k)) {
-          if (!done.has(k)) done.set(k, __twdShims[k](Reflect.get(t, k)));
+        if (typeof k === "string" && Object.hasOwn(__twShims, k)) {
+          if (!done.has(k)) done.set(k, __twShims[k](Reflect.get(t, k)));
           return done.get(k);
         }
         return Reflect.get(t, k, r);
       },
     });
-    __twdEnvs.set(env, e);
+    __twEnvs.set(env, e);
   }
   return e;
 }
-function __twdStoreClass(C) {
+function __twStoreClass(C) {
   if (typeof C !== "function") return C;
   const W = class extends C {
     constructor(ctx, env) {
-      super(ctx, __twdStoreEnv(env));
+      super(ctx, __twStoreEnv(env));
     }
   };
   Object.defineProperty(W, "name", { value: C.name });
@@ -332,7 +332,7 @@ function __twdStoreClass(C) {
 func storeFacetClass(app *bundle.App, expr string) string {
 	for _, sb := range app.Stores {
 		if k, _ := storeGen(sb.Kind); k.FacetShim != "" {
-			return "__twdStoreClass(" + expr + ")"
+			return "__twStoreClass(" + expr + ")"
 		}
 	}
 	return expr

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // fakeTS is a fake Tailscale API: keys, devices, policy (with ETag),
@@ -221,10 +221,10 @@ func direct(t *testing.T, e *testEnv, host, method, path string, body any) (int,
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	r := httptest.NewRequest(method, "http://twd-mgmt"+path, rd)
+	r := httptest.NewRequest(method, "http://tw-mgmt"+path, rd)
 	r.Header.Set(HostTokenHeader, e.token)
 	if host != "" {
-		r.Header.Set("Twd-Host-ID", host)
+		r.Header.Set("Tw-Host-ID", host)
 	}
 	if body != nil {
 		r.Header.Set("Content-Type", "application/json")
@@ -245,16 +245,16 @@ func directFail(t *testing.T, e *testEnv, host, method, path string, status int,
 	}
 }
 
-// noConfigBundle is a bundle without twd.jsonc: the deploy's explicit
+// noConfigBundle is a bundle without tailworks.jsonc: the deploy's explicit
 // namespaces define the classes (the spec requires a bundle either way).
 func noConfigBundle(t *testing.T) []byte {
 	return makeBundle(t, map[string]string{"dist/index.js": "export default {}"})
 }
 
-const testTwdJSONC = `// twd.jsonc
+const testTwJSONC = `// tailworks.jsonc
 { "tailnet": { "objects": {
-    "SupportAgent": { "tags": ["tag:twd-agent-support"], "agent": true },
-    "LookupAgent":  { "tags": ["tag:twd-agent-support-sub"], "agent": true, "ttl": "10m" },
+    "SupportAgent": { "tags": ["tag:tw-agent-support"], "agent": true },
+    "LookupAgent":  { "tags": ["tag:tw-agent-support-sub"], "agent": true, "ttl": "10m" },
     "Rogue":        { "tags": ["tag:crm"] },
   },
   "spawn": { "maxLive": 6, "maxDepth": 3 } } }`
@@ -263,8 +263,8 @@ const testTwdJSONC = `// twd.jsonc
 type apiClient struct {
 	t     *testing.T
 	hc    *http.Client
-	host  string // Twd-Host-ID
-	token string // Twd-Host-Token ("" = send none)
+	host  string // Tw-Host-ID
+	token string // Tw-Host-Token ("" = send none)
 	hdr   map[string]string
 }
 
@@ -284,7 +284,7 @@ func (c *apiClient) doRaw(method, path string, body any, out any) (int, map[stri
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req, _ := http.NewRequest(method, "http://twd-mgmt"+path, rd)
+	req, _ := http.NewRequest(method, "http://tw-mgmt"+path, rd)
 	if body != nil {
 		if method == "PATCH" {
 			req.Header.Set("Content-Type", "application/merge-patch+json")
@@ -293,7 +293,7 @@ func (c *apiClient) doRaw(method, path string, body any, out any) (int, map[stri
 		}
 	}
 	if c.host != "" {
-		req.Header.Set("Twd-Host-ID", c.host)
+		req.Header.Set("Tw-Host-ID", c.host)
 	}
 	if c.token != "" {
 		req.Header.Set(HostTokenHeader, c.token)
@@ -313,7 +313,7 @@ func (c *apiClient) doRaw(method, path string, body any, out any) (int, map[stri
 			return res.StatusCode, nil, res.Header
 		}
 		json.Unmarshal(b, &errBody)
-		if errBody["code"] == nil || errBody["trace_id"] == nil || errBody["message"] == nil || res.Header.Get("Twd-Error") == "" {
+		if errBody["code"] == nil || errBody["trace_id"] == nil || errBody["message"] == nil || res.Header.Get("Tw-Error") == "" {
 			c.t.Fatalf("%s %s: error body not in catalog shape: %s", method, path, b)
 		}
 		return res.StatusCode, errBody, res.Header
@@ -390,7 +390,7 @@ var specGaps = []string{
 	`property "detail"`, // host records carry detail as a JSON string
 	// a spawn from a killed parent is 410 delegation_invalid (no tombstone),
 	// while the spec's only 410 is the killed tombstone
-	`response 410: response header "Twd-Error"`,
+	`response 410: response header "Tw-Error"`,
 }
 
 func specReporter(t *testing.T) func(error) {
@@ -426,7 +426,7 @@ func newTestEnv(t *testing.T) *testEnv { return newTestEnvWith(t, nil) }
 // newTestEnvWith is newTestEnv with the Config adjusted by mutate.
 func newTestEnvWith(t *testing.T, mutate func(*Config)) *testEnv {
 	ctx := context.Background()
-	dir, err := os.MkdirTemp("/tmp", "twd-mgmt-test-") // short path: unix socket limit
+	dir, err := os.MkdirTemp("/tmp", "tw-mgmt-test-") // short path: unix socket limit
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,10 +435,10 @@ func newTestEnvWith(t *testing.T, mutate func(*Config)) *testEnv {
 	ts.oauthClients[envOAuthClient] = fakeOAuthClient{secret: fakeClientSecret(envOAuthClient), scopes: envOAuthScopes}
 	keyFile := writeTestOAuthFile(t, filepath.Join(dir, "oauth.env"))
 	var st *SQLStore
-	if os.Getenv("TWD_TEST_API_POSTGRES") != "" {
+	if os.Getenv("TW_TEST_API_POSTGRES") != "" {
 		st = storesUnderTest(t)["postgres"] // fresh schema
 		if st == nil {
-			t.Fatal("TWD_TEST_API_POSTGRES needs TWD_TEST_POSTGRES_DSN")
+			t.Fatal("TW_TEST_API_POSTGRES needs TW_TEST_POSTGRES_DSN")
 		}
 	} else {
 		var err error
@@ -517,7 +517,7 @@ func TestRemintAfterRejectedRejoin(t *testing.T) {
 	var tn struct{ TenantID string }
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, nil)
 	var root CreateObjectResponse
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "SupportAgent", "objectName": "alice"}, &root)
@@ -582,7 +582,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	}
 
 	// No host yet → no deploy.
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, 503, "no_host")
 	h1.fail("PUT", "/v1/hosts/h1/status", map[string]any{"liveNodes": 0, "leases": []any{}}, 404, "host_not_registered")
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
@@ -596,7 +596,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	if len(as) != 1 || as[0].Epoch != 1 || len(as[0].Namespaces) != 3 || as[0].BundleURL != "/v1/deployments/"+dep.DeploymentID+"/bundle" {
 		t.Fatalf("assignments %+v", as)
 	}
-	req, _ := http.NewRequest("GET", "http://twd-mgmt"+as[0].BundleURL, nil)
+	req, _ := http.NewRequest("GET", "http://tw-mgmt"+as[0].BundleURL, nil)
 	req.Header.Set(HostTokenHeader, c.token)
 	if res, err := c.hc.Do(req); err != nil || res.StatusCode != 200 {
 		t.Fatal("bundle fetch", err)
@@ -607,7 +607,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	// Root object → async mint → credential to the lease holder only.
 	var root CreateObjectResponse
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "SupportAgent", "objectName": "alice"}, &root)
-	if root.Status != "pending" || root.Tags[0] != "tag:twd-agent-support" || !strings.HasPrefix(root.ObjectID, "supportagent-") || len(root.ObjectID) != len("supportagent-")+10 {
+	if root.Status != "pending" || root.Tags[0] != "tag:tw-agent-support" || !strings.HasPrefix(root.ObjectID, "supportagent-") || len(root.ObjectID) != len("supportagent-")+10 {
 		t.Fatalf("create %+v", root)
 	}
 	var again CreateObjectResponse
@@ -626,7 +626,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	kb := e.ts.createdKey(1)
 	create := kb["capabilities"].(map[string]any)["devices"].(map[string]any)["create"].(map[string]any)
 	if create["reusable"] != false || create["preauthorized"] != true || kb["expirySeconds"].(float64) > 300 ||
-		fmt.Sprint(create["tags"]) != "[tag:twd-agent-support]" {
+		fmt.Sprint(create["tags"]) != "[tag:tw-agent-support]" {
 		t.Fatalf("minted key options %v", kb)
 	}
 	h1.ok("PATCH", "/v1/objects/"+root.ObjectID, map[string]any{"status": "ready", "epoch": 1, "nodeID": "1", "stableNodeID": "nROOT", "magicDNS": root.ObjectID + ".t.ts.net"}, nil)
@@ -669,7 +669,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	if st, eb, _ := spawn(c1.ObjectID, "LookupAgent", "w", map[string]any{"acme.com/cap/mcp": map[string]any{"tools": []string{"refund"}}}); st != 403 || eb["code"] != "delegation_exceeds_parent" {
 		t.Fatalf("re-widen: %d %v", st, eb)
 	}
-	// maxLive 6 (from twd.jsonc): 3 live so far, 3 more fit, the 7th doesn't.
+	// maxLive 6 (from tailworks.jsonc): 3 live so far, 3 more fit, the 7th doesn't.
 	var siblings []string
 	for i := range 3 {
 		_, _, s := spawn(root.ObjectID, "LookupAgent", fmt.Sprintf("s%d", i), nil)
@@ -794,7 +794,7 @@ func TestAPIThrottleBackoffAndTTLReaper(t *testing.T) {
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile, "registrationsPerMinute": 120}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}}, nil)
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w", "bundle": noConfigBundle(t), "namespaces": []ClassConfig{
-		{Class: "A", Tags: []string{"tag:twd-agent-support"}}, {Class: "B", Tags: []string{"tag:twd-agent-support-sub"}, TTL: "1s"}}}, nil)
+		{Class: "A", Tags: []string{"tag:tw-agent-support"}}, {Class: "B", Tags: []string{"tag:tw-agent-support-sub"}, TTL: "1s"}}}, nil)
 
 	e.ts.mu.Lock()
 	e.ts.rateLimitNext = 2
@@ -884,7 +884,7 @@ func TestAPIHostAuditChain(t *testing.T) {
 
 func TestTailnetAuth(t *testing.T) {
 	e := newTestEnv(t)
-	srv := &Server{M: e.m, Admins: []string{"ross@example.com"}, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Admins: []string{"ross@example.com"}, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
 		case "100.64.0.1:1":
@@ -895,8 +895,8 @@ func TestTailnetAuth(t *testing.T) {
 			return WhoIsInfo{NodeID: "nUSER", Login: "ross@example.com"}, nil
 		case "100.64.0.4:1": // plain user, no cap
 			return WhoIsInfo{NodeID: "nEVE", Login: "eve@example.com"}, nil
-		case "100.64.0.5:1": // a twd object node
-			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:twd-agent-support"}, Login: "tagged-devices", Name: "agent.t.ts.net"}, nil
+		case "100.64.0.5:1": // a tailworks object node
+			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:tw-agent-support"}, Login: "tagged-devices", Name: "agent.t.ts.net"}, nil
 		case "100.64.0.6:1": // autogroup:admin member: the base snippet grants the cap
 			return WhoIsInfo{NodeID: "nADM", Login: "alice@example.com", Caps: []string{AdminCap}}, nil
 		case "100.64.0.7:1": // a tagged node (CI, a dev box) granted the cap
@@ -915,7 +915,7 @@ func TestTailnetAuth(t *testing.T) {
 		return w.Code, out
 	}
 	code := func(from, method, path, body string) int { c, _ := call(from, method, path, body); return c }
-	// The operator tenant: twd host add mints the join key and the one-time
+	// The operator tenant: tw host add mints the join key and the one-time
 	// registration secret through it (M1).
 	var tn struct{ TenantID string }
 	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
@@ -936,7 +936,7 @@ func TestTailnetAuth(t *testing.T) {
 	if c := code("100.64.0.1:1", "PUT", "/v1/hosts/h1/status", `{}`); c != 403 {
 		t.Fatalf("unregistered host heartbeat: %d", c)
 	}
-	// A tag:twd-host node alone cannot claim a host ID: it needs the secret
+	// A tag:tw-host node alone cannot claim a host ID: it needs the secret
 	// (host_identity_mismatch), and an ID the admin never added is refused
 	// outright (host_not_registered; no implicit creation over the tailnet).
 	if c, b := call("100.64.0.1:1", "PUT", "/v1/hosts/h1", reg("")); c != 403 || b["code"] != "host_identity_mismatch" {
@@ -987,14 +987,14 @@ func TestTailnetAuth(t *testing.T) {
 		}
 	}
 	if c, b := call("100.64.0.6:1", "GET", "/v1/whoami", ``); c != 200 || b["admin"] != true || b["login"] != "alice@example.com" || b["actor"] != "alice@example.com" ||
-		b["mgmt"].(map[string]any)["dnsName"] != "twd-mgmt.t.ts.net" {
+		b["mgmt"].(map[string]any)["dnsName"] != "tw-mgmt.t.ts.net" {
 		t.Fatalf("admin whoami: %d %v", c, b)
 	}
 	if c, b := call("100.64.0.7:1", "GET", "/v1/whoami", ``); c != 200 || b["admin"] != true || b["login"] != "tag:ttest" || b["actor"] != "tag:ttest (nCI)" {
 		t.Fatalf("tagged admin whoami: %d %v", c, b)
 	}
 	// Non-admins are refused with not_admin and the grant to add.
-	for _, tc := range []struct{ from, src string }{{"100.64.0.4:1", "eve@example.com"}, {"100.64.0.5:1", "tag:twd-agent-support"}} {
+	for _, tc := range []struct{ from, src string }{{"100.64.0.4:1", "eve@example.com"}, {"100.64.0.5:1", "tag:tw-agent-support"}} {
 		c, b := call(tc.from, "GET", "/v1/tenants", ``)
 		if c != 403 || b["code"] != "not_admin" {
 			t.Fatalf("non-admin %s: %d %v", tc.from, c, b)
@@ -1057,7 +1057,7 @@ func TestKillWhileJoining(t *testing.T) {
 	}
 }
 
-// TestPurgeAfterKill: after `twd down --purge` the same workload must
+// TestPurgeAfterKill: after `tw down --purge` the same workload must
 // deploy again on the same state dir. mgmt keeps killed objects (the 410
 // tombstone, and the UNIQUE name), so DELETE /v1/tenants/{id}/objects forgets
 // them; a create of the same name is then a new pending object, and the
@@ -1077,8 +1077,8 @@ func TestPurgeAfterKill(t *testing.T) {
 	h1.ok("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "namespace": "A", "objectName": "keep"}, &keep)
 	h1.ok("PATCH", "/v1/objects/"+wl.ObjectID, map[string]any{"status": "ready", "epoch": 1, "stableNodeID": "nWL", "magicDNS": "agent.t.ts.net"}, nil)
 	var kr KillResult
-	c.ok("DELETE", "/v1/objects/"+wl.ObjectID+killQuery(true, "twd down --purge"), nil, &kr)
-	c.ok("DELETE", "/v1/objects/"+a.ObjectID+killQuery(false, "twd down --purge"), nil, nil)
+	c.ok("DELETE", "/v1/objects/"+wl.ObjectID+killQuery(true, "tw down --purge"), nil, &kr)
+	c.ok("DELETE", "/v1/objects/"+a.ObjectID+killQuery(false, "tw down --purge"), nil, nil)
 
 	// The bug: the killed workload node blocks a redeploy.
 	h1.fail("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "namespace": WorkloadNamespace, "objectName": "agent"}, 410, "killed")
@@ -1139,7 +1139,7 @@ func TestAPIVolumeKey(t *testing.T) {
 	var tn struct{ TenantID string }
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process", "microvm"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, &dep)
 	q := func(epoch int64) string {

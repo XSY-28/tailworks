@@ -6,18 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // transportHeaders are what Go's HTTP client adds on its own; they are part
-// of HTTP, not of the twd API.
+// of HTTP, not of the tailworks API.
 var transportHeaders = map[string]bool{"Accept-Encoding": true, "User-Agent": true}
 
 // documentedHeaders are request headers api/openapi.yaml documents for every
 // operation rather than per operation: Accept (content negotiation) and
-// Twd-Actor (the actor on the local-dev socket; see the spec's "Audit"
+// Tw-Actor (the actor on the local-dev socket; see the spec's "Audit"
 // paragraph).
-var documentedHeaders = map[string]bool{"Accept": true, "Twd-Actor": true}
+var documentedHeaders = map[string]bool{"Accept": true, "Tw-Actor": true}
 
 // TestUsesOnlyPublicAPI drives every page and every form, then checks each
 // request the UI sent to the API against api/openapi.yaml: the operation
@@ -63,7 +63,7 @@ func TestUsesOnlyPublicAPI(t *testing.T) {
 		"/ui/hosts/h1/remove":            "drain=true",
 		"/ui/tenants/tn_1/delete":        "force=true",
 	} {
-		r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net"+path, strings.NewReader(form))
+		r := httptest.NewRequest("POST", "http://tw-mgmt.t.ts.net"+path, strings.NewReader(form))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		h.ServeHTTP(httptest.NewRecorder(), r)
 	}
@@ -106,11 +106,11 @@ func TestAdmission(t *testing.T) {
 		api.routes["GET /v1/whoami"] = who
 		h := serve(t, api)
 		for _, p := range []string{"/ui/", "/ui/objects/obj_root", "/ui/audit"} {
-			if w := get(t, h, p); w.Code != 403 || w.Header().Get("Twd-Error") != "forbidden" || strings.Contains(w.Body.String(), "root-abc") {
-				t.Errorf("%s %s: %d %s", name, p, w.Code, w.Header().Get("Twd-Error"))
+			if w := get(t, h, p); w.Code != 403 || w.Header().Get("Tw-Error") != "forbidden" || strings.Contains(w.Body.String(), "root-abc") {
+				t.Errorf("%s %s: %d %s", name, p, w.Code, w.Header().Get("Tw-Error"))
 			}
 		}
-		r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net/ui/objects/obj_root/kill", strings.NewReader("reason=r"))
+		r := httptest.NewRequest("POST", "http://tw-mgmt.t.ts.net/ui/objects/obj_root/kill", strings.NewReader("reason=r"))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)

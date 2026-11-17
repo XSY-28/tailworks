@@ -1,4 +1,4 @@
-# ADR-observability: Structured request logs, Prometheus metrics and OTLP traces, built from workerd tail events and twd's own hops
+# ADR-observability: Structured request logs, Prometheus metrics and OTLP traces, built from workerd tail events and tailworks' own hops
 
 **Date:** 2026-11-15
 **Status:** Proposed (branch `observability-logs-metrics-traces-20`; results
@@ -7,12 +7,12 @@ implemented on the branch; phases 2 and 3 are proposals.
 
 **Context.**
 
-- Before this, `twd logs <workload>` tailed one raw file: workerd's stdout
+- Before this, `tw logs <workload>` tailed one raw file: workerd's stdout
   (`workerd.log`), the node tier's `app.log` or a microVM's serial console.
   There were no per-request records, no metrics, no traces and no export.
   The only timings were diagnostic log lines (`mgmt/spans.go`, the "mint
   spans" line).
-- Every request to a workload or a Durable Object crosses twd's own code
+- Every request to a workload or a Durable Object crosses tailworks' own code
   twice: hostd's ingress handler (after netd's WhoIs) on the way in, and
   hostd's egress handler (before netd dials from the object's node) on the
   way out. Both already know the verified caller, the object, the workload
@@ -22,7 +22,7 @@ implemented on the branch; phases 2 and 3 are proposals.
   - a tail receives one `TraceItem` per invocation, for the stateless
     Worker, for Durable Objects (`executionModel: "durableObject"`,
     `entrypoint` = the class) and for a Dynamic Worker loaded through the
-    Worker Loader (`WorkerCode.tails`, with `props`), which is how twd's
+    Worker Loader (`WorkerCode.tails`, with `props`), which is how tailworks'
     facet objects run;
   - it carries `logs` (every `console.*` call, with level and timestamp),
     `exceptions` (name, message, stack), `outcome`, and the request's URL,
@@ -40,7 +40,7 @@ implemented on the branch; phases 2 and 3 are proposals.
   `traceparent` decides the trace.
 - [wdl](https://github.com/wdl-dev/wdl) (read for ideas, no code taken)
   ships per-invocation logs from a tail-like hook and Prometheus metrics,
-  authenticated with bearer tokens. twd's identity comes from the tailnet.
+  authenticated with bearer tokens. Tailworks' identity comes from the tailnet.
 
 **Decision.**
 
@@ -54,13 +54,13 @@ implemented on the branch; phases 2 and 3 are proposals.
      `traceparent: 00-<trace>-<that span>-01`. With no inbound
      `traceparent`, the trace ID is the hop's audit trace ID, so a
      single-hop request has one ID in both worlds. Every ingress span
-     carries `twd.audit.trace_id`, so a trace links to `twd audit`.
+     carries `tw.audit.trace_id`, so a trace links to `tw audit`.
      Trace context never feeds authorization or audit.
 2. **Propagation inside workerd: the runtime, with `AsyncLocalStorage`.**
    - hostd adds `nodejs_als` to the tenant service's and the facets'
      compatibility flags (unless `nodejs_compat` or `nodejs_als` is already
      there).
-   - The runtime (`@twd/tailnet` `runtime.ts`, `trace.ts`) runs each
+   - The runtime (`@tailworks/tailnet` `runtime.ts`, `trace.ts`) runs each
      `fetch` handler (the Worker, plain-DO classes and facet classes) inside
      the request's trace context, and then:
      - **egress** `fetch()` gets the current context as `traceparent`
@@ -72,7 +72,7 @@ implemented on the branch; phases 2 and 3 are proposals.
        op).
    - hostd's egress handler opens a CLIENT span per request (child of the
      runtime's context) and rewrites `traceparent` to it, so the next hop's
-     ingress span (another twd object, or any OTel-instrumented server)
+     ingress span (another tailworks object, or any OTel-instrumented server)
      joins the same trace: caller → workload → DO → egress → next object.
    - RPC calls to a DO stub (`stub.method()`) carry no headers and are not
      traced in phase 1.
@@ -97,7 +97,7 @@ implemented on the branch; phases 2 and 3 are proposals.
    - Records go to a per-workload JSON Lines file on the host,
      `<data>/tenants/<tenant>/logs/<workload>.requests.jsonl`, and, if the
      tenant configured OTLP, to the collector.
-4. **`twd logs` shows the records.**
+4. **`tw logs` shows the records.**
    - Plain text by default: one line per request (time, method, path,
      status, duration, object, caller, trace), the `console.*` lines and
      exceptions indented under it. `--json` prints the records as they
@@ -106,12 +106,12 @@ implemented on the branch; phases 2 and 3 are proposals.
      `-n 50 --errors` is the last 50 errors.
    - `--console` shows the raw app output as before (`workerd.log`, the
      node tier's `app.log`, the microVM console).
-   - Locally `twd logs` still reads the file directly; from a linked
+   - Locally `tw logs` still reads the file directly; from a linked
      machine it goes through mgmt (`GET …/logs?source=requests&…`).
 5. **Metrics: Prometheus on each daemon's tailnet node, OTLP per tenant.**
    - Names follow the OpenTelemetry semantic conventions
      (`http.server.request.duration`, `http.client.request.duration`, …)
-     plus `twd.*` for what has no convention (invocations by outcome, DO
+     plus `tw.*` for what has no convention (invocations by outcome, DO
      objects by status, DO wake-ups, host capacity, dropped records, mint
      stage durations). The Prometheus names are the standard
      OTel→Prometheus translation (`http_server_request_duration_seconds`).
@@ -122,16 +122,16 @@ implemented on the branch; phases 2 and 3 are proposals.
    - hostd and mgmt serve `GET /metrics` on their **own tailnet node**,
      port 9464 (`-metrics-port`, 0 = off), and nowhere else. Who can
      scrape is a grant in the tailnet policy to `tcp:9464`; there is no
-     token. A single-process `twd up` serves both on mgmt's node.
+     token. A single-process `tw up` serves both on mgmt's node.
    - These are operator metrics: they cover every tenant on the host. A
      tenant gets its own workloads' metrics over OTLP.
    - CPU time is not available: workerd reports 0. Wall time is hostd's
      ingress duration.
 6. **OTLP export: per tenant, configured in custody, dialed from the
    workload's node.**
-   - `PUT /v1/tenants/{id}/telemetry` (`twd telemetry set`) stores
+   - `PUT /v1/tenants/{id}/telemetry` (`tw telemetry set`) stores
      `{otlp: {endpoint, headers, signals}}` in mgmt's custody
-     (`twd/<tenant>/telemetry`), like a secret (ADR-034): header values
+     (`tw/<tenant>/telemetry`), like a secret (ADR-034): header values
      (collector credentials) are never logged, audited or returned; `GET`
      shows the endpoint and header names only.
    - `POST /v1/tenants/{id}/workloads/{w}/telemetry-grants?epoch=N` releases
@@ -143,12 +143,12 @@ implemented on the branch; phases 2 and 3 are proposals.
      egress dialer, ADR-019 rules). The collector is a tailnet peer; the
      tailnet policy decides whether that workload may reach it. A public
      internet collector is refused like any other egress.
-   - twd implements OTLP/HTTP+JSON and the Prometheus text format itself
+   - tailworks implements OTLP/HTTP+JSON and the Prometheus text format itself
      (about 700 lines, `internal/obs/otlp.go` and `metrics.go`), instead of
      adding the OpenTelemetry Go SDK, its exporters and their
      gRPC/protobuf dependencies.
    - With no config nothing is exported, and records and `/metrics` work as
-     above: zero-config `twd up` has structured `twd logs` and metrics.
+     above: zero-config `tw up` has structured `tw logs` and metrics.
 7. **Safety.**
    - Never logged by default: request and response bodies, query strings,
      request headers (only `traceparent` is read), `cf` (beyond the
@@ -158,7 +158,7 @@ implemented on the branch; phases 2 and 3 are proposals.
        in total, and 8 exceptions (`truncated: true` says so);
      - each workload may write 200 records/s (burst 1000) to its file;
        beyond that records are dropped and counted
-       (`twd_logs_dropped_total`), and one `kind: "dropped"` record per
+       (`tw_logs_dropped_total`), and one `kind: "dropped"` record per
        second says how many;
      - each file rotates at 8 MiB (one previous file is kept);
      - `workerd.log` and the node tier's `app.log` are now size-capped the
@@ -174,10 +174,10 @@ implemented on the branch; phases 2 and 3 are proposals.
     span per run, hostd-started);
   - `ctx.tailnet.fetch` spans in the runtime (not only hostd's);
   - mgmt's own traces (the mint stages as spans, linked from hostd's
-    credential wait) and OTLP export of twd's own telemetry
+    credential wait) and OTLP export of tailworks' own telemetry
     (`OTEL_EXPORTER_OTLP_ENDPOINT` on the daemons);
-  - per-workload overrides in `twd.jsonc` (`observability.otlp`, sampling);
-  - egress records in `twd logs` (today egress is spans and metrics only;
+  - per-workload overrides in `tailworks.jsonc` (`observability.otlp`, sampling);
+  - egress records in `tw logs` (today egress is spans and metrics only;
     refusals are already audited).
 - **Phase 3:** the microVM console and node-tier app output as OTLP logs;
   CPU time if workerd ever reports it; head sampling and tail-based
@@ -188,12 +188,12 @@ implemented on the branch; phases 2 and 3 are proposals.
 - Every request now costs one extra local POST from workerd to hostd (the
   tail event) and, when the code calls a DO by stub fetch, one more (its
   spans). Both are unix-socket requests on the host, off the response path.
-- `twd logs` changes its default from raw output to records. Scripts that
-  read `twd logs <workload>` for app output need `--console`.
+- `tw logs` changes its default from raw output to records. Scripts that
+  read `tw logs <workload>` for app output need `--console`.
 - `nodejs_als` is always on for tenant code. It only adds
   `node:async_hooks`.
 - A tenant that sets its own `traceparent` on an egress `fetch()` keeps it;
-  twd then only adds its egress span under it.
+  tailworks then only adds its egress span under it.
 - A caller can choose the W3C trace ID of its requests (that is the point
   of propagation). That can mislead a tenant's trace view, never its
   audit trail, whose IDs it can't choose.

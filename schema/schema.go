@@ -1,6 +1,6 @@
-// Package schema embeds twd.schema.json, the JSON Schema of twd.jsonc, and
-// checks a config against it. The schema is the single list of twd.jsonc
-// keys: the Go structs that read twd.jsonc (mgmt, hostd/bundle, placement,
+// Package schema embeds tailworks.schema.json, the JSON Schema of tailworks.jsonc, and
+// checks a config against it. The schema is the single list of tailworks.jsonc
+// keys: the Go structs that read tailworks.jsonc (mgmt, hostd/bundle, placement,
 // containers) each decode only the part they need, so none of them can
 // reject a misspelt key on its own.
 //
@@ -21,8 +21,8 @@ import (
 	"github.com/tailscale/hujson"
 )
 
-//go:embed twd.schema.json
-var TwdSchema []byte
+//go:embed tailworks.schema.json
+var TwSchema []byte
 
 // Problem is one schema violation, at a dotted path like
 // "tailnet.objects.SupportAgent.tags".
@@ -60,15 +60,15 @@ type node struct {
 
 var root = func() *node {
 	var n node
-	if err := json.Unmarshal(TwdSchema, &n); err != nil {
-		panic("schema: twd.schema.json: " + err.Error())
+	if err := json.Unmarshal(TwSchema, &n); err != nil {
+		panic("schema: tailworks.schema.json: " + err.Error())
 	}
 	return &n
 }()
 
-// CheckTwd checks a twd.jsonc (JSONC/HuJSON) against the schema. A syntax
+// CheckTw checks a tailworks.jsonc (JSONC/HuJSON) against the schema. A syntax
 // error is returned as err; schema violations as problems, sorted by path.
-func CheckTwd(raw []byte) ([]Problem, error) {
+func CheckTw(raw []byte) ([]Problem, error) {
 	std, err := hujson.Standardize(append([]byte(nil), raw...))
 	if err != nil {
 		return nil, err

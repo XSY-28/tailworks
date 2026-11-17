@@ -1,12 +1,12 @@
 # Per-object egress: facet mode vs plain-DO mode
 
-Each Durable Object class picks how its outbound `fetch()` is attributed, in `twd.jsonc`:
+Each Durable Object class picks how its outbound `fetch()` is attributed, in `tailworks.jsonc`:
 
 ```jsonc
 { "tailnet": { "objects": {
-    "SupportAgent": { "tags": ["tag:twd-agent-support"] },                     // facet mode (default)
-    "Reminder":     { "tags": ["tag:twd-reminder"], "egress": "workload" },    // plain-DO mode
-    "TwdBudget":    { "egress": "workload", "node": false }                     // internal: no node at all
+    "SupportAgent": { "tags": ["tag:tw-agent-support"] },                     // facet mode (default)
+    "Reminder":     { "tags": ["tag:tw-reminder"], "egress": "workload" },    // plain-DO mode
+    "TwBudget":    { "egress": "workload", "node": false }                     // internal: no node at all
 } } }
 ```
 

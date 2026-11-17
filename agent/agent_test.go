@@ -45,36 +45,36 @@ func TestSkillsParse(t *testing.T) {
 	}
 }
 
-// A newer twd that dropped a skill removes the old copy, but only if twd
+// A newer tailworks that dropped a skill removes the old copy, but only if tailworks
 // wrote it; a user's file in the way is skipped, never overwritten.
 func TestPlanStaleAndForeign(t *testing.T) {
 	home := t.TempDir()
 	claude, _ := AgentByID("claude")
 	skills := filepath.Join(home, ".claude", "skills")
-	os.MkdirAll(filepath.Join(skills, "twd-gone"), 0o755)
-	os.WriteFile(filepath.Join(skills, "twd-gone", "SKILL.md"), []byte(marker("v-old")+"\n"), 0o644)
-	os.MkdirAll(filepath.Join(skills, "twd-deploy"), 0o755)
-	os.WriteFile(filepath.Join(skills, "twd-deploy", "SKILL.md"), []byte("the user's own\n"), 0o644)
+	os.MkdirAll(filepath.Join(skills, "tw-gone"), 0o755)
+	os.WriteFile(filepath.Join(skills, "tw-gone", "SKILL.md"), []byte(marker("v-old")+"\n"), 0o644)
+	os.MkdirAll(filepath.Join(skills, "tw-deploy"), 0o755)
+	os.WriteFile(filepath.Join(skills, "tw-deploy", "SKILL.md"), []byte("the user's own\n"), 0o644)
 	p := plan(t, home, Options{Agents: []Agent{claude}})
 	a := actions(p)
-	if a[filepath.Join(skills, "twd-gone", "SKILL.md")] != Remove {
-		t.Errorf("stale twd skill: %v", a)
+	if a[filepath.Join(skills, "tw-gone", "SKILL.md")] != Remove {
+		t.Errorf("stale tw skill: %v", a)
 	}
-	if a[filepath.Join(skills, "twd-deploy", "SKILL.md")] != Skip {
+	if a[filepath.Join(skills, "tw-deploy", "SKILL.md")] != Skip {
 		t.Errorf("user's file: %v", a)
 	}
 	if err := Apply(p); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(skills, "twd-deploy", "SKILL.md")); string(b) != "the user's own\n" {
-		t.Fatal("setup overwrote a file twd didn't write")
+	if b, _ := os.ReadFile(filepath.Join(skills, "tw-deploy", "SKILL.md")); string(b) != "the user's own\n" {
+		t.Fatal("setup overwrote a file tailworks didn't write")
 	}
-	if _, err := os.Stat(filepath.Join(skills, "twd-gone")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(skills, "tw-gone")); !os.IsNotExist(err) {
 		t.Fatal("stale skill directory left behind")
 	}
 	// Remove leaves the user's file too.
 	p = plan(t, home, Options{Agents: []Agent{claude}, Remove: true})
-	if _, ok := actions(p)[filepath.Join(skills, "twd-deploy", "SKILL.md")]; ok {
+	if _, ok := actions(p)[filepath.Join(skills, "tw-deploy", "SKILL.md")]; ok {
 		t.Fatal("remove plans to touch the user's file")
 	}
 }
@@ -115,7 +115,7 @@ func TestPlanBlock(t *testing.T) {
 }
 
 func TestCommandsParse(t *testing.T) {
-	s := Skill{Name: "x", Body: "Run `twd ls --json` first.\n\n<!-- twd-eval: demo -->\n```sh\ntwd init a --template mcp   # comment\ncd a && twd deploy --json\nprintf %s \"$K\" | twd secret put K\n```\n"}
+	s := Skill{Name: "x", Body: "Run `tw ls --json` first.\n\n<!-- tw-eval: demo -->\n```sh\ntw init a --template mcp   # comment\ncd a && tw deploy --json\nprintf %s \"$K\" | tw secret put K\n```\n"}
 	cmds, steps, err := Commands(s)
 	if err != nil {
 		t.Fatal(err)

@@ -34,7 +34,7 @@ func TestMM_H16_TenantQuotaRace(t *testing.T) {
 	c.must(0, "h1", "PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10000, "tiers": []string{"process"}}, nil)
 	var dep struct{ Epoch int64 }
 	c.must(0, "", "POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w",
-		"bundle": makeBundle(map[string]string{"twd.jsonc": twdJSONC, "dist/index.js": "export default {}"})}, &dep)
+		"bundle": makeBundle(map[string]string{"tailworks.jsonc": twJSONC, "dist/index.js": "export default {}"})}, &dep)
 	stop := make(chan struct{})
 	defer close(stop)
 	c.heartbeat(setup{tenantID: tn.TenantID, workload: "w", epoch: dep.Epoch}, stop)

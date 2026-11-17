@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/rosskukulinski/twd/mgmt/ui"
+	"github.com/rosskukulinski/tailworks/mgmt/ui"
 )
 
 // The admin UI (mgmt/ui) is an ordinary /v1 client: it takes an
@@ -18,7 +18,7 @@ import (
 // as its own process would get a network transport instead.
 
 // uiBaseURL is the in-process API's nominal origin. Nothing dials it.
-const uiBaseURL = "http://twd-mgmt.internal"
+const uiBaseURL = "http://tw-mgmt.internal"
 
 // embeddedUI returns the admin UI wired to api in-process.
 func embeddedUI(api http.Handler) http.Handler {

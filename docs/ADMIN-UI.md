@@ -1,6 +1,6 @@
-# twd admin UI
+# tailworks admin UI
 
-twd-mgmt serves a small admin web UI next to its `/v1` API. It is rendered
+tw-mgmt serves a small admin web UI next to its `/v1` API. It is rendered
 by mgmt itself from Go `html/template` pages and two embedded static files
 (one CSS, one vanilla-JS); there is no build step, no Node, no CDN, no
 external font, and nothing is stored in the browser. The code is
@@ -8,7 +8,7 @@ external font, and nothing is stored in the browser. The code is
 
 ## URL and who gets in
 
-    http(s)://twd-mgmt.<tailnet>.ts.net/ui/
+    http(s)://tw-mgmt.<tailnet>.ts.net/ui/
 
 Open it from any admin's browser over the tailnet. `GET /` from a browser
 (`Accept: text/html`) redirects there; API clients hitting `/` still get
@@ -19,12 +19,12 @@ Admission is the connection's WhoIs identity, exactly as for the API
 
 | principal | result |
 |---|---|
-| a user or tagged node holding `twd.dev/cap/admin` (granted to `tag:twd-mgmt`; `autogroup:admin` gets it from the base snippet), or a login in `-admins` | 200, the UI |
+| a user or tagged node holding `github.com/rosskukulinski/tailworks/cap/admin` (granted to `tag:tw-mgmt`; `autogroup:admin` gets it from the base snippet), or a login in `-admins` | 200, the UI |
 | mgmt's own node (the operator console on the host machine) | 200, the UI |
-| a user or tagged node holding only `twd.dev/cap/approve` (toward `tag:twd-mgmt`) | the **approvals** page only, defaulting to the tenants on its own tailnet (`GET /v1/whoami` `tenants`; `?tenant=<tenant ID>` for another); 403 `forbidden` elsewhere |
-| a user or tagged node holding only `twd.dev/cap/tenant-admin` ([teams.md](teams.md)) | 403 `forbidden`: the console isn't open to tenant admins yet; use the CLI |
+| a user or tagged node holding only `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) | the **approvals** page only, defaulting to the tenants on its own tailnet (`GET /v1/whoami` `tenants`; `?tenant=<tenant ID>` for another); 403 `forbidden` elsewhere |
+| a user or tagged node holding only `github.com/rosskukulinski/tailworks/cap/tenant-admin` ([teams.md](teams.md)) | 403 `forbidden`: the console isn't open to tenant admins yet; use the CLI |
 | any other tailnet user | 403 `not_admin`, with the grant snippet to add |
-| a `tag:twd-host` node (registered or not) | 403 `forbidden` (or `host_not_registered`); hosts never reach the UI or its assets |
+| a `tag:tw-host` node (registered or not) | 403 `forbidden` (or `host_not_registered`); hosts never reach the UI or its assets |
 
 There is no login, no cookie and no token: the tailnet connection is the
 credential, so the UI shows exactly what the API would show the same
@@ -76,7 +76,7 @@ spec.
   across every tenant (indented by depth; status badge; node name linking
   to the object page; MagicDNS link; tags; TTL; short node ID; acting-for;
   age; killed and failed rows dimmed); the **25 most recent audit
-  records** with `twd audit`'s descriptions.
+  records** with `tw audit`'s descriptions.
 - **`/ui/objects/{id}`**: every field of the object, the lineage up (root
   to parent), the subtree below (this object and its descendants), caps,
   the node certificate when the object has a node, the object's audit
@@ -111,11 +111,11 @@ spec.
   status, and has an anchor (`id="<instance>"`, a `#` link): the deep link
   of an `approval_requested` notification is
   `/ui/approvals?tenant=<tenant ID>#<instance>` and highlights the row.
-  "What you may decide" lists the caller's `twd.dev/cap/approve` grants
+  "What you may decide" lists the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants
   (`approveGrants`). `all` adds the decided ones with who decided. Each
   waiting row has **Approve** and **Reject** buttons sharing one comment.
   The decision is made with the browser's own tailnet identity and checked
-  against its `twd.dev/cap/approve` grants by the host running the
+  against its `github.com/rosskukulinski/tailworks/cap/approve` grants by the host running the
   Workflow; an admin without a grant gets `cap_missing`, and the operator
   console `no_identity` ([approvals](approvals.md)). Approvers who are not
   admins don't see the Overview, Objects and Audit links.
@@ -172,16 +172,16 @@ admin's tailnet connection. `mgmt.Server.Handler` wraps everything,
 API and UI, in a guard (`browserGuard`, `mgmt/server.go`):
 
 - Requests that are not browser-originated (no `Sec-Fetch-Mode`, no
-  `Origin`) are untouched: the `twd` CLI and `twd-hostd` send neither and
+  `Origin`) are untouched: the `tw` CLI and `tw-hostd` send neither and
   are never affected.
 - `GET`, `HEAD` and `OPTIONS` are never guarded.
 - A browser-originated mutation must have `Sec-Fetch-Site` in
   `{same-origin, none}` (when present) **and** an `Origin` whose host equals
   the request's `Host` (when present); `/v1` mutations must additionally
-  carry `X-Twd-UI: 1`. A custom header forces a CORS preflight that mgmt
+  carry `X-Tw-UI: 1`. A custom header forces a CORS preflight that mgmt
   never answers, so cross-origin JavaScript cannot reach the handler at
   all. The UI's own `/ui/...` form posts are covered by the
-  `Sec-Fetch-Site` / `Origin` checks. The UI no longer sends `X-Twd-UI`;
+  `Sec-Fetch-Site` / `Origin` checks. The UI no longer sends `X-Tw-UI`;
   the rule stays for any same-origin script that opts in.
 - Anything else is 403 `forbidden` with the message `cross-site request
   refused: …`. (The spec's `ErrorCode` enum is closed, so no separate
@@ -204,7 +204,7 @@ client-side: no cookies, no localStorage, no tokens.
   static assets and headers, and the tree and formatting helpers.
 - `mgmt/ui_integration_test.go`: a real `Server` over the SQLite store with
   a fake WhoIs: admission per principal, the `/` redirect, the browser
-  guard (cross-site refused, same-origin with `X-Twd-UI` and CLI-style
+  guard (cross-site refused, same-origin with `X-Tw-UI` and CLI-style
   requests succeed), the tombstone page, and every `/v1` call the UI makes
   on every page and form passing the kin-openapi validator.
 - `mgmt/approvals_test.go`: the approvals page per principal (approver,

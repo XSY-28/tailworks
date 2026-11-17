@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // collect is a flush target that keeps what it was sent.

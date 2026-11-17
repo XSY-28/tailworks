@@ -1,4 +1,4 @@
-// Package publicspec is the twd.jsonc "public" schema (ADR-029): which path
+// Package publicspec is the tailworks.jsonc "public" schema (ADR-029): which path
 // prefixes of a workload are reachable from the public internet over
 // Funnel, the ingress limits netd enforces on them, and the per-class
 // opt-in for public object creation. It is shared by the bundle parser
@@ -16,17 +16,17 @@ import (
 	"time"
 )
 
-// Tag is the tag every public node carries, and the only twd tag the
-// funnel nodeAttr may target besides tag:twd-mgmt (ADR-029 D6).
-const Tag = "tag:twd-public"
+// Tag is the tag every public node carries, and the only tailworks tag the
+// funnel nodeAttr may target besides tag:tw-mgmt (ADR-029 D6).
+const Tag = "tag:tw-public"
 
 // Namespace is the mgmt object namespace of a workload's public node; the
 // object name is the workload name (like "_workload").
 const Namespace = "_public"
 
 // ReservedPrefix is never public, whatever the routes say: the platform's
-// own /_twd/o/<Class>/<name> addressing would bypass the app's routing.
-const ReservedPrefix = "/_twd"
+// own /_tw/o/<Class>/<name> addressing would bypass the app's routing.
+const ReservedPrefix = "/_tw"
 
 // MaxRoutes bounds len(Routes).
 const MaxRoutes = 64
@@ -39,7 +39,7 @@ const MaxObjectsCeiling = 1000
 // registration planning rate (200/min), per tenant.
 const CreatesPerMinute = 20
 
-// Spec is twd.jsonc "public".
+// Spec is tailworks.jsonc "public".
 type Spec struct {
 	// Routes are path patterns: "/x" (exact), "/x/*" ("/x" and everything
 	// under it) or "/*" (every path). Required (non-empty) when "public"
@@ -71,7 +71,7 @@ type Limits struct {
 	UpgradeLifetimeSeconds int `json:"upgradeLifetimeSeconds,omitempty"`
 }
 
-// Defaults are the limits when twd.jsonc sets none (ADR-029 D5).
+// Defaults are the limits when tailworks.jsonc sets none (ADR-029 D5).
 var Defaults = Limits{RPS: 50, Burst: 100, IPRPS: 10, IPBurst: 20, MaxBodyBytes: 1 << 20,
 	MaxHeaderBytes: 32 << 10, TimeoutSeconds: 30, MaxConns: 256,
 	MaxConnsPerIP:          32,
@@ -132,7 +132,7 @@ func (l Limits) UpgradeLifetime() time.Duration {
 	return time.Duration(l.UpgradeLifetimeSeconds) * time.Second
 }
 
-// ClassSpec is twd.jsonc tailnet.objects.<Class>.public.
+// ClassSpec is tailworks.jsonc tailnet.objects.<Class>.public.
 type ClassSpec struct {
 	// Create lets a public request create a new object of this class
 	// (default false: public requests reach existing objects only).

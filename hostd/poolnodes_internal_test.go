@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // Tenant code reaches objects by (class, name); it must never be able to

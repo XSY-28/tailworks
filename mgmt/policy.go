@@ -15,7 +15,7 @@ import (
 	"github.com/tailscale/hujson"
 )
 
-// Policy is the subset of a tailnet policy file twd evaluates.
+// Policy is the subset of a tailnet policy file tailworks evaluates.
 type Policy struct {
 	TagOwners map[string][]string `json:"tagOwners"`
 	Grants    []Grant             `json:"grants"`
@@ -28,7 +28,7 @@ type Policy struct {
 }
 
 // NodeAttr is one nodeAttrs entry. Attr values may be strings or objects
-// (e.g. ipPool); only the string ones matter to twd.
+// (e.g. ipPool); only the string ones matter to tailworks.
 type NodeAttr struct {
 	Target []string `json:"target"`
 	Attr   []any    `json:"attr"`

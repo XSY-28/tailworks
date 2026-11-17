@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-// TestModuleTypes: twd-bundle.json "modules" types a module whatever its
+// TestModuleTypes: tw-bundle.json "modules" types a module whatever its
 // extension (wrangler rules: a Text module named *.md, a .sql text module),
 // and ships files whose extension would otherwise be dropped.
 func TestModuleTypes(t *testing.T) {
 	files := map[string][]byte{
 		"wrangler.jsonc":   []byte(`{"name":"w","main":"src/index.ts"}`),
-		"twd-bundle.json":  []byte(`{"main":"dist/index.js","modules":{"dist/aa-notes.md":"text","dist/bb-q.sql":"text","dist/cc-m.wasm":"wasm"}}`),
+		"tw-bundle.json":   []byte(`{"main":"dist/index.js","modules":{"dist/aa-notes.md":"text","dist/bb-q.sql":"text","dist/cc-m.wasm":"wasm"}}`),
 		"dist/index.js":    []byte("export default {}"),
 		"dist/aa-notes.md": []byte("# notes"),
 		"dist/bb-q.sql":    []byte("select 1"),
@@ -43,8 +43,8 @@ func TestModuleTypes(t *testing.T) {
 		for k, v := range files {
 			f[k] = v
 		}
-		f["twd-bundle.json"] = []byte(tb)
-		if _, err := Parse(f); err == nil || !strings.Contains(err.Error(), "twd-bundle.json modules") {
+		f["tw-bundle.json"] = []byte(tb)
+		if _, err := Parse(f); err == nil || !strings.Contains(err.Error(), "tw-bundle.json modules") {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

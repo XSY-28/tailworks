@@ -1,4 +1,4 @@
-// Package mgmtapi is twd-hostd's (and the twd CLI's) client for the mgmt
+// Package mgmtapi is tw-hostd's (and the tailworks CLI's) client for the mgmt
 // /v1 API. The wire is the generated client in hostd/mgmtapi/v1 (from
 // api/openapi.yaml, the contract's source of truth); the hostd-facing
 // types here are the subset hostd works with, converted at the edge.
@@ -7,8 +7,8 @@ package mgmtapi
 import (
 	"encoding/json"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/publicspec"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/publicspec"
 )
 
 // Error is every non-2xx body (DX.md catalog shape).
@@ -42,7 +42,7 @@ type Tenant struct {
 	RegistrationsPerMinute int    `json:"registrationsPerMinute,omitempty"`
 	MaxObjects             int    `json:"maxObjects,omitempty"`
 	// Tier (v0.1, optional) is the tenant's default isolation tier
-	// ("process" | "microvm"); a deployment's twd.jsonc "tier" overrides it.
+	// ("process" | "microvm"); a deployment's tailworks.jsonc "tier" overrides it.
 	Tier string `json:"tier,omitempty"`
 	// OBOPublicKey (RT-01) is the base64 Ed25519 key that verifies this
 	// tenant's node certificates. hostd pins it when it opens the tenant.
@@ -91,8 +91,8 @@ type RegisterRequest struct {
 	// first registration; later ones may only repeat it).
 	AuditPubKey string `json:"auditPubKey,omitempty"`
 	Pool        string `json:"pool,omitempty"`
-	// RegistrationSecret is the one-time secret `twd host add` / `twd up`
-	// put in the join file (TWD_REGISTRATION_SECRET); mgmt requires it on
+	// RegistrationSecret is the one-time secret `tw host add` / `tw up`
+	// put in the join file (TW_REGISTRATION_SECRET); mgmt requires it on
 	// the first tailnet registration of a host ID and ignores it after.
 	RegistrationSecret string `json:"registrationSecret,omitempty"`
 	// Arch is GOARCH; Capacity the capacity vector (ADR-032 D9).
@@ -214,12 +214,12 @@ type DeployRequest struct {
 	TenantID string `json:"tenantID"`
 	Workload string `json:"workload"`
 	Bundle   []byte `json:"bundle"` // base64 in JSON
-	// ContainerImages are images twd deploy built and pushed, by class:
+	// ContainerImages are images tw deploy built and pushed, by class:
 	// {"<Class>": {"image": ref, "images": {name: ref}}} (ADR-032 D3).
 	ContainerImages map[string]BuiltImages `json:"containerImages,omitempty"`
 }
 
-// BuiltImages are one class's built image refs (twd.local/<tenant>/…@sha256).
+// BuiltImages are one class's built image refs (tw.local/<tenant>/…@sha256).
 type BuiltImages struct {
 	Image  string            `json:"image,omitempty"`
 	Images map[string]string `json:"images,omitempty"`
@@ -277,7 +277,7 @@ type Assignment struct {
 	// pinned at deploy (ADR-032 D3); they replace the bundle's classes.
 	Containers []container.Class `json:"containers,omitempty"`
 	// Public (ADR-029) is the workload's public ingress. nil: tailnet-only
-	// (no twd.jsonc "public", or the tenant's publicIngress is not allow).
+	// (no tailworks.jsonc "public", or the tenant's publicIngress is not allow).
 	Public *PublicAssignment `json:"public,omitempty"`
 	// PlacementTargets (smart placement, ADR-033) are what this host should
 	// measure tailnet paths to, from this tenant's nodes.
@@ -293,9 +293,9 @@ type PublicAssignment struct {
 	Upgrade []string          `json:"upgrade,omitempty"`
 	Limits  publicspec.Limits `json:"limits"` // effective (defaults filled)
 	Tags    []string          `json:"tags"`
-	// Exposed is false after `twd expose off`: the public node stays
+	// Exposed is false after `tw expose off`: the public node stays
 	// joined (its certificate stays warm) but its Funnel listener is
-	// closed and its flows reset. `twd expose on` reopens it.
+	// closed and its flows reset. `tw expose on` reopens it.
 	Exposed bool `json:"exposed"`
 }
 
@@ -496,7 +496,7 @@ type Page[T any] struct {
 
 // WorkloadNamespace is the object namespace of a workload's entry node
 // (contract gap, see STATUS.md M3: mgmt must declare it like a class, with
-// the twd.jsonc tailnet.tags).
+// the tailworks.jsonc tailnet.tags).
 const WorkloadNamespace = "_workload"
 
 // StatusAssigned is the status of an object created on a pre-joined pool

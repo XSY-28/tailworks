@@ -31,9 +31,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 func TestRT3_H03_AuditFloodKeepsHostRecordsAndChain(t *testing.T) {

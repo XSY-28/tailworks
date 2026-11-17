@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
 )
 
 // TestGenerateR2: an r2_buckets binding is workerd's native r2Bucket
@@ -36,42 +36,42 @@ func TestGenerateR2(t *testing.T) {
 	c := string(cfg)
 	for _, want := range []string{
 		`(name = "PHOTOS", r2Bucket = (name = "platform", entrypoint = "R2Backend", props = (json = "{\"kind\":\"r2\",\"name\":\"photos\"}")))`,
-		`(name = "__TWD_STORE_PHOTOS", r2Bucket = (name = "platform", entrypoint = "R2Backend", props = (json = "{\"kind\":\"r2\",\"name\":\"photos\"}")))`,
-		`(name = "twd-store-r2.js", esModule = embed "twd-store-r2.js")`,
-		`(name = "__twd_store_r2.js.txt", text = embed "__twd_store_r2.js")`,
+		`(name = "__TW_STORE_PHOTOS", r2Bucket = (name = "platform", entrypoint = "R2Backend", props = (json = "{\"kind\":\"r2\",\"name\":\"photos\"}")))`,
+		`(name = "tw-store-r2.js", esModule = embed "tw-store-r2.js")`,
+		`(name = "__tw_store_r2.js.txt", text = embed "__tw_store_r2.js")`,
 	} {
 		if !strings.Contains(c, want) {
 			t.Errorf("config.capnp lacks %s", want)
 		}
 	}
-	idx, _ := os.ReadFile(filepath.Join(dir, "twd-stores.js"))
-	if !strings.Contains(string(idx), `export { R2Backend, R2FacetProxy } from "twd-store-r2.js";`) {
-		t.Errorf("twd-stores.js: %s", idx)
+	idx, _ := os.ReadFile(filepath.Join(dir, "tw-stores.js"))
+	if !strings.Contains(string(idx), `export { R2Backend, R2FacetProxy } from "tw-store-r2.js";`) {
+		t.Errorf("tw-stores.js: %s", idx)
 	}
-	facet, _ := os.ReadFile(filepath.Join(dir, "__twd_facet.js"))
+	facet, _ := os.ReadFile(filepath.Join(dir, "__tw_facet.js"))
 	for _, want := range []string{
-		`import { wrap as __twd_wrap_r2 } from "./__twd_store_r2.js";`,
-		`"PHOTOS": __twd_wrap_r2,`,
-		`export const Box = wrapFacetClass(__twdStoreClass(T["Box"]), "Box", B);`,
+		`import { wrap as __tw_wrap_r2 } from "./__tw_store_r2.js";`,
+		`"PHOTOS": __tw_wrap_r2,`,
+		`export const Box = wrapFacetClass(__twStoreClass(T["Box"]), "Box", B);`,
 	} {
 		if !strings.Contains(string(facet), want) {
-			t.Errorf("__twd_facet.js lacks %s:\n%s", want, facet)
+			t.Errorf("__tw_facet.js lacks %s:\n%s", want, facet)
 		}
 	}
-	mods, _ := os.ReadFile(filepath.Join(dir, "twd-modules.js"))
-	if !strings.Contains(string(mods), `"__twd_store_r2.js": { js: shim0 },`) || !strings.Contains(string(mods), `import shim0 from "__twd_store_r2.js.txt";`) {
-		t.Errorf("twd-modules.js lacks the shim:\n%s", mods)
+	mods, _ := os.ReadFile(filepath.Join(dir, "tw-modules.js"))
+	if !strings.Contains(string(mods), `"__tw_store_r2.js": { js: shim0 },`) || !strings.Contains(string(mods), `import shim0 from "__tw_store_r2.js.txt";`) {
+		t.Errorf("tw-modules.js lacks the shim:\n%s", mods)
 	}
 
 	// No R2: no shim, facet classes as before.
 	plain := *app
 	plain.Stores = nil
 	dir = gen1(&plain)
-	facet, _ = os.ReadFile(filepath.Join(dir, "__twd_facet.js"))
-	if strings.Contains(string(facet), "__twdStore") || !strings.Contains(string(facet), `export const Box = wrapFacetClass(T["Box"], "Box", B);`) {
-		t.Errorf("__twd_facet.js without R2:\n%s", facet)
+	facet, _ = os.ReadFile(filepath.Join(dir, "__tw_facet.js"))
+	if strings.Contains(string(facet), "__twStore") || !strings.Contains(string(facet), `export const Box = wrapFacetClass(T["Box"], "Box", B);`) {
+		t.Errorf("__tw_facet.js without R2:\n%s", facet)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "__twd_store_r2.js")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, "__tw_store_r2.js")); err == nil {
 		t.Error("shim written without an R2 binding")
 	}
 }

@@ -82,7 +82,7 @@ func TestTelemetryRelease(t *testing.T) {
 	var tn struct{ TenantID string }
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, &dep)
 	q := func(workload string, epoch int64) string {
@@ -130,7 +130,7 @@ func TestTelemetryRoles(t *testing.T) {
 	e := newTestEnv(t)
 	var tn struct{ TenantID string }
 	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
-	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
 		case "100.64.0.1:1":
@@ -139,8 +139,8 @@ func TestTelemetryRoles(t *testing.T) {
 			return WhoIsInfo{NodeID: "nADM", Login: "alice@example.com", Caps: []string{AdminCap}}, nil
 		case "100.64.0.4:1":
 			return WhoIsInfo{NodeID: "nEVE", Login: "eve@example.com"}, nil
-		case "100.64.0.5:1": // a twd object node (tenant code)
-			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:twd-agent-support"}, Login: "tagged-devices"}, nil
+		case "100.64.0.5:1": // a tailworks object node (tenant code)
+			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:tw-agent-support"}, Login: "tagged-devices"}, nil
 		}
 		return WhoIsInfo{}, fmt.Errorf("unknown")
 	}

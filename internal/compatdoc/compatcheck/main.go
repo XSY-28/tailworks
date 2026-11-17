@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rosskukulinski/twd/internal/compatdoc"
+	"github.com/rosskukulinski/tailworks/internal/compatdoc"
 )
 
 // usage: compatcheck [repo root, default .]

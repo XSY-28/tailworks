@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // waitWorkload polls the workload's status until ok, or fails the test.
@@ -100,11 +100,11 @@ func TestWorkerdWrapperKilled(t *testing.T) {
 	}
 	dir := t.TempDir()
 	wrapper := filepath.Join(dir, "workerd-wrapper")
-	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\n\"$TWD_TEST_REAL_WORKERD\" \"$@\" &\nwait\n"), 0o755); err != nil {
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\n\"$TW_TEST_REAL_WORKERD\" \"$@\" &\nwait\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TWD_WORKERD", wrapper)
-	t.Setenv("TWD_TEST_REAL_WORKERD", real)
+	t.Setenv("TW_WORKERD", wrapper)
+	t.Setenv("TW_TEST_REAL_WORKERD", real)
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.Sandbox = "none" })
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("probe"), "probe", nil)
@@ -150,7 +150,7 @@ func TestWorkerdDeployTimeFailure(t *testing.T) {
 	if err := os.WriteFile(bad, []byte("#!/bin/sh\necho 'Error: bad config (test)' >&2\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TWD_WORKERD", bad)
+	t.Setenv("TW_WORKERD", bad)
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.Sandbox = "none" })
 	e := s.e
 	t0 := time.Now()

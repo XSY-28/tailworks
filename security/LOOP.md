@@ -1,8 +1,8 @@
-# Loop: twd red team (multi-agent, self-paced)
+# Loop: tailworks red team (multi-agent, self-paced)
 
 Run with: `/loop Follow security/LOOP.md` (self-paced, no interval).
 
-You are the **lead** of a standing red team for twd. twd's security story
+You are the **lead** of a standing red team for tailworks. Tailworks' security story
 rests on a small number of headline claims: callers are identified by
 WireGuard identity, every object's egress leaves from its own node, a
 killed object is gone in under a second, `lim` narrows a child, the audit
@@ -21,7 +21,7 @@ never rewrite earlier passes). Regression tests live in
 1. **Hermetic by default.** Fake Tailscale API (`mgmt/api_test.go`
    `newFakeTS` / `mgmt/mgmttest`), fake setec, `testcontrol` for tsnet
    nodes, `hostd/fakemgmt`, stock `workerd` from `node_modules/.bin` or
-   `~/.twd/bin`, `go test -overlay` or a copy under `/tmp` for probes that
+   `~/.tailworks/bin`, `go test -overlay` or a copy under `/tmp` for probes that
    must not touch the worktree. Never use a personal tailnet or any key
    under `~/.config/`. A **live** attack (real tailnet, Funnel, Lima VM,
    Firecracker host) is allowed only when `LIVE_TARGETS` in LEDGER.md
@@ -63,9 +63,9 @@ than four at once.
 | Role | When | Brief |
 |---|---|---|
 | **Internet attacker** | item touches `netd/public*`, `internal/publicspec`, `hostd/public.go`, Funnel, Services | Anonymous client over Funnel or a tailnet peer with no grants. Goal: reach an unlisted path or a DO directly, forge identity, mint a node, exhaust a limit from one address, break or spam the audit chain, squat a name. Tools: `go test -overlay` probes against `netd`'s `pubEnv` harness, `publicspec`, raw HTTP/1.1 and TLS tricks. |
-| **Hostile tenant code** | item touches `hostd/gen`, `js/packages`, `templates`, the hostapi, egress MAC | Prompt-injected Worker/DO/Node code in one workload. Goal: forge `request.cf`/`x-twd-*`, reach `__TWD`/raw bindings, set `actingFor`/`principal`, escape the public env guard, reach sibling objects or another tenant, find any `fetch`/`connect`/cache/redirect path that skips netd's ADR-019 guard, flood audit. Tools: a hermetic workerd in `/tmp` with the generated config (`hostd/gen`), `go test ./hostd/...`. |
-| **Hostile host** | item touches `mgmt/v1.go`, `mgmt/service*.go`, `api/openapi.yaml`, leases, pools, placement, audit ingest | A registered `tag:twd-host` node with a valid token and lease for tenant A. Goal: act on tenant B (create, ready, kill, transfer pool nodes, set status, read bundles/credentials/certs), forge audit for other hosts or tenants, poison placement, hoard keys. Tools: two host principals through `Server.TailnetHandler`, SQLite store, fake TS API, in a `/tmp` copy. Produce the route/authz table diff against the one in RED-TEAM.md Pass 3. |
-| **Tailnet insider** | item touches admin cap, `twd link`, policy writes, WIF/OBO, services grants | A tailnet member without `twd.dev/cap/admin`, or an admin's compromised laptop. Goal: reach a mgmt route, widen policy via `--policy-apply`/preflight, abuse WIF issuer or OBO, obtain a Service VIP. Tools: `mgmt.TestTailnetAuth` matrix, `internal/policy` hostile table and fuzz. |
+| **Hostile tenant code** | item touches `hostd/gen`, `js/packages`, `templates`, the hostapi, egress MAC | Prompt-injected Worker/DO/Node code in one workload. Goal: forge `request.cf`/`x-tw-*`, reach `__TW`/raw bindings, set `actingFor`/`principal`, escape the public env guard, reach sibling objects or another tenant, find any `fetch`/`connect`/cache/redirect path that skips netd's ADR-019 guard, flood audit. Tools: a hermetic workerd in `/tmp` with the generated config (`hostd/gen`), `go test ./hostd/...`. |
+| **Hostile host** | item touches `mgmt/v1.go`, `mgmt/service*.go`, `api/openapi.yaml`, leases, pools, placement, audit ingest | A registered `tag:tw-host` node with a valid token and lease for tenant A. Goal: act on tenant B (create, ready, kill, transfer pool nodes, set status, read bundles/credentials/certs), forge audit for other hosts or tenants, poison placement, hoard keys. Tools: two host principals through `Server.TailnetHandler`, SQLite store, fake TS API, in a `/tmp` copy. Produce the route/authz table diff against the one in RED-TEAM.md Pass 3. |
+| **Tailnet insider** | item touches admin cap, `tw link`, policy writes, WIF/OBO, services grants | A tailnet member without `github.com/rosskukulinski/tailworks/cap/admin`, or an admin's compromised laptop. Goal: reach a mgmt route, widen policy via `--policy-apply`/preflight, abuse WIF issuer or OBO, obtain a Service VIP. Tools: `mgmt.TestTailnetAuth` matrix, `internal/policy` hostile table and fuzz. |
 | **Infra attacker** (Linux only) | item touches `hostd/vm`, `hostd/vm/helper`, `guest/`, `internal/procsb`, Landlock/seccomp | Tenant that escaped into the guest or the Firecracker VMM, or a same-uid process on a Landlock-less host. Goal: crash or confuse the root vmhelper (uffd, snapshot-base, attach), read another tenant's base/volume, defeat the sandbox battery (`security/attacks/rt_sandbox_linux_test.go`), reach `tailscaled.sock`/`hostapi.sock`. Needs a Linux `LIVE_TARGET` for execution; otherwise code review marked PLAUSIBLE. |
 | **Verifier** | every CONFIRMED candidate, before it enters the ledger | Adversarial to the attacker: given the claim, `file:line` and the test, try to refute it (wrong line, dead code, already gated upstream, mis-read severity, already disclosed in STATUS/docs/ADRs). Returns CONFIRMED / DOWNGRADED(severity, why) / REFUTED(why) and the exact "STATUS accurate?" verdict. Give it the code, not the attacker's conclusion. |
 | **Claims auditor** | every 5th iteration, or when docs/STATUS changed since last run | Reads README, `docs/*.md`, STATUS.md "Next steps"/"gaps", THREAT-MODEL.md, ADRs touched since the last audit. For each security claim: the enforcing `file:line`, the test that pins it, and whether the claim is accurate, overstated, or stale. New overstated claims become hypotheses. |
@@ -132,9 +132,9 @@ them out of git.
 | I2 | A public request never causes an object create, spawn, `ready`, or node mint except through `admit` under `public.create` with `maxObjects` and the per-tenant lane. |
 | I3 | `getCaller()`, `caps()`, `principalOf` and every `actingFor`/`principal` written to audit derive only from netd's WhoIs blob on the ingress socket, never from a header, `request.cf`, or an op argument. |
 | I4 | The host audit chain never silently loses a host-source record; overflow is visible in-chain, and `VerifyChain` distinguishes "dropped, attributed" from "tampered". |
-| I5 | Every tenant-controlled or internet-controlled string is rendered by `twd` with control characters escaped. |
+| I5 | Every tenant-controlled or internet-controlled string is rendered by `tw` with control characters escaped. |
 | I6 | A single client address cannot close a public listener to everyone; connection and request limits are per-IP as well as per-node. |
 | I7 | A public name is owned by one tenant per tailnet for the life of the tenant; no other tenant can serve it. |
 | I8 | Privileged helpers (vmhelper, hostapi, netd ctl) validate every field of every message from a less-trusted party and fail one session, never the process. |
-| I9 | Every identity header twd itself sets is also stripped from clients, by prefix, on every ingress path (tailnet, public, Service, egress). |
+| I9 | Every identity header tailworks itself sets is also stripped from clients, by prefix, on every ingress path (tailnet, public, Service, egress). |
 | I10 | Prior red-team regression tests (`security/attacks/rt0*`) stay green un-skipped. |

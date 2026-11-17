@@ -7,7 +7,7 @@
 #      upgrade-relevant path, a fragment added or changed in that diff names
 #      the matching upgrade kind:
 #        mgmt/migrations/            schema-expand or schema-contract
-#                                    (schema-contract if an added migration has a "-- twd:contract" line)
+#                                    (schema-contract if an added migration has a "-- tw:contract" line)
 #        api/openapi.yaml            protocol
 #        schema/cli.schema.json      cli-json
 #        package-lock.json workerd   workerd
@@ -53,7 +53,7 @@ if printf '%s\n' "$changed" | grep -q '^mgmt/migrations/'; then
 	contract=0
 	for f in $(printf '%s\n' "$changed" | grep '^mgmt/migrations/.*\.sql$' || true); do
 		# Only migrations new in this diff decide contract vs expand.
-		if ! git cat-file -e "$BASE:$f" 2>/dev/null && [ -f "$f" ] && grep -q '^-- twd:contract' "$f"; then contract=1; fi
+		if ! git cat-file -e "$BASE:$f" 2>/dev/null && [ -f "$f" ] && grep -q '^-- tw:contract' "$f"; then contract=1; fi
 	done
 	if [ $contract = 1 ]; then add schema-contract; else add 'schema-expand|schema-contract'; fi
 fi

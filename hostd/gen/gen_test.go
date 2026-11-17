@@ -14,13 +14,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
-// fakeHost plays twd-hostd's side of the sockets (no tailnet): it verifies
+// fakeHost plays tw-hostd's side of the sockets (no tailnet): it verifies
 // facet egress MACs and echoes the attribution it would use.
 type fakeHost struct {
 	mu       sync.Mutex
@@ -117,7 +117,7 @@ func (f *fakeHost) egressObj() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cls, name, ok := gen.VerifyEgress(f.key, r.Header, r.Method, r.RequestURI, time.Now())
 		if !ok {
-			w.Header().Set("twd-error", "unknown_object")
+			w.Header().Set("tw-error", "unknown_object")
 			w.WriteHeader(403)
 			json.NewEncoder(w).Encode(map[string]any{"code": "unknown_object", "uri": r.RequestURI, "h": r.Header})
 			return
@@ -162,7 +162,7 @@ func startFiles(t *testing.T, files map[string][]byte) *inst {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir, err := hostdtest.ShortDir("twd-gen-")
+	dir, err := hostdtest.ShortDir("tw-gen-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,31 +209,31 @@ func startFiles(t *testing.T, files map[string][]byte) *inst {
 
 var testCaller = map[string]any{"nodeId": "nCLIENT", "node": "ttest-client.ttest.ts.net.", "hostname": "ttest-client", "addrs": []string{"100.64.0.9"}, "tags": []string{}, "capMap": map[string]any{}}
 
-// ticketed adds hostd's create ticket to a simulated cf.twd (tailnet
+// ticketed adds hostd's create ticket to a simulated cf.tw (tailnet
 // requests and cron runs carry one; public requests never do).
-func (in *inst) ticketed(twd map[string]any) map[string]any {
+func (in *inst) ticketed(tw map[string]any) map[string]any {
 	out := map[string]any{"ticket": gen.CreateTicket(in.f.key, "tr-test", time.Now())}
-	for k, v := range twd {
+	for k, v := range tw {
 		out[k] = v
 	}
 	return out
 }
 
-func (in *inst) get(path string, twd map[string]any, hdr ...string) (int, http.Header, map[string]any) {
-	if twd["kind"] == "object" {
+func (in *inst) get(path string, tw map[string]any, hdr ...string) (int, http.Header, map[string]any) {
+	if tw["kind"] == "object" {
 		// Delivered on the object's own node: in hostd the object exists, so
 		// its ensure is a wake. The fake records it as admitted.
 		in.f.mu.Lock()
 		if in.f.admitted == nil {
 			in.f.admitted = map[string]bool{}
 		}
-		in.f.admitted[fmtAny(twd["name"])] = true
+		in.f.admitted[fmtAny(tw["name"])] = true
 		in.f.mu.Unlock()
 	}
 	req, _ := http.NewRequest("GET", "http://app.local"+path, nil)
-	blob := map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "twd": in.ticketed(twd)}
+	blob := map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "tw": in.ticketed(tw)}
 	b, _ := json.Marshal(blob)
-	req.Header.Set("x-twd-cf", string(b))
+	req.Header.Set("x-tw-cf", string(b))
 	for i := 0; i+1 < len(hdr); i += 2 {
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
@@ -305,7 +305,7 @@ func TestGeneratedWrapperProbe(t *testing.T) {
 			t.Fatalf("%d %v", code, r)
 		}
 		h := r["headers"].(map[string]any)
-		if h["X-Twd-Object"] != nil || h["Proxy-Authorization"] != nil || h["X-Twd-Cf"] != nil {
+		if h["X-Tw-Object"] != nil || h["Proxy-Authorization"] != nil || h["X-Tw-Cf"] != nil {
 			t.Fatalf("forged headers reached hostd: %v", h)
 		}
 	})
@@ -321,12 +321,12 @@ func TestGeneratedWrapperProbe(t *testing.T) {
 			}
 		}
 	})
-	t.Run("TwdObjectPathOnWorkload", func(t *testing.T) {
-		code, _, r := in.get("/_twd/o/Probe/zz/", wl)
+	t.Run("TwObjectPathOnWorkload", func(t *testing.T) {
+		code, _, r := in.get("/_tw/o/Probe/zz/", wl)
 		if code != 200 || r["name"] != "zz" {
 			t.Fatalf("%d %v", code, r)
 		}
-		code, _, r = in.get("/_twd/o/Nope/zz/", wl)
+		code, _, r = in.get("/_tw/o/Nope/zz/", wl)
 		if code != 404 {
 			t.Fatalf("unknown class: %d %v", code, r)
 		}
@@ -407,7 +407,7 @@ func TestGeneratedWrapperProbe(t *testing.T) {
 				t.Fatalf("%s kill: %d %v", c, code, r)
 			}
 			code, h, r := in.get("/", obj(c, "k1"))
-			if code != 410 || h.Get("twd-error") != "killed" {
+			if code != 410 || h.Get("tw-error") != "killed" {
 				t.Fatalf("%s after kill: %d %v", c, code, r)
 			}
 		}

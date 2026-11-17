@@ -203,8 +203,8 @@ func TestScoreHostsDeterministic(t *testing.T) {
 }
 
 func TestResolvePlacement(t *testing.T) {
-	parse := func(s string) *TwdConfig {
-		c, err := ParseTwdConfig([]byte(s))
+	parse := func(s string) *TwConfig {
+		c, err := ParseTwConfig([]byte(s))
 		if err != nil {
 			t.Fatal(err)
 		}

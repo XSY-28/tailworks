@@ -7,9 +7,9 @@ Preview deploys (issue #45 item 3) are not part of this decision.
 
 **Context.**
 
-- `twd deploy` replaces the workload's running deployment. Every deploy
+- `tw deploy` replaces the workload's running deployment. Every deploy
   already leaves its row in `deployments`, bundle included (`GET
-  /v1/deployments` lists them; `twd ls` asks for `latest=true`), but:
+  /v1/deployments` lists them; `tw ls` asks for `latest=true`), but:
   - nothing in the CLI lists a workload's past deployments;
   - nothing bounds the bundles mgmt keeps: every deploy adds up to 64 MiB
     to the store, forever;
@@ -20,7 +20,7 @@ Preview deploys (issue #45 item 3) are not part of this decision.
   `kamal rollback`). On Cloudflare a rollback changes the Worker's code
   and configuration; Durable Object storage, D1, KV and R2 keep their
   data, and D1 migrations only move forward.
-- A deploy in twd is more than "serve this code" (ADR-011, ADR-028): it
+- A deploy in tailworks is more than "serve this code" (ADR-011, ADR-028): it
   takes the `(tenant, workload)` lease at `epoch+1`, and the host fences
   itself on that epoch, so an older instance of a stateful workload stops
   serving. Durable Object storage lives on the host's disk; moving a
@@ -28,7 +28,7 @@ Preview deploys (issue #45 item 3) are not part of this decision.
 - Secrets (ADR-034) are one custody entry per workload, released to the
   lease holder at its epoch when the deployment starts. The store holds no
   value. Vars are in the bundle.
-- D1 migrations (ADR-038) are applied explicitly (`twd d1 migrations
+- D1 migrations (ADR-038) are applied explicitly (`tw d1 migrations
   apply`), never by a deploy.
 
 **Decision.**
@@ -50,10 +50,10 @@ Preview deploys (issue #45 item 3) are not part of this decision.
    newest first, paged by `(createdAt, deploymentID)` descending: id,
    created, deployed by, bundle SHA-256, status, the host's last report
    (`hostStatus`), error, host, `bundleRetained`, `rollbackOf`, and the
-   page's `bundleRetention`. `twd deployments <workload> [--json]` prints
+   page's `bundleRetention`. `tw deployments <workload> [--json]` prints
    it.
 
-2. **Retention: the newest N bundles per workload.** N is twd-mgmt
+2. **Retention: the newest N bundles per workload.** N is tw-mgmt
    `-bundle-retention` (default 10; `-1` keeps every bundle). After each
    deploy of a workload commits, mgmt drops the bundles of that workload's
    deployments beyond the newest N that still have one. A pruned row keeps
@@ -69,7 +69,7 @@ Preview deploys (issue #45 item 3) are not part of this decision.
 
 3. **A rollback is a new deployment of a stored bundle, through the deploy
    path.** `POST /v1/tenants/{id}/workloads/{workload}/rollbacks`
-   (`twd rollback <workload> [<deployment>]`) loads the target's bundle and
+   (`tw rollback <workload> [<deployment>]`) loads the target's bundle and
    calls `Mgmt.Deploy` with it, as `deploy --replace` and `host drain`
    already redeploy stored bundles. So it gets everything a deploy gets,
    with no second copy of the logic:
@@ -87,10 +87,10 @@ Preview deploys (issue #45 item 3) are not part of this decision.
    (`Deploy`), not as re-placing by default. Re-placing would move a
    stateful workload away from its Durable Object storage just because a
    better host appeared. `--replace`, `--host` and `--force-takeover` are
-   there, and behave as on `twd deploy`.
+   there, and behave as on `tw deploy`.
 
    Images the original deploy built and pushed to the tenant's namespace
-   of twd's registry are passed back as `containerImages`, so the
+   of tailworks' registry are passed back as `containerImages`, so the
    rollback runs the same digests without a rebuild. External images are
    pinned again (their tags may have moved).
 
@@ -111,10 +111,10 @@ Preview deploys (issue #45 item 3) are not part of this decision.
    written.
 
 5. **Authorization, approvals and audit are deploy's.**
-   - The route has deploy's role (`x-twd-role: admin`: a tailnet caller
-     with `twd.dev/cap/admin`, or the local socket), and so does the
+   - The route has deploy's role (`x-tw-role: admin`: a tailnet caller
+     with `github.com/rosskukulinski/tailworks/cap/admin`, or the local socket), and so does the
      history read. Hosts get `403`.
-   - Like `twd deploy`, the CLI first preflights the stored bundle against
+   - Like `tw deploy`, the CLI first preflights the stored bundle against
      the **current** policy (`?dryRun=true`), since grants may have changed
      since it was deployed. `--allow-missing-grants` overrides it, as on
      deploy.
@@ -126,7 +126,7 @@ Preview deploys (issue #45 item 3) are not part of this decision.
      in place of `deploy` and `rollbackOf` in its detail. `rollback` is a
      privileged kind that tenants can't submit.
    - There is no MCP `rollback` tool yet. One would need its own
-     `twd.dev/cap/mcp` grant name, as `deploy` has.
+     `github.com/rosskukulinski/tailworks/cap/mcp` grant name, as `deploy` has.
 
 6. **Durable Object storage moves forward only.** A rollback changes code
    and configuration, never data. With sticky placement the objects keep
@@ -153,13 +153,13 @@ Preview deploys (issue #45 item 3) are not part of this decision.
    bring back a rotated, possibly compromised credential on rollback. That
    is the opposite of what an operator rotating a secret wants. The
    cost: if the newer version renamed a secret, the older code finds its
-   old name missing, and the operator must put it back (`twd secret put`).
+   old name missing, and the operator must put it back (`tw secret put`).
    `docs/secrets.md` says so.
 
 **Consequences.**
 
 - A bad deploy can be undone in one command, without the source, for as
-  long as its predecessor's bundle is retained. `twd deployments` shows
+  long as its predecessor's bundle is retained. `tw deployments` shows
   which ones are (`*` marks a pruned bundle).
 - The store no longer grows without bound with bundles; it still keeps
   every deployment row.

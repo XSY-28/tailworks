@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // A tenant's OTLP export (ADR-observability), in memory: tests set it
@@ -32,7 +32,7 @@ func (s *Server) telemetryGrant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, fmt.Sprintf("lease %s is not held at epoch %d", name, epoch))
 		return
 	}
-	if hid := r.Header.Get("Twd-Host-ID"); hid != "" && hid != l.host {
+	if hid := r.Header.Get("Tw-Host-ID"); hid != "" && hid != l.host {
 		writeErr(w, 409, mgmtapi.CodeLeaseLost, "host "+hid+" does not hold the lease")
 		return
 	}

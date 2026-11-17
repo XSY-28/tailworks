@@ -65,7 +65,7 @@ func TestStoreIdentityScope(t *testing.T) {
 // A store from before M7 (objects unique on (tenant, namespace, name), no
 // workload column) is migrated in place: rows keep their IDs and get the
 // workload of their deployment. SQLite always; Postgres with
-// TWD_TEST_POSTGRES_DSN (make test-pg).
+// TW_TEST_POSTGRES_DSN (make test-pg).
 func TestStoreMigratesLegacyObjects(t *testing.T) {
 	ctx := context.Background()
 	type backend struct {
@@ -74,7 +74,7 @@ func TestStoreMigratesLegacyObjects(t *testing.T) {
 	}
 	path := filepath.Join(t.TempDir(), "mgmt.db")
 	bs := map[string]backend{"sqlite": {dsn: path, driver: "sqlite", open: "file:" + path, blob: "BLOB", ph: func(q string) string { return q }}}
-	if dsn := os.Getenv("TWD_TEST_POSTGRES_DSN"); dsn != "" {
+	if dsn := os.Getenv("TW_TEST_POSTGRES_DSN"); dsn != "" {
 		bs["postgres"] = backend{dsn: dsn, driver: "pgx", open: dsn, blob: "BYTEA", ph: (&SQLStore{d: dialectPostgres}).q}
 	}
 	for name, be := range bs {
@@ -159,7 +159,7 @@ func TestAPIIdentityScope(t *testing.T) {
 	if ta.TenantID == tb.TenantID {
 		t.Fatal("tenant IDs collide")
 	}
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	for _, d := range []struct{ tenant, w string }{{ta.TenantID, "one"}, {ta.TenantID, "two"}, {tb.TenantID, "one"}} {
 		c.ok("POST", "/v1/deployments", map[string]any{"tenantID": d.tenant, "workload": d.w, "bundle": bundle}, nil)
 	}
@@ -255,9 +255,9 @@ func TestAPIIdentityScope(t *testing.T) {
 // row survives with its workload; nobody errors. Postgres only (make
 // test-pg); each OpenStore has its own pool, like separate processes.
 func TestStoreConcurrentLegacyMigration(t *testing.T) {
-	dsn := os.Getenv("TWD_TEST_POSTGRES_DSN")
+	dsn := os.Getenv("TW_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("TWD_TEST_POSTGRES_DSN not set")
+		t.Skip("TW_TEST_POSTGRES_DSN not set")
 	}
 	ctx := context.Background()
 	db, err := sql.Open("pgx", dsn)

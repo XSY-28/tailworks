@@ -6,14 +6,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
 )
 
-// GET /v1/whoami's scope (issue #50): an approver who is not a twd admin
+// GET /v1/whoami's scope (issue #50): an approver who is not a tailworks admin
 // cannot list tenants, so it never learned the tenant ID the approvals
 // routes need. whoami now names the caller's own tailnet (from WhoIs) and
-// the tenants on it, plus the caller's twd.dev/cap/approve grants, and the
-// admin UI and `twd approvals` default to those tenants.
+// the tenants on it, plus the caller's github.com/rosskukulinski/tailworks/cap/approve grants, and the
+// admin UI and `tw approvals` default to those tenants.
 
 // WhoAmITenant is a tenant the caller can act in.
 type WhoAmITenant struct {
@@ -21,7 +21,7 @@ type WhoAmITenant struct {
 	Tailnet  string `json:"tailnet"`
 }
 
-// ApproveGrant is one twd.dev/cap/approve grant value
+// ApproveGrant is one github.com/rosskukulinski/tailworks/cap/approve grant value
 // (approvecap.Grant; a missing field does not narrow).
 type ApproveGrant struct {
 	Workloads []string           `json:"workloads,omitempty"`

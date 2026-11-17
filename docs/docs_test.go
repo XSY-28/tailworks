@@ -12,7 +12,7 @@ func TestShowAndSearch(t *testing.T) {
 	if s, ok := Show("errors.md#acl_denied"); !ok || !strings.HasPrefix(s, "### acl_denied\n") || strings.Contains(s, "### already_joined") {
 		t.Fatalf("Show(errors.md#acl_denied) = %q, %v", s, ok)
 	}
-	if _, ok := Show("docs/twd-jsonc.md#tags-and-twd-init"); !ok {
+	if _, ok := Show("docs/tailworks-jsonc.md#tags-and-tw-init"); !ok {
 		t.Fatal("Show with a docs/ prefix and a slug anchor")
 	}
 	if _, ok := Show("errors.md#no-such-code"); ok {
@@ -22,7 +22,7 @@ func TestShowAndSearch(t *testing.T) {
 	if len(hits) == 0 || hits[0].Ref() != "errors.md#acl_denied" {
 		t.Fatalf("Search(acl_denied) best hit: %+v", hits)
 	}
-	if s, ok := Show("../README.md#quick-start-deploy-your-first-durable-object"); !ok || !strings.Contains(s, "twd deploy") {
+	if s, ok := Show("../README.md#quick-start-deploy-your-first-durable-object"); !ok || !strings.Contains(s, "tw deploy") {
 		t.Fatalf("Show(../README.md#quick-start…) = %q, %v", s, ok)
 	}
 	if _, ok := Show("../go.mod"); ok {
@@ -41,10 +41,10 @@ func TestLLMsTxt(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(b)
-	if !strings.HasPrefix(s, "# twd\n") {
-		t.Fatal("llms.txt must start with `# twd`")
+	if !strings.HasPrefix(s, "# tailworks\n") {
+		t.Fatal("llms.txt must start with `# tailworks`")
 	}
-	base := "https://github.com/rosskukulinski/twd/blob/master/"
+	base := "https://github.com/rosskukulinski/tailworks/blob/master/"
 	linked := map[string]bool{}
 	for _, m := range regexp.MustCompile(`\]\(([^)]+)\)`).FindAllStringSubmatch(s, -1) {
 		p, ok := strings.CutPrefix(m[1], base)

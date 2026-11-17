@@ -1,26 +1,26 @@
 # Tailscale Services
 
-twd uses [Tailscale Services](https://tailscale.com/kb/1552/tailscale-services)
+tailworks uses [Tailscale Services](https://tailscale.com/kb/1552/tailscale-services)
 in two places:
 
 - **workloads:** a workload's entry node (its default export) can host a
   Service. Callers then use a stable name and VIP that don't change when the
   workload node is re-minted, redeployed or moved to another host;
-- **mgmt replicas:** several `twd-mgmt` replicas on one Postgres can host one
-  Service (e.g. `svc:twd-mgmt`), so hosts reach whichever replica is healthy
+- **mgmt replicas:** several `tw-mgmt` replicas on one Postgres can host one
+  Service (e.g. `svc:tw-mgmt`), so hosts reach whichever replica is healthy
   (H12 in `e2e/multimgmt/LEDGER.md`).
 
 Durable Object instances never host Services. A DO is single-instance, and
-its node *is* its identity: per-object egress attribution, `twd kill`, and
+its node *is* its identity: per-object egress attribution, `tw kill`, and
 spawn lineage all hang off that node.
 
 ## How it works (`internal/tssvc`)
 
 `tsnet.Server.ListenService` forwards Service traffic to a host loopback
 socket. The backend then sees `127.0.0.1` as the caller, or has to trust a
-PROXY header that any local process could forge. twd authenticates every
+PROXY header that any local process could forge. Tailworks authenticates every
 request with WhoIs on the connection's source address, so it can't use that.
-Instead, twd:
+Instead, tailworks:
 
 1. advertises the Service in the node's prefs (`AdvertiseServices`);
 2. adds an **empty** TCP handler for the Service port to the serve config.
@@ -39,27 +39,27 @@ other flow.
 ## Workloads
 
 ```jsonc
-// twd.jsonc
+// tailworks.jsonc
 {
   "name": "support",
   "tailnet": {
-    "tags": ["tag:twd-wl-support"],   // required: Service hosts are tagged nodes
+    "tags": ["tag:tw-wl-support"],   // required: Service hosts are tagged nodes
     "service": true                    // svc:support; or "svc:helpdesk" / "helpdesk"
   }
 }
 ```
 
-**What `twd deploy` does:**
+**What `tw deploy` does:**
 
 - **Preflight** (dry run): checks that the policy's
   `autoApprovers.services` lets the workload tags host the Service. If it
   doesn't, control would never route the Service to the node, so the deploy
   is refused with the entry to add:
   ```jsonc
-  "autoApprovers": { "services": { "svc:support": ["tag:twd-wl-support"] } }
+  "autoApprovers": { "services": { "svc:support": ["tag:tw-wl-support"] } }
   ```
 - **Service definition:** mgmt creates it (port `tcp:80`, the attributed
-  HTTP ingress) with the comment `managed by twd: tenant=<id> workload=<name>`.
+  HTTP ingress) with the comment `managed by tw: tenant=<id> workload=<name>`.
   - A redeploy adopts its own definition.
   - A Service with any other comment is refused with `409 service_conflict`.
     One tenant or workload can never take over another's name on a shared
@@ -95,17 +95,17 @@ It withdraws the Service:
   another host;
 - after 2 failed probes in a row (one good probe brings it back);
 - on a redeploy without `tailnet.service`;
-- with the node, on `twd kill` or a close.
+- with the node, on `tw kill` or a close.
 
 Withdrawing removes the serve-config entry, so the node stops intercepting
 the VIP at once. It also turns off keep-alives on Service connections: idle
 ones close, and active ones answer `Connection: close`. Callers' pooled
 connections therefore re-resolve instead of sticking to a host that no
 longer serves. Requests already in flight finish; a kill RSTs them.
-`twd-hostd`'s status shows `Service {name, advertised, healthy, reason}` per
+`tw-hostd`'s status shows `Service {name, advertised, healthy, reason}` per
 workload.
 
-**The definition outlives the deployment.** `twd undeploy` and `twd down`
+**The definition outlives the deployment.** `tw undeploy` and `tw down`
 withdraw the advertisement but keep the definition, so the VIP stays stable
 for the next deploy. Delete it in the admin console (or via the API) when
 the workload is gone for good.
@@ -124,7 +124,7 @@ calls go through the platform.
 {
   "name": "web",
   "replicas": 3,                       // 1..16, default 1
-  "tailnet": { "tags": ["tag:twd-wl-web"], "service": true }
+  "tailnet": { "tags": ["tag:tw-wl-web"], "service": true }
 }
 ```
 
@@ -155,7 +155,7 @@ the preflight and at the deploy.
   - a replica can't be deployed by its own name (`409 replica_conflict`);
   - a replica name already used by a separate workload is also refused
     with `409 replica_conflict`;
-  - `twd deploy` waits for every replica and prints
+  - `tw deploy` waits for every replica and prints
     `✓ replicas 3 · web@h1, web--r2@h2, web--r3@h3`.
 - **Routing:** in the measured runs, Tailscale sent every fresh connection
   from one client to the same Service host (20 of 20). Replicas give
@@ -169,24 +169,24 @@ Not done: the Cloudflare-style split for DO apps, where the Worker is
 replicated and its DOs stay single-homed, with stubs forwarded to the
 owning host.
 
-## mgmt replicas (`svc:twd-mgmt`)
+## mgmt replicas (`svc:tw-mgmt`)
 
 ```sh
-twd-mgmt -db-file pg.dsn -custody setec -setec-url … \
-  -tsnet-hostname twd-mgmt-1 -tsnet-control-url https://controlplane.tailscale.com \
-  -tsnet-service svc:twd-mgmt
+tw-mgmt -db-file pg.dsn -custody setec -setec-url … \
+  -tsnet-hostname tw-mgmt-1 -tsnet-control-url https://controlplane.tailscale.com \
+  -tsnet-service svc:tw-mgmt
 # every host
-twd-hostd -mgmt http://twd-mgmt.<tailnet> …
+tw-hostd -mgmt http://tw-mgmt.<tailnet> …
 ```
 
 - **Naming:** each replica keeps its own node (`-tsnet-hostname`, e.g.
-  `twd-mgmt-1`). mgmt refuses to start if the hostname equals the Service
+  `tw-mgmt-1`). mgmt refuses to start if the hostname equals the Service
   label, because MagicDNS would answer the node first.
 - **What's served:** Service flows on `:80` reach the same
   WhoIs-authenticated handler as the node's own address. Verified:
   `/v1/whoami` through the VIP returns the caller's node ID. Not yet
-  exercised end to end: a real `twd-hostd` registering and heartbeating
-  through the VIP, and `twd link`. Both use the same WhoIs path.
+  exercised end to end: a real `tw-hostd` registering and heartbeating
+  through the VIP, and `tw link`. Both use the same WhoIs path.
 - **Health gate:** `mgmt.ServiceGate` advertises while `Status` (the store)
   answers. It withdraws after 3 failed checks in a row (every 2 s, 2 s
   timeout), and one success restores it. On SIGTERM it withdraws before the
@@ -194,14 +194,14 @@ twd-hostd -mgmt http://twd-mgmt.<tailnet> …
   listener, so hosts' pooled connections move to another replica.
 - **Policy:**
   ```jsonc
-  "autoApprovers": { "services": { "svc:twd-mgmt": ["tag:twd-mgmt"] } },
+  "autoApprovers": { "services": { "svc:tw-mgmt": ["tag:tw-mgmt"] } },
   "grants": [
-    {"src": ["tag:twd-host"], "dst": ["svc:twd-mgmt"], "ip": ["tcp:80"]},
-    {"src": ["autogroup:admin"], "dst": ["svc:twd-mgmt"], "ip": ["tcp:80"], "app": {"twd.dev/cap/admin": [{}]}},
+    {"src": ["tag:tw-host"], "dst": ["svc:tw-mgmt"], "ip": ["tcp:80"]},
+    {"src": ["autogroup:admin"], "dst": ["svc:tw-mgmt"], "ip": ["tcp:80"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}},
   ]
   ```
-  Create the Service definition (`svc:twd-mgmt`, `tcp:80`) in the admin
-  console. `twd up --policy-apply` doesn't write `autoApprovers`.
+  Create the Service definition (`svc:tw-mgmt`, `tcp:80`) in the admin
+  console. `tw up --policy-apply` doesn't write `autoApprovers`.
 - **Limitation:** a replica that is stalled outright (SIGSTOP, a wedged
   process) can't withdraw itself. Callers time out and retry, and a later
   connection may land on it again until control sees the node go offline.
@@ -212,6 +212,6 @@ twd-hostd -mgmt http://twd-mgmt.<tailnet> …
 | Check | Result |
 |---|---|
 | `internal/tssvc` real (`TestRealService`) | VIP answered 3.5 s after advertise; WhoIs saw the caller's node ID through the VIP; after withdraw the next fresh request failed (within one 3 s timeout); re-advertise answered in 14 ms |
-| E2E-SVC (`make e2e-svc`, twd CLI) | `twd deploy` created the definition (owner comment, VIPs). First call through the VIP 11.1 s after deploy, caller = the client node. Redeploy kept the same VIPs and was served again at once. `twd kill` of the workload node: the VIP stopped answering on the next request (≤ 3 s). `twd down`: 0 leftover devices/keys; definition kept |
-| E2E-REPLICAS (`TestE2EReplicas` in `make e2e-svc`; host A from `twd up`, host B a second `twd-hostd` joined with `twd host add`) | `replicas: 2` placed on both hosts. The Service answered 5.6 s after deploy, caller = the client node, 20/20 fresh connections to one replica. Stalling that replica's workerd (SIGSTOP): its host withdrew, and 5 consecutive answers came from the other replica 11.1 s later; re-advertised 0.2 s after SIGCONT. Scale to 1: the second replica was undeployed and the Service kept answering. 0 leftovers |
-| H12 real (`make e2e-mm-svc`, 2 replicas on Postgres; needs `TWD_MM_PG_DSN` pointing at a database of its own) | `svc:ttest-mgmt` answered 5.6 s after start; `/v1/whoami` through the VIP = the client node, admin. Serving replica's store reset → 5 consecutive answers from the other replica 8.2 s later; it re-advertised 0.5 s after its store came back. SIGTERM of the serving replica → steady on the other 7.7 s later |
+| E2E-SVC (`make e2e-svc`, tailworks CLI) | `tw deploy` created the definition (owner comment, VIPs). First call through the VIP 11.1 s after deploy, caller = the client node. Redeploy kept the same VIPs and was served again at once. `tw kill` of the workload node: the VIP stopped answering on the next request (≤ 3 s). `tw down`: 0 leftover devices/keys; definition kept |
+| E2E-REPLICAS (`TestE2EReplicas` in `make e2e-svc`; host A from `tw up`, host B a second `tw-hostd` joined with `tw host add`) | `replicas: 2` placed on both hosts. The Service answered 5.6 s after deploy, caller = the client node, 20/20 fresh connections to one replica. Stalling that replica's workerd (SIGSTOP): its host withdrew, and 5 consecutive answers came from the other replica 11.1 s later; re-advertised 0.2 s after SIGCONT. Scale to 1: the second replica was undeployed and the Service kept answering. 0 leftovers |
+| H12 real (`make e2e-mm-svc`, 2 replicas on Postgres; needs `TW_MM_PG_DSN` pointing at a database of its own) | `svc:ttest-mgmt` answered 5.6 s after start; `/v1/whoami` through the VIP = the client node, admin. Serving replica's store reset → 5 consecutive answers from the other replica 8.2 s later; it re-advertised 0.5 s after its store came back. SIGTERM of the serving replica → steady on the other 7.7 s later |

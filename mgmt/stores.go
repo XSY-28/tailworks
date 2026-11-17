@@ -39,7 +39,7 @@ import (
 	"strings"
 	"sync"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Store limits.
@@ -180,7 +180,7 @@ func (m *Mgmt) fenceStore(ctx context.Context, tenantID, workload, hostID string
 var storeKeys sync.Map // incarnation -> []byte
 
 func storeKeyCustodyName(tenantID, inc string) string {
-	return "twd/" + tenantID + "/stores/" + inc + "/key"
+	return "tw/" + tenantID + "/stores/" + inc + "/key"
 }
 
 func (m *Mgmt) storeKey(ctx context.Context, tenantID, inc string) ([]byte, error) {
@@ -200,7 +200,7 @@ func (m *Mgmt) storeKey(ctx context.Context, tenantID, inc string) ([]byte, erro
 
 func subKey(key []byte, label string) []byte {
 	h := hmac.New(sha256.New, key)
-	h.Write([]byte("twd-store-v1\n" + label))
+	h.Write([]byte("tw-store-v1\n" + label))
 	return h.Sum(nil)
 }
 
@@ -216,7 +216,7 @@ func storeCKey(key []byte, ckey string) string {
 }
 
 func storeAAD(inc string, seq int64) []byte {
-	return []byte("twd-store-v1\n" + inc + "\n" + strconv.FormatInt(seq, 10))
+	return []byte("tw-store-v1\n" + inc + "\n" + strconv.FormatInt(seq, 10))
 }
 
 func storeAEAD(key []byte) (cipher.AEAD, error) {

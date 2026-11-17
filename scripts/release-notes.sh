@@ -15,7 +15,7 @@
 #
 # prev-tag ("-" = none) bounds the contract migrations listed in the
 # catalog entry: mgmt/migrations/*.sql files added since prev-tag that have
-# a "-- twd:contract" line. --finalize leaves the changes for you to
+# a "-- tw:contract" line. --finalize leaves the changes for you to
 # commit (docs/RELEASING.md).
 set -eu
 FINALIZE=0
@@ -35,7 +35,7 @@ if [ $FINALIZE = 0 ] && [ -d "changes/released/$TAG" ]; then
 	frags=$(ls "changes/released/$TAG"/*.md 2>/dev/null || true)
 fi
 # shellcheck disable=SC2086
-go run ./internal/catalog/changes notes -title "twd $TAG" $frags
+go run ./internal/catalog/changes notes -title "tw $TAG" $frags
 
 [ $FINALIZE = 1 ] || exit 0
 
@@ -50,7 +50,7 @@ if [ -d mgmt/migrations ]; then
 	SCHEMA=$(ls mgmt/migrations/*.sql 2>/dev/null | sed 's|.*/||; s|\..*||' | LC_ALL=C sort -u | tail -n 1)
 	for f in mgmt/migrations/*.sql; do
 		[ -f "$f" ] || continue
-		grep -q '^-- twd:contract' "$f" || continue
+		grep -q '^-- tw:contract' "$f" || continue
 		if [ "$PREV" != - ] && git cat-file -e "$PREV:$f" 2>/dev/null; then continue; fi
 		id=$(basename "$f" | sed 's|\..*||')
 		case ",$CONTRACT," in *",$id,"*) ;; *) CONTRACT=${CONTRACT:+$CONTRACT,}$id ;; esac

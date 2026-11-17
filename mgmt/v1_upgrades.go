@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rosskukulinski/twd/internal/catalog"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/catalog"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // /v1 handlers for cordon, drain, releases and upgrade runs
@@ -84,7 +84,7 @@ func (a *v1api) PutReleaseArtifact(w http.ResponseWriter, r *http.Request, ver s
 	m := a.s.M
 	dir := m.releaseDir(ver)
 	if dir == "" {
-		writeErr(w, r, errf(409, "bad_request", "this twd-mgmt keeps no release artifacts (no release directory)"))
+		writeErr(w, r, errf(409, "bad_request", "this tw-mgmt keeps no release artifacts (no release directory)"))
 		return
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -130,12 +130,12 @@ func (a *v1api) PutReleaseArtifact(w http.ResponseWriter, r *http.Request, ver s
 func (a *v1api) GetReleaseArtifact(w http.ResponseWriter, r *http.Request, ver string, name string) {
 	dir := a.s.M.releaseDir(ver)
 	if dir == "" {
-		writeErr(w, r, errf(404, "not_found", "this twd-mgmt keeps no release artifacts"))
+		writeErr(w, r, errf(404, "not_found", "this tw-mgmt keeps no release artifacts"))
 		return
 	}
 	f, err := os.Open(filepath.Join(dir, name))
 	if err != nil {
-		writeErr(w, r, errf(404, "not_found", "release %s has no %s on this twd-mgmt replica (twd release import it)", ver, name))
+		writeErr(w, r, errf(404, "not_found", "release %s has no %s on this tw-mgmt replica (tw release import it)", ver, name))
 		return
 	}
 	defer f.Close()

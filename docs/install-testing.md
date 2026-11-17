@@ -18,11 +18,11 @@ packaging + E2E-MAC on a different, clean Mac".
 `make e2e-linux`, 2026-11-08, release `0.1.0-bb3a3296`. Every VM was **fresh**:
 a Lima official template, 4 CPU / 6 GiB / 30 GiB, `--plain --mount-none`, and
 nothing mounted from the Mac. The tarball and the API key file (0600) were
-copied in with `limactl copy`. twd ran in the VM under `twd up --service`; the
+copied in with `limactl copy`. Tailworks ran in the VM under `tw up --service`; the
 tag:ttest client and echo ran on the Mac (M5 Pro) over tailnet 1. Every row
-passed checks (a)–(f), `twd doctor` before and while running,
-`systemctl --user restart twd` (healthy again, the same workload IP answering
-the Mac), `twd down --purge --service`, and cleanup: zero leftover devices or
+passed checks (a)–(f), `tw doctor` before and while running,
+`systemctl --user restart tw` (healthy again, the same workload IP answering
+the Mac), `tw down --purge --service`, and cleanup: zero leftover devices or
 keys. **Sandbox: none on every row in L1's run (made before the Landlock sandbox landed).** **microVM
 tier: unavailable on every row** (no `/dev/kvm` in these VMs, no
 firecracker, not root). Raw results: `e2e/real/results/l1-linux/`.
@@ -39,16 +39,16 @@ nested-virt VM, from the shipped tarball) are there too.
 | result | **PASS** | **PASS** | **PASS** | **PASS** | **PASS** |
 | glibc · kernel · Landlock ABI | 2.39 · 6.8 · 4 | 2.36 · 6.1 · 2 | 2.35 · 5.15 · 1 | 2.44 · 7.2 · 10 | 2.39 · 6.8 · 4 |
 | `install.sh` | 0.41 s | 0.81 s | 0.84 s | 0.47 s | 9.1 s |
-| `twd up --service` → ready | 0.70 s | 0.65 s | 0.64 s | 0.68 s | 3.4 s |
-| `twd deploy` → ready (agent / mcp) | 2.78 / 1.57 s | 1.57 / 1.45 s | 1.50 / 1.46 s | 1.59 / 1.56 s | 4.70 / 5.55 s |
+| `tw up --service` → ready | 0.70 s | 0.65 s | 0.64 s | 0.68 s | 3.4 s |
+| `tw deploy` → ready (agent / mcp) | 2.78 / 1.57 s | 1.57 / 1.45 s | 1.50 / 1.46 s | 1.59 / 1.56 s | 4.70 / 5.55 s |
 | first request → object node ready | 1.64 s | 1.67 s | 1.62 s | 1.59 s | 3.95 s |
-| `twd kill --cascade` (CLI / push) | 66 / 56 ms | 72 / 63 ms | 65 / 59 ms | 69 / 56 ms | 319 / 133 ms |
+| `tw kill --cascade` (CLI / push) | 66 / 56 ms | 72 / 63 ms | 65 / 59 ms | 69 / 56 ms | 319 / 133 ms |
 | request to a killed object → 410 | 1.7 ms | 1.3 ms | 0.9 ms | 0.9 ms | 10.9 ms |
 | Mac → VM path | **direct** after 0.19 s | **direct** after 0.18 s | **direct** after 0.18 s | **direct** after 0.20 s | **direct** after 0.47 s |
 | MCP `tools/list` direct · DERP-only (median) | 1.9 · 10.7 ms | 2.5 · 11.2 ms | 3.5 · 11.2 ms | 2.0 · 16.6 ms | 33.1 · 41.8 ms |
 | disco ping direct · DERP (median) | 0.41 · 7.8 ms | 0.57 · 9.2 ms | 0.67 · 8.5 ms | 0.42 · 14.1 ms | 1.47 · 13.4 ms |
-| `systemctl --user restart twd` → healthy / workload answers the Mac | 3.6 / 6.6 s | 3.6 / 6.7 s | 3.6 / 6.7 s | 0.7 / 3.8 s | 5.6 / 13.1 s |
-| `twd down --purge --service` | 0.62 s | 0.56 s | 0.60 s | 0.63 s | 4.0 s |
+| `systemctl --user restart tw` → healthy / workload answers the Mac | 3.6 / 6.6 s | 3.6 / 6.7 s | 3.6 / 6.7 s | 0.7 / 3.8 s | 5.6 / 13.1 s |
+| `tw down --purge --service` | 0.62 s | 0.56 s | 0.60 s | 0.63 s | 4.0 s |
 | reboot (enable-linger, `limactl stop`/`start`) → service active / healthy / workload answers | 6.6 / 6.6 / 8.6–17.1 s | — | — | — | — |
 | `--ephemeral` sub-agent across `systemctl --user restart` → re-minted, ready / answers | 4.1 / 9.5 s | — | — | — | — |
 
@@ -66,8 +66,8 @@ Unsupported hosts (bonus rows; `TestUnsupportedHost`):
 
 | | Debian 11 arm64 (glibc 2.31, kernel 5.10) | Alpine 3.24 arm64 (musl) |
 |---|---|---|
-| `install.sh` | refused: `glibc 2.31 is too old: twd's workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10)` | refused: `this Linux uses musl libc (Alpine?); twd's workerd needs glibc >= 2.35 …` |
-| `bin/twd doctor` | `✗ glibc` (names the distro and the fix); `! kernel` (< 5.13); `! landlock` (ENOSYS) | `✗ glibc`: `this system uses musl libc (/lib/ld-musl-aarch64.so.1) …` |
+| `install.sh` | refused: `glibc 2.31 is too old: tw's workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10)` | refused: `this Linux uses musl libc (Alpine?); tw's workerd needs glibc >= 2.35 …` |
+| `bin/tw doctor` | `✗ glibc` (names the distro and the fix); `! kernel` (< 5.13); `! landlock` (ENOSYS) | `✗ glibc`: `this system uses musl libc (/lib/ld-musl-aarch64.so.1) …` |
 | would workerd start anyway? | yes (`workerd --version`; untested beyond that) | no (no glibc loader) |
 
 RHEL/Alma/Rocky 8–9 and Amazon Linux 2 were not run in the matrix; they are
@@ -81,19 +81,19 @@ refused for their glibc version.
 Measured on Ubuntu 24.04 arm64 (the matrix's first column):
 
 - **`--ephemeral` nodes across a restart:** a spawned sub-agent was ready
-  again 4.1 s after `systemctl --user restart twd`, and answering a client on
+  again 4.1 s after `systemctl --user restart tw`, and answering a client on
   another machine after 9.5 s.
 - **Reboot, lingering on:** from the start of boot, ssh up at 6.6 s,
-  `twd.service` active and twd healthy at 6.6 s, every object rejoined from
+  `tw.service` active and tailworks healthy at 6.6 s, every object rejoined from
   saved state (same node IDs, nothing re-minted), and the workload answered
   a client on another machine at 8.6–17.1 s (two runs).
 
-The spread is on the **client's** side, not twd's: a persistent node comes
+The spread is on the **client's** side, not tailworks': a persistent node comes
 back with the same node key but fresh WireGuard state, so a client that
 still holds a recent session to it keeps sending on that dead session, and
 WireGuard only re-handshakes after ~15 s of silence. A client whose session
 had already gone idle, or a client that has never talked to the node,
-reaches it within 2–3 s of `twd up`. The node is reachable over DERP the
+reaches it within 2–3 s of `tw up`. The node is reachable over DERP the
 moment it is up. The diagnosis is in STATUS.md, "Diagnosis: the 12–17 s
 "client re-finds the node after reboot" delay".
 

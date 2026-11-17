@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // auditSpill is the on-disk overflow of the audit queue (RT3-03 / H03):

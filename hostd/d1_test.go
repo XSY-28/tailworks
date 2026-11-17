@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/internal/d1mig"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/internal/d1mig"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -400,7 +400,7 @@ func TestD1(t *testing.T) {
 				t.Fatalf("export lacks %q:\n%s", want, exported)
 			}
 		}
-		if strings.Contains(exported, "_cf_") || strings.Contains(exported, "__twd") {
+		if strings.Contains(exported, "_cf_") || strings.Contains(exported, "__tw") {
 			t.Fatalf("export has platform state:\n%s", exported)
 		}
 		if _, err := e.Host.StoreAdmin(ctx, e.TenantID, "d1app", "d1", "other-db", "query", []byte(`{}`)); err == nil || !strings.Contains(err.Error(), "binds no d1 store") {

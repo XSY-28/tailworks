@@ -14,15 +14,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd"
-	"github.com/rosskukulinski/twd/internal/policy"
-	"github.com/rosskukulinski/twd/internal/procsb"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/internal/policy"
+	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // MultiPolicy is what E2E-MULTI needs in each tenant's policy: exactly
 // what M4 added to tailnet 1 (Policy: the agent and mcp templates' tags
-// owned by tag:twd, the test client → twd nodes, the agents → the tenant's
+// owned by tag:tw, the test client → tailworks nodes, the agents → the tenant's
 // own private echo, tag:ttest), so tailnet 1 needs no write and tailnet-2
 // mirrors it.
 func MultiPolicy() policy.Snippet { return Policy() }
@@ -36,7 +36,7 @@ type Tenant struct {
 	// NewNode starts a tsnet test node in this tenant's tailnet named
 	// <prefix><role> (tag:ttest on production control).
 	NewNode func(role string) *nettest.Node
-	// Res collects the IDs twd created in this tailnet (leftover checks).
+	// Res collects the IDs tailworks created in this tailnet (leftover checks).
 	Res *Results
 
 	TenantID                   string
@@ -53,8 +53,8 @@ type Tenant struct {
 	sandbox, profile           string
 }
 
-// MultiEnv is E2E-MULTI: one twd host (the CLI's supervisor) serving
-// tenant A (the operator tailnet, `twd up`) and tenant B (`twd tenant
+// MultiEnv is E2E-MULTI: one tailworks host (the CLI's supervisor) serving
+// tenant A (the operator tailnet, `tw up`) and tenant B (`tw tenant
 // add`), with the same app deployed to both.
 type MultiEnv struct {
 	*Env // CLI runner; Env.Res holds the overall checks and numbers
@@ -124,12 +124,12 @@ func selfOf(n *nettest.Node) (id, name, ip string) {
 }
 
 // Run executes E2E-MULTI checks (a)–(f). The caller cleans up test nodes;
-// Down removes twd's own devices in both tailnets.
+// Down removes tailworks' own devices in both tailnets.
 func (m *MultiEnv) Run() {
 	t, res := m.T, m.Res
 	m.A.Key, m.B.Key = "A", "B"
 
-	// twd up: the operator tailnet is tenant A.
+	// tw up: the operator tailnet is tenant A.
 	upArgs := []string{"up", "--tailnet", m.A.Tailnet, "--oauth-client-file", m.A.OAuthClientFile, "--yes", "--ephemeral",
 		"--hostname-prefix", m.Prefix, "--control-url", m.A.ControlURL, "--allow-sibling-egress",
 		"--mgmt-hostname", m.Prefix + "mgmt", "--host-id", strings.TrimSuffix(m.Prefix, "-")}
@@ -139,18 +139,18 @@ func (m *MultiEnv) Run() {
 	if !m.SingleProcess {
 		upArgs = append(upArgs, "--separate-host") // the layout this suite was written against (Env.SingleProcess)
 	}
-	// `twd tenant add` and hostd refuse a second tenant when this user can
+	// `tw tenant add` and hostd refuse a second tenant when this user can
 	// reach a container engine, is in its group, or can reach the system
 	// tailscaled (sandbox_unavailable; procsb.ScanHostSockets). That control
 	// has its own tests (hostd TestSharedHost*); here it would only stop
 	// the isolation checks (a)–(f), which hold unchanged under the opt-out,
-	// so on such a host run as `twd up --insecure-shared-host` and say so.
+	// so on such a host run as `tw up --insecure-shared-host` and say so.
 	if hs := procsb.ScanHostSockets(); !hs.Empty() {
 		reach := append([]string{}, hs.Hard...)
 		if hs.Tailscaled != "" {
 			reach = append(reach, hs.Tailscaled)
 		}
-		t.Logf("this user can reach %s: twd would refuse the second tenant (sandbox_unavailable), so running twd up --insecure-shared-host; to exercise the refusal, run the tests as a user outside the docker/podman/lxd/incus groups without access to those sockets", strings.Join(reach, ", "))
+		t.Logf("this user can reach %s: tailworks would refuse the second tenant (sandbox_unavailable), so running tw up --insecure-shared-host; to exercise the refusal, run the tests as a user outside the docker/podman/lxd/incus groups without access to those sockets", strings.Join(reach, ", "))
 		upArgs = append(upArgs, "--insecure-shared-host")
 	}
 	var up struct {
@@ -166,7 +166,7 @@ func (m *MultiEnv) Run() {
 	// live on tenant A's tailnet.
 	m.A.Res.InfraNodeIDs = append(m.A.Res.InfraNodeIDs, m.Res.InfraNodeIDs...)
 
-	// twd tenant add: tenant B on its own tailnet.
+	// tw tenant add: tenant B on its own tailnet.
 	var ta struct {
 		TenantID string             `json:"tenantID"`
 		PolicyOK bool               `json:"policyOK"`
@@ -179,7 +179,7 @@ func (m *MultiEnv) Run() {
 		t.Fatalf("tenant add: %+v (tenant A %s)", ta, m.A.TenantID)
 	}
 	// The same credential file can't serve a second tailnet.
-	if _, se, _, err := m.Twd("tenant", "add", "other.example.ts.net", "--oauth-client-file", m.A.OAuthClientFile); err == nil || !strings.Contains(se, "state_conflict") {
+	if _, se, _, err := m.Tw("tenant", "add", "other.example.ts.net", "--oauth-client-file", m.A.OAuthClientFile); err == nil || !strings.Contains(se, "state_conflict") {
 		t.Fatalf("tenant add with tenant A's OAuth client file for another tailnet: %v %s", err, se)
 	}
 	var tl []struct {
@@ -191,15 +191,15 @@ func (m *MultiEnv) Run() {
 	if len(tl) != 2 || !tl[0].Operator || tl[0].TenantID != m.A.TenantID || tl[1].TenantID != m.B.TenantID {
 		t.Fatalf("tenant ls: %+v", tl)
 	}
-	res.pass("tenants", fmt.Sprintf("A %s (%s, operator) · B %s (%s) via `twd tenant add` in %v", m.A.Tailnet, m.A.TenantID, m.B.Tailnet, m.B.TenantID, d.Round(time.Millisecond)))
+	res.pass("tenants", fmt.Sprintf("A %s (%s, operator) · B %s (%s) via `tw tenant add` in %v", m.A.Tailnet, m.A.TenantID, m.B.Tailnet, m.B.TenantID, d.Round(time.Millisecond)))
 
 	// The same agent app (same directory, workload, classes and object
 	// names) deployed to both tenants.
 	agentDir := filepath.Join(m.WorkDir, "agent")
 	m.MustJSON(nil, "init", agentDir, "--template", "agent", "--keep-tags")
-	tj := filepath.Join(agentDir, "twd.jsonc")
+	tj := filepath.Join(agentDir, "tailworks.jsonc")
 	b, _ := os.ReadFile(tj)
-	b = bytes.Replace(b, []byte(`"tags": ["tag:twd-wl-agent"],`), []byte(`"tags": ["tag:twd-wl-agent"],
+	b = bytes.Replace(b, []byte(`"tags": ["tag:tw-wl-agent"],`), []byte(`"tags": ["tag:tw-wl-agent"],
     "connects": ["`+TestTag+`"],`), 1)
 	os.WriteFile(tj, b, 0o644)
 	for _, tn := range m.tenants() {
@@ -459,7 +459,7 @@ func (m *MultiEnv) Run() {
 		res.pass("d_state_isolation", "tenant dirs 0700 (no process sandbox on this host: same-uid processes are not confined)")
 	}
 
-	// Record the IDs twd created in each tailnet (leftover checks).
+	// Record the IDs tailworks created in each tailnet (leftover checks).
 	for _, tn := range m.tenants() {
 		for _, o := range m.objectsOf(tn) {
 			id := o.StableNodeID
@@ -473,10 +473,10 @@ func (m *MultiEnv) Run() {
 	}
 
 	// (f) part 1: cross-tenant operations are refused (before the kill).
-	if _, se, _, err := m.Twd("kill", "--tenant", m.B.Tailnet, m.A.agent.ID); err == nil || !strings.Contains(se, "unknown_object") {
+	if _, se, _, err := m.Tw("kill", "--tenant", m.B.Tailnet, m.A.agent.ID); err == nil || !strings.Contains(se, "unknown_object") {
 		t.Fatalf("kill tenant A's object as tenant B: %v %s", err, se)
 	}
-	if _, se, _, err := m.Twd("audit", "--tenant", m.B.Tailnet, m.A.agent.ID); err == nil || !strings.Contains(se, "unknown_object") {
+	if _, se, _, err := m.Tw("audit", "--tenant", m.B.Tailnet, m.A.agent.ID); err == nil || !strings.Contains(se, "unknown_object") {
 		t.Fatalf("audit tenant A's object as tenant B: %v %s", err, se)
 	}
 
@@ -515,7 +515,7 @@ func (m *MultiEnv) Run() {
 	res.pass("e_kill_A_spares_B", fmt.Sprintf("killed %v in %v; A's agent → 410 object_killed in %v; B's agent and workload still 200 (3×), B object ready",
 		kr.Result.Killed, d.Round(time.Millisecond), ra.Dur.Round(time.Microsecond)))
 
-	// (f) twd audit per tenant shows only that tenant's records.
+	// (f) tw audit per tenant shows only that tenant's records.
 	ids := map[string]map[string]bool{}
 	for _, tn := range m.tenants() {
 		ids[tn.Key] = map[string]bool{}
@@ -562,8 +562,8 @@ func (m *MultiEnv) Run() {
 		}
 		res.pass("f_audit_"+tn.Key, fmt.Sprintf("%d records, all tenant %s, chain verified, kinds %v", len(au.Records), tn.TenantID, kinds))
 	}
-	if so, _, _, err := m.Twd("audit", "--tenant", m.B.Tailnet, "--all"); err == nil {
-		m.T.Logf("twd audit --tenant %s --all:\n%s", m.B.Tailnet, so)
+	if so, _, _, err := m.Tw("audit", "--tenant", m.B.Tailnet, "--all"); err == nil {
+		m.T.Logf("tw audit --tenant %s --all:\n%s", m.B.Tailnet, so)
 	}
 }
 
@@ -578,7 +578,7 @@ func firstFile(dir string) string {
 	return out
 }
 
-// Down runs `twd down` (purges both tenants' objects and devices).
+// Down runs `tw down` (purges both tenants' objects and devices).
 func (m *MultiEnv) Down() { m.Env.Down() }
 
 // landlockProbes are the Linux-only (d) checks under a workload's Landlock

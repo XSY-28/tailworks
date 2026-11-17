@@ -12,13 +12,13 @@ import (
 
 // GuestIdentity identifies the guest a VM boots: the SHA-256 of the
 // image's manifest.json (it records the rootfs, guestd and workerd hashes
-// and, from twd_version on, the release; guest/build-image.sh), plus the
+// and, from tw_version on, the release; guest/build-image.sh), plus the
 // size and mtime of the kernel and rootfs files themselves (a hand-copied
 // image without a fresh manifest still changes identity).
 //
 // ADR-030 base snapshots are keyed by it (ADR-041 §5):
 // a base is never restored under a different guest, e.g. after install.sh
-// swapped share/twd/vm under a running hostd. Restores then boot cold
+// swapped share/tailworks/vm under a running hostd. Restores then boot cold
 // until the next base is built from the new guest.
 func GuestIdentity(kernel, rootfs string) (string, error) {
 	h := sha256.New()

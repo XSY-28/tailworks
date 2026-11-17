@@ -1,4 +1,4 @@
-// Package approvecap is the twd.dev/cap/approve app capability: who may
+// Package approvecap is the github.com/rosskukulinski/tailworks/cap/approve app capability: who may
 // decide a Workflow approval (ADR-040, docs/approvals.md).
 // hostd enforces it before it delivers a decision; mgmt uses the same rules
 // to show a caller the approvals it may decide.
@@ -19,7 +19,7 @@ import (
 // compare against the instance's numeric params (facts); a grant with a
 // limit the instance has no number for does not match (fail closed). The
 // grants are a union: any one matching grant allows the decision.
-const Cap = "twd.dev/cap/approve"
+const Cap = "github.com/rosskukulinski/tailworks/cap/approve"
 
 // Target is the approval being decided.
 type Target struct {
@@ -92,9 +92,9 @@ func MayDecide(grants []json.RawMessage, t Target) bool {
 }
 
 // Snippet is the policy grant to add so src may decide t (dst: the
-// workload's tag for its own node, tag:twd-mgmt for twd approve / the UI).
+// workload's tag for its own node, tag:tw-mgmt for tw approve / the UI).
 func Snippet(src string, t Target) string {
-	b, _ := json.Marshal(map[string]any{"src": []string{src}, "dst": []string{"<the workload's tag>", "tag:twd-mgmt"}, "app": map[string]any{
+	b, _ := json.Marshal(map[string]any{"src": []string{src}, "dst": []string{"<the workload's tag>", "tag:tw-mgmt"}, "app": map[string]any{
 		Cap: []map[string]any{{"workloads": []string{t.Workload}, "workflows": []string{t.Workflow}}}}})
 	return string(b)
 }

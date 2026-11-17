@@ -1,5 +1,5 @@
-// workers-oauth-provider on twd: the library's own OAUTH_KV usage (clients,
-// grants, tokens with expirationTtl, list by prefix) runs on twd's Workers
+// workers-oauth-provider on tailworks: the library's own OAUTH_KV usage (clients,
+// grants, tokens with expirationTtl, list by prefix) runs on tailworks' Workers
 // KV binding. /authorize approves at once as "alice" (no consent page: the
 // test is the user); /api/* is the protected API; /kv lists what the
 // provider stored, so the test can see it went through KV.
@@ -26,7 +26,7 @@ const app = {
         userId: "alice",
         metadata: { label: "e2e" },
         scope: ar.scope,
-        props: { user: "alice", via: "twd-kv" },
+        props: { user: "alice", via: "tw-kv" },
       });
       return Response.redirect(redirectTo, 302);
     }
@@ -60,17 +60,17 @@ const provider = new OAuthProvider({
   tokenEndpoint: "/token",
   clientRegistrationEndpoint: "/register",
   scopesSupported: ["read"],
-  // The API's canonical identifier (the token audience): on twd, the
+  // The API's canonical identifier (the token audience): on tailworks, the
   // workload's MagicDNS name.
   resourceMetadata: { resource: ORIGIN },
 });
 
 // The provider compares request.url's origin with resourceMetadata.resource
-// (token audience, RFC 8707). twd hands a Worker http:// URLs (the tailnet
+// (token audience, RFC 8707). Tailworks hands a Worker http:// URLs (the tailnet
 // already encrypts; public routes set X-Forwarded-Proto: https), so present
 // the canonical https origin, as a TLS-terminating front door would. A
 // class instance on purpose: `export default new X()` keeps fetch() on the
-// prototype, which twd's runtime must find (TestOAuthProviderKV).
+// prototype, which tailworks' runtime must find (TestOAuthProviderKV).
 class CanonicalOrigin {
   constructor(private inner: { fetch: (r: Request, e: Env, c: ExecutionContext) => Promise<Response> }) {}
   fetch(req: Request, env: Env, ctx: ExecutionContext) {

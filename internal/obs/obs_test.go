@@ -46,14 +46,14 @@ func TestParseTraceparent(t *testing.T) {
 
 func TestPrometheusExposition(t *testing.T) {
 	r := NewRegistry()
-	h := r.Histogram("http.server.request.duration", "s", "Duration of HTTP server requests.", []float64{0.1, 1}, "http.request.method", "http.response.status_code", "twd.workload")
+	h := r.Histogram("http.server.request.duration", "s", "Duration of HTTP server requests.", []float64{0.1, 1}, "http.request.method", "http.response.status_code", "tw.workload")
 	h.Observe(0.05, "GET", "200", "hello")
 	h.Observe(0.1, "GET", "200", "hello") // le is inclusive
 	h.Observe(3, "GET", "200", "hello")
-	c := r.Counter("twd.invocations", "{invocation}", "Workerd invocations.", "twd.workload", "twd.invocation.outcome")
+	c := r.Counter("tw.invocations", "{invocation}", "Workerd invocations.", "tw.workload", "tw.invocation.outcome")
 	c.Add(2, "hello", "ok")
 	c.Add(1, "hello", `ex"cep\tion`)
-	r.GaugeFunc("twd.host.nodes", "{node}", "", []string{"state"}, func(emit func(float64, ...string)) { emit(3, "ready") })
+	r.GaugeFunc("tw.host.nodes", "{node}", "", []string{"state"}, func(emit func(float64, ...string)) { emit(3, "ready") })
 	var b bytes.Buffer
 	if err := r.WritePrometheus(&b); err != nil {
 		t.Fatal(err)
@@ -61,15 +61,15 @@ func TestPrometheusExposition(t *testing.T) {
 	out := b.String()
 	for _, want := range []string{
 		"# TYPE http_server_request_duration_seconds histogram",
-		`http_server_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",twd_workload="hello",le="0.1"} 2`,
-		`http_server_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",twd_workload="hello",le="1"} 2`,
-		`http_server_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",twd_workload="hello",le="+Inf"} 3`,
-		`http_server_request_duration_seconds_sum{http_request_method="GET",http_response_status_code="200",twd_workload="hello"} 3.15`,
-		`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",twd_workload="hello"} 3`,
-		"# TYPE twd_invocations_total counter",
-		`twd_invocations_total{twd_workload="hello",twd_invocation_outcome="ok"} 2`,
-		`twd_invocation_outcome="ex\"cep\\tion"`,
-		`twd_host_nodes{state="ready"} 3`,
+		`http_server_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",tw_workload="hello",le="0.1"} 2`,
+		`http_server_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",tw_workload="hello",le="1"} 2`,
+		`http_server_request_duration_seconds_bucket{http_request_method="GET",http_response_status_code="200",tw_workload="hello",le="+Inf"} 3`,
+		`http_server_request_duration_seconds_sum{http_request_method="GET",http_response_status_code="200",tw_workload="hello"} 3.15`,
+		`http_server_request_duration_seconds_count{http_request_method="GET",http_response_status_code="200",tw_workload="hello"} 3`,
+		"# TYPE tw_invocations_total counter",
+		`tw_invocations_total{tw_workload="hello",tw_invocation_outcome="ok"} 2`,
+		`tw_invocation_outcome="ex\"cep\\tion"`,
+		`tw_host_nodes{state="ready"} 3`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in\n%s", want, out)
@@ -78,7 +78,7 @@ func TestPrometheusExposition(t *testing.T) {
 	// The handler.
 	rec := httptest.NewRecorder()
 	MetricsHandler(r).ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
-	if rec.Code != 200 || rec.Header().Get("Content-Type") != PrometheusContentType || !strings.Contains(rec.Body.String(), "twd_invocations_total") {
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != PrometheusContentType || !strings.Contains(rec.Body.String(), "tw_invocations_total") {
 		t.Fatalf("%d %v", rec.Code, rec.Header())
 	}
 }
@@ -86,16 +86,16 @@ func TestPrometheusExposition(t *testing.T) {
 func TestSeriesLimitOverflow(t *testing.T) {
 	r := NewRegistry()
 	r.SetSeriesLimit(3)
-	c := r.Counter("twd.egress", "", "", "twd.object.id")
+	c := r.Counter("tw.egress", "", "", "tw.object.id")
 	for i := 0; i < 10; i++ {
 		c.Add(1, fmt.Sprintf("o-%d", i))
 	}
 	var b bytes.Buffer
 	r.WritePrometheus(&b)
-	if n := strings.Count(b.String(), "twd_egress_total{"); n != 4 {
+	if n := strings.Count(b.String(), "tw_egress_total{"); n != 4 {
 		t.Fatalf("%d series (want 3 + overflow):\n%s", n, b.String())
 	}
-	if !strings.Contains(b.String(), `twd_egress_total{otel_metric_overflow="true"} 7`) {
+	if !strings.Contains(b.String(), `tw_egress_total{otel_metric_overflow="true"} 7`) {
 		t.Fatalf("overflow:\n%s", b.String())
 	}
 	// A tenant-filtered snapshot never includes the shared overflow series.
@@ -106,7 +106,7 @@ func TestSeriesLimitOverflow(t *testing.T) {
 			}
 		}
 	}
-	r.DeleteSeries(func(l map[string]string) bool { return l["twd.object.id"] == "o-0" })
+	r.DeleteSeries(func(l map[string]string) bool { return l["tw.object.id"] == "o-0" })
 	b.Reset()
 	r.WritePrometheus(&b)
 	if strings.Contains(b.String(), `"o-0"`) {
@@ -117,10 +117,10 @@ func TestSeriesLimitOverflow(t *testing.T) {
 func TestPromName(t *testing.T) {
 	for _, c := range []struct{ name, unit, kind, want string }{
 		{"http.server.request.duration", "s", KindHistogram, "http_server_request_duration_seconds"},
-		{"twd.invocations", "{invocation}", KindCounter, "twd_invocations_total"},
-		{"twd.logs.dropped", "{record}", KindCounter, "twd_logs_dropped_total"},
-		{"twd.host.memory", "By", KindGauge, "twd_host_memory_bytes"},
-		{"twd.host.capacity.nodes", "1", KindGauge, "twd_host_capacity_nodes"},
+		{"tw.invocations", "{invocation}", KindCounter, "tw_invocations_total"},
+		{"tw.logs.dropped", "{record}", KindCounter, "tw_logs_dropped_total"},
+		{"tw.host.memory", "By", KindGauge, "tw_host_memory_bytes"},
+		{"tw.host.capacity.nodes", "1", KindGauge, "tw_host_capacity_nodes"},
 	} {
 		if got := PromName(c.name, c.unit, c.kind); got != c.want {
 			t.Errorf("%s: %s, want %s", c.name, got, c.want)
@@ -144,10 +144,10 @@ func TestOTLPPayloads(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := &OTLPClient{Endpoint: srv.URL + "/base/", Headers: map[string]string{"Authorization": "Bearer s3cret"}}
-	res := []Attr{A("service.name", "hello"), A("twd.tenant.id", "t1")}
+	res := []Attr{A("service.name", "hello"), A("tw.tenant.id", "t1")}
 	t0 := time.Unix(1700000000, 5)
 	sp := Span{TraceID: NewTraceID(), SpanID: NewSpanID(), ParentSpanID: NewSpanID(), Name: "GET /", Kind: SpanKindServer, Start: t0, End: t0.Add(time.Millisecond),
-		Attrs: []Attr{A("http.response.status_code", int64(200)), A("twd.caller.tags", []string{"tag:a"}), A("empty", "")}, Status: StatusError, StatusMessage: "boom"}
+		Attrs: []Attr{A("http.response.status_code", int64(200)), A("tw.caller.tags", []string{"tag:a"}), A("empty", "")}, Status: StatusError, StatusMessage: "boom"}
 	ctx := context.Background()
 	if err := c.Export(ctx, SignalTraces, TracesPayload(res, []Span{sp})); err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestOTLPPayloads(t *testing.T) {
 	s := js(got["/base/v1/traces"])
 	for _, want := range []string{`"traceId":"` + sp.TraceID + `"`, `"parentSpanId":"` + sp.ParentSpanID + `"`, `"kind":2`, `"startTimeUnixNano":"1700000000000000005"`,
 		`{"key":"http.response.status_code","value":{"intValue":"200"}}`, `"arrayValue":{"values":[{"stringValue":"tag:a"}]}`, `"status":{"code":2,"message":"boom"}`,
-		`{"key":"service.name","value":{"stringValue":"hello"}}`, `"scope":{"name":"twd"}`} {
+		`{"key":"service.name","value":{"stringValue":"hello"}}`, `"scope":{"name":"tw"}`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("traces: missing %s in %s", want, s)
 		}
@@ -173,16 +173,16 @@ func TestOTLPPayloads(t *testing.T) {
 	}
 	l := js(got["/base/v1/logs"])
 	for _, want := range []string{`"severityNumber":13`, `"severityText":"WARN"`, `"body":{"stringValue":"careful"}`, `"spanId":"` + sp.SpanID + `"`,
-		`"severityNumber":17`, `"exception.stacktrace"`, `"stringValue":"twd.request"`, `"body":{"stringValue":"GET /x 500 0.0ms`} {
+		`"severityNumber":17`, `"exception.stacktrace"`, `"stringValue":"tw.request"`, `"body":{"stringValue":"GET /x 500 0.0ms`} {
 		if !strings.Contains(l, want) {
 			t.Errorf("logs: missing %s in %s", want, l)
 		}
 	}
 	reg := NewRegistry()
-	reg.Histogram("http.server.request.duration", "s", "", []float64{0.1}, "twd.workload").Observe(0.2, "hello")
-	reg.Counter("twd.invocations", "", "", "twd.workload").Add(1, "other")
-	reg.GaugeFunc("twd.do.objects", "", "", []string{"twd.workload"}, func(emit func(float64, ...string)) { emit(4, "hello"); emit(9, "other") })
-	snap := reg.Snapshot(func(l map[string]string) bool { return l["twd.workload"] == "hello" })
+	reg.Histogram("http.server.request.duration", "s", "", []float64{0.1}, "tw.workload").Observe(0.2, "hello")
+	reg.Counter("tw.invocations", "", "", "tw.workload").Add(1, "other")
+	reg.GaugeFunc("tw.do.objects", "", "", []string{"tw.workload"}, func(emit func(float64, ...string)) { emit(4, "hello"); emit(9, "other") })
+	snap := reg.Snapshot(func(l map[string]string) bool { return l["tw.workload"] == "hello" })
 	if err := c.Export(ctx, SignalMetrics, MetricsPayload(res, snap)); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestOTLPPayloads(t *testing.T) {
 			t.Errorf("metrics: missing %s in %s", want, m)
 		}
 	}
-	if strings.Contains(m, "twd.invocations") || strings.Contains(m, `"asDouble":9`) {
+	if strings.Contains(m, "tw.invocations") || strings.Contains(m, `"asDouble":9`) {
 		t.Errorf("another workload's series exported: %s", m)
 	}
 	// Errors: the status, never the headers.

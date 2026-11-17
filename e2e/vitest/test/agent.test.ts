@@ -1,13 +1,13 @@
 // The agent template (Cloudflare Agents SDK) under @cloudflare/vitest-plugin,
-// with @twd/tailnet/testing for callers and a fake ctx.tailnet.spawn.
+// with @tailworks/tailnet/testing for callers and a fake ctx.tailnet.spawn.
 // docs/testing.md.
 import { env, exports } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
-import { createTestTailnet } from "@twd/tailnet/testing";
+import { createTestTailnet } from "@tailworks/tailnet/testing";
 
-const twd = createTestTailnet();
-const get = async (path: string, who: object) => (await (exports as any).default.fetch(twd.withCaller("http://agent" + path, who))).json();
+const tw = createTestTailnet();
+const get = async (path: string, who: object) => (await (exports as any).default.fetch(tw.withCaller("http://agent" + path, who))).json();
 
 describe("agent template", () => {
   it("Agents SDK state and SQL: one agent per caller", async () => {
@@ -33,8 +33,8 @@ describe("agent template", () => {
     expect(r.child.reply).toMatchObject({ lookup: "lookup-1", parent: "helper", lookups: 1 });
   });
 
-  it("without the fake runtime, ctx.tailnet is absent (as off twd)", async () => {
-    const r = await (exports as any).default.fetch(twd.withCaller("http://agent/agents/support-agent/plain/spawn", { login: "alice@example.com" }));
+  it("without the fake runtime, ctx.tailnet is absent (as off tw)", async () => {
+    const r = await (exports as any).default.fetch(tw.withCaller("http://agent/agents/support-agent/plain/spawn", { login: "alice@example.com" }));
     expect(r.status).toBe(500);
   });
 });

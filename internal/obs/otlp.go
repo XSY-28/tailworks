@@ -30,8 +30,8 @@ const (
 // AllSignals in a stable order.
 var AllSignals = []string{SignalLogs, SignalMetrics, SignalTraces}
 
-// Scope is the instrumentation scope twd reports.
-const Scope = "twd"
+// Scope is the instrumentation scope tailworks reports.
+const Scope = "tw"
 
 type kv struct {
 	Key   string `json:"key"`

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/rosskukulinski/twd/hostd/r2"
+	"github.com/rosskukulinski/tailworks/hostd/r2"
 )
 
 // FakeS3 is an S3 server for one bucket, path style, keeping objects as
@@ -34,8 +34,8 @@ type FakeS3 struct {
 
 // StartFakeS3 starts a FakeS3 storing under dir.
 func StartFakeS3(dir string) *FakeS3 {
-	f := &FakeS3{Bucket: "twd-test", Region: "us-east-1", Dir: dir,
-		Creds: r2.Credentials{AccessKeyID: "AKIDTWDTEST", SecretAccessKey: "twd-test-secret"}}
+	f := &FakeS3{Bucket: "tw-test", Region: "us-east-1", Dir: dir,
+		Creds: r2.Credentials{AccessKeyID: "AKIDTWTEST", SecretAccessKey: "tw-test-secret"}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	f.URL = f.srv.URL
 	return f

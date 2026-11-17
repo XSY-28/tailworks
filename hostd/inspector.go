@@ -5,10 +5,10 @@ import (
 	"strconv"
 )
 
-// workerd's V8 inspector for twd dev --inspector-port (issue #42). Each
+// workerd's V8 inspector for tw dev --inspector-port (issue #42). Each
 // workerd gets its own free 127.0.0.1 port: a reload starts the new
 // instance before the old one drains (blue/green), so they can't share
-// one. twd dev serves the fixed --inspector-port and forwards to the
+// one. tw dev serves the fixed --inspector-port and forwards to the
 // active instance's (InspectorAddr).
 
 // inspectorArgs adds --inspector-addr to a workerd command line when

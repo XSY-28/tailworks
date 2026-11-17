@@ -11,7 +11,7 @@ import (
 //	"kv_namespaces": [{ "binding": "OAUTH_KV", "id": "oauth" }]
 //
 // The store's name is the entry's "id" (a namespace the operator created
-// with `twd kv namespace create`, or any name: the first write creates
+// with `tw kv namespace create`, or any name: the first write creates
 // it), or the binding name when there is no id. Bindings with the same id
 // share one namespace. "preview_id" and "remote" are wrangler dev's and
 // are ignored.

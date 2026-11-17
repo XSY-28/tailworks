@@ -2,8 +2,8 @@
 
 Short, complete apps for the things people reach for first. Each one is
 three files you can paste into an empty directory (or over a
-`twd init <dir> --template hello` app), then run with `twd dev` and ship
-with `twd deploy`. Every recipe was run under `twd dev`; where `twd dev`
+`tw init <dir> --template hello` app), then run with `tw dev` and ship
+with `tw deploy`. Every recipe was run under `tw dev`; where `tw dev`
 can't show the whole path (it has no gateways and no internet ingress),
 the recipe says what you'll see instead.
 
@@ -13,7 +13,7 @@ the recipe says what you'll see instead.
 - [A public webhook with signature verification](#a-public-webhook-with-signature-verification)
 - [A cron job that writes to KV](#a-cron-job-that-writes-to-kv)
 
-The templates (`twd init <dir> --template <name>`) are longer examples;
+The templates (`tw init <dir> --template <name>`) are longer examples;
 each has a README.md. Limits that apply to all of these are in
 [limits.md](limits.md).
 
@@ -46,12 +46,12 @@ example:
 **The app.**
 
 ```jsonc
-// twd.jsonc
+// tailworks.jsonc
 {
   "name": "weather",
   "tailnet": {
-    "tags": ["tag:twd-wl-weather"],
-    // twd deploy checks that a grant lets this workload reach the gateway
+    "tags": ["tag:tw-wl-weather"],
+    // tw deploy checks that a grant lets this workload reach the gateway
     "connects": ["tag:api-gw"]
   }
 }
@@ -69,7 +69,7 @@ example:
 
 ```ts
 // src/index.ts
-import { getCaller } from "@twd/tailnet";
+import { getCaller } from "@tailworks/tailnet";
 
 interface Env {
   API_GW: string; // the gateway's address on the tailnet, e.g. "http://api-gw"
@@ -79,7 +79,7 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     getCaller(req); // tailnet callers only: throws on a request with no verified caller
     const r = await fetch(`${env.API_GW}/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m`);
-    const refused = r.headers.get("twd-error"); // set when twd refused the egress, e.g. peer_not_visible
+    const refused = r.headers.get("tw-error"); // set when tw refused the egress, e.g. peer_not_visible
     if (refused) {
       return Response.json({ error: refused, detail: await r.json() }, { status: 502 });
     }
@@ -88,17 +88,17 @@ export default {
 };
 ```
 
-**The policy.** `twd deploy` prints the grant if it's missing:
+**The policy.** `tw deploy` prints the grant if it's missing:
 
 ```jsonc
 "grants": [
-  {"src": ["tag:twd-wl-weather"], "dst": ["tag:api-gw"], "ip": ["tcp:80"]},
+  {"src": ["tag:tw-wl-weather"], "dst": ["tag:api-gw"], "ip": ["tcp:80"]},
 ]
 ```
 
-**Run it.** `twd dev --once` has no gateway to reach, so it shows the
+**Run it.** `tw dev --once` has no gateway to reach, so it shows the
 refusal your code handles: `{"error": "peer_not_visible", …}` with status
-502. After `twd deploy`, a request to the workload returns the forecast.
+502. After `tw deploy`, a request to the workload returns the forecast.
 `api-gw` is the gateway's MagicDNS name; a bare name matches a peer's
 first label, and names are never resolved through the host's DNS.
 
@@ -111,11 +111,11 @@ provider's API key can stay on the gateway; if the gateway wants a key
 from each app, keep it in a [secret](secrets.md), not in `vars`.
 
 ```jsonc
-// twd.jsonc
+// tailworks.jsonc
 {
   "name": "ask",
   "tailnet": {
-    "tags": ["tag:twd-wl-ask"],
+    "tags": ["tag:tw-wl-ask"],
     "connects": ["tag:llm-gw"]
   }
 }
@@ -133,12 +133,12 @@ from each app, keep it in a [secret](secrets.md), not in `vars`.
 
 ```ts
 // src/index.ts
-import { getCaller } from "@twd/tailnet";
+import { getCaller } from "@tailworks/tailnet";
 
 interface Env {
   LLM_URL: string; // an OpenAI-compatible gateway on the tailnet, e.g. "http://llm-gw/v1"
   LLM_MODEL: string;
-  LLM_API_KEY?: string; // a secret: `twd secret put LLM_API_KEY`, or .dev.vars for twd dev
+  LLM_API_KEY?: string; // a secret: `tw secret put LLM_API_KEY`, or .dev.vars for tw dev
 }
 
 export default {
@@ -157,8 +157,8 @@ export default {
         user: who.user?.login ?? who.nodeId, // lets the gateway attribute usage per caller
       }),
     });
-    if (r.headers.get("twd-error")) {
-      return Response.json({ error: r.headers.get("twd-error"), detail: await r.json() }, { status: 502 });
+    if (r.headers.get("tw-error")) {
+      return Response.json({ error: r.headers.get("tw-error"), detail: await r.json() }, { status: 502 });
     }
     const out: any = await r.json();
     return Response.json({ answer: out.choices?.[0]?.message?.content ?? null, keySet: !!env.LLM_API_KEY });
@@ -167,13 +167,13 @@ export default {
 ```
 
 ```sh
-printf 'LLM_API_KEY=%s\n' "$KEY" > .dev.vars    # twd dev (gitignored by the templates)
-twd secret put LLM_API_KEY                       # twd deploy; applies on the next deploy
+printf 'LLM_API_KEY=%s\n' "$KEY" > .dev.vars    # tw dev (gitignored by the templates)
+tw secret put LLM_API_KEY                       # tw deploy; applies on the next deploy
 ```
 
-The grant is `{"src": ["tag:twd-wl-ask"], "dst": ["tag:llm-gw"], "ip": ["tcp:80"]}`;
+The grant is `{"src": ["tag:tw-wl-ask"], "dst": ["tag:llm-gw"], "ip": ["tcp:80"]}`;
 if the gateway listens on another port, put it in `LLM_URL` and the
-grant. Under `twd dev` the call ends in `peer_not_visible`, as above.
+grant. Under `tw dev` the call ends in `peer_not_visible`, as above.
 
 With the Vercel AI SDK, pass the object's tailnet fetch to the provider
 instead: the `ai-agent` template's `src/model.ts` shows the swap from its
@@ -189,14 +189,14 @@ node's ID for a tagged device). A capability from a tailnet grant lets
 some people read everyone's notes.
 
 ```jsonc
-// twd.jsonc
+// tailworks.jsonc
 {
   "name": "notes",
   "tailnet": {
-    "tags": ["tag:twd-wl-notes"],
+    "tags": ["tag:tw-wl-notes"],
     "objects": {
       // each person's Notes object is its own tailnet node
-      "Notes": { "tags": ["tag:twd-notes-notes"] }
+      "Notes": { "tags": ["tag:tw-notes-notes"] }
     }
   }
 }
@@ -216,7 +216,7 @@ some people read everyone's notes.
 ```ts
 // src/index.ts
 import { DurableObject } from "cloudflare:workers";
-import { getCaller, principalKey, type Caller } from "@twd/tailnet";
+import { getCaller, principalKey, type Caller } from "@tailworks/tailnet";
 
 interface Env {
   NOTES: DurableObjectNamespace<Notes>;
@@ -268,20 +268,20 @@ everyone's notes:
 
 ```jsonc
 "grants": [
-  {"src": ["autogroup:member"], "dst": ["tag:twd-wl-notes", "tag:twd-notes-notes"], "ip": ["tcp:80"]},
-  {"src": ["group:support"], "dst": ["tag:twd-wl-notes", "tag:twd-notes-notes"], "app": {"example.com/cap/notes": [{"readAll": true}]}},
+  {"src": ["autogroup:member"], "dst": ["tag:tw-wl-notes", "tag:tw-notes-notes"], "ip": ["tcp:80"]},
+  {"src": ["group:support"], "dst": ["tag:tw-wl-notes", "tag:tw-notes-notes"], "app": {"example.com/cap/notes": [{"readAll": true}]}},
 ]
 ```
 
-**Run it.** Under `twd dev` you are the dev user:
+**Run it.** Under `tw dev` you are the dev user:
 
 ```sh
 curl -X POST -d 'buy milk' http://127.0.0.1:8787/   # {"owner":"user-1@…","notes":["buy milk"]}
 curl http://127.0.0.1:8787/u/someone-else           # 403 {"error":"forbidden"}
 ```
 
-`twd dev` has no policy evaluator yet, so it can't show the `readAll`
-grant; on a tailnet, `twd ls` lists one object (and node) per person who
+`tw dev` has no policy evaluator yet, so it can't show the `readAll`
+grant; on a tailnet, `tw ls` lists one object (and node) per person who
 has written a note.
 
 ## A public webhook with signature verification
@@ -292,12 +292,12 @@ signature before you trust the body. This checks GitHub's
 sign a timestamp with the body; check the timestamp's age too.
 
 ```jsonc
-// twd.jsonc
+// tailworks.jsonc
 {
   "name": "hooks",
   // only this path is served to the internet; everything else stays tailnet-only
   "public": { "routes": ["/webhooks/*"] },
-  "tailnet": { "tags": ["tag:twd-wl-hooks"] }
+  "tailnet": { "tags": ["tag:tw-wl-hooks"] }
 }
 ```
 
@@ -312,10 +312,10 @@ sign a timestamp with the body; check the timestamp's age too.
 
 ```ts
 // src/index.ts
-import { getRequester } from "@twd/tailnet";
+import { getRequester } from "@tailworks/tailnet";
 
 interface Env {
-  WEBHOOK_SECRET: string; // `twd secret put WEBHOOK_SECRET`; .dev.vars for twd dev
+  WEBHOOK_SECRET: string; // `tw secret put WEBHOOK_SECRET`; .dev.vars for tw dev
 }
 
 // GitHub-style signature: X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body>.
@@ -344,11 +344,11 @@ export default {
 };
 ```
 
-**Run it.** `twd dev` has no Funnel, so test the handler from your own
+**Run it.** `tw dev` has no Funnel, so test the handler from your own
 machine (`from` says `tailnet`; deployed, GitHub's requests say `public`):
 
 ```sh
-printf 'WEBHOOK_SECRET=s3cret\n' > .dev.vars && twd dev
+printf 'WEBHOOK_SECRET=s3cret\n' > .dev.vars && tw dev
 body='{"action":"opened"}'
 sig=$(printf %s "$body" | openssl dgst -sha256 -hmac s3cret | sed 's/^.* //')
 curl -X POST http://127.0.0.1:8787/webhooks/github \
@@ -356,7 +356,7 @@ curl -X POST http://127.0.0.1:8787/webhooks/github \
 # {"ok":true,"event":"issues","action":"opened","from":"tailnet"}; a wrong signature gets 401
 ```
 
-**Deploy it.** `twd secret put WEBHOOK_SECRET`, then `twd deploy`. It
+**Deploy it.** `tw secret put WEBHOOK_SECRET`, then `tw deploy`. It
 prints the tagOwners and `funnel` nodeAttrs entries to add if they're
 missing, and the public URL, `https://hooks.<tailnet>.ts.net/`. Point the
 GitHub webhook at `https://hooks.<tailnet>.ts.net/webhooks/github` with
@@ -368,10 +368,10 @@ certificate's delay: [public-ingress.md](public-ingress.md).
 ## A cron job that writes to KV
 
 ```jsonc
-// twd.jsonc
+// tailworks.jsonc
 {
   "name": "tick",
-  "tailnet": { "tags": ["tag:twd-wl-tick"] }
+  "tailnet": { "tags": ["tag:tw-wl-tick"] }
 }
 ```
 
@@ -388,7 +388,7 @@ certificate's delay: [public-ingress.md](public-ingress.md).
 
 ```ts
 // src/index.ts
-import { getCaller } from "@twd/tailnet";
+import { getCaller } from "@tailworks/tailnet";
 
 interface Env {
   RUNS: KVNamespace;
@@ -415,12 +415,12 @@ export default {
 runs a trigger now:
 
 ```sh
-twd dev --test-scheduled
+tw dev --test-scheduled
 curl 'http://127.0.0.1:8787/__scheduled?cron=*/15+*+*+*+*'   # {"outcome":"ok","noRetry":false}
 curl http://127.0.0.1:8787/                                  # {"last":{"cron":"*/15 * * * *","at":"…"},"runs":["run:…"]}
 ```
 
-Deployed, the host runs it every 15 minutes; `twd kv key list --binding RUNS`
+Deployed, the host runs it every 15 minutes; `tw kv key list --binding RUNS`
 shows the keys. The namespace (named `RUNS`, after the binding) is created
 by the first write. The cron syntax, missed runs and retries are in
 [cron-triggers.md](cron-triggers.md); KV's consistency and limits in

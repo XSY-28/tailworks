@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// twd.jsonc "replicas": a stateless workload on N distinct hosts behind one
+// tailworks.jsonc "replicas": a stateless workload on N distinct hosts behind one
 // Service; each replica is its own workload (lease, record, assignment,
 // node); scale-down and undeploy stop replicas; stateful bundles, too few
 // hosts and name clashes are refused.
@@ -21,10 +21,10 @@ func TestWorkloadReplicas(t *testing.T) {
 	}
 	c := e.c
 	bundle := func(jsonc string) string {
-		return base64.StdEncoding.EncodeToString(makeBundle(t, map[string]string{"twd.jsonc": jsonc, "dist/index.js": "export default {}"}))
+		return base64.StdEncoding.EncodeToString(makeBundle(t, map[string]string{"tailworks.jsonc": jsonc, "dist/index.js": "export default {}"}))
 	}
 	web := func(n string) map[string]any {
-		return map[string]any{"tenantID": tn, "workload": "web", "bundle": bundle(`{ "replicas": ` + n + `, "tailnet": { "tags": ["tag:twd-web"], "service": true } }`)}
+		return map[string]any{"tenantID": tn, "workload": "web", "bundle": bundle(`{ "replicas": ` + n + `, "tailnet": { "tags": ["tag:tw-web"], "service": true } }`)}
 	}
 	// assigned maps workload → host from every host's assignments.
 	assigned := func() map[string]Assignment {
@@ -56,7 +56,7 @@ func TestWorkloadReplicas(t *testing.T) {
 			if !ok {
 				t.Fatalf("%s not assigned: %v", name, as)
 			}
-			if a.Service != "svc:web" || !slices.Equal(a.WorkloadTags, []string{"tag:twd-web"}) || a.Fence {
+			if a.Service != "svc:web" || !slices.Equal(a.WorkloadTags, []string{"tag:tw-web"}) || a.Fence {
 				t.Fatalf("%s assignment %+v", name, a)
 			}
 			if seen[a.Lease] {
@@ -114,16 +114,16 @@ func TestWorkloadReplicas(t *testing.T) {
 
 	t.Run("StatefulRefused", func(t *testing.T) {
 		eb := c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "counter",
-			"bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:twd-web"], "objects": { "Counter": { "tags": ["tag:twd-web"] } } } }`)}, 400, "bad_bundle")
+			"bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"], "objects": { "Counter": { "tags": ["tag:tw-web"] } } } }`)}, 400, "bad_bundle")
 		if !strings.Contains(eb["message"].(string), "stateless") || !strings.Contains(eb["message"].(string), "Counter") {
 			t.Fatalf("message %v", eb["message"])
 		}
-		// The dry run (twd deploy's preflight) refuses it the same way.
+		// The dry run (tw deploy's preflight) refuses it the same way.
 		c.fail("POST", "/v1/deployments?dryRun=true", map[string]any{"tenantID": tn, "workload": "counter",
-			"bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:twd-web"], "objects": { "Counter": { "tags": ["tag:twd-web"] } } } }`)}, 400, "bad_bundle")
+			"bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"], "objects": { "Counter": { "tags": ["tag:tw-web"] } } } }`)}, 400, "bad_bundle")
 		// "fence": "never" classes tolerate several instances.
 		c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "cache",
-			"bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:twd-web"], "objects": { "Cache": { "tags": ["tag:twd-web"], "fence": "never" } } } }`)}, nil)
+			"bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"], "objects": { "Cache": { "tags": ["tag:tw-web"], "fence": "never" } } } }`)}, nil)
 		c.ok("DELETE", "/v1/deployments/"+latestID(t, e, tn, "cache"), nil, nil)
 	})
 
@@ -136,8 +136,8 @@ func TestWorkloadReplicas(t *testing.T) {
 	})
 
 	t.Run("NameTakenBySeparateWorkload", func(t *testing.T) {
-		c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api--r2", "bundle": bundle(`{ "tailnet": { "tags": ["tag:twd-web"] } }`)}, nil)
-		c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api", "bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:twd-web"] } }`)}, 409, "replica_conflict")
+		c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api--r2", "bundle": bundle(`{ "tailnet": { "tags": ["tag:tw-web"] } }`)}, nil)
+		c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api", "bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"] } }`)}, 409, "replica_conflict")
 	})
 
 	t.Run("UndeployStopsReplicas", func(t *testing.T) {

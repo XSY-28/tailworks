@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/obs"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/obs"
 )
 
 // TelemetryOptions tune the pipeline (zero values: the defaults).
@@ -83,10 +83,10 @@ func (o TelemetryOptions) withDefaults() TelemetryOptions {
 
 // Metric attribute keys.
 const (
-	attrTenant   = "twd.tenant.id"
-	attrWorkload = "twd.workload"
-	attrClass    = "twd.object.class"
-	attrObject   = "twd.object.id"
+	attrTenant   = "tw.tenant.id"
+	attrWorkload = "tw.workload"
+	attrClass    = "tw.object.class"
+	attrObject   = "tw.object.id"
 )
 
 type telemetry struct {
@@ -136,19 +136,19 @@ func newTelemetry(h *Host) *telemetry {
 		obs.DurationBuckets, "http.request.method", "http.response.status_code", attrTenant, attrWorkload, attrClass)
 	t.egressDur = r.Histogram("http.client.request.duration", "s", "Duration of egress requests, per object (refusals have error.type).",
 		obs.DurationBuckets, "http.request.method", "http.response.status_code", "error.type", attrTenant, attrWorkload, attrObject)
-	t.invocations = r.Counter("twd.invocations", "{invocation}", "workerd invocations by event and outcome (from the tail).",
-		attrTenant, attrWorkload, attrClass, "twd.invocation.event", "twd.invocation.outcome")
-	t.wakeups = r.Counter("twd.do.wakeups", "{wakeup}", "Durable Object instances started (constructed) in workerd.", attrTenant, attrWorkload, attrClass)
-	t.logsDropped = r.Counter("twd.logs.dropped", "{record}", "Request records not written: the workload exceeded its record rate.", attrTenant, attrWorkload)
-	t.expDropped = r.Counter("twd.telemetry.export.dropped", "{item}", "Telemetry items not exported (queue full, or the export failed).", attrTenant, attrWorkload, "twd.signal")
-	t.expErrors = r.Counter("twd.telemetry.export.errors", "{export}", "Failed OTLP exports.", attrTenant, attrWorkload, "twd.signal")
-	r.GaugeFunc("twd.do.objects", "{object}", "Objects (Durable Object instances with a tailnet node, and workload entry nodes) on this host, by status.",
-		[]string{attrTenant, attrWorkload, attrClass, "twd.object.status"}, t.objectCounts)
-	r.GaugeFunc("twd.host.capacity", "1", "This host's capacity vector (nodes, vms, vm_memory_mib, huge_memory_mib, vcpus, scratch_mib).",
-		[]string{"twd.resource"}, t.capacity)
-	r.GaugeFunc("twd.host.usage", "1", "This host's live usage against its capacity (same resources, plus containers).",
-		[]string{"twd.resource"}, t.usage)
-	r.GaugeFunc("twd.workloads", "{workload}", "Workloads on this host by status.", []string{attrTenant, "twd.workload.status"}, t.workloadCounts)
+	t.invocations = r.Counter("tw.invocations", "{invocation}", "workerd invocations by event and outcome (from the tail).",
+		attrTenant, attrWorkload, attrClass, "tw.invocation.event", "tw.invocation.outcome")
+	t.wakeups = r.Counter("tw.do.wakeups", "{wakeup}", "Durable Object instances started (constructed) in workerd.", attrTenant, attrWorkload, attrClass)
+	t.logsDropped = r.Counter("tw.logs.dropped", "{record}", "Request records not written: the workload exceeded its record rate.", attrTenant, attrWorkload)
+	t.expDropped = r.Counter("tw.telemetry.export.dropped", "{item}", "Telemetry items not exported (queue full, or the export failed).", attrTenant, attrWorkload, "tw.signal")
+	t.expErrors = r.Counter("tw.telemetry.export.errors", "{export}", "Failed OTLP exports.", attrTenant, attrWorkload, "tw.signal")
+	r.GaugeFunc("tw.do.objects", "{object}", "Objects (Durable Object instances with a tailnet node, and workload entry nodes) on this host, by status.",
+		[]string{attrTenant, attrWorkload, attrClass, "tw.object.status"}, t.objectCounts)
+	r.GaugeFunc("tw.host.capacity", "1", "This host's capacity vector (nodes, vms, vm_memory_mib, huge_memory_mib, vcpus, scratch_mib).",
+		[]string{"tw.resource"}, t.capacity)
+	r.GaugeFunc("tw.host.usage", "1", "This host's live usage against its capacity (same resources, plus containers).",
+		[]string{"tw.resource"}, t.usage)
+	r.GaugeFunc("tw.workloads", "{workload}", "Workloads on this host by status.", []string{attrTenant, "tw.workload.status"}, t.workloadCounts)
 	return t
 }
 
@@ -176,7 +176,7 @@ func (t *telemetry) close() {
 // ---- metrics ----
 
 // Metrics is the host's registry (for a combined /metrics in mgmt's
-// process, single-process twd up).
+// process, single-process tw up).
 func (h *Host) Metrics() *obs.Registry { return h.tel.reg }
 
 // MetricsHandler serves GET /metrics.
@@ -313,12 +313,12 @@ func (s *ingressSpan) end() {
 		st = obs.StatusError
 	}
 	attrs := []obs.Attr{obs.A("http.request.method", rec.Method), obs.A("url.path", rec.Path), obs.A("http.response.status_code", int64(code)),
-		obs.A(attrWorkload, rec.Workload), obs.A(attrObject, rec.Object), obs.A(attrClass, rec.Class), obs.A("twd.object.name", rec.Name),
-		obs.A("twd.deployment.id", rec.Deployment), obs.A("twd.audit.trace_id", rec.AuditTraceID)}
+		obs.A(attrWorkload, rec.Workload), obs.A(attrObject, rec.Object), obs.A(attrClass, rec.Class), obs.A("tw.object.name", rec.Name),
+		obs.A("tw.deployment.id", rec.Deployment), obs.A("tw.audit.trace_id", rec.AuditTraceID)}
 	if c := rec.Caller; c != nil {
-		attrs = append(attrs, obs.A("twd.caller.node", c.Node), obs.A("twd.caller.user", c.User), obs.A("twd.caller.object", c.Object))
+		attrs = append(attrs, obs.A("tw.caller.node", c.Node), obs.A("tw.caller.user", c.User), obs.A("tw.caller.object", c.Object))
 		if c.Public {
-			attrs = append(attrs, obs.A("twd.caller.public", true), obs.A("client.address", c.IP))
+			attrs = append(attrs, obs.A("tw.caller.public", true), obs.A("client.address", c.IP))
 		}
 	}
 	t.span(s.w, obs.Span{TraceID: rec.TraceID, SpanID: rec.SpanID, ParentSpanID: s.parent, Name: name, Kind: obs.SpanKindServer,
@@ -352,7 +352,7 @@ func callerOf(blob map[string]any) *obs.Caller {
 			}
 		}
 	}
-	if o, _ := c["twd"].(map[string]any); o != nil {
+	if o, _ := c["tw"].(map[string]any); o != nil {
 		out.Object, _ = o["objectId"].(string)
 	}
 	return out
@@ -420,7 +420,7 @@ func (s *egressSpan) end(code int, errCode string) {
 	host, port := r.URL.Hostname(), r.URL.Port()
 	attrs := []obs.Attr{obs.A("http.request.method", r.Method), obs.A("server.address", host), obs.A("url.full", r.URL.Scheme+"://"+r.URL.Host+r.URL.Path),
 		obs.A("http.response.status_code", int64(code)), obs.A("error.type", errCode), obs.A(attrWorkload, w.name), obs.A(attrObject, o.ID),
-		obs.A(attrClass, o.Class), obs.A("twd.object.name", o.Name)}
+		obs.A(attrClass, o.Class), obs.A("tw.object.name", o.Name)}
 	if p, err := strconv.Atoi(port); err == nil {
 		attrs = append(attrs, obs.A("server.port", int64(p)))
 	}
@@ -576,9 +576,9 @@ func (t *telemetry) runtimeSpans(inst *instance, as *attested, spans []runtimeSp
 		}
 		attrs := []obs.Attr{obs.A(attrWorkload, w.name)}
 		if as != nil {
-			attrs = append(attrs, obs.A(attrClass, as.Class), obs.A("twd.object.name", as.Name))
+			attrs = append(attrs, obs.A(attrClass, as.Class), obs.A("tw.object.name", as.Name))
 		}
-		for _, k := range []string{"twd.do.class", "twd.do.name", "http.request.method"} {
+		for _, k := range []string{"tw.do.class", "tw.do.name", "http.request.method"} {
 			if v, ok := rs.Attrs[k].(string); ok && len(v) <= 256 {
 				attrs = append(attrs, obs.A(k, v))
 			}
@@ -637,7 +637,7 @@ func (t *telemetry) join(w *workload, rec *obs.Record, ingress bool) {
 func merge(in, tail *obs.Record) *obs.Record {
 	in.Logs, in.Exceptions, in.Outcome, in.Event, in.Entrypoint = tail.Logs, tail.Exceptions, tail.Outcome, tail.Event, tail.Entrypoint
 	in.Truncated = in.Truncated || tail.Truncated
-	if in.Class == "" && tail.Class != "" { // /_twd/o/<Class>/<name> via the workload node
+	if in.Class == "" && tail.Class != "" { // /_tw/o/<Class>/<name> via the workload node
 		in.Class, in.Name, in.DurableObjectID = tail.Class, tail.Name, tail.DurableObjectID
 		if tail.Object != "" {
 			in.Object = tail.Object
@@ -1040,7 +1040,7 @@ func (e *exporter) export(now time.Time) {
 func (t *telemetry) resource(w *workload) []obs.Attr {
 	return []obs.Attr{obs.A("service.name", w.name), obs.A("service.namespace", w.tenantID), obs.A("service.instance.id", t.h.cfg.HostID+"/"+w.name),
 		obs.A("host.name", t.h.cfg.HostID), obs.A(attrTenant, w.tenantID), obs.A(attrWorkload, w.name),
-		obs.A("telemetry.sdk.name", "twd"), obs.A("telemetry.sdk.language", "go")}
+		obs.A("telemetry.sdk.name", "tw"), obs.A("telemetry.sdk.language", "go")}
 }
 
 // ctxOrBackground is the host's context once started.

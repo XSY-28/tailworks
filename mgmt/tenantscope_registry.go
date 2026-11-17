@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rosskukulinski/twd/internal/registry"
+	"github.com/rosskukulinski/tailworks/internal/registry"
 )
 
 // The registry's rule for tenant admins (ADR-043 D3). Handler

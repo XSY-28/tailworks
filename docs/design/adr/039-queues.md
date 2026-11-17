@@ -21,8 +21,8 @@
   `--experimental` for crons) runs a Worker's `queue()` handler with
   workerd's own `MessageBatch`, accepts `serializedBody` (V8 structured
   clone) as well as `body`, and returns `{outcome, ackAll, retryBatch,
-  explicitAcks, retryMessages}`. So twd needs a broker and a dispatcher,
-  not an API. The default `contentType` at twd's compatibility dates is
+  explicitAcks, retryMessages}`. So tailworks needs a broker and a dispatcher,
+  not an API. The default `contentType` at tailworks' compatibility dates is
   `json`; `v8` is opt-in. Userland can't decode `v8` (`node:v8`
   `serialize` is not implemented), but `Fetcher.queue` can.
 - **ADR-platform-stores** gives a platform SQLite DO per store with a
@@ -59,10 +59,10 @@
 1. **Storage and ownership.** A queue is a tenant-scoped resource in mgmt
    (`queues`, `queue_messages`), named like Cloudflare's (`[a-z0-9-]`,
    ≤ 63). Each queue has a random `incarnation` and a 32-byte data key in
-   custody (`twd/<tenant>/queues/<incarnation>/key`). Bodies are sealed
+   custody (`tw/<tenant>/queues/<incarnation>/key`). Bodies are sealed
    with AES-256-GCM, bound to the incarnation and message ID; deleting a
    queue deletes its rows and key (crypto-shred). The first send or pull
-   creates the queue (`twd queues create` exists for operators, and the
+   creates the queue (`tw queues create` exists for operators, and the
    dead-letter queue is created on first use, as on Cloudflare).
 
 2. **Delivery semantics.** At least once.
@@ -121,22 +121,22 @@
 4. **Pull consumers and content types.** `POST …/queues/{q}/messages/pull`
    and `…/ack` are Cloudflare's pull API shape (lease IDs, visibility
    timeout, per-message retries with delays) on the admin role: a tailnet
-   identity with twd's admin capability, never a bearer token. A per-queue
+   identity with tailworks' admin capability, never a bearer token. A per-queue
    capability for non-admin pull clients is future work. Content types
    `json`, `text` and `bytes` are delivered as `body`; `v8` is stored as
    its serialized bytes and handed to `Fetcher.queue` as `serializedBody`,
    so workerd deserializes it. A pull consumer gets every type as base64
    bytes plus its `contentType`.
 
-5. **Operator surface.** `twd queues create|ls|info|rm|purge` and
-   `twd queues messages <queue>` (peek without claiming; how you read a
-   dead-letter queue), `twd queues send` (JSON or text), and the API
+5. **Operator surface.** `tw queues create|ls|info|rm|purge` and
+   `tw queues messages <queue>` (peek without claiming; how you read a
+   dead-letter queue), `tw queues send` (JSON or text), and the API
    (`/v1/tenants/{id}/queues…`, tag `queues`). Audited: `queue_create`,
    `queue_delete`, `queue_purge`. Sends, claims and acks are not audited
    (volume).
 
 6. **Delivery to the handler.** hostd posts the batch over the instance's
-   private ingress as `cf.twd {kind: "queue"}` (only hostd can set it, as
+   private ingress as `cf.tw {kind: "queue"}` (only hostd can set it, as
    for crons). The platform decodes the bodies and calls
    `env.TENANT.queue(name, messages)`. The batch's first message carries
    the run's create ticket (so `queue()` can create objects through its
@@ -147,7 +147,7 @@
 7. **Limits.** As Cloudflare: 128 KB per message, 100 messages and 256 KB
    per `sendBatch`, `delaySeconds` and `retry_delay` ≤ 43200 (12 h),
    `max_batch_size` ≤ 100, `max_batch_timeout` ≤ 60 s, `max_retries` ≤
-   100, `max_concurrency` ≤ 20 on twd. A queue keeps at most 1 GiB of
+   100, `max_concurrency` ≤ 20 on tailworks. A queue keeps at most 1 GiB of
    bodies (`400 queue_limit`).
 
 **Consequences.**
@@ -160,8 +160,8 @@
 - An mgmt outage stops sends (`send()` throws `queue_unavailable`) and
   delivery. Nothing is lost; claimed messages come back when their
   leases expire.
-- `twd dev` runs producers and consumers against its in-memory fake
-  mgmt, so dev queues last one `twd dev` run.
+- `tw dev` runs producers and consumers against its in-memory fake
+  mgmt, so dev queues last one `tw dev` run.
 
 **Open.**
 

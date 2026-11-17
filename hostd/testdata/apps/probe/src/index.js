@@ -1,15 +1,15 @@
-// Test fixture for twd-hostd: an ordinary Worker + DOs that expose what the
+// Test fixture for tw-hostd: an ordinary Worker + DOs that expose what the
 // platform did (caller, attribution, headers) so the Go tests can check it.
 import { DurableObject } from "cloudflare:workers";
-import { getCaller, tailnet, isTailnetError } from "@twd/tailnet";
+import { getCaller, tailnet, isTailnetError } from "@tailworks/tailnet";
 
-const SEEN = (req) => Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-twd") || k.startsWith("cf-") || k === "x-forwarded-for" || k === "tailnet-assertion"));
+const SEEN = (req) => Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-tw-") || k.startsWith("cf-") || k === "x-forwarded-for" || k === "tailnet-assertion"));
 
 async function egress(url, init) {
   try {
     const r = await fetch(url, init);
     const h = { "content-type": r.headers.get("content-type") || "text/plain" };
-    if (r.headers.get("twd-error")) h["twd-error"] = r.headers.get("twd-error");
+    if (r.headers.get("tw-error")) h["tw-error"] = r.headers.get("tw-error");
     return new Response(await r.text(), { status: r.status, headers: h });
   } catch (e) {
     return Response.json({ tenantCaught: String(e) }, { status: 599 });
@@ -53,7 +53,7 @@ export class Probe extends DurableObject {
       case "/forge-egress": {
         const victim = q("as");
         return egress(q("url"), {
-          headers: { "x-twd-object": victim, "x-twd-class": "Probe", "x-twd-name": victim, "x-twd-mac": "00", "x-twd-cf": JSON.stringify({ objectId: victim }), "Proxy-Authorization": victim },
+          headers: { "x-tw-object": victim, "x-tw-class": "Probe", "x-tw-name": victim, "x-tw-mac": "00", "x-tw-cf": JSON.stringify({ objectId: victim }), "Proxy-Authorization": victim },
           cf: { objectId: victim },
         });
       }

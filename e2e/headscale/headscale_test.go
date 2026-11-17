@@ -9,8 +9,8 @@
 //   - TestNodeLifecycle: the client's mint → join → list → rename →
 //     delete path (the kill Tier 2 and reaper mapping), including the
 //     node-side rename the pre-joined node pool relies on (ADR-031).
-//   - TestTwdUp: `twd up --control=headscale`, a deploy, a call from
-//     another tailnet node, kill and `twd down`, all through the CLI.
+//   - TestTwUp: `tw up --control=headscale`, a deploy, a call from
+//     another tailnet node, kill and `tw down`, all through the CLI.
 package headscale_test
 
 import (
@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/policy"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/internal/policy"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"github.com/tailscale/hujson"
 	"tailscale.com/ipn"
 )
@@ -31,17 +31,17 @@ import (
 const TestTag = "tag:ttest"
 
 // workloadSnippet is a workload's policy on the Headscale profile: its
-// tags owned by tag:twd, the test client's tag, an IP grant and a grant
+// tags owned by tag:tw, the test client's tag, an IP grant and a grant
 // with an app capability (caps travel in grants only).
 func workloadSnippet() policy.Snippet {
 	s := policy.Headscale(policy.InfraSnippet(7474))
-	s.TagOwners["tag:twd-wl-hello"] = []string{"tag:twd"}
-	s.TagOwners["tag:twd-agent-support"] = []string{"tag:twd"}
-	s.TagOwners["tag:twd-agent-support-sub"] = []string{"tag:twd", "tag:twd-agent-support"}
-	s.TagOwners[TestTag] = []string{"tag:twd"}
+	s.TagOwners["tag:tw-wl-hello"] = []string{"tag:tw"}
+	s.TagOwners["tag:tw-agent-support"] = []string{"tag:tw"}
+	s.TagOwners["tag:tw-agent-support-sub"] = []string{"tag:tw", "tag:tw-agent-support"}
+	s.TagOwners[TestTag] = []string{"tag:tw"}
 	s.Grants = append(s.Grants,
-		map[string]any{"src": []string{TestTag}, "dst": []string{"tag:twd-wl-hello", "tag:twd-agent-support"}, "ip": []string{"tcp:80"}},
-		map[string]any{"src": []string{"tag:twd-agent-support"}, "dst": []string{TestTag}, "ip": []string{"tcp:80"},
+		map[string]any{"src": []string{TestTag}, "dst": []string{"tag:tw-wl-hello", "tag:tw-agent-support"}, "ip": []string{"tcp:80"}},
+		map[string]any{"src": []string{"tag:tw-agent-support"}, "dst": []string{TestTag}, "ip": []string{"tcp:80"},
 			"app": map[string]any{"example.com/cap/mcp": []any{map[string]any{"tools": []string{"lookup_order"}, "limits": map[string]any{"refund": map[string]any{"maxUsd": 50}}}}}},
 	)
 	return s
@@ -97,16 +97,16 @@ func TestPolicyProfile(t *testing.T) {
 	// (RFC §7.2). Each fragment is merged into the applied policy and
 	// validated by the real server.
 	rejected := map[string]string{
-		"autogroup:admin owner":  `"tagOwners": {"tag:twd-x": ["autogroup:admin", "tag:twd"]}`,
-		"funnel nodeAttr":        `"nodeAttrs": [{"target": ["tag:twd"], "attr": ["funnel"]}]`,
-		"svc: destination":       `"grants": [{"src": ["tag:twd"], "dst": ["svc:web"], "ip": ["tcp:443"]}]`,
-		"autoApprovers.services": `"autoApprovers": {"services": {"svc:web": ["tag:twd"]}}`,
-		"postures":               `"postures": {"posture:twd-live": ["custom:twd-live == true"]}`,
-		"srcPosture":             `"grants": [{"src": ["tag:twd"], "dst": ["tag:twd"], "ip": ["*"], "srcPosture": ["posture:x"]}]`,
-		"app in nodeAttrs":       `"nodeAttrs": [{"target": ["tag:twd"], "app": {"example.com/cap/x": [{}]}}]`,
+		"autogroup:admin owner":  `"tagOwners": {"tag:tw-x": ["autogroup:admin", "tag:tw"]}`,
+		"funnel nodeAttr":        `"nodeAttrs": [{"target": ["tag:tw"], "attr": ["funnel"]}]`,
+		"svc: destination":       `"grants": [{"src": ["tag:tw"], "dst": ["svc:web"], "ip": ["tcp:443"]}]`,
+		"autoApprovers.services": `"autoApprovers": {"services": {"svc:web": ["tag:tw"]}}`,
+		"postures":               `"postures": {"posture:tw-live": ["custom:tw-live == true"]}`,
+		"srcPosture":             `"grants": [{"src": ["tag:tw"], "dst": ["tag:tw"], "ip": ["*"], "srcPosture": ["posture:x"]}]`,
+		"app in nodeAttrs":       `"nodeAttrs": [{"target": ["tag:tw"], "app": {"example.com/cap/x": [{}]}}]`,
 	}
 	for name, frag := range rejected {
-		body := []byte(`{"tagOwners": {"tag:twd": []}, ` + frag + `}`)
+		body := []byte(`{"tagOwners": {"tag:tw": []}, ` + frag + `}`)
 		if strings.HasPrefix(frag, `"tagOwners"`) {
 			body = []byte(`{` + frag + `}`)
 		}
@@ -131,24 +131,24 @@ func TestNodeLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An unused key is expired by DeleteKey (warm-key revoke).
-	spare, err := hs.Client.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{"tag:twd-agent-support"}, Preauthorized: true, ExpirySeconds: 300})
+	spare, err := hs.Client.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{"tag:tw-agent-support"}, Preauthorized: true, ExpirySeconds: 300})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := hs.Client.DeleteKey(ctx, spare.ID); err != nil {
 		t.Fatalf("expire unused key: %v", err)
 	}
-	if _, err := nettest.NewNode(ctx, hs.URL, spare.Secret, "twd-e2e-revoked", t.TempDir()); err == nil {
+	if _, err := nettest.NewNode(ctx, hs.URL, spare.Secret, "tw-e2e-revoked", t.TempDir()); err == nil {
 		t.Fatal("a node joined with an expired (revoked) key")
 	}
 	t.Log("PASS DeleteKey: an expired key can't join")
 
 	st := time.Now()
-	k, err := hs.Client.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{"tag:twd-agent-support"}, Preauthorized: true, ExpirySeconds: 300})
+	k, err := hs.Client.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{"tag:tw-agent-support"}, Preauthorized: true, ExpirySeconds: 300})
 	if err != nil {
 		t.Fatal(err)
 	}
-	n, err := nettest.NewNode(ctx, hs.URL, k.Secret, "twd-e2e-obj1", t.TempDir())
+	n, err := nettest.NewNode(ctx, hs.URL, k.Secret, "tw-e2e-obj1", t.TempDir())
 	if err != nil {
 		t.Fatalf("join with a minted key: %v", err)
 	}
@@ -162,15 +162,15 @@ func TestNodeLifecycle(t *testing.T) {
 	if _, err := strconv.ParseUint(id, 10, 64); err != nil {
 		t.Fatalf("StableNodeID %q is not the numeric Headscale node ID", id)
 	}
-	if self.Self.Tags == nil || self.Self.Tags.Len() != 1 || self.Self.Tags.At(0) != "tag:twd-agent-support" {
-		t.Fatalf("tags %v, want [tag:twd-agent-support]", self.Self.Tags)
+	if self.Self.Tags == nil || self.Self.Tags.Len() != 1 || self.Self.Tags.At(0) != "tag:tw-agent-support" {
+		t.Fatalf("tags %v, want [tag:tw-agent-support]", self.Self.Tags)
 	}
-	if want := "twd-e2e-obj1." + hs.Domain + "."; self.Self.DNSName != want {
+	if want := "tw-e2e-obj1." + hs.Domain + "."; self.Self.DNSName != want {
 		t.Fatalf("MagicDNS %q, want %q", self.Self.DNSName, want)
 	}
 	t.Logf("PASS joined: StableNodeID %s, %s, tags %v", id, self.Self.DNSName, self.Self.Tags.AsSlice())
 	// The key was single-use.
-	if _, err := nettest.NewNode(ctx, hs.URL, k.Secret, "twd-e2e-reuse", t.TempDir()); err == nil {
+	if _, err := nettest.NewNode(ctx, hs.URL, k.Secret, "tw-e2e-reuse", t.TempDir()); err == nil {
 		t.Fatal("a single-use key joined a second node")
 	}
 
@@ -178,20 +178,20 @@ func TestNodeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasDevice(devs, id, "twd-e2e-obj1."+hs.Domain) {
+	if !hasDevice(devs, id, "tw-e2e-obj1."+hs.Domain) {
 		t.Fatalf("ListDevices %+v lacks node %s", devs, id)
 	}
 
 	// ADR-031 (variant B): the pool hands a pre-joined node to an object by
 	// a node-side hostname change. Does Headscale follow it?
 	st = time.Now()
-	if _, err := n.LC.EditPrefs(ctx, &ipn.MaskedPrefs{Prefs: ipn.Prefs{Hostname: "twd-e2e-renamed"}, HostnameSet: true}); err != nil {
+	if _, err := n.LC.EditPrefs(ctx, &ipn.MaskedPrefs{Prefs: ipn.Prefs{Hostname: "tw-e2e-renamed"}, HostnameSet: true}); err != nil {
 		t.Fatal(err)
 	}
 	renamed := false
 	for time.Since(st) < 20*time.Second {
 		s, err := n.LC.StatusWithoutPeers(ctx)
-		if err == nil && s.Self.DNSName == "twd-e2e-renamed."+hs.Domain+"." {
+		if err == nil && s.Self.DNSName == "tw-e2e-renamed."+hs.Domain+"." {
 			renamed = true
 			break
 		}

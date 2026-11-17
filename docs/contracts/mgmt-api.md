@@ -1,37 +1,37 @@
 <!-- GENERATED from api/openapi.yaml by `make api` (api/render). Do not edit; edit the spec. -->
 
-# twd management API (1.0.0-pre)
+# tailworks management API (1.0.0-pre)
 
-_twd-mgmt ⇄ twd-hostd ⇄ twd CLI contract (/v1)_
+_tw-mgmt ⇄ tw-hostd ⇄ tailworks CLI contract (/v1)_
 
 This document is the **single source of truth** for `/v1`. Go server
 interfaces and types (`mgmt/api/v1`), the hostd/CLI client
 (`hostd/mgmtapi/v1`) and `docs/contracts/mgmt-api.md` are generated from
-it (`make api`); none of them is hand-edited. `/v0` is gone: twd is
+it (`make api`); none of them is hand-edited. `/v0` is gone: tailworks is
 pre-release and `/v1` is a breaking replacement with no compatibility shim.
 
 ## Transport and authentication (tsnet-only in normal operation)
 
-mgmt serves the API on **its own tsnet node** `twd-mgmt` (`tag:twd-mgmt`),
+mgmt serves the API on **its own tsnet node** `tw-mgmt` (`tag:tw-mgmt`),
 on `:80` and, when the tailnet has HTTPS, on `:443` with the node's
 certificate (tailnet-only). mgmt serves nothing over Funnel.
 
 Every tailnet request is authenticated by **Tailscale WhoIs on the
 connection**, never by a bearer token or API key:
 
-- **host** — the peer node carries `tag:twd-host`. hostd runs its own
-  tsnet node `twd-host-<hostID>`; the node is bound to the `hostID` it
+- **host** — the peer node carries `tag:tw-host`. hostd runs its own
+  tsnet node `tw-host-<hostID>`; the node is bound to the `hostID` it
   registered with (`PUT /v1/hosts/{id}`), and may only act on that host's
   records and on the namespaces it holds a lease for.
 - **admin** — the peer's WhoIs `CapMap` holds the app capability
-  `twd.dev/cap/admin` toward `tag:twd-mgmt` (granted by the base policy
+  `github.com/rosskukulinski/tailworks/cap/admin` toward `tag:tw-mgmt` (granted by the base policy
   snippet to `autogroup:admin`; tenants may grant it to users, groups or
-  tags such as a CI node). `twd-mgmt -admins <logins>` is an override.
-- **tenant admin** — the peer holds `twd.dev/cap/tenant-admin` (and not
-  `twd.dev/cap/admin`). Each value names tenants and actions:
+  tags such as a CI node). `tw-mgmt -admins <logins>` is an override.
+- **tenant admin** — the peer holds `github.com/rosskukulinski/tailworks/cap/tenant-admin` (and not
+  `github.com/rosskukulinski/tailworks/cap/admin`). Each value names tenants and actions:
   `{"tenants": ["payments"], "actions": ["read", "deploy"]}`, both
   required. The actions are `read`, `deploy`, `kill`, `secrets` and
-  `data`. An operation is open to tenant admins only if its `x-twd-role`
+  `data`. An operation is open to tenant admins only if its `x-tw-role`
   has a `tenant:<action>` part, and only for a tenant that one single
   value names with that action. Lists are limited to those tenants, and
   another tenant's deployment or object is `404`. Hosts, releases,
@@ -39,14 +39,14 @@ connection**, never by a bearer token or API key:
   (ADR-043).
 - everyone else: `403 not_admin` with the grant `snippet` to add.
 
-Each operation declares its role in `x-twd-role` (`admin`, `host`,
+Each operation declares its role in `x-tw-role` (`admin`, `host`,
 `admin|host`, `any`, plus `tenant:<action>` where tenant admins may call
 it). The security scheme `tailnetWhoIs` documents this;
 it is **not** a token scheme and no header is sent.
 
 The unix socket + host token (RT-03) survives **only** behind
-`--local-dev` (`twd dev`, hermetic tests). It is the `localHostToken`
-scheme; `twd doctor` reports `transport: tsnet` in normal operation and
+`--local-dev` (`tw dev`, hermetic tests). It is the `localHostToken`
+scheme; `tw doctor` reports `transport: tsnet` in normal operation and
 flags any local-socket use.
 
 mgmt → hostd pushes (kill, assignments) go to the host's tsnet node and are
@@ -76,22 +76,22 @@ hostd's API, not this document's.
   is the typed error plus the kill record (`TombstoneError`).
 - **Errors** are the typed error catalog (docs/errors.md) shape
   `{code, message, missing?, snippet?, doc_url, trace_id}` and also set
-  `Twd-Error: <code>`; `identity_pending` sets `Retry-After: 1`.
+  `Tw-Error: <code>`; `identity_pending` sets `Retry-After: 1`.
 - **Body limits.** Requests from the `host` role are capped at **1 MiB**
   except `POST /v1/audit` (batches; 64 MiB). Admin uploads (`POST
   /v1/deployments` bundles) keep the 64 MiB limit. Over the cap is
   `400 bad_request`.
-- **Audit.** Every mutating operation is marked `x-twd-audit: true` and
+- **Audit.** Every mutating operation is marked `x-tw-audit: true` and
   writes to mgmt's hash chain with the caller's actor (`deployedBy`,
   `by`): the WhoIs login for users, `<tag> (<stableNodeID>)` for tagged
-  admin nodes, `host:<id>` for hosts, `Twd-Actor` or `local` on the
+  admin nodes, `host:<id>` for hosts, `Tw-Actor` or `local` on the
   local-dev socket.
 
 ## Decisions recorded here
 
 - **Preflight is `POST /v1/deployments?dryRun=true`** (decided by Ross,
   2026-11-08): the request body is exactly a real deploy's; mgmt parses
-  `twd.jsonc` from the bundle as a deploy would (`tailnet.tags`,
+  `tailworks.jsonc` from the bundle as a deploy would (`tailnet.tags`,
   `tailnet.objects.*.tags` → `srcTags`; `tailnet.connects`), checks grants
   and tagOwners against the policy cache and answers `200 PreflightResult`
   (missing grants with HuJSON snippets). Nothing is created, no lease is
@@ -150,7 +150,7 @@ hostd's API, not this document's.
 | `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | Read the object's node certificate |
 | `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
-| `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/twd/catalog.json) |
+| `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/tailworks/catalog.json) |
 | `GET` | `/v1/releases/{version}/artifacts/{name}` | admin\|host | no | `GetReleaseArtifact` | Download a release tarball (hosts upgrading themselves) |
 | `PUT` | `/v1/releases/{version}/artifacts/{name}` | admin | yes | `PutReleaseArtifact` | Upload a release tarball (or its SHA256SUMS) |
 | `GET` | `/v1/status` | admin | no | `GetStatus` | mgmt status |
@@ -159,11 +159,11 @@ hostd's API, not this document's.
 | `GET` | `/v1/tenants/{id}` | admin\|host\|tenant:read | no | `GetTenant` | Read a tenant |
 | `PATCH` | `/v1/tenants/{id}` | admin | yes | `UpdateTenant` | Update a tenant (JSON Merge Patch) |
 | `DELETE` | `/v1/tenants/{id}` | admin | yes | `DeleteTenant` | Delete a tenant |
-| `GET` | `/v1/tenants/{id}/approvals` | admin\|approver | no | `ListApprovals` | The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI) |
-| `GET` | `/v1/tenants/{id}/notifications` | admin\|tenant:read | no | `GetTenantNotifications` | Read the tenant's notification webhook (`twd notify`), without secrets |
-| `PUT` | `/v1/tenants/{id}/notifications` | admin\|tenant:deploy | yes | `PutTenantNotifications` | Set the tenant's notification webhook (`twd notify set`) |
-| `DELETE` | `/v1/tenants/{id}/notifications` | admin\|tenant:deploy | yes | `DeleteTenantNotifications` | Stop the tenant's notifications (`twd notify rm`) |
-| `POST` | `/v1/tenants/{id}/notifications/test` | admin\|tenant:deploy | yes | `TestTenantNotifications` | Send a test notification now (`twd notify test`) |
+| `GET` | `/v1/tenants/{id}/approvals` | admin\|approver | no | `ListApprovals` | The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI) |
+| `GET` | `/v1/tenants/{id}/notifications` | admin\|tenant:read | no | `GetTenantNotifications` | Read the tenant's notification webhook (`tw notify`), without secrets |
+| `PUT` | `/v1/tenants/{id}/notifications` | admin\|tenant:deploy | yes | `PutTenantNotifications` | Set the tenant's notification webhook (`tw notify set`) |
+| `DELETE` | `/v1/tenants/{id}/notifications` | admin\|tenant:deploy | yes | `DeleteTenantNotifications` | Stop the tenant's notifications (`tw notify rm`) |
+| `POST` | `/v1/tenants/{id}/notifications/test` | admin\|tenant:deploy | yes | `TestTenantNotifications` | Send a test notification now (`tw notify test`) |
 | `DELETE` | `/v1/tenants/{id}/objects` | admin | yes | `PurgeTenantObjects` | Purge terminal objects of a tenant |
 | `GET` | `/v1/tenants/{id}/public-names` | admin\|tenant:read | no | `ListPublicNames` | List the public names a tenant owns |
 | `DELETE` | `/v1/tenants/{id}/public-names/{name}` | admin\|tenant:deploy | yes | `ReleasePublicName` | Release a public name the tenant owns |
@@ -176,23 +176,23 @@ hostd's API, not this document's.
 | `POST` | `/v1/tenants/{id}/queues/{queue}/messages/ack` | admin\|host\|tenant:data | no | `AckQueueMessages` | Settle claimed messages (ack, retry, extend) |
 | `POST` | `/v1/tenants/{id}/queues/{queue}/messages/pull` | admin\|host\|tenant:data | no | `PullQueueMessages` | Claim a batch of messages (push consumers and HTTP pull) |
 | `POST` | `/v1/tenants/{id}/queues/{queue}/purge` | admin\|tenant:data | yes | `PurgeQueue` | Delete every message of a queue, keeping the queue |
-| `GET` | `/v1/tenants/{id}/telemetry` | admin\|tenant:read | no | `GetTenantTelemetry` | Read the tenant's OTLP export (`twd telemetry`), without header values |
-| `PUT` | `/v1/tenants/{id}/telemetry` | admin\|tenant:deploy | yes | `PutTenantTelemetry` | Set the tenant's OTLP export (`twd telemetry set`) |
-| `DELETE` | `/v1/tenants/{id}/telemetry` | admin\|tenant:deploy | yes | `DeleteTenantTelemetry` | Stop the tenant's OTLP export (`twd telemetry rm`) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` | admin\|approver | yes | `DecideApproval` | Approve or reject a waiting Workflow instance (`twd approve`, the admin UI) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/export` | admin\|tenant:data | no | `ExportD1` | Export a D1 database as SQL (`twd d1 export`) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/query` | admin\|tenant:data | yes | `QueryD1` | Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/deployments` | admin\|tenant:read | no | `ListWorkloadDeployments` | A workload's deployment history, newest first (`twd deployments`) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin\|tenant:read | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/previews` | admin\|tenant:read | no | `ListWorkloadPreviews` | A workload's running previews (`twd previews`) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/promotions` | admin\|tenant:deploy | yes | `CreatePromotion` | Promote a preview to the workload (`twd promote`), or preflight it with dryRun |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:read | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`twd expose`) |
+| `GET` | `/v1/tenants/{id}/telemetry` | admin\|tenant:read | no | `GetTenantTelemetry` | Read the tenant's OTLP export (`tw telemetry`), without header values |
+| `PUT` | `/v1/tenants/{id}/telemetry` | admin\|tenant:deploy | yes | `PutTenantTelemetry` | Set the tenant's OTLP export (`tw telemetry set`) |
+| `DELETE` | `/v1/tenants/{id}/telemetry` | admin\|tenant:deploy | yes | `DeleteTenantTelemetry` | Stop the tenant's OTLP export (`tw telemetry rm`) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` | admin\|approver | yes | `DecideApproval` | Approve or reject a waiting Workflow instance (`tw approve`, the admin UI) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/export` | admin\|tenant:data | no | `ExportD1` | Export a D1 database as SQL (`tw d1 export`) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/d1/{name}/query` | admin\|tenant:data | yes | `QueryD1` | Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/deployments` | admin\|tenant:read | no | `ListWorkloadDeployments` | A workload's deployment history, newest first (`tw deployments`) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/logs` | admin\|tenant:read | no | `GetWorkloadLogs` | Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine) |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/previews` | admin\|tenant:read | no | `ListWorkloadPreviews` | A workload's running previews (`tw previews`) |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/promotions` | admin\|tenant:deploy | yes | `CreatePromotion` | Promote a preview to the workload (`tw promote`), or preflight it with dryRun |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:read | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`tw expose`) |
 | `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:deploy | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin\|tenant:deploy | yes | `CreateRollback` | Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin\|tenant:deploy | yes | `CreateRollback` | Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/secret-grants` | host | yes | `CreateWorkloadSecretGrant` | Release a workload's secret values to the lease holder |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin\|tenant:read | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
-| `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `PutWorkloadSecret` | Create or replace a workload secret (`twd secret put`) |
-| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `DeleteWorkloadSecret` | Delete a workload secret (`twd secret rm`) |
+| `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `PutWorkloadSecret` | Create or replace a workload secret (`tw secret put`) |
+| `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `DeleteWorkloadSecret` | Delete a workload secret (`tw secret rm`) |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores` | admin\|tenant:read | no | `ListWorkloadStores` | List a workload's stores |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` | admin\|tenant:data | no | `ListKVKeys` | List a KV namespace's keys |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | no | `GetKVValue` | Get one KV value |
@@ -246,7 +246,7 @@ lease it holds); admins see every tenant.
 | 200 | `TenantPage` | One page of tenants, ordered by `(createdAt, tenantID)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants` — Create a tenant
 
@@ -260,7 +260,7 @@ lease it holds); admins see every tenant.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}` — Read a tenant
 
@@ -281,7 +281,7 @@ to it (any other tenant is `404 not_found` for it).
 | 304 | `Error` | The `If-None-Match` validator still matches. No body. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PATCH /v1/tenants/{id}` — Update a tenant (JSON Merge Patch)
 
@@ -308,7 +308,7 @@ can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/tenants/{id}` — Delete a tenant
 
@@ -335,9 +335,9 @@ volume keys) are removed last.
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | Live objects exist and `force` was not set. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/approvals` — The Workflow approvals waiting in a tenant (`twd approvals`, the admin UI)
+### `GET /v1/tenants/{id}/approvals` — The Workflow approvals waiting in a tenant (`tw approvals`, the admin UI)
 
 `ListApprovals` · role **admin\|approver** · audited: no
 
@@ -347,7 +347,7 @@ A Workflow instance that waits for an event of type `approval` or
 host over the mgmt → hostd channel and merges the answers, oldest
 first; a host that does not answer is named in `unreachable`.
 Admins see every approval; a tailnet caller holding only
-`twd.dev/cap/approve` (toward `tag:twd-mgmt`) sees the ones its
+`github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) sees the ones its
 grants let it decide. A read, so not audited.
 
 | Parameter | In | Type | Required | Description |
@@ -361,9 +361,9 @@ grants let it decide. A read, so not audited.
 | 200 | `ApprovalList` | The approvals. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/notifications` — Read the tenant's notification webhook (`twd notify`), without secrets
+### `GET /v1/tenants/{id}/notifications` — Read the tenant's notification webhook (`tw notify`), without secrets
 
 `GetTenantNotifications` · role **admin\|tenant:read** · audited: no
 
@@ -381,15 +381,15 @@ credential. Header names only. A tenant that sends nothing has no
 | 200 | `NotificationConfig` | The tenant's notification config. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `PUT /v1/tenants/{id}/notifications` — Set the tenant's notification webhook (`twd notify set`)
+### `PUT /v1/tenants/{id}/notifications` — Set the tenant's notification webhook (`tw notify set`)
 
 `PutTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
 ADR-approval-notifications. When one of `events` happens in the
 tenant, mgmt POSTs a JSON `NotificationEvent` to `url` (header
-`Twd-Event`), with a deep link to the admin UI. `approval_requested`
+`Tw-Event`), with a deep link to the admin UI. `approval_requested`
 fires when a Workflow starts waiting for an approval (when mgmt
 receives the host's audit record, usually within seconds). mgmt
 dials the URL itself: a tailnet name, a `100.x` address or a
@@ -397,7 +397,7 @@ dials the URL itself: a tailnet name, a `100.x` address or a
 host's network; loopback and link-local addresses are refused.
 Delivery is tried 3 times; a final failure is audited
 (`notification_failed`). The config is stored encrypted in mgmt
-custody (custody name `twd/<tenant>/notifications`); the URL's path
+custody (custody name `tw/<tenant>/notifications`); the URL's path
 and query and the header values are never logged, audited or
 returned. Audited (`kind: notification_put`, the URL's host and
 header names).
@@ -414,9 +414,9 @@ header names).
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `DELETE /v1/tenants/{id}/notifications` — Stop the tenant's notifications (`twd notify rm`)
+### `DELETE /v1/tenants/{id}/notifications` — Stop the tenant's notifications (`tw notify rm`)
 
 `DeleteTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
@@ -431,9 +431,9 @@ Idempotent. Audited (`kind: notification_delete`).
 | 204 | — | Deleted (or there was nothing to delete). |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/notifications/test` — Send a test notification now (`twd notify test`)
+### `POST /v1/tenants/{id}/notifications/test` — Send a test notification now (`tw notify test`)
 
 `TestTenantNotifications` · role **admin\|tenant:deploy** · audited: yes
 
@@ -451,7 +451,7 @@ Audited (`kind: notification_test`, the origin and the outcome).
 | 200 | `NotificationTestResult` | The delivery attempt. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/tenants/{id}/objects` — Purge terminal objects of a tenant
 
@@ -475,7 +475,7 @@ Replaces `POST /v0/tenants/{id}/purge`.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/public-names` — List the public names a tenant owns
 
@@ -502,7 +502,7 @@ same tailnet is refused with `409 public_name_owned`. Ordered by
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/tenants/{id}/public-names/{name}` — Release a public name the tenant owns
 
@@ -513,7 +513,7 @@ tenant on the tailnet can deploy public routes under it next. Only
 a name nothing serves can be released: `409 public_name_in_use`
 while the workload's latest deployment declares public routes or
 its public node is live (undeploy it, or remove `"public"` from its
-`twd.jsonc` and redeploy, first). `404 not_found` when the tenant
+`tailworks.jsonc` and redeploy, first). `404 not_found` when the tenant
 does not own the name. Audited (`kind: public_name_release`).
 
 | Parameter | In | Type | Required | Description |
@@ -527,23 +527,23 @@ does not own the name. Audited (`kind: public_name_release`).
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` — Approve or reject a waiting Workflow instance (`twd approve`, the admin UI)
+### `POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}` — Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 
 `DecideApproval` · role **admin\|approver** · audited: yes
 
 The decision is made by the caller's own tailnet identity: mgmt's
 WhoIs of the connection (user, node, tags). mgmt sends it, with
-the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt`, to
+the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt`, to
 the host holding the workload's lease; that host checks the grants
 (`cap_missing` otherwise: the workload, Workflow, step, decision and
 numeric limits a grant names), delivers the event (the Workflow
 sees `approver`, never one from the request) and audits the
-decision (`approval_decision`, or `approval_denied`). Being a twd
+decision (`approval_decision`, or `approval_denied`). Being a tailworks
 admin does not let anyone approve: the grant does. The operator
 console and the local socket have no personal identity, so they
-get `403 no_identity`; use `twd link` from your own machine.
+get `403 no_identity`; use `tw link` from your own machine.
 `409 approval_not_pending` when nothing waits for this decision.
 
 | Parameter | In | Type | Required | Description |
@@ -562,9 +562,9 @@ get `403 no_identity`; use `twd link` from your own machine.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/workloads/{workload}/logs` — Read (or follow) a workload's workerd / node log (`twd logs` from a linked machine)
+### `GET /v1/tenants/{id}/workloads/{workload}/logs` — Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 
 `GetWorkloadLogs` · role **admin\|tenant:read** · audited: no
 
@@ -581,7 +581,7 @@ continue).
 A workload with `replicas` reads every replica's host; each line
 is then prefixed with `[<hostID>] `, and `host` selects one
 replica. A host that does not answer contributes one
-`[<hostID>] twd: …` line instead (`502 host_unavailable` when no
+`[<hostID>] tw: …` line instead (`502 host_unavailable` when no
 host answers). `404 unknown_workload` when the workload has no
 running replica (on `host`); `404 no_logs` when the host has no
 log file for it yet. A read, so not audited; mgmt logs the actor.
@@ -609,13 +609,13 @@ Only the workload's own app log: the daemons' logs
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/workloads/{workload}/public` — Read a workload's public-ingress exposure (`twd expose`)
+### `GET /v1/tenants/{id}/workloads/{workload}/public` — Read a workload's public-ingress exposure (`tw expose`)
 
 `GetWorkloadPublic` · role **admin\|tenant:read** · audited: no
 
-ADR-029. A workload whose `twd.jsonc` declares `public` routes is
+ADR-029. A workload whose `tailworks.jsonc` declares `public` routes is
 served over Funnel from its public node
 (`https://<workload>.<tailnet>.ts.net/`) while `exposed` is true and
 the tenant's `publicIngress` is `allow`. A workload that was never
@@ -631,13 +631,13 @@ toggled is exposed.
 | 200 | `WorkloadPublic` | The workload's exposure. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PATCH /v1/tenants/{id}/workloads/{workload}/public` — Expose or unexpose a workload's public routes (JSON Merge Patch)
 
 `UpdateWorkloadPublic` · role **admin\|tenant:deploy** · audited: yes
 
-`twd expose on|off` (ADR-029 D1): an operator override that survives
+`tw expose on|off` (ADR-029 D1): an operator override that survives
 redeploys. `exposed: false` makes the host close the public node's
 Funnel listener and reset its flows (the node and its certificate
 stay); `true` reopens it. The lease holder is pushed at once.
@@ -659,11 +659,11 @@ workload. Audited (`kind: expose_on` / `expose_off`).
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Hosts
 
-twd-hostd instances. A host writes its own record; admins read.
+tw-hostd instances. A host writes its own record; admins read.
 
 ### `GET /v1/hosts` — List hosts
 
@@ -680,20 +680,20 @@ twd-hostd instances. A host writes its own record; admins read.
 | 200 | `HostPage` | One page of hosts, ordered by `(createdAt, hostID)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/hosts` — Add a host and mint its single-use join key
 
 `CreateHost` · role **admin** · audited: yes
 
-`twd host add`: creates the host record (status `pending`), mints a
-**single-use, pre-authorized auth key for `tag:twd-host`** (10 min)
+`tw host add`: creates the host record (status `pending`), mints a
+**single-use, pre-authorized auth key for `tag:tw-host`** (10 min)
 and a one-time `registrationSecret` (32 random bytes, base64url; only
 its SHA-256 is stored) that the host must present on its first
 `PUT /v1/hosts/{id}`, so the join key alone cannot claim the host ID
 through the operator tenant's credential (its OAuth client, or the
-Headscale API key). `twd-hostd join --token <key>` joins the operator tailnet
-with it as `twd-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
+Headscale API key). `tw-hostd join --token <key>` joins the operator tailnet
+with it as `tw-host-<hostID>`, then `PUT /v1/hosts/{id}` binds that
 node to the record. Calling it again for a host that has not bound a
 node yet mints a fresh key (`200`); a bound host is `409 exists`
 (delete it first). The key is never logged. Audited
@@ -710,7 +710,7 @@ node yet mints a fresh key (`200`); a bound host is `409 exists`
 | 404 | `Error` | Unknown operator tenant. |
 | 409 | `Error` | The request conflicts with the resource's current state. |
 | 502 | `Error` | The control plane refused the mint (`bootstrap_failed`). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/hosts/{id}` — Read a host
 
@@ -727,13 +727,13 @@ node yet mints a fresh key (`200`); a bound host is `409 exists`
 | 304 | `Error` | The `If-None-Match` validator still matches. No body. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/hosts/{id}` — Register or re-register a host (idempotent)
 
 `RegisterHost` · role **host** · audited: yes
 
-The host's own record. Over the tailnet the WhoIs node (`tag:twd-host`)
+The host's own record. Over the tailnet the WhoIs node (`tag:tw-host`)
 is bound to this `hostID` on first registration, which must carry the
 `registrationSecret` from `POST /v1/hosts` (missing or wrong:
 `403 host_identity_mismatch`; the secret is cleared once the node is
@@ -744,10 +744,10 @@ same ID is `403 host_identity_mismatch`. Re-registering with the same
 node needs no secret and replaces capacity, tiers and `push`;
 `auditPubKey` is **pinned on first bind** (a later `PUT` may repeat
 it or omit it; a different key is `403 host_identity_mismatch` and
-rotating it is `twd host rm` + `twd host add`). Hosts re-register on
+rotating it is `tw host rm` + `tw host add`). Hosts re-register on
 every restart.
 
-A host that was created through `twd host add` exists before its first
+A host that was created through `tw host add` exists before its first
 `PUT` (status `pending`); the `PUT` activates it.
 
 | Parameter | In | Type | Required | Description |
@@ -761,8 +761,8 @@ A host that was created through `twd host add` exists before its first
 | 200 | `Host` | Re-registered. |
 | 201 | `Host` | First registration of this host ID. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
-| 403 | `Error` | Another node owns this host ID, or the caller is not a `tag:twd-host` node. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| 403 | `Error` | Another node owns this host ID, or the caller is not a `tag:tw-host` node. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/hosts/{id}` — Drain and remove a host
 
@@ -789,7 +789,7 @@ operator credential when mgmt has one; otherwise it is reported in
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The host holds leases and `drain` was not set. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/hosts/{id}/assignments` — List the deployments assigned to a host
 
@@ -807,7 +807,7 @@ operator credential when mgmt has one; otherwise it is reported in
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/hosts/{id}/cordon` — Cordon a host (no new placements)
 
@@ -825,7 +825,7 @@ skips it (`cordoned` in a decision). Idempotent; audited `host_cordon`.
 | 200 | `Host` | Cordoned. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/hosts/{id}/cordon` — Uncordon a host
 
@@ -842,14 +842,14 @@ Placement may choose the host again. Idempotent; audited `host_uncordon`.
 | 200 | `Host` | Uncordoned. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/hosts/{id}/drain` — Cordon a host and move its workloads to other hosts
 
 `DrainHost` · role **admin** · audited: yes
 
 Cordons the host, then re-places each workload assigned to it on another eligible host
-(`twd deploy --replace` with this host excluded; the lease moves at the next epoch):
+(`tw deploy --replace` with this host excluded; the lease moves at the next epoch):
 
 - a stateless workload (no Durable Objects) moves;
 - a workload with Durable Objects keeps its storage on this host's disk, so it is refused
@@ -858,7 +858,7 @@ Cordons the host, then re-places each workload assigned to it on another eligibl
 - a workload with no other eligible host is refused (`no_host`, `feature_unavailable`).
 
 `dryRun` reports what would happen and changes nothing (the host is not cordoned).
-Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back, and
+Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back, and
 `DELETE /v1/hosts/{id}` removes it.
 
 | Parameter | In | Type | Required | Description |
@@ -872,7 +872,7 @@ Audited `host_drain`. The host record is kept: `twd host uncordon` takes it back
 | 200 | `HostDrainResult` | The drain's outcome per workload. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/hosts/{id}/paths` — Report measured tailnet paths (smart placement)
 
@@ -903,7 +903,7 @@ recorded with the deploy.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | The host never registered (`host_not_registered`). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/hosts/{id}/sandbox-deny` — Every tenant's credential file paths, for the host's sandbox deny list
 
@@ -927,7 +927,7 @@ host may read only its own `{id}`.
 | 200 | object | The paths. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/hosts/{id}/status` — Heartbeat (replace the host's reported status)
 
@@ -953,7 +953,7 @@ so the host's kill must be idempotent). Replaces
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | The host never registered (`host_not_registered`). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Deployments
 
@@ -970,21 +970,21 @@ Deploys of a workload bundle to a host.
 | `tenant` | query | string | no |  |
 | `workload` | query | string | no |  |
 | `host` | query | string | no |  |
-| `latest` | query | boolean | no | Only the newest deployment of each `(tenant, workload)` (what `twd ls` shows). |
+| `latest` | query | boolean | no | Only the newest deployment of each `(tenant, workload)` (what `tw ls` shows). |
 
 | Status | Body | Description |
 |---|---|---|
 | 200 | `DeploymentPage` | One page of deployments, ordered by `(createdAt, deploymentID)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/deployments` — Deploy a workload (async), or preflight it with dryRun
 
 `CreateDeployment` · role **admin\|tenant:deploy** · audited: yes
 
-mgmt reads `twd.jsonc` from the bundle (a tar, optionally gzipped;
-the shallowest `twd.jsonc`): `tailnet.tags` (the `_workload` entry
+mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
+the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
 node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
 `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
@@ -994,8 +994,8 @@ wrangler's `placement`). A bundle with neither `tailnet.tags` nor
 duplicates, each a valid five-field UTC expression that can fire); an
 invalid one is `400 bad_bundle`.
 Every tag must match `^tag:[a-zA-Z0-9][a-zA-Z0-9._-]*$`
-(`400 bad_request`), and twd's own infrastructure tags (`tag:twd`,
-`tag:twd-mgmt`, `tag:twd-host`) are refused with `400 reserved_tag`;
+(`400 bad_request`), and tailworks' own infrastructure tags (`tag:tw`,
+`tag:tw-mgmt`, `tag:tw-host`) are refused with `400 reserved_tag`;
 both deploy and preflight enforce this.
 
 **Deploy** (`dryRun` absent or false): picks a host, acquires the
@@ -1021,7 +1021,7 @@ or `failed`.
    "sum" over several targets). Hosts without a fresh measurement are
    asked to probe (≤ 2 s). Free capacity breaks ties, then host ID.
 
-`replace: true` (`twd deploy --replace`) re-places a running workload:
+`replace: true` (`tw deploy --replace`) re-places a running workload:
 it moves only if an eligible host is clearly better (a better path
 class, or ≥ 2 ms and ≥ 20 % lower RTT), and the lease moves to it at
 `epoch+1` in one conditional write. A stateful workload's move also
@@ -1051,7 +1051,7 @@ the CLI then prints `preflight skipped` and deploys.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | Unknown tenant. |
 | 503 | `Error` | No live host can take the workload, or the policy cannot be read (dryRun). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/deployments/{id}` — Read a deployment and its status
 
@@ -1068,7 +1068,7 @@ the CLI then prints `preflight skipped` and deploys.
 | 304 | `Error` | The `If-None-Match` validator still matches. No body. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/deployments/{id}` — Undeploy
 
@@ -1094,7 +1094,7 @@ undeployed (`409 superseded` otherwise).
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The request conflicts with the resource's current state. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/deployments/{id}/bundle` — Download the raw bundle
 
@@ -1111,9 +1111,9 @@ Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (o
 | 200 | string (binary) | The bundle bytes (tar, optionally gzipped) exactly as uploaded. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/workloads/{workload}/deployments` — A workload's deployment history, newest first (`twd deployments`)
+### `GET /v1/tenants/{id}/workloads/{workload}/deployments` — A workload's deployment history, newest first (`tw deployments`)
 
 `ListWorkloadDeployments` · role **admin\|tenant:read** · audited: no
 
@@ -1123,7 +1123,7 @@ one is `assigned`, `starting`, `active` or `failed`; older ones are
 `superseded` or `stopped`), the host's last report (`hostStatus`)
 and whether mgmt still holds the bundle (`bundleRetained`). mgmt
 keeps the bundles of the newest `bundleRetention` deployments of
-each workload (twd-mgmt `-bundle-retention`) and prunes older ones;
+each workload (tw-mgmt `-bundle-retention`) and prunes older ones;
 their records stay, without the bundle, so they can't be rolled back
 to. `rollbackOf` names the deployment a rollback redeployed. A
 workload with no deployment is `404 unknown_workload`.
@@ -1141,9 +1141,9 @@ workload with no deployment is `404 unknown_workload`.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/workloads/{workload}/previews` — A workload's running previews (`twd previews`)
+### `GET /v1/tenants/{id}/workloads/{workload}/previews` — A workload's running previews (`tw previews`)
 
 `ListWorkloadPreviews` · role **admin\|tenant:read** · audited: no
 
@@ -1166,9 +1166,9 @@ answers an empty list.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/workloads/{workload}/promotions` — Promote a preview to the workload (`twd promote`), or preflight it with dryRun
+### `POST /v1/tenants/{id}/workloads/{workload}/promotions` — Promote a preview to the workload (`tw promote`), or preflight it with dryRun
 
 `CreatePromotion` · role **admin\|tenant:deploy** · audited: yes
 
@@ -1206,9 +1206,9 @@ policy.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/workloads/{workload}/rollbacks` — Roll a workload back to a stored bundle (`twd rollback`), or preflight it with dryRun
+### `POST /v1/tenants/{id}/workloads/{workload}/rollbacks` — Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun
 
 `CreateRollback` · role **admin\|tenant:deploy** · audited: yes
 
@@ -1220,7 +1220,7 @@ as a **new** deployment, through the same code path as
 is sticky as for any deploy (the workload stays on its host unless
 `replace` or `host` say otherwise), so Durable Object storage stays
 where it is. Container images the original deploy built and pushed
-to twd's registry are reused by digest.
+to tailworks' registry are reused by digest.
 
 Without `deploymentID`, the target is the newest earlier deployment
 that ran (the host reported it `active` and it did not fail), whose
@@ -1254,7 +1254,7 @@ current policy, like `POST /v1/deployments?dryRun=true`.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Objects
 
@@ -1280,7 +1280,7 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 | 200 | `ObjectPage` | One page of objects, ordered by `(createdAt, objectID)`. Hosts see only objects whose `(tenant, workload)` lease they hold; other objects are filtered out, never listed. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/objects` — Create an object (async mint)
 
@@ -1329,7 +1329,7 @@ Spawn checks are unchanged from v0.
 | 409 | `Error` | `identity_conflict` or `namespace_ambiguous`. |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | 429 | `Error` | Spawn budget or tenant quota. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/objects/{id}` — Read an object (lineage, children, kill record)
 
@@ -1349,7 +1349,7 @@ A host may read only objects whose lease it holds (`403 forbidden` otherwise); p
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PATCH /v1/objects/{id}` — Update an object (JSON Merge Patch)
 
@@ -1392,7 +1392,7 @@ Any other field, or a host sending admin fields (and vice versa), is
 | 409 | `Error` | `lease_lost` (the caller does not hold the namespace lease at this epoch) or `identity_conflict` (an `assigned` object reported ready on another node than the pool node it was given). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/objects/{id}` — Kill an object
 
@@ -1424,7 +1424,7 @@ A later `GET` is `410 Gone` with the kill record. Replaces
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | 412 | `Error` | `If-Match` did not match the current `ETag`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/objects/{id}/certificate` — Read the object's node certificate
 
@@ -1449,7 +1449,7 @@ tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The object has no node yet (`not_ready`). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/objects/{id}/credentials` — Mint a single-use auth key for the object's node
 
@@ -1485,7 +1485,7 @@ certificate and mints again under the same hostname. Replaces
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | 502 | `Error` | The control plane refused the mint (`bootstrap_failed`); the object is `failed`. |
 | 503 | `Error` | Still minting (`identity_pending`). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Credentials
 
@@ -1495,10 +1495,10 @@ Single-use auth keys and node certificates.
 
 `GetCertificate` · role **host\|admin** · audited: no
 
-The receiver-side lookup: "is the peer that just connected a twd
+The receiver-side lookup: "is the peer that just connected a tailworks
 object, and what is its `lim`?" `404 not_found` when no live object
 of the tenant has that node (the receiver then applies the WhoIs caps
-unchanged: the peer is not a twd object); `410 killed` for a tombstone.
+unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1512,7 +1512,7 @@ unchanged: the peer is not a twd object); `410 killed` for a tombstone.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Secrets
 
@@ -1542,13 +1542,13 @@ only) when there is at least one secret.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/secrets` — List a workload's secrets (names and times, never values)
 
 `ListWorkloadSecrets` · role **admin\|tenant:read** · audited: no
 
-`twd secret ls`. No admin operation returns a value; only the lease
+`tw secret ls`. No admin operation returns a value; only the lease
 holder gets them (`POST …/secret-grants`). Ordered by name. A
 workload with no secrets (or never deployed) is an empty page.
 `404 unknown_tenant`.
@@ -1566,20 +1566,20 @@ workload with no secrets (or never deployed) is an empty page.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name}` — Create or replace a workload secret (`twd secret put`)
+### `PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name}` — Create or replace a workload secret (`tw secret put`)
 
 `PutWorkloadSecret` · role **admin\|tenant:secrets** · audited: yes
 
 ADR-034. Stores the value encrypted at rest in mgmt's
-custody (custody name `twd/<tenant>/workloads/<workload>/secrets`).
+custody (custody name `tw/<tenant>/workloads/<workload>/secrets`).
 The workload need not be deployed yet. The value reaches the
 workload as the text binding `env.<name>` (runtime `node`: the
 environment variable `<name>`) on its **next deploy**; running
 instances keep the value they started with. At most 128 secrets per
 workload and 5 KiB per value. Names are JS identifiers that are also
-environment variable names; `TWD_…` and `__TWD…` are reserved. The
+environment variable names; `TW_…` and `__TW…` are reserved. The
 value is never logged, audited or returned. Audited
 (`kind: secret_put`, name only).
 
@@ -1587,7 +1587,7 @@ value is never logged, audited or returned. Audited
 |---|---|---|---|---|
 | `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
 | `workload` | path | string | yes | Workload name (a DNS label). |
-| `name` | path | string | yes | Secret name: a JS identifier that is also an environment variable name; `TWD_…` and `__TWD…` are reserved. |
+| `name` | path | string | yes | Secret name: a JS identifier that is also an environment variable name; `TW_…` and `__TW…` are reserved. |
 
 **Request** `application/json`: `SecretPut`
 
@@ -1598,9 +1598,9 @@ value is never logged, audited or returned. Audited
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name}` — Delete a workload secret (`twd secret rm`)
+### `DELETE /v1/tenants/{id}/workloads/{workload}/secrets/{name}` — Delete a workload secret (`tw secret rm`)
 
 `DeleteWorkloadSecret` · role **admin\|tenant:secrets** · audited: yes
 
@@ -1612,20 +1612,20 @@ when the workload has no secret of that name. Audited
 |---|---|---|---|---|
 | `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
 | `workload` | path | string | yes | Workload name (a DNS label). |
-| `name` | path | string | yes | Secret name: a JS identifier that is also an environment variable name; `TWD_…` and `__TWD…` are reserved. |
+| `name` | path | string | yes | Secret name: a JS identifier that is also an environment variable name; `TW_…` and `__TW…` are reserved. |
 
 | Status | Body | Description |
 |---|---|---|
 | 204 | — | Deleted. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Stores
 
 Platform storage objects (ADR-platform-stores) behind storage bindings such as Workers KV. Each store is served by a platform-owned SQLite Durable Object on the workload's host; its writes go first to a fenced, encrypted journal here, so a store survives hostd restarts and moves to another host.
 
-### `GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export` — Export a D1 database as SQL (`twd d1 export`)
+### `GET /v1/tenants/{id}/workloads/{workload}/d1/{name}/export` — Export a D1 database as SQL (`tw d1 export`)
 
 `ExportD1` · role **admin\|tenant:data** · audited: no
 
@@ -1649,9 +1649,9 @@ audited.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query` — Run SQL on a D1 database (`twd d1 execute`, `twd d1 migrations apply`)
+### `POST /v1/tenants/{id}/workloads/{workload}/d1/{name}/query` — Run SQL on a D1 database (`tw d1 execute`, `tw d1 migrations apply`)
 
 `QueryD1` · role **admin\|tenant:data** · audited: yes
 
@@ -1688,7 +1688,7 @@ statement count, never the SQL); a read is logged.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores` — List a workload's stores
 
@@ -1713,13 +1713,13 @@ mgmt keeps, after compaction.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` — List a KV namespace's keys
 
 `ListKVKeys` · role **admin\|tenant:data** · audited: no
 
-Workers KV's `list()` for operators (`twd kv key list`,
+Workers KV's `list()` for operators (`tw kv key list`,
 ADR-037): live keys in UTF-8 byte order, with their
 expiration and metadata, `limit` at a time (default and maximum
 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -1742,13 +1742,13 @@ does not exist.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Get one KV value
 
 `GetKVValue` · role **admin\|tenant:data** · audited: no
 
-`twd kv key get`. `404 not_found` if the key does not exist or has
+`tw kv key get`. `404 not_found` if the key does not exist or has
 expired, `404 unknown_store` if the namespace does not.
 
 | Parameter | In | Type | Required | Description |
@@ -1764,19 +1764,19 @@ expired, `404 unknown_store` if the namespace does not.
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Write one KV value
 
 `PutKVValue` · role **admin\|tenant:data** · audited: yes
 
-`twd kv key put`: a journal append, like a binding's `put()`, so
+`tw kv key put`: a journal append, like a binding's `put()`, so
 running workloads see it on their next sync (within 60 s, or a
 read's `cacheTtl`). Cloudflare's rules apply: `expirationTtl` and
 `expiration` at least 60 s ahead, metadata at most 1024 bytes of
 JSON, values at most 2 MiB − 4 KiB (`400 bad_request` /
 `400 store_limit`). The namespace must exist (`404
-unknown_store`; `twd kv namespace create`). Audited (`kind:
+unknown_store`; `tw kv namespace create`). Audited (`kind:
 kv_put`) with the namespace and who wrote, not the key: key names
 can be sensitive, and mgmt keeps them only sealed and HMACed.
 
@@ -1796,13 +1796,13 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` — Delete one KV value
 
 `DeleteKVValue` · role **admin\|tenant:data** · audited: yes
 
-`twd kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+`tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1818,7 +1818,7 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Get one store
 
@@ -1836,7 +1836,7 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 | 200 | `Store` | The store. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Create a store (idempotent)
 
@@ -1861,7 +1861,7 @@ only needed to create one before the first deploy. Audited
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Delete a store and its data
 
@@ -1886,7 +1886,7 @@ a new, empty store. `404 unknown_store` if there is none. Audited
 | 204 | — | Deleted. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` — Read a store's journal after a sequence number
 
@@ -1901,7 +1901,7 @@ with `head` 0 and no `incarnation`.
 
 A host must give `epoch`: the data is released only to the holder
 of the workload's lease at that epoch (`409 lease_lost`, as for
-secrets). An admin reads without it (`twd kv key get`).
+secrets). An admin reads without it (`tw kv key get`).
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1920,7 +1920,7 @@ secrets). An admin reads without it (`twd kv key get`).
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` — Append entries to a store's journal (conditional on its head)
 
@@ -1933,7 +1933,7 @@ is still `after` (and `incarnation` matches when given); otherwise
 `409 store_conflict`, and the writer catches up
 (`GET …/journal?after=`) and retries. That makes the journal
 linearizable across writers (a workload's replicas, an admin's
-`twd kv key put`). An entry with a `ckey` supersedes every earlier
+`tw kv key put`). An entry with a `ckey` supersedes every earlier
 entry with the same `ckey`, which mgmt deletes in the same
 transaction. The first append creates the store.
 
@@ -1963,13 +1963,13 @@ append, 2 MiB per entry, 1 GiB per store (`400 store_limit`).
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Telemetry
 
 A tenant's OTLP export (ADR-observability). The config, collector credentials included, lives in mgmt custody and is released only to a workload's lease holder.
 
-### `GET /v1/tenants/{id}/telemetry` — Read the tenant's OTLP export (`twd telemetry`), without header values
+### `GET /v1/tenants/{id}/telemetry` — Read the tenant's OTLP export (`tw telemetry`), without header values
 
 `GetTenantTelemetry` · role **admin\|tenant:read** · audited: no
 
@@ -1986,9 +1986,9 @@ header value. A tenant that exports nothing has no `otlp`.
 | 200 | `TelemetryConfig` | The tenant's telemetry config. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `PUT /v1/tenants/{id}/telemetry` — Set the tenant's OTLP export (`twd telemetry set`)
+### `PUT /v1/tenants/{id}/telemetry` — Set the tenant's OTLP export (`tw telemetry set`)
 
 `PutTenantTelemetry` · role **admin\|tenant:deploy** · audited: yes
 
@@ -1999,7 +1999,7 @@ to `<endpoint>/v1/{logs,metrics,traces}`. The collector is dialed
 peer the tailnet policy lets that workload reach (a public
 internet endpoint is refused like any other egress). The config
 is stored encrypted in mgmt custody (custody name
-`twd/<tenant>/telemetry`); header values (collector credentials)
+`tw/<tenant>/telemetry`); header values (collector credentials)
 are never logged, audited or returned. Hosts pick a change up
 within a minute. Audited (`kind: telemetry_put`, endpoint and
 header names).
@@ -2016,14 +2016,14 @@ header names).
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `DELETE /v1/tenants/{id}/telemetry` — Stop the tenant's OTLP export (`twd telemetry rm`)
+### `DELETE /v1/tenants/{id}/telemetry` — Stop the tenant's OTLP export (`tw telemetry rm`)
 
 `DeleteTenantTelemetry` · role **admin\|tenant:deploy** · audited: yes
 
 Hosts stop exporting within a minute. Records stay on the hosts
-(`twd logs`) and in `/metrics`. Idempotent. Audited
+(`tw logs`) and in `/metrics`. Idempotent. Audited
 (`kind: telemetry_delete`).
 
 | Parameter | In | Type | Required | Description |
@@ -2035,7 +2035,7 @@ Hosts stop exporting within a minute. Records stay on the hosts
 | 204 | — | Deleted (or there was nothing to delete). |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants` — Release the tenant's OTLP export config to a workload's lease holder
 
@@ -2065,7 +2065,7 @@ it every minute); a refusal always is.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Queues
 
@@ -2091,7 +2091,7 @@ exists once something sent to or pulled from it, or after
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/queues/{queue}` — Get one queue and its backlog
 
@@ -2117,7 +2117,7 @@ host reads it for a producer binding's `metrics()` (with
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/tenants/{id}/queues/{queue}` — Create a queue (idempotent)
 
@@ -2140,7 +2140,7 @@ dead-letter queue by the first message moved to it. Audited
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/tenants/{id}/queues/{queue}` — Delete a queue and its messages
 
@@ -2162,7 +2162,7 @@ is none. Audited (`kind: queue_delete`).
 | 204 | — | Deleted. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/tenants/{id}/queues/{queue}/messages` — Read messages without claiming them
 
@@ -2170,7 +2170,7 @@ is none. Audited (`kind: queue_delete`).
 
 The oldest messages, bodies included, without changing them (no
 lease, no attempt counted). This is how an operator inspects a
-dead-letter queue (`twd queues messages <queue>`).
+dead-letter queue (`tw queues messages <queue>`).
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2184,14 +2184,14 @@ dead-letter queue (`twd queues messages <queue>`).
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/queues/{queue}/messages` — Send messages to a queue
 
 `SendQueueMessages` · role **admin\|host\|tenant:data** · audited: no
 
 A producer's `send()` / `sendBatch()` (through its host), or an
-operator's `twd queues send`. The messages are durable in mgmt's
+operator's `tw queues send`. The messages are durable in mgmt's
 database when this answers. Each gets a random ID. A host must give
 `workload` and `epoch` (the lease it holds, `409 lease_lost`), and
 the workload's latest deployment must bind the queue as a producer
@@ -2215,7 +2215,7 @@ messages and 256 KB per call, 128 KB per message, `delaySeconds` ≤
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/queues/{queue}/messages/ack` — Settle claimed messages (ack, retry, extend)
 
@@ -2247,7 +2247,7 @@ claimed again, or settled) changes nothing and is counted in
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/queues/{queue}/messages/pull` — Claim a batch of messages (push consumers and HTTP pull)
 
@@ -2283,7 +2283,7 @@ them in the body.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/tenants/{id}/queues/{queue}/purge` — Delete every message of a queue, keeping the queue
 
@@ -2302,7 +2302,7 @@ Deletes all messages, in flight or not. Audited
 | 200 | `QueuePurgeResult` | Purged. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Audit
 
@@ -2331,7 +2331,7 @@ Hash-chained, append-only audit log.
 | 200 | `AuditPage` | One page, ordered by `(ts, chain, seq)` (reversed with `order=desc`), with per-chain verification of the records returned. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/audit` — Append a batch of host audit records
 
@@ -2354,7 +2354,7 @@ audit rows. Mutating by nature; it *is* the audit.
 | 201 | `AuditAppendResult` | Appended; the chain status after the append. |
 | 400 | `Error` | A record is malformed, breaks the chain, or claims a forbidden source. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/audit/verification` — Verify every audit chain
 
@@ -2366,11 +2366,11 @@ Recomputes every hash and link of every chain and checks each chain head; detect
 |---|---|---|
 | 200 | `AuditVerification` | The verification report (`ok` is the AND over chains). |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Upgrades
 
-Releases and upgrades (ADR-041). twd-mgmt keeps a release catalog (the
+Releases and upgrades (ADR-041). tw-mgmt keeps a release catalog (the
 releases it was built with, plus imported ones), plans upgrades from it and the fleet's
 reported versions and features, and runs fleet upgrades as durable upgrade runs.
 
@@ -2378,7 +2378,7 @@ reported versions and features, and runs fleet upgrades as durable upgrade runs.
 
 `ListReleases` · role **admin** · audited: no
 
-Every release this twd-mgmt knows: the ones built into it (its own and every earlier
+Every release this tw-mgmt knows: the ones built into it (its own and every earlier
 release) and imported ones (`POST /v1/releases`), ascending by version, with each one's
 notes, contract migrations, protocols and workerd pin. `current` is this replica's version.
 
@@ -2386,14 +2386,14 @@ notes, contract migrations, protocols and workerd pin. `current` is this replica
 |---|---|---|
 | 200 | `ReleaseCatalog` | The catalog. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/releases` — Import catalog entries (from a release's share/twd/catalog.json)
+### `POST /v1/releases` — Import catalog entries (from a release's share/tailworks/catalog.json)
 
 `ImportReleases` · role **admin** · audited: yes
 
-Adds or replaces imported entries. Entries built into this twd-mgmt are never replaced.
-`twd release import <tarball>` reads the tarball's `share/twd/catalog.json`, posts it here,
+Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
+`tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 `release_import`.
 
@@ -2404,7 +2404,7 @@ then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audite
 | 200 | `ReleaseCatalog` | The catalog after the import. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/releases/{version}/artifacts/{name}` — Download a release tarball (hosts upgrading themselves)
 
@@ -2413,27 +2413,27 @@ then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audite
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
 | `version` | path | string | yes |  |
-| `name` | path | string | yes | `twd-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`. |
+| `name` | path | string | yes | `tailworks-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`. |
 
 | Status | Body | Description |
 |---|---|---|
 | 200 | string (binary) | The file. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `PUT /v1/releases/{version}/artifacts/{name}` — Upload a release tarball (or its SHA256SUMS)
 
 `PutReleaseArtifact` · role **admin** · audited: yes
 
 Upload `SHA256SUMS` first: a tarball is accepted only if its SHA-256 matches its line there.
-Stored in twd-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
+Stored in tw-mgmt's release directory (`-release-dir`, default `<state-dir>/releases`);
 replicas that don't share that directory each need the upload. Audited `release_artifact`.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
 | `version` | path | string | yes |  |
-| `name` | path | string | yes | `twd-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`. |
+| `name` | path | string | yes | `tailworks-<version>-<os>-<arch>.tar.gz` or `SHA256SUMS`. |
 
 **Request** `application/octet-stream`: string (binary)
 
@@ -2442,7 +2442,7 @@ replicas that don't share that directory each need the upload. Audited `release_
 | 201 | `ReleaseArtifact` | Stored. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/upgrades` — Upgrade runs, newest first
 
@@ -2452,7 +2452,7 @@ replicas that don't share that directory each need the upload. Audited `release_
 |---|---|---|
 | 200 | object | The runs. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/upgrades` — Plan an upgrade, or start an upgrade run
 
@@ -2476,7 +2476,7 @@ pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_star
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/upgrades/{id}` — One upgrade run
 
@@ -2491,7 +2491,7 @@ pauses the run. Only one run may be active (`409 exists`). Audited `upgrade_star
 | 200 | `UpgradeRun` | The run. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/upgrades/{id}/actions` — Pause, resume or abort an upgrade run
 
@@ -2513,7 +2513,7 @@ host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upg
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The request conflicts with the resource's current state. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Volumes
 
@@ -2524,7 +2524,7 @@ dm-crypt data keys for DO volumes (microVM tier).
 `CreateVolumeKeyGrant` · role **host** · audited: yes
 
 Creates a key grant: the 256-bit data key of the `(tenant, workload)`
-DO volume (custody name `twd/<tenant>/volumes/<workload>/dek`,
+DO volume (custody name `tw/<tenant>/volumes/<workload>/dek`,
 created on first use) is released only to the host holding the
 workload's lease at `epoch` (`409 lease_lost`). Audited
 (`kind: volume_key`). `Cache-Control: no-store`. The key is never
@@ -2542,7 +2542,7 @@ logged. Replaces `GET /v0/volumes/key`.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Containers
 
@@ -2566,7 +2566,7 @@ Hosts see their own reservations only.
 | 200 | `ContainerReservationPage` | One page of reservations, ordered by `(createdAt, reservationID)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/container-reservations` — Reserve quota for a container before it starts
 
@@ -2609,7 +2609,7 @@ longer counts, both on the store clock. Audited
 | 404 | `Error` | Unknown tenant (`unknown_tenant`). |
 | 409 | `Error` | The caller does not hold the namespace lease at this epoch. |
 | 429 | `Error` | Over a container quota (`container_quota_exceeded`). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/container-reservations/{id}` — Release a container reservation (the container stopped)
 
@@ -2628,7 +2628,7 @@ Audited (`kind: container_release`).
 | 204 | — | Released. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Images
 
@@ -2639,15 +2639,15 @@ Container images (ADR-032 D3) — public base images shared across tenants, and 
 `ListImageAliases` · role **admin\|host\|tenant:read** · audited: no
 
 Upstream refs swapped for another image on one arch (ADR-032 D3: Cloudflare publishes
-`cloudflare/sandbox` for linux/amd64 only; arm64 hosts get twd's rebuild from the Apache-2.0
-source, in `public/`). Deploys apply it when pinning; `twd deploy` applies it as BuildKit named
+`cloudflare/sandbox` for linux/amd64 only; arm64 hosts get tailworks' rebuild from the Apache-2.0
+source, in `public/`). Deploys apply it when pinning; `tw deploy` applies it as BuildKit named
 contexts when it builds a Dockerfile, so app source never changes.
 
 | Status | Body | Description |
 |---|---|---|
 | 200 | `ImageAliasList` | The aliases. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/images/public` — List public base images
 
@@ -2668,16 +2668,16 @@ images another uses.
 | 200 | `PublicImagePage` | One page of public images, ordered by `(createdAt, id)`. |
 | 400 | `Error` | Malformed request, body, filter or cursor. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `POST /v1/images/public` — Mark an image as a public base (mirrors it now)
 
 `CreatePublicImage` · role **admin** · audited: yes
 
-`twd image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
+`tw image public add <ref>`. An upstream ref (`docker.io/cloudflare/sandbox:0.12.14`) is
 mirrored now through mgmt's egress into `public/<registry>/<repository>` and pinned by digest
-for each arch (default: every linux amd64/arm64 image it has); a `twd.local/<name>` ref names
-an image already pushed to `public/<name>` (`twd image push`). Re-adding refreshes the
+for each arch (default: every linux amd64/arm64 image it has); a `tw.local/<name>` ref names
+an image already pushed to `public/<name>` (`tw image push`). Re-adding refreshes the
 digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 
 **Request** `application/json`: `PublicImageCreate`
@@ -2689,7 +2689,7 @@ digest; deployments already pinned keep theirs. Audited (`kind: image_public`).
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 409 | `Error` | This mgmt has no registry, or does not mirror (`registry_unavailable`, `mirror_disabled`). |
 | 502 | `Error` | The upstream image could not be mirrored (`image_unavailable`). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `DELETE /v1/images/public/{id}` — Unmark a public base image
 
@@ -2706,23 +2706,23 @@ New deploys then mirror the ref into each tenant's namespace; pinned deployments
 | 204 | — | Unmarked. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | 404 | `Error` | No such resource (or none the caller may see). |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Mcp
 
-twd's own MCP server (ADR-035), served by twd-mgmt at `/mcp` on the same listeners and
+tailworks' own MCP server (ADR-035), served by tw-mgmt at `/mcp` on the same listeners and
 behind the same WhoIs gate as `/v1`. Its wire protocol is the external Model Context Protocol
 (Streamable HTTP, stateless: one JSON-RPC request per POST, answered with `application/json`);
 this entry documents the route and who may call it, and is excluded from code generation (the
 server is hand-written: `mgmt/mcp.go`). Tools run the `/v1` operations in process.
 
-- **admins** (`twd.dev/cap/admin`) and holders of `twd.dev/cap/mcp` get the read tools:
-  `whoami`, `status`, `ls`, `logs`, `audit`. A caller with only `twd.dev/cap/mcp` reaches
+- **admins** (`github.com/rosskukulinski/tailworks/cap/admin`) and holders of `github.com/rosskukulinski/tailworks/cap/mcp` get the read tools:
+  `whoami`, `status`, `ls`, `logs`, `audit`. A caller with only `github.com/rosskukulinski/tailworks/cap/mcp` reaches
   `/mcp` and nothing else.
-- `deploy`, `kill` and `undeploy` need a `twd.dev/cap/mcp` grant naming them
+- `deploy`, `kill` and `undeploy` need a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming them
   (`[{"tools": ["kill"]}]`, or `"*"`); being an admin is not enough.
-- the local operator (the `twd mcp` bridge on the twd host) gets the read tools, or exactly
-  the tools it lists in `Twd-MCP-Tools`; for tailnet callers that header only narrows.
+- the local operator (the `tw mcp` bridge on the tailworks host) gets the read tools, or exactly
+  the tools it lists in `Tw-MCP-Tools`; for tailnet callers that header only narrows.
 - hosts and browsers are refused.
 
 ### `GET /mcp` — Not supported (stateless server; no server-to-client stream)
@@ -2739,13 +2739,13 @@ server is hand-written: `mgmt/mcp.go`). Tools run the `/v1` operations in proces
 
 The body is one JSON-RPC 2.0 message (no batches). A request is answered `200` with the
 JSON-RPC response; a notification (no `id`) with `202` and no body. A tool the caller isn't
-granted is a tool result with `isError: true` and the twd error `cap_missing`, whose
-`snippet` is the grant (or the `twd mcp --allow` flag) that adds it. `kill`, `undeploy` and
+granted is a tool result with `isError: true` and the tailworks error `cap_missing`, whose
+`snippet` is the grant (or the `tw mcp --allow` flag) that adds it. `kill`, `undeploy` and
 `deploy` are audited like the `/v1` operations they run, with the caller as the actor.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
-| `Twd-MCP-Tools` | header | string | no | Comma-separated tools this request may use (narrows; see the tag description). |
+| `Tw-MCP-Tools` | header | string | no | Comma-separated tools this request may use (narrows; see the tag description). |
 
 **Request** `application/json`: object
 
@@ -2753,14 +2753,14 @@ granted is a tool result with `isError: true` and the twd error `cap_missing`, w
 |---|---|---|
 | 200 | object | The JSON-RPC response. |
 | 202 | — | A notification was accepted. |
-| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Twd-Host-Token`. |
+| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Tw-Host-Token`. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 
 ## Registry
 
-twd's OCI distribution registry (ADR-032 D3), served by twd-mgmt at `/v2/` on the same listeners
+tailworks' OCI distribution registry (ADR-032 D3), served by tw-mgmt at `/v2/` on the same listeners
 and behind the same WhoIs gate as `/v1`. Its wire protocol is the external OCI Distribution Spec v1.1
-(push and pull subset); these entries document the routes and the roles twd enforces, and are
+(push and pull subset); these entries document the routes and the roles tailworks enforces, and are
 excluded from code generation (the registry is hand-written: `internal/registry`).
 
 - `{name}` is a repository and may contain `/`: `<tenantID>/<path>` (one namespace per tenant) or
@@ -2771,8 +2771,8 @@ excluded from code generation (the registry is hand-written: `internal/registry`
   pushed or mirrored into: another namespace answers `404 BLOB_UNKNOWN` exactly as for absent
   content, cross-namespace mounts are refused, and a manifest may only reference content already
   in its own repository.
-- Errors are the spec's `{"errors": [{code, message}]}`; the body also carries twd's `code`
-  (`forbidden`, `not_found`, `bad_request`) and `Twd-Error`.
+- Errors are the spec's `{"errors": [{code, message}]}`; the body also carries tailworks' `code`
+  (`forbidden`, `not_found`, `bad_request`) and `Tw-Error`.
 
 ### `GET /v2/` — OCI API version check
 
@@ -2783,7 +2783,7 @@ excluded from code generation (the registry is hand-written: `internal/registry`
 | Status | Body | Description |
 |---|---|---|
 | 200 | — | The registry speaks the distribution API and admits the caller. |
-| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Twd-Host-Token`. |
+| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Tw-Host-Token`. |
 
 ### `POST /v2/{name}/blobs/uploads/` — Start a blob upload (or a monolithic upload, or a mount)
 
@@ -2943,7 +2943,7 @@ Health, status, identity, maintenance.
 `CreateDeviceDeleteRun` · role **admin** · audited: yes
 
 Kill tier 2 is deferred by `-device-delete-delay`; this creates a run
-that executes every pending delete immediately (what `twd down` does
+that executes every pending delete immediately (what `tw down` does
 before stopping mgmt). Each delete is audited (`kind: device_delete`).
 Replaces `POST /v0/flush`.
 
@@ -2951,7 +2951,7 @@ Replaces `POST /v0/flush`.
 |---|---|---|
 | 201 | `DeviceDeleteRun` | The run's outcome. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/healthz` — Liveness
 
@@ -2962,8 +2962,8 @@ Any authenticated principal (hosts included). On the local-dev socket the host t
 | Status | Body | Description |
 |---|---|---|
 | 200 | `Health` | Alive. |
-| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Twd-Host-Token`. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| 401 | `Error` | No identity on the connection (WhoIs failed), or the local-dev socket was used without `Tw-Host-Token`. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/status` — mgmt status
 
@@ -2973,19 +2973,19 @@ Any authenticated principal (hosts included). On the local-dev socket the host t
 |---|---|---|
 | 200 | `Status` | Counters and the transport mgmt is serving on. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ### `GET /v1/whoami` — Who the caller is, as mgmt sees it
 
 `WhoAmI` · role **any** · audited: no
 
-`twd link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
+`tw link` uses it to learn the endpoint and refuse non-admins early. Any authenticated principal, hosts included.
 
 | Status | Body | Description |
 |---|---|---|
 | 200 | `WhoAmI` | The caller's principal and mgmt's self-description. |
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
-| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Twd-Error` carries the code. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
 ## Components
 
@@ -2993,20 +2993,20 @@ Any authenticated principal (hosts included). On the local-dev socket the host t
 
 #### `localHostToken` (apiKey)
 
-`--local-dev` only (`twd dev`, hermetic tests): the unix socket
-`~/.twd/run/mgmt.sock` with the 256-bit token from
-`~/.twd/hostd/mgmt.token` (RT-03). Every request needs it, `/v1/healthz`
+`--local-dev` only (`tw dev`, hermetic tests): the unix socket
+`~/.tailworks/run/mgmt.sock` with the 256-bit token from
+`~/.tailworks/hostd/mgmt.token` (RT-03). Every request needs it, `/v1/healthz`
 included; a mgmt without a token answers `503 host_token_unconfigured`.
-The host names itself with `Twd-Host-ID`; admins may set `Twd-Actor`.
-Never used in normal operation; `twd doctor` flags it.
+The host names itself with `Tw-Host-ID`; admins may set `Tw-Actor`.
+Never used in normal operation; `tw doctor` flags it.
 
 #### `tailnetWhoIs` (mutualTLS)
 
 **Not a token.** The caller's identity is the Tailscale node behind the
 connection, resolved by WhoIs on mgmt's tsnet listener. No header is
-sent. Roles: `host` = the peer carries `tag:twd-host` (bound to a
+sent. Roles: `host` = the peer carries `tag:tw-host` (bound to a
 hostID at registration); `admin` = the peer's WhoIs CapMap holds
-`twd.dev/cap/admin` toward `tag:twd-mgmt`. `mutualTLS` is the closest
+`github.com/rosskukulinski/tailworks/cap/admin` toward `tag:tw-mgmt`. `mutualTLS` is the closest
 OpenAPI scheme type (identity comes from the transport, not from a
 credential in the request); the actual mechanism is WireGuard node
 identity + WhoIs, and the `:80` listener is tailnet-only plaintext.
@@ -3040,7 +3040,7 @@ One approval wait of one Workflow instance, as the host running it records it.
 |---|---|---|---|
 | `comment` | string | no | Shown to the Workflow (`comment`; a rejection's `reason`) and audited. |
 | `decision` | string: `approve` \| `reject` | yes |  |
-| `metadata` | object | no | Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by twd's. |
+| `metadata` | object | no | Extra fields for the Workflow (`waitForApproval` returns them). An `approver` key is replaced by tailworks'. |
 | `step` | string | no | Which wait, when the instance waits for several. |
 
 #### `ApprovalDecisionResponse`
@@ -3058,7 +3058,7 @@ One approval wait of one Workflow instance, as the host running it records it.
 
 #### `ApproveGrant`
 
-One value of a `twd.dev/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
+One value of a `github.com/rosskukulinski/tailworks/cap/approve` grant. A missing field does not narrow; `"*"` in a list matches anything.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -3078,7 +3078,7 @@ The verified tailnet identity that decided an approval (WireGuard, never the req
 | `nodeId` | string | yes | Stable node ID. |
 | `tags` | array of string | yes |  |
 | `user` | string | no | Login (untagged nodes). |
-| `via` | string: `tailnet` \| `mgmt` | yes | `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `twd approve` or the admin UI. |
+| `via` | string: `tailnet` \| `mgmt` | yes | `tailnet`: sent to the workload's (or object's) own node; `mgmt`: `tw approve` or the admin UI. |
 
 #### `Arch`
 
@@ -3093,7 +3093,7 @@ What a host must run; `bundleURL` is `GET /v1/deployments/{id}/bundle`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `bundleURL` | string (uri-reference) | yes |  |
-| `containers` | array of `ContainerClass` | no | The workload's container classes as mgmt resolved them at deploy (ADR-032 D3): the image refs `ctx.container` sees and their per-arch pins. hostd starts a container only from the pin for its own arch, pulled by digest from twd's registry. |
+| `containers` | array of `ContainerClass` | no | The workload's container classes as mgmt resolved them at deploy (ADR-032 D3): the image refs `ctx.container` sees and their per-arch pins. hostd starts a container only from the pin for its own arch, pulled by digest from tailworks' registry. |
 | `controlURL` | string (uri) | no |  |
 | `createdAt` | integer (int64) | yes |  |
 | `deploymentID` | string | yes |  |
@@ -3190,7 +3190,7 @@ mgmt chain:
 `notification_put` (the tenant's notification webhook set; its host and header names only),
 `notification_delete`,
 `notification_failed` (a notification was not delivered; the webhook's host and the error),
-`notification_test` (`twd notify test`; the origin and the outcome),
+`notification_test` (`tw notify test`; the origin and the outcome),
 `reap`,
 `preflight` (optional; dryRun deploys),
 `host_add`,
@@ -3247,7 +3247,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`twd notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-deploy-rollback), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`tw notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -3286,22 +3286,22 @@ Enum: `mgmt`, `host`, `tenant`
 
 #### `ClassConfig`
 
-One DO namespace from `twd.jsonc` `tailnet.objects`.
+One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `agent` | boolean | no |  |
 | `class` | string | yes |  |
 | `previewOf` | string | no | `_workload` only, previews: the workload this deployment is a preview of (ADR-deploy-preview), deployed as the workload `<workload>--preview-<alias>`. |
-| `replicaOf` | string | no | `_workload` only, replicas 2..N: the workload this deployment is a replica of (`twd.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`. |
+| `replicaOf` | string | no | `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`. |
 | `replicas` | integer | no | `_workload` only, the workload itself: its replica count when > 1. |
-| `service` | string | no | `_workload` only: the Tailscale Service the workload entry node hosts (`twd.jsonc` `tailnet.service`). |
+| `service` | string | no | `_workload` only: the Tailscale Service the workload entry node hosts (`tailworks.jsonc` `tailnet.service`). |
 | `tags` | array of string | yes |  |
 | `ttl` | string | no | `10m`-style duration or seconds. |
 
 #### `ContainerClass`
 
-A container class of a deployment (a wrangler `containers` entry plus twd.jsonc overrides) and its pinned images.
+A container class of a deployment (a wrangler `containers` entry plus tailworks.jsonc overrides) and its pinned images.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -3309,7 +3309,7 @@ A container class of a deployment (a wrangler `containers` entry plus twd.jsonc 
 | `class` | string | yes |  |
 | `custom` | `ContainerResources` | no | What one container reserves: vCPUs (fractional; Cloudflare's `lite` is 0.0625), guest memory and scratch disk (from its class's `instance_type`). |
 | `image` | string | no | The default image reference `start()` runs. |
-| `imageSources` | object | no | Named images twd deploy builds: name → the wrangler Dockerfile, as written. |
+| `imageSources` | object | no | Named images tw deploy builds: name → the wrangler Dockerfile, as written. |
 | `images` | object | no | Named images (`ctx.container.images`): name → reference. |
 | `instanceType` | string | no |  |
 | `maxInstances` | integer | no |  |
@@ -3319,22 +3319,22 @@ A container class of a deployment (a wrangler `containers` entry plus twd.jsonc 
 #### `ContainerImagePin`
 
 One image reference of a container class, resolved once at deploy for one arch (ADR-032 D3):
-hosts pull exactly `repository@digest` from twd's registry and nothing else. Retagging the
+hosts pull exactly `repository@digest` from tailworks' registry and nothing else. Retagging the
 upstream ref later changes nothing until the next deploy.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `arch` | string: `amd64` \| `arm64` | yes |  |
 | `digest` | string | yes | The linux/`arch` image manifest (never an index). |
-| `from` | string | no | What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the twd.local ref. |
+| `from` | string | no | What was resolved: `<upstream ref>@<digest>` (mirrored), `alias <ref>`, `public <ref>`, or the tw.local ref. |
 | `name` | string | no | The class's image name (wrangler `images` key); absent for the default image. |
-| `ref` | string | yes | The reference as `ctx.container` sees it (the wrangler image, or the `twd.local/<tenant>/…@sha256:…` ref `twd deploy` built). |
+| `ref` | string | yes | The reference as `ctx.container` sees it (the wrangler image, or the `tw.local/<tenant>/…@sha256:…` ref `tw deploy` built). |
 | `repository` | string | yes | `<tenantID>/…` (the tenant's builds and mirrors) or `public/…` (public bases, alias targets). |
 
 #### `ContainerImages`
 
-Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
-with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
+Images `tw deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}`
+with `tw.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They
 replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other.
 
 #### `ContainerReservation`
@@ -3428,7 +3428,7 @@ One statement's result, as D1's wire protocol has it.
 | `namespaces` | array of `ClassConfig` | yes |  |
 | `placement` | `PlacementDecision` | no | Why a deployment is on its host (smart placement, ADR-033). |
 | `public` | `DeploymentPublic` | no | The deployment's public routes (ADR-029); absent when tailnet-only. |
-| `replicas` | array of `ReplicaRef` | no | A workload with `twd.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas. |
+| `replicas` | array of `ReplicaRef` | no | A workload with `tailworks.jsonc` `replicas` > 1 (stateless only): every copy, this deployment first, each on a distinct host. Undeploying the workload undeploys its replicas. |
 | `status` | `DeploymentStatus` | yes | - `assigned`: mgmt placed it; the host has not reported yet. - `starting`: the host is starting it. - `active`: serving. - `crashloop`: it served, then its workerd kept exiting; the host keeps restarting it with exponential backoff (200 ms doubling to 5 min) and reports `active` again once it answers. `error` holds the attempt count, the next delay and the last log lines. - `draining`: being replaced or undeployed. - `stopped`: stopped (undeployed, fenced or unassigned). - `failed`: the deploy failed (bad bundle or config, or it never became healthy); the host does not retry it. `error` says why. - `superseded`: a newer deployment of the workload replaced it. |
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
@@ -3440,12 +3440,12 @@ One statement's result, as D1's wire protocol has it.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `bundle` | string | yes | tar (optionally gzipped) of the built worker + `twd.jsonc` + `wrangler.jsonc`. |
-| `containerImages` | `ContainerImages` | no | Images `twd deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}` with `twd.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other. |
+| `bundle` | string | yes | tar (optionally gzipped) of the built worker + `tailworks.jsonc` + `wrangler.jsonc`. |
+| `containerImages` | `ContainerImages` | no | Images `tw deploy` built and pushed, by class: `{"<Class>": {"image": ref, "images": {name: ref}}}` with `tw.local/<tenantID>/<repo>@sha256:…` refs (an index when built for several arches). They replace the class's Dockerfile `image` / `images` entries; every ref is then pinned like any other. |
 | `forceTakeover` | boolean | no | Confirm that the workload's current host, which has stopped heartbeating, is gone for good, so a stateful workload may move off it (ADR-028 §3). Without it such a move is refused with `takeover_unconfirmed`. Audited (`takeoverFrom`, `forced`). With `replace`, it also confirms moving a stateful workload off a live host (its DO storage stays there). |
 | `host` | string | no | Pin a host. |
-| `namespaces` | array of `ClassConfig` | no | Override the classes read from `twd.jsonc` (tests). |
-| `preview` | boolean | no | Deploy as a preview (`twd deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`. |
+| `namespaces` | array of `ClassConfig` | no | Override the classes read from `tailworks.jsonc` (tests). |
+| `preview` | boolean | no | Deploy as a preview (`tw deploy --preview`, ADR-deploy-preview): a workload of its own, `<workload>--preview-<alias>`, with the same tags, its own lease, Durable Object storage and stores, the workload's secrets, and no Tailscale Service, public routes or replicas. The workload itself is not touched. A bundle with queue bindings is `400 preview_unsupported`. |
 | `previewAlias` | string | no | The preview's alias (implies `preview`). Default: the first 8 hex digits of the bundle's SHA-256, so the same bundle is the same preview. |
 | `replace` | boolean | no | Re-place a running workload (smart placement, ADR-033): move it to a clearly better eligible host, or to `host` when pinned. Audited (`movedFrom`, `replace`). |
 | `tenantID` | string | yes |  |
@@ -3475,7 +3475,7 @@ The deployment's public routes (ADR-029); absent when tailnet-only.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `allowed` | boolean | yes | The tenant's `publicIngress` is `allow`; false: declared but not served. |
-| `exposed` | boolean | yes | `twd expose` setting. |
+| `exposed` | boolean | yes | `tw expose` setting. |
 | `routes` | array of string | yes |  |
 | `url` | string (uri) | yes |  |
 
@@ -3549,12 +3549,12 @@ The workload entry node (`_workload` object).
 The typed error catalog (docs/errors.md) shape. `code` is stable and machine-readable;
 `missing` names what is absent (grant, cap, field, quota); `snippet`
 is policy HuJSON to paste when a grant is missing; `doc_url` is
-`https://github.com/rosskukulinski/twd/blob/master/docs/errors.md#<code>` (the
+`https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#<code>` (the
 code's heading in the typed error catalog); `trace_id` correlates with audit.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `mint_mode_removed` \| 400 \| a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Twd-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `twd.dev/cap/admin` (`snippet` given) \| \| `tag_not_owned` \| 400 \| a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) \| \| `shared_owner_tag` \| 409 \| a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag \| \| `name_prefix_required` \| 409 \| a second tenant on a tailnet without a distinct `namePrefix` \| \| `tenant_forbidden` \| 403 \| a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) \| \| `cap_missing` \| 403 \| an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `preview_conflict` \| 409 \| a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one \| \| `preview_failed` \| 409 \| promote of a preview its host reported `failed` \| \| `preview_unsupported` \| 400 \| `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica \| \| `unknown_preview` \| 404 \| promote of a preview that doesn't exist or is stopped \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `profile_unsupported` \| 400 \| the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) \| \| `public_name_owned` \| 409 \| a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) \| \| `public_name_in_use` \| 409 \| release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) \| \| `upgrade_blocked` \| 409 \| an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) \| \| `upgrade_state` \| 409 \| pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this twd-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this twd-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs, approvals) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `approval_not_pending` \| 409 \| no approval of that Workflow instance is waiting (decided, timed out, or never asked) \| \| `internal` \| 500 \| — \| |
+| `code` | `ErrorCode` | yes | The catalog. Status in parentheses. \| code \| status \| when \| \|---\|---\|---\| \| `bad_request` \| 400 \| malformed body, parameter or filter \| \| `bad_cursor` \| 400 \| `cursor` does not decode \| \| `bad_bundle` \| 400 \| bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` \| \| `reserved_tag` \| 400 \| a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) \| \| `immutable_field` \| 400 \| PATCH touches a field the caller may not change \| \| `mint_mode_removed` \| 400 \| a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) \| \| `too_many_secrets` \| 400 \| a workload already has 128 secrets \| \| `d1_error` \| 400 \| a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied \| \| `no_identity` \| 401 \| WhoIs failed for the connection \| \| `host_token_required` \| 401 \| local-dev socket without `Tw-Host-Token` \| \| `host_token_invalid` \| 403 \| local-dev socket, wrong token \| \| `not_admin` \| 403 \| tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) \| \| `tag_not_owned` \| 400 \| a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) \| \| `shared_owner_tag` \| 409 \| a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag \| \| `name_prefix_required` \| 409 \| a second tenant on a tailnet without a distinct `namePrefix` \| \| `tenant_forbidden` \| 403 \| a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) \| \| `cap_missing` \| 403 \| an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) \| \| `forbidden` \| 403 \| role ok, but outside the caller's records / namespaces \| \| `host_not_registered` \| 403 \| `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created \| \| `host_identity_mismatch` \| 403 \| host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one \| \| `delegation_invalid` \| 403 \| child tag not owned by the parent's, parent unknown (404) or dead (410) \| \| `delegation_exceeds_parent` \| 403 \| spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) \| \| `policy_missing_tag_owners` \| 403 \| the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) \| \| `not_found` \| 404 \| — \| \| `unknown_tenant` \| 404 \| — \| \| `unknown_namespace` \| 404 \| `(workload, class)` not declared \| \| `no_logs` \| 404 \| the workload's host has no log file for it yet \| \| `unknown_secret` \| 404 \| the workload has no secret of that name \| \| `unknown_store` \| 404 \| the workload has no store of that kind and name \| \| `unknown_queue` \| 404 \| the tenant has no queue of that name \| \| `exists` \| 409 \| create of an existing ID \| \| `lease_lost` \| 409 \| epoch/holder fence failed \| \| `lease_held` \| 409 \| another host holds the lease \| \| `store_conflict` \| 409 \| a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry \| \| `store_limit` \| 400 \| a store append exceeds an entry, append or store size limit \| \| `queue_limit` \| 400 \| a send exceeds a message, batch, delay or queue size limit \| \| `store_unavailable` \| 503 \| the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` \| \| `tier_unavailable` \| 409 \| the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers \| \| `replica_conflict` \| 409 \| a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload \| \| `preview_conflict` \| 409 \| a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one \| \| `preview_failed` \| 409 \| promote of a preview its host reported `failed` \| \| `preview_unsupported` \| 400 \| `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica \| \| `unknown_preview` \| 404 \| promote of a preview that doesn't exist or is stopped \| \| `service_conflict` \| 409 \| `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload \| \| `service_api_failed` \| 502 \| mgmt can't read or create the Service definition (an OAuth client needs Services › Write) \| \| `profile_unsupported` \| 400 \| the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) \| \| `public_name_owned` \| 409 \| a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) \| \| `public_name_in_use` \| 409 \| release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live \| \| `move_unconfirmed` \| 409 \| `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` \| \| `lease_changed` \| 409 \| the workload's lease changed while `replace` was moving it (a concurrent deploy); retry \| \| `takeover_unconfirmed` \| 409 \| the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` \| \| `already_joined` \| 409 \| credential for an object that has a node \| \| `identity_conflict` \| 409 \| object ID collision across identities \| \| `namespace_ambiguous` \| 409 \| class declared by several workloads, `workload` missing \| \| `not_ready` \| 409 \| certificate requested before `ready` \| \| `superseded` \| 409 \| undeploy of a non-latest deployment \| \| `tenant_has_live_objects` \| 409 \| tenant delete without `force` \| \| `host_holds_leases` \| 409 \| host delete without `drain` \| \| `version_skew` \| 409 \| a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) \| \| `upgrade_blocked` \| 409 \| an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) \| \| `upgrade_state` \| 409 \| pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) \| \| `feature_unavailable` \| 409 \| the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts \| \| `killed` \| 410 \| tombstone (`TombstoneError`) \| \| `precondition_failed` \| 412 \| `If-Match` mismatch \| \| `object_quota_exceeded` \| 429 \| tenant `maxObjects` \| \| `spawn_budget_exceeded` \| 429 \| `maxLive` / `maxDepth` \| \| `container_quota_exceeded` \| 429 \| tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) \| \| `image_unavailable` \| 502 \| a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) \| \| `registry_unavailable` \| 409 \| this tw-mgmt serves no OCI registry (`-registry-dir off`) \| \| `mirror_disabled` \| 409 \| this tw-mgmt does not mirror external images (`-no-mirror`) \| \| `bootstrap_failed` \| 502 \| control plane refused the mint \| \| `host_unavailable` \| 502 \| the host holding the workload's lease did not answer mgmt (logs, approvals) \| \| `host_token_unconfigured` \| 503 \| local-dev mgmt without a token (fail closed) \| \| `identity_pending` \| 503 \| mint still queued (`Retry-After: 1`) \| \| `no_host` \| 503 \| no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) \| \| `policy_unavailable` \| 503 \| mgmt cannot read the tenant policy \| \| `approval_not_pending` \| 409 \| no approval of that Workflow instance is waiting (decided, timed out, or never asked) \| \| `internal` \| 500 \| — \| |
 | `doc_url` | string (uri) | yes |  |
 | `message` | string | yes |  |
 | `missing` | object | no | What is missing. Shape depends on `code` (e.g. `{src, dst, cap, field}` for `delegation_invalid`). |
@@ -3569,27 +3569,27 @@ The catalog. Status in parentheses.
 |---|---|---|
 | `bad_request` | 400 | malformed body, parameter or filter |
 | `bad_cursor` | 400 | `cursor` does not decode |
-| `bad_bundle` | 400 | bundle has no `twd.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
-| `reserved_tag` | 400 | a bundle or namespace asks for one of twd's own tags (`tag:twd`, `tag:twd-mgmt`, `tag:twd-host`) |
+| `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+| `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
 | `too_many_secrets` | 400 | a workload already has 128 secrets |
 | `d1_error` | 400 | a D1 statement failed (SQLite's message, or a D1 limit); nothing of its batch was applied |
 | `no_identity` | 401 | WhoIs failed for the connection |
-| `host_token_required` | 401 | local-dev socket without `Twd-Host-Token` |
+| `host_token_required` | 401 | local-dev socket without `Tw-Host-Token` |
 | `host_token_invalid` | 403 | local-dev socket, wrong token |
-| `not_admin` | 403 | tailnet caller without `twd.dev/cap/admin` (`snippet` given) |
+| `not_admin` | 403 | tailnet caller without `github.com/rosskukulinski/tailworks/cap/admin` (`snippet` given) |
 | `tag_not_owned` | 400 | a tenant with its own owner tag asks for a tag its owner tag doesn't own, or that another tenant's on the tailnet owns (`snippet` given) |
-| `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:twd`, or both the same owner tag |
+| `shared_owner_tag` | 409 | a second tenant on a tailnet where either tenant uses `tag:tw`, or both the same owner tag |
 | `name_prefix_required` | 409 | a second tenant on a tailnet without a distinct `namePrefix` |
-| `tenant_forbidden` | 403 | a tenant admin's `twd.dev/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
-| `cap_missing` | 403 | an approval the caller's `twd.dev/cap/approve` grants do not cover (`snippet` given) |
+| `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
+| `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
-| `host_not_registered` | 403 | `tag:twd-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
+| `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
 | `delegation_exceeds_parent` | 403 | spawn caps ⊄ parent (`missing: {src, dst, cap, field}`) |
-| `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for twd's own tags (`snippet` gives the tagOwners to add) |
+| `policy_missing_tag_owners` | 403 | the control plane refused to mint a key for tailworks' own tags (`snippet` gives the tagOwners to add) |
 | `not_found` | 404 | — |
 | `unknown_tenant` | 404 | — |
 | `unknown_namespace` | 404 | `(workload, class)` not declared |
@@ -3610,14 +3610,14 @@ The catalog. Status in parentheses.
 | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
 | `unknown_preview` | 404 | promote of a preview that doesn't exist or is stopped |
-| `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by twd for this tenant and workload |
+| `service_conflict` | 409 | `tailnet.service` names a Service that exists and isn't managed by tailworks for this tenant and workload |
 | `service_api_failed` | 502 | mgmt can't read or create the Service definition (an OAuth client needs Services › Write) |
 | `profile_unsupported` | 400 | the tenant's control-plane profile can't serve the request: on the Headscale profile (ADR-015), `tailnet.service` (no Tailscale Services), public routes or `publicIngress: allow` (no Funnel) |
 | `public_name_owned` | 409 | a deploy declares public routes under a workload name another tenant on the same tailnet owns as its public name (red-team H10) |
 | `public_name_in_use` | 409 | release of a public name the workload still serves: its latest deployment declares public routes, or its public node is live |
 | `move_unconfirmed` | 409 | `replace` would move a stateful workload off its live host, leaving its DO storage behind; confirm with `forceTakeover` |
 | `lease_changed` | 409 | the workload's lease changed while `replace` was moving it (a concurrent deploy); retry |
-| `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `twd host rm <host> --drain`, or redeploy with `--force-takeover` |
+| `takeover_unconfirmed` | 409 | the workload has Durable Objects and its host stopped heartbeating but is still registered: it may still be serving them. `tw host rm <host> --drain`, or redeploy with `--force-takeover` |
 | `already_joined` | 409 | credential for an object that has a node |
 | `identity_conflict` | 409 | object ID collision across identities |
 | `namespace_ambiguous` | 409 | class declared by several workloads, `workload` missing |
@@ -3625,7 +3625,7 @@ The catalog. Status in parentheses.
 | `superseded` | 409 | undeploy of a non-latest deployment |
 | `tenant_has_live_objects` | 409 | tenant delete without `force` |
 | `host_holds_leases` | 409 | host delete without `drain` |
-| `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer twd-mgmt contracted (ADR-041 §7) |
+| `version_skew` | 409 | a host (or CLI, or mgmt replica) outside the version window: a host newer than mgmt, or more than one release line behind it; or a store a newer tw-mgmt contracted (ADR-041 §7) |
 | `upgrade_blocked` | 409 | an upgrade run can't start: its plan has blockers (`message` lists them; `POST /v1/upgrades` with `dryRun` shows the plan) |
 | `upgrade_state` | 409 | pause, resume or abort of a run that isn't running (pause), paused (resume), or active (abort) |
 | `feature_unavailable` | 409 | the deployment needs a host feature (`kv`, `r2`, `d1`, …) that no eligible host, or the workload's current host, advertises: upgrade the hosts |
@@ -3634,9 +3634,9 @@ The catalog. Status in parentheses.
 | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
-| `image_unavailable` | 502 | a container image could not be pinned at deploy (not in twd's registry, no image for any of the pool's arches, or the upstream mirror failed) |
-| `registry_unavailable` | 409 | this twd-mgmt serves no OCI registry (`-registry-dir off`) |
-| `mirror_disabled` | 409 | this twd-mgmt does not mirror external images (`-no-mirror`) |
+| `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
+| `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
+| `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
 | `bootstrap_failed` | 502 | control plane refused the mint |
 | `host_unavailable` | 502 | the host holding the workload's lease did not answer mgmt (logs, approvals) |
 | `host_token_unconfigured` | 503 | local-dev mgmt without a token (fail closed) |
@@ -3665,23 +3665,23 @@ Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `reserved_tag`, `immutable_fiel
 | `cordonedAt` | integer (int64) | no | unix ms; absent when not cordoned. |
 | `cordonedBy` | string | no |  |
 | `createdAt` | integer (int64) | yes |  |
-| `dnsName` | string | no | `twd-host-<hostID>.<tailnet>`. |
+| `dnsName` | string | no | `tw-host-<hostID>.<tailnet>`. |
 | `features` | array of string | no | Host features it offers (`kv`, `r2`, `d1`, `telemetry`, …); placement needs every one a bundle uses. |
 | `hostID` | string | yes |  |
 | `lastSeen` | integer (int64) | yes | unix ms of the last heartbeat |
 | `leases` | array of `Lease` | no | Namespace leases the host currently holds. |
 | `liveNodes` | integer | yes |  |
-| `nodeID` | string | no | Stable node ID of the host's `tag:twd-host` tsnet node (bound at registration). |
+| `nodeID` | string | no | Stable node ID of the host's `tag:tw-host` tsnet node (bound at registration). |
 | `os` | string | no |  |
 | `pool` | string | no |  |
 | `protocols` | `Protocols` | no | Protocol versions a component speaks: `push`, `guest`, `helper`, `vz`, `rest`, `cliJSON`. |
 | `push` | `HostPush` | no | Where mgmt pushes kills and assignment changes. Over the tailnet, `port` names hostd's push listener on **its own tsnet node** (the WhoIs node; mgmt never pushes anywhere else). `url` is accepted only on the local-dev socket and only as `unix:///…`. |
 | `skew` | string | no | Why the host is outside the version window (placement skips it); absent when it is within. |
-| `status` | `HostStatusEnum` | yes | `pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted. |
+| `status` | `HostStatusEnum` | yes | `pending`: created by `tw host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted. |
 | `tiers` | array of `HostTier` | yes |  |
 | `updatedAt` | integer (int64) | yes |  |
 | `usage` | `HostUsage` | no | Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`). |
-| `version` | string | no | The host's twd version, from its last registration (absent: a hostd from before version reporting, 0.1.x). |
+| `version` | string | no | The host's tw version, from its last registration (absent: a hostd from before version reporting, 0.1.x). |
 
 #### `HostCapacity`
 
@@ -3739,7 +3739,7 @@ reports 0 for every VM dimension.
 
 #### `HostJoin`
 
-A single-use join key for a host's `tag:twd-host` node. Never logged.
+A single-use join key for a host's `tag:tw-host` node. Never logged.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -3747,7 +3747,7 @@ A single-use join key for a host's `tag:twd-host` node. Never logged.
 | `controlURL` | string (uri) | no |  |
 | `expiresAt` | integer (int64) | yes | unix ms |
 | `host` | `Host` | yes |  |
-| `hostname` | string | yes | `twd-host-<hostID>` |
+| `hostname` | string | yes | `tw-host-<hostID>` |
 | `registrationSecret` | string (password) | yes | One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound. |
 | `tags` | array of string | yes |  |
 | `tailnet` | string | no |  |
@@ -3776,7 +3776,7 @@ on the local-dev socket and only as `unix:///…`.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `port` | integer | no |  |
-| `url` | string | no | `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `twd up`; accepted only from the in-process transport). |
+| `url` | string | no | `unix:///path/hostd.sock` (local-dev only), or `inproc://` for the host embedded in the mgmt process (single-process `tw up`; accepted only from the in-process transport). |
 
 #### `HostRegistration`
 
@@ -3793,7 +3793,7 @@ on the local-dev socket and only as `unix:///…`.
 | `push` | `HostPush` | no | Where mgmt pushes kills and assignment changes. Over the tailnet, `port` names hostd's push listener on **its own tsnet node** (the WhoIs node; mgmt never pushes anywhere else). `url` is accepted only on the local-dev socket and only as `unix:///…`. |
 | `registrationSecret` | string (password) | no | Required on the first registration of a host created by `POST /v1/hosts` (the `registrationSecret` from that answer); ignored once the node is bound. |
 | `tiers` | array of `HostTier` | yes |  |
-| `version` | string | no | The host's twd version. A host outside the version window is refused: `409 version_skew`. |
+| `version` | string | no | The host's tw version. A host outside the version window is refused: `409 version_skew`. |
 
 #### `HostStatus`
 
@@ -3809,7 +3809,7 @@ The heartbeat body.
 
 #### `HostStatusEnum`
 
-`pending`: created by `twd host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
+`pending`: created by `tw host add`, never registered. `live`: heartbeated within 10 s. `stale`: registered, no recent heartbeat. `draining`: being deleted.
 
 Enum: `pending`, `live`, `stale`, `draining`
 
@@ -3922,7 +3922,7 @@ A Workers KV key as `list()` returns it (ADR-037).
 
 #### `MintMode`
 
-`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`.
+`oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 
 Enum: `oauth`, `headscale`, `static`, `apikey`, `wif`
 
@@ -3974,8 +3974,8 @@ tailnet identity and grants.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `cli` | string | no | The `twd approve` command line. |
-| `event` | `NotificationEventKind` | yes | `approval_requested` (a Workflow instance started waiting for an approval), `test` (`twd notify test`; never subscribed to). |
+| `cli` | string | no | The `tw approve` command line. |
+| `event` | `NotificationEventKind` | yes | `approval_requested` (a Workflow instance started waiting for an approval), `test` (`tw notify test`; never subscribed to). |
 | `facts` | object | no |  |
 | `instance` | string | no |  |
 | `link` | string | no | `https://<mgmt>/ui/approvals?tenant=<tenant>#<instance>` |
@@ -3989,7 +3989,7 @@ tailnet identity and grants.
 #### `NotificationEventKind`
 
 `approval_requested` (a Workflow instance started waiting for an approval),
-`test` (`twd notify test`; never subscribed to).
+`test` (`tw notify test`; never subscribed to).
 
 Enum: `approval_requested`, `test`
 
@@ -4180,9 +4180,9 @@ Why a deployment is on its host (smart placement, ADR-033).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `accessWarnings` | array of string | no | Grants to `tag:twd-mgmt` that don't do what they look like: values on `twd.dev/cap/admin` (they don't narrow it), invalid `twd.dev/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `twd.dev/cap/mcp` or `twd.dev/cap/approve` grants (they apply to every tenant). Never make `ok` false. |
+| `accessWarnings` | array of string | no | Grants to `tag:tw-mgmt` that don't do what they look like: values on `github.com/rosskukulinski/tailworks/cap/admin` (they don't narrow it), invalid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants, `github.com/rosskukulinski/tailworks/cap/mcp` or `github.com/rosskukulinski/tailworks/cap/approve` grants (they apply to every tenant). Never make `ok` false. |
 | `missing` | array of `PreflightMissing` | yes |  |
-| `missingNodeAttrs` | array of string | no | Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:twd-public` for a workload with public routes. |
+| `missingNodeAttrs` | array of string | no | Missing policy `nodeAttrs` (ADR-029 D6), e.g. `funnel on tag:tw-public` for a workload with public routes. |
 | `missingTagOwners` | array of string | yes |  |
 | `nodeAttrsSnippet` | string | no | The `tagOwners` + `nodeAttrs` policy to add (HuJSON). |
 | `ok` | boolean | yes |  |
@@ -4262,7 +4262,7 @@ while `exposed`.
 | `createdBy` | string | no |  |
 | `digest` | string | yes | The linux/`arch` image manifest. |
 | `id` | string | yes |  |
-| `ref` | string | yes | The normalised upstream ref (or twd.local ref) deploys match. |
+| `ref` | string | yes | The normalised upstream ref (or tw.local ref) deploys match. |
 | `repository` | string | yes | `public/…` |
 | `sourceDigest` | string | yes | The upstream top-level digest (index or manifest) at add time. |
 
@@ -4290,10 +4290,10 @@ Extends `Page`.
 #### `PublicIngress`
 
 Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the
-tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent):
+tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent):
 a deploy that declares them is refused `403 public_ingress_not_allowed`,
 and setting `deny` later makes hosts close every public listener.
-`twd up` (single-tenant) creates its tenant with `allow`.
+`tw up` (single-tenant) creates its tenant with `allow`.
 
 Enum: `allow`, `deny`
 
@@ -4518,7 +4518,7 @@ Extends `Page`.
 
 #### `ReplicaRef`
 
-One replica of a workload with `twd.jsonc` `replicas` > 1.
+One replica of a workload with `tailworks.jsonc` `replicas` > 1.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -4529,7 +4529,7 @@ One replica of a workload with `twd.jsonc` `replicas` > 1.
 
 #### `RequestRecord`
 
-One line of a workload's request log (`twd logs --json`,
+One line of a workload's request log (`tw logs --json`,
 ADR-observability): a request through hostd's ingress (`kind:
 request`), joined with its workerd invocation, or an invocation
 with no ingress half (`kind: invocation`: a DO called from the
@@ -4554,7 +4554,7 @@ query strings, request headers or secret values.
 | `logs` | array of object | no |  |
 | `method` | string | no |  |
 | `name` | string | no |  |
-| `object` | string | no | The twd object ID. |
+| `object` | string | no | The tailworks object ID. |
 | `outcome` | string | no |  |
 | `parentSpanId` | string | no |  |
 | `path` | string | no | The URL path (never the query string). |
@@ -4605,7 +4605,7 @@ One running container in a heartbeat.
 | `ahead` | array of string | no | Applied migrations this replica doesn't know (a newer replica ran them). |
 | `applied` | string | yes | The newest migration applied to the store. |
 | `latest` | string | yes | The newest migration this replica knows. |
-| `minBinary` | string | no | The oldest twd-mgmt that may open the store. |
+| `minBinary` | string | no | The oldest tw-mgmt that may open the store. |
 | `pending` | array of string | no |  |
 | `pendingContract` | array of string | no | Contract migrations deferred until every replica runs this version. |
 | `restoreGeneration` | integer (int64) | no |  |
@@ -4653,7 +4653,7 @@ Extends `Page`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `dnsName` | string | no | `twd-mgmt.<tailnet>` |
+| `dnsName` | string | no | `tw-mgmt.<tailnet>` |
 | `https` | boolean | yes |  |
 | `tailnet` | string | no |  |
 | `transport` | `Transport` | no | `tsnet` in normal operation; `local-dev` when the unix socket is serving. |
@@ -4674,7 +4674,7 @@ A workload's Tailscale Service: a stable name and VIPs that survive the workload
 |---|---|---|---|
 | `clock` | `StatusClock` | no | The shared clock this replica uses for leases, host liveness and expiries (ADR-028): the store's clock. `ok` is false (and the top-level `ok` with it) when this replica's wall clock is more than 2 s from the store clock, or the store clock has not been sampled for 30 s. Ownership decisions do not use the wall clock, so this is a warning, not a refusal; local-clock users (throttles) may misbehave. |
 | `hosts` | object | yes |  |
-| `listeners` | array of string | no | e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.twd/run/mgmt.sock`. |
+| `listeners` | array of string | no | e.g. `tsnet:80`, `tsnet:443`, `funnel:443`, `unix:~/.tailworks/run/mgmt.sock`. |
 | `objects` | object | yes | Count per `ObjectStatus`. |
 | `ok` | boolean | yes |  |
 | `pendingDeviceDeletes` | integer | yes |  |
@@ -4829,14 +4829,14 @@ Enum: `logs`, `metrics`, `traces`
 | `maxContainerVCPU` | number | no | Total vCPUs of the tenant's running containers (fractional: `lite` is 1/16). |
 | `maxContainers` | integer | no | Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`. |
 | `maxObjects` | integer | yes |  |
-| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
-| `namePrefix` | string | no | Goes in front of every tailnet name twd generates for this tenant (object and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11 of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most one may go without (`409 name_prefix_required`). Fixed once the tenant has deployed. |
+| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`. |
+| `namePrefix` | string | no | Goes in front of every tailnet name tailworks generates for this tenant (object and workload nodes, Services, public names): `<prefix>-<name>`. Up to 11 of a-z, 0-9 and inner hyphens. On a tailnet with several tenants, at most one may go without (`409 name_prefix_required`). Fixed once the tenant has deployed. |
 | `oauthClientFile` | string | no | `oauth` mode: absolute path of the 0600 file with `TS_OAUTH_CLIENT_ID=…` / `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, read at use on the mgmt host (a looser mode is refused). |
 | `oauthClientID` | string | no | `oauth` mode: the OAuth client's public ID (`TS_OAUTH_CLIENT_ID`). The secret is never stored or returned. |
 | `oboPublicKey` | string | no | base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. |
-| `ownerTag` | string | no | The tag that owns this tenant's workload and object tags, and that its OAuth client is scoped to. Default `tag:twd`. Two tenants on one tailnet need their own, so neither's client can mint the other's tags (`409 shared_owner_tag`). See docs/teams.md (ADR-043). |
+| `ownerTag` | string | no | The tag that owns this tenant's workload and object tags, and that its OAuth client is scoped to. Default `tag:tw`. Two tenants on one tailnet need their own, so neither's client can mint the other's tags (`409 shared_owner_tag`). See docs/teams.md (ADR-043). |
 | `pool` | string | no | Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host). |
-| `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
+| `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `tw up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | yes |  |
 | `tailnet` | string | yes | MagicDNS suffix of the customer tailnet., examples: [tail7906d5.ts.net] |
 | `tenantID` | string | yes |  |
@@ -4853,13 +4853,13 @@ Enum: `logs`, `metrics`, `traces`
 | `maxContainerVCPU` | number | no |  |
 | `maxContainers` | integer | no |  |
 | `maxObjects` | integer | no |  |
-| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
+| `mintMode` | `MintMode` | yes | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`. |
 | `namePrefix` | string | no | Default none (see `Tenant.namePrefix`). |
 | `oauthClientFile` | string | no |  |
 | `oauthClientID` | string | no |  |
-| `ownerTag` | string | no | Default `tag:twd` (see `Tenant.ownerTag`). |
+| `ownerTag` | string | no | Default `tag:tw` (see `Tenant.ownerTag`). |
 | `pool` | string | no |  |
-| `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `twd.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `twd up` (single-tenant) creates its tenant with `allow`. |
+| `publicIngress` | `PublicIngress` | no | Operator gate for public (Funnel) ingress (ADR-029 D1). `allow`: the tenant's `tailworks.jsonc` `public` routes take effect. `deny` (or absent): a deploy that declares them is refused `403 public_ingress_not_allowed`, and setting `deny` later makes hosts close every public listener. `tw up` (single-tenant) creates its tenant with `allow`. |
 | `registrationsPerMinute` | integer | no |  |
 | `tailnet` | string | yes |  |
 | `tenantID` | string | no | Optional; generated (`tn_…`) when absent. |
@@ -4877,12 +4877,12 @@ Enum: `logs`, `metrics`, `traces`
 
 #### `TenantGrant`
 
-One valid `twd.dev/cap/tenant-admin` value. Allows each action in each tenant it names.
+One valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` value. Allows each action in each tenant it names.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `actions` | array of string: `data` \| `deploy` \| `kill` \| `read` \| `secrets` | yes |  |
-| `approve` | array of `ApproveGrant` | no | `twd.dev/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md). |
+| `approve` | array of `ApproveGrant` | no | `github.com/rosskukulinski/tailworks/cap/approve` values that apply only to approvals in these tenants (docs/approvals.md). |
 | `mcp` | object | no | Admits the caller to `/mcp` for these tenants. The read tools need `read`; each write or destructive tool must be named here and its action held in `actions`. |
 | `tenants` | array of string | yes |  |
 
@@ -4905,11 +4905,11 @@ JSON Merge Patch over the updatable fields. `null` clears an optional field.
 | `maxContainerVCPU` | number | no |  |
 | `maxContainers` | integer | no |  |
 | `maxObjects` | integer | no |  |
-| `mintMode` | `MintMode` | no | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:twd`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older twd created in one still reports it here, but can't mint until it is switched to `oauth`. |
+| `mintMode` | `MintMode` | no | `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`. |
 | `namePrefix` | string \| null | no | Only before the tenant's first deploy (`400 immutable_field` after). |
 | `oauthClientFile` | string \| null | no |  |
 | `oauthClientID` | string \| null | no |  |
-| `ownerTag` | string \| null | no | Move the tenant to its own owner tag (`null` = back to `tag:twd`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch. |
+| `ownerTag` | string \| null | no | Move the tenant to its own owner tag (`null` = back to `tag:tw`). Existing nodes keep their tags; set `oauthClientFile` to a client scoped to the new tag in the same patch. |
 | `pool` | string \| null | no |  |
 | `publicIngress` | string \| null | no | The ADR-029 gate: `allow` or `deny` (anything else is `400 bad_request`); `null` clears it (= `deny`). |
 | `registrationsPerMinute` | integer | no |  |
@@ -5044,20 +5044,20 @@ A tenant's notification webhook, without its secrets.
 |---|---|---|---|
 | `actor` | string | yes |  |
 | `admin` | boolean | yes |  |
-| `approveGrants` | array of `ApproveGrant` | no | The values of the caller's `twd.dev/cap/approve` grants toward `tag:twd-mgmt` (docs/approvals.md): what it may decide through `twd approve` and the admin UI. Empty when it holds none. |
-| `approver` | boolean | no | The caller holds `twd.dev/cap/approve` and may decide Workflow approvals its grants cover (`twd approve`). Always false for the local operator, which has no personal identity. |
-| `caps` | array of string | no | The `twd.dev/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts. |
+| `approveGrants` | array of `ApproveGrant` | no | The values of the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants toward `tag:tw-mgmt` (docs/approvals.md): what it may decide through `tw approve` and the admin UI. Empty when it holds none. |
+| `approver` | boolean | no | The caller holds `github.com/rosskukulinski/tailworks/cap/approve` and may decide Workflow approvals its grants cover (`tw approve`). Always false for the local operator, which has no personal identity. |
+| `caps` | array of string | no | The `github.com/rosskukulinski/tailworks/cap/*` capabilities the caller holds toward mgmt (WhoIs CapMap), sorted. Empty for the local operator and hosts. |
 | `hostID` | string | no |  |
-| `invalidTenantGrants` | array of string | no | The caller's `twd.dev/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard). |
+| `invalidTenantGrants` | array of string | no | The caller's `github.com/rosskukulinski/tailworks/cap/tenant-admin` values that grant nothing, each with the reason (missing `tenants` or `actions`, an unknown action, a wildcard). |
 | `kind` | string: `user` \| `node` \| `host` \| `local` | yes |  |
 | `login` | string | no |  |
-| `mcpTools` | array of string | no | The MCP tools `/mcp` lets the caller use without a `Twd-MCP-Tools` header, in `tools/list` order. |
+| `mcpTools` | array of string | no | The MCP tools `/mcp` lets the caller use without a `Tw-MCP-Tools` header, in `tools/list` order. |
 | `mgmt` | `SelfInfo` | yes |  |
 | `nodeID` | string | no |  |
 | `tags` | array of string | no |  |
 | `tailnet` | string | no | The caller's own tailnet (the MagicDNS suffix of its node, from WhoIs). Absent for the local operator and hosts. |
-| `tenantGrants` | array of `TenantGrant` | no | The caller's valid `twd.dev/cap/tenant-admin` values: the tenants it may act in, and how. Empty when it holds none. An admin's values are listed too but don't narrow it. |
-| `tenants` | array of `WhoAmITenant` | no | The tenants the caller can act in without knowing their IDs: those whose `tailnet` is the caller's own tailnet. The local operator gets every tenant; hosts get none. The admin UI's approvals page and `twd approvals` / `twd approve` default to these. A tailnet admin can still list every tenant (`GET /v1/tenants`). |
+| `tenantGrants` | array of `TenantGrant` | no | The caller's valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values: the tenants it may act in, and how. Empty when it holds none. An admin's values are listed too but don't narrow it. |
+| `tenants` | array of `WhoAmITenant` | no | The tenants the caller can act in without knowing their IDs: those whose `tailnet` is the caller's own tailnet. The local operator gets every tenant; hosts get none. The admin UI's approvals page and `tw approvals` / `tw approve` default to these. A tailnet admin can still list every tenant (`GET /v1/tenants`). |
 
 #### `WhoAmITenant`
 
@@ -5070,7 +5070,7 @@ A tenant's notification webhook, without its secrets.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `exposed` | boolean | yes | `twd expose on` (true, the default) or `off`. |
+| `exposed` | boolean | yes | `tw expose on` (true, the default) or `off`. |
 | `tenantID` | string | yes |  |
 | `updatedAt` | integer (int64) | no |  |
 | `updatedBy` | string | no | The actor who last toggled it (see Conventions). |

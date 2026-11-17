@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
 )
 
 // TestCloudflareAgents runs real `agents` Agent classes (facet and plain-DO
-// egress modes) on twd and checks the SDK surface the RFC relies on.
+// egress modes) on tailworks and checks the SDK surface the RFC relies on.
 func TestCloudflareAgents(t *testing.T) {
 	s := startSuite(t)
 	dCF := s.a.Deploy(app("cfagents"), "cfagents", nil)
@@ -194,7 +194,7 @@ func TestCloudflareAgents(t *testing.T) {
 				t.Fatalf("env.%s is %v; expected absent (update docs/COMPAT.md)", k, r[k])
 			}
 		}
-		if !strings.Contains(js(r["email"]), "not supported on twd") {
+		if !strings.Contains(js(r["email"]), "not supported on tailworks") {
 			t.Fatalf("cloudflare:email: %v", r["email"])
 		}
 		// subAgent() inside a facet: the facet's Dynamic Worker has no

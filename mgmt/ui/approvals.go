@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/rosskukulinski/twd/internal/auditfmt"
+	"github.com/rosskukulinski/tailworks/internal/auditfmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,11 +15,11 @@ import (
 
 // Approvals (ADR-040): /ui/approvals lists the Workflow
 // approvals waiting in every tenant the caller can list (or ?tenant=, for
-// an approver who is not a twd admin) and offers Approve / Reject. The
+// an approver who is not a tailworks admin) and offers Approve / Reject. The
 // decision is POST /v1/tenants/{id}/workloads/{w}/approvals/{wf}/{instance}
 // made with the browser's own tailnet identity (mgmt's WhoIs of this
 // connection); the host running the Workflow checks the caller's
-// twd.dev/cap/approve grants, so an admin without a grant is refused
+// github.com/rosskukulinski/tailworks/cap/approve grants, so an admin without a grant is refused
 // (cap_missing) like anyone else.
 
 type approver struct {
@@ -96,7 +96,7 @@ type whoTenant struct {
 	Tailnet  string `json:"tailnet"`
 }
 
-// approveGrant is one of the caller's twd.dev/cap/approve grant values.
+// approveGrant is one of the caller's github.com/rosskukulinski/tailworks/cap/approve grant values.
 type approveGrant struct {
 	Workloads []string           `json:"workloads"`
 	Workflows []string           `json:"workflows"`
@@ -187,7 +187,7 @@ func (u *ui) approvals(w http.ResponseWriter, r *http.Request) {
 		if tn == "" {
 			tn = "your tailnet"
 		}
-		d.Errors = append(d.Errors, "No tenant uses "+tn+", so there is nothing to show by default. Enter the tenant ID from your approval link or ask your twd admin for it.")
+		d.Errors = append(d.Errors, "No tenant uses "+tn+", so there is nothing to show by default. Enter the tenant ID from your approval link or ask your tailworks admin for it.")
 	default:
 		for _, t := range d.Tenants {
 			ids = append(ids, t.TenantID)

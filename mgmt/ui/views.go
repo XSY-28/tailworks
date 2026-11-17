@@ -3,7 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/rosskukulinski/twd/internal/auditfmt"
+	"github.com/rosskukulinski/tailworks/internal/auditfmt"
 	"html/template"
 	"sort"
 	"strings"
@@ -45,7 +45,7 @@ type whoAmI struct {
 	Tenants       []whoTenant    `json:"tenants"`
 	ApproveGrants []approveGrant `json:"approveGrants"`
 
-	// A tenant admin's grants (twd.dev/cap/tenant-admin): the console
+	// A tenant admin's grants (github.com/rosskukulinski/tailworks/cap/tenant-admin): the console
 	// shows it its own tenants and skips the admin-only panels.
 	TenantGrants []struct {
 		Tenants []string `json:"tenants"`
@@ -217,7 +217,7 @@ type object struct {
 func (o object) Live() bool { return o.Status != "killed" && o.Status != "failed" }
 
 // NodeName is the node's short name: the MagicDNS label or the hostname
-// (`twd ls` NODE column).
+// (`tw ls` NODE column).
 func (o object) NodeName() string {
 	if o.MagicDNS != "" {
 		n, _, _ := strings.Cut(o.MagicDNS, ".")
@@ -226,7 +226,7 @@ func (o object) NodeName() string {
 	return o.Hostname
 }
 
-// DisplayNS is `twd ls`'s CLASS/NAME column.
+// DisplayNS is `tw ls`'s CLASS/NAME column.
 func (o object) DisplayNS() string {
 	if o.Namespace == workloadNamespace {
 		return "workload " + o.ObjectName
@@ -265,7 +265,7 @@ type chainStatus struct {
 	Error    string `json:"error"`
 }
 
-// Summary is `twd audit`'s per-chain line.
+// Summary is `tw audit`'s per-chain line.
 func (c chainStatus) Summary() string {
 	switch {
 	case !c.OK:
@@ -458,8 +458,8 @@ func subtree(objs []object, id string) []object {
 	return buildTree(out)
 }
 
-// describe renders an audit record's detail the way `twd audit` does
-// (cmd/twd/ops.go describe). names maps object IDs to node names.
+// describe renders an audit record's detail the way `tw audit` does
+// (cmd/tw/ops.go describe). names maps object IDs to node names.
 func describe(r auditRecord, names map[string]string) string {
 	if r.Kind == "tenant_note" || r.Source == "tenant" {
 		return tenantNoteText(r)

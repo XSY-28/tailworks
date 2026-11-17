@@ -21,13 +21,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rosskukulinski/twd/guest/proto"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/internal/version"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/guest/proto"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/internal/version"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
-// agent is the host end of one guest: the twd-guestd control channel
+// agent is the host end of one guest: the tw-guestd control channel
 // (guest/proto NDJSON over vsock), the host-side network stack and the
 // ingress proxy through it. Both backends (Firecracker, vz) embed it; they
 // differ only in how the VM, its vsock and its NIC come to exist.

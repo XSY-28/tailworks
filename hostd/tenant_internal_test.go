@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // A tenant's netd registry only ever gets keys for its own objects.

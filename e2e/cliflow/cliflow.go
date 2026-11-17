@@ -1,7 +1,7 @@
 // Package cliflow is the M4 end-to-end scenario, driven only through the
-// `twd` CLI binary (up → init → deploy → calls from a tsnet test client →
+// `tw` CLI binary (up → init → deploy → calls from a tsnet test client →
 // spawn → kill --cascade → audit → down), shared by the hermetic test
-// (cmd/twd, testcontrol + a fake Tailscale API) and E2E-MAC on tailnet 1
+// (cmd/tw, testcontrol + a fake Tailscale API) and E2E-MAC on tailnet 1
 // (e2e/mac, `make e2e-mac`).
 package cliflow
 
@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/policy"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/netd"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/internal/policy"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // MCPCap is the MCP app capability the templates use.
@@ -36,28 +36,28 @@ const TestTag = "tag:ttest"
 // Policy is what the scenario needs in the tenant policy (added to
 // tailnet 1 by `make e2e-mac`: validated, If-Match, existing rules kept).
 func Policy() policy.Snippet {
-	owners := []string{"autogroup:admin", "tag:twd"}
+	owners := []string{"autogroup:admin", "tag:tw"}
 	app := func(tools ...string) map[string]any {
 		return map[string]any{MCPCap: []any{map[string]any{"tools": tools}}}
 	}
 	infra := policy.InfraSnippet(7474)
 	s := policy.Snippet{
 		TagOwners: map[string][]string{
-			"tag:twd-wl-agent":          owners,
-			"tag:twd-wl-mcp":            owners,
-			"tag:twd-agent-support":     owners,
-			"tag:twd-agent-support-sub": {"autogroup:admin", "tag:twd", "tag:twd-agent-support"},
+			"tag:tw-wl-agent":          owners,
+			"tag:tw-wl-mcp":            owners,
+			"tag:tw-agent-support":     owners,
+			"tag:tw-agent-support-sub": {"autogroup:admin", "tag:tw", "tag:tw-agent-support"},
 		},
 		Grants: []map[string]any{
-			// the test client reaches every twd node of the scenario
-			{"src": []string{TestTag}, "dst": []string{"tag:twd-wl-agent", "tag:twd-agent-support", "tag:twd-agent-support-sub", "tag:twd-wl-mcp"}, "ip": []string{"tcp:80"}},
+			// the test client reaches every tailworks node of the scenario
+			{"src": []string{TestTag}, "dst": []string{"tag:tw-wl-agent", "tag:tw-agent-support", "tag:tw-agent-support-sub", "tag:tw-wl-mcp"}, "ip": []string{"tcp:80"}},
 			// … and may call lookup_order (only) on the MCP server
-			{"src": []string{TestTag}, "dst": []string{"tag:twd-wl-mcp"}, "ip": []string{"tcp:80"}, "app": app("lookup_order")},
+			{"src": []string{TestTag}, "dst": []string{"tag:tw-wl-mcp"}, "ip": []string{"tcp:80"}, "app": app("lookup_order")},
 			// agents (and sub-agents) reach the private echo service
-			{"src": []string{"tag:twd-wl-agent", "tag:twd-agent-support", "tag:twd-agent-support-sub"}, "dst": []string{TestTag}, "ip": []string{"tcp:80"}},
+			{"src": []string{"tag:tw-wl-agent", "tag:tw-agent-support", "tag:tw-agent-support-sub"}, "dst": []string{TestTag}, "ip": []string{"tcp:80"}},
 			// the parent agent's MCP caps (spawn narrows from these)
-			{"src": []string{"tag:twd-agent-support"}, "dst": []string{"tag:twd-wl-mcp"}, "ip": []string{"tcp:80"}, "app": app("lookup_order", "refund")},
-			{"src": []string{"tag:twd-agent-support-sub"}, "dst": []string{"tag:twd-wl-mcp"}, "ip": []string{"tcp:80"}, "app": app("lookup_order")},
+			{"src": []string{"tag:tw-agent-support"}, "dst": []string{"tag:tw-wl-mcp"}, "ip": []string{"tcp:80"}, "app": app("lookup_order", "refund")},
+			{"src": []string{"tag:tw-agent-support-sub"}, "dst": []string{"tag:tw-wl-mcp"}, "ip": []string{"tcp:80"}, "app": app("lookup_order")},
 		},
 	}
 	for k, v := range infra.TagOwners {
@@ -67,7 +67,7 @@ func Policy() policy.Snippet {
 	return s
 }
 
-// BuildBinaries builds twd, twd-mgmt and twd-hostd into a temp dir.
+// BuildBinaries builds tailworks, tw-mgmt and tw-hostd into a temp dir.
 func BuildBinaries(t testing.TB) string {
 	t.Helper()
 	root, err := nettest.FindRepoRoot()
@@ -75,15 +75,15 @@ func BuildBinaries(t testing.TB) string {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	cmd := exec.Command("go", "build", "-o", dir+"/", "./cmd/twd", "./cmd/twd-mgmt", "./cmd/twd-hostd")
+	cmd := exec.Command("go", "build", "-o", dir+"/", "./cmd/tw", "./cmd/tw-mgmt", "./cmd/tw-hostd")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, b)
 	}
-	// The binaries live outside the repo: point twd at create-twd.
-	if os.Getenv("TWD_CREATE_TWD") == "" {
-		os.Setenv("TWD_CREATE_TWD", filepath.Join(root, "js", "packages", "create-twd"))
+	// The binaries live outside the repo: point tailworks at create-tailworks.
+	if os.Getenv("TW_CREATE_TAILWORKS") == "" {
+		os.Setenv("TW_CREATE_TAILWORKS", filepath.Join(root, "js", "packages", "create-tailworks"))
 	}
 	return dir
 }
@@ -95,13 +95,13 @@ type Env struct {
 	StateDir string
 	WorkDir  string
 	Tailnet  string
-	// OAuthClientFile is the 0600 OAuth client file twd up mints with
+	// OAuthClientFile is the 0600 OAuth client file tw up mints with
 	// (mint mode oauth). On production control Tailnet is only the
 	// expected (discovered) tailnet, not a flag.
 	OAuthClientFile string
 	ControlURL      string
 	TSAPIURL        string // "" = production API
-	Prefix          string // hostname prefix (twd-e2e-<run>-)
+	Prefix          string // hostname prefix (tw-e2e-<run>-)
 	// NewNode starts a tagged (tag:ttest) tsnet test node named Prefix+role.
 	NewNode func(role string) *nettest.Node
 	// ClientTagged: test nodes carry tag:ttest (production control). On
@@ -119,7 +119,7 @@ type Env struct {
 	Exec func(args []string) (stdout, stderr string, dur time.Duration, err error)
 	// PatchFile, if set, edits a file in WorkDir (which is then remote).
 	PatchFile func(path string, edit func([]byte) []byte) error
-	// Tier, if set, is written into the agent and mcp apps' twd.jsonc
+	// Tier, if set, is written into the agent and mcp apps' tailworks.jsonc
 	// ("tier": "microvm" for e2e-linux-vm).
 	Tier string
 	// OnDeployed, if set, runs right after the agent and mcp deploys.
@@ -127,17 +127,17 @@ type Env struct {
 	// OnPeers, if set, runs once the client sees the agent and mcp
 	// workload nodes (e2e-mbp measures the cross-machine path there).
 	OnPeers func(client *nettest.Node, hc *http.Client, agentIP, mcpIP string)
-	// UpArgs are extra `twd up` flags (e2e-linux: --service).
+	// UpArgs are extra `tw up` flags (e2e-linux: --service).
 	UpArgs []string
-	// SingleProcess runs `twd up` in its default single-process layout
-	// (M13: the host agent embedded in twd-mgmt; mgmt's node is the only
+	// SingleProcess runs `tw up` in its default single-process layout
+	// (M13: the host agent embedded in tw-mgmt; mgmt's node is the only
 	// infrastructure device). The default here is the two-process layout
-	// (`--separate-host`: twd-hostd on its own tag:twd-host node), which
+	// (`--separate-host`: tw-hostd on its own tag:tw-host node), which
 	// the e2e suites were written against.
 	SingleProcess bool
-	// Persistent: join nodes non-ephemeral (twd up's default; e2e-linux,
+	// Persistent: join nodes non-ephemeral (tw up's default; e2e-linux,
 	// so they rejoin after a service restart). The caller must then stop
-	// with `twd down --purge` (Down doesn't purge).
+	// with `tw down --purge` (Down doesn't purge).
 	Persistent bool
 	// Slow scales every wait and latency bound (0 or 1 = as is). e2e-linux
 	// sets it for the emulated (qemu TCG) amd64 VM only; the measured
@@ -162,10 +162,10 @@ type Results struct {
 	Numbers map[string]float64 `json:"numbers"`
 	Notes   []string           `json:"notes,omitempty"`
 	Cleanup map[string]any     `json:"cleanup"`
-	// IDs this run created via twd (for leftover checks; never printed keys).
+	// IDs this run created via tailworks (for leftover checks; never printed keys).
 	NodeIDs []string `json:"nodeIDs"`
-	// InfraNodeIDs are mgmt's and the host's own nodes (tag:twd-mgmt,
-	// tag:twd-host): kept by `twd down` (state is kept for the next up), so
+	// InfraNodeIDs are mgmt's and the host's own nodes (tag:tw-mgmt,
+	// tag:tw-host): kept by `tw down` (state is kept for the next up), so
 	// they are excluded from the leftover check and deleted by the harness.
 	InfraNodeIDs []string `json:"infraNodeIDs"`
 	KeyIDs       []string `json:"keyIDs"`
@@ -182,13 +182,13 @@ func (r *Results) pass(name, detail string) { r.Checks[name] = "PASS " + detail 
 // Pass records a passed check (for callers outside cliflow).
 func (r *Results) Pass(name, detail string) { r.pass(name, detail) }
 
-// Twd runs the CLI.
-func (e *Env) Twd(args ...string) (stdout, stderr string, dur time.Duration, err error) {
+// Tailworks runs the CLI.
+func (e *Env) Tw(args ...string) (stdout, stderr string, dur time.Duration, err error) {
 	full := append([]string{"--state-dir", e.StateDir}, args...)
 	if e.Exec != nil {
 		return e.Exec(full)
 	}
-	cmd := exec.Command(filepath.Join(e.BinDir, "twd"), full...)
+	cmd := exec.Command(filepath.Join(e.BinDir, "tw"), full...)
 	cmd.Dir = e.WorkDir
 	var so, se bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &so, &se
@@ -202,13 +202,13 @@ func (e *Env) Twd(args ...string) (stdout, stderr string, dur time.Duration, err
 // MustJSON runs the CLI with --json and decodes stdout.
 func (e *Env) MustJSON(out any, args ...string) time.Duration {
 	e.T.Helper()
-	so, se, d, err := e.Twd(append(args, "--json")...)
+	so, se, d, err := e.Tw(append(args, "--json")...)
 	if err != nil {
-		e.T.Fatalf("twd %s: %v\nstdout: %s\nstderr: %s", strings.Join(args, " "), err, so, netd.Redact(se))
+		e.T.Fatalf("tw %s: %v\nstdout: %s\nstderr: %s", strings.Join(args, " "), err, so, netd.Redact(se))
 	}
 	if out != nil {
 		if err := json.Unmarshal([]byte(so), out); err != nil {
-			e.T.Fatalf("twd %s: bad JSON: %v\n%s", strings.Join(args, " "), err, so)
+			e.T.Fatalf("tw %s: bad JSON: %v\n%s", strings.Join(args, " "), err, so)
 		}
 	}
 	return d
@@ -357,7 +357,7 @@ func mcpCall(hc *http.Client, ip, tool string, args map[string]any) (map[string]
 	return m, nil
 }
 
-// upArgs is the `twd up` command line of this run.
+// upArgs is the `tw up` command line of this run.
 func (e *Env) upArgs() []string {
 	// --allow-sibling-egress: the agent and the MCP server share this host;
 	// check (d) needs the spawned child to reach the server over the tailnet.
@@ -383,12 +383,12 @@ func (e *Env) upArgs() []string {
 	return append(upArgs, e.UpArgs...)
 }
 
-// RedeployAfterPurge is the user flow `twd down --purge && twd up && twd
+// RedeployAfterPurge is the user flow `tw down --purge && tw up && tailworks
 // deploy` on the SAME state dir, after Run and a purging Down: the agent
 // workload must deploy and its node be ready again (it was refused with
 // `bootstrap_failed: the workload node for agent is killed` before the
 // killed objects were forgotten by purge). It ends with another purging
-// `twd down`; the new node IDs are tracked for the leftover check.
+// `tw down`; the new node IDs are tracked for the leftover check.
 func (e *Env) RedeployAfterPurge() {
 	t, res := e.T, e.Res
 	t.Helper()
@@ -423,7 +423,7 @@ func (e *Env) RedeployAfterPurge() {
 	res.pass("redeploy_after_purge_down", fmt.Sprintf("%d objects killed, %d forgotten", len(dr.Killed), dr.Purged))
 }
 
-// Object is a row of `twd ls --all` (exported for harnesses that drive extra
+// Object is a row of `tw ls --all` (exported for harnesses that drive extra
 // phases, e.g. e2e-linux's ephemeral restart).
 type Object = object
 
@@ -433,7 +433,7 @@ func (e *Env) WaitObjectReady(ns, name string, timeout time.Duration) Object {
 	return e.waitObjectReady(ns, name, timeout)
 }
 
-// FindObject returns ns/name from `twd ls --all`.
+// FindObject returns ns/name from `tw ls --all`.
 func (e *Env) FindObject(ns, name string) (Object, bool) { return e.findObject(ns, name) }
 
 // PeerIPs returns every IPv4 the client's netmap has for magicDNS (a device
@@ -461,7 +461,7 @@ func PeerIP(t testing.TB, n *nettest.Node, magicDNS string, timeout time.Duratio
 	return peerIP(t, n, magicDNS, timeout)
 }
 
-// TrackObjectNodes records every object node ID twd reports (live or
+// TrackObjectNodes records every object node ID tailworks reports (live or
 // killed) in Res.NodeIDs for the leftover check.
 func (e *Env) TrackObjectNodes() {
 	for _, o := range e.objects() {
@@ -474,18 +474,18 @@ func (e *Env) TrackObjectNodes() {
 }
 
 // Run executes the scenario. Cleanup of test-created nodes is the caller's;
-// `twd down` (in Down) removes twd's own devices.
+// `tw down` (in Down) removes tailworks' own devices.
 func (e *Env) Run() {
 	t, res := e.T, e.Res
 	upArgs := e.upArgs()
 	// No credential on a fresh state dir: how to create the OAuth client.
-	if _, se, _, err := e.Twd("up", "--yes"); err == nil || !strings.Contains(se, "mint_mode_required") || !strings.Contains(se, "--oauth-client-file") {
-		t.Fatalf("twd up without a credential should explain the OAuth client (mint_mode_required): %v %s", err, se)
+	if _, se, _, err := e.Tw("up", "--yes"); err == nil || !strings.Contains(se, "mint_mode_required") || !strings.Contains(se, "--oauth-client-file") {
+		t.Fatalf("tw up without a credential should explain the OAuth client (mint_mode_required): %v %s", err, se)
 	}
 	res.pass("up_without_mode_explains_oauth", "mint_mode_required")
 	// A Tailscale API key is no longer a mint mode.
-	if _, se, _, err := e.Twd("up", "--yes", "--api-key-file", e.OAuthClientFile); err == nil || !strings.Contains(se, "mint_mode_removed") {
-		t.Fatalf("twd up --api-key-file (Tailscale) should fail with mint_mode_removed: %v %s", err, se)
+	if _, se, _, err := e.Tw("up", "--yes", "--api-key-file", e.OAuthClientFile); err == nil || !strings.Contains(se, "mint_mode_removed") {
+		t.Fatalf("tw up --api-key-file (Tailscale) should fail with mint_mode_removed: %v %s", err, se)
 	}
 	res.pass("up_apikey_removed", "mint_mode_removed")
 
@@ -507,7 +507,7 @@ func (e *Env) Run() {
 	}
 	e.MustJSON(&st, "status")
 	if !st.Healthy {
-		t.Fatal("twd status: not healthy")
+		t.Fatal("tw status: not healthy")
 	}
 	res.pass("status", "healthy")
 
@@ -517,9 +517,9 @@ func (e *Env) Run() {
 		e.MustJSON(nil, "init", dir, "--template", tmpl, "--keep-tags")
 	}
 	// Declare the agent's dependency on the echo service (preflighted).
-	tj := filepath.Join(agentDir, "twd.jsonc")
+	tj := filepath.Join(agentDir, "tailworks.jsonc")
 	addConnects := func(b []byte) []byte {
-		return bytes.Replace(b, []byte(`"tags": ["tag:twd-wl-agent"],`), []byte(`"tags": ["tag:twd-wl-agent"],
+		return bytes.Replace(b, []byte(`"tags": ["tag:tw-wl-agent"],`), []byte(`"tags": ["tag:tw-wl-agent"],
     "connects": ["`+TestTag+`"],`), 1)
 	}
 	patch := func(path string, edit func([]byte) []byte) {
@@ -535,14 +535,14 @@ func (e *Env) Run() {
 	patch(tj, addConnects)
 	if e.Tier != "" {
 		for _, d := range []string{agentDir, mcpDir} {
-			patch(filepath.Join(d, "twd.jsonc"), func(b []byte) []byte {
+			patch(filepath.Join(d, "tailworks.jsonc"), func(b []byte) []byte {
 				return bytes.Replace(b, []byte("{"), []byte("{\n  \"tier\": \""+e.Tier+"\","), 1)
 			})
 		}
 	}
 
 	// Preflight refuses hello (tailnet.connects tag:db has no grant).
-	_, se, _, err := e.Twd("deploy", helloDir)
+	_, se, _, err := e.Tw("deploy", helloDir)
 	if err == nil || !strings.Contains(se, "acl_denied") || !strings.Contains(se, `"dst": ["tag:db"]`) {
 		t.Fatalf("deploy hello should fail preflight with a snippet: %v\n%s", err, se)
 	}
@@ -689,7 +689,7 @@ func (e *Env) Run() {
 	var caps map[string]any
 	json.Unmarshal(co.Caps, &caps)
 	if co.Parent != ao.ID || co.NodeID == "" || co.NodeID == ao.NodeID || co.MagicDNS == ao.MagicDNS ||
-		!slices.Contains(co.Tags, "tag:twd-agent-support-sub") || fmt.Sprint(get(caps, MCPCap, "tools")) != "[lookup_order]" {
+		!slices.Contains(co.Tags, "tag:tw-agent-support-sub") || fmt.Sprint(get(caps, MCPCap, "tools")) != "[lookup_order]" {
 		t.Fatalf("(d) child object: %+v (parent %s)", co, ao.ID)
 	}
 	coIP := peerIP(t, client, co.MagicDNS, e.tmo(60*time.Second))
@@ -726,7 +726,7 @@ func (e *Env) Run() {
 	no := e.waitObjectReady("SupportAgent", "narrow1", 60*time.Second)
 	var ncaps map[string]any
 	json.Unmarshal(no.Caps, &ncaps)
-	if no.Parent != ao.ID || !slices.Contains(no.Tags, "tag:twd-agent-support") || fmt.Sprint(get(ncaps, MCPCap, "tools")) != "[lookup_order]" {
+	if no.Parent != ao.ID || !slices.Contains(no.Tags, "tag:tw-agent-support") || fmt.Sprint(get(ncaps, MCPCap, "tools")) != "[lookup_order]" {
 		t.Fatalf("(d) narrowed child object: %+v", no)
 	}
 	// The narrowed child answers on its own node too. This also gives the
@@ -741,7 +741,7 @@ func (e *Env) Run() {
 	res.pass("d_spawn", fmt.Sprintf("child %s node %s tags %v caps %s; lim enforced: same-tag child %s (tag %v, lim %s) → refund cap_missing, lookup_order ok; parent refund ok=%v",
 		co.ID, co.MagicDNS, co.Tags, co.Caps, no.ID, no.Tags, no.Caps, get(r.Body, "parent", "refund", "ok")))
 
-	// Record the IDs twd created (leftover checks after down).
+	// Record the IDs tailworks created (leftover checks after down).
 	for _, o := range e.objects() {
 		id := o.StableNodeID
 		if id == "" {
@@ -807,7 +807,7 @@ func (e *Env) Run() {
 	}
 	wantChain := principal + " → " + strings.Split(ao.MagicDNS, ".")[0] + " → " + strings.Split(co.MagicDNS, ".")[0]
 	if au.Chain != wantChain || !au.Verified {
-		so, _, _, _ := e.Twd("audit", ao.ID, "--json")
+		so, _, _, _ := e.Tw("audit", ao.ID, "--json")
 		t.Logf("agent audit: %s", so)
 		t.Fatalf("(f) audit chain %q (want %q), verified %v", au.Chain, wantChain, au.Verified)
 	}
@@ -844,8 +844,8 @@ func (e *Env) Run() {
 	if len(hu.Records) < 2 {
 		t.Fatalf("(f) audit --human %s: %d records", principal, len(hu.Records))
 	}
-	so, _, _, _ := e.Twd("audit", co.MagicDNS)
-	t.Logf("twd audit %s:\n%s", co.MagicDNS, so)
+	so, _, _, _ := e.Tw("audit", co.MagicDNS)
+	t.Logf("tw audit %s:\n%s", co.MagicDNS, so)
 	res.pass("f_audit_chain", fmt.Sprintf("%q, %d records for the sub-agent, chain verified", au.Chain, len(au.Records)))
 
 	// Mint key IDs (for the leftover check after down).
@@ -868,13 +868,13 @@ func (e *Env) Run() {
 	}
 
 	// Smoke: ls, logs, status.
-	if so, se, _, err := e.Twd("logs", "agent", "-n", "5"); err != nil {
-		t.Fatalf("twd logs agent: %v %s", err, se)
+	if so, se, _, err := e.Tw("logs", "agent", "-n", "5"); err != nil {
+		t.Fatalf("tw logs agent: %v %s", err, se)
 	} else {
 		_ = so
 	}
-	if _, se, _, err := e.Twd("ls"); err != nil {
-		t.Fatalf("twd ls: %v %s", err, se)
+	if _, se, _, err := e.Tw("ls"); err != nil {
+		t.Fatalf("tw ls: %v %s", err, se)
 	}
 	_ = mcp
 }
@@ -889,7 +889,7 @@ func anyStrings(v any) []string {
 	return out
 }
 
-// Down runs `twd down` and records its duration.
+// Down runs `tw down` and records its duration.
 func (e *Env) Down() {
 	var dr struct {
 		Killed  []string           `json:"killed"`
@@ -901,8 +901,8 @@ func (e *Env) Down() {
 	e.Res.pass("down", fmt.Sprintf("%d objects purged, %d devices deleted, %v", len(dr.Killed), dr.Flushed, d.Round(time.Millisecond)))
 }
 
-// Leftovers checks (by ID only) which devices and keys twd created in this
-// run still exist after `twd down`. A key that is consumed (invalid) or
+// Leftovers checks (by ID only) which devices and keys tailworks created in this
+// run still exist after `tw down`. A key that is consumed (invalid) or
 // revoked doesn't count.
 func Leftovers(ctx context.Context, api *tsapi.Client, res *Results) (devices, keys []string) {
 	for _, id := range res.NodeIDs {
@@ -921,12 +921,12 @@ func Leftovers(ctx context.Context, api *tsapi.Client, res *Results) (devices, k
 	return devices, keys
 }
 
-// Objects lists every object (twd ls --all).
+// Objects lists every object (tw ls --all).
 func (e *Env) Objects() []Object { return e.objects() }
 
-// TrackInfra records mgmt's node (from `twd up`) and the host's own node
-// (from `twd host ls`) in Res.InfraNodeIDs, and asserts the transport is
-// tsnet: no unix socket in use (`twd doctor` transport row).
+// TrackInfra records mgmt's node (from `tw up`) and the host's own node
+// (from `tw host ls`) in Res.InfraNodeIDs, and asserts the transport is
+// tsnet: no unix socket in use (`tw doctor` transport row).
 func (e *Env) TrackInfra(mgmtNodeID string) {
 	t := e.T
 	t.Helper()
@@ -946,15 +946,15 @@ func (e *Env) TrackInfra(mgmtNodeID string) {
 		case e.SingleProcess && (h.Status != "live" || h.NodeID != ""):
 			t.Fatalf("host %s is %q with node %q: the embedded host must be live with no node of its own", h.HostID, h.Status, h.NodeID)
 		case !e.SingleProcess && (h.Status != "live" || h.NodeID == ""):
-			t.Fatalf("host %s is %q with node %q: the host must be live on its own tag:twd-host node", h.HostID, h.Status, h.NodeID)
+			t.Fatalf("host %s is %q with node %q: the host must be live on its own tag:tw-host node", h.HostID, h.Status, h.NodeID)
 		}
 	}
 	if e.SingleProcess {
 		if _, err := os.Stat(filepath.Join(e.StateDir, "hostd", "tsnet")); err == nil {
-			t.Fatalf("single-process twd up created host node state in %s", filepath.Join(e.StateDir, "hostd", "tsnet"))
+			t.Fatalf("single-process tw up created host node state in %s", filepath.Join(e.StateDir, "hostd", "tsnet"))
 		}
 		if _, err := os.Stat(filepath.Join(e.StateDir, "hostd", "join.env")); err == nil {
-			t.Fatalf("single-process twd up minted a host join key")
+			t.Fatalf("single-process tw up minted a host join key")
 		}
 	}
 	var doc struct {
@@ -978,22 +978,22 @@ func (e *Env) TrackInfra(mgmtNodeID string) {
 }
 
 // RunPrefixes names one real-tailnet run's nodes: the test client + echo
-// get ttest-<label>-<run>- and every node twd creates gets twd-<label>-<run>-.
-// label defaults to def; TWD_E2E_PREFIX=ttest-<label>- overrides it so
+// get ttest-<label>-<run>- and every node tailworks creates gets tw-<label>-<run>-.
+// label defaults to def; TW_E2E_PREFIX=ttest-<label>- overrides it so
 // concurrent runs (and the final-verification runs, ttest-fv-) clean up
 // only their own IDs.
-func RunPrefixes(def, run string) (testPrefix, twdPrefix, label string) {
+func RunPrefixes(def, run string) (testPrefix, twPrefix, label string) {
 	label = def
-	if p := os.Getenv("TWD_E2E_PREFIX"); p != "" {
+	if p := os.Getenv("TW_E2E_PREFIX"); p != "" {
 		l, ok := strings.CutPrefix(p, "ttest-")
 		if !ok || l == "" {
-			panic("TWD_E2E_PREFIX " + p + " must be ttest-<label>-")
+			panic("TW_E2E_PREFIX " + p + " must be ttest-<label>-")
 		}
 		label = strings.TrimSuffix(l, "-")
 	}
-	return "ttest-" + label + "-" + run + "-", "twd-" + label + "-" + run + "-", label
+	return "ttest-" + label + "-" + run + "-", "tw-" + label + "-" + run + "-", label
 }
 
-// UpCommand is the `twd up` command line Run uses (for scenarios that run
+// UpCommand is the `tw up` command line Run uses (for scenarios that run
 // their own flow after up, e.g. e2e-public).
 func (e *Env) UpCommand() []string { return e.upArgs() }

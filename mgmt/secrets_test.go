@@ -53,8 +53,8 @@ func TestSecretsStore(t *testing.T) {
 		t.Fatalf("page 2: %+v %v", p2, n2)
 	}
 	// Refusals.
-	c.fail("PUT", base+"/TWD_X", map[string]string{"value": "x"}, 400, "bad_request")
-	c.fail("PUT", base+"/__TWD_X", map[string]string{"value": "x"}, 400, "bad_request")
+	c.fail("PUT", base+"/TW_X", map[string]string{"value": "x"}, 400, "bad_request")
+	c.fail("PUT", base+"/__TW_X", map[string]string{"value": "x"}, 400, "bad_request")
 	// The spec refuses these too; the server must as well (direct: no validator).
 	for _, body := range []any{map[string]any{"value": strings.Repeat("x", SecretMaxValueBytes+1)}, map[string]any{}, map[string]any{"value": 1}, map[string]any{"value": "x", "extra": 1}} {
 		if st, eb := direct(t, e, "", "PUT", base+"/A", body); st != 400 || eb["code"] != "bad_request" {
@@ -124,7 +124,7 @@ func TestSecretsRelease(t *testing.T) {
 	c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	c.ok("PUT", "/v1/tenants/"+tn.TenantID+"/workloads/support/secrets/API_KEY", map[string]string{"value": secretValue}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, &dep)
 	q := func(workload string, epoch int64) string {
@@ -164,7 +164,7 @@ func TestSecretsRoles(t *testing.T) {
 	e := newTestEnv(t)
 	var tn struct{ TenantID string }
 	e.c.ok("POST", "/v1/tenants", map[string]any{"tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientFile": e.keyFile}, &tn)
-	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
 		case "100.64.0.1:1":
@@ -173,8 +173,8 @@ func TestSecretsRoles(t *testing.T) {
 			return WhoIsInfo{NodeID: "nADM", Login: "alice@example.com", Caps: []string{AdminCap}}, nil
 		case "100.64.0.4:1":
 			return WhoIsInfo{NodeID: "nEVE", Login: "eve@example.com"}, nil
-		case "100.64.0.5:1": // a twd object node (tenant code)
-			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:twd-agent-support"}, Login: "tagged-devices"}, nil
+		case "100.64.0.5:1": // a tailworks object node (tenant code)
+			return WhoIsInfo{NodeID: "nAGENT", Tags: []string{"tag:tw-agent-support"}, Login: "tagged-devices"}, nil
 		}
 		return WhoIsInfo{}, fmt.Errorf("unknown")
 	}
@@ -196,7 +196,7 @@ func TestSecretsRoles(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &out)
 		return w.Code, out.Code
 	}
-	// twd host add (admin), then the host's first registration with its
+	// tw host add (admin), then the host's first registration with its
 	// secret (hosts are bound to a join since the review fixes).
 	var hj struct{ RegistrationSecret string }
 	e.c.ok("POST", "/v1/hosts", map[string]any{"hostID": "h1", "tenantID": tn.TenantID}, &hj)
@@ -266,7 +266,7 @@ func TestSecretsReplicas(t *testing.T) {
 	}
 	c := e.c
 	c.ok("PUT", "/v1/tenants/"+tn+"/workloads/web/secrets/API_KEY", map[string]string{"value": secretValue}, nil)
-	b := base64.StdEncoding.EncodeToString(makeBundle(t, map[string]string{"twd.jsonc": `{ "replicas": 2, "tailnet": { "tags": ["tag:twd-web"], "service": true } }`, "dist/index.js": "export default {}"}))
+	b := base64.StdEncoding.EncodeToString(makeBundle(t, map[string]string{"tailworks.jsonc": `{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"], "service": true } }`, "dist/index.js": "export default {}"}))
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "web", "bundle": b}, nil)
 	got := map[string]bool{}
 	for id, h := range hosts {

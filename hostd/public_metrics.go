@@ -1,18 +1,18 @@
 package hostd
 
-import "github.com/rosskukulinski/twd/netd"
+import "github.com/rosskukulinski/tailworks/netd"
 
-// attrPublicReason labels twd.public.rejected by the limit that refused.
-const attrPublicReason = "twd.public.reason"
+// attrPublicReason labels tw.public.rejected by the limit that refused.
+const attrPublicReason = "tw.public.reason"
 
 // countPublicRejected adds a public node's per-minute refusal summary to
-// the twd.public.rejected counter (the same counts as the public_rejected
+// the tw.public.rejected counter (the same counts as the public_rejected
 // audit record).
 func (h *Host) countPublicRejected(o *object, s netd.PublicRejectSummary) {
 	if h.tel == nil {
 		return
 	}
-	c := h.tel.reg.Counter("twd.public.rejected", "{rejection}",
+	c := h.tel.reg.Counter("tw.public.rejected", "{rejection}",
 		"Public requests and connections refused by the public listener's limits, by reason.",
 		attrTenant, attrWorkload, attrPublicReason)
 	for _, r := range []struct {

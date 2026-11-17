@@ -45,7 +45,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := r.Method + " " + r.URL.Path
 	v, ok := f.routes[key]
 	if !ok {
-		w.Header().Set("Twd-Error", "not_found")
+		w.Header().Set("Tw-Error", "not_found")
 		w.WriteHeader(404)
 		json.NewEncoder(w).Encode(map[string]any{"code": "not_found", "message": key + " is not a route", "doc_url": "https://example/errors#not_found", "trace_id": "t1"})
 		return
@@ -55,7 +55,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if e.Tombstone != nil {
 			body["tombstone"] = e.Tombstone
 		}
-		w.Header().Set("Twd-Error", e.Code)
+		w.Header().Set("Tw-Error", e.Code)
 		w.WriteHeader(e.Status)
 		json.NewEncoder(w).Encode(body)
 		return
@@ -74,7 +74,7 @@ func pageOf(items ...any) map[string]any {
 // emptyAPI: a fresh mgmt with nothing in it.
 func emptyAPI() *fakeAPI {
 	return &fakeAPI{routes: map[string]any{
-		"GET /v1/whoami":             map[string]any{"kind": "user", "login": "a@x", "admin": true, "actor": "a@x", "mgmt": map[string]any{"dnsName": "twd-mgmt.t.ts.net", "tailnet": "t.ts.net"}},
+		"GET /v1/whoami":             map[string]any{"kind": "user", "login": "a@x", "admin": true, "actor": "a@x", "mgmt": map[string]any{"dnsName": "tw-mgmt.t.ts.net", "tailnet": "t.ts.net"}},
 		"GET /v1/status":             map[string]any{"ok": true, "transport": "tsnet", "listeners": []string{"tsnet:80"}, "hosts": map[string]int{"total": 0, "live": 0}, "tenants": 0, "objects": 0, "version": "v0"},
 		"GET /v1/hosts":              pageOf(),
 		"GET /v1/tenants":            pageOf(),
@@ -91,8 +91,8 @@ func populatedAPI() *fakeAPI {
 	f := emptyAPI()
 	now := time.Now().UnixMilli()
 	hostRec := map[string]any{"hostID": "h1", "capacityNodes": 10, "liveNodes": 2, "tiers": []string{"process", "vm"}, "lastSeen": now - 4000, "createdAt": now - 100000,
-		"status": "live", "nodeID": "nHOST1", "dnsName": "twd-host-h1.t.ts.net", "push": map[string]any{"port": 9443}, "leases": []any{map[string]any{"namespace": "tn_1/w", "holder": "h1", "epoch": 1, "expiresAt": now + 5000}}}
-	tenantRec := map[string]any{"tenantID": "tn_1", "tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientID": "kabc", "oauthClientFile": "/etc/twd/oauth.env",
+		"status": "live", "nodeID": "nHOST1", "dnsName": "tw-host-h1.t.ts.net", "push": map[string]any{"port": 9443}, "leases": []any{map[string]any{"namespace": "tn_1/w", "holder": "h1", "epoch": 1, "expiresAt": now + 5000}}}
+	tenantRec := map[string]any{"tenantID": "tn_1", "tailnet": "t.ts.net", "mintMode": "oauth", "oauthClientID": "kabc", "oauthClientFile": "/etc/tailworks/oauth.env",
 		"registrationsPerMinute": 30, "maxObjects": 100, "createdAt": now - 200000, "mintQueue": 0, "effectiveRegistrationsPerMinute": 30, "oboPublicKey": "pk"}
 	dep := map[string]any{"deploymentID": "dep_1", "tenantID": "tn_1", "workload": "w", "host": "h1", "epoch": 1, "status": "running", "deployedBy": "ross@x",
 		"createdAt": now - 90000, "namespaces": []any{map[string]any{"class": "A", "tags": []string{"tag:a"}, "agent": true, "ttl": "10m"}},
@@ -100,7 +100,7 @@ func populatedAPI() *fakeAPI {
 	root := map[string]any{"objectID": "obj_root", "tenantID": "tn_1", "workload": "w", "namespace": "A", "objectName": "root", "hostname": "root-abc",
 		"deploymentID": "dep_1", "lease": "tn_1/w", "tags": []string{"tag:a"}, "root": "obj_root", "depth": 0, "status": "ready", "nodeID": "7", "stableNodeID": "nROOTSTABLE0001",
 		"magicDNS": "root-abc.t.ts.net", "actingFor": "ross@x", "createdAt": now - 80000, "updatedAt": now - 70000, "lineage": []string{"obj_root"}, "children": []string{"obj_kid", "obj_dead"},
-		"caps": map[string]any{"twd.dev/cap/x": []any{map[string]any{"maxUsd": 1}}}}
+		"caps": map[string]any{"github.com/rosskukulinski/tailworks/cap/x": []any{map[string]any{"maxUsd": 1}}}}
 	kid := map[string]any{"objectID": "obj_kid", "tenantID": "tn_1", "workload": "w", "namespace": "A", "objectName": "kid", "hostname": "kid-def",
 		"deploymentID": "dep_1", "lease": "tn_1/w", "tags": []string{"tag:a"}, "parent": "obj_root", "root": "obj_root", "depth": 1, "status": "pending", "ttl": 600,
 		"createdAt": now - 60000, "updatedAt": now - 60000, "lineage": []string{"obj_root", "obj_kid"}}
@@ -148,7 +148,7 @@ func populatedAPI() *fakeAPI {
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	r := httptest.NewRequest("GET", "http://twd-mgmt.t.ts.net"+path, nil)
+	r := httptest.NewRequest("GET", "http://tw-mgmt.t.ts.net"+path, nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	return w
@@ -170,7 +170,7 @@ func TestPagesRenderEmpty(t *testing.T) {
 		if w.Code != wantStatus || !strings.Contains(w.Body.String(), "</html>") || strings.Contains(w.Body.String(), "template ") {
 			t.Errorf("%s: %d (want %d)\n%s", p, w.Code, wantStatus, w.Body.String())
 		}
-		if w.Code == 404 && (w.Header().Get("Twd-Error") != "not_found" || !strings.Contains(w.Body.String(), "not_found")) {
+		if w.Code == 404 && (w.Header().Get("Tw-Error") != "not_found" || !strings.Contains(w.Body.String(), "not_found")) {
 			t.Errorf("%s: 404 page lacks the typed code", p)
 		}
 	}
@@ -191,7 +191,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 	}
 	body := get(t, h, "/ui/").Body.String()
 	for _, want := range []string{
-		"twd-mgmt.t.ts.net", "v1.2.3", "tsnet:80, tsnet:443", // mgmt self
+		"tw-mgmt.t.ts.net", "v1.2.3", "tsnet:80, tsnet:443", // mgmt self
 		`href="/ui/hosts/h1"`, "tsnet:9443", "process, vm", "2/10", // hosts
 		`href="/ui/tenants/tn_1"`, "oauth", // tenants
 		`href="/ui/deployments/dep_1"`, "ross@x", `href="http://w-h1.t.ts.net/"`, // deployments
@@ -220,7 +220,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 		}
 	}
 	rb := get(t, h, "/ui/objects/obj_root").Body.String()
-	for _, want := range []string{"twd.dev/cap/x", "Node certificate", "nROOTSTABLE0001", "kid-def", "dead-ghi"} {
+	for _, want := range []string{"github.com/rosskukulinski/tailworks/cap/x", "Node certificate", "nROOTSTABLE0001", "kid-def", "dead-ghi"} {
 		if !strings.Contains(rb, want) {
 			t.Errorf("root page lacks %q", want)
 		}
@@ -242,7 +242,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 	if b := get(t, h, "/ui/hosts/h1").Body.String(); !strings.Contains(b, `action="/ui/hosts/h1/remove"`) || !strings.Contains(b, `name="drain"`) || !strings.Contains(b, "dep_1") {
 		t.Error("host page lacks the remove form or assignments")
 	}
-	if b := get(t, h, "/ui/tenants/tn_1").Body.String(); !strings.Contains(b, `action="/ui/tenants/tn_1/delete"`) || !strings.Contains(b, `name="force"`) || !strings.Contains(b, "/etc/twd/oauth.env") {
+	if b := get(t, h, "/ui/tenants/tn_1").Body.String(); !strings.Contains(b, `action="/ui/tenants/tn_1/delete"`) || !strings.Contains(b, `name="force"`) || !strings.Contains(b, "/etc/tailworks/oauth.env") {
 		t.Error("tenant page lacks the delete form or config")
 	}
 	// Audit page: filters echo back, paging link carries them, chains shown.
@@ -260,7 +260,7 @@ func TestFormFallbacks(t *testing.T) {
 	api := populatedAPI()
 	h := serve(t, api)
 	post := func(path, form string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net"+path, strings.NewReader(form))
+		r := httptest.NewRequest("POST", "http://tw-mgmt.t.ts.net"+path, strings.NewReader(form))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)

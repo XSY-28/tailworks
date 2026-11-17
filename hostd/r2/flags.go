@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Flags are twd-hostd's R2 backend flags (ADR-036: the backend is
+// Flags are tw-hostd's R2 backend flags (ADR-036: the backend is
 // per host, set by the operator).
 type Flags struct {
 	Backend     string
@@ -29,11 +29,11 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 	fs.StringVar(&f.Backend, "r2-backend", "fs", "where R2 bucket bytes live: fs (files under -r2-dir; this host only) | s3 (an S3-compatible service; needed when workloads can move between hosts)")
 	fs.StringVar(&f.Dir, "r2-dir", "", "fs backend: blob directory (default <data-dir>/r2)")
 	fs.StringVar(&f.Endpoint, "r2-s3-endpoint", "", "s3 backend: service URL, e.g. https://s3.us-east-1.amazonaws.com or http://minio.lan:9000")
-	fs.StringVar(&f.Bucket, "r2-s3-bucket", "", "s3 backend: the bucket that holds every twd R2 bucket's blobs (one prefix per tenant, workload and bucket)")
+	fs.StringVar(&f.Bucket, "r2-s3-bucket", "", "s3 backend: the bucket that holds every tailworks R2 bucket's blobs (one prefix per tenant, workload and bucket)")
 	fs.StringVar(&f.Region, "r2-s3-region", "us-east-1", "s3 backend: signing region")
-	fs.StringVar(&f.Prefix, "r2-s3-prefix", "twd/", "s3 backend: key prefix for twd's blobs")
+	fs.StringVar(&f.Prefix, "r2-s3-prefix", "tw/", "s3 backend: key prefix for tailworks' blobs")
 	fs.BoolVar(&f.VirtualHost, "r2-s3-virtual-host", false, "s3 backend: address the bucket as <bucket>.<endpoint host> (default: path style)")
-	fs.StringVar(&f.CredsFile, "r2-s3-credentials-file", "", "s3 backend: KEY=value file with TWD_R2_S3_ACCESS_KEY_ID and TWD_R2_S3_SECRET_ACCESS_KEY (default: those, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN, from the environment)")
+	fs.StringVar(&f.CredsFile, "r2-s3-credentials-file", "", "s3 backend: KEY=value file with TW_R2_S3_ACCESS_KEY_ID and TW_R2_S3_SECRET_ACCESS_KEY (default: those, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN, from the environment)")
 }
 
 // Open returns the configured backend. getenv reads the environment.
@@ -64,12 +64,12 @@ func (f *Flags) Open(dataDir string, getenv func(string) string) (Backend, error
 		}
 		env = func(k string) string { return m[k] }
 	}
-	c := Credentials{AccessKeyID: env("TWD_R2_S3_ACCESS_KEY_ID"), SecretAccessKey: env("TWD_R2_S3_SECRET_ACCESS_KEY"), SessionToken: env("TWD_R2_S3_SESSION_TOKEN")}
+	c := Credentials{AccessKeyID: env("TW_R2_S3_ACCESS_KEY_ID"), SecretAccessKey: env("TW_R2_S3_SECRET_ACCESS_KEY"), SessionToken: env("TW_R2_S3_SESSION_TOKEN")}
 	if c.AccessKeyID == "" {
 		c = Credentials{AccessKeyID: env("AWS_ACCESS_KEY_ID"), SecretAccessKey: env("AWS_SECRET_ACCESS_KEY"), SessionToken: env("AWS_SESSION_TOKEN")}
 	}
 	if c.AccessKeyID == "" || c.SecretAccessKey == "" {
-		return nil, errors.New("-r2-backend s3: no credentials (set TWD_R2_S3_ACCESS_KEY_ID and TWD_R2_S3_SECRET_ACCESS_KEY, or -r2-s3-credentials-file)")
+		return nil, errors.New("-r2-backend s3: no credentials (set TW_R2_S3_ACCESS_KEY_ID and TW_R2_S3_SECRET_ACCESS_KEY, or -r2-s3-credentials-file)")
 	}
 	if f.Prefix != "" && !strings.HasSuffix(f.Prefix, "/") {
 		f.Prefix += "/"

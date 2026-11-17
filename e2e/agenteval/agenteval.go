@@ -1,7 +1,7 @@
 // Package agenteval is the scripted agent loop of issue #25: no LLM, it
-// replays the commands twd's skills (agent/skills) tell a coding agent to
-// run, block by block, against a real twd (the hermetic harness in
-// cmd/twd TestAgentEval: twd up on testcontrol and a fake Tailscale API),
+// replays the commands tailworks' skills (agent/skills) tell a coding agent to
+// run, block by block, against a real tailworks (the hermetic harness in
+// cmd/tw TestAgentEval: tw up on testcontrol and a fake Tailscale API),
 // and checks every --json output against schema/cli.schema.json. A skill
 // that names a command, flag or output field that's gone fails it.
 package agenteval
@@ -19,9 +19,9 @@ import (
 	"testing"
 	"time"
 
-	twdagent "github.com/rosskukulinski/twd/agent"
-	twddocs "github.com/rosskukulinski/twd/docs"
-	"github.com/rosskukulinski/twd/schema"
+	twagent "github.com/rosskukulinski/tailworks/agent"
+	repodocs "github.com/rosskukulinski/tailworks/docs"
+	"github.com/rosskukulinski/tailworks/schema"
 )
 
 // Order is the order the eval replays the skills' eval blocks in: an
@@ -29,10 +29,10 @@ import (
 var Order = []string{"scaffold", "dev", "deploy", "inspect", "logs", "teardown"}
 
 // Steps returns every skill's eval steps by name.
-func Steps() (map[string]twdagent.EvalStep, error) {
-	out := map[string]twdagent.EvalStep{}
-	for _, s := range twdagent.Skills() {
-		_, steps, err := twdagent.Commands(s)
+func Steps() (map[string]twagent.EvalStep, error) {
+	out := map[string]twagent.EvalStep{}
+	for _, s := range twagent.Skills() {
+		_, steps, err := twagent.Commands(s)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +46,7 @@ func Steps() (map[string]twdagent.EvalStep, error) {
 	return out, nil
 }
 
-// Run is one twd invocation and its outcome.
+// Run is one tailworks invocation and its outcome.
 type Run struct {
 	Step   string        `json:"step,omitempty"`
 	Ref    string        `json:"ref,omitempty"` // skill:line
@@ -62,10 +62,10 @@ type Run struct {
 func (r Run) OK() bool { return r.Exit == 0 }
 
 // Agent is the scripted agent: a working directory (cd moves it) and the
-// twd binary, state dir and environment it runs with.
+// tailworks binary, state dir and environment it runs with.
 type Agent struct {
 	T        testing.TB
-	Bin      string // the twd binary
+	Bin      string // the tw binary
 	StateDir string
 	Dir      string
 	Env      []string
@@ -74,7 +74,7 @@ type Agent struct {
 	Log   []Run
 }
 
-// Exec runs `twd <args>` in a.Dir with --state-dir.
+// Exec runs `tw <args>` in a.Dir with --state-dir.
 func (a *Agent) Exec(args ...string) Run {
 	full := append([]string{"--state-dir", a.StateDir}, args...)
 	cmd := exec.Command(a.Bin, full...)
@@ -92,14 +92,14 @@ func (a *Agent) Exec(args ...string) Run {
 	if ee, ok := err.(*exec.ExitError); ok {
 		r.Exit = ee.ExitCode()
 	} else if err != nil {
-		a.T.Fatalf("twd %s: %v", strings.Join(args, " "), err)
+		a.T.Fatalf("tw %s: %v", strings.Join(args, " "), err)
 	}
 	a.Log = append(a.Log, r)
 	return r
 }
 
 // Replay runs one eval step's commands as written; `cd` moves the agent.
-func (a *Agent) Replay(step twdagent.EvalStep) []Run {
+func (a *Agent) Replay(step twagent.EvalStep) []Run {
 	var out []Run
 	for _, c := range step.Commands {
 		if c.Cd != "" {
@@ -177,7 +177,7 @@ func CheckDoc(def string, v any) error {
 // matches $defs/<def>.
 func CheckResult(def string, r Run) error {
 	if !r.OK() {
-		return fmt.Errorf("twd %s exited %d\n%s", strings.Join(r.Args, " "), r.Exit, r.Stderr)
+		return fmt.Errorf("tw %s exited %d\n%s", strings.Join(r.Args, " "), r.Exit, r.Stderr)
 	}
 	v, err := Doc(r)
 	if err != nil {
@@ -200,7 +200,7 @@ func CheckStream(def, s string) ([]map[string]any, error) {
 	return ls, nil
 }
 
-// CheckLogs checks `twd logs --json` output: request records
+// CheckLogs checks `tw logs --json` output: request records
 // ($defs/logs.record, they have "kind") or raw lines ($defs/logs.line).
 func CheckLogs(s string) ([]map[string]any, error) {
 	ls, err := Lines(s)
@@ -223,7 +223,7 @@ var codeHeading = regexp.MustCompile(`(?m)^### ([a-z_]+)$`)
 
 // KnownCodes are the error codes docs/errors.md documents.
 func KnownCodes() map[string]bool {
-	md, _ := twddocs.Read("errors.md")
+	md, _ := repodocs.Read("errors.md")
 	out := map[string]bool{}
 	for _, m := range codeHeading.FindAllStringSubmatch(md, -1) {
 		out[m[1]] = true
@@ -236,17 +236,17 @@ func KnownCodes() map[string]bool {
 // code (earlier stderr lines are NDJSON events). It returns the error.
 func CheckError(r Run) (map[string]any, error) {
 	if r.OK() {
-		return nil, fmt.Errorf("twd %s succeeded; want an error", strings.Join(r.Args, " "))
+		return nil, fmt.Errorf("tw %s succeeded; want an error", strings.Join(r.Args, " "))
 	}
 	if strings.TrimSpace(r.Stdout) != "" {
-		return nil, fmt.Errorf("twd %s failed but wrote to stdout:\n%s", strings.Join(r.Args, " "), r.Stdout)
+		return nil, fmt.Errorf("tw %s failed but wrote to stdout:\n%s", strings.Join(r.Args, " "), r.Stdout)
 	}
 	ls, err := Lines(r.Stderr)
 	if err != nil {
-		return nil, fmt.Errorf("twd %s: stderr is not NDJSON: %v", strings.Join(r.Args, " "), err)
+		return nil, fmt.Errorf("tw %s: stderr is not NDJSON: %v", strings.Join(r.Args, " "), err)
 	}
 	if len(ls) == 0 {
-		return nil, fmt.Errorf("twd %s: no error on stderr", strings.Join(r.Args, " "))
+		return nil, fmt.Errorf("tw %s: no error on stderr", strings.Join(r.Args, " "))
 	}
 	last := ls[len(ls)-1]
 	if err := CheckDoc("error", last); err != nil {
@@ -254,7 +254,7 @@ func CheckError(r Run) (map[string]any, error) {
 	}
 	e := last["error"].(map[string]any)
 	if code, _ := e["code"].(string); !KnownCodes()[code] {
-		return nil, fmt.Errorf("twd %s: error code %q is not in docs/errors.md", strings.Join(r.Args, " "), code)
+		return nil, fmt.Errorf("tw %s: error code %q is not in docs/errors.md", strings.Join(r.Args, " "), code)
 	}
 	return e, nil
 }

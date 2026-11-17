@@ -67,7 +67,7 @@ func TestMM_H13_OBORootKeyDiverges(t *testing.T) {
 	db := c.db()
 	for _, tid := range tids {
 		db.Exec("DELETE FROM secret_choice WHERE name=$1", "obo/"+tid)
-		setecDeletePrefix("twd/" + tid + "/obo-root")
+		setecDeletePrefix("tw/" + tid + "/obo-root")
 	}
 	for i := range replicas {
 		c.stop(i, syscall.SIGTERM)

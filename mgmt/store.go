@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/registry"
+	"github.com/rosskukulinski/tailworks/internal/registry"
 )
 
-// Store is twd-mgmt's durable state (ADR-011: leases are conditional writes
+// Store is tw-mgmt's durable state (ADR-011: leases are conditional writes
 // on a durable store; mgmt replicas are stateless). Backends: SQLite
-// (homelab / `twd up`) and Postgres.
+// (homelab / `tw up`) and Postgres.
 //
 // Fencing: every lease-holder commit carries (lease, holder, epoch); a stale
 // epoch fails with ErrLeaseLost inside the same transaction as the write.
@@ -126,12 +126,12 @@ type Store interface {
 	// CountLive counts live objects of a tenant, or (rootID != "") the live
 	// descendants of rootID.
 	CountLive(ctx context.Context, tenantID, rootID string) (int, error)
-	// Public ingress (ADR-029): a workload's `twd expose` setting.
+	// Public ingress (ADR-029): a workload's `tw expose` setting.
 	GetWorkloadPublic(ctx context.Context, tenantID, workload string) (WorkloadPublic, error)
 	SetWorkloadPublic(ctx context.Context, wp WorkloadPublic) error
 	// DeleteDeadObject forgets one killed/failed object (ErrNotFound if live).
 	DeleteDeadObject(ctx context.Context, id string) error
-	// DeleteDeadObjects removes a tenant's killed and failed objects (twd
+	// DeleteDeadObjects removes a tenant's killed and failed objects (tailworks
 	// down --purge), so their names and IDs can be used again. It returns
 	// the removed objects; audit records are untouched.
 	DeleteDeadObjects(ctx context.Context, tenantID string, statuses []string) ([]Object, error)

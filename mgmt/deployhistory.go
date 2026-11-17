@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Deployment history and bundle retention (ADR-deploy-rollback).
@@ -18,7 +18,7 @@ import (
 // rolled back to (rollback.go: 409 bundle_pruned).
 
 // DefaultBundleRetention is how many bundles per workload mgmt keeps when
-// Config.BundleRetention is 0 (twd-mgmt -bundle-retention).
+// Config.BundleRetention is 0 (tw-mgmt -bundle-retention).
 const DefaultBundleRetention = 10
 
 // DeploymentRecord is one entry of a workload's deployment history

@@ -26,7 +26,7 @@ func TestAPIPlacement(t *testing.T) {
 		hosts[h.id].ok("PUT", "/v1/hosts/"+h.id, map[string]any{"capacityNodes": h.cap, "tiers": h.tiers}, nil)
 	}
 	stateless := func(extra string) []byte {
-		return makeBundle(t, map[string]string{"twd.jsonc": `{` + extra + ` "tailnet": {"tags": ["tag:w"], "connects": ["tag:db"]}}`, "dist/index.js": "export default {}"})
+		return makeBundle(t, map[string]string{"tailworks.jsonc": `{` + extra + ` "tailnet": {"tags": ["tag:w"], "connects": ["tag:db"]}}`, "dist/index.js": "export default {}"})
 	}
 	type dep struct {
 		DeploymentID, Host string
@@ -127,7 +127,7 @@ func TestAPIPlacement(t *testing.T) {
 	}
 
 	// A stateful workload: a move off its live host must be confirmed.
-	sf := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	sf := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	s1 := deploy(map[string]any{"workload": "agent", "bundle": sf, "host": "h1"})
 	c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "bundle": sf, "host": "h2"}, 409, "lease_held")
 	c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "agent", "bundle": sf, "host": "h2", "replace": true}, 409, "move_unconfirmed")

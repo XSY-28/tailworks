@@ -17,7 +17,7 @@
 #                             bundles; ADR-041 §9). No draft
 #                             unless every gate passes.
 #   release                   macOS (the darwin binaries are ad-hoc signed,
-#                             twd-vz with the virtualization entitlement):
+#                             tw-vz with the virtualization entitlement):
 #                             `make release` with the three asset dirs, and
 #                             RELEASE_VM_ASSETS=1, so a tarball without its
 #                             microVM guest fails the build instead of
@@ -27,7 +27,7 @@
 #
 # The guest builds need no root and no VM (mkfs.ext4 -d, debugfs; plain gcc
 # kernel builds), and are meant to be reproducible: Ubuntu 24.04's gcc 13.3
-# is the same compiler as Lima twd-dev's, so CI and a local `make release`
+# is the same compiler as Lima tw-dev's, so CI and a local `make release`
 # should produce the same vmlinux and rootfs hashes (manifest.json,
 # kernel.json). Kernels are cached by their inputs.
 #
@@ -128,7 +128,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: guest/out/kernel-${{ matrix.arch }}
-          key: guest-kernel-${{ matrix.arch }}-${{ hashFiles('guest/inputs.sh', 'guest/build-kernel.sh', 'guest/kernel/twd.config') }}
+          key: guest-kernel-${{ matrix.arch }}-${{ hashFiles('guest/inputs.sh', 'guest/build-kernel.sh', 'guest/kernel/tw.config') }}
       - name: Cache guest downloads (content-checked)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -137,7 +137,7 @@ jobs:
       - name: make vm-assets
         run: |
           make deps
-          TWD_VERSION="${TAG#v}" make vm-assets GUEST_ARCH=${{ matrix.arch }} VM_ASSETS=dist/vm-assets-${{ matrix.arch }}
+          TW_VERSION="${TAG#v}" make vm-assets GUEST_ARCH=${{ matrix.arch }} VM_ASSETS=dist/vm-assets-${{ matrix.arch }}
           cat dist/vm-assets-${{ matrix.arch }}/manifest.json
           sha256sum dist/vm-assets-${{ matrix.arch }}/*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -171,7 +171,7 @@ jobs:
           key: vz-assets-${{ hashFiles('guest/**', 'go.mod', 'go.sum', 'package-lock.json') }}
       - name: make vz-assets
         run: |
-          TWD_VERSION="${TAG#v}" make vz-assets VZ_ASSETS=dist/vz-assets-arm64
+          TW_VERSION="${TAG#v}" make vz-assets VZ_ASSETS=dist/vz-assets-arm64
           sha256sum dist/vz-assets-arm64/*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -219,42 +219,42 @@ jobs:
           path: dist/vz-assets-arm64
       # Signed (issue #71): every SHA256SUMS (each tarball's, and the
       # release's) gets SHA256SUMS.sig, an SSH signature by the key in the
-      # release environment's TWD_RELEASE_SIGNING_KEY secret, which must be
+      # release environment's TW_RELEASE_SIGNING_KEY secret, which must be
       # pinned in internal/releasesig/allowed_signers (release.sh checks).
       # No secret, no release. Key ceremony: docs/RELEASING.md, "Signing".
       - name: make release (every tarball with its microVM guest, signed)
         env:
-          SIGNING_KEY: ${{ secrets.TWD_RELEASE_SIGNING_KEY }}
+          SIGNING_KEY: ${{ secrets.TW_RELEASE_SIGNING_KEY }}
         run: |
-          [ -n "$SIGNING_KEY" ] || { echo "::error::no TWD_RELEASE_SIGNING_KEY secret (docs/RELEASING.md, Signing)"; exit 1; }
+          [ -n "$SIGNING_KEY" ] || { echo "::error::no TW_RELEASE_SIGNING_KEY secret (docs/RELEASING.md, Signing)"; exit 1; }
           key="$RUNNER_TEMP/release-signing-key"
           trap 'rm -f "$key"' EXIT
           (umask 077 && printf '%s\n' "$SIGNING_KEY" >"$key")
           chmod +x dist/vm-assets-*/firecracker dist/vm-assets-*/jailer
-          export TWD_VM_ASSETS_amd64="$PWD/dist/vm-assets-amd64"
-          export TWD_VM_ASSETS_arm64="$PWD/dist/vm-assets-arm64"
-          export TWD_VZ_ASSETS="$PWD/dist/vz-assets-arm64"
-          TWD_RELEASE_SIGNING_KEY="$key" TWD_RELEASE_SIGN=1 make release RELEASE_VERSION="${TAG#v}" RELEASE_VM_ASSETS=1
+          export TW_VM_ASSETS_amd64="$PWD/dist/vm-assets-amd64"
+          export TW_VM_ASSETS_arm64="$PWD/dist/vm-assets-arm64"
+          export TW_VZ_ASSETS="$PWD/dist/vz-assets-arm64"
+          TW_RELEASE_SIGNING_KEY="$key" TW_RELEASE_SIGN=1 make release RELEASE_VERSION="${TAG#v}" RELEASE_VM_ASSETS=1
           cat dist/SHA256SUMS dist/SHA256SUMS.sig
       - name: Smoke test the darwin tarball
         run: |
-          mkdir -p "$RUNNER_TEMP/t" && tar -xzf dist/twd-*-darwin-arm64.tar.gz -C "$RUNNER_TEMP/t"
-          "$RUNNER_TEMP"/t/twd-*/bin/twd version
+          mkdir -p "$RUNNER_TEMP/t" && tar -xzf dist/tailworks-*-darwin-arm64.tar.gz -C "$RUNNER_TEMP/t"
+          "$RUNNER_TEMP"/t/tailworks-*/bin/tw version
           for a in darwin-arm64 linux-arm64 linux-amd64; do
-            tar -xzOf dist/twd-*-$a.tar.gz '*/share/twd/release.json' | grep -Eq '"microvm": ?true' ||
+            tar -xzOf dist/tailworks-*-$a.tar.gz '*/share/tailworks/release.json' | grep -Eq '"microvm": ?true' ||
               { echo "$a: release.json has no microVM tier"; exit 1; }
           done
           # Signed, as get.sh and install.sh check it (the pinned keys only).
-          ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I twd-release -n twd-release -s dist/SHA256SUMS.sig <dist/SHA256SUMS
-          t=$(ls -d "$RUNNER_TEMP"/t/twd-*)
-          ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I twd-release -n twd-release -s "$t/SHA256SUMS.sig" <"$t/SHA256SUMS"
+          ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I tw-release -n tw-release -s dist/SHA256SUMS.sig <dist/SHA256SUMS
+          t=$(ls -d "$RUNNER_TEMP"/t/tailworks-*)
+          ssh-keygen -Y verify -f internal/releasesig/allowed_signers -I tw-release -n tw-release -s "$t/SHA256SUMS.sig" <"$t/SHA256SUMS"
       - name: Draft the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || echo -)
           scripts/release-notes.sh "$prev" "$TAG" >"$RUNNER_TEMP/notes.md"
-          printf '\nInstall: see docs/INSTALL.md (or scripts/get.sh). Upgrade: `twd upgrade %s`. Built by .github/workflows/release.yml.\n' "$TAG" >>"$RUNNER_TEMP/notes.md"
+          printf '\nInstall: see docs/INSTALL.md (or scripts/get.sh). Upgrade: `tw upgrade %s`. Built by .github/workflows/release.yml.\n' "$TAG" >>"$RUNNER_TEMP/notes.md"
           gh release view "$TAG" >/dev/null 2>&1 ||
-            gh release create "$TAG" --draft --verify-tag --title "twd $TAG" --notes-file "$RUNNER_TEMP/notes.md"
-          gh release upload "$TAG" dist/twd-*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig --clobber
+            gh release create "$TAG" --draft --verify-tag --title "tw $TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release upload "$TAG" dist/tailworks-*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig --clobber

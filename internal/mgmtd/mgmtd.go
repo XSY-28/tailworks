@@ -1,12 +1,12 @@
-// Package mgmtd runs twd-mgmt (the management plane) as a library: the
-// standalone twd-mgmt binary is a flag parser over Start, and the
-// single-process `twd up` embeds it next to the host agent (internal/
+// Package mgmtd runs tw-mgmt (the management plane) as a library: the
+// standalone tw-mgmt binary is a flag parser over Start, and the
+// single-process `tw up` embeds it next to the host agent (internal/
 // hostdrun) in one process.
 //
 // Start opens the store and custody, joins (or re-opens) mgmt's own tsnet
 // node when TSNetHostname is set, and serves the /v1 API on it behind
 // WhoIs (TailnetHandler), optionally as a replica of a Tailscale Service
-// (TSNetService), publishes the node's loopback proxy for the local twd
+// (TSNetService), publishes the node's loopback proxy for the local tailworks
 // CLI. mgmt serves nothing over Funnel. With LocalDev it also serves the
 // unix socket guarded by the per-host token.
 package mgmtd
@@ -25,26 +25,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
-	"github.com/rosskukulinski/twd/internal/obs"
-	"github.com/rosskukulinski/twd/internal/tsapi"
-	"github.com/rosskukulinski/twd/internal/tssvc"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tssvc"
+	"github.com/rosskukulinski/tailworks/mgmt"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tsnet"
 )
 
-// Flag defaults twd-mgmt and the single-process twd up share (an Options
+// Flag defaults tw-mgmt and the single-process tw up share (an Options
 // zero value means "off" for these, so callers pass the default explicitly).
 const (
-	// DefaultWarmKeys is the warm-key pool cap (twd-mgmt -warm-keys).
+	// DefaultWarmKeys is the warm-key pool cap (tw-mgmt -warm-keys).
 	DefaultWarmKeys = 5
-	// DefaultReapInterval is the reaper interval (twd-mgmt -reap-interval).
+	// DefaultReapInterval is the reaper interval (tw-mgmt -reap-interval).
 	DefaultReapInterval = 10 * time.Second
 )
 
-// Options mirrors twd-mgmt's flags, one field per flag (see cmd/twd-mgmt).
+// Options mirrors tw-mgmt's flags, one field per flag (see cmd/tw-mgmt).
 type Options struct {
 	// StateDir (0700) holds the db, custody and the tsnet state.
 	StateDir string
@@ -63,7 +63,7 @@ type Options struct {
 	// TSNetHostname names mgmt's own tailnet node (required unless
 	// LocalDev); TSNetControlURL is required with it. TSNetAuthKeyFile
 	// holds TS_AUTHKEY=… for the first join (else the node state must be
-	// logged in already: twd up joins it first). TSNetTags are
+	// logged in already: tw up joins it first). TSNetTags are
 	// the tags the node advertises (nil = mgmt.MgmtTag; empty = none).
 	// TSNetService also hosts a Tailscale Service (svc:…) on :80,
 	// advertised only while this replica's store answers. TSNetTLS also
@@ -135,7 +135,7 @@ type Runtime struct {
 	extraMetrics obs.Gatherers
 }
 
-// Start runs mgmt per o (twd-mgmt's run body up to its wait). Cancel
+// Start runs mgmt per o (tw-mgmt's run body up to its wait). Cancel
 // ctx-independent work with Close; a failed listener is reported on Errs.
 func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	log := o.Log
@@ -307,7 +307,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	rt.Server, rt.Self = api, self
 	rt.handler = api.Handler()
 	if ts == nil && !o.LocalDev {
-		return nil, errors.New("no listeners: normal operation is tsnet only (-tsnet-hostname); -local-dev serves the unix socket for twd dev and tests")
+		return nil, errors.New("no listeners: normal operation is tsnet only (-tsnet-hostname); -local-dev serves the unix socket for tw dev and tests")
 	}
 	serve := func(name string, ln net.Listener, h http.Handler) *http.Server {
 		srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
@@ -398,7 +398,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			go rt.gate.Run(ctx)
 		}
 		if !o.NoLoopback {
-			// The operator console: the twd CLI on this machine dials mgmt's
+			// The operator console: the tailworks CLI on this machine dials mgmt's
 			// own tailnet IP through the node's SOCKS5 loopback proxy, so
 			// its requests carry mgmt's identity (WhoIs → operator). The
 			// credential lives in a 0600 file next to the state; nothing
@@ -420,7 +420,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			log.Info("operator console", "loopback", addr, "file", loopbackPath)
 		}
 		if self.HTTPS {
-			// The API over the node's own HTTPS certificate: what `twd
+			// The API over the node's own HTTPS certificate: what `tw
 			// link` uses from a developer machine. tailnet-only (ListenTLS
 			// never serves Funnel traffic).
 			tln, err := ts.ListenTLS("tcp", ":443")
@@ -431,11 +431,11 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			serve("tsnet-tls", tln, th)
 			// Fetch the node's certificate now, in the background: a new
 			// node name's first certificate takes 30–100 s, and nothing
-			// else would request it before the first `twd link`, whose TLS
+			// else would request it before the first `tw link`, whose TLS
 			// handshake would time out.
 			go prefetchCert(ts, self.DNSName, log)
 		} else if o.TSNetTLS {
-			log.Warn("HTTPS is not enabled on this tailnet: the API is served on :80 only; `twd link` uses plain HTTP (WireGuard-encrypted, WhoIs-authenticated)")
+			log.Warn("HTTPS is not enabled on this tailnet: the API is served on :80 only; `tw link` uses plain HTTP (WireGuard-encrypted, WhoIs-authenticated)")
 		}
 	}
 	if len(rt.servers) == 0 {
@@ -452,7 +452,7 @@ func (rt *Runtime) Handler() http.Handler { return rt.handler }
 // Errs reports a failed listener (the runtime should then be closed).
 func (rt *Runtime) Errs() <-chan error { return rt.errc }
 
-// Close stops mgmt in twd-mgmt's shutdown order: withdraw the Service
+// Close stops mgmt in tw-mgmt's shutdown order: withdraw the Service
 // advertisement, stop the listeners (5 s grace), remove the loopback
 // descriptor and socket, close mgmt (flushes pending
 // device deletes), then its node and the store. Safe on a partially
@@ -496,7 +496,7 @@ func (rt *Runtime) Close() error {
 
 // prefetchCert fetches the node's certificate in the background: a new
 // node name's first certificate takes 30–100 s, and nothing else would
-// request it before the first `twd link`, whose TLS handshake would time
+// request it before the first `tw link`, whose TLS handshake would time
 // out.
 func prefetchCert(ts *tsnet.Server, dnsName string, log *slog.Logger) {
 	lc, err := ts.LocalClient()
@@ -514,7 +514,7 @@ func prefetchCert(ts *tsnet.Server, dnsName string, log *slog.Logger) {
 		}
 		// ACME orders fail transiently (seen: CreateOrder 404); a TLS
 		// handshake retries on its own later, this only warms.
-		log.Warn("HTTPS certificate prefetch failed (twd link falls back to http on :80 meanwhile)", "name", dnsName, "attempt", attempt, "err", err)
+		log.Warn("HTTPS certificate prefetch failed (tw link falls back to http on :80 meanwhile)", "name", dnsName, "attempt", attempt, "err", err)
 		if attempt == 4 {
 			return
 		}
@@ -524,7 +524,7 @@ func prefetchCert(ts *tsnet.Server, dnsName string, log *slog.Logger) {
 
 // tsnetUp brings the node up. If it needs an interactive login and no auth
 // key was given, it fails fast with the login URL instead of waiting for
-// someone to click it: `twd up` owns the interactive flow.
+// someone to click it: `tw up` owns the interactive flow.
 func tsnetUp(ctx context.Context, ts *tsnet.Server, failOnLogin bool) (*ipnstate.Status, error) {
 	if !failOnLogin {
 		return ts.Up(ctx)
@@ -547,7 +547,7 @@ func tsnetUp(ctx context.Context, ts *tsnet.Server, failOnLogin bool) (*ipnstate
 			return nil, errors.New(*n.ErrMessage)
 		}
 		if n.BrowseToURL != nil {
-			return nil, fmt.Errorf("the mgmt node needs an interactive login (run `twd up` on this host to log in): %s", *n.BrowseToURL)
+			return nil, fmt.Errorf("the mgmt node needs an interactive login (run `tw up` on this host to log in): %s", *n.BrowseToURL)
 		}
 		if n.State != nil && *n.State == ipn.Running {
 			return ts.Up(ctx)

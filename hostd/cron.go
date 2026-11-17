@@ -11,9 +11,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/gen"
-	"github.com/rosskukulinski/twd/internal/cron"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/gen"
+	"github.com/rosskukulinski/tailworks/internal/cron"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // Cron triggers (wrangler.jsonc "triggers": {"crons": [...]}).
@@ -34,8 +34,8 @@ import (
 //   - A run is bounded by Config.CronTimeout (wall clock) and counts as an
 //     in-flight request, so a blue/green switch drains it like any other.
 //   - The invocation reaches workerd only over the instance's private
-//     ingress, as cf.twd {kind: "scheduled"}, which only hostd can set (it
-//     overwrites cf.twd on every tailnet request). The platform wrapper
+//     ingress, as cf.tw {kind: "scheduled"}, which only hostd can set (it
+//     overwrites cf.tw on every tailnet request). The platform wrapper
 //     accepts only crons the deployment declares.
 
 // DefaultCronTimeout bounds one scheduled() run (Cloudflare's limit for
@@ -168,7 +168,7 @@ func (h *Host) runScheduled(r cronRun) {
 }
 
 // RunCron runs one of a workload's declared cron triggers now, outside its
-// schedule (twd dev --test-scheduled, tests). at is the controller's
+// schedule (tw dev --test-scheduled, tests). at is the controller's
 // scheduledTime. It skips the schedule and lease checks but not the
 // declared-cron check.
 func (h *Host) RunCron(ctx context.Context, tenantID, workload, cronExpr string, at time.Time) (CronResult, error) {
@@ -182,7 +182,7 @@ func (h *Host) RunCron(ctx context.Context, tenantID, workload, cronExpr string,
 }
 
 // invokeCron sends one scheduled() invocation to the workload's active
-// instance (cf.twd.kind = scheduled) and waits for its outcome.
+// instance (cf.tw.kind = scheduled) and waits for its outcome.
 func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at time.Time) (CronResult, error) {
 	var res CronResult
 	actx, cancel := context.WithTimeout(ctx, h.cfg.DrainTimeout+5*time.Second)
@@ -206,11 +206,11 @@ func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at 
 	trace := newTraceID()
 	blob, _ := json.Marshal(map[string]any{
 		// The ticket lets scheduled() create objects through its guarded env.
-		"twd": map[string]any{"kind": "scheduled", "cron": cronExpr, "scheduledTime": at.UnixMilli(), "workload": w.name,
+		"tw": map[string]any{"kind": "scheduled", "cron": cronExpr, "scheduledTime": at.UnixMilli(), "workload": w.name,
 			"ticket": gen.CreateTicket(inst.macKey(), trace, time.Now())},
 		"traceId": trace,
 	})
-	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_twd/scheduled", nil)
+	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_tw/scheduled", nil)
 	req.Header.Set(netd.HeaderCF, string(blob))
 	// inst.direct's client timeout is for short admin calls; a run may take
 	// up to CronTimeout, bounded by ctx instead.

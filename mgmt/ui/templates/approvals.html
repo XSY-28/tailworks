@@ -1,6 +1,6 @@
 {{define "content"}}
 <h1>Approvals</h1>
-<p class="hint">Requests that are waiting for a person to approve or reject them. You decide as yourself: your tailnet identity is recorded with the decision and passed to the app. To decide, you need an approve grant (<span class="mono">twd.dev/cap/approve</span>) for that app; being a twd admin is not enough. From a terminal: <span class="mono">twd approvals</span> and <span class="mono">twd approve</span>.</p>
+<p class="hint">Requests that are waiting for a person to approve or reject them. You decide as yourself: your tailnet identity is recorded with the decision and passed to the app. To decide, you need an approve grant (<span class="mono">github.com/rosskukulinski/tailworks/cap/approve</span>) for that app; being a tailworks admin is not enough. From a terminal: <span class="mono">tw approvals</span> and <span class="mono">tw approve</span>.</p>
 
 <section class="card toolbar">
   <form method="get" action="/ui/approvals" class="filters inline-filters">
@@ -14,7 +14,7 @@
   {{if .Who.ApproveGrants}}<details class="grants">
     <summary>What you may decide</summary>
     <ul class="small">{{range .Who.ApproveGrants}}<li>{{.Text}}</li>{{end}}</ul>
-  </details>{{else if not .Who.Admin}}<p class="small muted">Your connection holds no approve grant toward twd-mgmt, so you can see requests but not decide them here.</p>{{end}}
+  </details>{{else if not .Who.Admin}}<p class="small muted">Your connection holds no approve grant toward tw-mgmt, so you can see requests but not decide them here.</p>{{end}}
 </section>
 
 {{range .Errors}}<div class="flash bad">{{.}}</div>{{end}}

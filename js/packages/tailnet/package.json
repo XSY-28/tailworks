@@ -1,9 +1,9 @@
 {
-  "name": "@twd/tailnet",
+  "name": "@tailworks/tailnet",
   "version": "0.2.0",
-  "description": "Verified tailnet caller identity and per-object egress for twd Workers and Durable Objects",
+  "description": "Verified tailnet caller identity and per-object egress for tailworks Workers and Durable Objects",
   "keywords": [
-    "twd",
+    "tw",
     "tailscale",
     "tailnet",
     "workers",
@@ -43,10 +43,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rosskukulinski/twd.git",
+    "url": "git+https://github.com/rosskukulinski/tailworks.git",
     "directory": "js/packages/tailnet"
   },
-  "homepage": "https://github.com/rosskukulinski/twd#readme",
-  "bugs": "https://github.com/rosskukulinski/twd/issues",
+  "homepage": "https://github.com/rosskukulinski/tailworks#readme",
+  "bugs": "https://github.com/rosskukulinski/tailworks/issues",
   "license": "BSD-3-Clause"
 }

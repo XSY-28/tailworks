@@ -55,7 +55,7 @@ func TestHostVersionSkew(t *testing.T) {
 	}
 	_, _, hdr := e.c.doRaw("GET", "/v1/status", nil, nil)
 	if hdr.Get(VersionHeader) != "0.3.0" {
-		t.Fatalf("Twd-Version header %q", hdr.Get(VersionHeader))
+		t.Fatalf("Tw-Version header %q", hdr.Get(VersionHeader))
 	}
 }
 
@@ -66,11 +66,11 @@ func TestFeatureGatedPlacementAndCordon(t *testing.T) {
 	// h-old is a 0.1 host (no features); h-new offers kv.
 	e.asHost("h-old").ok("PUT", "/v1/hosts/h-old", map[string]any{"capacityNodes": 1000, "tiers": []string{"process"}}, nil)
 	kvBundle := makeBundle(t, map[string]string{
-		"twd.jsonc":      `{"tailnet": {"tags": ["tag:w"]}}`,
-		"wrangler.jsonc": `{"name": "w", "main": "dist/index.js", "kv_namespaces": [{"binding": "CACHE", "id": "cache"}]}`,
-		"dist/index.js":  "export default {}",
+		"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`,
+		"wrangler.jsonc":  `{"name": "w", "main": "dist/index.js", "kv_namespaces": [{"binding": "CACHE", "id": "cache"}]}`,
+		"dist/index.js":   "export default {}",
 	})
-	plain := makeBundle(t, map[string]string{"twd.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`, "dist/index.js": "export default {}"})
+	plain := makeBundle(t, map[string]string{"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`, "dist/index.js": "export default {}"})
 	r := e.c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "kvw", "bundle": kvBundle}, 409, "feature_unavailable")
 	if !strings.Contains(r["message"].(string), "lacks feature kv") {
 		t.Fatalf("feature refusal: %v", r)
@@ -126,7 +126,7 @@ func TestUpgradeRun(t *testing.T) {
 		Items   []ReleaseEntry
 	}
 	e.c.ok("POST", "/v1/releases", map[string]any{"entries": []map[string]any{{"version": "0.3.0", "date": "2027-01-01", "workerd": "1.20261201.1",
-		"notes": []map[string]any{{"kind": "breaking", "source": "x.md", "text": "twd logs prints records"}}}}}, &cat)
+		"notes": []map[string]any{{"kind": "breaking", "source": "x.md", "text": "tw logs prints records"}}}}}, &cat)
 	if cat.Current != "0.3.0" || len(cat.Items) < 2 {
 		t.Fatalf("catalog: %+v", cat)
 	}
@@ -176,7 +176,7 @@ func TestUpgradeRun(t *testing.T) {
 	r := drive(func(r UpgradeRun) bool {
 		return r.Step < len(r.Steps) && r.Steps[r.Step].Host == "h2" && r.Steps[r.Step].Phase == "wait"
 	})
-	if !strings.Contains(r.Steps[r.Step].NeedsOperator, "install twd 0.3.0 on host h2") {
+	if !strings.Contains(r.Steps[r.Step].NeedsOperator, "install tw 0.3.0 on host h2") {
 		t.Fatalf("operator step: %+v", r.Steps[r.Step])
 	}
 	var h struct{ CordonedAt int64 }
@@ -225,11 +225,11 @@ func TestUpgradeRun(t *testing.T) {
 
 func TestReleaseArtifacts(t *testing.T) {
 	e := newVersionedEnv(t, "0.2.0")
-	name := "twd-0.2.0-linux-amd64.tar.gz"
+	name := "tailworks-0.2.0-linux-amd64.tar.gz"
 	body := []byte("not really a tarball")
 	sum := sha256.Sum256(body)
 	put := func(n string, b []byte) (int, string) {
-		req, _ := http.NewRequest("PUT", "http://twd-mgmt/v1/releases/0.2.0/artifacts/"+n, bytes.NewReader(b))
+		req, _ := http.NewRequest("PUT", "http://tw-mgmt/v1/releases/0.2.0/artifacts/"+n, bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/octet-stream")
 		req.Header.Set(HostTokenHeader, e.token)
 		res, err := e.c.hc.Do(req)
@@ -254,9 +254,9 @@ func TestReleaseArtifacts(t *testing.T) {
 		t.Fatalf("upload: %d %s", code, out)
 	}
 	// A host downloads it.
-	req, _ := http.NewRequest("GET", "http://twd-mgmt/v1/releases/0.2.0/artifacts/"+name, nil)
+	req, _ := http.NewRequest("GET", "http://tw-mgmt/v1/releases/0.2.0/artifacts/"+name, nil)
 	req.Header.Set(HostTokenHeader, e.token)
-	req.Header.Set("Twd-Host-ID", "h1")
+	req.Header.Set("Tw-Host-ID", "h1")
 	e.asHost("h1").ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 10, "tiers": []string{"process"}, "version": "0.2.0"}, nil)
 	res, err := e.c.hc.Do(req)
 	if err != nil {
@@ -276,9 +276,9 @@ func TestReleaseArtifacts(t *testing.T) {
 // Workflows app is stateful (fenced, and a drain doesn't move it).
 func TestBundleStatefulWorkflows(t *testing.T) {
 	b := makeBundle(t, map[string]string{
-		"twd.jsonc":      `{"tailnet": {"tags": ["tag:w"]}}`,
-		"wrangler.jsonc": `{"name": "w", "main": "dist/index.js", "workflows": [{"name": "refunds", "binding": "R", "class_name": "Refund"}]}`,
-		"dist/index.js":  "export default {}",
+		"tailworks.jsonc": `{"tailnet": {"tags": ["tag:w"]}}`,
+		"wrangler.jsonc":  `{"name": "w", "main": "dist/index.js", "workflows": [{"name": "refunds", "binding": "R", "class_name": "Refund"}]}`,
+		"dist/index.js":   "export default {}",
 	})
 	if st, why := BundleStateful(b); !st || !strings.Contains(why, "workflow refunds") {
 		t.Fatalf("stateful %v %q", st, why)

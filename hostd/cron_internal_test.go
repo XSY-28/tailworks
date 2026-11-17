@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 func cronHost(crons ...string) (*Host, *workload) {
@@ -221,9 +221,9 @@ func TestCronLoopFiresAtMinuteBoundary(t *testing.T) {
 	defer func() { h.cancel(); h.wg.Wait() }()
 	select {
 	case blob := <-got:
-		twd, _ := blob["twd"].(map[string]any)
-		if blob["_path"] != "/_twd/scheduled" || twd["kind"] != "scheduled" || twd["cron"] != "* * * * *" ||
-			twd["scheduledTime"] != float64(boundary.UnixMilli()) || twd["workload"] != "w" || blob["traceId"] == "" {
+		tw, _ := blob["tw"].(map[string]any)
+		if blob["_path"] != "/_tw/scheduled" || tw["kind"] != "scheduled" || tw["cron"] != "* * * * *" ||
+			tw["scheduledTime"] != float64(boundary.UnixMilli()) || tw["workload"] != "w" || blob["traceId"] == "" {
 			t.Fatalf("invocation %v", blob)
 		}
 		if _, ok := blob["tailscale"]; ok {

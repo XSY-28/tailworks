@@ -55,7 +55,7 @@ func newFakeHeadscale(t *testing.T) *fakeHeadscale {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/policy":
 			json.NewEncoder(w).Encode(map[string]any{"policy": `{
   // Headscale profile: no autogroup:admin, no postures, no svc:
-  "tagOwners": {"tag:twd": [], "tag:twd-agent-support": ["tag:twd"]},
+  "tagOwners": {"tag:tw": [], "tag:tw-agent-support": ["tag:tw"]},
   "grants": [],
 }`})
 		default:
@@ -109,18 +109,18 @@ func TestHeadscaleProfileTenant(t *testing.T) {
 
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	// tailnet.service needs Tailscale Services: refused before any side effect.
-	svc := makeBundle(t, map[string]string{"twd.jsonc": `{ "tailnet": { "tags": ["tag:twd-web"], "service": true } }`, "dist/index.js": ""})
+	svc := makeBundle(t, map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"], "service": true } }`, "dist/index.js": ""})
 	eb := c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn.ID, "workload": "web", "bundle": svc}, 400, "profile_unsupported")
 	if !strings.Contains(eb["message"].(string), "MagicDNS") {
 		t.Errorf("service refusal doesn't say where the workload is: %v", eb["message"])
 	}
 	c.fail("POST", "/v1/deployments?dryRun=true", map[string]any{"tenantID": tn.ID, "workload": "web", "bundle": svc}, 400, "profile_unsupported")
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": testTwdJSONC, "dist/index.js": "export default {}"})
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	// The preflight reads the Headscale policy; its tagOwners snippet has no
 	// autogroup:admin (Headscale rejects it).
 	var pf PreflightResult
 	c.ok("POST", "/v1/deployments?dryRun=true", map[string]any{"tenantID": tn.ID, "workload": "support", "bundle": bundle}, &pf)
-	if len(pf.MissingTagOwners) == 0 || slices.Contains(pf.MissingTagOwners, "tag:twd-agent-support") || !strings.Contains(pf.TagOwnersSnippet, `["tag:twd"]`) || strings.Contains(pf.TagOwnersSnippet, "autogroup") {
+	if len(pf.MissingTagOwners) == 0 || slices.Contains(pf.MissingTagOwners, "tag:tw-agent-support") || !strings.Contains(pf.TagOwnersSnippet, `["tag:tw"]`) || strings.Contains(pf.TagOwnersSnippet, "autogroup") {
 		t.Fatalf("preflight %+v", pf)
 	}
 
@@ -135,7 +135,7 @@ func TestHeadscaleProfileTenant(t *testing.T) {
 	hs.mu.Lock()
 	gotTags := hs.tags[len(hs.tags)-1]
 	hs.mu.Unlock()
-	if len(gotTags) != 1 || gotTags[0] != "tag:twd-agent-support" {
+	if len(gotTags) != 1 || gotTags[0] != "tag:tw-agent-support" {
 		t.Fatalf("minted with tags %v", gotTags)
 	}
 	// A Headscale node's StableNodeID is its decimal node ID.

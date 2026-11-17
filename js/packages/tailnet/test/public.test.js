@@ -10,7 +10,7 @@ const pub = (extra = {}) => ({
   cf: { traceId: "t1", objectId: "wl-1", tailscale: { requester: { kind: "public", ip: "203.0.113.7", port: 4433, proto: "https", host: "wl.example.ts.net" } }, ...extra },
 });
 const tailnetReq = () => ({
-  cf: { traceId: "t2", objectId: "wl-1", twd: { kind: "workload", ticket: "v1.9999999999999.t2.mac" },
+  cf: { traceId: "t2", objectId: "wl-1", tw: { kind: "workload", ticket: "v1.9999999999999.t2.mac" },
     tailscale: { caller: { nodeId: "nX", node: "laptop.ts.net", hostname: "laptop", tags: [], user: "alice@example.com", capMap: { "x/cap": [1] } } } },
 });
 
@@ -109,7 +109,7 @@ function mkReq(base, o, op) {
 
 test("public fetch: an existing object is admitted, then reached", async () => {
   const log = [];
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set(["lobby"])) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set(["lobby"])) };
   const H = wrapHandler(handler, { ROOM: "Room" });
   const r = await H.fetch(mkReq(pub(), "lobby"), env, {});
   assert.equal(await r.text(), "hello lobby");
@@ -120,29 +120,29 @@ test("public fetch: an existing object is admitted, then reached", async () => {
 
 test("public fetch: a new object is refused before any call reaches it", async () => {
   const log = [];
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set()) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set()) };
   const H = wrapHandler(handler, { ROOM: "Room" });
   const r = await H.fetch(mkReq(pub(), "fresh-" + Math.random()), env, {});
   assert.equal(r.status, 403);
-  assert.equal(r.headers.get("twd-error"), "public_create_denied");
+  assert.equal(r.headers.get("tw-error"), "public_create_denied");
   assert.equal(log.filter((l) => l[0] === "fetch").length, 0, JSON.stringify(log));
 });
 
 test("public fetch: newUniqueId and spawn are refused", async () => {
   const log = [];
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set(["lobby"])) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set(["lobby"])) };
   const H = wrapHandler(handler, { ROOM: "Room" });
   let r = await H.fetch(mkReq(pub(), "lobby", "unique"), env, {});
-  assert.equal(r.headers.get("twd-error"), "public_create_denied");
+  assert.equal(r.headers.get("tw-error"), "public_create_denied");
   r = await H.fetch(mkReq(pub(), "lobby", "spawn"), env, {});
-  assert.equal(r.headers.get("twd-error"), "public_create_denied");
+  assert.equal(r.headers.get("tw-error"), "public_create_denied");
   assert.equal(log.filter((l) => l[0] === "spawn").length, 0);
 });
 
 test("public fetch: RPC on a guarded stub is admitted first; id/name pass through", async () => {
   const log = [];
   const tw = fakeTw(log, new Set());
-  const env = publicEnv({ ROOM: fakeNS(log), __TWD: tw }, { ROOM: "Room" });
+  const env = publicEnv({ ROOM: fakeNS(log), __TW: tw }, { ROOM: "Room" });
   const s = env.ROOM.getByName("nope-" + Math.random());
   assert.equal(typeof s.name, "string");
   assert.equal(s.then, undefined);
@@ -153,7 +153,7 @@ test("public fetch: RPC on a guarded stub is admitted first; id/name pass throug
 
 test("tailnet fetch admits a new object with the request's create ticket (RT3-06/07)", async () => {
   const log = [];
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set()) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set()) };
   const H = wrapHandler(handler, { ROOM: "Room" });
   const r = await H.fetch(mkReq(tailnetReq(), "brand-new"), env, {});
   assert.equal(await r.text(), "hello brand-new");
@@ -163,7 +163,7 @@ test("tailnet fetch admits a new object with the request's create ticket (RT3-06
   assert.equal(admits[0][1].name, "brand-new");
 });
 
-test("tenant code never sees __TWD; a Worker-level spawn carries the ticket", async () => {
+test("tenant code never sees __TW; a Worker-level spawn carries the ticket", async () => {
   const log = [];
   let seenEnvKeys = null;
   const h2 = {
@@ -173,7 +173,7 @@ test("tenant code never sees __TWD; a Worker-level spawn carries the ticket", as
       return new Response("ok");
     },
   };
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set()) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set()) };
   const H = wrapHandler(h2, { ROOM: "Room" });
   const ctx = {};
   await H.fetch(mkReq(tailnetReq(), "x"), env, ctx);
@@ -185,12 +185,12 @@ test("tenant code never sees __TWD; a Worker-level spawn carries the ticket", as
 
 test("a tailnet request without a ticket (a raw or stale binding) cannot admit a new object", async () => {
   const log = [];
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set(["old"])) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set(["old"])) };
   const H = wrapHandler(handler, { ROOM: "Room" });
   const noTicket = tailnetReq();
-  delete noTicket.cf.twd.ticket;
+  delete noTicket.cf.tw.ticket;
   const r = await H.fetch(mkReq(noTicket, "never-admitted-" + Math.random()), env, {});
-  assert.equal(r.headers.get("twd-error"), "public_create_denied");
+  assert.equal(r.headers.get("tw-error"), "public_create_denied");
   assert.equal(log.filter((l) => l[0] === "fetch").length, 0);
   const r2 = await H.fetch(mkReq(noTicket, "old"), env, {});
   assert.equal(await r2.text(), "hello old");
@@ -210,9 +210,9 @@ test("WorkerEntrypoint-class handlers get the guarded env on public fetch", asyn
     }
   }
   const W = wrapHandler(App, { ROOM: "Room" });
-  const env = { ROOM: fakeNS(log), __TWD: fakeTw(log, new Set()) };
+  const env = { ROOM: fakeNS(log), __TW: fakeTw(log, new Set()) };
   const inst = new W({}, env);
   const r = await inst.fetch(mkReq(pub(), "x"));
-  assert.equal(r.headers.get("twd-error"), "public_create_denied");
+  assert.equal(r.headers.get("tw-error"), "public_create_denied");
   assert.equal(log.filter((l) => l[0] === "fetch").length, 0);
 });

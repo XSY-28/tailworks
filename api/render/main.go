@@ -252,7 +252,7 @@ func typeOf(ref *openapi3.SchemaRef) string {
 }
 
 func role(o *openapi3.Operation) string {
-	if v, ok := o.Extensions["x-twd-role"]; ok {
+	if v, ok := o.Extensions["x-tw-role"]; ok {
 		return fmt.Sprint(v)
 	}
 	if o.Security != nil && len(*o.Security) == 0 {
@@ -262,7 +262,7 @@ func role(o *openapi3.Operation) string {
 }
 
 func audited(o *openapi3.Operation) string {
-	if v, ok := o.Extensions["x-twd-audit"]; ok && v == true {
+	if v, ok := o.Extensions["x-tw-audit"]; ok && v == true {
 		return "yes"
 	}
 	return "no"

@@ -5,7 +5,7 @@ import (
 	"crypto/ed25519"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // AuditQueueForTest is hostd's real audit queue without a Host, for the

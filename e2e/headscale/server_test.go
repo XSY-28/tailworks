@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/internal/headscale"
+	"github.com/rosskukulinski/tailworks/internal/headscale"
 )
 
 // DefaultImage is the Headscale release the profile is gated against
@@ -22,11 +22,11 @@ import (
 // release"). Bump it with `make e2e-headscale HEADSCALE_IMAGE=…`.
 const DefaultImage = "headscale/headscale:v0.29.7"
 
-// BaseDomain is the test server's dns.base_domain (twd's "tailnet").
-const BaseDomain = "hs.twd.test"
+// BaseDomain is the test server's dns.base_domain (tailworks' "tailnet").
+const BaseDomain = "hs.tw.test"
 
 // server is a Headscale server for the suite: either an external one
-// (TWD_HEADSCALE_URL + TWD_HEADSCALE_API_KEY_FILE, policy.mode database)
+// (TW_HEADSCALE_URL + TW_HEADSCALE_API_KEY_FILE, policy.mode database)
 // or a fresh container of DefaultImage (needs docker).
 type server struct {
 	URL     string
@@ -46,25 +46,25 @@ func startServer(t *testing.T) *server {
 }
 
 // OldImage is the newest Headscale release the profile does NOT support
-// (no grants): twd must refuse it up front.
+// (no grants): tailworks must refuse it up front.
 const OldImage = "headscale/headscale:v0.28.0"
 
 func startServerImage(t *testing.T, image string) *server {
 	t.Helper()
-	if u := os.Getenv("TWD_HEADSCALE_URL"); u != "" {
-		kf := os.Getenv("TWD_HEADSCALE_API_KEY_FILE")
+	if u := os.Getenv("TW_HEADSCALE_URL"); u != "" {
+		kf := os.Getenv("TW_HEADSCALE_API_KEY_FILE")
 		b, err := os.ReadFile(kf)
 		if err != nil {
-			t.Fatalf("TWD_HEADSCALE_API_KEY_FILE: %v", err)
+			t.Fatalf("TW_HEADSCALE_API_KEY_FILE: %v", err)
 		}
 		key := strings.TrimPrefix(strings.TrimSpace(string(b)), headscale.APIKeyEnv+"=")
-		domain := os.Getenv("TWD_HEADSCALE_BASE_DOMAIN")
+		domain := os.Getenv("TW_HEADSCALE_BASE_DOMAIN")
 		return &server{URL: u, KeyFile: kf, Domain: domain, logs: func() string { return "" },
 			Client: &headscale.Client{BaseURL: u, APIKey: key, BaseDomain: domain}}
 	}
 	docker, err := exec.LookPath("docker")
 	if err != nil {
-		t.Skip("e2e-headscale: SKIPPED (no docker, and TWD_HEADSCALE_URL is not set)")
+		t.Skip("e2e-headscale: SKIPPED (no docker, and TW_HEADSCALE_URL is not set)")
 	}
 	if out, err := exec.Command(docker, "info", "--format", "{{.ServerVersion}}").CombinedOutput(); err != nil {
 		t.Skipf("e2e-headscale: SKIPPED (docker daemon unavailable: %s)", strings.TrimSpace(string(out)))
@@ -72,7 +72,7 @@ func startServerImage(t *testing.T, image string) *server {
 	port := freePort(t)
 	url := fmt.Sprintf("http://127.0.0.1:%d", port)
 	// Short path: Docker Desktop shares /tmp, and the config is mounted.
-	dir, err := os.MkdirTemp("/tmp", "twd-hs-")
+	dir, err := os.MkdirTemp("/tmp", "tw-hs-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ unix_socket_permission: "0770"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	name := fmt.Sprintf("twd-e2e-hs-%d", port)
+	name := fmt.Sprintf("tw-e2e-hs-%d", port)
 	run := exec.Command(docker, "run", "-d", "--rm", "--name", name, "-p", fmt.Sprintf("127.0.0.1:%d:8080", port),
 		"-v", filepath.Join(dir, "config.yaml")+":/etc/headscale/config.yaml:ro",
 		"-v", filepath.Join(dir, "lib")+":/var/lib/headscale",

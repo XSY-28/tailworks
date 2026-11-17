@@ -20,7 +20,7 @@ import (
 )
 
 // Custody holds secrets (auth keys in flight; node state / DEKs later,
-// ADR-018). Names look like "twd/<tenant>/<object>/authkey".
+// ADR-018). Names look like "tw/<tenant>/<object>/authkey".
 type Custody interface {
 	Put(ctx context.Context, name string, value []byte) error
 	Get(ctx context.Context, name string) ([]byte, error) // ErrNotFound if absent
@@ -140,7 +140,7 @@ func (c *FileCustody) Delete(_ context.Context, name string) error {
 }
 
 // SetecCustody is a minimal client for a setec server (ADR-018), reached
-// over the operator tailnet (HTTP is the tsnet client of tag:twd-mgmt; setec
+// over the operator tailnet (HTTP is the tsnet client of tag:tw-mgmt; setec
 // authorises by grants on tailscale.com/cap/secrets). Stub: put/get/delete
 // of the active version only; no version pinning or caching yet.
 type SetecCustody struct {

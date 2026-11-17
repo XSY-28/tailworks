@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/fakemgmt"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 	"tailscale.com/tailcfg"
 )
 
@@ -66,10 +66,10 @@ func (c *lockClientNode) lock(t *testing.T, base, name, op string, body map[stri
 	return r
 }
 
-// TestLockTemplate covers the lock template (js/packages/create-twd/templates/lock)
-// on twd-hostd + stock workerd: contended acquire from several tailnet
+// TestLockTemplate covers the lock template (js/packages/create-tailworks/templates/lock)
+// on tw-hostd + stock workerd: contended acquire from several tailnet
 // nodes, expiry by alarm, holder-bound renew/release, fencing tokens that
-// carry the lease epoch, `twd kill` as an emergency release, and the
+// carry the lease epoch, `tw kill` as an emergency release, and the
 // template's client (withLock) against an external store that checks the
 // token. docs/locks.md cites these subtests.
 func TestLockTemplate(t *testing.T) {
@@ -200,7 +200,7 @@ func TestLockTemplate(t *testing.T) {
 			t.Fatalf("status %+v", st)
 		}
 		t.Logf("winner %s (holder %s) token %d (epoch %d); 19 × lock_held", w.c.name, w.r.Holder.Node, w.r.Token, ep)
-		// `twd audit <lock>` shows who took it.
+		// `tw audit <lock>` shows who took it.
 		o, ok := e.Host.Object(e.TenantID, "locks", "Lock", "job:contended")
 		if !ok {
 			t.Fatal("no lock object")
@@ -418,7 +418,7 @@ func TestLockTemplate(t *testing.T) {
 	})
 
 	t.Run("KillLockObjectStopsIt", func(t *testing.T) {
-		// `twd kill` on the lock object itself is a kill switch, not a
+		// `tw kill` on the lock object itself is a kill switch, not a
 		// release: the object keeps a killed marker in its storage, so the
 		// name answers 410 killed for good. The holder's next renew fails and
 		// nobody can take that name again.

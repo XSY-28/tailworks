@@ -13,7 +13,7 @@ func TestValidatePatterns(t *testing.T) {
 			t.Errorf("%q: %v", p, err)
 		}
 	}
-	bad := []string{"", "webhooks", "/a/*/b", "/a*", "/a/", "//a", "/a/../b", "/a/./b", "/_twd/*", "/_twd", "/_twd/o/X/y", "/a?b", "/a#b", "/a%2fb", "/a b", "/*/x", "*"}
+	bad := []string{"", "webhooks", "/a/*/b", "/a*", "/a/", "//a", "/a/../b", "/a/./b", "/_tw/*", "/_tw", "/_tw/o/X/y", "/a?b", "/a#b", "/a%2fb", "/a b", "/*/x", "*"}
 	for _, p := range bad {
 		s := Spec{Routes: []string{p}}
 		if err := s.Validate(); err == nil {
@@ -59,7 +59,7 @@ func TestCanonicalPath(t *testing.T) {
 			t.Errorf("%q: %v", s, err)
 		}
 	}
-	bad := []string{"/a/../b", "/a//b", "/a/./b", "/a%2F..%2Fb", "/a%5cb", "/_twd/o/Room/x", "/_twd", "/x/%2e%2e/y"}
+	bad := []string{"/a/../b", "/a//b", "/a/./b", "/a%2F..%2Fb", "/a%5cb", "/_tw/o/Room/x", "/_tw", "/x/%2e%2e/y"}
 	for _, s := range bad {
 		u, err := url.Parse(s)
 		if err != nil {

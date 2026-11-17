@@ -1,0 +1,18 @@
+{
+  "name": "tw-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tw dev",
+    "deploy": "tw deploy",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@tailworks/tailnet": "^0.2.0",
+    "agents": "0.33.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261114.1",
+    "typescript": "7.0.2"
+  }
+}

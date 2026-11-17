@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
 // TestParseKVNamespaces: kv_namespaces entries are "kv" stores named by

@@ -77,12 +77,12 @@ func TestSchemaStatusAfterOpen(t *testing.T) {
 func TestSchemaAheadAndDowngradeGuard(t *testing.T) {
 	ctx := context.Background()
 	s, dsn := openTestStore(t)
-	// A newer twd-mgmt applied an expand migration this binary doesn't know.
+	// A newer tw-mgmt applied an expand migration this binary doesn't know.
 	s.rawExec(ctx, "INSERT INTO schema_migrations (id, applied_at, applied_by) VALUES ('299901010000_future', 1, '9.0.0')")
 	s.Close()
 	s, err := OpenStore(ctx, dsn)
 	if err != nil {
-		t.Fatalf("an expand migration from a newer twd-mgmt must not block an older one: %v", err)
+		t.Fatalf("an expand migration from a newer tw-mgmt must not block an older one: %v", err)
 	}
 	st, _ := s.SchemaStatus(ctx)
 	if !slices.Equal(st.Ahead, []string{"299901010000_future"}) {

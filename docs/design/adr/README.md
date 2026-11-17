@@ -22,18 +22,18 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [010](010-behalf-delegation-node-bound-per-request.md) | On-behalf-of and delegation as node-bound, per-request, single-hop assertions; no bearer tokens | 2026-11-07 | Accepted |
 | [011](011-leases-conditional-writes-durable-store.md) | Leases as conditional writes on a durable store; stateless controller replicas; no Raft | 2026-11-07 | Accepted |
 | [012](012-mvp-single-host-per-tenant-namespace.md) | MVP is single-host per tenant namespace; v1 adopts upstream workerd cluster via public hooks | 2026-11-07 | Accepted |
-| [013](013-credentials.md) | Credentials: per-tenant WIF trust, scoped to auth keys for twd tags only; issuer key in KMS | 2026-11-07 | Accepted; WIF superseded by ADR-042 |
+| [013](013-credentials.md) | Credentials: per-tenant WIF trust, scoped to auth keys for tailworks tags only; issuer key in KMS | 2026-11-07 | Accepted; WIF superseded by ADR-042 |
 | [014](014-local-dev-evaluates-real-policy.md) | Local dev evaluates real policy; outbound dependencies are declared | 2026-11-07 | Accepted |
 | [015](015-headscale-profile-framework-scope.md) | Headscale profile and framework scope | 2026-11-07 | Accepted |
 | [018](018-use-setec-node-key-dek-custody.md) | Use setec for node-key/DEK custody; borrow thundersnap's lease + state-broker pattern; don't depend on thundersnap | 2026-11-07 | Proposed |
 | [019](019-prototype-driven-data-plane-rules.md) | Prototype-driven data-plane rules | 2026-11-07 | Accepted |
 | [020](020-operator-journey.md) | Operator journey: mgmt init, single-use host join tokens, tenant pools | 2026-11-07 | Accepted |
-| [021](021-all-one-homelab-mode.md) | All-in-one homelab mode: `twd up` | 2026-11-07 | Accepted |
+| [021](021-all-one-homelab-mode.md) | All-in-one homelab mode: `tw up` | 2026-11-07 | Accepted |
 | [022](022-agent-sdk-support-plan.md) | Agent SDK support plan; MCP is stateless | 2026-11-07 | Accepted |
 | [023](023-linux-process-tier-sandbox.md) | Linux process-tier sandbox: Landlock + seccomp, no unix sockets for workloads | 2026-11-08 | Accepted |
 | [024](024-microvm-privilege-model-persistent-encrypted-storage.md) | microVM privilege model and persistent encrypted storage | 2026-11-08 | Accepted |
 | [025](025-node-certificates-make-spawn-lim-real.md) | Node certificates make spawn `lim` real; audit provenance; host token | 2026-11-08 | Accepted |
-| [026](026-keyless-default.md) | Keyless by default: tailnet identity for every twd connection; WIF for minting; API keys only as an explicit fallback | 2026-11-08 | Accepted; minting superseded by ADR-042 |
+| [026](026-keyless-default.md) | Keyless by default: tailnet identity for every tailworks connection; WIF for minting; API keys only as an explicit fallback | 2026-11-08 | Accepted; minting superseded by ADR-042 |
 | [027](027-spec-first-rest-v1.md) | Spec-first REST v1: OpenAPI 3.1 as the source of truth, real CRUD, pagination from day one, tsnet-only transport | 2026-11-08 | Accepted |
 | [028](028-database-lease-clock-hosts-fence-themselves.md) | The database is the lease clock, and hosts fence themselves for stateful namespaces | 2026-11-11 | Accepted |
 | [029](029-public-ingress-over-funnel-through-netd.md) | Public ingress over Funnel, through netd on a stable per-workload public node; tsidp deferred | 2026-11-13 | Proposed |
@@ -42,12 +42,12 @@ slug everywhere in that change (`git grep ADR-<slug>`). See `AGENTS.md` rule 5.
 | [032](032-containers-code-sandboxes.md) | Containers and code sandboxes: Cloudflare's `ctx.container` on the microVM tier, one VM per container, attached to its DO, no tailnet reach by default | 2026-11-13 | Accepted |
 | [033](033-smart-placement.md) | Smart placement: put a workload on the host with the best measured tailnet path to what it connects to | 2026-11-13 | Proposed |
 | [034](034-worker-secrets.md) | Worker secrets: values in mgmt custody, released only to the workload's lease holder at its epoch, text bindings in workerd | 2026-11-14 | Proposed |
-| [035](035-mgmt-mcp.md) | twd's own MCP server on mgmt, next to `/v1`: tools run the API in process, destructive tools only from a `twd.dev/cap/mcp` grant naming them | 2026-11-15 | Proposed |
+| [035](035-mgmt-mcp.md) | tailworks' own MCP server on mgmt, next to `/v1`: tools run the API in process, destructive tools only from a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming them | 2026-11-15 | Proposed |
 | [036](036-r2-buckets.md) | R2 buckets as a platform store: the index in the journal, the bytes in an operator-configured blob backend that hostd talks to | 2026-11-15 | Proposed |
 | [037](037-workers-kv.md) | Workers KV: a platform store per workload behind workerd's own `kvNamespace` binding; read-your-writes per host, writes journaled in mgmt first | 2026-11-15 | Proposed |
 | [038](038-d1-databases.md) | D1 databases as platform-store Durable Objects behind workerd's own D1 API, with statement journals in mgmt | 2026-11-15 | Proposed |
 | [039](039-queues.md) | Queues: a sealed, lease-fenced broker in mgmt; hostd runs push consumers through workerd's own queue binding and `queue()` dispatch; the deploy is the grant | 2026-11-15 | Proposed |
-| [040](040-workflows-approvals.md) | Workflows on workerd's built-in engine; an approval is a decision by a tailnet identity holding `twd.dev/cap/approve`, checked and audited by twd | 2026-11-15 | Proposed |
+| [040](040-workflows-approvals.md) | Workflows on workerd's built-in engine; an approval is a decision by a tailnet identity holding `github.com/rosskukulinski/tailworks/cap/approve`, checked and audited by tailworks | 2026-11-15 | Proposed |
 | [041](041-upgrades-and-releases.md) | One release train, declared version skew, expand/contract store migrations, feature-gated placement, mgmt-driven upgrade runs, tested upgrades | 2026-11-15 | Proposed |
 | [042](042-oauth-only-minting.md) | Mint node keys with an OAuth client only; remove the API-key and WIF mint modes | 2026-11-15 | Accepted |
 | [043](043-team-tenants.md) | Several tenants per tailnet, one per team: a tenant-admin capability, a per-tenant owner tag, and per-tenant name prefixes | 2026-11-16 | Accepted |

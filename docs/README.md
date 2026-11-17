@@ -1,8 +1,8 @@
-# twd docs map
+# tw docs map
 
-Every twd doc, by who you are and by what you need. The same files ship
-in the CLI: `twd docs ls`, `twd docs search <words>`,
-`twd docs show <doc>[#<anchor>]`.
+Every tailworks doc, by who you are and by what you need. The same files ship
+in the CLI: `tw docs ls`, `tw docs search <words>`,
+`tw docs show <doc>[#<anchor>]`.
 
 ## Start here by role
 
@@ -26,18 +26,18 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
   [RED-TEAM.md](../security/RED-TEAM.md). The design:
   [RFC](design/RFC.md) and the [ADRs](design/adr/README.md).
 - **You are a coding agent.** [agents.md](agents.md), then
-  `twd agent setup`. Parse `--json` with [cli-json.md](cli-json.md); look
+  `tw agent setup`. Parse `--json` with [cli-json.md](cli-json.md); look
   up error codes in [errors.md](errors.md). The index for agents is
   [llms.txt](../llms.txt).
 
 ## Learn: walk-throughs
 
 - [Quick start](../README.md#quick-start-deploy-your-first-durable-object):
-  install, start twd, deploy a Durable Object, call it.
-- [Concepts](concepts.md): the words twd uses (tenant, workload, object,
+  install, start tailworks, deploy a Durable Object, call it.
+- [Concepts](concepts.md): the words tailworks uses (tenant, workload, object,
   tiers, facet mode, pool nodes, warm keys).
-- [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `twd dev`.
-- Templates: `twd init <dir> --template <name>`. `hello`, `agent`, `mcp`,
+- [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `tw dev`.
+- Templates: `tw init <dir> --template <name>`. `hello`, `agent`, `mcp`,
   `ai-agent` (a mock model; `src/model.ts` shows how to point it at an LLM
   gateway on your tailnet), `lock`,
   `refund-approval` (a Workflow that waits for a person), `node-workflow`.
@@ -62,15 +62,15 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 - Read logs, metrics and traces: [observability.md](observability.md)
 - Use the admin console: [ADMIN-UI.md](ADMIN-UI.md)
 - Let a team manage only its own tenant: [teams.md](teams.md)
-- Upgrade twd: [upgrading.md](upgrading.md)
+- Upgrade tailworks: [upgrading.md](upgrading.md)
 - Run on Headscale: [headscale.md](headscale.md)
 
 ## Look up: reference
 
 - CLI: [cli.md](cli.md) has every command, subcommand and flag (generated
-  from `--help`); `twd help` groups the commands, `twd <command> --help`
+  from `--help`); `tw help` groups the commands, `tw <command> --help`
   shows one.
-- `twd.jsonc`, every key: [twd-jsonc.md](twd-jsonc.md)
+- `tailworks.jsonc`, every key: [tailworks-jsonc.md](tailworks-jsonc.md)
 - What works from Cloudflare Workers: [COMPAT.md](COMPAT.md)
 - Error codes and their fixes: [errors.md](errors.md)
 - `--json` output: [cli-json.md](cli-json.md)
@@ -79,7 +79,7 @@ in the CLI: `twd docs ls`, `twd docs search <words>`,
 - What changed in each release: [CHANGELOG.md](../CHANGELOG.md)
 - Versions and release notes: [RELEASING.md](RELEASING.md#versions),
   [compatibility dates](upgrading.md#versions-compatibility-dates-and-the-changelog) and
-  the [GitHub releases](https://github.com/rosskukulinski/twd/releases).
+  the [GitHub releases](https://github.com/rosskukulinski/tailworks/releases).
 
 ## Understand: how it works
 

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/image"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/hostd/sandbox/sandboxtest"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/image"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox/sandboxtest"
 )
 
 type fakeBackend struct{}
@@ -22,7 +22,7 @@ func (fakeBackend) Name() string                                           { ret
 // TestTierFor: deployment tier > tenant tier > host default. A microvm
 // deployment on a host without a microVM backend is refused with
 // tier_unavailable; it is never downgraded to the process tier (ADR-032
-// D5b). Only ForceProcessTier (twd dev) runs it in the process tier.
+// D5b). Only ForceProcessTier (tw dev) runs it in the process tier.
 func TestTierFor(t *testing.T) {
 	ten := func(tier string) *tenant { return &tenant{info: mgmtapi.Tenant{Tier: tier}} }
 	const refused = "refused"
@@ -35,7 +35,7 @@ func TestTierFor(t *testing.T) {
 		{false, false, "", "", "microvm", refused}, // no backend: refused, not downgraded
 		{false, false, "", "microvm", "", refused}, // the tenant's default too
 		{false, false, "", "microvm", "process", "process"},
-		{false, true, "", "", "microvm", "process"}, // twd dev: explicit
+		{false, true, "", "", "microvm", "process"}, // tw dev: explicit
 		{false, true, "microvm", "microvm", "microvm", "process"},
 		{true, false, "", "", "", "process"},
 		{true, false, "", "", "microvm", "microvm"},

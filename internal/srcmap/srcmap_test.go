@@ -10,7 +10,7 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-// build bundles files (path -> TypeScript) with esbuild as twd does and
+// build bundles files (path -> TypeScript) with esbuild as tailworks does and
 // returns the module and its map.
 func build(t *testing.T, files map[string]string, entry string) (js string, m *Map) {
 	t.Helper()
@@ -80,7 +80,7 @@ func TestLookupEsbuild(t *testing.T) {
 	stack := "Error: boom at x1\n" +
 		"    at explode (dist/index.js:" + strconv.Itoa(tl) + ":" + strconv.Itoa(tc) + ")\n" +
 		"    at Object.fetch (dist/index.js:" + strconv.Itoa(cl) + ":" + strconv.Itoa(cc) + ")\n" +
-		"    at __twd_rt.js:120:15\n" +
+		"    at __tw_rt.js:120:15\n" +
 		"    at async Promise.all (index 0)"
 	got := MapStack(stack, func(mod string) *Map {
 		if mod == "dist/index.js" {
@@ -88,7 +88,7 @@ func TestLookupEsbuild(t *testing.T) {
 		}
 		return nil
 	})
-	for _, want := range []string{"at explode (", "src/boom.ts:5:3)", "at Object.fetch (", "src/index.ts:5:", "at __twd_rt.js:120:15", "at async Promise.all (index 0)"} {
+	for _, want := range []string{"at explode (", "src/boom.ts:5:3)", "at Object.fetch (", "src/index.ts:5:", "at __tw_rt.js:120:15", "at async Promise.all (index 0)"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("mapped stack lacks %q:\n%s", want, got)
 		}

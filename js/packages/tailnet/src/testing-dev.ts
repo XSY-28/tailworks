@@ -1,15 +1,15 @@
 /// <reference types="node" />
-// @twd/tailnet/testing/dev: black-box tests against a real local twd.
-// startDev() runs `twd dev <dir> --port 0 --json` as a child process (the
-// same twd-hostd, netd and workerd as production, on an embedded control
+// @tailworks/tailnet/testing/dev: black-box tests against a real local tailworks.
+// startDev() runs `tw dev <dir> --port 0 --json` as a child process (the
+// same tw-hostd, netd and workerd as production, on an embedded control
 // plane), waits for its `ready` event, and gives you one local URL per
 // identity. Every request through a caller's URL arrives over that caller's
 // own dev tailnet node, so getCaller() in the app sees a real, netd-verified
-// caller: nothing is forged. stop() sends SIGTERM and waits for twd dev to
+// caller: nothing is forged. stop() sends SIGTERM and waits for tw dev to
 // exit (it reaps its own workerd); docs/testing.md has the details.
 //
 // Node only (it spawns a process). For unit tests inside workerd, use
-// @twd/tailnet/testing.
+// @tailworks/tailnet/testing.
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -25,17 +25,17 @@ export interface StartDevOptions {
   dir?: string;
   /** Extra callers by name (a-z, 0-9, -). Each gets its own dev node and local URL. */
   callers?: Record<string, DevCallerSpec> | string[];
-  /** The twd binary (default: $TWD_BIN, else `twd` on PATH). */
-  twd?: string;
-  /** More `twd dev` flags, e.g. ["--env", "staging"]. */
+  /** The tw binary (default: $TW_BIN, else `tw` on PATH). */
+  tw?: string;
+  /** More `tw dev` flags, e.g. ["--env", "staging"]. */
   args?: string[];
-  /** Environment for twd dev (default: this process's). */
+  /** Environment for tw dev (default: this process's). */
   env?: NodeJS.ProcessEnv;
   /** How long to wait for `ready` (default 120 s: the first run builds and starts workerd). */
   readyTimeoutMs?: number;
   /** How long stop() waits after SIGTERM before SIGKILL (default 15 s). */
   stopTimeoutMs?: number;
-  /** Receives twd dev's stderr lines (default: kept, and shown if start fails). */
+  /** Receives tw dev's stderr lines (default: kept, and shown if start fails). */
   onLog?: (line: string) => void;
 }
 
@@ -56,7 +56,7 @@ export interface DevCaller {
 }
 
 export interface DevApp {
-  /** The default caller's URL (`twd dev`'s own client node, "you"). */
+  /** The default caller's URL (`tw dev`'s own client node, "you"). */
   url: string;
   /** url plus the MCP route, for an app that mounts an MCP server. */
   serves: string;
@@ -71,7 +71,7 @@ export interface DevApp {
   fetch(path: string | URL, init?: RequestInit): Promise<Response>;
   /** The raw `ready` event. */
   ready: Record<string, any>;
-  /** stop sends SIGTERM to twd dev and waits for it to exit. Safe to call twice. */
+  /** stop sends SIGTERM to tw dev and waits for it to exit. Safe to call twice. */
   stop(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
 }
@@ -102,7 +102,7 @@ function makeCaller(c: { name: string; url: string; as?: string; login?: string;
 }
 
 // Children still running when this process exits are killed, so a crashed
-// test run doesn't leave twd dev (and its workerd) behind.
+// test run doesn't leave tw dev (and its workerd) behind.
 const live = new Set<ChildProcess>();
 let exitHook = false;
 function track(p: ChildProcess) {
@@ -127,9 +127,9 @@ function waitExit(p: ChildProcess, ms: number): Promise<boolean> {
   });
 }
 
-/** startDev starts the app under `twd dev` and resolves once it is ready. */
+/** startDev starts the app under `tw dev` and resolves once it is ready. */
 export async function startDev(opts: StartDevOptions = {}): Promise<DevApp> {
-  const bin = opts.twd ?? process.env.TWD_BIN ?? "twd";
+  const bin = opts.tw ?? process.env.TW_BIN ?? "tw";
   const args = ["dev", opts.dir ?? ".", "--port", "0", "--json", ...callerArgs(opts.callers), ...(opts.args ?? [])];
   const child = spawn(bin, args, { env: opts.env ?? process.env, stdio: ["ignore", "pipe", "pipe"] });
   track(child);
@@ -159,11 +159,11 @@ export async function startDev(opts: StartDevOptions = {}): Promise<DevApp> {
     const t = setTimeout(() => fail(`no ready event in ${opts.readyTimeoutMs ?? 120000} ms`), opts.readyTimeoutMs ?? 120000);
     child.once("error", (e) => {
       clearTimeout(t);
-      fail(`can't run twd (${e.message}); install it, or set TWD_BIN`);
+      fail(`can't run tw (${e.message}); install it, or set TW_BIN`);
     });
     child.once("exit", (code, sig) => {
       clearTimeout(t);
-      fail(`twd dev exited (${sig ?? code}) before it was ready`);
+      fail(`tw dev exited (${sig ?? code}) before it was ready`);
     });
     createInterface({ input: child.stdout! }).on("line", (l) => {
       let ev: any;
@@ -177,7 +177,7 @@ export async function startDev(opts: StartDevOptions = {}): Promise<DevApp> {
         child.removeAllListeners("exit");
         resolve(ev);
       } else if (ev?.error?.code || ev?.code) {
-        // an error document (twd dev failed before ready), or an error event
+        // an error document (tw dev failed before ready), or an error event
         const e = ev.error ?? ev;
         logs.push(`${e.code}: ${e.message ?? ""}${(e.detail ?? []).length ? "\n  " + [].concat(e.detail).join("\n  ") : ""}`);
       }

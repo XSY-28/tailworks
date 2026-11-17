@@ -1,11 +1,11 @@
 #!/bin/sh
-# twd installer: run from the extracted release directory.
+# tailworks installer: run from the extracted release directory.
 #
-#   ./install.sh                 install (or upgrade, or repair) into ~/.twd
+#   ./install.sh                 install (or upgrade, or repair) into ~/.tailworks
 #   ./install.sh --prefix DIR    install into DIR instead
-#   ./install.sh --uninstall     remove bin/ and share/ (keeps twd state: twd.json, logs, …)
-#   ./install.sh --uninstall --purge   also remove the state in the prefix (run `twd down` first)
-#   ~/.twd/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
+#   ./install.sh --uninstall     remove bin/ and share/ (keeps tailworks state: tw.json, logs, …)
+#   ./install.sh --uninstall --purge   also remove the state in the prefix (run `tw down` first)
+#   ~/.tailworks/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
 #   ./install.sh --allow-unsigned      install a release without a valid SHA256SUMS.sig (local builds)
 #
 # The release must be signed: SHA256SUMS.sig, an SSH signature of SHA256SUMS
@@ -16,20 +16,20 @@
 # keeps the version it replaces as bin.prev/share.prev/VERSION.prev (a
 # re-install of the same version keeps the older .prev), and copies this
 # script to <prefix>/install.sh so --rollback works without the tarball.
-# --rollback refuses while twd runs from the prefix (twd down first, or
+# --rollback refuses while tailworks runs from the prefix (tw down first, or
 # --force); rolling back twice returns to where you started.
 set -eu
-PREFIX=${TWD_HOME:-$HOME/.twd}
+PREFIX=${TW_HOME:-$HOME/.tailworks}
 MODE=install
 PURGE=0
 FORCE=0
-ALLOW_UNSIGNED=${TWD_ALLOW_UNSIGNED:-0}
-# The release signing keys (allowed_signers lines; TWD_RELEASE_SIGNERS=FILE
+ALLOW_UNSIGNED=${TW_ALLOW_UNSIGNED:-0}
+# The release signing keys (allowed_signers lines; TW_RELEASE_SIGNERS=FILE
 # overrides, for tests and private builds).
-# BEGIN twd release signers (copied from internal/releasesig/allowed_signers by scripts/release-keygen.sh --sync)
+# BEGIN tw release signers (copied from internal/releasesig/allowed_signers by scripts/release-keygen.sh --sync)
 SIGNERS='
 '
-# END twd release signers
+# END tw release signers
 while [ $# -gt 0 ]; do
 	case $1 in
 	--prefix) PREFIX=$2; shift ;;
@@ -48,7 +48,7 @@ done
 say() { printf '%s\n' "$*"; }
 die() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 
-[ "$(id -u)" != 0 ] || die "don't run as root (twd installs per user, into ~/.twd, and needs no sudo)"
+[ "$(id -u)" != 0 ] || die "don't run as root (tailworks installs per user, into ~/.tailworks, and needs no sudo)"
 
 running() {
 	pf=$PREFIX/supervisor.pid
@@ -57,18 +57,18 @@ running() {
 
 if [ "$MODE" = uninstall ]; then
 	if running && [ "$FORCE" != 1 ]; then
-		die "twd is running from $PREFIX (twd down first, or pass --force)"
+		die "tw is running from $PREFIX (tw down first, or pass --force)"
 	fi
 	rm -rf "$PREFIX/bin" "$PREFIX/share" "$PREFIX/VERSION" "$PREFIX/.install-"* \
 		"$PREFIX/bin.prev" "$PREFIX/share.prev" "$PREFIX/VERSION.prev" "$PREFIX/install.sh"
 	if [ "$PURGE" = 1 ]; then
-		rm -rf "$PREFIX/twd.json" "$PREFIX/logs" "$PREFIX/run" "$PREFIX/mgmt" "$PREFIX/hostd" "$PREFIX/supervisor.pid"
+		rm -rf "$PREFIX/tw.json" "$PREFIX/logs" "$PREFIX/run" "$PREFIX/mgmt" "$PREFIX/hostd" "$PREFIX/supervisor.pid"
 	fi
 	rmdir "$PREFIX" 2>/dev/null || true
 	if [ -d "$PREFIX" ]; then
-		say "✓ uninstalled twd from $PREFIX (state kept: $(ls -A "$PREFIX" | tr '\n' ' '))"
+		say "✓ uninstalled tw from $PREFIX (state kept: $(ls -A "$PREFIX" | tr '\n' ' '))"
 	else
-		say "✓ uninstalled twd ($PREFIX removed)"
+		say "✓ uninstalled tw ($PREFIX removed)"
 	fi
 	say "  remove the PATH line for $PREFIX/bin from your shell profile if you added one"
 	exit 0
@@ -77,7 +77,7 @@ fi
 if [ "$MODE" = rollback ]; then
 	[ -d "$PREFIX/bin.prev" ] && [ -d "$PREFIX/share.prev" ] || die "no previous install in $PREFIX (bin.prev, share.prev) to roll back to"
 	if running && [ "$FORCE" != 1 ]; then
-		die "twd is running from $PREFIX (twd down first, or pass --force)"
+		die "tw is running from $PREFIX (tw down first, or pass --force)"
 	fi
 	cur=$(cat "$PREFIX/VERSION" 2>/dev/null || echo unknown)
 	prev=$(cat "$PREFIX/VERSION.prev" 2>/dev/null || echo unknown)
@@ -88,13 +88,13 @@ if [ "$MODE" = rollback ]; then
 		[ -e "$PREFIX/$d.prev" ] && mv "$PREFIX/$d.prev" "$PREFIX/$d"
 		[ -e "$PREFIX/$d.swap" ] && mv "$PREFIX/$d.swap" "$PREFIX/$d.prev"
 	done
-	say "✓ rolled back twd $cur → $prev in $PREFIX ($cur is kept as bin.prev: --rollback again to return)"
-	say "  restore the mgmt store from the backup taken before the upgrade if a migration ran (twd upgrade prints the command)"
+	say "✓ rolled back tw $cur → $prev in $PREFIX ($cur is kept as bin.prev: --rollback again to return)"
+	say "  restore the mgmt store from the backup taken before the upgrade if a migration ran (tw upgrade prints the command)"
 	exit 0
 fi
 
 SRC=$(cd "$(dirname "$0")" && pwd)
-[ -f "$SRC/VERSION" ] && [ -x "$SRC/bin/twd" ] || die "run me from the extracted twd release directory"
+[ -f "$SRC/VERSION" ] && [ -x "$SRC/bin/tw" ] || die "run me from the extracted tw release directory"
 VERSION=$(cat "$SRC/VERSION")
 t0=$(date +%s)
 
@@ -103,26 +103,26 @@ os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
 [ "$arch" = aarch64 ] && arch=arm64
 [ "$arch" = x86_64 ] && arch=amd64
-want=$(sed -n 's/.*"os":"\([^"]*\)","arch":"\([^"]*\)".*/\1-\2/p' "$SRC/share/twd/release.json")
+want=$(sed -n 's/.*"os":"\([^"]*\)","arch":"\([^"]*\)".*/\1-\2/p' "$SRC/share/tailworks/release.json")
 [ "$os-$arch" = "$want" ] || die "this release is for $want, this machine is $os-$arch"
 
 # Linux: workerd is linked against glibc and needs >= 2.35 (Ubuntu 22.04,
 # Debian 12, Fedora 36, RHEL 10). musl (Alpine) and older glibc (Debian 11,
-# RHEL/Alma 8-9, Amazon Linux 2) can't run it. `bin/twd doctor` (static) says
+# RHEL/Alma 8-9, Amazon Linux 2) can't run it. `bin/tw doctor` (static) says
 # the same from the extracted directory.
 if [ "$os" = linux ]; then
 	glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')
 	if [ -z "$glibc" ]; then
 		if ls /lib/ld-musl-* >/dev/null 2>&1; then
-			die "this Linux uses musl libc (Alpine?); twd's workerd needs glibc >= 2.35. Use a glibc distro (Ubuntu 22.04+, Debian 12+, Fedora 36+), or a glibc container/VM. Details: $SRC/bin/twd doctor"
+			die "this Linux uses musl libc (Alpine?); tailworks' workerd needs glibc >= 2.35. Use a glibc distro (Ubuntu 22.04+, Debian 12+, Fedora 36+), or a glibc container/VM. Details: $SRC/bin/tw doctor"
 		fi
-		die "can't determine the glibc version (getconf GNU_LIBC_VERSION); twd's workerd needs glibc >= 2.35. Details: $SRC/bin/twd doctor"
+		die "can't determine the glibc version (getconf GNU_LIBC_VERSION); tailworks' workerd needs glibc >= 2.35. Details: $SRC/bin/tw doctor"
 	fi
 	gmaj=${glibc%%.*}
 	gmin=${glibc#*.}
 	gmin=${gmin%%.*}
 	if [ "$gmaj" -lt 2 ] || { [ "$gmaj" -eq 2 ] && [ "$gmin" -lt 35 ]; }; then
-		die "glibc $glibc is too old: twd's workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10). Details: $SRC/bin/twd doctor"
+		die "glibc $glibc is too old: tailworks' workerd needs glibc >= 2.35 (Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10). Details: $SRC/bin/tw doctor"
 	fi
 fi
 
@@ -138,15 +138,15 @@ else
 	# The pinned key first: an install.sh that pins none refuses, even
 	# without ssh-keygen ("no key" never means "accept").
 	signers=$(mktemp)
-	if [ -n "${TWD_RELEASE_SIGNERS:-}" ]; then cat "$TWD_RELEASE_SIGNERS" >"$signers"; else printf '%s\n' "$SIGNERS" >"$signers"; fi
-	grep -q '^twd-release ' "$signers" || { rm -f "$signers"; die "this install.sh pins no release signing key, so it can't check SHA256SUMS.sig (--allow-unsigned to install anyway)"; }
+	if [ -n "${TW_RELEASE_SIGNERS:-}" ]; then cat "$TW_RELEASE_SIGNERS" >"$signers"; else printf '%s\n' "$SIGNERS" >"$signers"; fi
+	grep -q '^tw-release ' "$signers" || { rm -f "$signers"; die "this install.sh pins no release signing key, so it can't check SHA256SUMS.sig (--allow-unsigned to install anyway)"; }
 	if ! command -v ssh-keygen >/dev/null 2>&1; then
 		say "WARNING: no ssh-keygen (OpenSSH): can't check SHA256SUMS.sig (see INSTALL.md, \"Verify a release\")"
-	elif ! ssh-keygen -Y verify -f "$signers" -I twd-release -n twd-release -s "$SRC/SHA256SUMS.sig" <"$SRC/SHA256SUMS" >/dev/null 2>&1; then
+	elif ! ssh-keygen -Y verify -f "$signers" -I tw-release -n tw-release -s "$SRC/SHA256SUMS.sig" <"$SRC/SHA256SUMS" >/dev/null 2>&1; then
 		rm -f "$signers"
-		die "SHA256SUMS.sig is not a valid signature by a twd release key: refusing to install"
+		die "SHA256SUMS.sig is not a valid signature by a tw release key: refusing to install"
 	else
-		say "✓ signed by a twd release key"
+		say "✓ signed by a tw release key"
 	fi
 	rm -f "$signers"
 fi
@@ -169,6 +169,8 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 trap 'rm -rf "$STAGE"' EXIT
 cp -R "$SRC/bin" "$SRC/share" "$SRC/VERSION" "$STAGE/"
+# The long name works too: tailworks → tw.
+ln -sf tw "$STAGE/bin/tailworks"
 if [ "$os" = darwin ]; then
 	# Release binaries are ad-hoc signed; files fetched by a browser carry
 	# com.apple.quarantine (scp/curl don't). Clear it on our copy only.
@@ -176,7 +178,7 @@ if [ "$os" = darwin ]; then
 fi
 # Smoke-test before swapping: the binaries must run on this machine.
 "$STAGE/bin/workerd" --version >/dev/null 2>&1 || die "workerd does not run on this machine ($STAGE/bin/workerd --version)"
-"$STAGE/bin/twd" version >/dev/null 2>&1 || die "twd does not run on this machine"
+"$STAGE/bin/tw" version >/dev/null 2>&1 || die "tw does not run on this machine"
 # The install being replaced becomes .prev (install.sh --rollback), unless
 # it is this same version (a repair): then the older .prev is kept.
 old=$(cat "$PREFIX/VERSION" 2>/dev/null || true)
@@ -196,10 +198,10 @@ done
 mv "$STAGE/VERSION" "$PREFIX/VERSION"
 cp "$SRC/install.sh" "$PREFIX/install.sh.tmp" && chmod 755 "$PREFIX/install.sh.tmp" && mv "$PREFIX/install.sh.tmp" "$PREFIX/install.sh"
 
-say "✓ installed twd $VERSION into $PREFIX ($(($(date +%s) - t0)) s)"
+say "✓ installed tw $VERSION into $PREFIX ($(($(date +%s) - t0)) s)"
 [ $keepprev = 1 ] || say "  previous install ($old) kept as bin.prev/share.prev: $PREFIX/install.sh --rollback restores it"
-say "  $("$PREFIX/bin/twd" version)"
-say "  $("$PREFIX/bin/workerd" --version) · process tier ($( [ "$os" = darwin ] && echo "dev-grade isolation on macOS; microVM tier on Virtualization.framework when the release has share/twd/vm" || echo "see twd doctor for the sandbox and the microVM tier"))"
+say "  $("$PREFIX/bin/tw" version)"
+say "  $("$PREFIX/bin/workerd" --version) · process tier ($( [ "$os" = darwin ] && echo "dev-grade isolation on macOS; microVM tier on Virtualization.framework when the release has share/tailworks/vm" || echo "see tw doctor for the sandbox and the microVM tier"))"
 case ":$PATH:" in
 *":$PREFIX/bin:"*) ;;
 *)
@@ -211,9 +213,9 @@ case ":$PATH:" in
 		if [ "$os" = darwin ] || [ -f "$HOME/.bash_profile" ]; then prof="~/.bash_profile"; fi ;;
 	esac
 	say ""
-	say "Add twd to your PATH (this installer doesn't edit your shell profile):"
+	say "Add tw to your PATH (this installer doesn't edit your shell profile):"
 	say "  echo 'export PATH=\"$PREFIX/bin:\$PATH\"' >> $prof && export PATH=\"$PREFIX/bin:\$PATH\""
 	;;
 esac
 say ""
-say "Next: twd doctor   then   twd up --oauth-client-file <file>   (an OAuth client: no browser, no Funnel; see INSTALL.md)"
+say "Next: tw doctor   then   tw up --oauth-client-file <file>   (an OAuth client: no browser, no Funnel; see INSTALL.md)"

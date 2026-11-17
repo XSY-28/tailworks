@@ -1,9 +1,9 @@
 {
-  "name": "@twd/node",
+  "name": "@tailworks/node",
   "version": "0.2.0",
-  "description": "twd Node process tier SDK: verified caller (x-twd-caller), attributed egress (proxy fetch / undici dispatcher)",
+  "description": "tw Node process tier SDK: verified caller (x-tw-caller), attributed egress (proxy fetch / undici dispatcher)",
   "keywords": [
-    "twd",
+    "tw",
     "tailscale",
     "node"
   ],
@@ -37,10 +37,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rosskukulinski/twd.git",
+    "url": "git+https://github.com/rosskukulinski/tailworks.git",
     "directory": "js/packages/node"
   },
-  "homepage": "https://github.com/rosskukulinski/twd#readme",
-  "bugs": "https://github.com/rosskukulinski/twd/issues",
+  "homepage": "https://github.com/rosskukulinski/tailworks#readme",
+  "bugs": "https://github.com/rosskukulinski/tailworks/issues",
   "license": "BSD-3-Clause"
 }

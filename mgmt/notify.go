@@ -31,7 +31,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Notification events.
@@ -61,14 +61,14 @@ var notifyAllowLoopback = false
 
 // notifyReservedHeaders are set by mgmt itself.
 var notifyReservedHeaders = map[string]bool{
-	"twd-event":  true,
+	"tw-event":   true,
 	"user-agent": true,
 }
 
 // notifyState is Mgmt's notification state (one field in Mgmt).
 type notifyState struct {
 	mu         sync.Mutex
-	consoleURL string // https://twd-mgmt.<tailnet>, "" when unknown
+	consoleURL string // https://tw-mgmt.<tailnet>, "" when unknown
 }
 
 // SetConsoleURL sets the admin UI's base URL used in notification links
@@ -158,7 +158,7 @@ func urlOrigin(s string) string {
 
 var notifyMu sync.Mutex
 
-func notifyCustodyName(tenantID string) string { return "twd/" + tenantID + "/notifications" }
+func notifyCustodyName(tenantID string) string { return "tw/" + tenantID + "/notifications" }
 
 // ValidateWebhook checks and normalises h (events default to
 // approval_requested, header names lowercase). Errors never quote the URL's
@@ -335,7 +335,7 @@ func (m *Mgmt) notifyHostRecord(o *Object, kind string, raw json.RawMessage) {
 	}
 	ev := NotificationEvent{Event: EventApprovalRequested, TenantID: o.TenantID, Workload: o.Workload, Workflow: d.Workflow,
 		Instance: d.Instance, Step: d.Step, Facts: d.Facts}
-	ev.CLI = "twd approve " + o.Workload + " " + d.Instance
+	ev.CLI = "tw approve " + o.Workload + " " + d.Instance
 	if d.Workflow != "" {
 		ev.CLI += " --workflow " + d.Workflow
 	}
@@ -424,10 +424,10 @@ func (m *Mgmt) TestNotifications(ctx context.Context, tenantID, by string) (Noti
 		return NotifyResult{}, err
 	}
 	if e.Webhook == nil {
-		return NotifyResult{}, errf(404, "not_found", "tenant %s has no notification webhook; twd notify set --webhook <url>", tenantID)
+		return NotifyResult{}, errf(404, "not_found", "tenant %s has no notification webhook; tw notify set --webhook <url>", tenantID)
 	}
 	ev := NotificationEvent{Event: EventTest, TenantID: tenantID, SentAt: m.now().UTC(), Link: ApprovalLink(m.consoleURL(), tenantID, "")}
-	ev.Text = "twd test notification for tenant " + tenantID + ". Approvals: " + ev.Link
+	ev.Text = "tw test notification for tenant " + tenantID + ". Approvals: " + ev.Link
 	res := m.deliver(ctx, *e.Webhook, ev)
 	m.audit(ctx, AuditRecord{TenantID: tenantID, Kind: "notification_test", ActingFor: by},
 		map[string]any{"origin": urlOrigin(e.Webhook.URL), "delivered": res.Delivered, "status": res.Status, "error": res.Error, "by": by})
@@ -444,8 +444,8 @@ func (m *Mgmt) deliver(ctx context.Context, h Webhook, ev NotificationEvent) Not
 		return NotifyResult{Error: "bad webhook URL"}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "twd-mgmt")
-	req.Header.Set("Twd-Event", ev.Event)
+	req.Header.Set("User-Agent", "tw-mgmt")
+	req.Header.Set("Tw-Event", ev.Event)
 	for k, v := range h.Headers {
 		req.Header.Set(k, v)
 	}

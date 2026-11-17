@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/rosskukulinski/twd/hostd/sandbox"
-	"github.com/rosskukulinski/twd/hostd/vm"
+	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/hostd/vm"
 )
 
 // vmBackend enables the microVM tier when this host can run it: KVM, the
-// guest kernel and image, and the twd-vmhelper service (`sudo twd host
+// guest kernel and image, and the tw-vmhelper service (`sudo tw host
 // setup --microvm`; as root without it, an in-process helper). Otherwise
 // microvm deployments are refused (tier_unavailable), never downgraded.
 func vmBackend(o VMOptions, log *slog.Logger) sandbox.Backend {

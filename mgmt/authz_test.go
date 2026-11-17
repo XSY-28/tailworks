@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Regression tests for the 2026-11 security review findings (H2, H3, M1,
@@ -38,7 +38,7 @@ const (
 
 func newAuthzEnv(t *testing.T) *authzEnv {
 	e := newTestEnv(t)
-	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
+	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
 		case nodeH1:
@@ -86,7 +86,7 @@ func (a *authzEnv) call(from, method, path string, body any, out any) (int, map[
 	} else {
 		rd = bytes.NewReader(nil)
 	}
-	r := httptest.NewRequest(method, "http://twd-mgmt"+path, rd)
+	r := httptest.NewRequest(method, "http://tw-mgmt"+path, rd)
 	r.RemoteAddr = from
 	if body != nil {
 		ct := "application/json"
@@ -117,7 +117,7 @@ func (a *authzEnv) fail(from, method, path string, body any, status int, code st
 	return eb
 }
 
-// addHost is twd host add + the host's first registration with the secret.
+// addHost is tw host add + the host's first registration with the secret.
 func (a *authzEnv) addHost(id, from string) string {
 	a.t.Helper()
 	var hj struct{ RegistrationSecret string }
@@ -179,7 +179,7 @@ func TestAuthzH2ReadyIsFenced(t *testing.T) {
 	a.asHost("h2").fail("POST", "/v1/objects/"+a.objA+"/credentials?epoch=1&reason=rejoin_rejected", nil, 409, "lease_lost")
 }
 
-// TestAuthzH3ReservedTags: a bundle or namespace may not ask for twd's own
+// TestAuthzH3ReservedTags: a bundle or namespace may not ask for tailworks' own
 // tags, and every tag must be well-formed; deploy and preflight agree.
 func TestAuthzH3ReservedTags(t *testing.T) {
 	a := newAuthzEnv(t)
@@ -191,40 +191,40 @@ func TestAuthzH3ReservedTags(t *testing.T) {
 		return a.c.do("POST", path, map[string]any{"tenantID": a.tn, "workload": "x", "bundle": noConfigBundle(t),
 			"namespaces": []ClassConfig{{Class: "X", Tags: []string{tag}}}}, nil)
 	}
-	for _, tag := range []string{"tag:twd", "tag:twd-mgmt", "tag:twd-host", "tag:TWD-HOST"} {
+	for _, tag := range []string{"tag:tw", "tag:tw-mgmt", "tag:tw-host", "tag:TW-HOST"} {
 		for _, dry := range []bool{false, true} {
 			if st, eb := deploy(tag, dry); st != 400 || eb["code"] != "reserved_tag" {
 				t.Fatalf("%s dryRun=%v: %d %v", tag, dry, st, eb)
 			}
 		}
 	}
-	for _, tag := range []string{"tag:", "tag:twd-host ", "tag: x", "tag:a\tb", "tag:a\x00", "notatag", "tag:-x", "tag:x/y", "tag:ünï"} {
+	for _, tag := range []string{"tag:", "tag:tw-host ", "tag: x", "tag:a\tb", "tag:a\x00", "notatag", "tag:-x", "tag:x/y", "tag:ünï"} {
 		if st, eb := deploy(tag, false); st != 400 || eb["code"] != "bad_request" {
 			t.Fatalf("%q: %d %v", tag, st, eb)
 		}
 	}
-	// Through the bundle's twd.jsonc too (the CLI path).
+	// Through the bundle's tailworks.jsonc too (the CLI path).
 	for _, cfg := range []string{
-		`{"tailnet": {"tags": ["tag:twd-host"]}}`,
-		`{"tailnet": {"objects": {"Evil": {"tags": ["tag:twd-mgmt"]}}}}`,
+		`{"tailnet": {"tags": ["tag:tw-host"]}}`,
+		`{"tailnet": {"objects": {"Evil": {"tags": ["tag:tw-mgmt"]}}}}`,
 	} {
-		b := makeBundle(t, map[string]string{"twd.jsonc": cfg, "dist/index.js": "export default {}"})
+		b := makeBundle(t, map[string]string{"tailworks.jsonc": cfg, "dist/index.js": "export default {}"})
 		for _, path := range []string{"/v1/deployments", "/v1/deployments?dryRun=true"} {
 			if st, eb := a.c.do("POST", path, map[string]any{"tenantID": a.tn, "workload": "x", "bundle": b}, nil); st != 400 || eb["code"] != "reserved_tag" {
 				t.Fatalf("bundle %s via %s: %d %v", cfg, path, st, eb)
 			}
 		}
 	}
-	// A legitimate tag of the twd-… family is still fine.
-	if st, eb := deploy("tag:twd-wl-x", true); st != 200 {
-		t.Fatalf("tag:twd-wl-x preflight: %d %v", st, eb)
+	// A legitimate tag of the tw-… family is still fine.
+	if st, eb := deploy("tag:tw-wl-x", true); st != 200 {
+		t.Fatalf("tag:tw-wl-x preflight: %d %v", st, eb)
 	}
 	if d, err := a.m.store.ListDeployments(context.Background(), DeploymentFilter{Workload: "x"}, Page{}); err != nil || len(d) != 0 {
 		t.Fatalf("a refused deploy was stored: %v %v", d, err)
 	}
 }
 
-// TestAuthzM1RegistrationSecret: the join key proves tag:twd-host, the
+// TestAuthzM1RegistrationSecret: the join key proves tag:tw-host, the
 // one-time secret proves the host ID; it rotates with each host add and
 // never appears in the API or the audit log.
 func TestAuthzM1RegistrationSecret(t *testing.T) {
@@ -376,7 +376,7 @@ func TestAuthzM3HostReadScope(t *testing.T) {
 		} else {
 			rd = bytes.NewReader(nil)
 		}
-		r := httptest.NewRequest(method, "http://twd-mgmt"+path, rd)
+		r := httptest.NewRequest(method, "http://tw-mgmt"+path, rd)
 		r.RemoteAddr = "100.64.0.4:1"
 		if body != nil {
 			r.Header.Set("Content-Type", "application/json")

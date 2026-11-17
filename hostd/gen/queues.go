@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/internal/queuecfg"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/internal/queuecfg"
 )
 
 // Queues (ADR-039): every producer binding becomes workerd's own
 // `queue` binding in the tenant worker, targeting the platform's
 // QueueProducer entrypoint (js/queue.js) with props {queue}; facets get a
 // QueueFacetProxy that forwards to a platform-side native binding of the
-// same queue (`__TWD_QUEUE_<Binding>`). Push consumers are run by hostd
-// through the platform's deliverQueue (cf.twd kind "queue"), which needs
+// same queue (`__TW_QUEUE_<Binding>`). Push consumers are run by hostd
+// through the platform's deliverQueue (cf.tw kind "queue"), which needs
 // workerd's service_binding_extra_handlers (TENANT.queue()).
 
 //go:embed js/queue.js
 var queueJS string
 
-// queueCfg is twd-config.json "queues".
+// queueCfg is tw-config.json "queues".
 type queueCfg struct {
 	// Consumers are the queues whose batches the platform delivers.
 	Consumers []string `json:"consumers"`
@@ -60,7 +60,7 @@ func checkQueues(app *bundle.App) error {
 	}
 	for _, p := range app.Queues.Producers {
 		if _, ok := app.Secrets[p.Binding]; ok {
-			return fmt.Errorf("gen: secret %q has the name of a queue binding; rename one (twd secret rm %s)", p.Binding, p.Binding)
+			return fmt.Errorf("gen: secret %q has the name of a queue binding; rename one (tw secret rm %s)", p.Binding, p.Binding)
 		}
 	}
 	return nil
@@ -92,7 +92,7 @@ func queuePlatformBindings(app *bundle.App) string {
 	}
 	var s strings.Builder
 	for _, p := range app.Queues.Producers {
-		s.WriteString(queueBinding("__TWD_QUEUE_"+p.Binding, p))
+		s.WriteString(queueBinding("__TW_QUEUE_"+p.Binding, p))
 	}
 	return s.String()
 }

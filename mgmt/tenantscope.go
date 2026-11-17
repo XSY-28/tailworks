@@ -21,19 +21,19 @@ import (
 // A tenant admin is an ordinary "user" principal without AdminCap. Every
 // existing check that asks "is this user an admin?" therefore says no, and
 // the only extra access is what this file grants: an operation whose
-// x-twd-role has a "tenant:<action>" part, for a tenant one single grant
+// x-tw-role has a "tenant:<action>" part, for a tenant one single grant
 // value names together with that action.
 
-// TenantAdminCap is the app capability (granted to tag:twd-mgmt) that lets
+// TenantAdminCap is the app capability (granted to tag:tw-mgmt) that lets
 // a tailnet caller act in named tenants. Values:
 //
 //	{"tenants": ["payments"], "actions": ["read", "deploy"]}
 //
 // Both fields are required and non-empty; a value missing either, or naming
 // an unknown action, grants nothing.
-const TenantAdminCap = "twd.dev/cap/tenant-admin"
+const TenantAdminCap = "github.com/rosskukulinski/tailworks/cap/tenant-admin"
 
-// Tenant actions, the "tenant:<action>" part of an operation's x-twd-role.
+// Tenant actions, the "tenant:<action>" part of an operation's x-tw-role.
 const (
 	ActionData    = "data"    // tenant data through mgmt: KV, D1, store journals, queues
 	ActionDeploy  = "deploy"  // deploy, rollback, promote, undeploy, public routes, telemetry, notifications
@@ -61,7 +61,7 @@ type TenantGrant struct {
 	// Actions allow them.
 	MCP *TenantMCP `json:"mcp,omitempty"`
 
-	// Approve are twd.dev/cap/approve values (internal/approvecap) that
+	// Approve are github.com/rosskukulinski/tailworks/cap/approve values (internal/approvecap) that
 	// apply only to these tenants' approvals (tenantscope_approve.go).
 	Approve []json.RawMessage `json:"approve,omitempty"`
 }
@@ -183,7 +183,7 @@ func (p Principal) tenantsWith(action string) []string {
 	return out
 }
 
-// tenantAction is the "tenant:<action>" part of an x-twd-role ("" if none).
+// tenantAction is the "tenant:<action>" part of an x-tw-role ("" if none).
 func tenantAction(role string) string {
 	for _, part := range strings.Split(role, "|") {
 		if a, ok := strings.CutPrefix(strings.TrimSpace(part), "tenant:"); ok {

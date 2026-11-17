@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // FencedStore is the example external system of docs/locks.md: a service
-// outside twd that the lock protects. It remembers, per resource, the
+// outside tailworks that the lock protects. It remembers, per resource, the
 // highest fencing token it has accepted and refuses any write that carries
 // a lower one (409 stale_token). Equal tokens are the same holder writing
 // again and are accepted.

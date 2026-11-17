@@ -1,18 +1,18 @@
 // The lock template under @cloudflare/vitest-plugin: its Worker and Durable
-// Object run inside workerd as on Cloudflare; @twd/tailnet/testing supplies
+// Object run inside workerd as on Cloudflare; @tailworks/tailnet/testing supplies
 // the tailnet callers and a fake ctx.tailnet. docs/testing.md.
 import { env, exports } from "cloudflare:workers";
 import { runInDurableObject, runDurableObjectAlarm } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
-import { createTestTailnet } from "@twd/tailnet/testing";
+import { createTestTailnet } from "@tailworks/tailnet/testing";
 
-const twd = createTestTailnet();
+const tw = createTestTailnet();
 const alice = { login: "alice@example.com" };
 const bob = { login: "bob@example.com" };
 const LOCK = (env as any).LOCK;
 
 const post = (path: string, who: object, body: object = {}) =>
-  (exports as any).default.fetch(twd.withCaller(new Request("http://locks" + path, { method: "POST", body: JSON.stringify(body) }), who));
+  (exports as any).default.fetch(tw.withCaller(new Request("http://locks" + path, { method: "POST", body: JSON.stringify(body) }), who));
 
 describe("lock template", () => {
   it("without a caller the template answers 401 no_identity", async () => {

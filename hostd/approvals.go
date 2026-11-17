@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/internal/approvecap"
-	"github.com/rosskukulinski/twd/netd"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/netd"
 )
 
 // Approvals by tailnet identity (ADR-040, docs/approvals.md).
@@ -25,16 +25,16 @@ import (
 // runtime reports the wait here (platform TailnetApi "approval"); hostd
 // lists it and is the only path that can deliver the decision:
 //
-//   - on the workload's (or an object's) own node: /_twd/approvals[...]
+//   - on the workload's (or an object's) own node: /_tw/approvals[...]
 //     (ingress below). The approver is the request's WireGuard identity as
-//     netd stamped it, and its grants are that caller's twd.dev/cap/approve
+//     netd stamped it, and its grants are that caller's github.com/rosskukulinski/tailworks/cap/approve
 //     toward the node;
-//   - from mgmt (twd approve, the admin UI): POST /v1/approvals/decide on
+//   - from mgmt (tw approve, the admin UI): POST /v1/approvals/decide on
 //     the push API. mgmt sends the approver's WhoIs identity and their
-//     twd.dev/cap/approve toward mgmt; hostd checks them the same way.
+//     github.com/rosskukulinski/tailworks/cap/approve toward mgmt; hostd checks them the same way.
 //
 // hostd authorises (authorizeApproval), sends the event through the
-// platform (cf.twd kind "approval", which only hostd can set; the payload's
+// platform (cf.tw kind "approval", which only hostd can set; the payload's
 // "approver" is the verified identity, whatever the request said), and
 // audits every request for approval, decision, refusal and timeout on the
 // host chain.
@@ -70,7 +70,7 @@ type Approver struct {
 	Node   string   `json:"node"`           // MagicDNS name
 	NodeID string   `json:"nodeId"`         // stable node ID
 	Tags   []string `json:"tags"`
-	Via    string   `json:"via"` // "tailnet" (the node itself) | "mgmt" (twd approve, admin UI)
+	Via    string   `json:"via"` // "tailnet" (the node itself) | "mgmt" (tw approve, admin UI)
 }
 
 func (a Approver) principal() string {
@@ -131,7 +131,7 @@ func (h *Host) approvals() *approvalStore {
 			if json.Unmarshal(b, &list) == nil {
 				for _, r := range list {
 					if r.V > approvalsFormat {
-						h.log.Warn("approvals.json was written by a newer twd; upgrade: its waits are not loaded", "v", r.V)
+						h.log.Warn("approvals.json was written by a newer tailworks; upgrade: its waits are not loaded", "v", r.V)
 						break
 					}
 					if r.Approval != nil {
@@ -382,7 +382,7 @@ func (h *Host) decideApproval(d approvalDecision) (*Approval, *apiError) {
 	}
 
 	// The payload the Workflow sees. "approver" and metadata.approver are
-	// twd's (the identity above), whatever the request carried.
+	// tailworks' (the identity above), whatever the request carried.
 	meta := map[string]any{}
 	for k, v := range d.Metadata {
 		if k != "approver" {
@@ -442,15 +442,15 @@ func (h *Host) decideApproval(d approvalDecision) (*Approval, *apiError) {
 // ---- the approval endpoint on a workload's / object's node ----
 
 // approvalsPath is the prefix the platform never routes to tenant code.
-const approvalsPath = "/_twd/approvals"
+const approvalsPath = "/_tw/approvals"
 
-// serveApprovals handles /_twd/approvals[/<workflow>/<instance>] for a
+// serveApprovals handles /_tw/approvals[/<workflow>/<instance>] for a
 // request netd delivered (blob: its cf, with the verified caller). It
 // reports whether it handled the request.
 //
-//	GET  /_twd/approvals                         the pending approvals of this workload the caller may decide
-//	GET  /_twd/approvals/<workflow>/<instance>   one instance's approvals (any status)
-//	POST /_twd/approvals/<workflow>/<instance>   {"decision": "approve"|"reject", "comment", "metadata", "step"}
+//	GET  /_tw/approvals                         the pending approvals of this workload the caller may decide
+//	GET  /_tw/approvals/<workflow>/<instance>   one instance's approvals (any status)
+//	POST /_tw/approvals/<workflow>/<instance>   {"decision": "approve"|"reject", "comment", "metadata", "step"}
 //
 // A POST must be Content-Type application/json: a cross-site page cannot
 // send one without a CORS preflight, which this endpoint never grants, so
@@ -561,7 +561,7 @@ func callerApprover(blob map[string]any) (Approver, []json.RawMessage, *apiError
 	return ap, c.CapMap[ApproveCap], nil
 }
 
-// ---- push API (mgmt → hostd): twd approvals / twd approve / admin UI ----
+// ---- push API (mgmt → hostd): tw approvals / tw approve / admin UI ----
 
 // approvalsListHandler is GET /v1/approvals?tenant=&all=1.
 func (h *Host) approvalsListHandler(w http.ResponseWriter, r *http.Request) {

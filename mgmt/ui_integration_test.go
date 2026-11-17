@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
-	"github.com/rosskukulinski/twd/mgmt/ui"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/mgmt/ui"
 )
 
 // The admin UI (mgmt/ui) mounted in Server.Handler: admission by principal,
@@ -19,7 +19,7 @@ import (
 // rendered from the real store through in-process /v1 calls.
 
 // uiEnv is a Server over the SQLite store with a fake WhoIs: 100.64.0.1 is
-// a registered tag:twd-host node, .6 an admin (AdminCap), .4 a plain user.
+// a registered tag:tw-host node, .6 an admin (AdminCap), .4 a plain user.
 type uiEnv struct {
 	e   *testEnv
 	srv *Server
@@ -37,7 +37,7 @@ const (
 func newUIEnv(t *testing.T) *uiEnv {
 	t.Helper()
 	e := newTestEnv(t)
-	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "twd-mgmt.t.ts.net", Tailnet: "t.ts.net", NodeID: "nSELF"}, Version: "test-ui", Listeners: []string{"tsnet:80"}}
+	srv := &Server{M: e.m, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net", NodeID: "nSELF"}, Version: "test-ui", Listeners: []string{"tsnet:80"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
 		switch addr {
 		case fromHost:
@@ -66,7 +66,7 @@ func newUIEnv(t *testing.T) *uiEnv {
 // call drives the tailnet handler from addr with optional browser-ish
 // headers; it returns the status and the body.
 func (u *uiEnv) call(from, method, path, body string, hdr map[string]string) (int, *httptest.ResponseRecorder) {
-	r := httptest.NewRequest(method, "http://twd-mgmt.t.ts.net"+path, strings.NewReader(body))
+	r := httptest.NewRequest(method, "http://tw-mgmt.t.ts.net"+path, strings.NewReader(body))
 	r.RemoteAddr = from
 	if body != "" {
 		r.Header.Set("Content-Type", "application/json")
@@ -112,7 +112,7 @@ func TestUIAdmission(t *testing.T) {
 		t.Fatalf("admin /ui/: %d %s %s", st, w.Header().Get("Content-Type"), w.Body.String())
 	}
 	body := w.Body.String()
-	for _, want := range []string{"h1", u.tn, dep, root, kid, "root-node", "alice@example.com", "test-ui", "twd-mgmt.t.ts.net", `href="/ui/static/app.css"`} {
+	for _, want := range []string{"h1", u.tn, dep, root, kid, "root-node", "alice@example.com", "test-ui", "tw-mgmt.t.ts.net", `href="/ui/static/app.css"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("admin overview lacks %q", want)
 		}
@@ -149,8 +149,8 @@ func TestUIAdmission(t *testing.T) {
 		}
 	}
 	// Unknown records are typed 404 pages; unknown UI paths too.
-	if st, w := u.call(fromAdmin, "GET", "/ui/objects/obj_nope", "", nil); st != 404 || w.Header().Get("Twd-Error") != "not_found" {
-		t.Fatalf("unknown object: %d %q", st, w.Header().Get("Twd-Error"))
+	if st, w := u.call(fromAdmin, "GET", "/ui/objects/obj_nope", "", nil); st != 404 || w.Header().Get("Tw-Error") != "not_found" {
+		t.Fatalf("unknown object: %d %q", st, w.Header().Get("Tw-Error"))
 	}
 	if st, _ := u.call(fromAdmin, "GET", "/ui/nope", "", nil); st != 404 {
 		t.Fatalf("unknown page: %d", st)
@@ -187,16 +187,16 @@ func TestUIBrowserGuard(t *testing.T) {
 	u := newUIEnv(t)
 	_, root, kid := u.seed(t)
 	kill := func(id string) string { return "/v1/objects/" + id + "?" + url.Values{"reason": {"ui test"}}.Encode() }
-	sameOrigin := map[string]string{"Origin": "http://twd-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "X-Twd-UI": "1"}
+	sameOrigin := map[string]string{"Origin": "http://tw-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "X-Tw-UI": "1"}
 	// Cross-site variants are refused before the handler runs: the object
 	// stays live.
 	for name, hdr := range map[string]map[string]string{
-		"cross-site fetch":         {"Origin": "http://evil.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors", "X-Twd-UI": "1"},
-		"origin mismatch only":     {"Origin": "http://evil.example", "X-Twd-UI": "1"},
+		"cross-site fetch":         {"Origin": "http://evil.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors", "X-Tw-UI": "1"},
+		"origin mismatch only":     {"Origin": "http://evil.example", "X-Tw-UI": "1"},
 		"null origin":              {"Origin": "null", "Sec-Fetch-Site": "cross-site"},
-		"rebound host":             {"Origin": "http://100.64.0.9", "Sec-Fetch-Site": "same-origin", "X-Twd-UI": "1"},
-		"same-origin, no UI hdr":   {"Origin": "http://twd-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors"},
-		"same-site (subdomain)":    {"Origin": "http://other.t.ts.net", "Sec-Fetch-Site": "same-site", "X-Twd-UI": "1"},
+		"rebound host":             {"Origin": "http://100.64.0.9", "Sec-Fetch-Site": "same-origin", "X-Tw-UI": "1"},
+		"same-origin, no UI hdr":   {"Origin": "http://tw-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors"},
+		"same-site (subdomain)":    {"Origin": "http://other.t.ts.net", "Sec-Fetch-Site": "same-site", "X-Tw-UI": "1"},
 		"navigate form, no UI hdr": {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate"},
 	} {
 		st, w := u.call(fromAdmin, "DELETE", kill(root), "", hdr)
@@ -217,7 +217,7 @@ func TestUIBrowserGuard(t *testing.T) {
 		t.Fatalf("same-origin kill: %d %s", st, w.Body.String())
 	}
 	// A CLI-style DELETE with no browser headers still succeeds (regression
-	// guard: hostd and the twd CLI send none of these).
+	// guard: hostd and the tailworks CLI send none of these).
 	if st, w := u.call(fromAdmin, "DELETE", kill(root), "", nil); st != 202 {
 		t.Fatalf("CLI-style kill: %d %s", st, w.Body.String())
 	}
@@ -225,11 +225,11 @@ func TestUIBrowserGuard(t *testing.T) {
 	if st, w := u.call(fromAdmin, "GET", "/ui/objects/"+kid, "", nil); st != 200 || !strings.Contains(w.Body.String(), "ui test") || !strings.Contains(w.Body.String(), "alice@example.com") {
 		t.Fatalf("tombstone page: %d %s", st, w.Body.String())
 	}
-	// The UI's mutation path: a same-origin form POST to /ui/... (no X-Twd-UI
+	// The UI's mutation path: a same-origin form POST to /ui/... (no X-Tw-UI
 	// needed off /v1) runs the call in-process and redirects back with
 	// the outcome; a cross-site one is refused.
-	form := map[string]string{"Origin": "http://twd-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate", "Content-Type": "application/x-www-form-urlencoded"}
-	r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net/ui/hosts/h1/remove", strings.NewReader("drain=true"))
+	form := map[string]string{"Origin": "http://tw-mgmt.t.ts.net", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate", "Content-Type": "application/x-www-form-urlencoded"}
+	r := httptest.NewRequest("POST", "http://tw-mgmt.t.ts.net/ui/hosts/h1/remove", strings.NewReader("drain=true"))
 	r.RemoteAddr = fromAdmin
 	for k, v := range form {
 		r.Header.Set(k, v)
@@ -263,7 +263,7 @@ func TestUISpecConformance(t *testing.T) {
 	uiH := ui.Handler(&http.Client{Transport: uiTransport{api}}, uiBaseURL)
 	admin := Principal{Kind: "user", Login: "alice@example.com", NodeID: "nADM", Caps: []string{AdminCap}}
 	for _, p := range []string{"/ui/", "/ui/objects/" + root, "/ui/objects/" + kid, "/ui/deployments/" + dep, "/ui/hosts/h1", "/ui/tenants/" + u.tn, "/ui/audit", "/ui/audit?object=" + root + "&limit=2", "/ui/audit?tenant=" + u.tn + "&kind=create&workload=w", "/ui/objects", "/ui/objects?status=ready&tag=x", "/ui/approvals"} {
-		r := httptest.NewRequest("GET", "http://twd-mgmt.t.ts.net"+p, nil)
+		r := httptest.NewRequest("GET", "http://tw-mgmt.t.ts.net"+p, nil)
 		r = r.WithContext(WithPrincipal(r.Context(), admin))
 		w := httptest.NewRecorder()
 		uiH.ServeHTTP(w, r)
@@ -277,7 +277,7 @@ func TestUISpecConformance(t *testing.T) {
 		{"/ui/hosts/h1/remove", "drain=true"},
 		{"/ui/tenants/" + u.tn + "/delete", "force=true"},
 	} {
-		r := httptest.NewRequest("POST", "http://twd-mgmt.t.ts.net"+f.path, strings.NewReader(f.form))
+		r := httptest.NewRequest("POST", "http://tw-mgmt.t.ts.net"+f.path, strings.NewReader(f.form))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r = r.WithContext(WithPrincipal(r.Context(), admin))
 		w := httptest.NewRecorder()

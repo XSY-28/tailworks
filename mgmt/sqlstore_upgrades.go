@@ -123,7 +123,7 @@ func (s *SQLStore) UpdateUpgradeRun(ctx context.Context, id, state, runJSON stri
 // ApplyDeferredContract applies the contract migrations that opening the
 // store deferred because an older replica was live (migrate() applies
 // expand migrations at once). Called by an upgrade run once every replica
-// reports this version, or by `twd-mgmt migrate --apply`.
+// reports this version, or by `tw-mgmt migrate --apply`.
 func (s *SQLStore) ApplyDeferredContract(ctx context.Context) ([]string, error) {
 	if s.d == dialectPostgres {
 		if _, err := s.db.ExecContext(ctx, "SELECT pg_advisory_lock(7464)"); err != nil {
@@ -150,8 +150,8 @@ func (s *SQLStore) ApplyDeferredContract(ctx context.Context) ([]string, error) 
 // built from epochs) is ever reused.
 const RestoreEpochJump = 1 << 20
 
-// RestoreFence runs after a store is restored from a backup (`twd-mgmt
-// restore-fence`, `twd upgrade` rollback): it raises every lease's epoch
+// RestoreFence runs after a store is restored from a backup (`tw-mgmt
+// restore-fence`, `tw upgrade` rollback): it raises every lease's epoch
 // by RestoreEpochJump and counts the restore. It returns the new restore
 // generation.
 func (s *SQLStore) RestoreFence(ctx context.Context) (int64, error) {
@@ -178,7 +178,7 @@ func (s *SQLStore) RestoreFence(ctx context.Context) (int64, error) {
 }
 
 // RestoreFenceDSN is RestoreFence on a store that is not opened for
-// serving: it doesn't migrate, so a restored store from an older twd-mgmt
+// serving: it doesn't migrate, so a restored store from an older tw-mgmt
 // stays at its schema (only the bookkeeping tables are created).
 func RestoreFenceDSN(ctx context.Context, dsn string) (int64, error) {
 	s, err := openSQL(ctx, dsn)

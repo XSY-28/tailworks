@@ -37,7 +37,7 @@ func TestMM_F8_PushTargetShared(t *testing.T) {
 	var mu sync.Mutex
 	hits := map[string]int{}
 	serve := func(name string) string {
-		sock := filepath.Join(os.TempDir(), "twd-f8-"+name+"-"+filepath.Base(dir)+".sock")
+		sock := filepath.Join(os.TempDir(), "tw-f8-"+name+"-"+filepath.Base(dir)+".sock")
 		os.Remove(sock)
 		ln, err := net.Listen("unix", sock)
 		if err != nil {

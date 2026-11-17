@@ -19,7 +19,7 @@ func TestGuestIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(m, []byte(`{"rootfs_sha256":"a","twd_version":"0.2.0"}`), 0o644); err != nil {
+	if err := os.WriteFile(m, []byte(`{"rootfs_sha256":"a","tw_version":"0.2.0"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	a, _ := GuestIdentity(k, r)
@@ -29,7 +29,7 @@ func TestGuestIdentity(t *testing.T) {
 	if again, _ := GuestIdentity(k, r); again != a {
 		t.Fatal("identity is not stable")
 	}
-	os.WriteFile(m, []byte(`{"rootfs_sha256":"b","twd_version":"0.3.0"}`), 0o644)
+	os.WriteFile(m, []byte(`{"rootfs_sha256":"b","tw_version":"0.3.0"}`), 0o644)
 	if b, _ := GuestIdentity(k, r); b == a {
 		t.Fatal("a new manifest kept the identity")
 	}

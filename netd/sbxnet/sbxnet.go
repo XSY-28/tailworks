@@ -565,7 +565,7 @@ func (p *Proxy) deliver(w http.ResponseWriter, r *http.Request, scheme, name str
 	u := scheme + "://" + host + r.URL.RequestURI()
 	out, err := http.NewRequestWithContext(r.Context(), r.Method, u, r.Body)
 	if err != nil {
-		http.Error(w, "twd: bad request", http.StatusBadRequest)
+		http.Error(w, "tw: bad request", http.StatusBadRequest)
 		return
 	}
 	out.Header = r.Header.Clone()
@@ -574,15 +574,15 @@ func (p *Proxy) deliver(w http.ResponseWriter, r *http.Request, scheme, name str
 	}
 	out.ContentLength = r.ContentLength
 	if p.cfg.Deliver == nil {
-		http.Error(w, "twd: no intercept handler", http.StatusBadGateway)
+		http.Error(w, "tw: no intercept handler", http.StatusBadGateway)
 		return
 	}
 	resp, err := p.cfg.Deliver(r.Context(), key, out)
 	if err != nil {
 		w.Header().Set("content-type", "text/plain; charset=utf-8")
-		w.Header().Set("twd-error", "intercept_failed")
+		w.Header().Set("tw-error", "intercept_failed")
 		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprintf(w, "twd: the intercept handler (%s) failed: %v\n", key, err)
+		fmt.Fprintf(w, "tw: the intercept handler (%s) failed: %v\n", key, err)
 		return
 	}
 	defer resp.Body.Close()

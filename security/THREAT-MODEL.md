@@ -1,4 +1,4 @@
-# twd Threat Model (red-team)
+# tailworks Threat Model (red-team)
 
 Date: 2026-11-08 · Branch `rt-redteam` · Author: red team (adversarial review of the
 overnight build, M0–M9 as recorded in `STATUS.md`). Companion: `RED-TEAM.md` (findings),
@@ -13,14 +13,14 @@ paper threat model and the code disagree, the code wins.
 
 | # | Asset | Where it lives |
 |---|-------|----------------|
-| A1 | Per-object tailnet **node keys** / machine keys | `~/.twd` state dirs, one `tsnet.Server` per object (netd) |
+| A1 | Per-object tailnet **node keys** / machine keys | `~/.tailworks` state dirs, one `tsnet.Server` per object (netd) |
 | A2 | Tenant **mint credentials** (OAuth client secrets `tskey-client-*`; Headscale API keys) | tenant `oauthClientFile` / `apiKeyFile` paths (0600); mgmt reads at use time |
 | A3 | mgmt **custody key** + custody secrets (AES-256-GCM DEKs, OBO root keys) | `custody.key` (0600) |
-| A4 | **Caller identity** (`request.cf.tailscale.caller`, Node `x-twd-caller`) | set by netd/hostd from WhoIs |
+| A4 | **Caller identity** (`request.cf.tailscale.caller`, Node `x-tw-caller`) | set by netd/hostd from WhoIs |
 | A5 | **Object egress identity** (which node a `fetch()` leaves from) | platform Egress + MAC + netd dialer |
 | A6 | **Capabilities / delegation** (policy capMap, spawn `lim`) | tailnet policy + mgmt spawn checks |
 | A7 | **Control surfaces**: mgmt admin socket, hostd `hostapi.sock`, netd `ctl.sock`/`egress.sock`, push API | unix sockets, 0600 in 0700 dirs |
-| A8 | **Audit log** (hash-chained, ed25519 host sigs) | mgmt store; `twd audit` |
+| A8 | **Audit log** (hash-chained, ed25519 host sigs) | mgmt store; `tw audit` |
 | A9 | **Budgets / leases** (epoch fencing, maxLive/maxDepth, registration throttle) | mgmt store |
 
 ## 2. Trust boundaries
@@ -41,7 +41,7 @@ paper threat model and the code disagree, the code wins.
   process/Node tiers — the OS sandbox (Seatbelt on macOS only).
 - **B3 Object ↔ object** within a tenant. Per-object nodes + the egress MAC bind
   attribution; spawn `lim` is meant to narrow a child.
-- **B4 Host ↔ mgmt.** hostd authenticates by lease epoch + (tsnet) WhoIs `tag:twd-host`;
+- **B4 Host ↔ mgmt.** hostd authenticates by lease epoch + (tsnet) WhoIs `tag:tw-host`;
   the local admin socket trusts same-uid peercred.
 - **B5 Platform ↔ Tailscale control.** mint broker (OAuth client; Headscale API key). Keys are single-use,
   ≤300 s, ephemeral for children.
@@ -80,7 +80,7 @@ DO storage on restart. The process/Node tiers on Linux are effectively single-te
    (RT-02).
 6. **Host/ops**: key leaks, file perms, release/`install.sh`, `--policy-apply` widening.
    → redaction + secret hook are thorough; `--policy-apply` can merge attacker-declared
-   grants from a bundle's `twd.jsonc` (RT-06).
+   grants from a bundle's `tailworks.jsonc` (RT-06).
 7. **Sandboxes**: Seatbelt (macOS), Landlock/seccomp/microVM (Linux). → Seatbelt profile
    is real and tested; Linux process/Node tiers have **no confinement** (RT-03); microVM
    tier confines but shares a per-VM MAC key across the VM's objects (RT-04).
@@ -96,7 +96,7 @@ DO storage on restart. The process/Node tiers on Linux are effectively single-te
 - Lease epoch fencing (single conditional writes) and the registration throttle (AIMD).
 - Audit **hash chain** tamper-evidence (truncation/gap/forged-sig all caught).
 - Cron triggers (`docs/cron-triggers.md`): `scheduled()` runs are reachable only via
-  hostd's private instance ingress (`cf.twd.kind = "scheduled"`, which only hostd sets).
+  hostd's private instance ingress (`cf.tw.kind = "scheduled"`, which only hostd sets).
   The platform refuses undeclared crons. Runs need a fresh heartbeat, so a partitioned
   host does not run them twice. Expressions are bounded and fuzzed (`internal/cron`).
   Tests: `TestCronTriggers/TailnetCallerCannotTriggerScheduled` and

@@ -10,7 +10,7 @@ import (
 )
 
 // handlerTransport streams: the first line is readable while the handler is
-// still writing (twd logs -f through an embedded host), and status codes
+// still writing (tw logs -f through an embedded host), and status codes
 // pass through.
 func TestHandlerTransportStreams(t *testing.T) {
 	release := make(chan struct{})

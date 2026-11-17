@@ -1,4 +1,4 @@
-// @twd/tailnet/testing: withCaller / withPublic and the fake ctx.tailnet.
+// @tailworks/tailnet/testing: withCaller / withPublic and the fake ctx.tailnet.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getCaller, getRequester, principalKey } from "../dist/index.js";
@@ -60,7 +60,7 @@ test("fake ctx.tailnet: spawn, kill, audit, self, fetch", async () => {
     env: { LookupAgent: ns },
     bindings: { LookupAgent: "LookupAgent" },
     self: { epoch: 7 },
-    fetch: (req) => (new URL(req.url).hostname === "db" ? Response.json({ ok: true }) : new Response("{}", { status: 403, headers: { "twd-error": "peer_not_visible" } })),
+    fetch: (req) => (new URL(req.url).hostname === "db" ? Response.json({ ok: true }) : new Response("{}", { status: 403, headers: { "tw-error": "peer_not_visible" } })),
   });
   const ctx = t.ctx();
   const child = await ctx.tailnet.spawn(ns, { name: "lookup-1", caps: { "example.com/cap/mcp": { tools: ["lookup"] } }, ttl: "10m" });

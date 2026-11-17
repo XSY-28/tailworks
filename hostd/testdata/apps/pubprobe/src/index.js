@@ -1,14 +1,14 @@
 // Test fixture for ADR-029 public ingress: reports what a handler sees for
 // public vs tailnet requests, and tries the things public requests must not do.
 import { DurableObject, env as rawEnv } from "cloudflare:workers";
-import { getCaller, getRequester, isTailnetError } from "@twd/tailnet";
+import { getCaller, getRequester, isTailnetError } from "@tailworks/tailnet";
 
 // A handler that caches the env it was given (a pattern the docs warn
 // about): a later public request would use a tailnet request's guard.
 let CACHED_ENV = null;
 
 const SEEN = (req) =>
-  Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-twd") || k.startsWith("cf-") || k.startsWith("x-forwarded") || k.startsWith("tailscale-")));
+  Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-tw-") || k.startsWith("cf-") || k.startsWith("x-forwarded") || k.startsWith("tailscale-")));
 
 function who(req) {
   let callerError = null;
@@ -65,13 +65,13 @@ export default {
         return Response.json({ error: String(e?.message ?? e) }, { status: 299 });
       }
     }
-    if (parts[0] === "twd") {
+    if (parts[0] === "tw") {
       // The platform binding is not in the handler's env; the raw binding
       // still has it, and a spawn through it must be refused by hostd.
-      const out = { handlerHas: "__TWD" in env, rawHas: !!rawEnv.__TWD };
-      if (rawEnv.__TWD) {
+      const out = { handlerHas: "__TW" in env, rawHas: !!rawEnv.__TW };
+      if (rawEnv.__TW) {
         try {
-          out.rawSpawn = await rawEnv.__TWD.call("spawn", { class: "Room", name: "via-twd" });
+          out.rawSpawn = await rawEnv.__TW.call("spawn", { class: "Room", name: "via-tw" });
         } catch (e) {
           out.rawSpawn = { error: String(e) };
         }

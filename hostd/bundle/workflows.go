@@ -75,8 +75,8 @@ func parseWorkflows(wb []byte, a *App) error {
 		if !identRE.MatchString(x.Binding) || !identRE.MatchString(x.ClassName) {
 			return fmt.Errorf("%s: bad binding %q or class_name %q", where, x.Binding, x.ClassName)
 		}
-		if strings.HasPrefix(x.Binding, "__TWD") || strings.HasPrefix(x.ClassName, "Host_") {
-			return fmt.Errorf("%s: names starting with Host_/__TWD are reserved", where)
+		if strings.HasPrefix(x.Binding, "__TW") || strings.HasPrefix(x.ClassName, "Host_") {
+			return fmt.Errorf("%s: names starting with Host_/__TW are reserved", where)
 		}
 		if bindings[x.Binding] {
 			return fmt.Errorf("%s: binding %s is already a binding", where, x.Binding)

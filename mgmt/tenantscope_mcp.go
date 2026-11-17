@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/rosskukulinski/twd/internal/approvecap"
+	"github.com/rosskukulinski/tailworks/internal/approvecap"
 )
 
-// Tenant admins on twd's MCP server (ADR-043 D2). A TenantAdminCap
+// Tenant admins on tailworks' MCP server (ADR-043 D2). A TenantAdminCap
 // value with an "mcp" entry admits the caller to /mcp for that value's
 // tenants:
 //
 //	{"tenants": ["payments"], "actions": ["read", "kill"], "mcp": {"tools": ["kill"]}}
 //
 // gives whoami, ls, logs and audit (with "read") and kill (named, and
-// "kill" in the same value's actions). Unlike a twd.dev/cap/mcp holder,
+// "kill" in the same value's actions). Unlike a github.com/rosskukulinski/tailworks/cap/mcp holder,
 // whose tools run as an admin (ADR-035), these tools run as the caller,
 // limited to the values that carry "mcp": the /v1 tenant gate decides
 // every call they make.
@@ -44,7 +44,7 @@ func badSubValues(g TenantGrant) string {
 	for _, raw := range g.Approve {
 		var a approvecap.Grant
 		if json.Unmarshal(raw, &a) != nil {
-			return "approve entries must be twd.dev/cap/approve values (objects)"
+			return "approve entries must be github.com/rosskukulinski/tailworks/cap/approve values (objects)"
 		}
 	}
 	return ""

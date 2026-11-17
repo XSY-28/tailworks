@@ -301,7 +301,7 @@ func (c *Client) SetDeviceTags(ctx context.Context, id string, tags []string) er
 	return c.do(ctx, "POST", "/api/v2/device/"+url.PathEscape(id)+"/tags", map[string][]string{"tags": tags}, nil)
 }
 
-// GetPolicy reads the tailnet policy file as JSON (read-only; twd never
+// GetPolicy reads the tailnet policy file as JSON (read-only; tailworks never
 // writes policy). With etag set it sends If-None-Match and reports
 // notModified on a 304.
 func (c *Client) GetPolicy(ctx context.Context, etag string) (body []byte, newETag string, notModified bool, err error) {

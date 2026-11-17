@@ -1,27 +1,27 @@
-// twd platform wrapper (TRUSTED). Generated per deployment by twd-hostd from
-// this template plus twd-config.json / twd-modules.js. Tenant code never
+// tailworks platform wrapper (TRUSTED). Generated per deployment by tw-hostd from
+// this template plus tw-config.json / tw-modules.js. Tenant code never
 // runs in this isolate and never sees these bindings:
 //   LOADER       Dynamic Worker loader (facets)
-//   NETD_EGRESS  hostd's attributed egress socket (trusts x-twd-class/name + MAC)
+//   NETD_EGRESS  hostd's attributed egress socket (trusts x-tw-class/name + MAC)
 //   EGRESS_WL    hostd's workload egress socket (the tenant service's identity)
 //   HOSTD        hostd's local host API socket (ensure/spawn/ready/kill/audit)
 //   MAC_KEY      per-process root key; per-object egress MAC keys are derived from it (RT-04)
 //   TENANT       the tenant service (the app's default export)
 //   NS_<Class>   plain-DO namespaces (classes with "egress": "workload")
 //
-// Routing comes from request.cf.twd, which only hostd can set (ingress
+// Routing comes from request.cf.tw, which only hostd can set (ingress
 // socket cfBlobHeader; netd strips client copies).
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
-import CFG from "twd-config.json";
-import MODULES from "twd-modules.js";
-import { deliverQueue } from "twd-queue.js";
+import CFG from "tw-config.json";
+import MODULES from "tw-modules.js";
+import { deliverQueue } from "tw-queue.js";
 
 const FACET_MODULES = MODULES;
 
 const json = (status, body, extra = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...extra } });
 
-const DOC = "https://github.com/rosskukulinski/twd/blob/main/docs/errors.md#";
+const DOC = "https://github.com/rosskukulinski/tailworks/blob/main/docs/errors.md#";
 const STATUS = {
   killed: 410, no_identity: 401, bad_request: 400, unknown_object: 404, identity_pending: 503, hostd_unavailable: 503,
   public_create_denied: 403, public_request: 403, not_public: 404, create_not_admitted: 403,
@@ -37,7 +37,7 @@ function errBody(code, message, extra = {}) {
   return { code, message, doc_url: DOC + code, ...extra };
 }
 function errResponse(code, message, extra = {}) {
-  return json(STATUS[code] ?? 403, errBody(code, message, extra), { "twd-error": code });
+  return json(STATUS[code] ?? 403, errBody(code, message, extra), { "tw-error": code });
 }
 
 // principalOf names who a request acts for (audit "actingFor"): the human
@@ -89,10 +89,10 @@ async function routeObject(env, ctx, cls, name, req) {
   return objectStub(env, ctx, cls, name).fetch(req);
 }
 
-// scheduled runs one cron trigger (cf.twd.kind = "scheduled", which only
+// scheduled runs one cron trigger (cf.tw.kind = "scheduled", which only
 // hostd can set): the tenant's default export scheduled() handler. Only the
 // app's declared crons are accepted. The run goes to the tenant service as
-// a fetch carrying cf.twd (kind scheduled, cron, scheduledTime and the run's
+// a fetch carrying cf.tw (kind scheduled, cron, scheduledTime and the run's
 // create ticket): the runtime wrapper in the tenant isolate dispatches it to
 // scheduled() with a controller and answers {outcome, noRetry, error}.
 // (workerd's native Fetcher.scheduled() builds its own controller, so the
@@ -104,10 +104,10 @@ async function scheduled(env, t, req) {
   if (typeof st !== "number" || !Number.isFinite(st)) return errResponse("bad_request", "bad scheduledTime");
   try {
     const r = await env.TENANT.fetch(
-      new Request("http://tenant/_twd/scheduled", {
+      new Request("http://tenant/_tw/scheduled", {
         method: "POST",
         signal: req.signal,
-        cf: { twd: { kind: "scheduled", cron, scheduledTime: st, ticket: t.ticket }, traceId: req.cf?.traceId },
+        cf: { tw: { kind: "scheduled", cron, scheduledTime: st, ticket: t.ticket }, traceId: req.cf?.traceId },
       }),
     );
     const body = await r.json().catch(() => null);
@@ -124,14 +124,14 @@ async function admin(req, env, ctx, t) {
       return json(200, { ok: true, deploymentID: CFG.deploymentID, workload: CFG.workload });
     case "kill": {
       try {
-        await objectStub(env, ctx, t.class, t.name).__twd_kill(t.reason || "killed");
+        await objectStub(env, ctx, t.class, t.name).__tw_kill(t.reason || "killed");
       } catch (e) {
         return json(500, errBody("bad_request", "kill: " + String(e)));
       }
       return json(200, { ok: true });
     }
     case "store": {
-      // An operator operation on a platform store (twd d1 execute, …):
+      // An operator operation on a platform store (tw d1 execute, …):
       // hostd sends it only for a store this deployment declares.
       if (!(CFG.stores ?? []).some((s) => s.kind === t.storeKind && s.name === t.name)) return errResponse("bad_request", "no such store in this deployment");
       try {
@@ -149,15 +149,15 @@ async function admin(req, env, ctx, t) {
 
 export default {
   async fetch(req, env, ctx) {
-    const t = req.cf?.twd;
+    const t = req.cf?.tw;
     if (!t || typeof t !== "object") return errResponse("no_identity", "request did not come through netd/hostd");
     if (isPublic(req)) {
       // A public node only fronts its workload's default export; the
-      // platform's /_twd/... addressing is never public (netd refuses it
+      // platform's /_tw/... addressing is never public (netd refuses it
       // too: defense in depth).
       if (t.kind !== "workload") return errResponse("public_request", "a public request may only reach its workload's entry point");
       const p = new URL(req.url).pathname;
-      if (p === "/_twd" || p.startsWith("/_twd/")) return errResponse("not_public", "/_twd is never public");
+      if (p === "/_tw" || p.startsWith("/_tw/")) return errResponse("not_public", "/_tw is never public");
       return env.TENANT.fetch(req);
     }
     switch (t.kind) {
@@ -166,7 +166,7 @@ export default {
       case "scheduled":
         return scheduled(env, t, req);
       case "queue":
-        return deliverQueue(env, t, req); // twd-queue.js (ADR-039)
+        return deliverQueue(env, t, req); // tw-queue.js (ADR-039)
       case "approval":
         return deliverApproval(env, t);
       case "object":
@@ -179,19 +179,19 @@ export default {
         if (!t.name || typeof t.key !== "string" || typeof t.url !== "string") return errResponse("bad_request", "bad intercept route");
         const hasBody = req.method !== "GET" && req.method !== "HEAD";
         const r = new Request(t.url, { method: req.method, headers: req.headers, body: hasBody ? req.body : undefined, redirect: "manual" });
-        return objectStub(env, ctx, t.class, t.name).__twd_intercept(t.key, r);
+        return objectStub(env, ctx, t.class, t.name).__tw_intercept(t.key, r);
       }
       case "workload": {
-        // /_twd/o/<Class>/<name>/... on the workload node reaches an object
+        // /_tw/o/<Class>/<name>/... on the workload node reaches an object
         // before (or instead of) its own node.
         const u = new URL(req.url);
-        const m = u.pathname.match(/^\/_twd\/o\/([A-Za-z_$][\w$]*)\/([^/]+)(\/.*)?$/);
+        const m = u.pathname.match(/^\/_tw\/o\/([A-Za-z_$][\w$]*)\/([^/]+)(\/.*)?$/);
         if (m) {
           const name = decodeURIComponent(m[2]);
           if (CFG.classes[m[1]] && name) {
             // A tailnet request may create the object it addresses: admit it
             // with the request's ticket (hostd verifies; public requests
-            // never reach /_twd).
+            // never reach /_tw).
             try {
               await hostd(env, "admit", { class: m[1], name, ticket: t.ticket });
             } catch (e) {
@@ -220,7 +220,7 @@ function makeHost(cls) {
       this.__f = null;
       this.__ensured = null;
       this.__actingFor = ""; // own property: the Proxy would answer unknown names with an RPC forwarder
-      this.__killed = ctx.storage.kv.get("__twd_killed") ?? null;
+      this.__killed = ctx.storage.kv.get("__tw_killed") ?? null;
       const self = this;
       return new Proxy(this, {
         get(t, p, r) {
@@ -262,21 +262,21 @@ function makeHost(cls) {
     __facet() {
       if (!this.__f) {
         const name = this.ctx.id.name;
-        if (!name) throw new Error("[bad_request] twd objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
+        if (!name) throw new Error("[bad_request] tw objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
         const exp = this.ctx.exports;
         const w = this.env.LOADER.get(CFG.deploymentID + ":" + cls + ":" + name, () => {
           const env = { ...CFG.vars };
           for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
           for (const w of CFG.workflows ?? []) env[w.binding] = exp.WorkflowGate({ props: { workflow: w.name } });
-          env.__TWD = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
+          env.__TW = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
           for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
           for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
           const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
-          if (Object.keys(wrap).length) env.__TWD_WRAP = wrap; // twd-rt.js puts the API around these stubs (D1)
+          if (Object.keys(wrap).length) env.__TW_WRAP = wrap; // tw-rt.js puts the API around these stubs (D1)
           return {
             compatibilityDate: CFG.compatDate,
             compatibilityFlags: CFG.compatFlags,
-            mainModule: "__twd_facet.js",
+            mainModule: "__tw_facet.js",
             modules: FACET_MODULES,
             globalOutbound: exp.Egress({ props: { class: cls, name } }),
             // The facet's console.*, exceptions and outcomes, attested as
@@ -291,7 +291,7 @@ function makeHost(cls) {
     }
     async fetch(req) {
       if (this.__killed) return errResponse("killed", "object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
-      if (!this.ctx.id.name) return errResponse("bad_request", "twd objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
+      if (!this.ctx.id.name) return errResponse("bad_request", "tw objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
       // Internal fetches (e.g. partyserver's set-name) carry no caller.
       const who = principalOf(req);
       if (who && !this.__actingFor) {
@@ -317,7 +317,7 @@ function makeHost(cls) {
     // Facet alarm delegation (facets cannot set alarms in workerd): the
     // facet's ctx.storage.{set,get,delete}Alarm land here via TailnetApi
     // "alarm", and alarm() runs the facet's alarm handler.
-    async __twd_alarm_op(action, time) {
+    async __tw_alarm_op(action, time) {
       if (this.__killed) throw new Error("[killed] object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
       if (action === "set") {
         await this.ctx.storage.setAlarm(time);
@@ -330,18 +330,18 @@ function makeHost(cls) {
       return await this.ctx.storage.getAlarm();
     }
     // A request the object's container sent to an intercepted destination.
-    async __twd_intercept(key, req) {
+    async __tw_intercept(key, req) {
       if (this.__killed) return errResponse("killed", "object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
-      return this.__facet(true).__twd_intercept(key, req);
+      return this.__facet(true).__tw_intercept(key, req);
     }
     async alarm(info) {
       if (this.__killed) return;
       // AlarmInvocationInfo is not serializable; pass its fields.
-      await this.__facet().__twd_alarm({ retryCount: info?.retryCount ?? 0, isRetry: !!info?.isRetry });
+      await this.__facet().__tw_alarm({ retryCount: info?.retryCount ?? 0, isRetry: !!info?.isRetry });
     }
-    async __twd_kill(reason) {
+    async __tw_kill(reason) {
       this.__killed = reason || "killed";
-      this.ctx.storage.kv.put("__twd_killed", this.__killed);
+      this.ctx.storage.kv.put("__tw_killed", this.__killed);
       try {
         await this.ctx.storage.deleteAlarm();
       } catch {
@@ -362,12 +362,12 @@ function makeHost(cls) {
 
 //@@HOST_CLASSES@@
 
-// Platform stores (twd-store.js; ADR-platform-stores), when the app has
+// Platform stores (tw-store.js; ADR-platform-stores), when the app has
 // storage bindings.
 //@@STORES@@
 
-// Queue producer bindings and their facet proxies (twd-queue.js; ADR-039).
-export { QueueProducer, QueueFacetProxy } from "twd-queue.js";
+// Queue producer bindings and their facet proxies (tw-queue.js; ADR-039).
+export { QueueProducer, QueueFacetProxy } from "tw-queue.js";
 
 // NsProxy stands in for a DO namespace binding inside a facet's env:
 // env.X.getByName(name) returns the real stub (RPC promise pipelining makes
@@ -386,7 +386,7 @@ async function hmacKey(secret) {
 let rootKey = null;
 const objectKeys = new Map(); // "class\nname" -> CryptoKey
 // objectKey derives this object's egress key from the instance root key
-// (hostd gen.ObjectMACKey): hex(HMAC(root, "twd-egress-object-key-v1\n" +
+// (hostd gen.ObjectMACKey): hex(HMAC(root, "tw-egress-object-key-v1\n" +
 // class + "\n" + name)). hostd verifies a (class, name) MAC only under that
 // object's key.
 async function objectKey(env, cls, name) {
@@ -394,7 +394,7 @@ async function objectKey(env, cls, name) {
   let ck = objectKeys.get(k);
   if (!ck) {
     rootKey ??= await hmacKey(env.MAC_KEY);
-    const derived = hex(new Uint8Array(await crypto.subtle.sign("HMAC", rootKey, enc.encode("twd-egress-object-key-v1\n" + k))));
+    const derived = hex(new Uint8Array(await crypto.subtle.sign("HMAC", rootKey, enc.encode("tw-egress-object-key-v1\n" + k))));
     ck = await hmacKey(derived);
     objectKeys.set(k, ck);
   }
@@ -412,14 +412,14 @@ export class Egress extends WorkerEntrypoint {
   async fetch(request) {
     const { class: cls, name } = this.ctx.props;
     const h = new Headers(request.headers);
-    for (const k of [...h.keys()]) if (k.startsWith("x-twd") || k.startsWith("twd-") || k === "proxy-authorization") h.delete(k);
+    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
     const ts = String(Date.now());
     const nonce = crypto.randomUUID();
-    h.set("x-twd-class", cls);
-    h.set("x-twd-name", encodeURIComponent(name));
-    h.set("x-twd-ts", ts);
-    h.set("x-twd-nonce", nonce);
-    h.set("x-twd-mac", await mac(this.env, cls, name, [cls, name, request.method, request.url, ts, nonce].join("\n")));
+    h.set("x-tw-class", cls);
+    h.set("x-tw-name", encodeURIComponent(name));
+    h.set("x-tw-ts", ts);
+    h.set("x-tw-nonce", nonce);
+    h.set("x-tw-mac", await mac(this.env, cls, name, [cls, name, request.method, request.url, ts, nonce].join("\n")));
     // workerd's proxy-style external sends absolute-form without Host; Go's net/http rejects that.
     h.set("host", new URL(request.url).host);
     return this.env.NETD_EGRESS.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
@@ -431,7 +431,7 @@ export class Egress extends WorkerEntrypoint {
 export class WorkloadEgress extends WorkerEntrypoint {
   async fetch(request) {
     const h = new Headers(request.headers);
-    for (const k of [...h.keys()]) if (k.startsWith("x-twd") || k.startsWith("twd-") || k === "proxy-authorization") h.delete(k);
+    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
     h.set("host", new URL(request.url).host);
     return this.env.EGRESS_WL.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
   }
@@ -474,7 +474,7 @@ export class TailnetApi extends WorkerEntrypoint {
       return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
     }
   }
-  // exec: a streamed Response (stdio frames), headers x-twd-exec(-pid).
+  // exec: a streamed Response (stdio frames), headers x-tw-exec(-pid).
   async ctrExec(args = {}) {
     const as = containerAs(this.ctx.props ?? {}, args);
     if (!as) return errResponse("bad_request", "ctx.container is only for the calling object's own container");
@@ -490,7 +490,7 @@ export class TailnetApi extends WorkerEntrypoint {
     if (!as) return ctrErr("ctx.container is only for the calling object's own container");
     const r = await this.env.HOSTD.fetch("http://hostd/v1/container/stdin?exec=" + encodeURIComponent(String(args.exec ?? "")), {
       method: "POST",
-      headers: { "x-twd-as": JSON.stringify(as) },
+      headers: { "x-tw-as": JSON.stringify(as) },
       body,
     });
     return { ok: r.ok, status: r.status };
@@ -503,9 +503,9 @@ export class TailnetApi extends WorkerEntrypoint {
     if (!Number.isInteger(port) || port < 1 || port > 65535) return errResponse("bad_request", "bad port");
     const u = new URL(request.url);
     const h = new Headers(request.headers);
-    for (const k of [...h.keys()]) if (k.startsWith("x-twd") || k.startsWith("twd-")) h.delete(k);
-    h.set("x-twd-as", JSON.stringify(as));
-    h.set("x-twd-host", u.host);
+    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-")) h.delete(k);
+    h.set("x-tw-as", JSON.stringify(as));
+    h.set("x-tw-host", u.host);
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
     return this.env.HOSTD.fetch("http://hostd/v1/container/port/" + port + u.pathname + u.search, {
       method: request.method,
@@ -527,7 +527,7 @@ export class TailnetApi extends WorkerEntrypoint {
       if (!["set", "get", "delete"].includes(act)) return { ok: false, error: errBody("bad_request", "bad alarm action") };
       if (act === "set" && !Number.isFinite(args.time)) return { ok: false, error: errBody("bad_request", "bad alarm time") };
       try {
-        return { ok: true, value: await this.ctx.exports["Host_" + p.class].getByName(p.name).__twd_alarm_op(act, args.time) };
+        return { ok: true, value: await this.ctx.exports["Host_" + p.class].getByName(p.name).__tw_alarm_op(act, args.time) };
       } catch (e) {
         const m = String(e?.message ?? e);
         return { ok: false, error: errBody(m.includes("[killed]") ? "killed" : "bad_request", m) };
@@ -621,14 +621,14 @@ function slimEvent(e) {
     out.path = pathOf(ev.request.url);
     const tp = ev.request.headers?.traceparent;
     if (typeof tp === "string") out.traceparent = tp;
-    const t = ev.request.cf?.twd;
+    const t = ev.request.cf?.tw;
     if (t && typeof t === "object") {
       out.route = { kind: String(t.kind ?? ""), class: String(t.class ?? ""), name: String(t.name ?? "") };
       if (t.kind === "scheduled") out.event = "scheduled";
     }
     out.status = ev.response?.status ?? 0;
   } else if (typeof ev.rpcMethod === "string") {
-    out.event = ev.rpcMethod === "__twd_alarm" ? "alarm" : "rpc";
+    out.event = ev.rpcMethod === "__tw_alarm" ? "alarm" : "rpc";
     out.method = ev.rpcMethod;
   } else if (typeof ev.cron === "string") {
     out.event = "scheduled";
@@ -688,7 +688,7 @@ function engineOf(env, workflow) {
 }
 
 // dropApprover removes any "approver" an app put in an event payload (and
-// in payload.metadata, which waitForApproval returns): only twd sets it.
+// in payload.metadata, which waitForApproval returns): only tailworks sets it.
 function dropApprover(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
   const { approver: _a, ...rest } = payload;
@@ -701,7 +701,7 @@ function dropApprover(payload) {
 
 // WorkflowGate is the Workflow API tenant code reaches (props.workflow). It
 // forwards to the engine, except that an approval event (type "approval" or
-// "approval-*") can only come from twd, which checked the approver's grant
+// "approval-*") can only come from tailworks, which checked the approver's grant
 // (hostd), and no other event may carry an approver.
 export class WorkflowGate extends WorkerEntrypoint {
   get #e() {
@@ -744,15 +744,15 @@ export class WorkflowGate extends WorkerEntrypoint {
     const type = event?.type;
     if (isApprovalType(type)) {
       throw new Error(
-        "[approval_requires_identity] an approval is a decision by a tailnet identity: send it through twd (POST /_twd/approvals/" +
-          this.ctx.props.workflow + "/<instance> on this workload's node, twd approve, or the admin UI), not from app code",
+        "[approval_requires_identity] an approval is a decision by a tailnet identity: send it through tw (POST /_tw/approvals/" +
+          this.ctx.props.workflow + "/<instance> on this workload's node, tw approve, or the admin UI), not from app code",
       );
     }
     return this.#e.sendEvent(id, { type, payload: dropApprover(event?.payload) });
   }
 }
 
-// deliverApproval sends an approval hostd authorised and audited (cf.twd
+// deliverApproval sends an approval hostd authorised and audited (cf.tw
 // kind "approval": only hostd sets it) to the waiting instance.
 async function deliverApproval(env, t) {
   if (typeof t.workflow !== "string" || typeof t.instance !== "string" || !isApprovalType(t.type)) {
@@ -763,7 +763,7 @@ async function deliverApproval(env, t) {
   } catch (e) {
     const m = String(e?.message ?? e);
     if (m.includes("instance.not_found")) return errResponse("unknown_object", "no instance " + t.instance + " of Workflow " + t.workflow);
-    return json(502, errBody("bad_request", "approval delivery: " + m.slice(0, 512)), { "twd-error": "bad_request" });
+    return json(502, errBody("bad_request", "approval delivery: " + m.slice(0, 512)), { "tw-error": "bad_request" });
   }
   return json(200, { ok: true });
 }

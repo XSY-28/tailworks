@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rosskukulinski/twd/hostd/bundle"
-	"github.com/rosskukulinski/twd/hostd/hostdtest"
-	"github.com/rosskukulinski/twd/hostd/mgmtapi"
-	"github.com/rosskukulinski/twd/hostd/r2/r2test"
-	"github.com/rosskukulinski/twd/netd/nettest"
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/hostd/r2/r2test"
+	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
 // TestE2EVMR2 runs the R2 binding (ADR-036) on the microVM tier:
@@ -30,9 +30,9 @@ import (
 // worker and from a facet-mode object, and a 64 MiB body streamed in and
 // out.
 func TestE2EVMR2(t *testing.T) {
-	kernel, rootfs := os.Getenv("TWD_VM_KERNEL"), os.Getenv("TWD_VM_ROOTFS")
+	kernel, rootfs := os.Getenv("TW_VM_KERNEL"), os.Getenv("TW_VM_ROOTFS")
 	if kernel == "" || rootfs == "" {
-		t.Skip("TWD_VM_KERNEL and TWD_VM_ROOTFS must be set (make e2e-vm / e2e-vz)")
+		t.Skip("TW_VM_KERNEL and TW_VM_ROOTFS must be set (make e2e-vm / e2e-vz)")
 	}
 	be, _, err := newBackend(kernel, rootfs, 2, -1, false)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestE2EVMR2(t *testing.T) {
 	}
 	t.Cleanup(ctl.Close)
 	e := hostdtest.Start(t, hostdtest.Options{ControlURL: ctl.URL, Fake: fakeStatic(), Ephemeral: true, KillTombstone: 5 * time.Second,
-		VM: be, R2: fake.Backend("twd/"),
+		VM: be, R2: fake.Backend("tw/"),
 		Tenant: mgmtapi.Tenant{Tailnet: "ttest.ts.net", ControlURL: ctl.URL, MintMode: "static", Tier: bundle.TierMicroVM}})
 	ctx := context.Background()
 	client, err := nettest.NewNode(ctx, ctl.URL, nettest.DummyKey, "ttest-client", filepath.Join(e.Dir, "client"))
@@ -136,7 +136,7 @@ func TestE2EVMR2(t *testing.T) {
 		t.Fatalf("fake S3 refused %d signatures", fake.Denied.Load())
 	}
 	for _, n := range fake.Keys() {
-		if !strings.HasPrefix(n, "twd/t/"+e.TenantID+"/w/r2probe/b/main/") {
+		if !strings.HasPrefix(n, "tw/t/"+e.TenantID+"/w/r2probe/b/main/") {
 			t.Fatalf("blob %q outside the workload's bucket prefix", n)
 		}
 	}

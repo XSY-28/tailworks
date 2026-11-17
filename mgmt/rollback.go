@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rosskukulinski/twd/internal/container"
-	"github.com/rosskukulinski/twd/internal/oci"
-	"github.com/rosskukulinski/twd/internal/registry"
-	v1 "github.com/rosskukulinski/twd/mgmt/api/v1"
+	"github.com/rosskukulinski/tailworks/internal/container"
+	"github.com/rosskukulinski/tailworks/internal/oci"
+	"github.com/rosskukulinski/tailworks/internal/registry"
+	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 )
 
 // Rollback (ADR-deploy-rollback): redeploy the stored bundle of an earlier
@@ -83,7 +83,7 @@ func (m *Mgmt) rollbackTarget(ctx context.Context, r RollbackRequest) (Deploymen
 	m.fillRecord(ctx, hs, &cur, cur.ID)
 	keep := m.bundleRetention()
 	pruned := func(d DeploymentRecord) error {
-		return errf(409, "bundle_pruned", "the bundle of %s (%s) was pruned: mgmt keeps the bundles of the newest %d deployments of each workload; redeploy that version from source with twd deploy",
+		return errf(409, "bundle_pruned", "the bundle of %s (%s) was pruned: mgmt keeps the bundles of the newest %d deployments of each workload; redeploy that version from source with tw deploy",
 			d.ID, short(d.BundleSHA256), keep)
 	}
 
@@ -96,7 +96,7 @@ func (m *Mgmt) rollbackTarget(ctx context.Context, r RollbackRequest) (Deploymen
 		m.fillRecord(ctx, hs, &target, cur.ID)
 		switch {
 		case target.ID == cur.ID:
-			return none, Deployment{}, errf(409, "no_rollback_target", "%s is the current deployment of %s; name an earlier one (twd deployments %s)", target.ID, r.Workload, r.Workload)
+			return none, Deployment{}, errf(409, "no_rollback_target", "%s is the current deployment of %s; name an earlier one (tw deployments %s)", target.ID, r.Workload, r.Workload)
 		case target.BundlePruned:
 			return none, Deployment{}, pruned(target)
 		case !target.BundleRetained:
@@ -129,7 +129,7 @@ func (m *Mgmt) rollbackTarget(ctx context.Context, r RollbackRequest) (Deploymen
 			pg.After = &PageKey{Created: last.CreatedAt, ID: last.ID}
 		}
 		if !found {
-			return none, Deployment{}, errf(409, "no_rollback_target", "%s has no earlier deployment that ran with a different bundle; twd deployments %s lists its history", r.Workload, r.Workload)
+			return none, Deployment{}, errf(409, "no_rollback_target", "%s has no earlier deployment that ran with a different bundle; tw deployments %s lists its history", r.Workload, r.Workload)
 		}
 	}
 	d, err := m.store.GetDeployment(ctx, target.ID)
@@ -170,7 +170,7 @@ func (m *Mgmt) PreflightRollback(ctx context.Context, r RollbackRequest) (Prefli
 }
 
 // builtFromPinned turns the images a deployment pinned from the tenant's
-// own registry namespace (the ones twd deploy built and pushed) back into
+// own registry namespace (the ones tw deploy built and pushed) back into
 // ContainerImages, so a rollback runs the same image digests instead of
 // needing a rebuild. External images are pinned again at rollback.
 func builtFromPinned(tenantID string, cs []container.Class) map[string]BuiltImages {

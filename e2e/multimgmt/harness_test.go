@@ -1,7 +1,7 @@
 //go:build e2emultimgmt
 
-// Package multimgmt is the hermetic multi-replica twd-mgmt harness driven by
-// e2e/multimgmt/LOOP.md: N real twd-mgmt processes sharing one Postgres,
+// Package multimgmt is the hermetic multi-replica tw-mgmt harness driven by
+// e2e/multimgmt/LOOP.md: N real tw-mgmt processes sharing one Postgres,
 // a fake Tailscale API and a fake setec. Nothing here touches a real tailnet.
 package multimgmt
 
@@ -27,16 +27,16 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/rosskukulinski/twd/e2e/cliflow"
-	"github.com/rosskukulinski/twd/mgmt"
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
-const pgPassword = "twdmm"
+const pgPassword = "twmm"
 
-// pgContainer is the throwaway Postgres container's name. TWD_MM_PG_NAME
-// (with TWD_MM_PG_PORT) isolates concurrent runs from other worktrees,
+// pgContainer is the throwaway Postgres container's name. TW_MM_PG_NAME
+// (with TW_MM_PG_PORT) isolates concurrent runs from other worktrees,
 // which would otherwise remove each other's container mid-scenario.
-var pgContainer = env("TWD_MM_PG_NAME", "twd-mm-pg")
+var pgContainer = env("TW_MM_PG_NAME", "tw-mm-pg")
 
 func env(k, def string) string {
 	if v := os.Getenv(k); v != "" {
@@ -78,14 +78,14 @@ func (r *run) record(kind, name string, pid int) {
 
 // ---- Postgres (OrbStack docker) ----
 
-// startPG starts a fresh twd-mm-pg container (or uses TWD_MM_PG_DSN) and
+// startPG starts a fresh tw-mm-pg container (or uses TW_MM_PG_DSN) and
 // returns the DSN. The container is removed when the test ends.
 func startPG(t *testing.T, r *run) string {
 	t.Helper()
-	if dsn := os.Getenv("TWD_MM_PG_DSN"); dsn != "" {
+	if dsn := os.Getenv("TW_MM_PG_DSN"); dsn != "" {
 		return dsn
 	}
-	ctx, port := env("PG_CTX", "orbstack"), env("TWD_MM_PG_PORT", "55434")
+	ctx, port := env("PG_CTX", "orbstack"), env("TW_MM_PG_PORT", "55434")
 	docker := func(args ...string) ([]byte, error) {
 		return exec.Command("docker", append([]string{"--context", ctx}, args...)...).CombinedOutput()
 	}
@@ -125,7 +125,7 @@ func startPG(t *testing.T, r *run) string {
 // ---- fake Tailscale API ----
 
 // fakeTS is the subset of the Tailscale API that mgmt's mint broker and
-// device deletes use. It counts keys per object ("twd <objectID>").
+// device deletes use. It counts keys per object ("tw <objectID>").
 type fakeTS struct {
 	srv *httptest.Server
 	mu  sync.Mutex
@@ -169,9 +169,9 @@ const fakeAPIToken = "fake-api-token"
 // fakePolicy lets SupportAgent objects spawn LookupAgent children.
 const fakePolicy = `{
   "tagOwners": {
-    "tag:twd": ["autogroup:admin"],
-    "tag:twd-agent-support": ["tag:twd"],
-    "tag:twd-agent-support-sub": ["tag:twd", "tag:twd-agent-support"],
+    "tag:tw": ["autogroup:admin"],
+    "tag:tw-agent-support": ["tag:tw"],
+    "tag:tw-agent-support-sub": ["tag:tw", "tag:tw-agent-support"],
   },
 }`
 
@@ -215,8 +215,8 @@ func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body)
 		f.n++
 		id := fmt.Sprintf("k%06d", f.n)
-		obj := strings.TrimPrefix(body.Description, "twd ")
-		if strings.HasPrefix(body.Description, "twd pool ") {
+		obj := strings.TrimPrefix(body.Description, "tw ")
+		if strings.HasPrefix(body.Description, "tw pool ") {
 			obj = "pool:" + id // a warm key belongs to no object until one adopts it
 		}
 		cr := body.Capabilities.Devices.Create
@@ -306,12 +306,12 @@ func newFakeSetec(t *testing.T) *httptest.Server {
 	return srv
 }
 
-// ---- twd-mgmt replicas ----
+// ---- tw-mgmt replicas ----
 
-// warmArgs sets every replica's warm-key pool cap from TWD_MM_WARM_KEYS
-// ("0" turns it off; unset keeps twd-mgmt's default, 5).
+// warmArgs sets every replica's warm-key pool cap from TW_MM_WARM_KEYS
+// ("0" turns it off; unset keeps tw-mgmt's default, 5).
 func warmArgs() []string {
-	if n := os.Getenv("TWD_MM_WARM_KEYS"); n != "" {
+	if n := os.Getenv("TW_MM_WARM_KEYS"); n != "" {
 		return []string{"-warm-keys", n}
 	}
 	return nil
@@ -326,13 +326,13 @@ var buildOnce struct {
 func mgmtBinary(t *testing.T) string {
 	t.Helper()
 	buildOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "twd-mm-bin-")
+		dir, err := os.MkdirTemp("", "tw-mm-bin-")
 		if err != nil {
 			buildOnce.err = err
 			return
 		}
-		buildOnce.bin = filepath.Join(dir, "twd-mgmt")
-		out, err := exec.Command("go", "build", "-o", buildOnce.bin, "../../cmd/twd-mgmt").CombinedOutput()
+		buildOnce.bin = filepath.Join(dir, "tw-mgmt")
+		out, err := exec.Command("go", "build", "-o", buildOnce.bin, "../../cmd/tw-mgmt").CombinedOutput()
 		if err != nil {
 			buildOnce.err = fmt.Errorf("%v: %s", err, out)
 		}
@@ -354,7 +354,7 @@ type cluster struct {
 	replicas  []*replica
 	extraArgs []string
 	repMu     sync.Mutex       // guards replica process state (chaos runs start/stop concurrently with calls)
-	jsonc     string           // twd.jsonc for setupTenant ("" = twdJSONC)
+	jsonc     string           // tailworks.jsonc for setupTenant ("" = twJSONC)
 	env       map[int][]string // extra environment per replica
 	argsFor   map[int][]string // extra flags per replica (after extraArgs)
 	clients   map[int]*http.Client
@@ -387,7 +387,7 @@ func newCluster(t *testing.T, r *run, n int) *cluster {
 	}
 	for i := 0; i < n; i++ {
 		// unix socket paths are limited to ~104 bytes on macOS: keep them short.
-		sock := filepath.Join(os.TempDir(), fmt.Sprintf("twd-mm-%d-%d.sock", os.Getpid(), i))
+		sock := filepath.Join(os.TempDir(), fmt.Sprintf("tw-mm-%d-%d.sock", os.Getpid(), i))
 		u, _ := url.Parse(c.dsn)
 		c.replicas = append(c.replicas, &replica{i: i, dir: filepath.Join(r.dir, fmt.Sprintf("r%d", i)), sock: sock,
 			pg: newPGProxy(t, u.Host)})
@@ -423,7 +423,7 @@ func (c *cluster) start(i int) {
 	if err := cmd.Start(); err != nil {
 		c.t.Fatal(err)
 	}
-	c.r.record("twd-mgmt", fmt.Sprintf("r%d", i), cmd.Process.Pid)
+	c.r.record("tw-mgmt", fmt.Sprintf("r%d", i), cmd.Process.Pid)
 	c.repMu.Lock()
 	rp.cmd, rp.log, rp.exited = cmd, lf, make(chan struct{})
 	ch := rp.exited
@@ -504,7 +504,7 @@ func (c *cluster) call(i int, method, path string, body any) (int, []byte, error
 	return c.callAs(i, "", method, path, body)
 }
 
-// callAs does one API request on replica i, as host (Twd-Host-ID) when host
+// callAs does one API request on replica i, as host (Tw-Host-ID) when host
 // is not empty, and returns status and body.
 func (c *cluster) callAs(i int, host, method, path string, body any) (int, []byte, error) {
 	var rd io.Reader
@@ -512,10 +512,10 @@ func (c *cluster) callAs(i int, host, method, path string, body any) (int, []byt
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req, _ := http.NewRequest(method, "http://twd-mgmt"+path, rd)
-	req.Header.Set("Twd-Host-Token", c.token)
+	req, _ := http.NewRequest(method, "http://tw-mgmt"+path, rd)
+	req.Header.Set("Tw-Host-Token", c.token)
 	if host != "" {
-		req.Header.Set("Twd-Host-ID", host)
+		req.Header.Set("Tw-Host-ID", host)
 	}
 	if body != nil {
 		ct := "application/json"
@@ -585,9 +585,9 @@ func advisoryHolders(db *sql.DB) ([]string, error) {
 
 // ---- tenant / host / deployment setup ----
 
-const twdJSONC = `{ "tailnet": { "objects": {
-    "SupportAgent": { "tags": ["tag:twd-agent-support"], "agent": true },
-    "LookupAgent":  { "tags": ["tag:twd-agent-support-sub"], "agent": true },
+const twJSONC = `{ "tailnet": { "objects": {
+    "SupportAgent": { "tags": ["tag:tw-agent-support"], "agent": true },
+    "LookupAgent":  { "tags": ["tag:tw-agent-support-sub"], "agent": true },
   },
   "spawn": { "maxLive": 64, "maxDepth": 3 } } }`
 
@@ -646,11 +646,11 @@ func (c *cluster) setupTenant(i int, rpm int) setup {
 	var dep struct {
 		Epoch int64
 	}
-	jsonc := twdJSONC
+	jsonc := twJSONC
 	if c.jsonc != "" {
 		jsonc = c.jsonc
 	}
-	bundle := makeBundle(map[string]string{"twd.jsonc": jsonc, "dist/index.js": "export default {}"})
+	bundle := makeBundle(map[string]string{"tailworks.jsonc": jsonc, "dist/index.js": "export default {}"})
 	c.must(i, "", "POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "w", "bundle": bundle}, &dep)
 	return setup{tenantID: tn.TenantID, workload: "w", epoch: dep.Epoch}
 }
@@ -692,6 +692,6 @@ func objectStatuses(db *sql.DB) (map[string]string, error) {
 }
 
 // writeAPIKey writes the tenant's credential: an OAuth client file the
-// fake TS API exchanges for fakeAPIToken (twd mints only with OAuth
+// fake TS API exchanges for fakeAPIToken (tailworks mints only with OAuth
 // clients).
 func writeAPIKey(t testing.TB, path string) { cliflow.WriteFakeOAuthFile(t, path) }

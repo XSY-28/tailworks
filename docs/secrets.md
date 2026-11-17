@@ -1,10 +1,10 @@
 # Worker secrets
 
 `wrangler.jsonc` `vars` are plaintext and live in git. For API keys and
-other credentials, twd has **secrets**, which work like Cloudflare Worker
+other credentials, tailworks has **secrets**, which work like Cloudflare Worker
 secrets:
 
-- You set a secret with `twd secret put <NAME>`. The value is read from
+- You set a secret with `tw secret put <NAME>`. The value is read from
   stdin, never from the command line.
 - Your code reads it as `env.NAME`, a string, in the Worker and in every
   Durable Object class. For `"runtime": "node"` it is
@@ -15,12 +15,12 @@ The design and the threat model are in
 [ADR-034](design/adr/034-worker-secrets.md).
 
 ```sh
-cd my-agent                         # the app: the workload is its name, as for twd deploy
-twd secret put LLM_API_KEY          # hidden prompt on a terminal
-printf %s "$KEY" | twd secret put LLM_API_KEY   # or from a pipe (one trailing newline is dropped)
-twd secret ls                       # names, last update and who set them; never values
-twd secret rm LLM_API_KEY
-twd deploy                          # secrets take effect on the next deploy
+cd my-agent                         # the app: the workload is its name, as for tw deploy
+tw secret put LLM_API_KEY          # hidden prompt on a terminal
+printf %s "$KEY" | tw secret put LLM_API_KEY   # or from a pipe (one trailing newline is dropped)
+tw secret ls                       # names, last update and who set them; never values
+tw secret rm LLM_API_KEY
+tw deploy                          # secrets take effect on the next deploy
 ```
 
 ```ts
@@ -38,20 +38,20 @@ export default {
 
 | Command | What it does |
 |---|---|
-| `twd secret put <NAME>` | Creates or replaces a secret. It reads the value from stdin: a hidden prompt on a terminal, or everything piped in, less one trailing newline. A value given on the command line is refused and never echoed. |
-| `twd secret ls` | Lists the secret names with their last update time and actor. No command or API ever returns a value. |
-| `twd secret rm <NAME>` | Deletes a secret. |
+| `tw secret put <NAME>` | Creates or replaces a secret. It reads the value from stdin: a hidden prompt on a terminal, or everything piped in, less one trailing newline. A value given on the command line is refused and never echoed. |
+| `tw secret ls` | Lists the secret names with their last update time and actor. No command or API ever returns a value. |
+| `tw secret rm <NAME>` | Deletes a secret. |
 
 All three take these flags:
 
 - `--workload <w>`: defaults to the app in the current directory, named the
-  way `twd deploy` names it.
-- `--tenant <t>`: defaults to the `twd up` tenant.
+  way `tw deploy` names it.
+- `--tenant <t>`: defaults to the `tw up` tenant.
 - `--json`
 
-The commands work on the host and from a `twd link`ed laptop: both go to
+The commands work on the host and from a `tw link`ed laptop: both go to
 mgmt's `/v1` API, and over the tailnet they need the admin capability
-(`twd.dev/cap/admin`), like every other write.
+(`github.com/rosskukulinski/tailworks/cap/admin`), like every other write.
 
 The workload doesn't have to be deployed yet, so you can put its secrets
 before the first deploy. With `"replicas": N`, every replica gets the
@@ -59,8 +59,8 @@ workload's secrets. Each replica is released them under its own lease.
 
 **Names** are JS identifiers that are also environment variable names
 (`[A-Za-z_][A-Za-z0-9_]*`, up to 128 characters). Names starting with
-`TWD_` or `__TWD` are reserved. For `"runtime": "node"`, these are also
-refused because twd sets them: `PATH`, `HOME`, `TMPDIR`, `NODE_ENV`,
+`TW_` or `__TW` are reserved. For `"runtime": "node"`, these are also
+refused because tailworks sets them: `PATH`, `HOME`, `TMPDIR`, `NODE_ENV`,
 `PORT`, `HOST` and the proxy variables. A secret can't have the name of a
 Durable Object binding.
 
@@ -70,16 +70,16 @@ Durable Object binding.
 ## When changes take effect
 
 A running workload keeps the secrets it started with. A new or changed
-value reaches it on its **next deploy**: run `twd deploy` again, the same
-as for a changed var. A restart of twd-hostd also refetches secrets, since
+value reaches it on its **next deploy**: run `tw deploy` again, the same
+as for a changed var. A restart of tw-hostd also refetches secrets, since
 it redeploys from its assignments. A crash restart of the same instance
 (workerd or node exiting) reuses the same values.
 
-Secrets are not versioned with deployments. `twd rollback` redeploys an
+Secrets are not versioned with deployments. `tw rollback` redeploys an
 older bundle with the secrets the workload has **now**, so a secret you
 rotated stays rotated and a secret you deleted stays deleted.
 
-A preview (`twd deploy --preview`) runs with the workload's secrets, as a
+A preview (`tw deploy --preview`) runs with the workload's secrets, as a
 replica does: they are released to the host holding the preview's own
 lease, and the release is audited with `previewOf`. Set them on the
 workload, not on `<workload>--preview-<alias>`. A preview runs code that
@@ -89,7 +89,7 @@ secrets.
 
 ## Local development: `.dev.vars`
 
-`twd dev` reads `.dev.vars` from the app directory, if there is one, the
+`tw dev` reads `.dev.vars` from the app directory, if there is one, the
 same way `wrangler dev` does. It's a dotenv file:
 
 ```sh
@@ -100,7 +100,7 @@ GREETING="multi\nline"
 
 Every entry becomes a secret of the dev workload, so it overrides a var of
 the same name. It reaches your code through the same path as
-`twd secret put` in production. If you edit the file, the app reloads.
+`tw secret put` in production. If you edit the file, the app reloads.
 
 The format:
 
@@ -115,7 +115,7 @@ The templates' `.gitignore` lists `.dev.vars`.
 ## Where values live
 
 - **At rest:** mgmt's custody, one sealed entry per workload
-  (`twd/<tenant>/workloads/<workload>/secrets`). The homelab file custody
+  (`tw/<tenant>/workloads/<workload>/secrets`). The homelab file custody
   is AES-256-GCM with the entry name bound as additional data; setec
   custody keeps its own encryption. mgmt's database never holds a value.
 - **In flight:** a value leaves mgmt only in a secret grant
@@ -125,7 +125,7 @@ The templates' `.gitignore` lists `.dev.vars`.
   carries `Cache-Control: no-store`.
 - **On the host:** the values go into the instance directory only, which
   is `0700` and is deleted when the instance stops:
-  - workerd: text bindings in `config.capnp`, plus `twd-config.json`,
+  - workerd: text bindings in `config.capnp`, plus `tw-config.json`,
     where facet Durable Objects get their `env`;
   - runtime `node`: a `0600` file there, which a `--require` preload
     copies into `process.env` at start-up and then deletes (every start

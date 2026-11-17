@@ -14,7 +14,7 @@ import (
 // even when the parent is process-tier; otherwise 503 no_host, or 409
 // tier_unavailable for a pinned host or a sticky lease holder.
 func TestContainerPlacement(t *testing.T) {
-	const tags = `"tailnet": { "tags": ["tag:twd-web"] }`
+	const tags = `"tailnet": { "tags": ["tag:tw-web"] }`
 	wrangler := func(arch string) string {
 		a := ""
 		if arch != "" {
@@ -37,23 +37,23 @@ func TestContainerPlacement(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		hosts    []host
-		twd      string
+		tw       string
 		wrangler string
 		pin      string
 		want     string
 		wantErr  string
 		mention  string
 	}{
-		{name: "no containers: by capacity", hosts: []host{proc, ctrArm}, twd: `{` + tags + `}`, want: "hp"},
-		{name: "process-tier parent still needs containers", hosts: []host{proc, vm, ctrArm, ctrAmd}, twd: `{` + tags + `}`, wrangler: wrangler(""), want: "ha"},
-		{name: "amd64 images", hosts: []host{proc, ctrArm, ctrAmd}, twd: `{` + tags + `}`, wrangler: wrangler("amd64"), want: "hx"},
-		{name: "arm64 via twd.jsonc", hosts: []host{proc, ctrArm, ctrAmd}, twd: `{"containers": [{"class": "Sandbox", "arch": "arm64"}], ` + tags + `}`, wrangler: wrangler("amd64"), want: "ha"},
-		{name: "microvm parent with containers", hosts: []host{vm, ctrAmd}, twd: `{"tier": "microvm", ` + tags + `}`, wrangler: wrangler(""), want: "hx"},
-		{name: "no containers host", hosts: []host{proc, vm}, twd: `{` + tags + `}`, wrangler: wrangler(""), wantErr: "no_host", mention: "containers"},
-		{name: "no host for the arch", hosts: []host{proc, ctrArm}, twd: `{` + tags + `}`, wrangler: wrangler("amd64"), wantErr: "no_host", mention: "amd64"},
-		{name: "pinned to a host without containers", hosts: []host{vm, ctrAmd}, twd: `{` + tags + `}`, wrangler: wrangler(""), pin: "hv", wantErr: "tier_unavailable"},
-		{name: "pinned to the containers host", hosts: []host{vm, ctrAmd}, twd: `{` + tags + `}`, wrangler: wrangler(""), pin: "hx", want: "hx"},
-		{name: "mixed arches", hosts: []host{ctrArm, ctrAmd}, twd: `{"containers": [{"class": "Other", "image": "x", "arch": "arm64"}], ` + tags + `}`, wrangler: wrangler("amd64"), wantErr: "bad_bundle"},
+		{name: "no containers: by capacity", hosts: []host{proc, ctrArm}, tw: `{` + tags + `}`, want: "hp"},
+		{name: "process-tier parent still needs containers", hosts: []host{proc, vm, ctrArm, ctrAmd}, tw: `{` + tags + `}`, wrangler: wrangler(""), want: "ha"},
+		{name: "amd64 images", hosts: []host{proc, ctrArm, ctrAmd}, tw: `{` + tags + `}`, wrangler: wrangler("amd64"), want: "hx"},
+		{name: "arm64 via tailworks.jsonc", hosts: []host{proc, ctrArm, ctrAmd}, tw: `{"containers": [{"class": "Sandbox", "arch": "arm64"}], ` + tags + `}`, wrangler: wrangler("amd64"), want: "ha"},
+		{name: "microvm parent with containers", hosts: []host{vm, ctrAmd}, tw: `{"tier": "microvm", ` + tags + `}`, wrangler: wrangler(""), want: "hx"},
+		{name: "no containers host", hosts: []host{proc, vm}, tw: `{` + tags + `}`, wrangler: wrangler(""), wantErr: "no_host", mention: "containers"},
+		{name: "no host for the arch", hosts: []host{proc, ctrArm}, tw: `{` + tags + `}`, wrangler: wrangler("amd64"), wantErr: "no_host", mention: "amd64"},
+		{name: "pinned to a host without containers", hosts: []host{vm, ctrAmd}, tw: `{` + tags + `}`, wrangler: wrangler(""), pin: "hv", wantErr: "tier_unavailable"},
+		{name: "pinned to the containers host", hosts: []host{vm, ctrAmd}, tw: `{` + tags + `}`, wrangler: wrangler(""), pin: "hx", want: "hx"},
+		{name: "mixed arches", hosts: []host{ctrArm, ctrAmd}, tw: `{"containers": [{"class": "Other", "image": "x", "arch": "arm64"}], ` + tags + `}`, wrangler: wrangler("amd64"), wantErr: "bad_bundle"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, tn := tierTestMgmt(t)
@@ -63,7 +63,7 @@ func TestContainerPlacement(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			files := map[string]string{"twd.jsonc": tc.twd, "index.js": "export default {}"}
+			files := map[string]string{"tailworks.jsonc": tc.tw, "index.js": "export default {}"}
 			if tc.wrangler != "" {
 				files["wrangler.jsonc"] = tc.wrangler
 			}
@@ -92,7 +92,7 @@ func TestContainerPlacementStickyHolder(t *testing.T) {
 	ctx := context.Background()
 	m.RegisterHost(ctx, RegisterRequest{HostID: "hp", CapacityNodes: 1000, Tiers: []string{"process"}, Arch: "amd64"}, "", "")
 	m.RegisterHost(ctx, RegisterRequest{HostID: "hx", CapacityNodes: 10, Tiers: []string{"process", "microvm", "containers"}, Arch: "amd64"}, "", "")
-	files := map[string]string{"twd.jsonc": `{ "tailnet": { "tags": ["tag:twd-web"] } }`, "index.js": "export default {}"}
+	files := map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"] } }`, "index.js": "export default {}"}
 	if dep, err := m.Deploy(ctx, DeployRequest{TenantID: tn.ID, Workload: "w", Bundle: makeBundle(t, files)}); err != nil || dep.Host != "hp" {
 		t.Fatalf("first deploy: %+v %v", dep, err)
 	}
@@ -139,7 +139,7 @@ func TestV1ContainerReservations(t *testing.T) {
 	capVec := map[string]any{"nodes": 0, "vms": 8, "vmMemMiB": 8192, "hugeMemMiB": 4096, "vcpus": 4, "vcpuOvercommit": 2, "scratchMiB": 100000}
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process", "microvm", "containers"}, "arch": "amd64", "capacity": capVec}, nil)
 	h2.ok("PUT", "/v1/hosts/h2", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}, "arch": "arm64"}, nil)
-	bundle := makeBundle(t, map[string]string{"twd.jsonc": `{ "tailnet": { "tags": ["tag:twd-web"] } }`, "index.js": "export default {}",
+	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"] } }`, "index.js": "export default {}",
 		"wrangler.jsonc": `{ "name": "w", "main": "index.js", "containers": [{ "class_name": "Sandbox", "image": "./Dockerfile", "max_instances": 2 }],
 			"durable_objects": { "bindings": [{ "name": "SANDBOX", "class_name": "Sandbox" }] } }`})
 	var dep DeployResponse

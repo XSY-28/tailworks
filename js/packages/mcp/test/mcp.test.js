@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { withTailnet, caller, authorizeTool, budget } from "../dist/index.js";
-import { getCaller } from "@twd/tailnet";
+import { getCaller } from "@tailworks/tailnet";
 
 const CAP = "acme.com/cap/mcp";
 const mkReq = (caps) => {
@@ -46,7 +46,7 @@ test("withTailnet exposes caller() per request and rejects unverified requests",
   assert.equal(await (await h.fetch(mkReq([]), {}, {})).text(), "nA");
   const bad = await h.fetch(new Request("http://x/mcp"), {}, {});
   assert.equal(bad.status, 401);
-  assert.equal(bad.headers.get("twd-error"), "no_identity");
+  assert.equal(bad.headers.get("tw-error"), "no_identity");
   assert.equal((await h.fetch(new Request("http://x/other"), {}, {})).status, 404);
   assert.throws(() => caller(), (e) => e.code === "no_identity");
 });
@@ -70,7 +70,7 @@ test("budget reserves against the perDay limit from authorizeTool", async () => 
 
 test("mcpFetch routes via ctx.tailnet.fetch with traceparent; typed errors pass through", async () => {
   const { mcpFetch } = await import("../dist/index.js");
-  const { TailnetError } = await import("@twd/tailnet");
+  const { TailnetError } = await import("@tailworks/tailnet");
   const seen = [];
   const ctx = { tailnet: { async fetch(url, init) { seen.push({ url, init }); if (url.includes("denied")) throw new TailnetError("peer_not_visible", "nope"); return new Response("{}"); } } };
   const f = mcpFetch(ctx, { traceId: "0123456789abcdef0123456789abcdef", headers: { "x-a": "1" } });

@@ -38,7 +38,7 @@ func CheckHost(hostV, mgmtV string) error {
 	}
 	h, err := parseOrLegacy(hostV)
 	if err != nil {
-		return &SkewError{"hostd", hostV, "twd-mgmt", mgmtV, err.Error()}
+		return &SkewError{"hostd", hostV, "tw-mgmt", mgmtV, err.Error()}
 	}
 	m, err := Parse(mgmtV)
 	if err != nil {
@@ -46,10 +46,10 @@ func CheckHost(hostV, mgmtV string) error {
 	}
 	switch d := h.LinesBehind(m); {
 	case d < 0:
-		return &SkewError{"hostd", h.String(), "twd-mgmt", m.String(),
-			fmt.Sprintf("the host is newer than mgmt; upgrade twd-mgmt to %s first (hosts upgrade after mgmt)", h.LineName())}
+		return &SkewError{"hostd", h.String(), "tw-mgmt", m.String(),
+			fmt.Sprintf("the host is newer than mgmt; upgrade tw-mgmt to %s first (hosts upgrade after mgmt)", h.LineName())}
 	case d > 1:
-		return &SkewError{"hostd", h.String(), "twd-mgmt", m.String(),
+		return &SkewError{"hostd", h.String(), "tw-mgmt", m.String(),
 			fmt.Sprintf("the host is more than one release line behind (mgmt %s supports hosts on %s and %s); upgrade the host", m.LineName(), prevLine(m), m.LineName())}
 	}
 	return nil
@@ -70,7 +70,7 @@ func CheckReplica(otherV, selfV string) error {
 		return nil
 	}
 	if d := o.LinesBehind(s); d > 1 || d < -1 {
-		return &SkewError{"twd-mgmt", o.String(), "twd-mgmt", s.String(), "replicas more than one release line apart may not run together; finish the previous upgrade first"}
+		return &SkewError{"tw-mgmt", o.String(), "tw-mgmt", s.String(), "replicas more than one release line apart may not run together; finish the previous upgrade first"}
 	}
 	return nil
 }
@@ -89,9 +89,9 @@ func CLIAdvice(cliV, mgmtV string) (msg string, tooOld bool) {
 	}
 	switch d := c.LinesBehind(m); {
 	case d > 1:
-		return fmt.Sprintf("twd %s is too old for twd-mgmt %s (it supports CLIs from %s on); run `twd upgrade` or install twd %s", c, m, prevLine(m), m.LineName()), true
+		return fmt.Sprintf("tw %s is too old for tw-mgmt %s (it supports CLIs from %s on); run `tw upgrade` or install tw %s", c, m, prevLine(m), m.LineName()), true
 	case d < 0:
-		return fmt.Sprintf("twd %s is newer than twd-mgmt %s: commands that need newer mgmt features will fail until mgmt is upgraded", c, m), false
+		return fmt.Sprintf("tw %s is newer than tw-mgmt %s: commands that need newer mgmt features will fail until mgmt is upgraded", c, m), false
 	}
 	return "", false
 }

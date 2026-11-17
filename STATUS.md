@@ -1,5 +1,7 @@
 # twd STATUS (living log)
 
+> The project was renamed twd → tailworks (issue #86). This file is frozen history and keeps the old names.
+
 `BUILD-PLAN.md` and `MORNING.md` referenced below were removed before publication (see commit 84b4246); their safety rules are summarised in security/THREAT-MODEL.md.
 
 Last update: 2026-11-07 23:55 PT. M0 and M1 by the first run; M2 (`twd-mgmt`) on branch `m2-mgmt`.

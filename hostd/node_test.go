@@ -29,8 +29,8 @@ func TestSignCallerFormat(t *testing.T) {
 }
 
 func TestParseProxyAuth(t *testing.T) {
-	ok := "Basic " + base64.StdEncoding.EncodeToString([]byte("twd:tok:en"))
-	if u, p, good := parseProxyAuth(ok); !good || u != "twd" || p != "tok:en" {
+	ok := "Basic " + base64.StdEncoding.EncodeToString([]byte("tw:tok:en"))
+	if u, p, good := parseProxyAuth(ok); !good || u != "tw" || p != "tok:en" {
 		t.Fatal(u, p, good)
 	}
 	for _, v := range []string{"", "Bearer x", "Basic !!!", "Basic " + base64.StdEncoding.EncodeToString([]byte("nocolon"))} {

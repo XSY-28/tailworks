@@ -30,7 +30,7 @@ const (
 )
 
 // Record is one line of a workload's request log (JSON Lines) and the
-// unit `twd logs` shows. Bodies, query strings and request headers are
+// unit `tw logs` shows. Bodies, query strings and request headers are
 // never in it.
 type Record struct {
 	Time       time.Time `json:"time"`
@@ -39,7 +39,7 @@ type Record struct {
 	Tenant     string    `json:"tenant,omitempty"`
 	Workload   string    `json:"workload,omitempty"`
 	Deployment string    `json:"deployment,omitempty"`
-	// Object is the twd object ID (o-…); Class/Name the DO it is (empty
+	// Object is the tailworks object ID (o-…); Class/Name the DO it is (empty
 	// for the workload's own node). DurableObjectID is workerd's ID for an
 	// internal invocation of a plain-DO class whose name the tail does not
 	// carry.
@@ -73,7 +73,7 @@ type Caller struct {
 	NodeID string   `json:"nodeId,omitempty"`
 	User   string   `json:"user,omitempty"`
 	Tags   []string `json:"tags,omitempty"`
-	Object string   `json:"object,omitempty"` // the calling twd object (node certificate)
+	Object string   `json:"object,omitempty"` // the calling tw object (node certificate)
 	Public bool     `json:"public,omitempty"`
 	IP     string   `json:"ip,omitempty"` // public requests: the client IP Funnel reports
 }
@@ -167,7 +167,7 @@ func (r *Record) IsError() bool {
 	return r.Status >= 400 || (r.Outcome != "" && r.Outcome != "ok") || len(r.Exceptions) > 0
 }
 
-// Filter selects records (`twd logs` flags; hostd applies it).
+// Filter selects records (`tw logs` flags; hostd applies it).
 type Filter struct {
 	Object  string // object ID, Class/name, Class or name
 	Status  string // "404", "4xx", "5xx"
@@ -269,7 +269,7 @@ func (r *Record) Summary() string {
 	var b strings.Builder
 	switch r.Kind {
 	case KindDropped:
-		return fmt.Sprintf("twd: %d log records dropped (rate limit for this workload)", r.Dropped)
+		return fmt.Sprintf("tw: %d log records dropped (rate limit for this workload)", r.Dropped)
 	case KindInvocation:
 		ev := r.Event
 		if ev == "" {
@@ -354,9 +354,9 @@ func fmtDur(ms float64) string {
 // Attrs are r's OpenTelemetry attributes (shared by its log records).
 func (r *Record) Attrs() []Attr {
 	a := []Attr{
-		A("twd.workload", r.Workload), A("twd.deployment.id", r.Deployment), A("twd.object.id", r.Object),
-		A("twd.object.class", r.Class), A("twd.object.name", r.Name), A("twd.invocation.outcome", r.Outcome),
-		A("twd.invocation.event", r.Event), A("twd.audit.trace_id", r.AuditTraceID),
+		A("tw.workload", r.Workload), A("tw.deployment.id", r.Deployment), A("tw.object.id", r.Object),
+		A("tw.object.class", r.Class), A("tw.object.name", r.Name), A("tw.invocation.outcome", r.Outcome),
+		A("tw.invocation.event", r.Event), A("tw.audit.trace_id", r.AuditTraceID),
 	}
 	if r.Method != "" {
 		a = append(a, A("http.request.method", r.Method), A("url.path", r.Path))
@@ -365,19 +365,19 @@ func (r *Record) Attrs() []Attr {
 		a = append(a, A("http.response.status_code", int64(r.Status)))
 	}
 	if r.Caller != nil {
-		a = append(a, A("twd.caller.node", r.Caller.Node), A("twd.caller.user", r.Caller.User), A("twd.caller.object", r.Caller.Object))
+		a = append(a, A("tw.caller.node", r.Caller.Node), A("tw.caller.user", r.Caller.User), A("tw.caller.object", r.Caller.Object))
 		if len(r.Caller.Tags) > 0 {
-			a = append(a, A("twd.caller.tags", r.Caller.Tags))
+			a = append(a, A("tw.caller.tags", r.Caller.Tags))
 		}
 		if r.Caller.Public {
-			a = append(a, A("twd.caller.public", true))
+			a = append(a, A("tw.caller.public", true))
 		}
 	}
 	return a
 }
 
 // LogRecords converts r for OTLP: one record for the request itself
-// (event.name twd.request / twd.invocation), one per console line and one
+// (event.name tw.request / tw.invocation), one per console line and one
 // per exception, all with r's trace and span.
 func (r *Record) LogRecords() []LogRecord {
 	attrs := r.Attrs()
@@ -387,9 +387,9 @@ func (r *Record) LogRecords() []LogRecord {
 		sev, st = SevError, "ERROR"
 	}
 	body := r.Summary()
-	ev := "twd." + r.Kind
+	ev := "tw." + r.Kind
 	out = append(out, LogRecord{Time: r.Time, Severity: sev, SeverityText: st, Body: body,
-		Attrs: append(attrs[:len(attrs):len(attrs)], A("event.name", ev), A("twd.duration_ms", r.DurationMs)), TraceID: r.TraceID, SpanID: r.SpanID})
+		Attrs: append(attrs[:len(attrs):len(attrs)], A("event.name", ev), A("tw.duration_ms", r.DurationMs)), TraceID: r.TraceID, SpanID: r.SpanID})
 	for _, l := range r.Logs {
 		s, t := SeverityOf(l.Level)
 		out = append(out, LogRecord{Time: l.Time, Severity: s, SeverityText: t, Body: l.Message,
