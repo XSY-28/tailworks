@@ -38,11 +38,6 @@ interface State {
   why?: "released" | "expired"; // how the last holder lost it
 }
 
-interface Env {
-  DEFAULT_TTL_MS?: string;
-  MAX_TTL_MS?: string;
-}
-
 const FREE: State = { holder: null, token: 0, expiresAt: 0, since: 0, lastToken: 0 };
 
 function reply(status: number, body: Record<string, unknown>, headers: Record<string, string> = {}): Response {

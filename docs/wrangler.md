@@ -204,13 +204,22 @@ secret names.
 
 Every `tw init` template ships the file along with a `tsconfig.json`
 (`@cloudflare/workers-types` plus `@tailworks/tailnet`, which declares
-`ctx.tailnet`), so `npm install && npx tsc --noEmit` passes. Run
+`ctx.tailnet`), so `npm install && npx tsc --noEmit` passes. The templates
+use that global `Env` and don't declare their own: in an ES module a local
+`interface Env` would hide the generated one. Run
 `tw types` again after you change the config. In CI, run
 `tw types --check`: it writes nothing and fails with
 [`types_stale`](errors.md#types_stale) if the file is missing or out of date.
 `.dev.vars` isn't committed, so for `--check` to see the same secrets on
 every machine, list their names in `.dev.vars.example` or
 `secrets.required`.
+
+`npm install` fetches `@tailworks/tailnet` (and `@tailworks/mcp`,
+`@tailworks/node`) from npm, where each tailworks release publishes them at
+its version. Until the first release that publishes them, `npm install`
+fails with `404 Not Found` for `@tailworks/…`. `tw dev` and `tw deploy`
+don't need it: for workerd apps, tailworks resolves those imports from the
+copies in its own install.
 
 ## `wrangler dev` and Miniflare
 
