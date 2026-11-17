@@ -104,6 +104,10 @@ type Server struct {
 	Listeners []string
 	// Version is reported by GET /v1/status.
 	Version string
+
+	// Hosts are the Host header values TailnetHandler admits (the
+	// DNS-rebinding guard, hostguard.go); nil admits any.
+	Hosts *HostAllowlist
 }
 
 // SelfInfo is mgmt's own identity, reported to callers so `tw link` can
@@ -397,7 +401,8 @@ type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIsInfo, error)
 // never affected. For a browser-originated request that is not GET, HEAD
 // or OPTIONS:
 //   - Sec-Fetch-Site, if present, must be same-origin or none;
-//   - Origin, if present, must name the request's own Host;
+//   - Origin, if present, must name the request's own Host, and that
+//     host must be one of mgmt's own names (hosts; hostguard.go);
 //   - a /v1 mutation must carry X-Tw-UI: 1 (the custom header forces a
 //     CORS preflight, which mgmt never answers, so cross-origin JavaScript
 //     cannot reach the handler at all). The admin UI itself no longer
@@ -406,7 +411,7 @@ type WhoIsFunc func(ctx context.Context, remoteAddr string) (WhoIsInfo, error)
 //
 // Refusals are 403 forbidden "cross-site request refused": the spec's
 // ErrorCode enum is closed, so no cross_site_request code is minted.
-func browserGuard(h http.Handler) http.Handler {
+func browserGuard(hosts *HostAllowlist, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
@@ -427,7 +432,7 @@ func browserGuard(h http.Handler) http.Handler {
 		}
 		if origin != "" {
 			u, err := url.Parse(origin)
-			if err != nil || origin == "null" || u.Host == "" || !strings.EqualFold(u.Host, r.Host) {
+			if err != nil || origin == "null" || u.Host == "" || !strings.EqualFold(u.Host, r.Host) || !hosts.Allowed(u.Host) {
 				refuse("Origin " + origin + " is not this host (" + r.Host + ")")
 				return
 			}
@@ -452,6 +457,9 @@ func browserGuard(h http.Handler) http.Handler {
 //   - everyone else is refused with 403 not_admin and the grant to add.
 func (s *Server) TailnetHandler(whois WhoIsFunc, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.Hosts.guard(w, r) { // DNS rebinding (hostguard.go)
+			return
+		}
 		wi, err := whois(r.Context(), r.RemoteAddr)
 		if err != nil {
 			writeErr(w, r, errf(401, "no_identity", "WhoIs failed for %s", r.RemoteAddr))
