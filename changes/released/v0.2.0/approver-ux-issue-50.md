@@ -7,11 +7,11 @@ Approvers no longer need a tenant ID, and they hear about waiting approvals
 
 - `GET /v1/whoami` now returns `tailnet` (the caller's own), `tenants` (the
   tenants on that tailnet; every tenant for the local operator) and
-  `approveGrants` (the caller's `twd.dev/cap/approve` grants). The admin
-  UI's approvals page and `twd approvals` / `twd approve` from a linked
+  `approveGrants` (the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants). The admin
+  UI's approvals page and `tw approvals` / `tw approve` from a linked
   machine default to those tenants; the page hides the tenant box when
   there is exactly one.
-- `twd notify set --webhook -` sets a tenant webhook (stored in custody;
+- `tw notify set --webhook -` sets a tenant webhook (stored in custody;
   only its origin is ever shown). When a Workflow starts waiting for an
   approval, mgmt POSTs a JSON `approval_requested` event with a deep link
   to the request's row (`/ui/approvals?tenant=…#<instance>`); Slack-style
@@ -28,7 +28,7 @@ Approvers no longer need a tenant ID, and they hear about waiting approvals
 - Browsers on public (Funnel) routes get a minimal HTML error page (status,
   code, docs link, nothing about the request) instead of JSON when they ask
   for `text/html`. JSON stays the default.
-- `twd dev` serves a read-only data console on `127.0.0.1` (press `e`, or
+- `tw dev` serves a read-only data console on `127.0.0.1` (press `e`, or
   open the printed `console on …` URL): Workers KV namespaces, keys and
   values, and D1 tables and rows of the run. `--console-port <port>` picks
   the port (default: a free one); `--console-port -1` turns it off. With

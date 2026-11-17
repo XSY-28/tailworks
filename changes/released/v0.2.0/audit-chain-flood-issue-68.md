@@ -11,7 +11,7 @@ record: host records spill to `<data-dir>/audit-spill.jsonl` once 10 000
 wait in memory, and are flushed in order, in batches. Records that may be
 shed are refused before they are chained and counted in a new in-chain
 `audit_dropped` record, so the chain still verifies and the gap shows in
-`twd audit`. Those records are tenant notes over a per-object rate (10/s,
+`tw audit`. Those records are tenant notes over a per-object rate (10/s,
 burst 200) or sent while the queue is backed up, and `public_request`
 records once the spill reaches 256 MiB. Public `404 not_public` and
 `400 bad_request` refusals are no longer one `public_request` record each.
