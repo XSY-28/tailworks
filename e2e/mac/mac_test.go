@@ -1,6 +1,6 @@
 //go:build e2emac
 
-// E2E-MAC (BUILD-PLAN definition of done 1) on this machine against
+// E2E-MAC (the macOS end-to-end acceptance test) on this machine against
 // tailnet 1, driven only through the tailworks CLI: tw up (apikey mode, temp
 // --state-dir) → deploy the agent and mcp templates → a tag:ttest tsnet
 // client + a private tag:ttest echo service check (a)–(f) → tw down →
