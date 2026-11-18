@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,7 +77,18 @@ func doctorSandbox(s *state) (string, string, string) {
 	if err := exec.CommandContext(ctx, "/usr/bin/sandbox-exec", "-f", prof, "/bin/cat", canary).Run(); err == nil {
 		return "fail", "Seatbelt did not enforce a deny rule on " + osv + " (a denied file was readable)", "report this; tenants are not confined on this machine"
 	}
-	detail := "Seatbelt works on " + osv + ": workerd starts under a tailworks profile with the home dir denied, and denied files are unreadable"
+	// Writes outside the workload's dirs and signals to other processes
+	// (tw-hostd, tw-mgmt) are refused too.
+	outside := filepath.Join(tmp, "outside")
+	for what, args := range map[string][]string{
+		"a write outside the workload's dirs succeeded": {"/bin/sh", "-c", "echo x > " + outside},
+		"a signal to another process was delivered":     {"/bin/kill", "-0", strconv.Itoa(os.Getpid())},
+	} {
+		if err := exec.CommandContext(ctx, "/usr/bin/sandbox-exec", append([]string{"-f", prof}, args...)...).Run(); err == nil {
+			return "fail", "Seatbelt did not enforce a deny rule on " + osv + " (" + what + ")", "report this; tenants are not confined on this machine"
+		}
+	}
+	detail := "Seatbelt works on " + osv + ": workerd starts under a tailworks profile with the home dir denied; denied files are unreadable, and writes outside the workload's dirs, signals to other processes and network other than its own sockets and ports are refused"
 	return doctorSandboxActive(s, hostd.SandboxSeatbelt, detail, "")
 }
 
