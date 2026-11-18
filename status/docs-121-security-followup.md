@@ -46,4 +46,6 @@ at master adae38b. Docs only; no code change.
 ## Tests
 
 - `make lint`: PASS.
-- `make test`: see the PR body for the result.
+- `make test` (Go `-race` suites and JS): PASS, first run, no flaky reruns.
+- `make changes-check`: ok (no upgrade-relevant paths; docs only, no fragment).
+- Not run: `make test-node`, `e2e-mac` (no code change; #171 ran them).
