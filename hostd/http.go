@@ -84,6 +84,7 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 		trace := newTraceID()
 		blob["tw"] = route
 		blob["traceId"] = trace
+		// limits.md#redeploy-wait
 		ctx, cancel := context.WithTimeout(r.Context(), h.cfg.DrainTimeout+5*time.Second)
 		inst, release := wl.acquire(ctx)
 		cancel()
@@ -419,6 +420,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				return
 			}
 			to := time.Duration(req.TimeoutMS) * time.Millisecond
+			// limits.md#ready-wait-max
 			if to <= 0 || to > 5*time.Minute {
 				to = h.cfg.ReadyTimeout
 			}
