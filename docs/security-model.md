@@ -54,27 +54,29 @@ it.
 
 | | macOS (Seatbelt) | Linux, Landlock ABI ≥ 4 (kernel 6.7+) | Linux, Landlock ABI 1–3 |
 |---|---|---|---|
-| Profile shape | `(allow default)` plus a deny list (`seatbeltProfile` in `hostd/seatbelt.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
+| Profile shape | `(allow default)` (Mach services, sysctls) with writes, network, signals and exec denied, then allowed back for what the workload needs, plus a read deny list (`seatbeltProfile` in `hostd/seatbelt_strict.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
 | Reads | denied under your home dir, tailworks' state and run dirs, hostd's data and run dirs, and every tenant's credential files; **everything else is readable** (`/etc`, `/tmp`, …) | only the OS dirs (`/usr`, `/lib`, `/bin`, `/etc`, `/opt`, …), the runtime binary (and a Node install prefix), a few global `/proc` and `/sys` files, the process's own `/proc` entries and its own dirs | same as ABI ≥ 4 |
-| Writes | denied under the same paths; **allowed everywhere else** the user can write (`/tmp`, for example) | own dirs only | own dirs only (ABI 1 also refuses renames and links across directories) |
-| Unix sockets | connects denied under the same paths; others (for example the system tailscaled socket) are reachable | none: seccomp refuses `socket(AF_UNIX)` (except a Node app in `listen: "unix"` mode) | same as ABI ≥ 4 |
-| TCP | **unrestricted**: any address, including loopback, the LAN and the internet | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); bind only its own port. Landlock matches port numbers, not addresses | **unrestricted** (Landlock has no TCP rules before ABI 4) |
-| Other sockets | unrestricted (UDP and so on) | TCP only for IPv4/IPv6 (no UDP, ICMP, raw or MPTCP); netlink route only | same as ABI ≥ 4 |
-| Signals | **any process of the same user**, including tw-hostd and tw-mgmt | only itself and its own process group | same as ABI ≥ 4 |
-| Other syscalls | not filtered | seccomp refuses ptrace, `process_vm_readv/writev`, mount, bpf, perf, keyrings, new namespaces, kexec, modules, io_uring, … | same as ABI ≥ 4 |
-| Node-tier egress (`tw status`) | `unenforced`: the egress proxy is cooperative | `enforced` | `unenforced`: the egress proxy is cooperative |
+| Writes | own dirs only (plus `/dev/null` and similar devices); `/tmp` and the rest of the disk are refused | own dirs only | own dirs only (ABI 1 also refuses renames and links across directories) |
+| Unix sockets | only its own (in its own dirs); every other socket, including the system tailscaled socket and DNS (mDNSResponder), is refused | none: seccomp refuses `socket(AF_UNIX)` (except a Node app in `listen: "unix"` mode) | same as ABI ≥ 4 |
+| TCP | connect only to `localhost:<port>` for the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: none); bind only its own port | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); bind only its own port. Landlock matches port numbers, not addresses | **unrestricted** (Landlock has no TCP rules before ABI 4) |
+| Other sockets | none (no UDP, so no DNS of its own; netd resolves names) | TCP only for IPv4/IPv6 (no UDP, ICMP, raw or MPTCP); netlink route only | same as ABI ≥ 4 |
+| Signals | only itself and its own children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload | only itself and its own process group | same as ABI ≥ 4 |
+| Other syscalls | not filtered; exec only of the runtime binary, its own dirs and the OS dirs (`/bin`, `/usr`, `/opt`, …) | seccomp refuses ptrace, `process_vm_readv/writev`, mount, bpf, perf, keyrings, new namespaces, kexec, modules, io_uring, … | same as ABI ≥ 4 |
+| Node-tier egress (`tw status`) | `enforced` | `enforced` | `unenforced`: the egress proxy is cooperative |
 
 On every platform, the process tier sets no CPU or memory limit (see
 [Limits that don't exist](limits.md#limits-that-dont-exist)), and the
 workload runs as the same user as tailworks.
 
-So on macOS and on Landlock ABI 1–3, a hostile Node app, or workerd code
-after a V8 escape, can open TCP connections with the host's network
-identity (including to other tenants' loopback ports and to services on
-your LAN), and on macOS it can also signal (and so kill) tailworks' own
-processes and write outside its directories. [node-tier.md](node-tier.md)
-describes what the Node tier still guarantees there. Tightening the macOS
-profile is tracked separately.
+So on Landlock ABI 1–3, a hostile Node app, or workerd code after a V8
+escape, can open TCP connections with the host's network identity
+(including to other tenants' loopback ports and to services on your LAN).
+[node-tier.md](node-tier.md) describes what the Node tier still guarantees
+there. On macOS, `tw-hostd -sandbox seatbelt-legacy` keeps the previous
+profile for one release in case the strict one breaks a workload: it
+confines reads, writes and unix socket connects under the deny list only,
+so TCP, signals to tailworks' own processes and writes elsewhere (`/tmp`)
+are open again, and `tw status` reports Node egress as `unenforced`.
 
 ### When a host is shared between tenants
 
@@ -88,15 +90,17 @@ other):
   that already serves another tenant (`egress_unenforced`).
 - **Your user can reach a container engine** (or is in the
   docker/podman/lxd/incus groups): refused.
-- **Your user can reach the system tailscaled socket**: refused on macOS
-  (Seatbelt doesn't deny that socket), and on Linux when a Node app uses
-  `listen: "unix"`.
+- **Your user can reach the system tailscaled socket**: refused on Linux
+  when a Node app uses `listen: "unix"`. (On macOS the Seatbelt profile
+  refuses every unix socket outside the workload's own dirs.)
 
-A host whose sandbox works but doesn't confine TCP (macOS, Landlock ABI
-1–3) **is admitted** as a shared host. `tw status` reports its Node
-workloads as `egress unenforced` and `tw doctor` warns. If you share such
+A host whose sandbox works but doesn't confine TCP (Landlock ABI 1–3, or
+macOS with `-sandbox seatbelt-legacy`) **is admitted** as a shared host.
+`tw status` reports its Node workloads as `egress unenforced` and
+`tw doctor` warns. If you share such
 a host between tenants that don't trust each other, use
-`"tier": "microvm"` or a Linux host with kernel 6.7+.
+`"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
+default Seatbelt profile.
 
 ## Egress: deny by default
 
