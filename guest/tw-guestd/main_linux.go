@@ -685,7 +685,6 @@ type guest struct {
 
 	mu         sync.Mutex
 	workerdPID int
-	restarts   int
 	stopping   bool     // shutdown: don't restart workerd
 	sfx        string   // stage-name suffix of the current workerd attempt
 	exits      chan int // workerd exit statuses, fed by reap()

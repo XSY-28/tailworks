@@ -44,6 +44,11 @@ tailworks is pre-1.0, maintained on a best-effort basis, with no bug bounty.
 | the minor before it (0.N−1) | yes |
 | older | no: upgrade ([docs/upgrading.md](docs/upgrading.md)) |
 
+Vulnerabilities in what tailworks bundles (Go modules, workerd, Tailscale,
+Firecracker, the guest kernel and rootfs) are tracked and fixed as
+described in
+[Upstream advisories](docs/RELEASING.md#upstream-advisories).
+
 ## What's in scope
 
 The tailworks binaries (`tw`, `tw-mgmt`, `tw-hostd`, `tw-netd`,

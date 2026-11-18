@@ -788,7 +788,6 @@ func (c *prefixConn) CloseWrite() error {
 // oneConn is a net.Listener that yields one connection.
 type oneConn struct {
 	c    net.Conn
-	once sync.Once
 	ch   chan net.Conn
 	done chan struct{}
 	cl   sync.Once

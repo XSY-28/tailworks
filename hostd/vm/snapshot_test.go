@@ -188,7 +188,6 @@ func TestSnapshotUniqueness(t *testing.T) {
 		pre, post *proto.Ident
 		hostPre   int64
 		hostPost  int64
-		bootID    string
 		worker    map[string]any
 		egress    string
 		token     string // the copy's control-channel token after its claim

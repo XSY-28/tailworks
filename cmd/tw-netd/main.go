@@ -185,6 +185,7 @@ func readKeyFile(path string) (string, error) {
 	}
 	k := strings.TrimSpace(string(b))
 	if k == "" || strings.Contains(k, "\n") {
+		//lint:ignore ST1005 "TS_AUTHKEY=..." is the expected file content, not punctuation
 		return "", fmt.Errorf("%s: want a single key or TS_AUTHKEY=...", path)
 	}
 	return k, nil
