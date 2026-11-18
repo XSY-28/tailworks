@@ -318,8 +318,15 @@ can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 unless `force=true`: then every live object is killed (cascade, device
 deletes through the tenant credential), killed/failed objects are
 purged, deployments and leases are released, and the whole cascade is
-audited (`kind: tenant_delete`). The tenant's custody entries (OBO root,
-volume keys) are removed last.
+audited (`kind: tenant_delete`, with the counts of what was removed).
+Then everything the tenant owns is removed: its custody entries (store
+and queue data keys, workload secrets, volume keys, auth keys,
+notification and telemetry settings, OBO roots), its KV, D1 and R2
+journals, queue messages, objects, deployments and the rest of its
+rows, and the tenant row last. Every host removes the tenant's files
+(`tenants/<id>/`, R2 blobs) at its next heartbeat (`purgeTenants`),
+audited `tenant_purge_host`. Only the audit records stay. The delete
+is idempotent: if it fails part way, run it again to finish.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -3150,6 +3157,7 @@ mgmt chain:
 `tenant_create`,
 `tenant_update`,
 `tenant_delete`,
+`tenant_purge_host` (a host removed a deleted tenant's files),
 `host_register`,
 `host_delete`,
 `host_cordon`,
@@ -3219,7 +3227,7 @@ Workflow approvals (ADR-040), host chain:
 Both chains:
 `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed).
 
-Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `audit_dropped`, `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `notification_put`, `notification_delete`, `notification_failed`, `notification_test`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `public_name_claim`, `public_name_release`, `approval_requested`, `approval_decision`, `approval_denied`, `approval_timeout`, `expose_on`, `expose_off`
+Enum: `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note`, `container_start`, `container_stop`, `audit_dropped`, `tenant_create`, `tenant_update`, `tenant_delete`, `tenant_purge_host`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback`, `create`, `mint`, `remint`, `ready`, `device_delete`, `purge`, `volume_key`, `secret_put`, `secret_delete`, `secret_release`, `store_create`, `store_delete`, `queue_create`, `queue_delete`, `queue_purge`, `d1_write`, `kv_put`, `kv_delete`, `telemetry_put`, `telemetry_delete`, `telemetry_release`, `notification_put`, `notification_delete`, `notification_failed`, `notification_test`, `reap`, `preflight`, `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push`, `image_pin`, `image_public`, `transfer`, `revoke`, `public_request`, `public_rejected`, `public_object_created`, `public_name_claim`, `public_name_release`, `approval_requested`, `approval_decision`, `approval_denied`, `approval_timeout`, `expose_on`, `expose_off`
 
 #### `AuditPage`
 
@@ -3247,7 +3255,7 @@ written, no HTML escaping. `seq` and `chain` are assigned by mgmt.
 | `grant` | string | no |  |
 | `hash` | string | yes |  |
 | `hostSig` | string | no | base64 ed25519 over utf8(hash); host chains only. |
-| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`tw notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
+| `kind` | `AuditKind` | yes | Host chain (netd/hostd): `allow`, `deny`, `egress`, `spawn`, `kill`, `principal`, `tenant_note` (source `tenant`, unverified), `container_start` (an object's container, ADR-032), `container_stop` (an object's container, ADR-032), `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies). mgmt chain: `tenant_create`, `tenant_update`, `tenant_delete`, `tenant_purge_host` (a host removed a deleted tenant's files), `host_register`, `host_delete`, `host_cordon`, `host_uncordon`, `host_drain`, `release_import`, `release_artifact`, `upgrade_start`, `upgrade_step`, `upgrade_pause`, `upgrade_resume`, `upgrade_abort`, `deploy`, `undeploy`, `rollback` (a deploy of an earlier deployment's stored bundle, ADR-046), `create`, `mint`, `remint`, `ready`, `kill`, `device_delete`, `purge`, `volume_key`, `secret_put` (a workload secret set; name only), `secret_delete`, `secret_release` (a workload's secrets released to its lease holder; names only), `store_create` (a platform store created, by its first write or an admin), `store_delete` (a platform store and its data key deleted), `queue_create` (a queue created, by its first use or an admin), `queue_delete` (a queue, its messages and its data key deleted), `queue_purge` (every message of a queue deleted), `d1_write` (an operator's SQL changed a D1 database; statement count only), `kv_put` (an admin wrote a Workers KV key; the namespace only, never the key), `kv_delete` (an admin deleted a Workers KV key; the namespace only), `telemetry_put` (the tenant's OTLP export set; endpoint and header names only), `telemetry_delete`, `telemetry_release` (the OTLP export config released to a workload's lease holder; once per host, workload and version), `notification_put` (the tenant's notification webhook set; its host and header names only), `notification_delete`, `notification_failed` (a notification was not delivered; the webhook's host and the error), `notification_test` (`tw notify test`; the origin and the outcome), `reap`, `preflight` (optional; dryRun deploys), `host_add`, `credential`, `obo_root`, `object_update`, `container_reserve`, `container_release`, `image_push` (a manifest pushed to the registry), `image_pin` (a deploy resolved its container images to digests, mirroring external ones), `image_public` (a public base image added or removed), `transfer` (a `_pool` node went to an object, ADR-031), `revoke` (an unused pooled key revoked). Public ingress (ADR-029), host chain: `public_request` (one per public request), `public_rejected` (per-minute summary of requests the limits refused, and of `not_public`/`bad_request` path refusals), `public_object_created` (a name admitted for a public create). Public ingress, mgmt chain: `public_name_claim` (a tenant took a public name on its tailnet, red-team H10), `public_name_release` (a tenant gave a public name up). Workflow approvals (ADR-040), host chain: `approval_requested` (a Workflow instance waits for an approval), `approval_decision` (approved or rejected, with the approver's identity), `approval_denied` (a decision refused, e.g. `cap_missing`), `approval_timeout` (the wait timed out: rejected by default). Both chains: `expose_on` / `expose_off` (mgmt: the operator's change; host: the listener opened/closed). |
 | `objectID` | string | no |  |
 | `prevHash` | string | yes | `""` for the first record of a chain. |
 | `seq` | integer (int64) | no | (read-only) |
@@ -3806,6 +3814,7 @@ The heartbeat body.
 | `deployments` | array of `DeploymentReport` | no |  |
 | `leases` | array of `Lease` | yes |  |
 | `liveNodes` | integer | yes |  |
+| `purgedTenants` | array of string | no | Deleted tenants (from `purgeTenants`) whose local state this host has removed. |
 | `usage` | `HostUsage` | no | Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`). |
 
 #### `HostStatusEnum`
@@ -3819,6 +3828,7 @@ Enum: `pending`, `live`, `stale`, `draining`
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `assignmentsChanged` | boolean | no | A hint to re-list assignments (set when a push could not be delivered). |
+| `purgeTenants` | array of string | no | Deleted tenants whose local state this host must remove (`tenants/<id>/`, R2 blobs); repeated until the host reports them in `purgedTenants`. |
 | `revoke` | array of string | yes | Lease entries that are no longer held. |
 | `revokeObjects` | array of string | yes | Object IDs killed in the last 10 min in namespaces this host holds; kill idempotently. |
 
@@ -4874,6 +4884,7 @@ Enum: `logs`, `metrics`, `traces`
 | `devicesDeleting` | array of string | no |  |
 | `killed` | array of string | yes |  |
 | `purged` | array of string | no |  |
+| `removed` | object | no | What the delete removed, by kind (rows, custody entries, hosts to purge). |
 | `tenantID` | string | yes |  |
 
 #### `TenantGrant`
