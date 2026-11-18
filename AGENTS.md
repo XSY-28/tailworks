@@ -113,6 +113,11 @@ and break master together (as #54, #55 and #57 did).
    virtualization (`e2e-real`, `e2e-public`, `e2e-vm`, `e2e-vz`,
    `e2e-headscale`, …) are fine to skip if you can't run them. Say so in the
    PR.
+
+   `.github/workflows/nightly.yml` runs the credential-free suites
+   (including `e2e-headscale`) every night, and `test-pg` against a
+   Postgres service container on PRs that touch `mgmt/`. That is a
+   backstop, not a reason to skip the table above.
 3. **Generated and registered things:**
    - API: edit `api/openapi.yaml`, run `make api`, commit the output (rule 2).
    - Release notes: when `make changes-check` asks for one, add a
