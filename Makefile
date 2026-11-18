@@ -98,7 +98,8 @@ e2e-queues: deps
 e2e-observability: deps
 	$(GO) test -tags e2eobs -count=1 -v -timeout 10m ./e2e/observability/...
 
-## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container).
+## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container), or,
+## with TW_TEST_POSTGRES_DSN set, against that database (CI's service container; nightly.yml).
 PG_CTX  ?= orbstack
 PG_PORT ?= 55433
 .PHONY: test-pg
