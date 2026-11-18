@@ -166,6 +166,7 @@ const (
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
+	AuditKindTenantPurgeHost     AuditKind = "tenant_purge_host"
 	AuditKindTenantUpdate        AuditKind = "tenant_update"
 	AuditKindTransfer            AuditKind = "transfer"
 	AuditKindUndeploy            AuditKind = "undeploy"
@@ -315,6 +316,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindTenantDelete:
 		return true
 	case AuditKindTenantNote:
+		return true
+	case AuditKindTenantPurgeHost:
 		return true
 	case AuditKindTenantUpdate:
 		return true
@@ -1614,6 +1617,7 @@ type AuditBatch struct {
 // `tenant_create`,
 // `tenant_update`,
 // `tenant_delete`,
+// `tenant_purge_host` (a host removed a deleted tenant's files),
 // `host_register`,
 // `host_delete`,
 // `host_cordon`,
@@ -1731,6 +1735,7 @@ type AuditRecord struct {
 	// `tenant_create`,
 	// `tenant_update`,
 	// `tenant_delete`,
+	// `tenant_purge_host` (a host removed a deleted tenant's files),
 	// `host_register`,
 	// `host_delete`,
 	// `host_cordon`,
@@ -2748,6 +2753,9 @@ type HostStatus struct {
 	Leases      []Lease             `json:"leases"`
 	LiveNodes   int                 `json:"liveNodes"`
 
+	// PurgedTenants Deleted tenants (from `purgeTenants`) whose local state this host has removed.
+	PurgedTenants *[]string `json:"purgedTenants,omitempty"`
+
 	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
 	Usage *HostUsage `json:"usage,omitempty"`
 }
@@ -2759,6 +2767,11 @@ type HostStatusEnum string
 type HostStatusResponse struct {
 	// AssignmentsChanged A hint to re-list assignments (set when a push could not be delivered).
 	AssignmentsChanged *bool `json:"assignmentsChanged,omitempty"`
+
+	// PurgeTenants Deleted tenants whose local state this host must remove
+	// (`tenants/<id>/`, R2 blobs); repeated until the host reports them
+	// in `purgedTenants`.
+	PurgeTenants *[]string `json:"purgeTenants,omitempty"`
 
 	// Revoke Lease entries that are no longer held.
 	Revoke []string `json:"revoke"`
@@ -4148,7 +4161,10 @@ type TenantDeleteResult struct {
 	DevicesDeleting    *[]string `json:"devicesDeleting,omitempty"`
 	Killed             []string  `json:"killed"`
 	Purged             *[]string `json:"purged,omitempty"`
-	TenantID           string    `json:"tenantID"`
+
+	// Removed What the delete removed, by kind (rows, custody entries, hosts to purge).
+	Removed  *map[string]int64 `json:"removed,omitempty"`
+	TenantID string            `json:"tenantID"`
 }
 
 // TenantGrant One valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` value. Allows each action in each tenant it names.
@@ -6322,8 +6338,15 @@ type ClientInterface interface {
 	// unless `force=true`: then every live object is killed (cascade, device
 	// deletes through the tenant credential), killed/failed objects are
 	// purged, deployments and leases are released, and the whole cascade is
-	// audited (`kind: tenant_delete`). The tenant's custody entries (OBO root,
-	// volume keys) are removed last.
+	// audited (`kind: tenant_delete`, with the counts of what was removed).
+	// Then everything the tenant owns is removed: its custody entries (store
+	// and queue data keys, workload secrets, volume keys, auth keys,
+	// notification and telemetry settings, OBO roots), its KV, D1 and R2
+	// journals, queue messages, objects, deployments and the rest of its
+	// rows, and the tenant row last. Every host removes the tenant's files
+	// (`tenants/<id>/`, R2 blobs) at its next heartbeat (`purgeTenants`),
+	// audited `tenant_purge_host`. Only the audit records stay. The delete
+	// is idempotent: if it fails part way, run it again to finish.
 	//
 	// Corresponds with DELETE /v1/tenants/{id} (the `DeleteTenant` operationId).
 	DeleteTenant(ctx context.Context, id TenantID, params *DeleteTenantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8894,8 +8917,15 @@ func (c *Client) CreateTenant(ctx context.Context, body CreateTenantJSONRequestB
 // unless `force=true`: then every live object is killed (cascade, device
 // deletes through the tenant credential), killed/failed objects are
 // purged, deployments and leases are released, and the whole cascade is
-// audited (`kind: tenant_delete`). The tenant's custody entries (OBO root,
-// volume keys) are removed last.
+// audited (`kind: tenant_delete`, with the counts of what was removed).
+// Then everything the tenant owns is removed: its custody entries (store
+// and queue data keys, workload secrets, volume keys, auth keys,
+// notification and telemetry settings, OBO roots), its KV, D1 and R2
+// journals, queue messages, objects, deployments and the rest of its
+// rows, and the tenant row last. Every host removes the tenant's files
+// (`tenants/<id>/`, R2 blobs) at its next heartbeat (`purgeTenants`),
+// audited `tenant_purge_host`. Only the audit records stay. The delete
+// is idempotent: if it fails part way, run it again to finish.
 //
 // Corresponds with DELETE /v1/tenants/{id} (the `DeleteTenant` operationId).
 func (c *Client) DeleteTenant(ctx context.Context, id TenantID, params *DeleteTenantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -17545,8 +17575,15 @@ type ClientWithResponsesInterface interface {
 	// unless `force=true`: then every live object is killed (cascade, device
 	// deletes through the tenant credential), killed/failed objects are
 	// purged, deployments and leases are released, and the whole cascade is
-	// audited (`kind: tenant_delete`). The tenant's custody entries (OBO root,
-	// volume keys) are removed last.
+	// audited (`kind: tenant_delete`, with the counts of what was removed).
+	// Then everything the tenant owns is removed: its custody entries (store
+	// and queue data keys, workload secrets, volume keys, auth keys,
+	// notification and telemetry settings, OBO roots), its KV, D1 and R2
+	// journals, queue messages, objects, deployments and the rest of its
+	// rows, and the tenant row last. Every host removes the tenant's files
+	// (`tenants/<id>/`, R2 blobs) at its next heartbeat (`purgeTenants`),
+	// audited `tenant_purge_host`. Only the audit records stay. The delete
+	// is idempotent: if it fails part way, run it again to finish.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -29459,8 +29496,15 @@ func (c *ClientWithResponses) CreateTenantWithResponse(ctx context.Context, body
 // unless `force=true`: then every live object is killed (cascade, device
 // deletes through the tenant credential), killed/failed objects are
 // purged, deployments and leases are released, and the whole cascade is
-// audited (`kind: tenant_delete`). The tenant's custody entries (OBO root,
-// volume keys) are removed last.
+// audited (`kind: tenant_delete`, with the counts of what was removed).
+// Then everything the tenant owns is removed: its custody entries (store
+// and queue data keys, workload secrets, volume keys, auth keys,
+// notification and telemetry settings, OBO roots), its KV, D1 and R2
+// journals, queue messages, objects, deployments and the rest of its
+// rows, and the tenant row last. Every host removes the tenant's files
+// (`tenants/<id>/`, R2 blobs) at its next heartbeat (`purgeTenants`),
+// audited `tenant_purge_host`. Only the audit records stay. The delete
+// is idempotent: if it fails part way, run it again to finish.
 //
 // Returns a wrapper object for the known response body format(s).
 //
