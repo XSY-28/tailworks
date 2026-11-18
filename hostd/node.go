@@ -15,8 +15,9 @@ package hostd
 //
 // Enforcement: on Linux with Landlock ABI ≥ 4 the app runs under the procsb
 // sandbox, which allows TCP only to its own port and the egress proxy, so
-// the proxy is enforced. Elsewhere (macOS, older kernels) it is
-// cooperative: a malicious app can open raw sockets (loopback, LAN,
+// the proxy is enforced; so does the macOS Seatbelt profile (TCP only to
+// localhost:<proxy> and its own port). Elsewhere (older kernels,
+// -sandbox seatbelt-legacy or none) it is cooperative: a malicious app can open raw sockets (loopback, LAN,
 // internet) and ignore the env proxies (see docs/node-tier.md).
 
 import (
