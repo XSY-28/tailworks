@@ -11,11 +11,10 @@
 #     a partial failure finishes the job.
 #   - A prerelease (0.3.0-rc.1) goes to the "next" dist-tag, not "latest".
 #
-# Auth is npm's own. In CI it is trusted publishing: npm (>= 11.5.1)
-# exchanges the GitHub Actions OIDC token for a publish credential and
-# attaches provenance itself (.github/workflows/npm-publish.yml). By hand it
-# is your `npm login`. --dry-run packs and validates without publishing
-# (no auth).
+# Auth is npm's own: NODE_AUTH_TOKEN with the .npmrc that
+# actions/setup-node writes (.github/workflows/npm-publish.yml), or your
+# `npm login`. --dry-run packs and validates without publishing (no auth).
+# Set NPM_CONFIG_PROVENANCE=true in CI for provenance attestations.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"

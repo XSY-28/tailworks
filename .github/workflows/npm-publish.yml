@@ -6,15 +6,10 @@
 # already published, so re-running it (or running it by hand for an
 # existing tag) is safe.
 #
-# Auth is npm trusted publishing (OIDC; docs/RELEASING.md "Publish npm"):
-# each package on npmjs.com trusts this workflow file in
-# rosskukulinski/tailworks, and npm exchanges the job's GitHub OIDC token
-# (id-token: write) for a short-lived publish credential. There is no npm
-# token or secret, and provenance is attached automatically (public repo,
-# public packages). Trusted publishing needs npm >= 11.5.1 and
-# Node >= 22.14, hence the pinned npm below. A package with no trusted
-# publisher configured fails to publish. release.yml's gates already ran a
-# --dry-run of the same script.
+# Needs the repository secret NPM_TOKEN (an npm automation or granular
+# token that may publish the @tailworks scope and create-tailworks). Without it the job
+# says so and does nothing, so forks and repos without npm access don't
+# fail. release.yml's gates already ran a --dry-run of the same script.
 #
 # By hand for an existing tag: gh workflow run npm-publish.yml -f tag=v0.3.0
 name: npm-publish
@@ -30,7 +25,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm trusted publishing (OIDC) and provenance
+  id-token: write # npm provenance
 
 env:
   TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
@@ -40,23 +35,37 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Check for NPM_TOKEN
+        id: token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::notice::NPM_TOKEN is not set: not publishing $TAG to npm"
+            echo "skip=1" >>"$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.token.outputs.skip != '1'
         with:
           ref: ${{ env.TAG }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.token.outputs.skip != '1'
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      # Trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10.
-      - name: npm 11 (trusted publishing)
-        run: npm install -g npm@11.21.2 && npm --version
       - name: Check the tag matches VERSION
+        if: steps.token.outputs.skip != '1'
         run: |
           v="${TAG#v}"
           if [ "$v" != "$(cat VERSION)" ]; then
             echo "tag $TAG does not match VERSION $(cat VERSION)"; exit 1
           fi
       - name: npm ci
+        if: steps.token.outputs.skip != '1'
         run: npm ci
       - name: Publish
+        if: steps.token.outputs.skip != '1'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
         run: sh scripts/npm-publish.sh "$TAG"
