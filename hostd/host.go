@@ -325,6 +325,9 @@ type Host struct {
 	appr     *approvalStore
 
 	upg upgrader // upgrade.go
+
+	// tenantpurge.go: deleted tenants' local state.
+	tenantPurge tenantPurgeState
 }
 
 // DefaultFenceAfter rides out typical mgmt restarts and database failovers;
@@ -657,6 +660,7 @@ func (h *Host) tick() {
 func (h *Host) heartbeat(ctx context.Context) error {
 	usage := h.usage()
 	req := mgmtapi.HeartbeatRequest{Leases: []mgmtapi.Lease{}, Usage: &usage, Containers: h.containers.running()}
+	req.PurgedTenants = h.tenantPurge.done() // tenantpurge.go
 	h.mu.Lock()
 	for _, o := range h.objects {
 		if o.Status == statusReady {
@@ -690,6 +694,7 @@ func (h *Host) heartbeat(ctx context.Context) error {
 	for _, id := range resp.RevokeObjects {
 		go h.killLocal(id, "revoked by mgmt")
 	}
+	h.purgeTenants(resp.PurgeTenants) // tenantpurge.go
 	if len(resp.Revoke) > 0 {
 		h.revoke(resp.Revoke)
 	}
