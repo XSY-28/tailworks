@@ -96,7 +96,7 @@ func run() error {
 		vmSnapFill = flag.Bool("vm-snapshot-refill", false, "microVM tier: also refill the warm pool by restoring the base snapshot (faster refills, slower claims) instead of booting")
 		vmRotate   = flag.Duration("vm-snapshot-rotate", time.Hour, "microVM tier: rebuild the base snapshot this often (and at every start); idle pool VMs restored from the old base are discarded; < 0 = never")
 		vmPool     = flag.Int("vm-pool", 0, "microVM tier: warm pool size (pre-booted VMs without tenant code; single use; Durable Object VMs only, containers cold-boot): 0 = auto (≤ 2, within the huge-page reservation), -1 = off")
-		sandboxF   = flag.String("sandbox", "auto", "process-tier workerd/Node sandbox: auto (seatbelt on macOS, landlock on Linux) | seatbelt | landlock | none")
+		sandboxF   = flag.String("sandbox", "auto", "process-tier workerd/Node sandbox: auto (seatbelt on macOS, landlock on Linux) | seatbelt | seatbelt-legacy (macOS: the previous files-only profile, kept for one release) | landlock | none")
 		insecureSH = flag.Bool("insecure-shared-host", false, "without a process sandbox, still run process-tier workloads of more than one tenant (tenants are NOT isolated from each other)")
 		sbDeny     = flag.String("sandbox-deny", "", "comma-separated extra paths no workerd may read, write or connect to (tw up: its state and run dirs)")
 		nodeBin    = flag.String("node", "", "Node process tier (runtime \"node\"): node binary (default: $TW_NODE, or node on PATH)")
