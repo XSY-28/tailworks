@@ -323,8 +323,7 @@ func resolveJSSymbol(src, target string) ([]float64, error) {
 	default:
 		return nil, fmt.Errorf("%s matches %d places; cite a unique name or add a // limits.md#slug anchor", target, len(found))
 	}
-	var consts func(string) (float64, bool)
-	consts = func(name string) (float64, bool) {
+	consts := func(name string) (float64, bool) {
 		d := decl(name)
 		if len(d) != 1 {
 			return 0, false
