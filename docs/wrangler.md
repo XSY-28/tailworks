@@ -216,10 +216,9 @@ every machine, list their names in `.dev.vars.example` or
 
 `npm install` fetches `@tailworks/tailnet` (and `@tailworks/mcp`,
 `@tailworks/node`) from npm, where each tailworks release publishes them at
-its version. Until the first release that publishes them, `npm install`
-fails with `404 Not Found` for `@tailworks/…`. `tw dev` and `tw deploy`
-don't need it: for workerd apps, tailworks resolves those imports from the
-copies in its own install.
+its version (since v0.2.0). `tw dev` and `tw deploy` don't need it: for
+workerd apps, tailworks resolves those imports from the copies in its own
+install.
 
 ## `wrangler dev` and Miniflare
 
