@@ -45,7 +45,7 @@ type App struct {
 	Modules       map[string][]byte // path -> contents (js/mjs/json/txt/wasm)
 	SpawnMaxLive  int
 	SpawnMaxDepth int
-	Internet      []string // egress.internet (recorded; MVP denies all internet)
+	Internet      []string // egress.internet: the containers' allowlist (Worker code has no internet egress)
 	// Tier is the requested isolation tier (tailworks.jsonc "tier"): "" (host
 	// default), "process" or "microvm".
 	Tier string
