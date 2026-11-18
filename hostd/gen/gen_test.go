@@ -122,12 +122,18 @@ func (f *fakeHost) egressObj() http.Handler {
 			json.NewEncoder(w).Encode(map[string]any{"code": "unknown_object", "uri": r.RequestURI, "h": r.Header})
 			return
 		}
+		if egressRedirect(w, r) { // egress_sink_test.go
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]any{"as": cls + "/" + name, "url": r.RequestURI, "headers": r.Header})
 	})
 }
 
 func (f *fakeHost) egressWL() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if egressRedirect(w, r) { // egress_sink_test.go
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]any{"as": "workload", "url": r.RequestURI, "headers": r.Header})
 	})
 }
