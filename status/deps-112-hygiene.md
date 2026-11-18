@@ -97,6 +97,12 @@ All fixed; none suppressed except two ST1005 with `//lint:ignore` (the
 - Not run: `make e2e-placement` / `e2e-real` (tailscale.com not bumped);
   `make test-pg` (no store change).
 
+- After merging master (with #117), staticcheck flagged one new SA1019 in
+  `netd/internet.go` (`Status.MagicDNSSuffix`, a deliberate fallback after
+  `CurrentTailnet`); suppressed with `//lint:ignore` and a reason. Expect
+  this on every branch that merges after this lands: run `make lint`.
+- After each merge of origin/master: `make lint test` pass (3 merges).
+
 ## Gaps / next
 
 - #146: go1.27.4, then drop the `-` before `$(MAKE) vulncheck` in `make lint`.
