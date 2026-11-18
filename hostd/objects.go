@@ -53,6 +53,10 @@ type object struct {
 	reserved  bool          // a pool node offered to a create in flight (poolnodes.go)
 	readyCh   chan struct{} // closed on ready/failed/killed
 	joinFails int           // consecutive bootstrap failures (retryNode)
+
+	// nodeGen counts node starts (startNodeLocked); an awaitNode whose
+	// start was superseded leaves the object alone (nodestart.go).
+	nodeGen uint64
 }
 
 func (o *object) namespace() string { return mgmtapi.Namespace(o.Workload, o.Class) }
@@ -363,15 +367,15 @@ func (h *Host) startNodeLocked(o *object) {
 	if o.Status != statusReady {
 		o.Status = statusPending
 	}
-	go h.awaitNode(t, o, no)
+	go h.awaitNode(t, o, no, o.bumpNodeGenLocked())
 }
 
-func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object) {
+func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object, gen uint64) {
 	ctx, cancel := context.WithTimeout(h.ctx, 3*time.Minute)
 	defer cancel()
 	err := no.Ready(ctx)
 	h.mu.Lock()
-	if o.Status == statusKilled {
+	if o.Status == statusKilled || o.nodeGen != gen {
 		h.mu.Unlock()
 		return
 	}
@@ -380,10 +384,10 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object) {
 		ch := o.readyCh
 		o.readyCh = make(chan struct{}) // a later ensure may retry
 		o.joinFails++
-		fails := o.joinFails
+		fails, errMsg := o.joinFails, o.Err
 		h.mu.Unlock()
 		closeOnce(ch)
-		h.log.Warn("object node failed", "object", o.ID, "err", o.Err, "attempt", fails)
+		h.log.Warn("object node failed", "object", o.ID, "err", errMsg, "attempt", fails)
 		h.retryNode(o, fails)
 		return
 	}
@@ -405,20 +409,21 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object) {
 		}
 	}
 	ch := o.readyCh
+	magicDNS, ip, errMsg := o.MagicDNS, o.IP, o.Err // read under h.mu: a later start may rewrite them
 	h.mu.Unlock()
 	if nameTaken {
 		if err := t.reg.SetPublicEnabled(o.NetdID, false); err != nil {
 			h.log.Warn("public node: closing listener after a name clash failed", "object", o.ID, "err", netd.RedactError(err))
 		}
-		h.log.Error("public node name taken; public ingress stays closed", "object", o.ID, "want", o.Hostname, "got", o.MagicDNS)
-		h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "deny", Code: "public_name_taken", Detail: mgmtapi.Note(o.Err), TraceID: newTraceID()})
+		h.log.Error("public node name taken; public ingress stays closed", "object", o.ID, "want", o.Hostname, "got", magicDNS)
+		h.audit.add(mgmtapi.AuditRecord{ObjectID: o.ID, Kind: "deny", Code: "public_name_taken", Detail: mgmtapi.Note(errMsg), TraceID: newTraceID()})
 	}
 	rctx, rcancel := context.WithTimeout(h.ctx, 15*time.Second)
 	var epoch int64
 	if w := h.workloadOf(o); w != nil {
 		epoch = w.epochNow()
 	}
-	if err := h.mgmt.Ready(rctx, o.ID, mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: o.MagicDNS, Epoch: epoch}); err != nil {
+	if err := h.mgmt.Ready(rctx, o.ID, mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: magicDNS, Epoch: epoch}); err != nil {
 		h.log.Warn("mgmt ready failed", "object", o.ID, "err", err)
 		if e, ok := mgmtapi.AsError(err); ok && e.Code == mgmtapi.CodeKilled {
 			rcancel()
@@ -430,7 +435,7 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object) {
 	rcancel()
 	closeOnce(ch)
 	h.saveObjects()
-	h.log.Info("object node ready", "object", o.ID, "hostname", o.Hostname, "ip", o.IP, "join_ms", info.JoinMS, "rejoined", info.Rejoined, "reminted", info.Reminted)
+	h.log.Info("object node ready", "object", o.ID, "hostname", o.Hostname, "ip", ip, "join_ms", info.JoinMS, "rejoined", info.Rejoined, "reminted", info.Reminted)
 }
 
 // retryNode re-joins a node whose bootstrap failed while its workload is
