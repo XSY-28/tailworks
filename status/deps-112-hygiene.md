@@ -18,8 +18,11 @@ Last update: 2026-11-17 PT. Dependency hygiene (issue #112): Dependabot for Go/n
   into `bin/lint/`.
 - **`make staticcheck`**: blocking, in `make lint`. Runs with `-matrix` for
   linux and darwin (CGO off) so platform-only code isn't reported unused and
-  a Mac reports what CI reports. `cmd/tw-vz` (cgo) is left out of the
-  matrix; it's clean when checked natively on a Mac.
+  a Mac reports what CI reports (`scripts/staticcheck.sh`). Packages that
+  build on one OS only (today `hostd/vm/helper`) are checked for that OS
+  alone, since -matrix fails on a package with no files for one config;
+  the first CI run failed on exactly that. `cmd/tw-vz` (cgo) is left out;
+  it's clean when checked natively on a Mac.
 - **`make vulncheck`**: govulncheck. In `make lint` as a non-blocking step
   (`-@$(MAKE) vulncheck`, TODO(#146)) because the only remaining finding
   needs the go1.27.4 toolchain.
