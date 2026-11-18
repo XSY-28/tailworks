@@ -266,6 +266,9 @@ func (o *Object) resolveEgress(ctx context.Context, hostport, scheme string) (ne
 			}
 			return netip.AddrPortFrom(vip, uint16(port)), nil
 		}
+		if !tailnetShaped(want, st) {
+			return refuse(CodeInternetEgressUnavailable, internetEgressDetail(host))
+		}
 		return refuse(CodePeerNotVisible, "no peer named "+host+" in this object's netmap (names are never resolved via host DNS; a grant may be missing)")
 	}
 	if code, detail := o.reg.classify(o, found); code != "" {

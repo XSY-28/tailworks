@@ -262,7 +262,7 @@ func TestChain(t *testing.T) {
 			{"public-ip", "http://1.1.1.1/", netd.CodeForbiddenDestination},
 			{"rfc1918", "http://192.168.1.1/", netd.CodeForbiddenDestination},
 			{"localhost-name", "http://localhost/", netd.CodePeerNotVisible},
-			{"public-name-no-host-dns", "http://example.com/", netd.CodePeerNotVisible},
+			{"public-name-no-host-dns", "http://example.com/", netd.CodeInternetEgressUnavailable},
 			// workerd's WHATWG URL parser canonicalises 2130706433 to 127.0.0.1;
 			// RawProxyNumericHost covers a client that doesn't.
 			{"decimal-ip", "http://2130706433/", netd.CodeForbiddenDestination},
@@ -283,12 +283,40 @@ func TestChain(t *testing.T) {
 		}
 	})
 
+	t.Run("InternetEgressUnavailable", func(t *testing.T) {
+		// A name that is not tailnet-shaped is internet egress, which Workers
+		// don't have: its own code, and a hint that links the gateway recipe
+		// rather than one about grants.
+		for _, u := range []string{"https://api.github.com/zen", "http://example.com/"} {
+			code, h, b := e.get("http://"+e.objIP["a"]+"/egress?url="+u, nil)
+			var er netd.Error
+			json.Unmarshal(b, &er)
+			if code != 403 || er.Code != netd.CodeInternetEgressUnavailable || h.Get(netd.HeaderError) != netd.CodeInternetEgressUnavailable {
+				t.Fatalf("%s: got %d %s", u, code, b)
+			}
+			if !strings.Contains(er.Detail, netd.RecipeInternetAPI) || strings.Contains(er.Detail, "grant") {
+				t.Errorf("%s: detail %q should link the recipe and not mention grants", u, er.Detail)
+			}
+			if !strings.HasSuffix(er.DocURL, "#"+netd.CodeInternetEgressUnavailable) {
+				t.Errorf("%s: doc_url %q", u, er.DocURL)
+			}
+		}
+	})
+
 	t.Run("PeerNotVisible", func(t *testing.T) {
 		code, _, b := e.get("http://"+e.objIP["a"]+"/egress?url=http://ttest-nonexistent/", nil)
 		var er netd.Error
 		json.Unmarshal(b, &er)
 		if code != 403 || er.Code != netd.CodePeerNotVisible || !strings.Contains(er.Detail, "never resolved via host DNS") {
 			t.Fatalf("got %d %s", code, b)
+		}
+		// A tailnet-shaped FQDN that is not in the netmap is peer_not_visible
+		// too (a missing peer or grant), not internet egress.
+		code, _, b = e.get("http://"+e.objIP["a"]+"/egress?url=http://ttest-nonexistent."+nettest.MagicDNSDomain+"/", nil)
+		er = netd.Error{}
+		json.Unmarshal(b, &er)
+		if code != 403 || er.Code != netd.CodePeerNotVisible {
+			t.Fatalf("unknown tailnet FQDN: got %d %s", code, b)
 		}
 		// A tailnet-range IP that is not in the netmap is also peer_not_visible.
 		code, _, b = e.get("http://"+e.objIP["a"]+"/egress?url=http://100.64.255.254/", nil)
@@ -427,7 +455,13 @@ func TestChain(t *testing.T) {
 		ec := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", filepath.Join(e.rundir, "egress.sock"))
 		}}}
-		for _, h := range []string{"2130706433", "0x7f000001", "127.1", "localhost.", "metadata.google.internal"} {
+		for h, want := range map[string]string{
+			"2130706433":               netd.CodePeerNotVisible,
+			"0x7f000001":               netd.CodePeerNotVisible,
+			"127.1":                    netd.CodeInternetEgressUnavailable,
+			"localhost.":               netd.CodePeerNotVisible,
+			"metadata.google.internal": netd.CodeInternetEgressUnavailable,
+		} {
 			req, _ := http.NewRequest("GET", "http://"+h+"/", nil)
 			req.Header.Set(netd.HeaderObject, "a")
 			resp, err := proxyClient(ec).Do(req)
@@ -435,7 +469,7 @@ func TestChain(t *testing.T) {
 				t.Fatal(err)
 			}
 			resp.Body.Close()
-			if resp.StatusCode != 403 || resp.Header.Get(netd.HeaderError) != netd.CodePeerNotVisible {
+			if resp.StatusCode != 403 || resp.Header.Get(netd.HeaderError) != want {
 				t.Errorf("%s: got %d %q", h, resp.StatusCode, resp.Header.Get(netd.HeaderError))
 			}
 		}

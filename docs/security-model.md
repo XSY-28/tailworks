@@ -105,9 +105,10 @@ default Seatbelt profile.
 ## Egress: deny by default
 
 - A Worker's outbound `fetch()` reaches **tailnet peers only**. A name that
-  isn't in the node's netmap is refused (`peer_not_visible`), as are
-  loopback, link-local, metadata and the host's own addresses. There is no
-  internet egress for Workers; put what they need on the tailnet
+  isn't in the node's netmap is refused (`peer_not_visible`; an internet
+  name gets `internet_egress_unavailable`), as are loopback, link-local,
+  metadata and the host's own addresses. There is no internet egress for
+  Workers, and no setting that turns it on; put what they need on the tailnet
   ([recipes.md](recipes.md)). This is netd's guard on the path every
   `fetch()` takes; code that escapes workerd's V8 sandbox, and a Node app,
   are held to it only where the OS sandbox confines TCP (see the table
