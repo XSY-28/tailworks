@@ -174,12 +174,16 @@ type TenantDeleteResult struct {
 	Purged             []string `json:"purged"`
 	DeploymentsStopped []string `json:"deploymentsStopped"`
 	DevicesDeleting    []string `json:"devicesDeleting,omitempty"`
+
+	// Removed counts what the delete removed, by kind (tenantpurge.go).
+	Removed map[string]int64 `json:"removed,omitempty"`
 }
 
 // DeleteTenant removes a tenant. Without force it refuses while any object
 // is live (409 tenant_has_live_objects); with force it kills every live
-// root (cascade), purges, stops deployments, releases leases and finally
-// drops the row and the tenant's custody entries. Audited as tenant_delete.
+// root (cascade), purges, stops deployments, and finally removes everything
+// the tenant owns (tenantpurge.go: custody entries, every row, the tenant
+// row; hosts remove its files). Audited as tenant_delete, with counts.
 func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by string) (TenantDeleteResult, error) {
 	res := TenantDeleteResult{TenantID: id, Killed: []string{}, Purged: []string{}, DeploymentsStopped: []string{}}
 	t, err := m.store.GetTenant(ctx, id)
@@ -229,9 +233,11 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 			}
 		}
 	}
-	if err := m.store.DeleteTenant(ctx, id); err != nil {
+	removed, err := m.purgeTenant(ctx, id) // tenantpurge.go: custody entries, every row, then the tenant
+	if err != nil {
 		return res, err
 	}
+	res.Removed = removed
 	m.broker.Forget(id)
 	m.mu.Lock()
 	delete(m.throttles, id)
@@ -240,13 +246,9 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 		delete(m.queues, id)
 	}
 	m.mu.Unlock()
-	if kid, err := m.store.SecretChoice(ctx, oboChoiceName(id)); err == nil {
-		m.custody.Delete(ctx, oboKeyName(id, kid))
-	}
-	m.custody.Delete(ctx, oboCustodyName(id))
-	m.store.DeleteSecretChoice(ctx, oboChoiceName(id))
 	m.audit(ctx, AuditRecord{TenantID: id, Kind: "tenant_delete", ActingFor: by}, map[string]any{"tailnet": t.Tailnet, "force": force,
-		"killed": len(res.Killed), "purged": len(res.Purged), "deployments": res.DeploymentsStopped, "by": by})
+		"killed": len(res.Killed), "purged": len(res.Purged), "deployments": res.DeploymentsStopped, "by": by,
+		"removed": removed})
 	return res, nil
 }
 

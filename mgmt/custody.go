@@ -32,6 +32,8 @@ type Custody interface {
 // with another replica) or "setec:<url>".
 func CustodyFingerprint(c Custody) string {
 	switch c := c.(type) {
+	case *indexedCustody: // tenantpurge.go
+		return CustodyFingerprint(c.Custody)
 	case *FileCustody:
 		h, _ := os.Hostname()
 		return "file:" + h + ":" + c.dir
