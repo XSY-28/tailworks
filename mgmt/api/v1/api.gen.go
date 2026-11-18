@@ -168,6 +168,7 @@ const (
 	AuditKindTenantCreate        AuditKind = "tenant_create"
 	AuditKindTenantDelete        AuditKind = "tenant_delete"
 	AuditKindTenantNote          AuditKind = "tenant_note"
+	AuditKindTenantPurgeHost     AuditKind = "tenant_purge_host"
 	AuditKindTenantUpdate        AuditKind = "tenant_update"
 	AuditKindTransfer            AuditKind = "transfer"
 	AuditKindUndeploy            AuditKind = "undeploy"
@@ -317,6 +318,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindTenantDelete:
 		return true
 	case AuditKindTenantNote:
+		return true
+	case AuditKindTenantPurgeHost:
 		return true
 	case AuditKindTenantUpdate:
 		return true
@@ -1613,6 +1616,7 @@ type AuditBatch struct {
 // `tenant_create`,
 // `tenant_update`,
 // `tenant_delete`,
+// `tenant_purge_host` (a host removed a deleted tenant's files),
 // `host_register`,
 // `host_delete`,
 // `host_cordon`,
@@ -1730,6 +1734,7 @@ type AuditRecord struct {
 	// `tenant_create`,
 	// `tenant_update`,
 	// `tenant_delete`,
+	// `tenant_purge_host` (a host removed a deleted tenant's files),
 	// `host_register`,
 	// `host_delete`,
 	// `host_cordon`,
@@ -2744,6 +2749,9 @@ type HostStatus struct {
 	Leases      []Lease             `json:"leases"`
 	LiveNodes   int                 `json:"liveNodes"`
 
+	// PurgedTenants Deleted tenants (from `purgeTenants`) whose local state this host has removed.
+	PurgedTenants *[]string `json:"purgedTenants,omitempty"`
+
 	// Usage Live usage against `HostCapacity`, reported with every heartbeat. `containers` is the running containers (a subset of `vms`).
 	Usage *HostUsage `json:"usage,omitempty"`
 }
@@ -2755,6 +2763,11 @@ type HostStatusEnum string
 type HostStatusResponse struct {
 	// AssignmentsChanged A hint to re-list assignments (set when a push could not be delivered).
 	AssignmentsChanged *bool `json:"assignmentsChanged,omitempty"`
+
+	// PurgeTenants Deleted tenants whose local state this host must remove
+	// (`tenants/<id>/`, R2 blobs); repeated until the host reports them
+	// in `purgedTenants`.
+	PurgeTenants *[]string `json:"purgeTenants,omitempty"`
 
 	// Revoke Lease entries that are no longer held.
 	Revoke []string `json:"revoke"`
@@ -4144,7 +4157,10 @@ type TenantDeleteResult struct {
 	DevicesDeleting    *[]string `json:"devicesDeleting,omitempty"`
 	Killed             []string  `json:"killed"`
 	Purged             *[]string `json:"purged,omitempty"`
-	TenantID           string    `json:"tenantID"`
+
+	// Removed What the delete removed, by kind (rows, custody entries, hosts to purge).
+	Removed  *map[string]int64 `json:"removed,omitempty"`
+	TenantID string            `json:"tenantID"`
 }
 
 // TenantGrant One valid `github.com/rosskukulinski/tailworks/cap/tenant-admin` value. Allows each action in each tenant it names.

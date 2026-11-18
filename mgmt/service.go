@@ -187,6 +187,7 @@ func New(cfg Config) (*Mgmt, error) {
 		upgradeKick: make(chan struct{}, 1),
 		pending:     map[string]*pendingDelete{}, noDeviceScope: map[string]bool{}, deviceKept: map[string]bool{},
 		poolKick: make(chan struct{}, 1), poolPause: map[string]time.Time{}}
+	m.custody = indexCustody(m.custody, m.store, func() int64 { return m.now().UnixMilli() }) // tenantpurge.go
 	if m.cfg.WarmKeyTTL == 0 {
 		m.cfg.WarmKeyTTL = DefaultWarmKeyTTL
 	}
@@ -614,6 +615,10 @@ type HeartbeatResponse struct {
 	OK            bool     `json:"ok"`
 	Revoke        []string `json:"revoke"`
 	RevokeObjects []string `json:"revokeObjects"`
+
+	// PurgeTenants are deleted tenants whose local state this host must
+	// remove (tenantpurge.go); listed until the host reports them done.
+	PurgeTenants []string `json:"purgeTenants,omitempty"`
 }
 
 func (m *Mgmt) Heartbeat(ctx context.Context, hostID string, liveNodes int, leases []HeartbeatLease, deps ...DeploymentStatus) (HeartbeatResponse, error) {
@@ -630,6 +635,10 @@ type HostReport struct {
 	// an empty list means none run.
 	Usage      *HostUsage         `json:"usage"`
 	Containers []RunningContainer `json:"containers"`
+
+	// PurgedTenants are the deleted tenants whose local state this host
+	// removed (the heartbeat reply's PurgeTenants; tenantpurge.go).
+	PurgedTenants []string `json:"purgedTenants"`
 }
 
 // ReportHostStatus is a heartbeat: host liveness and usage, lease renewals,
@@ -663,6 +672,7 @@ func (m *Mgmt) ReportHostStatus(ctx context.Context, hostID string, rep HostRepo
 		return resp, err
 	}
 	resp.RevokeObjects = append(resp.RevokeObjects, objs...)
+	resp.PurgeTenants = m.tenantPurgesFor(ctx, hostID, rep.PurgedTenants) // tenantpurge.go
 	return resp, nil
 }
 
