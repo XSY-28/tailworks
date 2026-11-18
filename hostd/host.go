@@ -40,7 +40,6 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/r2"
 	"github.com/rosskukulinski/tailworks/hostd/sandbox"
 	"github.com/rosskukulinski/tailworks/internal/procsb"
-	"github.com/rosskukulinski/tailworks/netd"
 	"tailscale.com/tsnet"
 )
 
@@ -836,11 +835,6 @@ func newTraceID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
-}
-
-// writeErr renders a typed error (netd catalog shape).
-func writeErr(w http.ResponseWriter, code, detail string) {
-	netd.WriteError(w, &netd.Error{Code: code, Detail: detail})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

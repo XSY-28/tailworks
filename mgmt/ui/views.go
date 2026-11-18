@@ -526,15 +526,3 @@ func tenantNoteText(r auditRecord) string {
 	}
 	return "tenant note (unverified, written by tenant code): " + text
 }
-
-func compact(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
