@@ -45,7 +45,7 @@ func TestSeatbeltProfile(t *testing.T) {
 	}
 	deny := idx(`(deny file-read* file-write* (subpath "` + rd + `/data"))`)
 	allow := idx(`(allow file-read* file-write* (subpath "` + rd + `/data/tenants/A/workloads/w/do"))`)
-	idx(`(deny network-outbound (remote unix-socket (subpath "` + rd + `/run")))`)
+	idx(`(deny network*)`)
 	idx(`(allow network-outbound (remote unix-socket (subpath "` + rd + `/run/i1")))`)
 	idx(`(allow file-read* (literal "/opt/workerd"))`)
 	idx(`(allow file-read-metadata (literal "` + rd + `/data/tenants"))`)
@@ -74,7 +74,7 @@ func TestSeatbeltProfileNodePrefix(t *testing.T) {
 		}
 	}
 	p := seatbeltProfile([]string{dir + "/run/i2", dir + "/data/tenants/A/workloads/w/node"}, []string{bin}, nodePrefix(bin),
-		[]string{dir + "/home", dir + "/data", dir + "/run"})
+		[]string{dir + "/home", dir + "/data", dir + "/run"}, nil, nil)
 	lines := strings.Split(p, "\n")
 	at := func(s string) int {
 		for i, l := range lines {
