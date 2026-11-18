@@ -351,7 +351,7 @@ func TestRealTailnet(t *testing.T) {
 			"quad100":       {"http://100.100.100.100/", netd.CodeForbiddenDestination},
 			"public_ip":     {"http://1.1.1.1/", netd.CodeForbiddenDestination},
 			"localhost":     {"http://localhost/", netd.CodePeerNotVisible},
-			"public_name":   {"http://example.com/", netd.CodePeerNotVisible},
+			"public_name":   {"http://example.com/", netd.CodeInternetEgressUnavailable},
 			"nonexistent":   {"http://" + prefix + "-nonexistent/", netd.CodePeerNotVisible},
 			"unknown_cgnat": {"http://100.127.255.254/", netd.CodePeerNotVisible},
 			"echo_short_ok": {"http://" + prefix + "-echo/", ""},
