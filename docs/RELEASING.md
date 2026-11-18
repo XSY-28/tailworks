@@ -161,8 +161,6 @@ scripts/release-notes.sh v0.1.0 v0.2.0
         `npm view @tailworks/tailnet version` and that
         `npm create tailworks@latest x && cd x && npm install && npx tsc --noEmit`
         passes on a machine without this checkout.
-     4. Remove the "until the first release that publishes them" notes from
-        `docs/wrangler.md` and `docs/testing.md`.
 
 ## Signing
 
