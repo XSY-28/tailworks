@@ -93,6 +93,9 @@ lives in `egress_sink_test.go`).
   hostd/bundle, hostd/gen, security/attacks).
 - After merging origin/master (9d3db9c: npm publishing docs and workflow
   only, no security-relevant change): `make lint` pass.
+- After merging origin/master again (544caa4, #164 tenant purge for #107):
+  `tw tenant rm` now revokes a tenant's warm keys, so the ledger's H25 row
+  and #158 say so. `make lint` pass; `make test` pass (all packages).
 
 ## Gaps
 
