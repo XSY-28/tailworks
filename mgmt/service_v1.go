@@ -227,8 +227,6 @@ func (m *Mgmt) DeleteTenant(ctx context.Context, id string, force bool, by strin
 			if l, err := m.store.GetLease(ctx, LeaseName(id, d.Workload)); err == nil && l.Holder != "" {
 				m.store.ReleaseLease(ctx, l.Name, l.Holder, l.Epoch)
 			}
-			m.mu.Lock()
-			m.mu.Unlock()
 		}
 	}
 	if err := m.store.DeleteTenant(ctx, id); err != nil {
