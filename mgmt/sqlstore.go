@@ -870,31 +870,37 @@ func (s *SQLStore) GetTenant(ctx context.Context, id string) (Tenant, error) {
 }
 
 func (s *SQLStore) DeleteTenant(ctx context.Context, id string) error {
-	return s.tx(ctx, func(tx *sql.Tx) error {
-		for _, q := range []string{"DELETE FROM objects WHERE tenant_id=?", "DELETE FROM deployments WHERE tenant_id=?", "DELETE FROM workload_public WHERE tenant_id=?",
-			"DELETE FROM public_names WHERE tenant_id=?", // publicnames.go: a deleted tenant releases its names
-			"DELETE FROM leases WHERE name LIKE ? || '/%'", "DELETE FROM container_reservations WHERE tenant_id=?"} {
-			if _, err := tx.ExecContext(ctx, s.q(q), id); err != nil {
-				return err
-			}
-		}
-		// The tenant's registry namespace (ADR-032 D3): its links and tags go
-		// (blobs stay content-addressed on disk). A prefix compare, not LIKE:
-		// "_" in a tenant ID must not match another tenant's namespace.
-		for _, q := range []string{"DELETE FROM registry_links WHERE substr(repo, 1, ?) = ?", "DELETE FROM registry_tags WHERE substr(repo, 1, ?) = ?"} {
-			if _, err := tx.ExecContext(ctx, s.q(q), len(id)+1, id+"/"); err != nil {
-				return err
-			}
-		}
-		res, err := tx.ExecContext(ctx, s.q("DELETE FROM tenants WHERE id=?"), id)
-		if err != nil {
+	_, _, err := s.PurgeTenant(ctx, id, time.Now().UnixMilli()) // sqlstore_tenantpurge.go: every row the tenant owns
+	return err
+}
+
+// deleteTenantTx deletes the tenant row and what PurgeTenant leaves to it.
+func (s *SQLStore) deleteTenantTx(ctx context.Context, tx *sql.Tx, id string) error {
+	for _, q := range []string{"DELETE FROM objects WHERE tenant_id=?", "DELETE FROM deployments WHERE tenant_id=?", "DELETE FROM workload_public WHERE tenant_id=?",
+		"DELETE FROM public_names WHERE tenant_id=?", // publicnames.go: a deleted tenant releases its names
+		"DELETE FROM container_reservations WHERE tenant_id=?"} {
+		if _, err := tx.ExecContext(ctx, s.q(q), id); err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return ErrNotFound
+	}
+	// The tenant's registry namespace (ADR-032 D3): its links and tags go
+	// (blobs stay content-addressed on disk), and its leases. A prefix
+	// compare, not LIKE: "_" in a tenant ID must not match another
+	// tenant's namespace.
+	for _, q := range []string{"DELETE FROM registry_links WHERE substr(repo, 1, ?) = ?", "DELETE FROM registry_tags WHERE substr(repo, 1, ?) = ?",
+		"DELETE FROM leases WHERE substr(name, 1, ?) = ?"} {
+		if _, err := tx.ExecContext(ctx, s.q(q), len(id)+1, id+"/"); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	res, err := tx.ExecContext(ctx, s.q("DELETE FROM tenants WHERE id=?"), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *SQLStore) ListTenants(ctx context.Context, pg Page) ([]Tenant, error) {

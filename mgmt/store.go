@@ -19,8 +19,8 @@ type Store interface {
 	// UpdateTenant rewrites mint configuration and limits (not ID/tailnet).
 	UpdateTenant(ctx context.Context, t Tenant) error
 	ListTenants(ctx context.Context, pg Page) ([]Tenant, error)
-	// DeleteTenant removes the tenant row (objects, deployments and leases
-	// of the tenant must already be gone or are removed with it).
+	// DeleteTenant removes the tenant row and every row the tenant owns
+	// (sqlstore_tenantpurge.go). Its custody entries are the caller's.
 	DeleteTenant(ctx context.Context, id string) error
 
 	UpsertHost(ctx context.Context, h Host) error

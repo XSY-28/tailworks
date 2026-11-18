@@ -172,6 +172,29 @@ look like:
   tailnet. Use the `mcp` and `approve` entries of a tenant-admin value to
   limit them to one team.
 
+## Removing a team
+
+`tw tenant rm <tenant> --force` (an admin) removes the team's tenant and
+everything it owns. It kills the tenant's live objects (their devices go
+too), then deletes:
+
+- its custody entries: the data keys of its KV, D1 and R2 stores and its
+  queues, its workloads' secrets and volume keys, its objects' auth keys,
+  its notification and telemetry settings and its OBO roots. Deleting the
+  data keys makes any copy of the sealed data unreadable;
+- every row it owns in mgmt's store: the store journals, queue messages,
+  objects, deployments and their bundles, leases, public names and the
+  rest, and the tenant row last, in one transaction;
+- its files on every host: each host removes `tenants/<id>/` (node state,
+  Durable Object storage, logs) and the tenant's R2 blobs at its next
+  heartbeat, audited `tenant_purge_host`. A host with an S3 R2 backend
+  can't list the bucket, so it logs the `t/<tenant>/` prefix for the
+  operator to delete.
+
+The audit records stay. The `tenant_delete` record counts what was removed
+(`removed`). If the delete fails part way (custody unreachable, say), the
+tenant is still there; run the same command again to finish it.
+
 ## Admins
 
 `github.com/rosskukulinski/tailworks/cap/admin` is unchanged: an admin can do everything, in every
