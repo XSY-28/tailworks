@@ -54,7 +54,8 @@ The ones you'll meet most:
 | `deploy_failed` | the app crashed at start; `tw logs <workload>` |
 | `identity_pending` | the node didn't come up in time; `tw status`, then `tw logs --component hostd` |
 | `unknown_workload` | no such deployment; `tw ls` |
-| `peer_not_visible` | the app called a name that isn't on the tailnet or isn't granted; check `tailnet.connects` and the grants |
+| `peer_not_visible` | the app called a tailnet name that isn't in its netmap (missing or not granted); check `tailnet.connects` and the grants |
+| `internet_egress_unavailable` | the app called an internet name; Workers have no internet egress. Put a gateway on the tailnet (docs/recipes.md#call-an-internet-api) |
 | `cap_missing` | an MCP caller lacks the tool in its grant's app capability (see `tw-policy`) |
 
 ## Check the machine

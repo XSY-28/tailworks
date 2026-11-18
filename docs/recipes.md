@@ -19,9 +19,11 @@ each has a README.md. Limits that apply to all of these are in
 
 ## Call an internet API
 
-A Worker's outbound `fetch()` reaches **tailnet peers only**. A request to
-`https://api.example.com` is refused with `peer_not_visible`, the same as
-a peer you have no grant to ([COMPAT.md](COMPAT.md#fetch)). To call an
+A Worker's outbound `fetch()` reaches **tailnet peers only**, and there is
+no setting that gives Workers internet egress. A request to
+`https://api.example.com` is refused with 403
+[`internet_egress_unavailable`](errors.md#internet_egress_unavailable),
+whose detail links here ([COMPAT.md](COMPAT.md#fetch)). To call an
 internet API, put a gateway for it on your tailnet and grant the workload
 access to that gateway. The gateway is where internet egress happens, so
 it's also the place to log, cache or rate-limit it.
