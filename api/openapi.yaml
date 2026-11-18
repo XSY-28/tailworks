@@ -334,8 +334,15 @@ paths:
         unless `force=true`: then every live object is killed (cascade, device
         deletes through the tenant credential), killed/failed objects are
         purged, deployments and leases are released, and the whole cascade is
-        audited (`kind: tenant_delete`). The tenant's custody entries (OBO root,
-        volume keys) are removed last.
+        audited (`kind: tenant_delete`, with the counts of what was removed).
+        Then everything the tenant owns is removed: its custody entries (store
+        and queue data keys, workload secrets, volume keys, auth keys,
+        notification and telemetry settings, OBO roots), its KV, D1 and R2
+        journals, queue messages, objects, deployments and the rest of its
+        rows, and the tenant row last. Every host removes the tenant's files
+        (`tenants/<id>/`, R2 blobs) at its next heartbeat (`purgeTenants`),
+        audited `tenant_purge_host`. Only the audit records stay. The delete
+        is idempotent: if it fails part way, run it again to finish.
       x-tw-role: admin
       x-tw-audit: true
       parameters:
@@ -4804,6 +4811,10 @@ components:
         purged: { type: array, items: { type: string } }
         deploymentsStopped: { type: array, items: { type: string } }
         devicesDeleting: { type: array, items: { type: string } }
+        removed:
+          type: object
+          description: What the delete removed, by kind (rows, custody entries, hosts to purge).
+          additionalProperties: { type: integer, format: int64 }
     PurgeResult:
       type: object
       required: [purged]
@@ -5184,6 +5195,10 @@ components:
             holds the workload's lease (it runs; mgmt records it, over quota
             or not, audited `container_reserve` with `adopted`), else ignored.
           items: { $ref: "#/components/schemas/RunningContainer" }
+        purgedTenants:
+          type: array
+          description: Deleted tenants (from `purgeTenants`) whose local state this host has removed.
+          items: { type: string }
       additionalProperties: false
     HostStatusResponse:
       type: object
@@ -5192,6 +5207,13 @@ components:
         revoke: { type: array, items: { type: string }, description: Lease entries that are no longer held. }
         revokeObjects: { type: array, items: { type: string }, description: Object IDs killed in the last 10 min in namespaces this host holds; kill idempotently. }
         assignmentsChanged: { type: boolean, description: A hint to re-list assignments (set when a push could not be delivered). }
+        purgeTenants:
+          type: array
+          description: |
+            Deleted tenants whose local state this host must remove
+            (`tenants/<id>/`, R2 blobs); repeated until the host reports them
+            in `purgedTenants`.
+          items: { type: string }
     HostDeleteResult:
       type: object
       required: [hostID, killed, leasesReleased]
@@ -5709,6 +5731,7 @@ components:
         `tenant_create`,
         `tenant_update`,
         `tenant_delete`,
+        `tenant_purge_host` (a host removed a deleted tenant's files),
         `host_register`,
         `host_delete`,
         `host_cordon`,
@@ -5791,6 +5814,7 @@ components:
         - tenant_create
         - tenant_update
         - tenant_delete
+        - tenant_purge_host
         - host_register
         - host_delete
         - host_cordon
