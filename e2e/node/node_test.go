@@ -329,6 +329,9 @@ func TestNodeTier(t *testing.T) {
 		if sb == hostd.SandboxLandlock {
 			rec["landlock"] = e.landlockNodeChecks(t, ws, base)
 		}
+		if sb == hostd.SandboxSeatbelt {
+			rec["seatbelt"] = e.seatbeltNodeChecks(t, ws, base)
+		}
 		e.record("nodeprobe.sandbox", rec)
 	})
 
@@ -577,7 +580,7 @@ func TestNodeWorkflow(t *testing.T) {
 }
 
 // RT-08: the Node tier's egress proxy is an enforcement boundary only under
-// a sandbox that confines the process's TCP (Landlock ABI ≥ 4); elsewhere status says
+// a sandbox that confines the process's TCP (Landlock ABI ≥ 4, Seatbelt); elsewhere status says
 // `Egress: "unenforced"`. On a host with NO process sandbox at all, a
 // Node-tier deployment for a second tenant is refused (egress_unenforced)
 // unless the operator passes -insecure-shared-host.
@@ -586,7 +589,7 @@ func TestNodeTierSharedHostRefused(t *testing.T) {
 	dep := e.a.DeployNode(hostdtest.Fixture("nodeprobe"), "nodeprobe", nil)
 	e.a.WaitActive("nodeprobe", dep, 60*time.Second)
 	ws := e.nodeStatus(e.a, "nodeprobe")
-	if ws.Egress != hostd.EgressEnforcement(ws.Sandbox) || ws.Sandbox != hostd.SandboxLandlock && ws.Egress == hostd.EgressEnforced {
+	if ws.Egress != hostd.EgressEnforcement(ws.Sandbox) || ws.Sandbox != hostd.SandboxLandlock && ws.Sandbox != hostd.SandboxSeatbelt && ws.Egress == hostd.EgressEnforced {
 		t.Fatalf("status Egress=%q Sandbox=%q", ws.Egress, ws.Sandbox)
 	}
 	// A host without any process sandbox, serving a second tenant.

@@ -75,6 +75,11 @@ http.createServer(async (req, res) => {
         });
         return json(res, 200, r);
       }
+      case "/signal": {
+        // Sandbox probe: kill(pid, 0). Only the outcome is returned.
+        try { process.kill(Number(u.searchParams.get("pid")), 0); return json(res, 200, { ok: true }); }
+        catch (e) { return json(res, 200, { ok: false, code: e.code ?? String(e) }); }
+      }
       case "/log": console.log("probe-log-line", u.searchParams.get("m")); return json(res, 200, { ok: true });
       case "/crash": json(res, 200, { bye: process.pid }); setTimeout(() => process.exit(3), 10); return;
       case "/stream": {
