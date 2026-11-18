@@ -178,7 +178,8 @@ func TestMultiTenant(t *testing.T) {
 		if err := probe("/bin/ls", ws["a"].DOStorage); err != nil {
 			t.Fatalf("tenant A's sandbox can't list its own DO storage: %v", err)
 		}
-		t.Logf("seatbelt: tenant A's workerd profile denies tenant B's state dir, node state and DO storage")
+		seatbeltLiveEscapes(t, ws["a"].SandboxProfile)
+		t.Logf("seatbelt: tenant A's workerd profile denies tenant B's state dir, node state and DO storage, TCP, signals to hostd and writes to /tmp")
 	} else if sb == hostd.SandboxLandlock {
 		landlockCrossTenant(t, ea, ws["a"], ws["b"], filepath.Join(data, "tenants", eb.TenantID), objs["b"].NetdID)
 	} else {

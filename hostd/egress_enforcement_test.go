@@ -11,7 +11,8 @@ func TestEgressEnforcementByABI(t *testing.T) {
 		want    string
 	}{
 		{SandboxNone, 0, EgressUnenforced},
-		{SandboxSeatbelt, 0, EgressUnenforced},
+		{SandboxSeatbelt, 0, EgressEnforced},
+		{SandboxSeatbeltLegacy, 0, EgressUnenforced},
 		{SandboxLandlock, 0, EgressUnenforced},
 		{SandboxLandlock, 1, EgressUnenforced},
 		{SandboxLandlock, 2, EgressUnenforced},
