@@ -624,7 +624,7 @@ func cmdTenantRm(args []string) error {
 	if len(pos) != 1 {
 		return fail("bad_request", "tw tenant rm needs one tenant", "usage: tw "+usageOf("tenant"))
 	}
-	if err := confirmDestroy(f, *yes, "removing tenant "+pos[0]+" stops serving it from this mgmt and deletes its deployments, queues and stores", pos[0], "tw tenant rm "+pos[0]); err != nil {
+	if err := confirmDestroy(f, *yes, "removing tenant "+pos[0]+" stops serving it from this mgmt and deletes everything it owns: deployments, KV, D1 and R2 data, queues, secrets, data keys and its files on every host", pos[0], "tw tenant rm "+pos[0]); err != nil {
 		return err
 	}
 	s, err := openState(*f.stateDir)
