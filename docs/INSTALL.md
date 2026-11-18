@@ -523,10 +523,15 @@ your user account. On top of that, tw-hostd runs every tenant's workerd
 
 Either way a workload can't read your home dir (including `~/.tailworks`),
 tailworks' state (node keys, mgmt custody, other tenants' storage) or any
-tenant's API key file, and can't use mgmt's or hostd's sockets. The macOS
-profile is a deny list: anything else the user can read or write, the
-workload can too, and it can signal the user's processes
+tenant's API key file, and can't use mgmt's or hostd's sockets. **On
+macOS** a workload can also write only its own dirs, open no network
+except its own unix sockets and the TCP ports hostd gives it (a Node app:
+its egress proxy and its own port), signal only itself and its children,
+and exec only its runtime, its own dirs and the OS dirs; it can still
+read what the user can outside the denied paths
 ([security-model.md](security-model.md#what-the-process-tier-sandbox-confines)).
+`tw-hostd -sandbox seatbelt-legacy` brings back the previous files-only
+profile for one release.
 **Linux adds more:** a workload can write only its own instance and data
 dirs and read only the OS, its runtime binary and its install prefix;
 with Landlock ABI ≥ 4 (kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) it may
