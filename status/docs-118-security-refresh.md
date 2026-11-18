@@ -96,6 +96,11 @@ lives in `egress_sink_test.go`).
 - After merging origin/master again (544caa4, #164 tenant purge for #107):
   `tw tenant rm` now revokes a tenant's warm keys, so the ledger's H25 row
   and #158 say so. `make lint` pass; `make test` pass (all packages).
+- After merging #160 (#135 race fix) and #162 (#117: a Worker's fetch to an
+  internet name now fails `internet_egress_unavailable`; still no internet
+  egress for Workers): no claim here changes; THREAT-MODEL already says
+  Worker egress is netd's guard to tailnet peers only. `make lint` and
+  `make test` rerun after each merge.
 
 ## Gaps
 
