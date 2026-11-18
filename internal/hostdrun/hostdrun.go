@@ -299,6 +299,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		if mc, err = mgmtapi.NewClient(o.MgmtAddr); err != nil {
 			return nil, err
 		}
+		mc.HostID = o.HostID // before first use: the client is shared (rt.Client, the image puller)
 		if strings.HasPrefix(o.MgmtAddr, "unix://") || strings.HasPrefix(o.MgmtAddr, "/") {
 			mc.TokenFile = o.MgmtTokenFile
 		}
@@ -320,6 +321,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		if mc, err = mgmtapi.NewClient(o.MgmtAddr); err != nil {
 			return nil, err
 		}
+		mc.HostID = o.HostID // before first use: the client is shared (rt.Client, the image puller)
 		mc.HTTP = &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{DialContext: rt.TS.Dial, MaxIdleConnsPerHost: 16}}
 		if pushLn, err = rt.TS.Listen("tcp", fmt.Sprintf(":%d", o.PushPort)); err != nil {
 			return nil, fmt.Errorf("push listener on the node: %w", err)
