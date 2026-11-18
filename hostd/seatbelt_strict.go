@@ -33,7 +33,7 @@ var seatbeltDevWrite = []string{
 //     data and run dirs, credential files), then allowed again under each
 //     of own; each of readOnly (the runtime binary) and everything below
 //     readOnlyTrees (a Node install prefix) is readable;
-//   - writes are denied everywhere else too (/tmp, /Users/Shared, …),
+//   - writes are denied everywhere else too (/tmp and the rest of the disk),
 //     except a few devices;
 //   - all network is denied (no DNS: netd resolves names), except unix
 //     sockets in own, TCP connects to localhost:<connectTCP> (a Node app's

@@ -58,8 +58,8 @@ Last update: 2026-11-17 PT. Strict macOS Seatbelt profile (#121): writes, networ
   signalling itself work; status `Egress: enforced`. TestNodeWorkflow
   (Vercel Workflow, restarts) passes under the strict profile. PASS.
 - `make lint`: PASS. `TestDoctor` (cmd/tw): PASS.
-- `make test`: see the PR for the result of this run (the Mac ran ~14
-  agents' suites at once; load average 35-47).
+- `make test` (as its parts, after merging origin/master): `go test -race` of netd/... and internal/... PASS; of cmd, hostd, security, mgmt, docs, schema, guest, agent PASS; `make test-js` PASS. `make test-sdk` PASS (all SDK apps under seatbelt). The single `make test` run hit the 30-min tool limit (~14
+  agents running suites at once, load average 35-47), so it was run in parts.
 
 ## Gaps / next
 
