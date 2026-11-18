@@ -122,7 +122,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · mgmt, hostd. **When:** the caller's role is fine but the record is not its own: a host reading another host's deployment or lease, a request to a workerd instance from the wrong peer; a host node asking for the admin UI (`/ui/`); or, with the message `cross-site request refused`, a browser-originated mutation (it carried `Origin` or `Sec-Fetch-Mode`) whose `Sec-Fetch-Site` was not `same-origin`/`none`, whose `Origin` was not the request's own host and one of mgmt's own names, or which hit `/v1` without the `X-Tw-UI: 1` header (docs/ADMIN-UI.md). **Fix:** usually a bug or stale state; `tw status` and report it. For the cross-site refusal, use the admin UI from mgmt's own URL (`http(s)://tw-mgmt.<tailnet>/ui/`), never through another origin; CLI and hostd clients send none of those headers and are never affected.
 
 ### forbidden_destination
-403 · netd. **When:** egress to a destination class netd refuses: loopback, link-local, multicast, cloud metadata, the object itself, a sibling object on the same host, the host, or a non-tailnet address (ADR-019). **Fix:** only tailnet peers are reachable from an object; talk to siblings through the tailnet name of another host, or `tw up --allow-sibling-egress` for dev.
+403 · netd. **When:** egress to a destination class netd refuses: loopback, link-local, multicast, cloud metadata, the object itself, a sibling object on the same host, the host, or a non-tailnet IP address (ADR-019; an internet name is [`internet_egress_unavailable`](#internet_egress_unavailable)). **Fix:** only tailnet peers are reachable from an object; talk to siblings through the tailnet name of another host, or `tw up --allow-sibling-egress` for dev.
 
 ### funnel_required
 412 · cli. **When:** `tw deploy` of an app with tailworks.jsonc `"public"` routes, and the tenant policy has no `funnel` node attribute for `tag:tw-public` (ADR-029). **Fix:** add the printed `nodeAttrs` entry for `tag:tw-public` (never `tag:tw-mgmt`) and deploy again.
@@ -171,6 +171,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### internal
 500 · mgmt, cli. **When:** an unexpected error with no better code; the CLI wraps any untyped error this way. **Fix:** the detail is redacted but usually names the cause; `tw logs --component mgmt|hostd`; report it with the `trace_id`.
+
+### internet_egress_unavailable
+403 · netd. **When:** a Worker (or Node app) called a name that is not a tailnet name, such as `https://api.github.com/`. A tailnet name is a bare short name, a name under a tailnet's MagicDNS suffix, or any `*.ts.net` name; anything else would be internet egress, and Workers have none. There is no setting that turns it on; names are never resolved via host DNS. **Fix:** put a gateway for the API on your tailnet and call that ([recipes.md](recipes.md#call-an-internet-api)). Containers are the exception: one started with `enableInternet: true` may reach the hosts in `tailnet.egress.internet` ([containers.md](containers.md)). A tailnet name that isn't in the netmap is [`peer_not_visible`](#peer_not_visible) instead.
 
 ### keys_in_guest
 1 · cli. **When:** `tw host vmcheck --keyscan` found key material inside a microVM guest. **Fix:** this must never happen (keys stay in hostd); report it with the output.
@@ -278,7 +281,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 429 · mgmt. **When:** the tenant's `maxObjects` is reached. **Fix:** `tw tenant set <tenant> --max-objects N`, or kill idle objects.
 
 ### peer_not_visible
-403 · netd. **When:** the destination is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes). **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
+403 · netd. **When:** the destination is a tailnet name or address that is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes). An internet name gets [`internet_egress_unavailable`](#internet_egress_unavailable) instead. **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
 
 ### plan_feature_missing
 501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use; also `ctx.tailnet.connect()` (raw TCP egress), which is not implemented yet. **Fix:** use `fetch()`; see STATUS.md for what is built.
