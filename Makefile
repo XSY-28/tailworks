@@ -538,15 +538,12 @@ lint: api-check compat-check changes-check
 lint-tools:
 	$(GO) build -C tools -o $(CURDIR)/bin/lint/ honnef.co/go/tools/cmd/staticcheck golang.org/x/vuln/cmd/govulncheck
 
-# staticcheck: one run per OS (-matrix), so code that only one OS uses isn't
-# reported unused and a Mac reports what CI reports. cmd/tw-vz is cgo
-# (Virtualization.framework) and can't be type-checked without cgo, so it's
-# left out. Silence a finding only with a `//lint:ignore <check> <reason>`
-# comment on the line above it.
-STATICCHECK_MATRIX := linux: GOOS=linux CGO_ENABLED=0\ndarwin: GOOS=darwin CGO_ENABLED=0\n
+# staticcheck: linux and darwin, the same on a Mac as in CI (how: the
+# script's header). Silence a finding only with a
+# `//lint:ignore <check> <reason>` comment on the line above it.
 .PHONY: staticcheck
 staticcheck: lint-tools
-	printf '$(STATICCHECK_MATRIX)' | bin/lint/staticcheck -matrix $$($(GO) list ./... | grep -v '/cmd/tw-vz$$')
+	GO=$(GO) sh scripts/staticcheck.sh bin/lint/staticcheck
 
 # vulncheck: govulncheck ./... against the Go vulnerability database
 # (vuln.go.dev, so it needs the network). It fails on any vulnerability the
