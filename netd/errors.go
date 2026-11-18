@@ -27,6 +27,10 @@ const (
 	CodeNotPublic         = "not_public"          // 404: the path is not in public.routes
 	CodeUpgradeNotAllowed = "upgrade_not_allowed" // 403: the route is not in public.upgrade
 	CodeRequestTimeout    = "request_timeout"     // 504: public.limits.timeoutSeconds expired
+
+	// Egress to a name that is not on the tailnet (403): Workers have no
+	// internet egress.
+	CodeInternetEgressUnavailable = "internet_egress_unavailable"
 )
 
 // DocBase is the prefix for doc_url in error bodies.
@@ -58,6 +62,8 @@ func (e *Error) Status() int {
 	}
 	switch e.Code {
 	case CodeForbiddenDestination, CodePeerNotVisible, CodeUnknownObject, CodeNoIdentity:
+		return http.StatusForbidden
+	case CodeInternetEgressUnavailable:
 		return http.StatusForbidden
 	case CodeBadRequest:
 		return http.StatusBadRequest
