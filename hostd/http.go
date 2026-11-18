@@ -636,7 +636,7 @@ type WorkloadStatus struct {
 	// Egress (Node tier) says whether egress attribution is an enforcement
 	// boundary on this host: "enforced" only under a sandbox that confines
 	// the process's network to the egress proxy (Landlock ABI ≥ 4 on Linux,
-	// or a microVM); otherwise "unenforced": the proxy is cooperative and a
+	// Seatbelt on macOS, or a microVM); otherwise "unenforced": the proxy is cooperative and a
 	// hostile app can bypass it with raw sockets (RT-08, docs/node-tier.md).
 	Egress string `json:",omitempty"`
 	// LogFile is the app's log (workerd.log, or app.log for runtime node).
@@ -666,9 +666,9 @@ const (
 )
 
 // EgressEnforcement reports whether a Node-tier process under the given
-// sandbox can only reach the network through hostd's egress proxy. Neither
-// "none" nor macOS Seatbelt (which confines files, not TCP) does that; the
-// Linux Landlock sandbox pins the process's TCP connects to the proxy port
+// sandbox can only reach the network through hostd's egress proxy. macOS
+// Seatbelt does (TCP connects only to localhost:<proxy> and its own port);
+// "none" and "seatbelt-legacy" don't. The Linux Landlock sandbox pins the process's TCP connects to the proxy port
 // only on a kernel with Landlock ABI ≥ 4 (6.7+). Below that, Landlock has
 // no TCP rules and the seccomp filter allows TCP sockets, so the proxy is
 // cooperative there too. A microVM is the only other enforcement boundary.

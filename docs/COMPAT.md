@@ -415,10 +415,10 @@ unless `tailworks.jsonc` lists `public.routes` ([public-ingress.md](public-ingre
 ## Node process tier (M9)
 
 See [node-tier.md](node-tier.md) for the full table and the security
-caveat: on Linux with Landlock ABI ≥ 4 (kernel 6.7+) the sandbox lets a Node
-app open TCP only to its own port and its egress proxy, so egress through
-netd is **enforced**; on macOS (Seatbelt) and on Landlock ABI < 4 it is
-**cooperative** (a malicious Node app can bypass the proxy; `tw status`
+caveat: on Linux with Landlock ABI ≥ 4 (kernel 6.7+) and on macOS (Seatbelt)
+the sandbox lets a Node app open TCP only to its own port and its egress
+proxy, so egress through netd is **enforced**; on Landlock ABI < 4 (and
+under `tw-hostd -sandbox seatbelt-legacy`) it is **cooperative** (a malicious Node app can bypass the proxy; `tw status`
 says `egress unenforced` and `tw doctor` warns). A multi-tenant host
 refuses a Node deploy by default only when it has no process sandbox at
 all; see [security-model.md](security-model.md#when-a-host-is-shared-between-tenants).

@@ -107,8 +107,13 @@ ABI 4). Unix sockets: on ABI < 9 Landlock can't refuse a connect to a
 pathname socket, so tailworks' own sockets (hostd's, mgmt's, the instance
 egress sockets) refuse sandboxed peers themselves; see INSTALL.md.
 
-**Elsewhere it is cooperative.** On macOS (Seatbelt confines files and unix
-sockets, not TCP) and on Linux kernels with Landlock ABI < 4, a malicious or
+**On macOS it is enforced too.** The Seatbelt profile refuses every
+network operation except TCP connects to `localhost:<proxy port>` and
+`localhost:<own port>`, a bind of its own port, and unix sockets in its own
+dirs; `make test-node` checks the same probes there (`EPERM`).
+
+**Elsewhere it is cooperative.** On Linux kernels with Landlock ABI < 4
+(and under `tw-hostd -sandbox seatbelt-legacy`), a malicious or
 buggy Node app can ignore the env proxies, override the global dispatcher,
 or open raw sockets to loopback, the LAN, the internet or other local
 services, because it is an ordinary process with the host user's network.
