@@ -70,13 +70,6 @@ type MultiEnv struct {
 
 func (m *MultiEnv) tenants() []*Tenant { return []*Tenant{m.A, m.B} }
 
-func must[T any](v T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return v
-}
-
 func (m *MultiEnv) other(t *Tenant) *Tenant {
 	if t == m.A {
 		return m.B

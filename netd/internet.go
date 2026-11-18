@@ -40,6 +40,7 @@ func tailnetShaped(want string, st *ipnstate.Status) bool {
 	if st.CurrentTailnet != nil && under(st.CurrentTailnet.MagicDNSSuffix) {
 		return true
 	}
+	//lint:ignore SA1019 fallback for a node whose status has no CurrentTailnet (checked first, above)
 	if under(st.MagicDNSSuffix) {
 		return true
 	}

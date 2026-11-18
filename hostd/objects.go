@@ -59,8 +59,6 @@ type object struct {
 	nodeGen uint64
 }
 
-func (o *object) namespace() string { return mgmtapi.Namespace(o.Workload, o.Class) }
-
 // key is the local lookup key: tenant|workload|class|name.
 func (o *object) key() string { return objKey(o.TenantID, o.Workload, o.Class, o.Name) }
 
