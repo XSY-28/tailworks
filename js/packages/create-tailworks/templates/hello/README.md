@@ -18,7 +18,10 @@ tw deploy                             # then curl the URL it prints, from any de
   (node, user, tags, capabilities); there are no tokens to check.
 - `wrangler.jsonc` `vars.UPSTREAM`: a service on your tailnet to fetch, e.g.
   `http://inventory-db/items`. Outbound `fetch()` reaches tailnet peers only;
-  a missing grant answers `peer_not_visible` (in the `tw-error` header).
+  a missing grant answers `peer_not_visible` (in the `tw-error` header), and
+  an internet URL answers `internet_egress_unavailable`: Workers have no
+  internet egress, so call an internet API
+  [through a gateway on your tailnet](https://github.com/rosskukulinski/tailworks/blob/master/docs/recipes.md#call-an-internet-api).
 - `tailworks.jsonc` `tailnet.connects`: the tags you call (the template says
   `tag:db`). `tw deploy` checks that your tailnet policy grants them.
 - `tailworks.jsonc` `tailnet.tags`: the workload node's tag, named after your app
