@@ -133,9 +133,12 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    from the tag, which publishes `@tailworks/tailnet`, `@tailworks/node`, `@tailworks/mcp`
    and `create-tailworks` at the release's version (a prerelease goes to the
    `next` dist-tag), with provenance.
-   - It needs the repository secret `NPM_TOKEN`, a token that may publish
-     the `@tailworks` scope and `create-tailworks`. Without it the job only logs a
-     notice.
+   - Auth is npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+     (OIDC): npm trusts this repository's `npm-publish.yml` for each
+     package, and the job (`id-token: write`, npm >= 11.5.1) publishes with
+     no token or secret. Provenance is automatic. A package without a
+     trusted publisher fails to publish; see "Trusted publishing setup"
+     below.
    - Packages already on npm at that version are skipped, so after a partial
      failure re-run it: `gh workflow run npm-publish.yml -f tag=v0.2.0`.
    - By hand, from a checkout of the tag after `npm ci` and `npm login`:
@@ -145,22 +148,32 @@ scripts/release-notes.sh v0.1.0 v0.2.0
      packages: `make templates-typecheck` (every template's
      `tw init && npm install && npx tsc --noEmit`, with `@tailworks/*` from
      `npm pack` tarballs).
-   - One-time setup, before the first publish:
-     1. On npmjs.com, create the `tailworks` organization (that owns the
-        `@tailworks` scope) and check that the unscoped name
-        `create-tailworks` is still free.
-     2. Create a granular access token that can publish `@tailworks/*` and
-        `create-tailworks` (an automation token also works), and add it to
-        the repository as the `NPM_TOKEN` secret:
-        `gh secret set NPM_TOKEN`.
-     3. Cut the next release as above; publishing it runs the workflow.
-        Only tags made after the rename to tailworks carry the
-        `@tailworks/*` names, so don't publish an older tag. For a release
-        already published before the secret existed:
-        `gh workflow run npm-publish.yml -f tag=v<VERSION>`. Then check
-        `npm view @tailworks/tailnet version` and that
-        `npm create tailworks@latest x && cd x && npm install && npx tsc --noEmit`
-        passes on a machine without this checkout.
+   - Trusted publishing setup (each package: `@tailworks/tailnet`,
+     `@tailworks/node`, `@tailworks/mcp`, `create-tailworks`):
+     1. Configure it just before a release: a new trusted publisher must be
+        used by a publish within 2 days or it expires (then delete it and
+        add it again).
+     2. On npmjs.com, the package's Settings → Trusted Publisher → GitHub
+        Actions: user `rosskukulinski`, repository `tailworks`, workflow
+        `npm-publish.yml`, no environment. Or with npm >= 11.15, logged in
+        as a maintainer:
+        `npm trust github <pkg> --file npm-publish.yml --repo rosskukulinski/tailworks --allow-publish`.
+     3. Publish the release (or `gh workflow run npm-publish.yml -f tag=v<VERSION>`
+        for one already published), then check
+        `npm view @tailworks/tailnet version`.
+     4. After the first OIDC publish succeeds, delete the `NPM_TOKEN`
+        repository secret (`gh secret delete NPM_TOKEN`), and set each
+        package's Settings → Publishing access to "Require two-factor
+        authentication and disallow tokens". That blocks classic and
+        granular tokens only; trusted publishing and `npm login` keep
+        working.
+     - Optional, staged publishing: allow only staged publishes
+       (`npm trust github … --allow-stage-publish`, or the "Allowed
+       actions" setting on npmjs.com) and switch `scripts/npm-publish.sh`
+       to `npm stage publish`. Each staged package is public only after a
+       maintainer approves it with 2FA: `npm stage list`, then
+       `npm stage approve <stage-id>` (or on npmjs.com).
+   - A maintainer can still publish by hand with `npm login` (above).
 
 ## Signing
 
