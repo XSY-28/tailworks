@@ -1,0 +1,171 @@
+# nightly: the suites ci.yml leaves out because they are too slow for every
+# PR, but that need no credentials, KVM or a real tailnet (issue #109).
+#
+#   suite    one matrix job per Makefile target, so they run in parallel and
+#            report separately. Each needs only `make deps` (npm ci, workerd,
+#            the JS builds), Go and Node; e2e-headscale also uses the
+#            runner's Docker, templates-typecheck and test-vitest the npm
+#            registry.
+#   test-pg  `make test-pg` against a Postgres 17 service container
+#            (scripts/test-pg.sh uses TW_TEST_POSTGRES_DSN instead of
+#            starting its own). Also runs on PRs that touch the store.
+#   report   on a scheduled run with a failure, comments on (or opens) the
+#            "nightly suites failing" issue so a red night is not missed.
+#
+# A suite that fails on master for a real reason gets an issue and
+# `allow_failure: <issue URL>` on its matrix entry (continue-on-error) until
+# it is fixed. Don't drop it from the matrix.
+#
+# Not here: suites that need tailnet credentials (e2e-real, e2e-public,
+# e2e-oauth, ...), KVM or a Mac (e2e-vm, e2e-vz, ...), and e2e-upgrade
+# (release.yml runs it). Run one suite by hand with
+#   gh workflow run nightly.yml
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 8 * * *" # 08:17 UTC, off the top of the hour
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "mgmt/**"
+      - "scripts/test-pg.sh"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/nightly.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  suite:
+    # PRs that touch the store run test-pg only.
+    if: github.event_name != 'pull_request'
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    continue-on-error: ${{ matrix.allow_failure != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: e2e-coldid
+            timeout: 30
+            allow_failure: ""
+          - target: e2e-headscale
+            timeout: 45
+            allow_failure: ""
+          - target: e2e-local
+            timeout: 30
+            allow_failure: ""
+          - target: e2e-locks
+            timeout: 30
+            allow_failure: ""
+          - target: e2e-observability
+            timeout: 30
+            allow_failure: ""
+          - target: e2e-placement
+            timeout: 30
+            allow_failure: ""
+          - target: e2e-queues
+            timeout: 30
+            allow_failure: ""
+          - target: e2e-wrangler
+            timeout: 30
+            allow_failure: ""
+          - target: templates-typecheck
+            timeout: 30
+            allow_failure: ""
+          - target: test-node
+            timeout: 30
+            allow_failure: ""
+          - target: test-sdk
+            timeout: 30
+            allow_failure: ""
+          - target: test-vitest
+            timeout: 30
+            allow_failure: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: make deps
+        run: make deps
+      - name: known failure
+        if: matrix.allow_failure != ''
+        env:
+          ISSUE: ${{ matrix.allow_failure }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          echo "::warning::$TARGET is a known failure (continue-on-error): $ISSUE"
+      - name: make ${{ matrix.target }}
+        run: make ${{ matrix.target }}
+
+  test-pg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: twtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: make test-pg
+        env:
+          TW_TEST_POSTGRES_DSN: postgres://postgres:twtest@127.0.0.1:5432/postgres?sslmode=disable
+          TW_TEST_PG_LOG: ${{ runner.temp }}/tw-test-pg.log
+        run: make test-pg
+      - name: full test-pg log
+        if: failure()
+        run: cat "$RUNNER_TEMP/tw-test-pg.log"
+
+  report:
+    if: always() && github.event_name == 'schedule'
+    needs: [suite, test-pg]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: comment on the tracking issue when a suite failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "results: $RESULTS"
+          failed=0
+          for r in $RESULTS; do [ "$r" = success ] || failed=1; done
+          [ "$failed" = 1 ] || exit 0
+          title="nightly suites failing"
+          body="Nightly run failed on $(date -u +%Y-%m-%d) at ${GITHUB_SHA}: $RUN_URL"
+          n=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body "$body"
+          else
+            gh issue create --title "$title" --label flaky-test --body "$body
+
+          Opened by .github/workflows/nightly.yml. Close it when the nightly is green again; the next failure opens a new one."
+          fi
