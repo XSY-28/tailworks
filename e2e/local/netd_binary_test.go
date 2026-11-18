@@ -192,7 +192,7 @@ func TestNetdBinary(t *testing.T) {
 	}
 	// SSRF + peer_not_visible through the binary
 	for u, want := range map[string]string{"http://" + ips["b"] + "/": netd.CodeForbiddenDestination,
-		"http://127.0.0.1/": netd.CodeForbiddenDestination, "http://example.com/": netd.CodePeerNotVisible} {
+		"http://127.0.0.1/": netd.CodeForbiddenDestination, "http://example.com/": netd.CodeInternetEgressUnavailable} {
 		_, b := get("http://" + ips["a"] + "/egress?url=" + u)
 		var e netd.Error
 		json.Unmarshal(b, &e)
