@@ -33,6 +33,8 @@ type Client struct {
 	HTTP *http.Client
 	// HostID, if set, is sent as the Tw-Host-ID header (homelab/test
 	// transports; production mgmt authenticates hosts by WhoIs instead).
+	// Like the other fields, set it before the first request; use
+	// WithHostID for a copy with another identity.
 	HostID string
 	// TokenFile, if set, is the per-host token file mgmt minted (RT-03); its
 	// content is sent as Tw-Host-Token on every request. It is re-read when
@@ -97,6 +99,22 @@ func NewClient(addr string) (*Client, error) {
 		return &Client{Base: strings.TrimSuffix(addr, "/"), HTTP: &http.Client{Timeout: 30 * time.Second}}, nil
 	}
 	return nil, fmt.Errorf("mgmtapi: unsupported address %q", addr)
+}
+
+// WithHostID returns a new Client like c (same Base, transport and token
+// source) that sends id as Tw-Host-ID. c itself is not modified: a Client's
+// exported fields are configuration, set before its first request and never
+// written after, because requests on other goroutines read them without a
+// lock (issue #135: hostd.New used to set HostID on a client a previous
+// Host's goroutines were still using).
+func (c *Client) WithHostID(id string) *Client {
+	return &Client{
+		Base:      c.Base,
+		HTTP:      c.HTTP,
+		HostID:    id,
+		TokenFile: c.TokenFile,
+		Token:     c.Token,
+	}
 }
 
 // Do sends a JSON request and decodes a JSON response into out (if non-nil).
