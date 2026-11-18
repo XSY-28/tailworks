@@ -343,6 +343,9 @@ func New(cfg Config) (*Host, error) {
 	if cfg.HostID == "" || cfg.Mgmt == nil || cfg.DataDir == "" || cfg.WorkerdBin == "" {
 		return nil, errors.New("hostd: HostID, Mgmt, DataDir and WorkerdBin are required")
 	}
+	if cfg.Mgmt.HostID != cfg.HostID {
+		cfg.Mgmt = cfg.Mgmt.WithHostID(cfg.HostID) // never write the caller's client: it may be in use (#135)
+	}
 	if cfg.PushListener != nil && cfg.WhoIs == nil {
 		return nil, errors.New("hostd: PushListener requires WhoIs (pushes over the tailnet are authenticated)")
 	}
@@ -402,7 +405,6 @@ func New(cfg Config) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.Mgmt.HostID = cfg.HostID
 	// One field per line: features that add a map here should not collide.
 	h := &Host{
 		cfg:        cfg,
