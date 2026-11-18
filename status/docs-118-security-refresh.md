@@ -86,7 +86,13 @@ lives in `egress_sink_test.go`).
 - `go test ./mgmt/ -run 'TestTailnetAuth$'`: pass.
 - Each new test alone: pass.
 - `make lint`: pass (changes-check included).
-- `make test`: see below.
+- `make test`: everything passed except `hostd.TestWorkersKVMove`, a data
+  race in `mgmtapi.Client.setHeaders` (known flake #135, unrelated). A
+  rerun of `go test -race -count=1 -run 'TestWorkersKVMove|TestEgressMACReplayRefusedByHandler|TestTenantAuditIsOnlyANote|TestPublicIngress' ./hostd/`
+  passed. The new tests passed in the full run (netd, internal/mgmtd,
+  hostd/bundle, hostd/gen, security/attacks).
+- After merging origin/master (9d3db9c: npm publishing docs and workflow
+  only, no security-relevant change): `make lint` pass.
 
 ## Gaps
 
