@@ -29,6 +29,59 @@ This is the maintainer process. The design behind it is
 - **Support.** Only the latest minor gets patches. Security fixes also go to
   the minor before it.
 
+## Upstream advisories
+
+The maintainer owns this. Every release bundles code we don't write, so
+watch each upstream that ships in it:
+
+| Upstream | Pin | Where advisories come from |
+| --- | --- | --- |
+| Go modules and the Go toolchain | `go.mod`, `tools/go.mod` | `make vulncheck` (govulncheck, run by `make lint`), Dependabot alerts, golang-announce |
+| npm packages | `package-lock.json`, `e2e/*/package-lock.json` | Dependabot alerts, `npm audit` |
+| workerd | `package.json` | the workerd GitHub releases and security advisories |
+| Tailscale (`tailscale.com`) | `go.mod` | tailscale.com/security-bulletins, govulncheck |
+| Firecracker | `guest/inputs.sh` | the Firecracker GitHub releases and security advisories |
+| Guest kernel (6.1 LTS) | `guest/inputs.sh` | the kernel.org stable releases and linux-cve-announce |
+| Ubuntu base (guest rootfs) | `guest/inputs.sh` | Ubuntu Security Notices for 24.04 |
+| GitHub Actions | `.github/workflows` (SHA-pinned) | Dependabot |
+
+**Routine updates.** Dependabot (`.github/dependabot.yml`) opens grouped
+minor and patch PRs every Monday, one per ecosystem. They go through
+`make lint test` like any PR. tailscale.com and workerd get their own PRs:
+a tailscale.com bump also needs `make e2e-placement` and `make e2e-real`,
+and a workerd bump needs a `workerd` release-note fragment. The pins that
+Dependabot can't see (Go toolchain, Firecracker, kernel, Ubuntu base) are
+checked by hand once a month.
+
+**When an advisory affects a release.** It affects us when govulncheck
+reports it as reachable, or when the vulnerable code ships in a tarball or
+the guest and a tenant or a network peer can reach it.
+
+- Triage within 2 business days: affected or not, and the severity.
+  Record it in a private security advisory, or in an issue labelled
+  `security` if the issue is already public.
+- Critical or high: a patch release (on `release-0.N`, and the minor
+  before it, per **Support** above) within 7 days of a fix being
+  available upstream.
+- Medium or low: the next release. Ship it sooner if it is cheap.
+- Not affected: say so in the issue or advisory, so the next person
+  doesn't triage it again.
+
+**What a patch release may bump for a security fix.** The patch rules under
+[Versions](#versions) hold, except that a patch may move the Go toolchain,
+a Go or npm module, tailscale.com, workerd, Firecracker, the guest kernel or
+the Ubuntu base to the smallest version that has the fix. That bump must
+not change a format, a protocol or an API. A guest bump rebuilds the guest
+assets and needs a `workerd` fragment (upgrade kind `workerd` covers
+`guest/inputs.sh`). If the only fix is in an upstream release that would
+break one of those rules, it ships in a minor and the advisory says so.
+
+**govulncheck in CI.** `make lint` runs `make vulncheck` without failing
+on findings until issue #146 (the go1.27.4 `net/http` fix) lands; then it
+becomes blocking. A new advisory published upstream can then fail CI on
+any branch: fix it in its own small PR rather than in the branch that hit
+it.
+
 ## Release notes
 
 Every branch adds `changes/<branch>.md` (format: `changes/README.md`).

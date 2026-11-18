@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 	"github.com/rosskukulinski/tailworks/mgmt"
@@ -106,21 +104,4 @@ func (s *state) mintHostJoin(ctx context.Context, hostID, tenantID string) error
 		return err
 	}
 	return os.Rename(tmp, s.hostJoinFile())
-}
-
-// waitHostLive waits until mgmt reports the host live.
-func (s *state) waitHostLive(ctx context.Context, hostID string, timeout time.Duration) error {
-	dl := time.Now().Add(timeout)
-	for {
-		var h struct {
-			Status string `json:"status"`
-		}
-		if s.mgmt().Do(ctx, "GET", "/v1/hosts/"+hostID, nil, &h) == nil && h.Status == "live" {
-			return nil
-		}
-		if time.Now().After(dl) {
-			return fmt.Errorf("host %s did not become live within %v", hostID, timeout)
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
 }

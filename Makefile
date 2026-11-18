@@ -500,6 +500,9 @@ install-test:
 lint: api-check compat-check changes-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
+	@$(MAKE) --no-print-directory staticcheck
+	@# TODO(#146): drop the leading "-" (make vulncheck blocking) once go1.27.4 lands.
+	-@$(MAKE) --no-print-directory vulncheck
 	$(GO) vet -tags e2e ./e2e/local/...
 	$(GO) vet -tags e2e ./e2e/wrangler/...
 	$(GO) vet -tags e2eupgrade ./e2e/upgrade/...
@@ -529,6 +532,27 @@ lint: api-check compat-check changes-check
 	$(GO) vet -tags e2eobs ./e2e/observability/...
 	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...
 	@sh scripts/check-secrets.sh
+
+# The lint tools come from tools/go.mod (a separate module, so their
+# dependencies never touch the main build) and are built into bin/lint/.
+.PHONY: lint-tools
+lint-tools:
+	$(GO) build -C tools -o $(CURDIR)/bin/lint/ honnef.co/go/tools/cmd/staticcheck golang.org/x/vuln/cmd/govulncheck
+
+# staticcheck: linux and darwin, the same on a Mac as in CI (how: the
+# script's header). Silence a finding only with a
+# `//lint:ignore <check> <reason>` comment on the line above it.
+.PHONY: staticcheck
+staticcheck: lint-tools
+	GO=$(GO) sh scripts/staticcheck.sh bin/lint/staticcheck
+
+# vulncheck: govulncheck ./... against the Go vulnerability database
+# (vuln.go.dev, so it needs the network). It fails on any vulnerability the
+# code can reach. `make lint` runs it without failing until #146 (the go1.27.4
+# net/http fix) lands; see "Upstream advisories" in docs/RELEASING.md.
+.PHONY: vulncheck
+vulncheck: lint-tools
+	bin/lint/govulncheck ./...
 
 .PHONY: hooks
 hooks:

@@ -29,7 +29,7 @@ func TestSkillCommandsExist(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, c := range cmds {
-			if c.Args == nil || len(c.Args) == 0 || strings.HasPrefix(c.Args[0], "<") {
+			if len(c.Args) == 0 || strings.HasPrefix(c.Args[0], "<") {
 				continue // cd, `tw`, `tw <command> --help`
 			}
 			n++
