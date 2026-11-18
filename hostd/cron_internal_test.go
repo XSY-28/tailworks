@@ -213,7 +213,7 @@ func TestCronLoopFiresAtMinuteBoundary(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	}}}
 	boundary := time.Now().UTC().Truncate(time.Minute).Add(time.Minute)
-	offset := boundary.Add(-300 * time.Millisecond).Sub(time.Now())
+	offset := time.Until(boundary.Add(-300 * time.Millisecond))
 	h.nowFn = func() time.Time { return time.Now().Add(offset) }
 	h.ctx, h.cancel = context.WithCancel(context.Background())
 	h.wg.Add(1)

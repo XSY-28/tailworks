@@ -360,11 +360,6 @@ func detailMap(r mgmt.AuditRecord) (map[string]any, string) {
 	return nil, ""
 }
 
-func compact(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
-
 func describe(r mgmt.AuditRecord, names map[string]string) string {
 	d, text := detailMap(r)
 	name := func(id any) string {
