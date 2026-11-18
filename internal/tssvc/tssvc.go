@@ -43,6 +43,7 @@ import (
 // Validate reports whether name is a valid Service name ("svc:" + a DNS label).
 func Validate(name string) error {
 	if !strings.HasPrefix(name, "svc:") {
+		//lint:ignore ST1005 "svc:" is the literal prefix, not punctuation
 		return fmt.Errorf("service name %q must start with svc:", name)
 	}
 	return tailcfg.ServiceName(name).Validate()

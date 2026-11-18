@@ -64,11 +64,12 @@ func main() {
 		os.Exit(2)
 	}
 	c := &ctl{enc: json.NewEncoder(ctlConn)}
-	if err := run(&cfg, c, ctlConn); err != nil {
-		logf("%v", err)
-		c.send(vzapi.Ctl{Event: "stopped", Error: err.Error()})
-		os.Exit(1)
-	}
+	// run returns only when setting the VM up fails: once it runs, run
+	// exits the process itself.
+	err = run(&cfg, c, ctlConn)
+	logf("%v", err)
+	c.send(vzapi.Ctl{Event: "stopped", Error: err.Error()})
+	os.Exit(1)
 }
 
 type ctl struct {

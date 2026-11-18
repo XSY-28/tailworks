@@ -40,10 +40,6 @@ type ContainerReservation struct {
 	RenewedAt int64               `json:"renewedAt"`
 }
 
-func (r ContainerReservation) key() string {
-	return r.TenantID + "|" + r.Workload + "|" + r.Class + "|" + r.Object
-}
-
 // ContainerQuota is what the store checks a new (or grown) reservation
 // against, atomically with the insert.
 type ContainerQuota struct {

@@ -196,7 +196,7 @@ func TestOTLPPayloads(t *testing.T) {
 		t.Errorf("another workload's series exported: %s", m)
 	}
 	// Errors: the status, never the headers.
-	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "nope", 401) }))
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "nope", http.StatusUnauthorized) }))
 	defer bad.Close()
 	err := (&OTLPClient{Endpoint: bad.URL, Headers: map[string]string{"Authorization": "Bearer s3cret"}}).Export(ctx, SignalLogs, LogsPayload(res, nil))
 	if err == nil || strings.Contains(err.Error(), "s3cret") || !strings.Contains(err.Error(), "401") {
