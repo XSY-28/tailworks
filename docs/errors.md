@@ -376,6 +376,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### store_conflict
 409 · mgmt. **When:** a platform store journal append named a head (`after`) or incarnation that is no longer current: another writer (a replica, an admin) appended first, or the store was deleted. **Fix:** nothing for app code: the store object catches up and retries on its own. A client of the REST API reads the journal from its `after` and retries.
 
+### store_degraded
+409 · hostd, mgmt. **When:** a platform store's object couldn't apply a journal entry while catching up (a D1 statement that fails on replay, which only non-deterministic SQL can do; an entry written by a newer tailworks; a corrupt entry). It stopped there instead of skipping the entry: it serves reads from what it applied before it, refuses writes, and tries the entry again on later syncs. A Worker's D1 call fails with `D1_ERROR: [store_degraded] …` naming the entry and SQLite's error. **Fix:** an entry from a newer tailworks: upgrade tw-hostd. Otherwise, for D1, `tw d1 export <db> --output backup.sql` (it exports what applied, headed by a comment naming the failing entry), check it, then `tw d1 delete <db>`, `tw d1 create <db>` and `tw d1 execute <db> --file backup.sql` ([d1.md](d1.md), "Recovery").
+
 ### store_limit
 400 · mgmt, hostd. **When:** a platform store write is too big: an entry over 2 MiB, an append over 4 MiB or 128 entries, a compaction key over 1 KiB, or a store over 1 GiB. **Fix:** write less at once, or delete data you no longer need.
 
