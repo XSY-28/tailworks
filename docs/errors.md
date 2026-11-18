@@ -131,7 +131,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 500 · cli. **When:** `tw host setup --microvm` installed `tw-vmhelper.service` but it did not come up. **Fix:** `journalctl -u tw-vmhelper`.
 
 ### host_failed
-1 · cli. **When:** `tw up` (single process): the host agent embedded in tw-mgmt failed to start or to register with mgmt. **Fix:** the detail has the cause; `tw logs --component hostd` and `tw doctor`, then `tw up` again.
+1 · cli. **When:** `tw up` (single process): the host agent embedded in tw-mgmt failed to start or to register with mgmt. Also the supervisor's exit error (in `supervisor.log`) when tw-hostd (two processes) kept exiting and the supervisor gave up; it exits 1 so the service manager restarts it. **Fix:** the detail has the cause; `tw logs --component hostd` and `tw doctor`, then `tw up` again (under `tw up --service` it restarts on its own).
 
 ### host_holds_leases
 409 · mgmt, cli. **When:** `tw host rm <id>` while the host still holds namespace leases. **Fix:** `tw host rm <id> --drain`.
@@ -188,7 +188,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 408 · cli. **When:** a tailnet node tailworks joins interactively (`tw link --tsnet`) printed a login URL and nobody completed the browser login within 5 minutes. **Fix:** run the command again and finish the login, or pass an auth key file for an unattended join.
 
 ### mgmt_failed
-1 · cli. **When:** `tw up` (single process): the embedded tw-mgmt failed to start. **Fix:** the detail has the cause; `tw logs --component mgmt` and `tw doctor`, then `tw up` again.
+1 · cli. **When:** `tw up` (single process): the embedded tw-mgmt failed to start. Also the supervisor's exit error (in `supervisor.log`) when mgmt stopped after start: its listener failed (single process) or tw-mgmt kept exiting (two processes); it exits 1 so the service manager restarts it. **Fix:** the detail has the cause; `tw logs --component mgmt` and `tw doctor`, then `tw up` again (under `tw up --service` it restarts on its own).
 
 ### mgmt_not_found
 404 · cli. **When:** `tw link` with no endpoint found no `tw-mgmt` through MagicDNS. **Fix:** `tw link tw-mgmt.<tailnet>.ts.net`.
