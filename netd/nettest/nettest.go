@@ -204,7 +204,7 @@ func (n *Node) ServeEcho() error {
 		}
 		who, err := n.LC.WhoIs(r.Context(), r.RemoteAddr)
 		if err != nil {
-			http.Error(w, "whois: "+err.Error(), 403)
+			http.Error(w, "whois: "+err.Error(), http.StatusForbidden)
 			return
 		}
 		var rep EchoReply

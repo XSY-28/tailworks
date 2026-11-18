@@ -412,7 +412,6 @@ func TestD1(t *testing.T) {
 	// lost (as on a new host after a lease move): the database comes back
 	// from mgmt's journal alone, byte for byte as exported.
 	t.Run("RecoveredFromJournal", func(t *testing.T) {
-		w, f := W.with(t), F.with(t)
 		ws := workloadStatus(t, e, "d1app")
 		if ws.DOStorage == "" {
 			t.Fatal("no DO storage dir in status")
@@ -432,7 +431,7 @@ func TestD1(t *testing.T) {
 		wl = e.WaitActive("d1app", dep, 60*time.Second)
 		s.waitPeer(wl.IP)
 		W.base, F.base = "http://"+wl.IP, "http://"+wl.IP+"/do"
-		w, f = W.with(t), F.with(t)
+		w, f := W.with(t), F.with(t)
 		if got := js(w.col("SELECT v FROM kv WHERE k = 'op'", "v")); got != `"from the operator"` {
 			t.Fatalf("after losing DO storage: %s", got)
 		}

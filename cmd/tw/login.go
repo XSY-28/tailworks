@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"tailscale.com/ipn"
-	"tailscale.com/tailcfg"
+	"tailscale.com/tailcfg/nodecap"
 	"tailscale.com/tsnet"
 )
 
@@ -116,11 +115,8 @@ func joinMgmtNode(ctx context.Context, o joinOpts) (*mgmtNode, error) {
 		res.Tags = st.Self.Tags.AsSlice()
 	}
 	res.HTTPS = len(st.CertDomains) > 0
-	if st.Self.CapMap != nil {
-		_, res.Funnel = st.Self.CapMap[tailcfg.NodeAttrFunnel]
-	}
-	if !res.Funnel {
-		res.Funnel = slices.Contains(st.Self.Capabilities, tailcfg.NodeAttrFunnel)
-	}
+	// Every Capabilities entry is also a CapMap key (ipnstate.PeerStatus docs),
+	// so CapMap alone is enough.
+	_, res.Funnel = st.Self.CapMap[nodecap.Funnel]
 	return res, nil
 }
