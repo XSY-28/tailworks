@@ -529,9 +529,10 @@ func (o *Object) start(ctx context.Context) error {
 		IdleConnTimeout:     30 * time.Second,
 		ForceAttemptHTTP2:   false,
 	}
+	// limits.md#object-ingress-server
 	hs := &http.Server{
 		Handler:           http.HandlerFunc(o.serveIngress),
-		ReadHeaderTimeout: 30 * time.Second,
+		ReadHeaderTimeout: 30 * time.Second, // limits.md#object-ingress-header-timeout
 		ErrorLog:          slog.NewLogLogger(r.log.Handler(), slog.LevelDebug),
 	}
 
