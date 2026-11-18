@@ -191,6 +191,10 @@ type HeartbeatRequest struct {
 	// an empty list means none run, so mgmt releases this host's
 	// reservations). Always set it (null is not in the spec).
 	Containers []RunningContainer `json:"containers"`
+
+	// PurgedTenants are deleted tenants (from PurgeTenants) whose local
+	// state this host has removed.
+	PurgedTenants []string `json:"purgedTenants,omitempty"`
 }
 
 type KillOrder struct {
@@ -208,6 +212,10 @@ type HeartbeatResponse struct {
 	RevokeObjects []string `json:"revokeObjects"`
 	// AssignmentsChanged hints that a push could not be delivered.
 	AssignmentsChanged bool `json:"assignmentsChanged,omitempty"`
+
+	// PurgeTenants are deleted tenants whose local state (tenants/<id>/,
+	// R2 blobs) this host must remove; repeated until reported purged.
+	PurgeTenants []string `json:"purgeTenants,omitempty"`
 }
 
 type DeployRequest struct {
