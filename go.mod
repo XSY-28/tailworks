@@ -6,7 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/coder/websocket v1.8.15
 	github.com/evanw/esbuild v0.28.2
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/jsimonetti/rtnetlink v1.4.2
@@ -21,6 +21,19 @@ require (
 	golang.org/x/term v0.47.0
 	gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72
 	modernc.org/sqlite v1.62.0
+
+	// tailscale.com is pinned to main commit 5030108 (2026-11-07), not a tag.
+	// Why: the design spikes (RFC "Prototype results") ran on that commit,
+	// and M0 took it as is. No feature we use needs it: the tree builds and
+	// vets against v1.104.5 (v1.104.6+ need go1.27.4, issue #146). But
+	// v1.104.x branched from main on 2026-09-30, so any 1.104 tag would roll
+	// back five weeks of main under netd, which reaches into tsnet, ipn and
+	// gVisor internals (docs/RELEASING.md, "Upstream advisories").
+	// Un-pin: move to the first tagged release cut from main after 5030108
+	// (v1.106.0) once `make lint test e2e-placement` and `make e2e-real` pass.
+	// From then on, tagged releases only, taken within two weeks of each one
+	// (Dependabot's "tailscale" group). hujson, peercred and gvisor have no
+	// tags; they follow whatever tailscale.com requires.
 	tailscale.com v1.105.0-pre.0.20261107202901-503010831ecd
 )
 

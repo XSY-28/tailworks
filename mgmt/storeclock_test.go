@@ -86,7 +86,7 @@ func TestStoreClockSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	if d := st.Now().Sub(time.Now()).Abs(); d > time.Second {
+	if d := time.Until(st.Now()).Abs(); d > time.Second {
 		t.Fatalf("SQLite store clock should be local time, off by %v", d)
 	}
 	if off, _ := st.ClockOffset(); off != 0 {

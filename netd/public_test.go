@@ -162,7 +162,7 @@ func (e *pubEnv) upstream(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		n = len(b)
 		if err != nil {
-			http.Error(w, "upstream read: "+err.Error(), 502)
+			http.Error(w, "upstream read: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 	}

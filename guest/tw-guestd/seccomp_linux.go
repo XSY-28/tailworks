@@ -71,8 +71,8 @@ type bpfProg struct {
 }
 
 type bpfFix struct {
-	at         int
-	jt, jf, ja string
+	at     int
+	jt, jf string
 }
 
 func (p *bpfProg) label(l string) { p.labels[l] = len(p.ins) }

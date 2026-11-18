@@ -3,6 +3,7 @@
 package procsb_test
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
@@ -250,7 +251,9 @@ const w :Workerd.Worker = ( modules = [ (name = "w.js", esModule = embed "w.js")
 		t.Fatal(err)
 	}
 	defer cmd.Process.Kill()
-	hc := &http.Client{Transport: &http.Transport{Dial: func(_, _ string) (net.Conn, error) { return net.Dial("unix", sock) }}}
+	hc := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", sock)
+	}}}
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		r, err := hc.Get("http://x/")

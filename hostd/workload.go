@@ -52,8 +52,7 @@ type workload struct {
 	active       *instance
 	gate         chan struct{} // non-nil while switching: closed when open
 	wl           *object       // the workload entry node
-	classTags    map[string][]string
-	noFence      bool // assignment fence=false: stateless, keeps serving without mgmt
+	noFence      bool          // assignment fence=false: stateless, keeps serving without mgmt
 
 	// Tailscale Service (service.go): service is the active deployment's
 	// Service; svcAdvertised/svcNetd what the workload node advertises now.
