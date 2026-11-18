@@ -7,7 +7,9 @@ import { defineConfig } from "vitest/config";
 
 const template = (name: string) => ({
   plugins: [cloudflareTest({ wrangler: { configPath: `../../js/packages/create-tailworks/templates/${name}/wrangler.jsonc` } })],
-  test: { name, include: [`test/${name}.test.ts`] },
+  // testTimeout: the first call into the mcp and refund-approval templates takes
+  // 3.5-5s (cold module and Workflow start in workerd); vitest's default 5s timed out.
+  test: { name, include: [`test/${name}.test.ts`], testTimeout: 30_000 },
 });
 
 export default defineConfig({
