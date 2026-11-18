@@ -188,7 +188,7 @@ prove every ✅ and ⚠️.
 
 | Area | Surface | Status | Note |
 |---|---|---|---|
-| Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers only (no internet, by default) |
+| Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers only; no internet egress for Workers ([call an internet API](docs/recipes.md#call-an-internet-api) through a gateway on your tailnet) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
 | Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
