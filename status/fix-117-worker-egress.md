@@ -30,7 +30,7 @@ gateway, RFC §4.6) needs a dial path that leaves netd's netmap-only egress
 guard: today every Worker dial goes through `tsnet.Server.Dial` to a
 tailnet address, and the only internet path is the containers' sbxnet
 allowlist. That is a design change (an ADR) rather than a fix, so this
-branch documents that there is no switch. Follow-up issue to be filed.
+branch documents that there is no switch. Follow-up: #161.
 
 ## Tests
 
