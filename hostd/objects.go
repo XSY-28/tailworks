@@ -365,6 +365,7 @@ func (h *Host) startNodeLocked(o *object) {
 }
 
 func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object) {
+	// limits.md#node-join-after-create
 	ctx, cancel := context.WithTimeout(h.ctx, 3*time.Minute)
 	defer cancel()
 	err := no.Ready(ctx)
