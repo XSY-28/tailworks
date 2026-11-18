@@ -51,6 +51,14 @@ never rewrite earlier passes). Regression tests live in
 7. **No destructive techniques beyond the repo.** No attacks on Tailscale
    control, DERP, or anyone else's nodes. Everything targets code in this
    repo or processes you started.
+8. **A ledger row changes status only with a test name or an issue
+   link.** `fixed` and `pinned` name the test that fails without the fix
+   (or the claim) and drives the production path: the handler, listener
+   or generated config tailworks runs, not only a helper it calls. `open`
+   and `partial` link a GitHub issue with the `security` label, and the
+   issue links back to the row (an unfixed Critical, or High on B1, says
+   "private advisory" until it is fixed). A claim pinned only by a helper
+   test, or a fixed row whose test is skipped, is not pinned.
 
 ## The team
 
@@ -68,7 +76,7 @@ than four at once.
 | **Tailnet insider** | item touches admin cap, `tw link`, policy writes, WIF/OBO, services grants | A tailnet member without `github.com/rosskukulinski/tailworks/cap/admin`, or an admin's compromised laptop. Goal: reach a mgmt route, widen policy via `--policy-apply`/preflight, abuse WIF issuer or OBO, obtain a Service VIP. Tools: `mgmt.TestTailnetAuth` matrix, `internal/policy` hostile table and fuzz. |
 | **Infra attacker** (Linux only) | item touches `hostd/vm`, `hostd/vm/helper`, `guest/`, `internal/procsb`, Landlock/seccomp | Tenant that escaped into the guest or the Firecracker VMM, or a same-uid process on a Landlock-less host. Goal: crash or confuse the root vmhelper (uffd, snapshot-base, attach), read another tenant's base/volume, defeat the sandbox battery (`security/attacks/rt_sandbox_linux_test.go`), reach `tailscaled.sock`/`hostapi.sock`. Needs a Linux `LIVE_TARGET` for execution; otherwise code review marked PLAUSIBLE. |
 | **Verifier** | every CONFIRMED candidate, before it enters the ledger | Adversarial to the attacker: given the claim, `file:line` and the test, try to refute it (wrong line, dead code, already gated upstream, mis-read severity, already disclosed in STATUS/docs/ADRs). Returns CONFIRMED / DOWNGRADED(severity, why) / REFUTED(why) and the exact "STATUS accurate?" verdict. Give it the code, not the attacker's conclusion. |
-| **Claims auditor** | every 5th iteration, or when docs/STATUS changed since last run | Reads README, `docs/*.md`, STATUS.md "Next steps"/"gaps", THREAT-MODEL.md, ADRs touched since the last audit. For each security claim: the enforcing `file:line`, the test that pins it, and whether the claim is accurate, overstated, or stale. New overstated claims become hypotheses. |
+| **Claims auditor** | every 5th iteration, or when docs/STATUS changed since last run | Reads README, `docs/*.md` (`docs/security-model.md` first), `status/*.md` gaps, THREAT-MODEL.md, ADRs touched since the last audit, and the "Pinned by" column (does each test drive the production path?). For each security claim: the enforcing `file:line`, the test that pins it, and whether the claim is accurate, overstated, or stale. New overstated claims become hypotheses. |
 | **Fixer** | `FIX_MODE: fix`, top of the fix queue | Writes the regression test first (must fail), then the smallest fix, then runs `make test`, `make lint` and the relevant `security/attacks` test. Reports the diff and the before/after test output verbatim. Never widens scope. |
 
 The lead (you) never does an attacker's work inline beyond a ten-minute
@@ -103,6 +111,10 @@ spot check; the lead picks, briefs, verifies, records, and decides.
    - Root cause with `file:line`, severity with the Pass 1 scale, the
      "STATUS accurate?" verdict, a fix sketch, and any new hypotheses.
    - Append the finding to the current pass section of RED-TEAM.md.
+   - Open a GitHub issue with the `security` label for the row (search
+     open issues first) and link it both ways (hard rule 8). A new
+     Critical, or a High on B1, goes into a private security advisory
+     (SECURITY.md) instead of a public issue until it is fixed.
    - If `FIX_MODE: fix`, add a fix-queue row.
 6. **Update LEDGER.md** (status table, run log line, new hypotheses) and
    commit on `rt3-loop` with a message naming the item and verdict.
