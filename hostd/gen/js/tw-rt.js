@@ -1303,7 +1303,25 @@ function requestTicket(req) {
 function isScheduledReq(req) {
   return req?.cf?.tw?.kind === "scheduled";
 }
-async function runScheduled(scheduledFn, req, extra) {
+function scheduledCtx(ctx) {
+  const pending = [];
+  const drain = async () => {
+    while (pending.length) await Promise.allSettled(pending.splice(0));
+  };
+  if (!ctx || typeof ctx !== "object") return { ctx, drain };
+  const waitUntil = (p) => {
+    pending.push(Promise.resolve(p));
+  };
+  const proxy = new Proxy(ctx, {
+    get(t, k) {
+      if (k === "waitUntil") return waitUntil;
+      const v = Reflect.get(t, k, t);
+      return typeof v === "function" ? v.bind(t) : v;
+    }
+  });
+  return { ctx: proxy, drain };
+}
+async function runScheduled(scheduledFn, req, extra, drain) {
   const t = req.cf.tw;
   let noRetry = false;
   const controller = {
@@ -1319,8 +1337,10 @@ async function runScheduled(scheduledFn, req, extra) {
   }
   try {
     await scheduledFn(controller, ...extra);
+    await drain();
     return Response.json({ outcome: "ok", noRetry });
   } catch (e) {
+    await drain();
     return Response.json({ outcome: "exception", noRetry, error: String(e?.message ?? e).slice(0, 512) });
   }
 }
@@ -1372,8 +1392,10 @@ function wrapHandler(H, bindings) {
           this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket }));
           if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, void 0, ticket));
           if (isScheduledReq(req)) {
+            const sc = scheduledCtx(this.ctx);
+            this.ctx = sc.ctx;
             const sf = typeof this.scheduled === "function" ? this.scheduled.bind(this) : void 0;
-            return runScheduled(sf, req, []);
+            return runScheduled(sf, req, [], sc.drain);
           }
         }
         try {
@@ -1412,7 +1434,10 @@ function wrapHandler(H, bindings) {
         else if (k === "queue") ({ batch: a, ticket } = queueBatch(a));
         env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, void 0, ticket));
-        if (k === "fetch" && isScheduledReq(a)) return runScheduled(H.scheduled, a, [env, ctx]);
+        if (k === "fetch" && isScheduledReq(a)) {
+          const sc = scheduledCtx(ctx);
+          return runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain);
+        }
       }
       let r;
       try {

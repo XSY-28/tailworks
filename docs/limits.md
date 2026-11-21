@@ -162,7 +162,8 @@ Details: [cron-triggers.md](cron-triggers.md#syntax).
 |---|---|---|---|
 | Triggers per workload | 10 | no | `internal/cron/cron.go:MaxTriggers` |
 | Expression length | 128 bytes | no | `internal/cron/cron.go:MaxLen` |
-| One `scheduled()` run | 15 min wall time | no | `hostd/cron.go:DefaultCronTimeout` |
+| One `scheduled()` run | 15 min wall time, `ctx.waitUntil()` work included; the run is cancelled at the limit | no | `hostd/cron.go:DefaultCronTimeout` |
+| Concurrent runs of one trigger | 1: a run that comes due while the previous one is in flight is skipped | no | `hostd/cron.go:#cron-no-overlap` |
 | Retries of a failed run | none | — | [cron-triggers.md](cron-triggers.md#delivery) |
 
 ## Secrets
