@@ -1,6 +1,6 @@
 {
   "name": "create-tailworks",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Scaffold (templates hello, agent, mcp, ai-agent, lock, refund-approval, node-workflow) and bundle tailworks apps",
   "keywords": [
     "tw",
