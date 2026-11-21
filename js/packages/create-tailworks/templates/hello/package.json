@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "@tailworks/tailnet": "^0.2.0"
+    "@tailworks/tailnet": "^0.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261118.1",

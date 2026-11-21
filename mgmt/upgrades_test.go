@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -112,26 +114,30 @@ func TestFeatureGatedPlacementAndCordon(t *testing.T) {
 }
 
 func TestUpgradeRun(t *testing.T) {
-	e := newVersionedEnv(t, "0.3.0")
+	// The target must not be in the built-in catalog (which ends at this
+	// tree's VERSION), so it is the next minor; the hosts run a patch of the
+	// current minor, inside the skew window.
+	to, old := nextMinorAndPatch(t)
+	e := newVersionedEnv(t, to)
 	reg := func(id, v string) {
 		e.asHost(id).ok("PUT", "/v1/hosts/"+id, map[string]any{"capacityNodes": 10, "tiers": []string{"process"}, "version": v, "os": "linux"}, nil)
 	}
-	reg("h1", "0.2.5")
-	reg("h2", "0.2.5")
+	reg("h1", old)
+	reg("h2", old)
 	// The target isn't in the catalog yet (the built-in entries end at this
 	// tree's releases).
-	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "dryRun": true}, 400, "bad_request")
+	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": to, "dryRun": true}, 400, "bad_request")
 	var cat struct {
 		Current string
 		Items   []ReleaseEntry
 	}
-	e.c.ok("POST", "/v1/releases", map[string]any{"entries": []map[string]any{{"version": "0.3.0", "date": "2027-01-01", "workerd": "1.20261201.1",
+	e.c.ok("POST", "/v1/releases", map[string]any{"entries": []map[string]any{{"version": to, "date": "2027-01-01", "workerd": "1.20261201.1",
 		"notes": []map[string]any{{"kind": "breaking", "source": "x.md", "text": "tw logs prints records"}}}}}, &cat)
-	if cat.Current != "0.3.0" || len(cat.Items) < 2 {
+	if cat.Current != to || len(cat.Items) < 2 {
 		t.Fatalf("catalog: %+v", cat)
 	}
 	var plan UpgradePlan
-	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "dryRun": true, "canary": "h2", "soakSeconds": 0}, &plan)
+	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": to, "dryRun": true, "canary": "h2", "soakSeconds": 0}, &plan)
 	if len(plan.Blockers) != 0 || len(plan.Breaking) != 1 {
 		t.Fatalf("plan: %+v", plan)
 	}
@@ -150,8 +156,8 @@ func TestUpgradeRun(t *testing.T) {
 
 	var run UpgradeRun
 	soak := 0
-	e.c.okStatus("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "canary": "h2", "soakSeconds": soak, "settleSeconds": 60}, &run)
-	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": "0.3.0"}, 409, "exists")
+	e.c.okStatus("POST", "/v1/upgrades", map[string]any{"to": to, "canary": "h2", "soakSeconds": soak, "settleSeconds": 60}, &run)
+	e.c.fail("POST", "/v1/upgrades", map[string]any{"to": to}, 409, "exists")
 	ctx := context.Background()
 	drive := func(until func(UpgradeRun) bool) UpgradeRun {
 		t.Helper()
@@ -176,7 +182,7 @@ func TestUpgradeRun(t *testing.T) {
 	r := drive(func(r UpgradeRun) bool {
 		return r.Step < len(r.Steps) && r.Steps[r.Step].Host == "h2" && r.Steps[r.Step].Phase == "wait"
 	})
-	if !strings.Contains(r.Steps[r.Step].NeedsOperator, "install tw 0.3.0 on host h2") {
+	if !strings.Contains(r.Steps[r.Step].NeedsOperator, "install tw "+to+" on host h2") {
 		t.Fatalf("operator step: %+v", r.Steps[r.Step])
 	}
 	var h struct{ CordonedAt int64 }
@@ -193,7 +199,7 @@ func TestUpgradeRun(t *testing.T) {
 	e.c.ok("POST", "/v1/upgrades/"+run.ID+"/actions", map[string]any{"action": "resume"}, &r)
 	// The operator upgrades h2: it re-registers at 0.2.0, settles, is
 	// uncordoned; then h1.
-	reg("h2", "0.3.0")
+	reg("h2", to)
 	drive(func(r UpgradeRun) bool {
 		return r.Step < len(r.Steps) && r.Steps[r.Step].Host == "h1" && r.Steps[r.Step].Phase == "wait"
 	})
@@ -202,7 +208,7 @@ func TestUpgradeRun(t *testing.T) {
 	if h.CordonedAt != 0 {
 		t.Fatal("canary still cordoned")
 	}
-	reg("h1", "0.3.0")
+	reg("h1", to)
 	r = drive(func(r UpgradeRun) bool { return r.State == "done" })
 	for _, s := range r.Steps {
 		if s.Status != "done" && s.Status != "skipped" {
@@ -215,7 +221,7 @@ func TestUpgradeRun(t *testing.T) {
 		t.Fatalf("list: %+v", list)
 	}
 	// Everything is at the target now: a new plan has no host work.
-	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": "0.3.0", "dryRun": true}, &plan)
+	e.c.ok("POST", "/v1/upgrades", map[string]any{"to": to, "dryRun": true}, &plan)
 	for _, s := range plan.Steps {
 		if s.Kind == "host" && s.Status != "skipped" {
 			t.Fatalf("host step after upgrade: %+v", s)
@@ -283,4 +289,19 @@ func TestBundleStatefulWorkflows(t *testing.T) {
 	if st, why := BundleStateful(b); !st || !strings.Contains(why, "workflow refunds") {
 		t.Fatalf("stateful %v %q", st, why)
 	}
+}
+
+// nextMinorAndPatch returns the minor release after this tree's VERSION
+// (x.(y+1).0) and a patch of the current minor (x.y.5).
+func nextMinorAndPatch(t *testing.T) (next, patch string) {
+	t.Helper()
+	b, err := os.ReadFile("../VERSION")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var maj, min, pat int
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(b)), "%d.%d.%d", &maj, &min, &pat); err != nil {
+		t.Fatalf("VERSION: %v", err)
+	}
+	return fmt.Sprintf("%d.%d.0", maj, min+1), fmt.Sprintf("%d.%d.5", maj, min)
 }
