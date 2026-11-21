@@ -27,6 +27,18 @@ export default {
       await new Promise((r) => setTimeout(r, Number(env.SLEEP_MS ?? 1500)));
       run.phase = "end";
     }
+    if (controller.cron === "1 0 4 1 *") {
+      // Returns at once but leaves work running in ctx.waitUntil(): the
+      // run lasts until that work settles (cron overlap and timeout, H17).
+      await env.LOG.getByName("log").add({ ...run, phase: "start" });
+      ctx.waitUntil(
+        (async () => {
+          await new Promise((r) => setTimeout(r, Number(env.SLEEP_MS ?? 1500)));
+          await env.LOG.getByName("log").add({ ...run, phase: "end" });
+        })(),
+      );
+      return;
+    }
     if (controller.cron === "0 0 3 1 *") {
       try {
         const r = await fetch(env.ECHO_URL ?? "http://echo/from-cron");
