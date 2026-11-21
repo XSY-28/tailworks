@@ -43,4 +43,7 @@ the issue (no log was kept).
 - With the fix: same command, `-count=20`: ok 20/20.
 - `go test -race -count=5 -run 'TestQueues$' ./hostd`: ok.
 - `go test -race -count=2 -run 'Fence|Fenced|Cron|Queue' ./hostd`: ok.
-- `make e2e-queues`, `make lint test`: see the PR.
+- `make e2e-queues`: ok.
+- After merging origin/master (with #152's cron change):
+  `go test -race -count=3 -run 'TestQueues$|Fence|Cron' ./hostd`: ok;
+  `make lint test` (macOS): ok.
