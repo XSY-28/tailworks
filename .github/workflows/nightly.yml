@@ -74,6 +74,9 @@ jobs:
           - target: e2e-queues
             timeout: 30
             allow_failure: ""
+          - target: e2e-tw-upgrade
+            timeout: 30
+            allow_failure: ""
           - target: e2e-wrangler
             timeout: 30
             allow_failure: ""
