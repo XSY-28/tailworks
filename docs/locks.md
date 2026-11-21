@@ -254,7 +254,7 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
   (`hostd:TestLockTemplate/ContendedAcquireOneWinner`).
 - **Emergency release: `tw kill` the holder.** Its node is cut off the
   tailnet, so it can't renew, and the lock is free when the lease runs out.
-  Measured: 0.8 s after killing a holder of a 1 s lease
+  Measured: 3.0 s after killing a holder of a 3 s lease
   (`hostd:TestLockTemplate/KillHolderReleases`).
 - **Kill switch: `tw kill` the lock object.** This is **not** a release.
   A killed object keeps a killed marker in its storage, so that lock name
