@@ -31,8 +31,15 @@ import (
 //     stepped forwards (or a host that slept) does not backfill the missed
 //     minutes. Like Cloudflare's, delivery is best effort, not exactly once.
 //   - A trigger whose previous run is still going is skipped, not queued.
+//     A run lasts until scheduled() and its ctx.waitUntil() work settle
+//     (the runtime wrapper collects waitUntil promises and answers only
+//     after them), so work left in waitUntil still counts as in flight.
 //   - A run is bounded by Config.CronTimeout (wall clock) and counts as an
 //     in-flight request, so a blue/green switch drains it like any other.
+//     At the timeout hostd drops the run's connection, which makes workerd
+//     cancel it, waitUntil work included, so a timed-out run does not keep
+//     going beside the next one (H17, #152). It is logged as
+//     "cron trigger timed out".
 //   - The invocation reaches workerd only over the instance's private
 //     ingress, as cf.tw {kind: "scheduled"}, which only hostd can set (it
 //     overwrites cf.tw on every tailnet request). The platform wrapper
@@ -41,6 +48,9 @@ import (
 // DefaultCronTimeout bounds one scheduled() run (Cloudflare's limit for
 // cron triggers is 15 minutes of wall time).
 const DefaultCronTimeout = 15 * time.Minute
+
+// errCronTimeout: a run hit Config.CronTimeout and was cancelled.
+var errCronTimeout = errors.New("scheduled() exceeded the cron timeout")
 
 // CronResult is one scheduled() run's outcome, as workerd reports it.
 type CronResult struct {
@@ -102,6 +112,7 @@ func (h *Host) cronDue(now time.Time) []cronRun {
 			if err != nil || !s.Matches(minute) {
 				continue // validated at deploy; an error here cannot happen
 			}
+			// limits.md#cron-no-overlap
 			if w.cronRunning[expr] {
 				h.log.Warn("cron trigger skipped: previous run still in progress", "workload", w.name, "cron", expr, "scheduledTime", minute)
 				continue
@@ -158,6 +169,8 @@ func (h *Host) runScheduled(r cronRun) {
 	res, err := h.invokeCron(h.ctx, r.w, r.cron, r.at)
 	log := h.log.With("workload", r.w.name, "tenant", r.w.tenantID, "cron", r.cron, "scheduledTime", r.at, "ms", time.Since(st).Milliseconds())
 	switch {
+	case errors.Is(err, errCronTimeout):
+		log.Warn("cron trigger timed out", "outcome", "exceededTimeout", "err", err)
 	case err != nil:
 		log.Warn("cron trigger failed", "err", err)
 	case res.Outcome != "ok":
@@ -217,7 +230,8 @@ func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at 
 	resp, err := (&http.Client{Transport: inst.direct.Transport}).Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return res, fmt.Errorf("scheduled() exceeded the %v cron timeout", timeout)
+			// Dropping the connection cancels the run in workerd.
+			return res, fmt.Errorf("%w (%v): the run was cancelled", errCronTimeout, timeout)
 		}
 		return res, err
 	}
