@@ -92,8 +92,8 @@ Limits of `tw dev` today:
 
 [`@cloudflare/vitest-plugin`](https://developers.cloudflare.com/workers/testing/vitest-integration/)
 (formerly `@cloudflare/vitest-pool-workers`) works with a tailworks app's
-`wrangler.jsonc` as is. Measured with `@cloudflare/vitest-plugin` 1.8.2 and
-vitest 5.1.0 on the `lock`, `agent`, `mcp` and `refund-approval` templates
+`wrangler.jsonc` as is. Measured with `@cloudflare/vitest-plugin` 1.8.4 and
+vitest 5.1.1 on the `lock`, `agent`, `mcp` and `refund-approval` templates
 (`make test-vitest`, `e2e/vitest`):
 
 | Works | Notes |
