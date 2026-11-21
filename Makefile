@@ -100,8 +100,9 @@ e2e-observability: deps
 
 ## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container), or,
 ## with TW_TEST_POSTGRES_DSN set, against that database (CI's service container; nightly.yml).
+## The container gets a per-run name and a free port, so worktrees don't collide; PG_PORT=<n> pins it.
 PG_CTX  ?= orbstack
-PG_PORT ?= 55433
+PG_PORT ?=
 .PHONY: test-pg
 test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
