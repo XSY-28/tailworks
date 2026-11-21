@@ -25,6 +25,9 @@ type fakeStore struct {
 	head            int64
 	entries         []fakeStoreEntry // by seq
 	created, update time.Time
+
+	// degraded: as its host reported it (storedegraded.go).
+	degraded *mgmtapi.StoreDegraded
 }
 
 type fakeStoreEntry struct {
@@ -69,8 +72,12 @@ func (s *Server) storeView(r *http.Request, st *fakeStore) map[string]any {
 	for _, e := range st.entries {
 		bytes += int64(len(e.data))
 	}
-	return map[string]any{"tenantID": r.PathValue("id"), "workload": r.PathValue("workload"), "kind": st.kind, "name": st.name,
+	v := map[string]any{"tenantID": r.PathValue("id"), "workload": r.PathValue("workload"), "kind": st.kind, "name": st.name,
 		"incarnation": st.inc, "head": st.head, "entries": len(st.entries), "bytes": bytes, "createdAt": ms(st.created), "updatedAt": ms(st.update)}
+	if st.degraded != nil {
+		v["degraded"] = st.degraded
+	}
+	return v
 }
 
 func newIncarnation() string {
@@ -173,7 +180,7 @@ func (s *Server) readJournal(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, p)
 		return
 	}
-	p.Incarnation, p.Head = st.inc, st.head
+	p.Incarnation, p.Head, p.Degraded = st.inc, st.head, st.degraded
 	for _, e := range st.entries {
 		if e.seq <= after {
 			continue

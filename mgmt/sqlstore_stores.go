@@ -68,19 +68,27 @@ type storeEntryRow struct {
 	Data []byte
 }
 
-const storeCols = "tenant_id, workload, kind, name, incarnation, head, entries, bytes, created_at, updated_at"
+// storeInsertCols are the columns a new store row sets; storeCols adds the
+// degraded record (sqlstore_storedegraded.go).
+const storeInsertCols = "tenant_id, workload, kind, name, incarnation, head, entries, bytes, created_at, updated_at"
+const storeCols = storeInsertCols + ", " + storeDegradedCols
 
 func scanStore(sc interface{ Scan(...any) error }) (StoreInfo, error) {
 	var st StoreInfo
-	err := sc.Scan(&st.TenantID, &st.Workload, &st.Kind, &st.Name, &st.Incarnation, &st.Head, &st.Entries, &st.Bytes, &st.CreatedAt, &st.UpdatedAt)
+	var d StoreDegraded
+	err := sc.Scan(&st.TenantID, &st.Workload, &st.Kind, &st.Name, &st.Incarnation, &st.Head, &st.Entries, &st.Bytes, &st.CreatedAt, &st.UpdatedAt,
+		&d.Seq, &d.Error, &d.Host, &d.At, &d.Workload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return st, ErrNotFound
+	}
+	if d.Seq > 0 {
+		st.Degraded = &d
 	}
 	return st, err
 }
 
 func (s *SQLStore) CreateStore(ctx context.Context, st StoreInfo) (bool, error) {
-	res, err := s.db.ExecContext(ctx, s.q("INSERT INTO stores ("+storeCols+") VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING"),
+	res, err := s.db.ExecContext(ctx, s.q("INSERT INTO stores ("+storeInsertCols+") VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING"),
 		st.TenantID, st.Workload, st.Kind, st.Name, st.Incarnation, st.Head, st.Entries, st.Bytes, st.CreatedAt, st.UpdatedAt)
 	if err != nil {
 		return false, err

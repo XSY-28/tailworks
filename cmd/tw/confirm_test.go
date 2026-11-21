@@ -21,7 +21,7 @@ func TestDestructiveCommandsConfirm(t *testing.T) {
 	}
 	name := func(args []string) string { // the positional after the subcommand(s)
 		for _, a := range args[1:] {
-			if !strings.HasPrefix(a, "-") && a != "delete" && a != "rm" && a != "purge" && a != "namespace" && a != "bucket" {
+			if !strings.HasPrefix(a, "-") && a != "delete" && a != "repair" && a != "rm" && a != "purge" && a != "namespace" && a != "bucket" {
 				return a
 			}
 		}

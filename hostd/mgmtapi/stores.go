@@ -31,6 +31,10 @@ type StoreJournalPage struct {
 	Head        int64        `json:"head"`
 	Entries     []StoreEntry `json:"entries"`
 	More        bool         `json:"more"`
+
+	// Degraded is mgmt's degraded record of the store (storestatus.go):
+	// a store object that replays past it reports itself healthy.
+	Degraded *StoreDegraded `json:"degraded,omitempty"`
 }
 
 // String never prints entry data.

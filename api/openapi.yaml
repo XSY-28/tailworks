@@ -1115,6 +1115,31 @@ paths:
         "409": { $ref: "#/components/responses/LeaseLost" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/stores/degraded:
+    get:
+      tags: [stores]
+      operationId: ListDegradedStores
+      summary: List degraded stores
+      description: |
+        Every store mgmt records as degraded (`Store.degraded`: its object
+        stopped its replay at a journal entry it can't apply), across
+        workloads, for `tw status` and the console. At most 1000, by
+        tenant, workload, kind and name.
+      x-tw-role: admin
+      parameters:
+        - name: tenant
+          in: query
+          description: Only this tenant's stores.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The degraded stores.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DegradedStores" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/workloads/{workload}/stores:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -1301,6 +1326,88 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/StoreConflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeKind"
+      - $ref: "#/components/parameters/storeName"
+    post:
+      tags: [stores]
+      operationId: ReportStoreStatus
+      summary: Report that a store object is degraded, or healthy again
+      description: |
+        A store object that stops its replay at a journal entry it can't
+        apply (`store_degraded`, ADR-044 §3) reports it here through its
+        host, once per change: with `degraded` when it stops, without it
+        when the entry applies (or was skipped with `…/repair`). mgmt
+        keeps the latest report on the store (`Store.degraded`, shown by
+        `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+        and the console) and audits the first report of each failing
+        entry on each host (`kind: store_replay_failed`). A report for
+        another incarnation is ignored. A healthy report clears the record
+        only if it comes from the host that made it, or its `applied` is
+        at or past the recorded entry (another host replayed it fine,
+        after a move).
+
+        A host must give `epoch` (lease holder at that epoch, `409
+        lease_lost`).
+      x-tw-role: admin|host
+      x-tw-audit: true
+      parameters:
+        - $ref: "#/components/parameters/storeEpoch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreStatusReport" }
+      responses:
+        "204":
+          description: Recorded (or ignored).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/repair:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeKind"
+      - $ref: "#/components/parameters/storeName"
+    post:
+      tags: [stores]
+      operationId: RepairStore
+      summary: Skip the journal entry a degraded store stopped at
+      description: |
+        `tw d1 repair <db> --skip <seq>`: deletes journal entry `skip`, the
+        one the store's object could not apply (`Store.degraded.seq`), so
+        every host's replay goes from the entry before it to the one after
+        it. The store object tries again on its next sync (its next write,
+        or a read once its freshness lapses) and heals. That entry's
+        change is lost for good: export first. `409 store_not_degraded`
+        unless mgmt records the store as degraded at exactly `skip`.
+        Clears `Store.degraded`. Audited (`kind: store_repair`).
+      x-tw-role: admin|tenant:data
+      x-tw-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreRepair" }
+      responses:
+        "200":
+          description: Skipped. The store after the repair.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys:
@@ -4247,7 +4354,8 @@ components:
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
         | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
-        | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then recreate the database) |
+        | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then `tw d1 repair --skip <seq>` or recreate the database) |
+        | `store_not_degraded` | 409 | `…/repair` of a store mgmt does not record as degraded at that journal entry |
         | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
         | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
         | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
@@ -4330,6 +4438,7 @@ components:
         - approval_not_pending
         - store_conflict
         - store_degraded
+        - store_not_degraded
         - store_limit
         - queue_limit
         - takeover_unconfirmed
@@ -5766,6 +5875,8 @@ components:
         `secret_release` (a workload's secrets released to its lease holder; names only),
         `store_create` (a platform store created, by its first write or an admin),
         `store_delete` (a platform store and its data key deleted),
+        `store_replay_failed` (a store's object stopped its replay at a journal entry it can't apply; the entry's seq, the error and the host),
+        `store_repair` (an operator skipped the journal entry a degraded store stopped at, `tw d1 repair`),
         `queue_create` (a queue created, by its first use or an admin),
         `queue_delete` (a queue, its messages and its data key deleted),
         `queue_purge` (every message of a queue deleted),
@@ -5848,6 +5959,8 @@ components:
         - secret_release
         - store_create
         - store_delete
+        - store_replay_failed
+        - store_repair
         - queue_create
         - queue_delete
         - queue_purge
@@ -6139,6 +6252,36 @@ components:
         bytes: { type: integer, format: int64, description: Plaintext bytes of the kept entries. }
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
+        degraded: { $ref: "#/components/schemas/StoreDegraded" }
+    StoreDegraded:
+      type: object
+      description: "The journal entry a store's object could not apply, as its host last reported it (`store_degraded`). Absent: no host reports the store degraded."
+      required: [seq, error, at]
+      properties:
+        seq: { type: integer, format: int64, description: "The entry that failed: the object's copy stops before it. `tw d1 repair --skip` takes it." }
+        error: { type: string, description: "Why it failed (SQLite's error for D1)." }
+        host: { type: string, description: The host whose store object reported it (empty in local dev). }
+        workload: { type: string, description: "The workload, or replica (`<workload>--r<n>`), that host runs it for." }
+        at: { type: integer, format: int64, description: When it first failed there (ms). }
+    StoreStatusReport:
+      type: object
+      required: [incarnation, applied]
+      properties:
+        incarnation: { type: string, description: The incarnation the object holds; a report for another is ignored. }
+        applied: { type: integer, format: int64, minimum: 0, description: The last journal seq the object applied. }
+        degraded: { $ref: "#/components/schemas/StoreDegraded" }
+      additionalProperties: false
+    StoreRepair:
+      type: object
+      required: [skip]
+      properties:
+        skip: { type: integer, format: int64, minimum: 1, description: "The journal entry to delete: it must be the store's `degraded.seq`." }
+      additionalProperties: false
+    DegradedStores:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Store" } }
     StorePage:
       allOf:
         - $ref: "#/components/schemas/Page"
@@ -6184,6 +6327,7 @@ components:
         head: { type: integer, format: int64 }
         entries: { type: array, items: { $ref: "#/components/schemas/StoreEntry" } }
         more: { type: boolean, description: "True if entries after the last one returned remain: read again with `after` = its `seq`." }
+        degraded: { $ref: "#/components/schemas/StoreDegraded" }
     KVKey:
       type: object
       description: A Workers KV key as `list()` returns it (ADR-037).

@@ -30,3 +30,16 @@ func degradeStore(t *testing.T, e *hostdtest.Env, journal string, entries ...[]b
 	}
 	return p.Head + 1
 }
+
+// degradedRecord is mgmt's record of a store's degraded state (#147), nil
+// when there is none.
+func degradedRecord(t *testing.T, e *hostdtest.Env, store string) *mgmtapi.StoreDegraded {
+	t.Helper()
+	var st struct {
+		Degraded *mgmtapi.StoreDegraded `json:"degraded"`
+	}
+	if err := e.Mgmt.Do(context.Background(), "GET", store, nil, &st); err != nil {
+		t.Fatal(err)
+	}
+	return st.Degraded
+}

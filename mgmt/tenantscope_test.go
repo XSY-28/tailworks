@@ -82,6 +82,7 @@ var tenantOperatorRoutes = map[string]bool{
 	"PATCH /v1/tenants/{id}":          true, // limits, pool, tier, credentials
 	"POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}": true, // approvers
 	"POST /v1/tenants/{id}/workloads/{workload}/secret-grants":                   true, // hosts
+	"POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status":     true, // hosts (a store object's degraded report)
 	"POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants":                true, // hosts
 }
 
