@@ -34,4 +34,4 @@ rarely: `go test -race -count=15 -cpu 1,2,8 -run 'TestWorkerdDeployTimeFailure$'
   - With the fix: `go test -race -count=50 -cpu 1,2,8 -run TestWaitHealthyDuringRestart ./hostd`:
     ok, 150 runs, no race.
 - `go test -race -count=15 -cpu 1,2,8 -run 'TestWorkerdDeployTimeFailure$' ./hostd`: ok (45 runs).
-- `make lint test`: see the PR.
+- `make lint test` (macOS, after fetching origin/master: no new commits): ok.
