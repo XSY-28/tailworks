@@ -44,8 +44,17 @@ range and panic the whole helper, dropping every VM on the host
 - Before/after: the same test built with the old validation (overlay) fails
   for "wrapped offset", "offset wraps" and "unaligned base": the old check
   accepts them.
-- `make e2e-vm` on the amd64 KVM test VM: see the PR's Tests section.
-- `make lint test`: see the PR's Tests section.
+- `make lint` and `make test` (macOS, after merging origin/master): pass.
+- `make e2e-vm` on an amd64 KVM test VM (scratch checkout, a guest kernel
+  from an older build via `TW_VM_KERNEL`, `VM_HUGEPAGES=1024`): the unit
+  tests in `./hostd/vm` pass, but every VM test fails with "microVM not
+  ready after 30s", including a cold `TestSmoke` that doesn't use uffd.
+  A control run of `TestSmoke` built from origin/master fails the same way
+  on that VM, so this is the environment (most likely the borrowed
+  kernel), not this change. The snapshot-restore (uffd) path was **not**
+  exercised against real Firecracker; it should be, with
+  `make e2e-vm` on a working KVM host, to confirm real tables pass
+  `validateRegions`.
 
 ## Gaps
 
