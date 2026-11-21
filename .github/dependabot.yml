@@ -56,6 +56,13 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # @types/node's major tracks a Node.js major. CI and releases run
+    # Node 22 (setup-node) and package.json says node >=20, so a newer
+    # major would type-check APIs the supported Nodes don't have. Move it
+    # by hand when the supported Node moves.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       workerd:
         patterns:
