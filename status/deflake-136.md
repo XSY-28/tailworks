@@ -56,10 +56,10 @@ of sleeping, then checks the contender gets 409, then kills.
 - `TestLockTemplate/ClientWithLockRenewsAndFences`, 1 of 10 on master
   under the same load: `after withLock: {... Held:false Why:expired}`. That
   subtest uses the same 1 s lease. The lease ran out before the release.
-  Reported separately.
+  Filed as #196.
 
 ## Tests
 
 - `go test -race -count=15 -run 'TestLockTemplate$' ./hostd`: ok, all subtests 15/15.
 - `go test -race -count=30 -run 'TestLockTemplate$/(KillLockObjectStopsIt|KillHolderReleases)' ./hostd`: ok, 30/30 each.
-- `make lint test`: see the PR.
+- `make lint test` (macOS, after merging origin/master): ok.
