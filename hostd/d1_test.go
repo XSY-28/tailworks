@@ -484,9 +484,33 @@ func TestD1(t *testing.T) {
 		}
 	})
 
+	// mgmt knows (#147): the host reported the degraded database, and an
+	// operator's repair skips the failing entry, after which the object
+	// applies the one after it and takes writes again.
+	t.Run("Repair", func(t *testing.T) {
+		w := W.with(t)
+		store := "/v1/tenants/" + e.TenantID + "/workloads/d1app/stores/d1/app-db"
+		d := degradedRecord(t, e, store)
+		if d == nil || !strings.Contains(d.Error, "no such table: no_such_table") {
+			t.Fatalf("mgmt's record of the degraded database: %+v", d)
+		}
+		if err := e.Mgmt.Do(ctx, "POST", store+"/repair", map[string]any{"skip": d.Seq + 1}, nil); err == nil || !strings.Contains(err.Error(), "store_not_degraded") {
+			t.Fatalf("repair of the wrong entry: %v", err)
+		}
+		if err := e.Mgmt.Do(ctx, "POST", store+"/repair", map[string]any{"skip": d.Seq}, nil); err != nil {
+			t.Fatal(err)
+		}
+		w.q("INSERT INTO kv (k, v) VALUES ('w-repaired', 1)", "run")
+		if got := js(w.col("SELECT count(*) AS n FROM kv WHERE k IN ('after-bad', 'w-repaired')", "n")); got != "2" {
+			t.Fatalf("after the repair: %s of the entry after the skipped one and a new write", got)
+		}
+		if d := degradedRecord(t, e, store); d != nil {
+			t.Fatalf("repaired, still recorded degraded: %+v", d)
+		}
+	})
+
 	// An admin deletes the database: the object empties itself on its next
-	// sync; the binding then works on a new, empty database (which also
-	// recovers it from ReplayFailureStops' degraded state).
+	// sync; the binding then works on a new, empty database.
 	t.Run("Delete", func(t *testing.T) {
 		w := W.with(t)
 		if err := e.Mgmt.Do(ctx, "DELETE", "/v1/tenants/"+e.TenantID+"/workloads/d1app/stores/d1/app-db", nil, nil); err != nil {

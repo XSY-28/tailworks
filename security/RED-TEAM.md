@@ -912,3 +912,25 @@ for one release; under it the Pass 2 macOS verdict (TCP anywhere, writes to
 `/tmp`, signals to any same-user process, unix sockets outside the deny
 list including the system tailscaled socket, egress `unenforced`) applies
 again.
+
+---
+
+# Note 2026-11-21: RT3-11 fixed (#149)
+
+This note updates RT3-11. The earlier passes are left as written.
+
+The vmhelper now decodes the uffd handshake with `parseRegions`
+(`hostd/vm/helper/uffdregions.go`, no build tag) and refuses a table unless
+every region has a power-of-two page size from 4 KiB to 1 GiB, a
+page-aligned `Base`, a non-zero `Size` that is a whole number of pages, a
+`Base+Size` that does not wrap, a 4 KiB-aligned `Offset`, and
+`Offset <= len(mem) && Size <= len(mem)-Offset`; the table has at most 64
+regions and no two overlap in guest memory. A refused table fails that VM's
+session (`uffd: bad region ...` in the start error). `copyPage` maps a
+fault through `pageSource` and checks the bound again before it takes
+`&mem[src]`. `serve`, `prefetch` and `serveConn` recover from a panic and
+fail only their own session (I8).
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| RT3-11 | **Fixed** (F8) | `helper.TestRT3_H11_UffdBadTableFailsSession` (Linux, no root): a fake VMM connects to `listenUffd`'s socket, sends a crafted table with a pipe as the userfaultfd and queues a page fault; each table fails its session and a good table after them is served up to `UFFDIO_COPY`. With the old check, the wrapped-offset, offset-wraps and unaligned-base tables pass the handshake. `helper.TestRT3_H11_UffdRegionValidation` (any OS, table-driven) and `helper.FuzzRegionTable`: every accepted table keeps every fault and prefetch page inside the memory file. |

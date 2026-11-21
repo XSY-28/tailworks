@@ -1248,6 +1248,10 @@ type statusResult struct {
 	Containers   []hostd.ContainerStatus     `json:"containers,omitempty"`
 	Reservations []mgmt.ContainerReservation `json:"containerReservations,omitempty"`
 	Capacity     []hostCapacity              `json:"hostCapacity,omitempty"`
+
+	// DegradedStores (#147, storedegraded.go): stores whose object stopped
+	// its replay at a journal entry it can't apply.
+	DegradedStores []mgmt.StoreInfo `json:"degradedStores,omitempty"`
 }
 
 func cmdStatus(args []string) error {
@@ -1327,6 +1331,7 @@ func cmdStatus(args []string) error {
 	r.Containers = hv.Containers
 	if r.Mgmt {
 		r.Capacity, r.Reservations = containerState(ctx, s.mgmt(), "")
+		r.DegradedStores = degradedStores(ctx, s.mgmt(), "")
 	}
 	r.Healthy = r.Supervisor && r.Mgmt && r.Host
 	emit(f, r, func() {
@@ -1376,6 +1381,7 @@ func cmdStatus(args []string) error {
 			}
 			fmt.Printf("%s workload    %s %s (tenant %s, %s, epoch %d, %d requests%s)%s\n", mark(w.Status == "active"), w.Workload, w.Status, w.TenantID, w.DeploymentID, w.Epoch, w.Requests, sb, e)
 		}
+		printDegradedStores(r.DegradedStores)
 		printContainers(r.Capacity, r.Reservations, r.Containers, hv.ImageCacheBytes)
 	})
 	if !r.Healthy {
@@ -1411,8 +1417,12 @@ func remoteStatus(f *flags, s *state) error {
 		}
 	}
 	capv, resv := containerState(ctx, s.mgmt(), "")
+	degraded := degradedStores(ctx, s.mgmt(), "")
 	res := map[string]any{"linked": s.Link, "whoami": w, "hosts": hosts, "tenants": tenants, "healthy": live > 0,
 		"hostCapacity": capv, "containerReservations": resv}
+	if len(degraded) > 0 {
+		res["degradedStores"] = degraded
+	}
 	emit(f, res, func() {
 		fmt.Printf("tw status · linked to %s · tailnet %s · you are %s (admin by WhoIs)\n", s.Link.Endpoint, w.Mgmt.Tailnet, w.Actor)
 		for _, h := range hosts {
@@ -1440,6 +1450,7 @@ func remoteStatus(f *flags, s *state) error {
 				}
 			}
 		}
+		printDegradedStores(degraded)
 		printContainers(capv, resv, nil, 0)
 	})
 	if live == 0 {

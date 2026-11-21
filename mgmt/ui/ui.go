@@ -315,6 +315,9 @@ type overviewData struct {
 	Verification verification
 	MintModes    []string
 	Errors       []string
+
+	// DegradedStores (stores.go): operators only.
+	DegradedStores []degradedStore
 }
 
 func (u *ui) overview(w http.ResponseWriter, r *http.Request) {
@@ -352,6 +355,8 @@ func (u *ui) overview(w http.ResponseWriter, r *http.Request) {
 	note("audit", err)
 	if operator {
 		note("audit verification", u.call(r, "GET", "/v1/audit/verification", &d.Verification))
+		d.DegradedStores, err = u.degradedStores(r)
+		note("degraded stores", err)
 	}
 	u.render(w, 200, "overview", d)
 }

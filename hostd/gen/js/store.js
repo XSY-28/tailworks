@@ -24,7 +24,10 @@
 // marked degraded (the failing seq and error, kept on disk), and it never
 // reports itself synced past it. A degraded store keeps serving reads
 // from what it has applied, refuses writes (store_degraded), and tries
-// the entry again on later syncs; it heals if the entry applies.
+// the entry again on later syncs; it heals if the entry applies (or an
+// operator skips it: `tw d1 repair --skip <seq>` deletes it from the
+// journal). It reports each change to mgmt (#report), which shows it on
+// the store and audits it.
 //
 // A kind is a module that calls registerStoreKind(kind, def):
 //   init(store)              create its tables (idempotent; every boot)
@@ -166,7 +169,27 @@ export class Store extends DurableObject {
       this.#setMeta("seq", 0);
       this.#setMeta("inc", inc);
       this.kv.delete("__tw_store_degraded");
+      this.kv.delete("__tw_store_reported"); // a new store: mgmt has no record of it
     });
+  }
+
+  // #report tells mgmt (through hostd) that this object is degraded, or
+  // healthy again, once per change: "reported" is the failing seq mgmt was
+  // last told ("" = healthy). mgmtDegraded is mgmt's record from the last
+  // journal page: a healthy object that has applied up to it (on a new
+  // host after a move) clears it. Best effort: a failed report is retried
+  // by the next sync that ends the same way.
+  async #report(mgmtDegraded = null) {
+    const d = this.degraded;
+    const want = d ? String(d.seq) : "";
+    const stale = !d && mgmtDegraded && this.seq >= mgmtDegraded.seq;
+    if (want === String(this.#meta("reported", "")) && !stale) return;
+    try {
+      await this.#hostd("status", { incarnation: this.incarnation, applied: this.seq, degraded: d ?? undefined });
+      this.#setMeta("reported", want);
+    } catch (e) {
+      console.warn("tw store " + this.kindName + "/" + this.name + ": could not report its state to mgmt: " + String(e?.message ?? e));
+    }
   }
 
   // #applyEntries applies [{seq, data}] in order, inside the caller's
@@ -201,6 +224,7 @@ export class Store extends DurableObject {
 
   async #catchUp() {
     let after = this.seq;
+    let mgmtDegraded = null;
     for (;;) {
       const p = await this.#hostd("read", { after });
       const inc = p.incarnation ?? "";
@@ -217,6 +241,7 @@ export class Store extends DurableObject {
           this.#setMeta("inc", inc);
         }
       }
+      mgmtDegraded = p.degraded ?? null;
       const entries = (p.entries ?? []).map((e) => ({ seq: e.seq, data: b64dec(e.data) }));
       let bad = null;
       this.ctx.storage.transactionSync(() => {
@@ -224,12 +249,20 @@ export class Store extends DurableObject {
         if (bad) return; // keep what applied; never synced past the failing entry
         if (!p.more && p.head > this.seq) this.#setMeta("seq", p.head);
         if (!p.more) this.#setMeta("synced", 1);
+        // The failing entry left the journal (an operator skipped it) with
+        // nothing after it to apply.
+        const d = this.degraded;
+        if (!p.more && d && this.seq >= d.seq) this.kv.delete("__tw_store_degraded");
       });
-      if (bad) throw this.#degradedError(bad);
+      if (bad) {
+        await this.#report();
+        throw this.#degradedError(bad);
+      }
       if (!p.more) break;
       after = this.seq;
     }
     this.syncedAt = Date.now();
+    await this.#report(mgmtDegraded);
   }
 
   // sync catches up with the journal now.
@@ -291,7 +324,10 @@ export class Store extends DurableObject {
           bad = this.#applyEntries(es.map((e) => ({ seq: ++seq, data: e.data })));
           if (!bad) this.#setMeta("synced", 1);
         });
-        if (bad) throw this.#degradedError(bad, true);
+        if (bad) {
+          await this.#report();
+          throw this.#degradedError(bad, true);
+        }
         return r.head;
       }
       throw new StoreError("store_conflict", "the store kept moving under this write; retry");
