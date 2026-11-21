@@ -20,6 +20,16 @@ import (
 // before it has a home DERP or endpoints). Without awaitPeerPath the first
 // handshake initiation has no path, is dropped, and WireGuard retries after
 // 5 s; with it the call completes as soon as the path exists.
+//
+// The new peer can be in a's netmap, and answer a's disco ping, a moment
+// before its object opens the ingress listener (Ready). A SYN that arrives
+// then is reset: "connection was refused" (issue #139, on Linux CI and on
+// a loaded Mac). The reset came back over WireGuard, so the handshake this
+// test is about already worked; the call then waits for Ready and dials
+// again, and the time counts from the first dial. Waiting for Ready before
+// the first dial instead would give a the path first and hide the 5 s
+// penalty. The host's own routes don't matter: tsnet dials a tailnet IP
+// through netstack once the peer is in the netmap, which the call waits for.
 func TestEgressWaitsForNewPeerPath(t *testing.T) {
 	ctl := startControl(t)
 	mint := &countingMint{}
@@ -52,7 +62,8 @@ func TestEgressWaitsForNewPeerPath(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer regB.Close()
-		if _, err := regB.Create(id, netd.ObjectOptions{}); err != nil {
+		b, err := regB.Create(id, netd.ObjectOptions{})
+		if err != nil {
 			t.Fatal(err)
 		}
 		var ip string
@@ -72,6 +83,13 @@ func TestEgressWaitsForNewPeerPath(t *testing.T) {
 		}
 		t0 := time.Now()
 		c, err := regA.DialEgress(ctx, "a", ip+":80")
+		if err != nil && strings.Contains(err.Error(), "refused") {
+			t.Logf("%s: refused before its listener was open; waiting for Ready", id)
+			if err := b.Ready(ctx); err != nil {
+				t.Fatal(err)
+			}
+			c, err = regA.DialEgress(ctx, "a", ip+":80")
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
