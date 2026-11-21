@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/internal/termsafe"
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
@@ -91,7 +92,7 @@ func (ev *events) emit(kind string, fields map[string]any) {
 	}
 	ev.mu.Lock()
 	defer ev.mu.Unlock()
-	fmt.Fprintln(ev.w, netd.Redact(string(b)))
+	fmt.Fprintln(ev.w, netd.Redact(string(termsafe.JSON(b))))
 }
 
 // error writes an "error" event carrying the --json error object.
@@ -145,13 +146,16 @@ func (l *lineWriter) Flush() {
 	}
 }
 
-// logsOut is where `tw logs` writes: stdout as is, or with --json one
+// logsOut is where `tw logs` writes: stdout escaped per line, or with --json one
 // {"event": "log", "line", "workload" | "component", "host"?} per line. A
 // linked machine's replica lines arrive as "[<host>] …"; that prefix
 // becomes "host".
 func logsOut(on bool, pos []string, comp string, remote bool) (io.Writer, func()) {
 	if !on {
-		return os.Stdout, func() {}
+		// workerd.log, app.log and the daemons' logs carry tenant and
+		// internet-controlled text: escape it per line (internal/termsafe).
+		sw := termsafe.NewWriter(os.Stdout)
+		return sw, func() { sw.Flush() }
 	}
 	fields := map[string]any{}
 	switch {

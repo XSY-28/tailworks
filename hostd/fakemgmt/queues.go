@@ -30,6 +30,9 @@ type fakeQueue struct {
 	consumedAt            int64
 	created, updated      time.Time
 	sends, pulls, settles int
+
+	// claims counts messages handed to a host's pull (QueueClaims).
+	claims int
 }
 
 type fakeQMsg struct {
@@ -383,6 +386,9 @@ func (s *Server) pullQueue(w http.ResponseWriter, r *http.Request) {
 		if len(out) > 0 || dead > 0 || !time.Now().Before(deadline) {
 			q.pulls++
 			if len(out) > 0 {
+				if workload != "" {
+					q.claims += len(out)
+				}
 				q.consumer, q.consumedAt = workload, now
 				if workload == "" {
 					q.consumer = "admin"

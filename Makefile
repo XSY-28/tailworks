@@ -1,4 +1,4 @@
-# tailworks build. GOTOOLCHAIN=local: use the installed Go (1.27.3), never download one.
+# tailworks build. GOTOOLCHAIN=local: use the installed Go (1.27.4), never download one.
 export GOTOOLCHAIN := local
 GO        ?= go
 TS_CREDS  ?= $(HOME)/.config/tailnet-agents-design
@@ -100,8 +100,9 @@ e2e-observability: deps
 
 ## test-pg: the mgmt Store tests against Postgres 17 in OrbStack docker (throwaway container), or,
 ## with TW_TEST_POSTGRES_DSN set, against that database (CI's service container; nightly.yml).
+## The container gets a per-run name and a free port, so worktrees don't collide; PG_PORT=<n> pins it.
 PG_CTX  ?= orbstack
-PG_PORT ?= 55433
+PG_PORT ?=
 .PHONY: test-pg
 test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
@@ -116,6 +117,15 @@ TW_UPGRADE_FROM ?= $(shell sh scripts/upgrade-from.sh)
 .PHONY: e2e-upgrade
 e2e-upgrade: deps
 	TW_UPGRADE_FROM="$(TW_UPGRADE_FROM)" $(GO) test -tags e2eupgrade -count=1 -v -timeout 20m ./e2e/upgrade/...
+
+## e2e-tw-upgrade: single-machine `tw upgrade` end to end (issue #111), hermetic: an install.sh
+## prefix running `tw up` on testcontrol, an app with KV and D1 data, releases signed with a run key
+## (TW_RELEASE_SIGNERS). Unsigned, unpinned-key and tampered releases are refused before they run;
+## a release that doesn't start and one that fails the health gate are rolled back with the data;
+## a good one upgrades (backup, restart, health gate) with the data.
+.PHONY: e2e-tw-upgrade
+e2e-tw-upgrade: deps
+	$(GO) test -tags e2etwupgrade -count=1 -v -timeout 20m ./e2e/twupgrade/...
 
 ## e2e-local: the tw-netd binary as a real process against a local control plane + workerd.
 .PHONY: e2e-local
@@ -501,11 +511,11 @@ lint: api-check compat-check changes-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
 	@$(MAKE) --no-print-directory staticcheck
-	@# TODO(#146): drop the leading "-" (make vulncheck blocking) once go1.27.4 lands.
-	-@$(MAKE) --no-print-directory vulncheck
+	@$(MAKE) --no-print-directory vulncheck
 	$(GO) vet -tags e2e ./e2e/local/...
 	$(GO) vet -tags e2e ./e2e/wrangler/...
 	$(GO) vet -tags e2eupgrade ./e2e/upgrade/...
+	$(GO) vet -tags e2etwupgrade ./e2e/twupgrade/...
 	$(GO) vet -tags e2ereal ./e2e/real/...
 	GOOS=linux $(GO) vet ./hostd/vm/... ./guest/... ./cmd/tw-hostd/... ./cmd/tw-vmhelper/... ./cmd/tw/...
 	GOOS=linux $(GO) vet -tags e2evm ./e2e/vm/...
@@ -548,8 +558,8 @@ staticcheck: lint-tools
 
 # vulncheck: govulncheck ./... against the Go vulnerability database
 # (vuln.go.dev, so it needs the network). It fails on any vulnerability the
-# code can reach. `make lint` runs it without failing until #146 (the go1.27.4
-# net/http fix) lands; see "Upstream advisories" in docs/RELEASING.md.
+# code can reach, and `make lint` fails with it; see "Upstream advisories" in
+# docs/RELEASING.md.
 .PHONY: vulncheck
 vulncheck: lint-tools
 	bin/lint/govulncheck ./...

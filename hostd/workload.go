@@ -953,11 +953,11 @@ func (inst *instance) waitHealthy(d time.Duration) error {
 			return nil
 		}
 		inst.mu.Lock()
-		ex := inst.exited
+		ex, restarts := inst.exited, inst.restarts // onExit bumps restarts under mu (#181)
 		inst.mu.Unlock()
 		select {
 		case <-ex:
-			if inst.restarts == 0 {
+			if restarts == 0 {
 				time.Sleep(50 * time.Millisecond)
 			}
 		default:

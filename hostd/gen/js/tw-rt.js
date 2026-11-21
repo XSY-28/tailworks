@@ -1131,6 +1131,13 @@ function noPreviewURLs(W) {
     };
   }
 }
+function killedMark(ctx) {
+  try {
+    return ctx?.storage?.kv?.get?.("__tw_killed") ?? void 0;
+  } catch {
+    return void 0;
+  }
+}
 function wrapPlainClass(C, name, bindings, opts) {
   if (typeof C !== "function") throw new Error(`tw: durable_objects class ${name} is not exported by the main module`);
   const proto = C.prototype;
@@ -1146,7 +1153,7 @@ function wrapPlainClass(C, name, bindings, opts) {
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
-        if (tw && oname && opts.node) {
+        if (tw && oname && opts.node && !killedMark(ctx)) {
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
               const err2 = TailnetError.from(r.error);
@@ -1163,6 +1170,8 @@ function wrapPlainClass(C, name, bindings, opts) {
       }
       async __tw_kill(reason) {
         this.ctx.storage.kv.put("__tw_killed", reason || "killed");
+        const oname = this.ctx?.id?.name;
+        if (oname) forgetAdmitted(name, oname);
         return true;
       }
       async __tw_intercept(key, req) {
@@ -1195,20 +1204,29 @@ function admitter(tw, extra) {
   };
 }
 var ADMIT_CACHE_MAX = 1e4;
+var ADMIT_CACHE_TTL_MS = 6e4;
 var admitted = /* @__PURE__ */ new Map();
 function remember(key) {
+  admitted.delete(key);
   if (admitted.size >= ADMIT_CACHE_MAX) {
     const first2 = admitted.keys().next().value;
     if (first2 !== void 0) admitted.delete(first2);
   }
-  admitted.set(key, true);
+  admitted.set(key, Date.now() + ADMIT_CACHE_TTL_MS);
+}
+function forgetAdmitted(cls, name) {
+  admitted.delete(cls + "\n" + name);
 }
 async function admit(adm, cls, name) {
   const key = cls + "\n" + name;
-  if (admitted.has(key)) return;
+  const exp = admitted.get(key);
+  if (exp !== void 0) {
+    if (Date.now() < exp) return;
+    admitted.delete(key);
+  }
   const r = await adm(cls, name);
   if (!r || !r.ok) throw TailnetError.from(r?.error ?? { code: "create_not_admitted", message: "admit refused" });
-  remember(key);
+  if (r.value?.existing === true) remember(key);
 }
 function denied(msg) {
   throw new TailnetError("public_create_denied", msg);
@@ -1293,7 +1311,7 @@ function asResponse(e) {
   if (i >= 0) return new TailnetError("killed", m.slice(i + 8).trim()).toResponse();
   const j = m.indexOf("[create_not_admitted]");
   if (j >= 0) return new TailnetError("create_not_admitted", m.slice(j + 21).trim()).toResponse();
-  if (isTailnetError(e) && (e.code === "public_create_denied" || e.code === "public_request" || e.code === "create_not_admitted")) return e.toResponse();
+  if (isTailnetError(e) && (e.code === "public_create_denied" || e.code === "public_request" || e.code === "create_not_admitted" || e.code === "killed")) return e.toResponse();
   return null;
 }
 function requestTicket(req) {

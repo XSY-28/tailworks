@@ -107,6 +107,7 @@ and break master together (as #54, #55 and #57 did).
    | templates, `js/packages`, SDK compat | `make templates-typecheck test-sdk` |
    | wrangler config or bundling | `make e2e-wrangler` |
    | anything `make changes-check` calls upgrade-relevant | `make e2e-upgrade` |
+   | `tw upgrade` on a `tw up` machine, or how `tw up` restarts | `make e2e-tw-upgrade` |
    | `install.sh` / `get.sh` | `make install-test` |
 
    The suites that need credentials, a real tailnet, Docker, KVM or a Mac's

@@ -142,7 +142,7 @@ func cmdNotify(args []string) error {
 		case sub == "test" && *v.Delivered:
 			fmt.Printf("✓ test notification delivered (HTTP %d)\n", v.Status)
 		case sub == "test":
-			fmt.Printf("✗ test notification not delivered: %s\n", v.Error)
+			fmt.Printf("✗ test notification not delivered: %s\n", tsafe(v.Error))
 		case v.Webhook == nil:
 			fmt.Printf("tenant %s sends no notifications: approvals wait until someone looks (tw approvals, the admin UI)\n", tn.Tailnet)
 			fmt.Printf("  notify: tw notify set --webhook -   (paste a Slack/chat incoming-webhook URL, or a tailnet URL)\n")
