@@ -194,7 +194,13 @@ func (h *Host) queueLoop() {
 	defer t.Stop()
 	for {
 		want := h.queueWanted()
-		for k := range runs {
+		for k, r := range runs {
+			select {
+			case <-r.done: // ended by itself (a self-fence cancelled it): start again when wanted
+				delete(runs, k)
+				continue
+			default:
+			}
 			if _, ok := want[k]; !ok {
 				stop(k)
 			}
@@ -207,7 +213,7 @@ func (h *Host) queueLoop() {
 		}
 		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
 		for _, k := range keys {
-			ctx, cancel := context.WithCancel(h.ctx)
+			ctx, cancel := context.WithCancel(h.consumeContext()) // queuefence.go
 			r := &queueRun{cancel: cancel, done: make(chan struct{})}
 			runs[k] = r
 			go func(k queueRunKey, c queuecfg.Consumer) {
@@ -251,6 +257,9 @@ func (h *Host) consumeQueue(ctx context.Context, k queueRunKey, c queuecfg.Consu
 	vis := h.queueVisibility()
 	backoff := time.Second
 	for ctx.Err() == nil {
+		if !h.cronLeaseFresh() {
+			return // no claim from a host that may have lost mgmt (queuefence.go)
+		}
 		batch, err := h.claimBatch(ctx, w, k, c, vis)
 		if err != nil {
 			if ctx.Err() != nil {

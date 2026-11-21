@@ -288,6 +288,9 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
+	// consume: queue consumers' context, cancelled on self-fence (queuefence.go).
+	consume consumeGate
+
 	// teardown gate (teardown.go): POST /v1/teardown, tw down --purge.
 	tearingDown     bool
 	createsInFlight int
@@ -642,6 +645,7 @@ func (h *Host) tick() {
 		h.mu.Unlock()
 		if stale {
 			h.log.Error("no successful heartbeat; self-fencing stateful workloads (stateless keep serving)", "after", h.cfg.FenceAfter)
+			h.stopConsumers() // queuefence.go: no claim while fenced (#140)
 			h.fenceStateful("heartbeat lost")
 		}
 		return
