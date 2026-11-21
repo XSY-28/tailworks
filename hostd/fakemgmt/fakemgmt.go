@@ -241,6 +241,8 @@ func New(cfg Config) *Server {
 	m.HandleFunc("DELETE /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", s.deleteStore)
 	m.HandleFunc("GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", s.readJournal)
 	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", s.appendJournal)
+	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/repair", s.repairStore)
+	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status", s.reportStoreStatus)
 	m.HandleFunc("GET /v1/tenants/{id}/queues", s.listQueues)
 	m.HandleFunc("GET /v1/tenants/{id}/queues/{queue}", s.getQueue)
 	m.HandleFunc("PUT /v1/tenants/{id}/queues/{queue}", s.putQueue)

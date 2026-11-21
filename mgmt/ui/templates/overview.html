@@ -27,6 +27,30 @@
 
 {{if .Errors}}<div class="flash bad">{{range .Errors}}<div>{{.}}</div>{{end}}</div>{{end}}
 
+{{if .DegradedStores}}<section id="degraded-stores">
+  <div class="sect-head"><div>
+    <h2>Degraded stores <span class="count">{{len .DegradedStores}}</span></h2>
+    <p class="hint">A store's object stopped its replay at a journal entry it can't apply: reads serve what applied before it, writes are refused (store_degraded).</p>
+  </div></div>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>Store</th><th>Workload</th><th>Tenant</th><th>Entry</th><th>Error</th><th>Host</th><th>Since</th><th>Fix</th></tr></thead>
+    <tbody>
+    {{range .DegradedStores}}<tr>
+      <td class="mono"><b>{{.Kind}} {{.Name}}</b></td>
+      <td class="mono">{{.Workload}}{{if and .Degraded.Workload (ne .Degraded.Workload .Workload)}}<div class="sub-line">{{.Degraded.Workload}}</div>{{end}}</td>
+      <td class="mono"><a href="/ui/tenants/{{.TenantID}}">{{.TenantID}}</a></td>
+      <td class="mono">{{.Degraded.Seq}}</td>
+      <td class="small bad-text">{{.Degraded.Error}}</td>
+      <td class="mono">{{if .Degraded.Host}}<a href="/ui/hosts/{{.Degraded.Host}}">{{.Degraded.Host}}</a>{{else}}—{{end}}</td>
+      <td class="small">{{since .Degraded.At}}</td>
+      <td class="mono small">{{.Fix}}</td>
+    </tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+</section>{{end}}
+
 <section id="deployments" data-live="deployments">
   <div class="sect-head"><div>
     <h2>Deployments <span class="count">{{len .Deployments}}</span></h2>

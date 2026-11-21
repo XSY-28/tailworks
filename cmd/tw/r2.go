@@ -18,6 +18,7 @@ import (
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // r2Bucket is a bucket as the stores API describes it.
@@ -28,6 +29,9 @@ type r2Bucket struct {
 	Bytes     int64  `json:"bytes"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
+
+	// Degraded (#147): the bucket's index stopped its replay at an entry.
+	Degraded *mgmt.StoreDegraded `json:"degraded,omitempty"`
 }
 
 // r2Object is one live key of a bucket's index.
@@ -153,6 +157,7 @@ func cmdR2(args []string) error {
 			fmt.Printf("%-32s %10s %-20s\n", "BUCKET", "INDEX", "UPDATED")
 			for _, b := range items {
 				fmt.Printf("%-32s %10s %-20s\n", b.Name, humanBytes(b.Bytes), time.UnixMilli(b.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
+				printStoreDegraded(b.Degraded, storeFix(mgmt.StoreInfo{Kind: "r2", Name: b.Name, Workload: workload, Degraded: b.Degraded}))
 			}
 		})
 	case "bucket create":

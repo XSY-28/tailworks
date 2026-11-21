@@ -57,6 +57,7 @@ func confirmDestroy(f *flags, yes bool, what, name, cmdline string, fix ...strin
 // each without --yes and without a terminal.
 var destructiveCommands = [][]string{
 	{"d1", "delete", "db", "--workload", "app"},
+	{"d1", "repair", "db", "--skip", "3", "--workload", "app"},
 	{"host", "rm", "h1"},
 	{"kv", "namespace", "delete", "sessions", "--workload", "app"},
 	{"queues", "purge", "jobs"},

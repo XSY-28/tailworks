@@ -24,7 +24,7 @@ import (
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
-const d1Usage = "d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]"
+const d1Usage = "d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]"
 
 type d1Result struct {
 	Workload  string           `json:"workload"`
@@ -37,6 +37,10 @@ type d1Result struct {
 	Applied   []string         `json:"applied,omitempty"`
 	File      string           `json:"file,omitempty"`
 	Bytes     int              `json:"bytes,omitempty"`
+
+	// repair (d1repair.go): the database after the skipped entry.
+	Repaired *mgmt.StoreInfo `json:"repaired,omitempty"`
+	Skipped  int64           `json:"skipped,omitempty"`
 }
 
 func cmdD1(args []string) error {
@@ -59,7 +63,7 @@ func cmdD1(args []string) error {
 		}
 	}
 	if len(subs) == 0 || subs[0] == "migrations" && len(subs) < 2 {
-		return fail("bad_request", "tw d1 needs a subcommand: create | list | delete | execute | export | migrations create|list|apply", "usage: tw "+usageOf("d1"))
+		return fail("bad_request", "tw d1 needs a subcommand: create | list | delete | execute | export | repair | migrations create|list|apply", "usage: tw "+usageOf("d1"))
 	}
 	return cmdD1Sub(strings.Join(subs, " "), rest)
 }
@@ -71,6 +75,7 @@ func cmdD1Sub(sub string, args []string) error {
 	command := f.String("command", "", "execute: SQL to run (one or more statements, run as one batch)")
 	file := f.String("file", "", "execute: a file of SQL to run as one batch")
 	output := f.String("output", "", "export: write the SQL to this file (default: stdout)")
+	skip := f.Int64("skip", 0, "repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)")
 	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
@@ -82,7 +87,7 @@ func cmdD1Sub(sub string, args []string) error {
 	case "rm":
 		sub = "delete"
 	}
-	want := map[string]int{"create": 1, "list": 0, "delete": 1, "execute": 1, "export": 1, "migrations create": 2, "migrations list": 1, "migrations apply": 1}
+	want := map[string]int{"create": 1, "list": 0, "delete": 1, "execute": 1, "export": 1, "repair": 1, "migrations create": 2, "migrations list": 1, "migrations apply": 1}
 	n, ok := want[sub]
 	if !ok {
 		return fail("bad_request", fmt.Sprintf("unknown subcommand %q", sub), "usage: tw "+usageOf("d1"))
@@ -150,6 +155,11 @@ func cmdD1Sub(sub string, args []string) error {
 			return err
 		}
 	}
+	if sub == "repair" {
+		if err := confirmD1Repair(f, *yes, name, *skip); err != nil {
+			return err
+		}
+	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
 		return err
@@ -201,6 +211,7 @@ func cmdD1Sub(sub string, args []string) error {
 			fmt.Printf("%-32s %10s %12s  %s\n", "NAME", "WRITES", "JOURNAL", "UPDATED")
 			for _, d := range items {
 				fmt.Printf("%-32s %10d %12s  %s\n", d.Name, d.Head, humanBytes(d.Bytes), time.UnixMilli(d.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
+				printStoreDegraded(d.Degraded, storeFix(d))
 			}
 		})
 	case "delete":
@@ -248,6 +259,10 @@ func cmdD1Sub(sub string, args []string) error {
 		}
 		res.File = *output
 		emit(f, res, func() { fmt.Printf("✓ exported %s (%s) to %s\n", name, humanBytes(int64(len(raw))), *output) })
+	case "repair":
+		if err := d1Repair(ctx, c, f, &res, storePath, *skip, hdr); err != nil {
+			return err
+		}
 	case "migrations list":
 		pend, err := d1mig.Pending(ctx, exec, filepath.Join(a.Dir, db.MigrationsDir), db.MigrationsTable)
 		if err != nil {
