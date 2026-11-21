@@ -1,6 +1,6 @@
 module github.com/rosskukulinski/tailworks
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -25,10 +25,9 @@ require (
 	// tailscale.com is pinned to main commit 5030108 (2026-11-07), not a tag.
 	// Why: the design spikes (RFC "Prototype results") ran on that commit,
 	// and M0 took it as is. No feature we use needs it: the tree builds and
-	// vets against v1.104.5 (v1.104.6+ need go1.27.4, issue #146). But
-	// v1.104.x branched from main on 2026-09-30, so any 1.104 tag would roll
-	// back five weeks of main under netd, which reaches into tsnet, ipn and
-	// gVisor internals (docs/RELEASING.md, "Upstream advisories").
+	// vets against v1.104.5. But v1.104.x branched from main on 2026-09-30,
+	// so any 1.104 tag would roll back five weeks of main under netd, which
+	// reaches into tsnet, ipn and gVisor internals (docs/RELEASING.md, "Upstream advisories").
 	// Un-pin: move to the first tagged release cut from main after 5030108
 	// (v1.106.0) once `make lint test e2e-placement` and `make e2e-real` pass.
 	// From then on, tagged releases only, taken within two weeks of each one

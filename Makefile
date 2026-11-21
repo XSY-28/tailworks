@@ -1,4 +1,4 @@
-# tailworks build. GOTOOLCHAIN=local: use the installed Go (1.27.3), never download one.
+# tailworks build. GOTOOLCHAIN=local: use the installed Go (1.27.4), never download one.
 export GOTOOLCHAIN := local
 GO        ?= go
 TS_CREDS  ?= $(HOME)/.config/tailnet-agents-design
@@ -501,8 +501,7 @@ lint: api-check compat-check changes-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	$(GO) vet ./...
 	@$(MAKE) --no-print-directory staticcheck
-	@# TODO(#146): drop the leading "-" (make vulncheck blocking) once go1.27.4 lands.
-	-@$(MAKE) --no-print-directory vulncheck
+	@$(MAKE) --no-print-directory vulncheck
 	$(GO) vet -tags e2e ./e2e/local/...
 	$(GO) vet -tags e2e ./e2e/wrangler/...
 	$(GO) vet -tags e2eupgrade ./e2e/upgrade/...
@@ -548,8 +547,8 @@ staticcheck: lint-tools
 
 # vulncheck: govulncheck ./... against the Go vulnerability database
 # (vuln.go.dev, so it needs the network). It fails on any vulnerability the
-# code can reach. `make lint` runs it without failing until #146 (the go1.27.4
-# net/http fix) lands; see "Upstream advisories" in docs/RELEASING.md.
+# code can reach, and `make lint` fails with it; see "Upstream advisories" in
+# docs/RELEASING.md.
 .PHONY: vulncheck
 vulncheck: lint-tools
 	bin/lint/govulncheck ./...
