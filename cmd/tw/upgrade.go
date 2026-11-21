@@ -604,7 +604,8 @@ func localPlanFor(cur string, meta releaseMeta, rel, source string, s *state) lo
 		"if it isn't: roll back to " + cur + " and restore the store (unless a contract migration ran)",
 	}
 	if inst, _ := serviceOf(s); !inst && !s.supervisorAlive() {
-		p.Steps[3] = "tw is not running: install only"
+		// No health check then, so nothing is rolled back (homelabUpgrade).
+		p.Steps = append(p.Steps[:3], "tw is not running: install only (no health check, no automatic rollback)")
 	}
 	if runtime.GOOS == "linux" {
 		if _, err := os.Stat("/etc/tailworks/setup.json"); err == nil {
