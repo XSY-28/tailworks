@@ -274,6 +274,15 @@ function noPreviewURLs(W: any) {
   }
 }
 
+/** killedMark reads a plain DO's kill marker (set by __tw_kill), if its storage has one. */
+function killedMark(ctx: any): string | undefined {
+  try {
+    return ctx?.storage?.kv?.get?.("__tw_killed") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * wrapPlainClass wraps a tenant DO class run as a plain DO (egress:
  * "workload"): alarms work, egress leaves as the workload node. The wrapper
@@ -295,9 +304,10 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
-        if (tw && oname && opts.node) {
+        if (tw && oname && opts.node && !killedMark(ctx)) {
           // The object's node comes up only if its creation was admitted
-          // (RT3-06/07); fetch answers the refusal below.
+          // (RT3-06/07); fetch answers the refusal below. A killed object
+          // asks for none (#153): fetch answers 410.
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
               const err = TailnetError.from((r as any).error);
@@ -314,6 +324,8 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
       }
       async __tw_kill(reason: string) {
         (this as any).ctx.storage.kv.put("__tw_killed", reason || "killed");
+        const oname = (this as any).ctx?.id?.name;
+        if (oname) forgetAdmitted(name, oname); // #153: the next call admits again
         return true;
       }
       async __tw_intercept(key: string, req: Request) {
@@ -369,24 +381,39 @@ function admitter(tw: TailnetApiStub | undefined, extra: Record<string, unknown>
 }
 
 const ADMIT_CACHE_MAX = 10_000;
-// "class\nname" of objects hostd admitted in this isolate (bounded; an
-// admitted object stays admitted: a later kill answers 410 on its own).
-const admitted = new Map<string, true>();
+const ADMIT_CACHE_TTL_MS = 60_000;
+// "class\nname" -> expiry, for objects hostd said exist (bounded, short-
+// lived). Only "existing" answers are kept: an admission to create is
+// one-shot in hostd, and a cached one let a later call skip admit after
+// the object was killed and purged (#153, ledger H19). A plain DO's kill
+// evicts its entry (forgetAdmitted); the TTL bounds the rest (a facet's
+// kill runs in the platform worker, not in this isolate).
+const admitted = new Map<string, number>();
 
 function remember(key: string) {
+  admitted.delete(key);
   if (admitted.size >= ADMIT_CACHE_MAX) {
     const first = admitted.keys().next().value;
     if (first !== undefined) admitted.delete(first);
   }
-  admitted.set(key, true);
+  admitted.set(key, Date.now() + ADMIT_CACHE_TTL_MS);
+}
+
+/** forgetAdmitted drops class/name from this isolate's admit cache (its object was killed). */
+function forgetAdmitted(cls: string, name: string) {
+  admitted.delete(cls + "\n" + name);
 }
 
 async function admit(adm: Admitter, cls: string, name: string): Promise<void> {
   const key = cls + "\n" + name;
-  if (admitted.has(key)) return;
+  const exp = admitted.get(key);
+  if (exp !== undefined) {
+    if (Date.now() < exp) return;
+    admitted.delete(key);
+  }
   const r = await adm(cls, name);
   if (!r || !r.ok) throw TailnetError.from((r as any)?.error ?? { code: "create_not_admitted", message: "admit refused" });
-  remember(key);
+  if ((r as any).value?.existing === true) remember(key);
 }
 
 function denied(msg: string): never {
@@ -490,7 +517,7 @@ function asResponse(e: unknown): Response | null {
   if (i >= 0) return new TailnetError("killed", m.slice(i + 8).trim()).toResponse();
   const j = m.indexOf("[create_not_admitted]");
   if (j >= 0) return new TailnetError("create_not_admitted", m.slice(j + 21).trim()).toResponse();
-  if (isTailnetError(e) && (e.code === "public_create_denied" || e.code === "public_request" || e.code === "create_not_admitted")) return e.toResponse();
+  if (isTailnetError(e) && (e.code === "public_create_denied" || e.code === "public_request" || e.code === "create_not_admitted" || e.code === "killed")) return e.toResponse();
   return null;
 }
 

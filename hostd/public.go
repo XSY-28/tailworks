@@ -292,9 +292,13 @@ func (h *Host) admitPublic(w *workload, app *bundle.App, class, name string) (ex
 	}
 	h.mu.Lock()
 	o := h.byKey[objKey(w.tenantID, w.name, class, name)]
+	killed := o == nil && h.killedLocked(objKey(w.tenantID, w.name, class, name)) // admitkill.go
 	h.mu.Unlock()
 	if o != nil && !o.terminal() {
 		return true, nil
+	}
+	if killed {
+		return false, killedName(class, name)
 	}
 	if h.pubCreates.has(w.tenantID, w.name, class, name) {
 		return true, nil
@@ -341,6 +345,9 @@ func (h *Host) admitCreate(w *workload, app *bundle.App, class, name string) (ex
 	defer h.mu.Unlock()
 	if o := h.byKey[objKey(w.tenantID, w.name, class, name)]; o != nil && !o.terminal() {
 		return true, nil
+	}
+	if h.killedLocked(objKey(w.tenantID, w.name, class, name)) { // admitkill.go
+		return false, killedName(class, name)
 	}
 	h.admitLocalLocked(w, class, name)
 	return false, nil
