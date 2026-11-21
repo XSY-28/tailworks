@@ -168,6 +168,7 @@ func cmdUp(args []string) error {
 		mode = mgmt.MintHeadscale
 	}
 	if s.configured() {
+		keepSavedUpFlags(f.FlagSet, s.Cfg) // up_saved.go
 		was := s.Cfg.modeName()
 		switch {
 		case s.Cfg.removedMode() && mode == "oauth":
