@@ -73,11 +73,22 @@ Delivery is best effort. Like Cloudflare's, it is not exactly once.
   forwards (or the host sleeps), the missed minutes are not backfilled;
   only the current minute runs.
 - **No overlap.** If a trigger's previous run is still going when it comes
-  due again, that run is skipped (and logged), not queued.
+  due again, that run is skipped (and logged as `cron trigger skipped`),
+  not queued. As on Cloudflare, a run lasts until `scheduled()` returns
+  **and** the promises it passed to `ctx.waitUntil()` settle, so work left
+  in `waitUntil` still counts as the run being in flight.
 - **Time limit.** A run is limited to 15 minutes of wall time
-  (`hostd.Config.CronTimeout`). It counts as an in-flight request, so a
-  redeploy drains it like any other. A new schedule takes effect at the
-  next minute after the new deployment becomes active.
+  (`hostd.Config.CronTimeout`), `waitUntil` work included. At the limit the
+  run is **cancelled**, not abandoned: the host drops the invocation and
+  workerd cancels `scheduled()` and its `waitUntil` work, so a timed-out run
+  never keeps going beside the next one. The host logs
+  `cron trigger timed out` (`outcome=exceededTimeout`). Two things are
+  outside the run and are not cancelled: a call the run made into a Durable
+  Object finishes in that object, and a synchronous loop that never yields
+  can't be interrupted (there is no CPU limit, see
+  [limits](limits.md#limits-that-dont-exist)). A run counts as an
+  in-flight request, so a redeploy drains it like any other. A new schedule
+  takes effect at the next minute after the new deployment becomes active.
 - **No retries.** Outcomes (`ok`, `exception`, …) and failures go to hostd's
   log, tagged with workload, cron and `scheduledTime`.
 
