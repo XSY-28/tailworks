@@ -62,10 +62,14 @@ Last update: 2026-11-21 12:00 PT. `make e2e-tw-upgrade`: single-machine `tw upgr
 
 ## Tests run (2026-11-21, macOS arm64)
 
-- `make e2e-tw-upgrade`: PASS ×3 (about 140 s each; see the PR).
+- `make e2e-tw-upgrade`: PASS 4 times (one `go test` run at 140 s, then 110 s, 107 s and 114 s under `make`).
 - `go test ./cmd/tw -run 'TestUpKeepsSavedSettings|TestUpgradePlanGolden'`: PASS.
-- `make lint test`: PASS.
-- `make e2e-upgrade`: PASS.
+- `make lint`: PASS.
+- `make test`: PASS, apart from two failures in packages this branch doesn't touch:
+  `mgmt` TestWarmKeyRefillRespectsThrottle and `hostd` TestContainerFenceInheritance.
+  The machine was shared and under load. Both passed on a rerun
+  (`go test -count=1 -run … ./mgmt/` and `./hostd/`).
+- `make e2e-upgrade`: PASS (27 s).
 
 ## Gaps and next steps
 
