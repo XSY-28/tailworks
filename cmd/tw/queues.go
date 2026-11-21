@@ -154,7 +154,7 @@ func cmdQueuesSub(sub string, args []string) error {
 			}
 			fmt.Printf("%-32s %8s %9s %8s %10s %s\n", "QUEUE", "BACKLOG", "IN FLIGHT", "DELAYED", "BYTES", "CONSUMER")
 			for _, q := range items {
-				fmt.Printf("%-32s %8d %9d %8d %10d %s\n", q.Name, q.Backlog, q.InFlight, q.Delayed, q.Bytes, orDash(q.Consumer))
+				fmt.Printf("%-32s %8d %9d %8d %10d %s\n", tsafe(q.Name), q.Backlog, q.InFlight, q.Delayed, q.Bytes, tsafe(orDash(q.Consumer)))
 			}
 		})
 	case "create", "info":
@@ -178,7 +178,7 @@ func cmdQueuesSub(sub string, args []string) error {
 				fmt.Printf("  oldest     %s\n", time.UnixMilli(q.OldestAt).Local().Format("2006-01-02 15:04:05"))
 			}
 			if q.Consumer != "" {
-				fmt.Printf("  consumer   %s (last claim %s)\n", q.Consumer, time.UnixMilli(q.ConsumedAt).Local().Format("2006-01-02 15:04:05"))
+				fmt.Printf("  consumer   %s (last claim %s)\n", tsafe(q.Consumer), time.UnixMilli(q.ConsumedAt).Local().Format("2006-01-02 15:04:05"))
 			}
 			fmt.Printf("  created    %s\n", time.UnixMilli(q.CreatedAt).Local().Format("2006-01-02 15:04:05"))
 		})
@@ -215,7 +215,7 @@ func cmdQueuesSub(sub string, args []string) error {
 				if len(body) > 200 {
 					body = body[:200] + "…"
 				}
-				fmt.Printf("%s  %s  attempts %d  %-5s %s\n", m.ID, time.UnixMilli(m.Timestamp).Local().Format("2006-01-02 15:04:05"), m.Attempts, m.ContentType, body)
+				fmt.Printf("%s  %s  attempts %d  %-5s %s\n", tsafe(m.ID), time.UnixMilli(m.Timestamp).Local().Format("2006-01-02 15:04:05"), m.Attempts, tsafe(m.ContentType), tsafe(body))
 			}
 		})
 	case "send":

@@ -41,7 +41,7 @@ func printStoreDegraded(d *mgmt.StoreDegraded, fix string) {
 	if d == nil {
 		return
 	}
-	fmt.Printf("  ✗ %s\n", degradedLine(d))
+	fmt.Printf("  ✗ %s\n", tsafe(degradedLine(d))) // may quote a host error
 	if fix != "" {
 		fmt.Printf("    fix: %s\n", fix)
 	}

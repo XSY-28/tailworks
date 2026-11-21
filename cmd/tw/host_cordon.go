@@ -81,7 +81,7 @@ func cmdHostDrain(args []string) error {
 			fmt.Printf("✓ %s %s/%s → %s\n", verb, m.TenantID, m.Workload, m.To)
 		}
 		for _, r := range res.Refused {
-			fmt.Printf("· stays    %s/%s [%s] %s\n", r.TenantID, r.Workload, r.Code, r.Message)
+			fmt.Printf("· stays    %s/%s [%s] %s\n", tsafe(r.TenantID), tsafe(r.Workload), tsafe(r.Code), tsafe(r.Message))
 		}
 		if len(res.Moved) == 0 && len(res.Refused) == 0 {
 			fmt.Println("  nothing runs there")

@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/termsafe"
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
@@ -287,12 +288,15 @@ func printErr(err error) {
 	e := asCLIErr(err)
 	if jsonOut {
 		b, _ := json.Marshal(map[string]any{"error": jsonError(e)})
-		fmt.Fprintln(os.Stderr, netd.Redact(string(b)))
+		fmt.Fprintln(os.Stderr, netd.Redact(string(termsafe.JSON(b))))
 		return
 	}
-	fmt.Fprintf(os.Stderr, "error [%s]: %s\n", e.Code, netd.Redact(e.Message))
+	// The message and lines can quote mgmt's or a host's error text, and
+	// through it a tenant's or an internet client's (a bundler error, a
+	// deploy error): escape them, keeping their line breaks.
+	fmt.Fprintf(os.Stderr, "error [%s]: %s\n", e.Code, netd.Redact(termsafe.Text(e.Message)))
 	for _, l := range e.Lines {
-		fmt.Fprintf(os.Stderr, "  %s\n", netd.Redact(l))
+		fmt.Fprintf(os.Stderr, "  %s\n", netd.Redact(termsafe.Text(l)))
 	}
 	for i, l := range e.Fix {
 		if i == 0 {
@@ -363,7 +367,7 @@ func usageOf(name string) string {
 func emit(f *flags, v any, human func()) {
 	if *f.json {
 		b, _ := json.MarshalIndent(v, "", "  ")
-		fmt.Println(netd.Redact(string(b)))
+		fmt.Println(netd.Redact(string(termsafe.JSON(b))))
 		return
 	}
 	human()
