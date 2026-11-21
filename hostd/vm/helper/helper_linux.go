@@ -280,6 +280,9 @@ func closeAll(fds []int) {
 }
 
 func (s *Server) serveConn(c *net.UnixConn) {
+	// Deferred first so it runs last, after the cleanups below: a panic
+	// fails this connection's session, never the helper (security/LOOP.md I8).
+	defer s.recoverConn(c)
 	s.mu.Lock()
 	s.conns[c] = true
 	s.mu.Unlock()
