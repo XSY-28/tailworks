@@ -677,9 +677,10 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 // always reach NeedsLogin: it can stay in NoState, retrying its login and
 // reporting "NodeKeyExpired" errors, forever. Without the error case that
 // rejoin never ends, and it holds a join slot (JoinParallel) while it waits
-// (issue #75).
+// (issue #75). Those errors arrive as a health warning, not an ErrMessage
+// (loginRejectedNotify, issue #182).
 func watchNeedsLogin(ctx context.Context, lc *local.Client, onRejected func()) {
-	w, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState)
+	w, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState|ipn.NotifyInitialHealthState)
 	if err != nil {
 		return
 	}
@@ -696,7 +697,7 @@ func watchNeedsLogin(ctx context.Context, lc *local.Client, onRejected func()) {
 		if err != nil {
 			return
 		}
-		if n.ErrMessage != nil && *n.ErrMessage != "" && !up && timer == nil {
+		if loginRejectedNotify(&n) && !up && timer == nil { // rejoin.go
 			timer = time.AfterFunc(needsLoginGrace, onRejected)
 		}
 		if n.State == nil {
