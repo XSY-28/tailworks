@@ -98,7 +98,7 @@ func cmdRollback(args []string) error {
 		}
 		pf = mgmt.PreflightResult{OK: true}
 		if !*f.json {
-			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n", firstLine(me.Message))
+			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n", tsafe(firstLine(me.Message)))
 		}
 	}
 	res.Preflight = &pf
@@ -129,7 +129,7 @@ func cmdRollback(args []string) error {
 		fmt.Printf("✓ rollback   %s → the bundle of %s (%s, deployed %s by %s)\n", workload, rb.RollbackOf, sha,
 			time.UnixMilli(rb.Target.CreatedAt).Local().Format("2006-01-02 15:04:05"), orDash(rb.Target.DeployedBy))
 		if dv.Placement != nil {
-			fmt.Printf("✓ placed     %s\n", dv.Placement.Summary)
+			fmt.Printf("✓ placed     %s\n", tsafe(dv.Placement.Summary))
 		}
 	}
 	if *noWait {

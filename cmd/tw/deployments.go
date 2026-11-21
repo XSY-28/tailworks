@@ -101,13 +101,13 @@ func printDeployments(res deploymentsResult) {
 		if i == 0 && d.Status != "superseded" && d.Status != "stopped" {
 			mark += " ←"
 		}
-		fmt.Printf("%-22s %-19s %-12s %-12s %-22s %s\n", mark, time.UnixMilli(d.CreatedAt).Local().Format("2006-01-02 15:04:05"),
-			bundle, st, d.HostID, d.DeployedBy)
+		fmt.Printf("%-22s %-19s %-12s %-12s %-22s %s\n", tsafe(mark), time.UnixMilli(d.CreatedAt).Local().Format("2006-01-02 15:04:05"),
+			tsafe(bundle), tsafe(st), tsafe(d.HostID), tsafe(d.DeployedBy))
 		if d.RollbackOf != "" {
-			fmt.Printf("  rollback of %s\n", d.RollbackOf)
+			fmt.Printf("  rollback of %s\n", tsafe(d.RollbackOf))
 		}
 		if d.Error != "" && (d.Status == "failed" || d.HostStatus == "failed") {
-			fmt.Printf("  error: %s\n", firstLine(d.Error))
+			fmt.Printf("  error: %s\n", tsafe(firstLine(d.Error)))
 		}
 	}
 	keep := "every bundle"

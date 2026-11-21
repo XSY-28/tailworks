@@ -291,7 +291,7 @@ func cmdHostLs(args []string) error {
 			for _, l := range h.Leases {
 				ls = append(ls, fmt.Sprintf("%s@%d", l.Namespace, l.Epoch))
 			}
-			fmt.Printf("  %-16s %-8s %-18s %-36s %-6d %-10s %s\n", h.HostID, h.Status, strings.Join(h.Tiers, ","), h.DNSName, h.LiveNodes, seen, strings.Join(ls, " "))
+			fmt.Printf("  %-16s %-8s %-18s %-36s %-6d %-10s %s\n", tsafe(h.HostID), tsafe(h.Status), tsafe(strings.Join(h.Tiers, ",")), tsafe(h.DNSName), h.LiveNodes, seen, tsafe(strings.Join(ls, " ")))
 		}
 	})
 	return nil

@@ -157,7 +157,7 @@ func cmdSecretSub(sub string, args []string) error {
 			}
 			fmt.Printf("%-32s %-20s %s\n", "NAME", "UPDATED", "BY")
 			for _, m := range items {
-				fmt.Printf("%-32s %-20s %s\n", m.Name, time.UnixMilli(m.UpdatedAt).Local().Format("2006-01-02 15:04:05"), orDash(m.UpdatedBy))
+				fmt.Printf("%-32s %-20s %s\n", tsafe(m.Name), time.UnixMilli(m.UpdatedAt).Local().Format("2006-01-02 15:04:05"), tsafe(orDash(m.UpdatedBy)))
 			}
 		})
 	case "rm":

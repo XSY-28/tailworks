@@ -533,7 +533,7 @@ func cmdDeploy(args []string) error {
 				ev.emit("public_wait", map[string]any{"url": p.URL, "detail": firstLine(s)})
 			}
 			if !*f.json && s != last {
-				fmt.Printf("  … waiting for %s from the public internet: %s\n", p.URL, firstLine(s))
+				fmt.Printf("  … waiting for %s from the public internet: %s\n", p.URL, tsafe(firstLine(s)))
 				last = s
 			}
 		})

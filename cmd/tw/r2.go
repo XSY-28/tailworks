@@ -152,7 +152,7 @@ func cmdR2(args []string) error {
 			}
 			fmt.Printf("%-32s %10s %-20s\n", "BUCKET", "INDEX", "UPDATED")
 			for _, b := range items {
-				fmt.Printf("%-32s %10s %-20s\n", b.Name, humanBytes(b.Bytes), time.UnixMilli(b.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
+				fmt.Printf("%-32s %10s %-20s\n", tsafe(b.Name), humanBytes(b.Bytes), time.UnixMilli(b.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
 			}
 		})
 	case "bucket create":
@@ -191,7 +191,7 @@ func cmdR2(args []string) error {
 			}
 			fmt.Printf("%-48s %10s %-20s %s\n", "KEY", "SIZE", "UPLOADED", "ETAG")
 			for _, o := range objs {
-				fmt.Printf("%-48s %10s %-20s %s\n", o.Key, humanBytes(o.Size), time.UnixMilli(o.Uploaded).Local().Format("2006-01-02 15:04:05"), o.ETag)
+				fmt.Printf("%-48s %10s %-20s %s\n", tsafe(o.Key), humanBytes(o.Size), time.UnixMilli(o.Uploaded).Local().Format("2006-01-02 15:04:05"), tsafe(o.ETag))
 			}
 		})
 	}
