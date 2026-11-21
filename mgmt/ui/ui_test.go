@@ -80,6 +80,7 @@ func emptyAPI() *fakeAPI {
 		"GET /v1/tenants":            pageOf(),
 		"GET /v1/deployments":        pageOf(),
 		"GET /v1/objects":            pageOf(),
+		"GET /v1/stores/degraded":    map[string]any{"items": []any{}},
 		"GET /v1/audit":              map[string]any{"items": []any{}, "nextCursor": nil, "chains": []any{}, "verified": true},
 		"GET /v1/audit/verification": map[string]any{"ok": true, "chains": []any{}, "verifiedAt": 1},
 	}}
@@ -133,6 +134,8 @@ func populatedAPI() *fakeAPI {
 	f.routes["GET /v1/tenants/tn_1"] = tenantRec
 	f.routes["GET /v1/deployments"] = pageOf(dep)
 	f.routes["GET /v1/deployments/dep_1"] = dep
+	f.routes["GET /v1/stores/degraded"] = map[string]any{"items": []any{map[string]any{"tenantID": "tn_1", "workload": "w", "kind": "d1", "name": "app-db",
+		"degraded": map[string]any{"seq": 7, "error": "no such table: gone", "host": "h1", "at": now - 3000, "workload": "w"}}}}
 	f.routes["GET /v1/objects"] = pageOf(root, kid, dead)
 	f.routes["GET /v1/objects/obj_root"] = root
 	f.routes["GET /v1/objects/obj_kid"] = kid
@@ -199,6 +202,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 		"NOT VERIFIED", "BROKEN at 4 (hash mismatch)", // verification
 		"key k1 tags [&#34;tag:a&#34;] (oauth)", "node root-abc.t.ts.net on h1", // audit describe
 		"tenant note (unverified, written by tenant code): &lt;script&gt;", // RT-02: escaped, labelled
+		"Degraded stores", "no such table: gone", "tw d1 repair app-db --skip 7 --workload w", // degraded stores (#147)
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("overview lacks %q", want)

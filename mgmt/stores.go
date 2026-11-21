@@ -81,6 +81,10 @@ type StoreInfo struct {
 	Bytes       int64  `json:"bytes"`
 	CreatedAt   int64  `json:"createdAt"`
 	UpdatedAt   int64  `json:"updatedAt"`
+
+	// Degraded: the journal entry the store's object could not apply, as
+	// its host last reported it (storedegraded.go); nil when none does.
+	Degraded *StoreDegraded `json:"degraded,omitempty"`
 }
 
 // StoreEntryIn is one entry to append: an optional compaction key and the
@@ -102,6 +106,10 @@ type StoreJournalPage struct {
 	Head        int64        `json:"head"`
 	Entries     []StoreEntry `json:"entries"`
 	More        bool         `json:"more"`
+
+	// Degraded is the store's degraded record, so a store object that
+	// replays past it can clear it (storedegraded.go).
+	Degraded *StoreDegraded `json:"degraded,omitempty"`
 }
 
 // String never prints entry data.
@@ -466,7 +474,7 @@ func (m *Mgmt) ReadStore(ctx context.Context, tenantID, workload, kind, name, ho
 	if err != nil {
 		return StoreJournalPage{}, err
 	}
-	p := StoreJournalPage{Incarnation: st.Incarnation, Head: st.Head, Entries: make([]StoreEntry, 0, len(rows)), More: more}
+	p := StoreJournalPage{Incarnation: st.Incarnation, Head: st.Head, Entries: make([]StoreEntry, 0, len(rows)), More: more, Degraded: st.Degraded}
 	for _, r := range rows {
 		d, err := openStoreEntry(key, st.Incarnation, r.Seq, r.Data)
 		if err != nil {

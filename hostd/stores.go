@@ -7,6 +7,7 @@ package hostd
 //
 //	POST /v1/store/read   {kind, name, after}                       → journal page
 //	POST /v1/store/append {kind, name, after, incarnation, entries} → {incarnation, head}
+//	POST /v1/store/status {kind, name, incarnation, applied, degraded?} → {} (storestatus.go)
 //
 // hostd adds what the platform can't vouch for itself: the tenant, the
 // workload and the lease epoch this host holds, so mgmt fences every read
@@ -31,6 +32,10 @@ type storeReq struct {
 	After       int64                  `json:"after"`
 	Incarnation string                 `json:"incarnation"`
 	Entries     []mgmtapi.StoreEntryIn `json:"entries"`
+
+	// status (storestatus.go)
+	Applied  int64                  `json:"applied"`
+	Degraded *mgmtapi.StoreDegraded `json:"degraded"`
 }
 
 var storeErrStatus = map[string]int{
@@ -92,6 +97,8 @@ func (h *Host) storeAPI(inst *instance, w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		writeJSON(w, 200, res)
+	case "status":
+		h.storeStatus(w, r, wl, epoch, req)
 	default:
 		writeStoreError(w, &apiError{Code: "bad_request", Detail: "unknown store op"})
 	}

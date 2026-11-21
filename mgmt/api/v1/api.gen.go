@@ -162,6 +162,8 @@ const (
 	AuditKindSpawn               AuditKind = "spawn"
 	AuditKindStoreCreate         AuditKind = "store_create"
 	AuditKindStoreDelete         AuditKind = "store_delete"
+	AuditKindStoreRepair         AuditKind = "store_repair"
+	AuditKindStoreReplayFailed   AuditKind = "store_replay_failed"
 	AuditKindTelemetryDelete     AuditKind = "telemetry_delete"
 	AuditKindTelemetryPut        AuditKind = "telemetry_put"
 	AuditKindTelemetryRelease    AuditKind = "telemetry_release"
@@ -306,6 +308,10 @@ func (e AuditKind) Valid() bool {
 	case AuditKindStoreCreate:
 		return true
 	case AuditKindStoreDelete:
+		return true
+	case AuditKindStoreRepair:
+		return true
+	case AuditKindStoreReplayFailed:
 		return true
 	case AuditKindTelemetryDelete:
 		return true
@@ -506,6 +512,7 @@ const (
 	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
 	ErrorCodeStoreDegraded           ErrorCode = "store_degraded"
 	ErrorCodeStoreLimit              ErrorCode = "store_limit"
+	ErrorCodeStoreNotDegraded        ErrorCode = "store_not_degraded"
 	ErrorCodeStoreUnavailable        ErrorCode = "store_unavailable"
 	ErrorCodeSuperseded              ErrorCode = "superseded"
 	ErrorCodeTagNotOwned             ErrorCode = "tag_not_owned"
@@ -662,6 +669,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeStoreDegraded:
 		return true
 	case ErrorCodeStoreLimit:
+		return true
+	case ErrorCodeStoreNotDegraded:
 		return true
 	case ErrorCodeStoreUnavailable:
 		return true
@@ -1648,6 +1657,8 @@ type AuditBatch struct {
 // `secret_release` (a workload's secrets released to its lease holder; names only),
 // `store_create` (a platform store created, by its first write or an admin),
 // `store_delete` (a platform store and its data key deleted),
+// `store_replay_failed` (a store's object stopped its replay at a journal entry it can't apply; the entry's seq, the error and the host),
+// `store_repair` (an operator skipped the journal entry a degraded store stopped at, `tw d1 repair`),
 // `queue_create` (a queue created, by its first use or an admin),
 // `queue_delete` (a queue, its messages and its data key deleted),
 // `queue_purge` (every message of a queue deleted),
@@ -1766,6 +1777,8 @@ type AuditRecord struct {
 	// `secret_release` (a workload's secrets released to its lease holder; names only),
 	// `store_create` (a platform store created, by its first write or an admin),
 	// `store_delete` (a platform store and its data key deleted),
+	// `store_replay_failed` (a store's object stopped its replay at a journal entry it can't apply; the entry's seq, the error and the host),
+	// `store_repair` (an operator skipped the journal entry a degraded store stopped at, `tw d1 repair`),
 	// `queue_create` (a queue created, by its first use or an admin),
 	// `queue_delete` (a queue, its messages and its data key deleted),
 	// `queue_purge` (every message of a queue deleted),
@@ -2031,6 +2044,11 @@ type D1Result struct {
 	Success bool `json:"success"`
 }
 
+// DegradedStores defines model for DegradedStores.
+type DegradedStores struct {
+	Items []Store `json:"items"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	// Containers The bundle's container classes with the images pinned at deploy (ADR-032 D3): what hosts pull, by digest.
@@ -2294,7 +2312,8 @@ type Error struct {
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
-	// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then recreate the database) |
+	// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then `tw d1 repair --skip <seq>` or recreate the database) |
+	// | `store_not_degraded` | 409 | `…/repair` of a store mgmt does not record as degraded at that journal entry |
 	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 	// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
@@ -2390,7 +2409,8 @@ type Error struct {
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
 // | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
-// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then recreate the database) |
+// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then `tw d1 repair --skip <seq>` or recreate the database) |
+// | `store_not_degraded` | 409 | `…/repair` of a store mgmt does not record as degraded at that journal entry |
 // | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 // | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
@@ -2605,7 +2625,8 @@ type HostDrainResult struct {
 		// | `lease_lost` | 409 | epoch/holder fence failed |
 		// | `lease_held` | 409 | another host holds the lease |
 		// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
-		// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then recreate the database) |
+		// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then `tw d1 repair --skip <seq>` or recreate the database) |
+		// | `store_not_degraded` | 409 | `…/repair` of a store mgmt does not record as degraded at that journal entry |
 		// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 		// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 		// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
@@ -3960,6 +3981,9 @@ type Store struct {
 	Bytes     int64 `json:"bytes"`
 	CreatedAt int64 `json:"createdAt"`
 
+	// Degraded The journal entry a store's object could not apply, as its host last reported it (`store_degraded`). Absent: no host reports the store degraded.
+	Degraded *StoreDegraded `json:"degraded,omitempty"`
+
 	// Entries Journal entries kept (after compaction).
 	Entries int64 `json:"entries"`
 
@@ -3994,6 +4018,24 @@ type StoreAppendResult struct {
 	Incarnation string `json:"incarnation"`
 }
 
+// StoreDegraded The journal entry a store's object could not apply, as its host last reported it (`store_degraded`). Absent: no host reports the store degraded.
+type StoreDegraded struct {
+	// At When it first failed there (ms).
+	At int64 `json:"at"`
+
+	// Error Why it failed (SQLite's error for D1).
+	Error string `json:"error"`
+
+	// Host The host whose store object reported it (empty in local dev).
+	Host *string `json:"host,omitempty"`
+
+	// Seq The entry that failed: the object's copy stops before it. `tw d1 repair --skip` takes it.
+	Seq int64 `json:"seq"`
+
+	// Workload The workload, or replica (`<workload>--r<n>`), that host runs it for.
+	Workload *string `json:"workload,omitempty"`
+}
+
 // StoreEntry defines model for StoreEntry.
 type StoreEntry struct {
 	Data []byte `json:"data"`
@@ -4011,8 +4053,10 @@ type StoreEntryIn struct {
 
 // StoreJournal defines model for StoreJournal.
 type StoreJournal struct {
-	Entries []StoreEntry `json:"entries"`
-	Head    int64        `json:"head"`
+	// Degraded The journal entry a store's object could not apply, as its host last reported it (`store_degraded`). Absent: no host reports the store degraded.
+	Degraded *StoreDegraded `json:"degraded,omitempty"`
+	Entries  []StoreEntry   `json:"entries"`
+	Head     int64          `json:"head"`
 
 	// Incarnation Empty when the store does not exist.
 	Incarnation *string `json:"incarnation,omitempty"`
@@ -4030,6 +4074,24 @@ type StorePage struct {
 
 	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
 	NextCursor nullable.Nullable[string] `json:"nextCursor"`
+}
+
+// StoreRepair defines model for StoreRepair.
+type StoreRepair struct {
+	// Skip The journal entry to delete: it must be the store's `degraded.seq`.
+	Skip int64 `json:"skip"`
+}
+
+// StoreStatusReport defines model for StoreStatusReport.
+type StoreStatusReport struct {
+	// Applied The last journal seq the object applied.
+	Applied int64 `json:"applied"`
+
+	// Degraded The journal entry a store's object could not apply, as its host last reported it (`store_degraded`). Absent: no host reports the store degraded.
+	Degraded *StoreDegraded `json:"degraded,omitempty"`
+
+	// Incarnation The incarnation the object holds; a report for another is ignored.
+	Incarnation string `json:"incarnation"`
 }
 
 // TelemetryConfig defines model for TelemetryConfig.
@@ -4290,7 +4352,8 @@ type TombstoneError struct {
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
 	// | `store_conflict` | 409 | a store journal append's `after` (or `incarnation`) is not the journal's head: catch up and retry |
-	// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then recreate the database) |
+	// | `store_degraded` | 409 | the store object on the workload's host could not apply a journal entry: it stopped its replay there, serves reads from what it applied and refuses writes (`tw d1 export`, then `tw d1 repair --skip <seq>` or recreate the database) |
+	// | `store_not_degraded` | 409 | `…/repair` of a store mgmt does not record as degraded at that journal entry |
 	// | `store_limit` | 400 | a store append exceeds an entry, append or store size limit |
 	// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
@@ -4861,6 +4924,12 @@ type CreateObjectCredentialParams struct {
 // CreateObjectCredentialParamsReason defines parameters for CreateObjectCredential.
 type CreateObjectCredentialParamsReason string
 
+// ListDegradedStoresParams defines parameters for ListDegradedStores.
+type ListDegradedStoresParams struct {
+	// Tenant Only this tenant's stores.
+	Tenant *string `form:"tenant,omitempty" json:"tenant,omitempty"`
+}
+
 // ListTenantsParams defines parameters for ListTenants.
 type ListTenantsParams struct {
 	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
@@ -5109,6 +5178,12 @@ type AppendStoreJournalParams struct {
 	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
 }
 
+// ReportStoreStatusParams defines parameters for ReportStoreStatus.
+type ReportStoreStatusParams struct {
+	// Epoch Hosts: the workload's lease epoch the caller holds (required; `409 lease_lost`). Admins leave it out.
+	Epoch *StoreEpoch `form:"epoch,omitempty" json:"epoch,omitempty"`
+}
+
 // CreateTelemetryGrantParams defines parameters for CreateTelemetryGrant.
 type CreateTelemetryGrantParams struct {
 	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
@@ -5218,6 +5293,12 @@ type PutKVValueJSONRequestBody = KVPut
 
 // AppendStoreJournalJSONRequestBody defines body for AppendStoreJournal for application/json ContentType.
 type AppendStoreJournalJSONRequestBody = StoreAppend
+
+// RepairStoreJSONRequestBody defines body for RepairStore for application/json ContentType.
+type RepairStoreJSONRequestBody = StoreRepair
+
+// ReportStoreStatusJSONRequestBody defines body for ReportStoreStatus for application/json ContentType.
+type ReportStoreStatusJSONRequestBody = StoreStatusReport
 
 // CreateUpgradeJSONRequestBody defines body for CreateUpgrade for application/json ContentType.
 type CreateUpgradeJSONRequestBody = UpgradeRequest
@@ -5477,6 +5558,9 @@ type ServerInterface interface {
 	// GetStatus mgmt status
 	// (GET /v1/status)
 	GetStatus(w http.ResponseWriter, r *http.Request)
+	// ListDegradedStores List degraded stores
+	// (GET /v1/stores/degraded)
+	ListDegradedStores(w http.ResponseWriter, r *http.Request, params ListDegradedStoresParams)
 	// ListTenants List tenants
 	// (GET /v1/tenants)
 	ListTenants(w http.ResponseWriter, r *http.Request, params ListTenantsParams)
@@ -5624,6 +5708,12 @@ type ServerInterface interface {
 	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
 	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
 	AppendStoreJournal(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params AppendStoreJournalParams)
+	// RepairStore Skip the journal entry a degraded store stopped at
+	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/repair)
+	RepairStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName)
+	// ReportStoreStatus Report that a store object is degraded, or healthy again
+	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status)
+	ReportStoreStatus(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params ReportStoreStatusParams)
 	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
 	// (POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants)
 	CreateTelemetryGrant(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params CreateTelemetryGrantParams)
@@ -7333,6 +7423,39 @@ func (siw *ServerInterfaceWrapper) GetStatus(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDegradedStores operation middleware
+func (siw *ServerInterfaceWrapper) ListDegradedStores(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDegradedStoresParams
+
+	// ------------- Optional query parameter "tenant" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tenant", r.URL.Query(), &params.Tenant, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tenant"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tenant", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDegradedStores(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9874,6 +9997,128 @@ func (siw *ServerInterfaceWrapper) AppendStoreJournal(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// RepairStore operation middleware
+func (siw *ServerInterfaceWrapper) RepairStore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RepairStore(w, r, id, workload, kind, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportStoreStatus operation middleware
+func (siw *ServerInterfaceWrapper) ReportStoreStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind StoreKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name StoreName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReportStoreStatusParams
+
+	// ------------- Optional query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportStoreStatus(w, r, id, workload, kind, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateTelemetryGrant operation middleware
 func (siw *ServerInterfaceWrapper) CreateTelemetryGrant(w http.ResponseWriter, r *http.Request) {
 
@@ -10206,12 +10451,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets/{name}", wrapper.DeleteWorkloadSecret)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secrets/{name}", wrapper.PutWorkloadSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/secret-grants", wrapper.CreateWorkloadSecretGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/stores/degraded", wrapper.ListDegradedStores)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores", wrapper.ListWorkloadStores)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.DeleteWorkloadStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.GetWorkloadStore)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}", wrapper.PutWorkloadStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.ReadStoreJournal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal", wrapper.AppendStoreJournal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status", wrapper.ReportStoreStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/repair", wrapper.RepairStore)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys", wrapper.ListKVKeys)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.DeleteKVValue)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value", wrapper.GetKVValue)
@@ -14406,6 +14654,66 @@ type GetStatusdefaultJSONResponse struct {
 }
 
 func (response GetStatusdefaultJSONResponse) VisitGetStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDegradedStoresRequestObject struct {
+	Params ListDegradedStoresParams
+}
+
+type ListDegradedStoresResponseObject interface {
+	VisitListDegradedStoresResponse(w http.ResponseWriter) error
+}
+
+type ListDegradedStores200JSONResponse DegradedStores
+
+func (response ListDegradedStores200JSONResponse) VisitListDegradedStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDegradedStores403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListDegradedStores403JSONResponse) VisitListDegradedStoresResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDegradedStoresdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ListDegradedStoresdefaultJSONResponse) VisitListDegradedStoresResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -19385,6 +19693,231 @@ func (response AppendStoreJournaldefaultJSONResponse) VisitAppendStoreJournalRes
 	return err
 }
 
+type RepairStoreRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+	Body     *RepairStoreJSONRequestBody
+}
+
+type RepairStoreResponseObject interface {
+	VisitRepairStoreResponse(w http.ResponseWriter) error
+}
+
+type RepairStore200JSONResponse Store
+
+func (response RepairStore200JSONResponse) VisitRepairStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RepairStore400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RepairStore400JSONResponse) VisitRepairStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RepairStore403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RepairStore403JSONResponse) VisitRepairStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RepairStore404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RepairStore404JSONResponse) VisitRepairStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RepairStore409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RepairStore409JSONResponse) VisitRepairStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RepairStoredefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response RepairStoredefaultJSONResponse) VisitRepairStoreResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportStoreStatusRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Kind     StoreKind    `json:"kind"`
+	Name     StoreName    `json:"name"`
+	Params   ReportStoreStatusParams
+	Body     *ReportStoreStatusJSONRequestBody
+}
+
+type ReportStoreStatusResponseObject interface {
+	VisitReportStoreStatusResponse(w http.ResponseWriter) error
+}
+
+type ReportStoreStatus204Response struct {
+}
+
+func (response ReportStoreStatus204Response) VisitReportStoreStatusResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportStoreStatus400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReportStoreStatus400JSONResponse) VisitReportStoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportStoreStatus403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReportStoreStatus403JSONResponse) VisitReportStoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportStoreStatus404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReportStoreStatus404JSONResponse) VisitReportStoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportStoreStatus409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response ReportStoreStatus409JSONResponse) VisitReportStoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportStoreStatusdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ReportStoreStatusdefaultJSONResponse) VisitReportStoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateTelemetryGrantRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -20158,6 +20691,9 @@ type StrictServerInterface interface {
 	// GetStatus mgmt status
 	// (GET /v1/status)
 	GetStatus(ctx context.Context, request GetStatusRequestObject) (GetStatusResponseObject, error)
+	// ListDegradedStores List degraded stores
+	// (GET /v1/stores/degraded)
+	ListDegradedStores(ctx context.Context, request ListDegradedStoresRequestObject) (ListDegradedStoresResponseObject, error)
 	// ListTenants List tenants
 	// (GET /v1/tenants)
 	ListTenants(ctx context.Context, request ListTenantsRequestObject) (ListTenantsResponseObject, error)
@@ -20305,6 +20841,12 @@ type StrictServerInterface interface {
 	// AppendStoreJournal Append entries to a store's journal (conditional on its head)
 	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal)
 	AppendStoreJournal(ctx context.Context, request AppendStoreJournalRequestObject) (AppendStoreJournalResponseObject, error)
+	// RepairStore Skip the journal entry a degraded store stopped at
+	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/repair)
+	RepairStore(ctx context.Context, request RepairStoreRequestObject) (RepairStoreResponseObject, error)
+	// ReportStoreStatus Report that a store object is degraded, or healthy again
+	// (POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status)
+	ReportStoreStatus(ctx context.Context, request ReportStoreStatusRequestObject) (ReportStoreStatusResponseObject, error)
 	// CreateTelemetryGrant Release the tenant's OTLP export config to a workload's lease holder
 	// (POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants)
 	CreateTelemetryGrant(ctx context.Context, request CreateTelemetryGrantRequestObject) (CreateTelemetryGrantResponseObject, error)
@@ -21542,6 +22084,32 @@ func (sh *strictHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetStatusResponseObject); ok {
 		if err := validResponse.VisitGetStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDegradedStores operation middleware
+func (sh *strictHandler) ListDegradedStores(w http.ResponseWriter, r *http.Request, params ListDegradedStoresParams) {
+	var request ListDegradedStoresRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDegradedStores(ctx, request.(ListDegradedStoresRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDegradedStores")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDegradedStoresResponseObject); ok {
+		if err := validResponse.VisitListDegradedStoresResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -23027,6 +23595,79 @@ func (sh *strictHandler) AppendStoreJournal(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AppendStoreJournalResponseObject); ok {
 		if err := validResponse.VisitAppendStoreJournalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RepairStore operation middleware
+func (sh *strictHandler) RepairStore(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) {
+	var request RepairStoreRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+
+	var body RepairStoreJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RepairStore(ctx, request.(RepairStoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RepairStore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RepairStoreResponseObject); ok {
+		if err := validResponse.VisitRepairStoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportStoreStatus operation middleware
+func (sh *strictHandler) ReportStoreStatus(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, kind StoreKind, name StoreName, params ReportStoreStatusParams) {
+	var request ReportStoreStatusRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Kind = kind
+	request.Name = name
+	request.Params = params
+
+	var body ReportStoreStatusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportStoreStatus(ctx, request.(ReportStoreStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportStoreStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportStoreStatusResponseObject); ok {
+		if err := validResponse.VisitReportStoreStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

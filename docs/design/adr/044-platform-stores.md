@@ -83,7 +83,13 @@ Drafted as `ADR-platform-stores`.
      keeps what applied, marks itself degraded (the failing seq and
      error), serves reads, refuses writes with `store_degraded`, and
      retries the entry on later syncs. It never skips an entry or reports
-     itself synced past one.
+     itself synced past one. It reports the change to mgmt through hostd
+     (`POST …/status`, once when it stops and once when it heals), which
+     records it on the store (`Store.degraded`) and audits it
+     (`store_replay_failed`). Only an operator skips an entry: `POST
+     …/repair` (`tw d1 repair --skip <seq>`, audited as `store_repair`)
+     deletes the recorded entry from the journal, so every replay goes on
+     to the next one.
    - An acknowledged write is in mgmt's database before the caller sees it:
      RPO 0 for a host loss or a move. The new host's object starts empty
      and replays the journal.

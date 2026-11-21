@@ -942,7 +942,7 @@ a workload's D1 databases and migrations
 ```text
 tw d1: a workload's D1 databases (like wrangler d1): create, list, delete, run SQL, export, and wrangler-layout migrations; execute/export/migrations reach the running workload
 
-usage: tw d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
+usage: tw d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -958,6 +958,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -980,6 +982,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1002,6 +1006,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1024,6 +1030,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1046,6 +1054,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1068,6 +1078,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1090,6 +1102,8 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1112,6 +1126,32 @@ flags:
     	machine-readable output
   -output string
     	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
+  -workload string
+    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
+```
+
+#### tw d1 repair
+
+```text
+flags:
+  -command string
+    	execute: SQL to run (one or more statements, run as one batch)
+  -file string
+    	execute: a file of SQL to run as one batch
+  -json
+    	machine-readable output
+  -output string
+    	export: write the SQL to this file (default: stdout)
+  -skip int
+    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
