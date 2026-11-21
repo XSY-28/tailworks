@@ -201,7 +201,7 @@ func cmdKV(args []string) error {
 			}
 			fmt.Printf("%-32s %10s %12s  %s\n", "NAME", "ENTRIES", "BYTES", "UPDATED")
 			for _, st := range items {
-				fmt.Printf("%-32s %10d %12d  %s\n", st.Name, st.Entries, st.Bytes, time.UnixMilli(st.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
+				fmt.Printf("%-32s %10d %12d  %s\n", tsafe(st.Name), st.Entries, st.Bytes, time.UnixMilli(st.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
 				printStoreDegraded(st.Degraded, storeFix(st))
 			}
 		})
@@ -271,7 +271,7 @@ func cmdKV(args []string) error {
 				}
 				meta := "-"
 				if len(k.Metadata) > 0 {
-					meta = string(k.Metadata)
+					meta = tsafe(string(k.Metadata))
 				}
 				fmt.Printf("%-40s %-20s %s\n", strconv.Quote(k.Name), exp, meta)
 			}

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rosskukulinski/tailworks/internal/termsafe"
 )
 
 // Record kinds.
@@ -301,14 +303,15 @@ func (r *Record) Summary() string {
 }
 
 // Text renders r for a terminal: one summary line, then its console lines
-// and exceptions indented.
+// and exceptions indented. Every field is escaped (internal/termsafe): the
+// path, console output and exceptions are tenant- or internet-controlled.
 func (r *Record) Text() string {
 	var b strings.Builder
 	b.WriteString(r.Time.UTC().Format("2006-01-02T15:04:05.000Z"))
 	b.WriteByte(' ')
-	b.WriteString(r.Summary())
+	b.WriteString(termsafe.String(r.Summary()))
 	if r.Kind != KindDropped && r.TraceID != "" {
-		b.WriteString("  trace=" + r.TraceID)
+		b.WriteString("  trace=" + termsafe.String(r.TraceID))
 	}
 	b.WriteByte('\n')
 	if r.Kind == KindDropped {
@@ -321,17 +324,17 @@ func (r *Record) Text() string {
 		}
 		for i, line := range strings.Split(strings.TrimRight(l.Message, "\n"), "\n") {
 			if i == 0 {
-				fmt.Fprintf(&b, "    %-5s %s\n", lvl, line)
+				fmt.Fprintf(&b, "    %-5s %s\n", termsafe.String(lvl), termsafe.Line(line))
 			} else {
-				fmt.Fprintf(&b, "          %s\n", line)
+				fmt.Fprintf(&b, "          %s\n", termsafe.Line(line))
 			}
 		}
 	}
 	for _, e := range r.Exceptions {
-		fmt.Fprintf(&b, "    error %s: %s\n", e.Name, e.Message)
+		fmt.Fprintf(&b, "    error %s: %s\n", termsafe.String(e.Name), termsafe.String(e.Message))
 		for _, line := range strings.Split(strings.TrimRight(FoldRuntimeFrames(e.Stack), "\n"), "\n") { // stack.go
 			if strings.TrimSpace(line) != "" {
-				fmt.Fprintf(&b, "          %s\n", strings.TrimSpace(line))
+				fmt.Fprintf(&b, "          %s\n", termsafe.Line(strings.TrimSpace(line)))
 			}
 		}
 	}

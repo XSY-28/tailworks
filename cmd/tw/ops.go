@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rosskukulinski/tailworks/internal/auditfmt"
 	"io"
 	"net/url"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd"
+	"github.com/rosskukulinski/tailworks/internal/auditfmt"
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
@@ -201,14 +201,14 @@ func cmdLs(args []string) error {
 		for _, d := range deps {
 			by := ""
 			if d.DeployedBy != "" {
-				by = "  by " + d.DeployedBy
+				by = "  by " + tsafe(d.DeployedBy)
 			}
-			fmt.Printf("  %-12s %-22s %-8s %-10s http://%s/%s\n", d.Workload, d.DeploymentID, d.Host, d.Status, d.Endpoint.MagicDNS, by)
+			fmt.Printf("  %-12s %-22s %-8s %-10s http://%s/%s\n", tsafe(d.Workload), tsafe(d.DeploymentID), tsafe(d.Host), tsafe(d.Status), tsafe(d.Endpoint.MagicDNS), by)
 			if d.Placement != nil && d.Placement.Summary != "" {
-				fmt.Printf("  %-12s placement: %s\n", "", d.Placement.Summary)
+				fmt.Printf("  %-12s placement: %s\n", "", tsafe(d.Placement.Summary))
 			}
 			if d.Error != "" {
-				fmt.Printf("  %-12s error: %s\n", "", deployErrorLine(d.Workload, d.Error)) // lserror.go
+				fmt.Printf("  %-12s error: %s\n", "", tsafe(deployErrorLine(d.Workload, d.Error))) // lserror.go
 			}
 		}
 		fmt.Println("OBJECTS")
@@ -222,7 +222,7 @@ func cmdLs(args []string) error {
 			if p, ok := by[o.ParentID]; ok {
 				parent = nodeName(p)
 			}
-			fmt.Printf("  %-36s %-34s %-8s %-30s %s\n", nodeName(o), displayNS(o), o.Status, strings.Join(o.Tags, ","), parent)
+			fmt.Printf("  %-36s %-34s %-8s %-30s %s\n", tsafe(nodeName(o)), tsafe(displayNS(o)), tsafe(o.Status), tsafe(strings.Join(o.Tags, ",")), tsafe(parent))
 		}
 	})
 	return nil
@@ -306,12 +306,12 @@ func cmdKill(args []string) error {
 			fmt.Printf("✓ tier 2  %d device(s) deleted\n", len(kr.DevicesDeleted))
 		}
 		fmt.Printf("  tier 3  posture flip: not available (plan_feature_missing: custom posture attributes)\n")
-		fmt.Printf("revoked: %s (+%d descendants)\n", res.Chain, max(res.Descendants, 0))
+		fmt.Printf("revoked: %s (+%d descendants)\n", tsafe(res.Chain), max(res.Descendants, 0))
 		for id, e := range kr.Errors {
-			fmt.Printf("  warning %s: %s\n", id, e)
+			fmt.Printf("  warning %s: %s\n", tsafe(id), tsafe(e))
 		}
 		for _, w := range kr.Warnings {
-			fmt.Printf("› %s  %s (%s)\n  fix: %s\n", w.Code, w.Message, strings.Join(w.Objects, ", "), w.Fix)
+			fmt.Printf("› %s  %s (%s)\n  fix: %s\n", tsafe(w.Code), tsafe(w.Message), tsafe(strings.Join(w.Objects, ", ")), tsafe(w.Fix))
 		}
 	})
 	return nil
@@ -534,7 +534,7 @@ func cmdAudit(args []string) error {
 	}
 	emit(f, res, func() {
 		if res.Chain != "" {
-			fmt.Printf("chain: %s\n", res.Chain)
+			fmt.Printf("chain: %s\n", tsafe(res.Chain))
 		}
 		for _, l := range res.Lines {
 			ts := l.TS
@@ -549,17 +549,17 @@ func cmdAudit(args []string) error {
 			if l.Source == mgmt.SourceTenant {
 				kind = "~" + l.Kind // tenant-written content, not a platform record
 			}
-			fmt.Printf("%s  %-13s %-34s %s%s\n", ts, kind, orDash(l.Node), l.Text, src)
+			fmt.Printf("%s  %-13s %-34s %s%s\n", tsafe(ts), tsafe(kind), tsafe(orDash(l.Node)), tsafe(l.Text), tsafe(src))
 		}
 		var cs []string
 		for _, c := range res.Chains {
 			st := "ok"
 			if !c.OK {
-				st = fmt.Sprintf("BROKEN at %d (%s)", c.BrokenAt, c.Error)
+				st = fmt.Sprintf("BROKEN at %d (%s)", c.BrokenAt, tsafe(c.Error))
 			} else if strings.HasPrefix(c.Chain, "host:") {
 				st = "signature ok"
 			}
-			cs = append(cs, fmt.Sprintf("%s %s", c.Chain, st))
+			cs = append(cs, fmt.Sprintf("%s %s", tsafe(c.Chain), st))
 		}
 		v := "verified"
 		if !res.Verified {
@@ -729,7 +729,7 @@ func cmdUndeploy(args []string) error {
 	}
 	res := map[string]any{"workload": pos[0], "deploymentID": d.DeploymentID, "result": kr, "timingsMs": map[string]float64{"total": ms(time.Since(t0))}}
 	emit(f, res, func() {
-		fmt.Printf("✓ undeployed %s (%s) · %d objects killed · lease released\n", pos[0], d.DeploymentID, len(kr.Killed))
+		fmt.Printf("✓ undeployed %s (%s) · %d objects killed · lease released\n", tsafe(pos[0]), tsafe(d.DeploymentID), len(kr.Killed))
 	})
 	return nil
 }

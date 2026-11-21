@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -43,6 +44,11 @@ type lockReply struct {
 		Node   string   `json:"node"`
 		Tags   []string `json:"tags"`
 	} `json:"holder"`
+
+	// Raw is the body of an answer that is not the lock template's own
+	// (no "error" field: a tailworks error from the platform, hostd or
+	// netd), so a failure shows which layer answered (#136).
+	Raw string `json:"-"`
 }
 
 func (c *lockClientNode) lock(t *testing.T, base, name, op string, body map[string]any) lockReply {
@@ -61,8 +67,12 @@ func (c *lockClientNode) lock(t *testing.T, base, name, op string, body map[stri
 	}
 	defer resp.Body.Close()
 	var r lockReply
-	json.NewDecoder(resp.Body).Decode(&r)
+	b, _ := io.ReadAll(resp.Body)
+	json.Unmarshal(b, &r)
 	r.Status = resp.StatusCode
+	if r.Status != 200 && r.Error == "" {
+		r.Raw = resp.Header.Get("Tw-Error") + " " + string(b)
+	}
 	return r
 }
 
@@ -371,14 +381,18 @@ func TestLockTemplate(t *testing.T) {
 	})
 
 	t.Run("KillHolderReleases", func(t *testing.T) {
-		// The holder is lockuser's workload node, inside withLock with a 1 s
-		// lease that it renews. Killing that node cuts it off the tailnet:
-		// it can't renew, and the lease runs out.
+		// The holder is lockuser's workload node, inside withLock with a 3 s
+		// lease that it renews (every 1 s). Killing that node cuts it off
+		// the tailnet: it can't renew, and the lease runs out.
+		//
+		// The lease is 3 s, not 1 s (#136): with 1 s, a loaded machine under
+		// -race let a renewal miss the deadline, and the contender below
+		// legitimately took the lock before the kill.
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
 			qc := s.client.HTTPClient(30 * time.Second)
-			if r, err := qc.Get("http://" + user.IP + "/with?name=job:holder&hold=20000&ttl=1000"); err == nil {
+			if r, err := qc.Get("http://" + user.IP + "/with?name=job:holder&hold=20000&ttl=3000"); err == nil {
 				r.Body.Close()
 			}
 		}()
@@ -392,7 +406,21 @@ func TestLockTemplate(t *testing.T) {
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
-		time.Sleep(1500 * time.Millisecond) // past the first lease: it is renewing
+		// Wait until the holder has renewed (the deadline moved), rather
+		// than sleeping past the first lease: then it is renewing.
+		for i := 0; ; i++ {
+			x := c2.lock(t, base, "job:holder", "status", nil)
+			if !x.Held || x.LastToken != a.LastToken {
+				t.Fatalf("holder lost job:holder before the kill: %+v (took it as %+v)", x, a)
+			}
+			if x.ExpiresAt > a.ExpiresAt {
+				break
+			}
+			if i > 200 {
+				t.Fatalf("holder never renewed job:holder: %+v", x)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 		if x := c2.lock(t, base, "job:holder", "acquire", nil); x.Status != 409 {
 			t.Fatalf("contender while the holder renews: %+v", x)
 		}
@@ -410,7 +438,7 @@ func TestLockTemplate(t *testing.T) {
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
-		t.Logf("killed the holder (1 s lease): lock taken by another node %v later", time.Since(st).Round(10*time.Millisecond))
+		t.Logf("killed the holder (3 s lease): lock taken by another node %v later", time.Since(st).Round(10*time.Millisecond))
 		if b.Token <= a.LastToken {
 			t.Fatalf("token %d after %d", b.Token, a.LastToken)
 		}
