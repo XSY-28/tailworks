@@ -25,6 +25,14 @@ Existing objects are reachable by any of these paths. Bypassing the guard
 therefore loses the ability to mint nodes rather than gaining it, which is
 the inversion that closes RT3-06 and RT3-07.
 
+A kill ends every admission for the name (#153). hostd drops the name's
+pending admission and its `public.create` record, and `admit` answers
+`410 killed` for the name until it is purged (`tw down --purge`). After
+that, a caller has to admit the name again. A tenant purge drops all of
+the tenant's admissions. The runtime's per-isolate admit cache keeps only
+"this object exists" answers, for 60 seconds, and a plain DO's kill evicts
+its entry.
+
 ## The ticket
 
 `v1.<expiry unix ms>.<trace id>.<hex HMAC-SHA256>` under the instance root

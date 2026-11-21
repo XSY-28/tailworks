@@ -168,6 +168,7 @@ func cmdUp(args []string) error {
 		mode = mgmt.MintHeadscale
 	}
 	if s.configured() {
+		keepSavedUpFlags(f.FlagSet, s.Cfg) // up_saved.go
 		was := s.Cfg.modeName()
 		switch {
 		case s.Cfg.removedMode() && mode == "oauth":
@@ -1367,7 +1368,7 @@ func cmdStatus(args []string) error {
 		for _, w := range r.Workloads {
 			e := ""
 			if w.Error != "" {
-				e = " · " + w.Error
+				e = " · " + tsafe(w.Error)
 			}
 			sb := ""
 			if w.Sandbox != "" {
@@ -1440,9 +1441,9 @@ func remoteStatus(f *flags, s *state) error {
 					by = " · by " + d.DeployedBy
 				}
 				if d.Error != "" {
-					by += " · " + d.Error
+					by += " · " + tsafe(d.Error)
 				}
-				fmt.Printf("  workload    %s %s · http://%s/%s\n", d.Workload, d.Status, d.Endpoint.MagicDNS, by)
+				fmt.Printf("  workload    %s %s · http://%s/%s\n", tsafe(d.Workload), tsafe(d.Status), tsafe(d.Endpoint.MagicDNS), by)
 				for _, c := range d.Containers {
 					for _, p := range c.Pins {
 						fmt.Printf("    image     %s %s linux/%s → %s@%s\n", c.Class, p.Ref, p.Arch, p.Repository, p.Digest)

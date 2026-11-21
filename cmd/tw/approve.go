@@ -138,11 +138,13 @@ func cmdApprovals(args []string) error {
 						extra += fmt.Sprintf(" %q", *a.Comment)
 					}
 				}
-				fmt.Printf("%-16s %-16s %-28s %-20s %-8s %-9s %s\n", a.Workload, a.Workflow, a.Instance, a.Step, shortAge(time.Since(a.RequestedAt)), a.Status, extra)
+				// Instance IDs, step names and params are tenant code's (and
+				// may come from an internet request): escaped.
+				fmt.Printf("%-16s %-16s %-28s %-20s %-8s %-9s %s\n", tsafe(a.Workload), tsafe(a.Workflow), tsafe(a.Instance), tsafe(a.Step), shortAge(time.Since(a.RequestedAt)), a.Status, tsafe(extra))
 			}
 		}
 		if out.Unreachable != nil && len(*out.Unreachable) > 0 {
-			fmt.Printf("warning: host(s) %s did not answer; their approvals are missing\n", strings.Join(*out.Unreachable, ", "))
+			fmt.Printf("warning: host(s) %s did not answer; their approvals are missing\n", tsafe(strings.Join(*out.Unreachable, ", ")))
 		}
 	})
 	return nil
@@ -227,7 +229,7 @@ func cmdApprove(args []string) error {
 		if a.Approver != nil {
 			by = " as " + approverString(*a.Approver)
 		}
-		fmt.Printf("✓ %s %s/%s/%s (step %s)%s\n", a.Status, a.Workload, a.Workflow, a.Instance, a.Step, by)
+		fmt.Printf("✓ %s %s/%s/%s (step %s)%s\n", a.Status, tsafe(a.Workload), tsafe(a.Workflow), tsafe(a.Instance), tsafe(a.Step), tsafe(by))
 	})
 	return nil
 }

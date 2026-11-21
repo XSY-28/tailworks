@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/tailworks/internal/obs"
+	"github.com/rosskukulinski/tailworks/internal/termsafe"
 )
 
 // logsOpts are `tw logs`' record flags.
@@ -52,7 +53,7 @@ func logsFlags(f *flags) func() (logsOpts, error) {
 func printRecord(w io.Writer, r *obs.Record) {
 	if jsonOut {
 		b, _ := json.Marshal(r)
-		w.Write(append(b, '\n'))
+		w.Write(append(termsafe.JSON(b), '\n'))
 		return
 	}
 	io.WriteString(w, r.Text())
@@ -116,10 +117,10 @@ func copyRecords(w io.Writer, body io.Reader) error {
 			var r obs.Record
 			if json.Unmarshal(l, &r) == nil && r.Kind != "" {
 				if jsonOut {
-					w.Write(l)
+					w.Write(termsafe.JSON(l))
 				} else {
 					if len(prefix) > 0 {
-						w.Write(prefix)
+						io.WriteString(w, termsafe.String(string(prefix)))
 					}
 					io.WriteString(w, r.Text())
 				}
@@ -128,7 +129,7 @@ func copyRecords(w io.Writer, body io.Reader) error {
 				ev := newEvents(true, w)
 				ev.emit("log", map[string]any{"line": string(bytes.TrimRight(line, "\r\n"))})
 			} else {
-				w.Write(line)
+				io.WriteString(w, termsafe.Line(string(bytes.TrimRight(line, "\r\n")))+"\n")
 			}
 		}
 		if err != nil {

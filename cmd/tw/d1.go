@@ -210,7 +210,7 @@ func cmdD1Sub(sub string, args []string) error {
 			}
 			fmt.Printf("%-32s %10s %12s  %s\n", "NAME", "WRITES", "JOURNAL", "UPDATED")
 			for _, d := range items {
-				fmt.Printf("%-32s %10d %12s  %s\n", d.Name, d.Head, humanBytes(d.Bytes), time.UnixMilli(d.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
+				fmt.Printf("%-32s %10d %12s  %s\n", tsafe(d.Name), d.Head, humanBytes(d.Bytes), time.UnixMilli(d.UpdatedAt).Local().Format("2006-01-02 15:04:05"))
 				printStoreDegraded(d.Degraded, storeFix(d))
 			}
 		})
@@ -310,7 +310,7 @@ func d1Fix(err error, workload string) error {
 
 func printD1Results(rs []d1mig.Result) {
 	for i, r := range rs {
-		cols := r.Results.Columns
+		cols := tsafeAll(r.Results.Columns)
 		if len(rs) > 1 {
 			fmt.Printf("-- statement %d: ", i+1)
 		}
@@ -337,12 +337,12 @@ func printD1Results(rs []d1mig.Result) {
 				switch x := v.(type) {
 				case nil:
 				case string:
-					s = x
+					s = tsafe(x) // tenant data
 				case []any:
 					s = fmt.Sprintf("<blob %d bytes>", len(x))
 				default:
 					b, _ := json.Marshal(x)
-					s = string(b)
+					s = tsafe(string(b))
 				}
 				cells[k][j] = s
 				w[j] = max(w[j], len(s))

@@ -236,7 +236,10 @@ func TestQueues(t *testing.T) {
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
-		// An operator sends while the host is cut off: it waits in mgmt.
+		// An operator sends while the host is cut off: it waits in mgmt,
+		// unclaimed. (A fenced host's long poll used to claim it and hand it
+		// back, #140: with a workerd still up it could have consumed it.)
+		claims := e.FM.QueueClaims(e.TenantID, "jobs")
 		if err := e.Mgmt.Do(context.Background(), "POST", "/v1/tenants/"+e.TenantID+"/queues/jobs/messages",
 			map[string]any{"messages": []any{map[string]any{"body": []byte(`{"k":"op1"}`), "contentType": "json"}}}, nil); err != nil {
 			t.Fatal(err)
@@ -244,6 +247,9 @@ func TestQueues(t *testing.T) {
 		time.Sleep(1500 * time.Millisecond)
 		if n := e.FM.QueueBacklog(e.TenantID, "jobs"); n < 1 {
 			t.Fatalf("backlog while fenced: %d", n)
+		}
+		if n := e.FM.QueueClaims(e.TenantID, "jobs") - claims; n != 0 {
+			t.Fatalf("the fenced host claimed %d message(s)", n)
 		}
 		e.FM.SetHeartbeatsDown(false)
 		wl = e.WaitActive("queues", dep, 60*time.Second)

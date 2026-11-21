@@ -53,7 +53,7 @@ func printContainers(hosts []hostCapacity, res []mgmt.ContainerReservation, loca
 			u.VCPUs, c.VCPUs, c.VCPUOvercommit, u.ScratchMiB, c.ScratchMiB, u.Containers)
 	}
 	for _, r := range res {
-		fmt.Printf("  reserved    %s/%s/%s/%s on %s · %.4g vCPU, %d MiB, %d MiB disk (%s)\n", r.TenantID, r.Workload, r.Class, r.Object, r.HostID,
+		fmt.Printf("  reserved    %s/%s/%s/%s on %s · %.4g vCPU, %d MiB, %d MiB disk (%s)\n", tsafe(r.TenantID), tsafe(r.Workload), tsafe(r.Class), tsafe(r.Object), tsafe(r.HostID),
 			r.Resources.VCPU, r.Resources.MemMiB, r.Resources.DiskMiB, r.ID)
 	}
 	for _, c := range local {
@@ -67,7 +67,7 @@ func printContainers(hosts []hostCapacity, res []mgmt.ContainerReservation, loca
 		} else if c.ExitReason != "" {
 			extra = fmt.Sprintf(" · exit %d (%s)", c.ExitCode, firstLine(c.ExitReason))
 		}
-		fmt.Printf("  container   %s/%s/%s %s · %s (%s)%s\n", c.Workload, c.Class, c.Object, c.State, c.Image, d, extra)
+		fmt.Printf("  container   %s/%s/%s %s · %s (%s)%s\n", tsafe(c.Workload), tsafe(c.Class), tsafe(c.Object), tsafe(c.State), tsafe(c.Image), tsafe(d), tsafe(extra))
 	}
 	if cacheBytes > 0 {
 		fmt.Printf("  images      %d MB converted on this host\n", cacheBytes>>20)

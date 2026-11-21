@@ -1,7 +1,10 @@
 package hostd
 
 import (
+	"context"
 	"errors"
+	"net"
+	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -87,5 +90,40 @@ func TestReapGroup(t *testing.T) {
 	t.Logf("group reaped in %v", time.Since(t0))
 	if err := reapGroup(pgid); err != nil { // idempotent: nothing left
 		t.Fatal(err)
+	}
+}
+
+// TestWaitHealthyDuringRestart (#181): waitHealthy runs while onExit counts
+// the restarts of a workerd that keeps exiting. It must read the count under
+// inst.mu, as onExit writes it; under -race the old unlocked read failed.
+func TestWaitHealthyDuringRestart(t *testing.T) {
+	ex := make(chan struct{})
+	close(ex) // the first workerd already exited
+	inst := &instance{w: &workload{name: "probe"}, dir: t.TempDir(), exited: ex,
+		direct: &http.Client{Transport: &http.Transport{
+			DialContext: func(context.Context, string, string) (net.Conn, error) {
+				return nil, errors.New("workerd is down (test)")
+			},
+		}}}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() { // onExit's bookkeeping, restart after restart
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			inst.mu.Lock()
+			inst.restarts++
+			inst.mu.Unlock()
+		}
+	}()
+	err := inst.waitHealthy(300 * time.Millisecond)
+	close(stop)
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "did not become healthy") {
+		t.Fatalf("waitHealthy: %v", err)
 	}
 }

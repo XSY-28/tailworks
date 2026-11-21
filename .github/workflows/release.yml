@@ -17,7 +17,9 @@
 #                             test, and `make e2e-upgrade` (upgrade from the
 #                             newest published release to this tag: data,
 #                             rejoin, old bundles; ADR-041 §9; from this tree
-#                             while none is published: scripts/upgrade-from.sh).
+#                             while none is published: scripts/upgrade-from.sh),
+#                             and `make e2e-tw-upgrade` (tw upgrade on a tw up
+#                             machine: signature refusal, rollback, upgrade).
 #                             No draft
 #                             unless every gate passes.
 #   release                   macOS (the darwin binaries are ad-hoc signed,
@@ -82,6 +84,8 @@ jobs:
         run: make install-test
       - name: make e2e-upgrade (newest published release → this tag)
         run: make e2e-upgrade
+      - name: make e2e-tw-upgrade (tw upgrade on a tw up machine, signed releases, rollback)
+        run: make e2e-tw-upgrade
 
   # The Headscale profile against every supported Headscale minor, in Docker
   # (ADR-041 §9 gate 6). One minor until Headscale v0.30
