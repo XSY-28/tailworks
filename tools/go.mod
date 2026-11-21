@@ -3,7 +3,7 @@
 // change what tailworks itself builds against. Dependabot bumps them.
 module github.com/rosskukulinski/tailworks/tools
 
-go 1.27.3
+go 1.27.4
 
 tool (
 	golang.org/x/vuln/cmd/govulncheck

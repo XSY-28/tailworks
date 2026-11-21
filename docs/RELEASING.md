@@ -76,11 +76,10 @@ assets and needs a `workerd` fragment (upgrade kind `workerd` covers
 `guest/inputs.sh`). If the only fix is in an upstream release that would
 break one of those rules, it ships in a minor and the advisory says so.
 
-**govulncheck in CI.** `make lint` runs `make vulncheck` without failing
-on findings until issue #146 (the go1.27.4 `net/http` fix) lands; then it
-becomes blocking. A new advisory published upstream can then fail CI on
-any branch: fix it in its own small PR rather than in the branch that hit
-it.
+**govulncheck in CI.** `make lint` runs `make vulncheck` and fails on any
+finding the code can reach. A new advisory published upstream can then
+fail CI on any branch: fix it in its own small PR rather than in the branch
+that hit it.
 
 ## Release notes
 
