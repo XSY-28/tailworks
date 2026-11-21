@@ -533,11 +533,44 @@ function isScheduledReq(req: any): boolean {
 }
 
 /**
+ * scheduledCtx wraps a cron run's ExecutionContext so that ctx.waitUntil()
+ * work belongs to the run, as on Cloudflare (a cron event lasts until its
+ * waitUntil promises settle). Promises are collected, not handed to the
+ * request's own waitUntil, so the run's answer waits for them and hostd's
+ * cron timeout, which drops the connection, cancels them with the run
+ * instead of leaving them running after the next tick starts (H17, #152).
+ */
+function scheduledCtx(ctx: any): { ctx: any; drain: () => Promise<void> } {
+  const pending: Promise<unknown>[] = [];
+  const drain = async () => {
+    while (pending.length) await Promise.allSettled(pending.splice(0));
+  };
+  if (!ctx || typeof ctx !== "object") return { ctx, drain };
+  const waitUntil = (p: unknown) => {
+    pending.push(Promise.resolve(p));
+  };
+  const proxy = new Proxy(ctx, {
+    get(t, k) {
+      if (k === "waitUntil") return waitUntil;
+      const v = Reflect.get(t, k, t);
+      return typeof v === "function" ? v.bind(t) : v;
+    },
+  });
+  return { ctx: proxy, drain };
+}
+
+/**
  * runScheduled dispatches a cron run to the handler's scheduled() with a
  * controller (cron, scheduledTime, type, noRetry()) and answers the
- * platform's {outcome, noRetry, error} record.
+ * platform's {outcome, noRetry, error} record once scheduled() and its
+ * waitUntil work (drain) have finished.
  */
-async function runScheduled(scheduledFn: ((c: any, ...rest: any[]) => unknown) | undefined, req: any, extra: unknown[]): Promise<Response> {
+async function runScheduled(
+  scheduledFn: ((c: any, ...rest: any[]) => unknown) | undefined,
+  req: any,
+  extra: unknown[],
+  drain: () => Promise<void>,
+): Promise<Response> {
   const t = req.cf.tw;
   let noRetry = false;
   const controller = {
@@ -553,8 +586,10 @@ async function runScheduled(scheduledFn: ((c: any, ...rest: any[]) => unknown) |
   }
   try {
     await scheduledFn(controller, ...extra);
+    await drain();
     return Response.json({ outcome: "ok", noRetry });
   } catch (e) {
+    await drain();
     return Response.json({ outcome: "exception", noRetry, error: String((e as any)?.message ?? e).slice(0, 512) });
   }
 }
@@ -623,8 +658,10 @@ export function wrapHandler(H: any, bindings: BindingMap) {
           this.env = guardEnv(this.env, bindings, "tailnet", admitter(tw, { ticket }));
           if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, undefined, ticket));
           if (isScheduledReq(req)) {
+            const sc = scheduledCtx(this.ctx);
+            this.ctx = sc.ctx;
             const sf = typeof this.scheduled === "function" ? this.scheduled.bind(this) : undefined;
-            return runScheduled(sf, req, []);
+            return runScheduled(sf, req, [], sc.drain);
           }
         }
         try {
@@ -666,7 +703,10 @@ export function wrapHandler(H: any, bindings: BindingMap) {
         else if (k === "queue") ({ batch: a, ticket } = queueBatch(a));
         env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, undefined, ticket));
-        if (k === "fetch" && isScheduledReq(a)) return runScheduled(H.scheduled, a, [env, ctx]);
+        if (k === "fetch" && isScheduledReq(a)) {
+          const sc = scheduledCtx(ctx);
+          return runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain);
+        }
       }
       let r: unknown;
       try {
