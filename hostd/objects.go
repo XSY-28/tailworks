@@ -539,6 +539,7 @@ func (h *Host) killLocal(objectID, reason string) error {
 	run := newKillRun()
 	o.kill = run
 	delete(h.byKey, o.key())
+	h.dropAdmissionLocked(o) // admitkill.go (#153)
 	ch := o.readyCh
 	t := h.tenants[o.TenantID]
 	live := o.live
@@ -558,7 +559,7 @@ func (h *Host) killLocal(objectID, reason string) error {
 			h.log.Info("object killed (tier 1)", "object", o.ID, "flows", rep.FlowsAborted, "abort_ms", rep.AbortMS)
 		}
 	}
-	if o.ActingFor == OriginPublic && o.Class != "" {
+	if o.Class != "" { // admitkill.go: not only ActingFor "public" (#153)
 		h.pubCreates.forget(o.TenantID, o.Workload, o.Class, o.Name)
 	}
 	inErr := h.killInProcess(o, reason) // kill.go

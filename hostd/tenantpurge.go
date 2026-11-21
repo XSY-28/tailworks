@@ -106,6 +106,7 @@ func (h *Host) purgeTenant(id string) error {
 	for _, w := range wls {
 		h.undeploy(w, "tenant deleted")
 	}
+	h.dropTenantAdmissions(id) // admitkill.go (#153)
 	h.mu.Lock()
 	for _, o := range h.objects {
 		if o.TenantID == id {

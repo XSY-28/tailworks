@@ -81,8 +81,8 @@ func cmdPreviews(args []string) error {
 		fmt.Printf("%-20s %-19s %-12s %-12s %-22s %s\n", "ALIAS", "CREATED", "BUNDLE", "STATUS", "HOST", "URL")
 		for _, p := range res.Previews {
 			d := p.Deployment
-			fmt.Printf("%-20s %-19s %-12s %-12s %-22s http://%s/\n", p.Alias, time.UnixMilli(d.CreatedAt).Local().Format("2006-01-02 15:04:05"),
-				short12(p.BundleSHA256), d.Status, d.Host, d.Endpoint.MagicDNS)
+			fmt.Printf("%-20s %-19s %-12s %-12s %-22s http://%s/\n", tsafe(p.Alias), time.UnixMilli(d.CreatedAt).Local().Format("2006-01-02 15:04:05"),
+				tsafe(short12(p.BundleSHA256)), tsafe(d.Status), tsafe(d.Host), tsafe(d.Endpoint.MagicDNS))
 		}
 		fmt.Printf("\ntw promote %s <alias> · tw undeploy %s--preview-<alias>\n", workload, workload)
 	})
@@ -166,7 +166,7 @@ func cmdPromote(args []string) error {
 		}
 		pf = mgmt.PreflightResult{OK: true}
 		if !*f.json {
-			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n", firstLine(me.Message))
+			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n", tsafe(firstLine(me.Message)))
 		}
 	}
 	res.Preflight = &pf
@@ -194,7 +194,7 @@ func cmdPromote(args []string) error {
 	if !*f.json {
 		fmt.Printf("✓ promote    %s → the bundle of preview %s (%s)\n", workload, pr.Preview, pr.PromotedFrom)
 		if dv.Placement != nil {
-			fmt.Printf("✓ placed     %s\n", dv.Placement.Summary)
+			fmt.Printf("✓ placed     %s\n", tsafe(dv.Placement.Summary))
 		}
 		if pr.PreviewStopped {
 			fmt.Printf("✓ undeployed %s\n", pr.Preview)

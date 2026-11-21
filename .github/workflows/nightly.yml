@@ -10,7 +10,8 @@
 #            (scripts/test-pg.sh uses TW_TEST_POSTGRES_DSN instead of
 #            starting its own). Also runs on PRs that touch the store.
 #   report   on a scheduled run with a failure, comments on (or opens) the
-#            "nightly suites failing" issue so a red night is not missed.
+#            "nightly suites failing" issue so a red night is not missed;
+#            a green scheduled run closes that issue ("passing again").
 #
 # A suite that fails on master for a real reason gets an issue and
 # `allow_failure: <issue URL>` on its matrix entry (continue-on-error) until
@@ -74,6 +75,9 @@ jobs:
           - target: e2e-queues
             timeout: 30
             allow_failure: ""
+          - target: e2e-tw-upgrade
+            timeout: 30
+            allow_failure: ""
           - target: e2e-wrangler
             timeout: 30
             allow_failure: ""
@@ -91,7 +95,7 @@ jobs:
             allow_failure: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -127,7 +131,7 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - name: make test-pg
@@ -148,7 +152,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: comment on the tracking issue when a suite failed
+      - name: comment on the tracking issue when a suite failed, close it when all pass
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -158,14 +162,18 @@ jobs:
           echo "results: $RESULTS"
           failed=0
           for r in $RESULTS; do [ "$r" = success ] || failed=1; done
-          [ "$failed" = 1 ] || exit 0
           title="nightly suites failing"
-          body="Nightly run failed on $(date -u +%Y-%m-%d) at ${GITHUB_SHA}: $RUN_URL"
           n=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ "$failed" = 0 ]; then
+            # Green again: close the tracker so the next failure opens a fresh one.
+            [ -z "$n" ] || gh issue close "$n" --comment "Passing again on $(date -u +%Y-%m-%d) at ${GITHUB_SHA}: $RUN_URL"
+            exit 0
+          fi
+          body="Nightly run failed on $(date -u +%Y-%m-%d) at ${GITHUB_SHA}: $RUN_URL"
           if [ -n "$n" ]; then
             gh issue comment "$n" --body "$body"
           else
             gh issue create --title "$title" --label flaky-test --body "$body
 
-          Opened by .github/workflows/nightly.yml. Close it when the nightly is green again; the next failure opens a new one."
+          Opened by .github/workflows/nightly.yml. The next green nightly closes it; a failure after that opens a new one."
           fi

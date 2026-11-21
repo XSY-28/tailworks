@@ -63,6 +63,24 @@ func publicHost(t *testing.T, e *testEnv) *pushRecorder {
 	if _, _, err := e.m.RegisterHost(context.Background(), RegisterRequest{HostID: "h1", CapacityNodes: 100, Tiers: []string{"process"}, PushURL: "unix://" + sock}, "", ""); err != nil {
 		t.Fatal(err)
 	}
+	// Heartbeat as a real host does. Without it h1 is live only for
+	// HostLeaseTTL after it registers, and a test that runs longer than that
+	// (a loaded CI runner) gets 503 no_host "h1: not live" (issue #183).
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(HostLeaseTTL / 10)
+		defer tick.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+				e.m.Heartbeat(context.Background(), "h1", 0, nil)
+			}
+		}
+	}()
+	t.Cleanup(func() { close(stop); <-done })
 	return rec
 }
 
