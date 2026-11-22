@@ -29,6 +29,9 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
   `tw agent setup`. Parse `--json` with [cli-json.md](cli-json.md); look
   up error codes in [errors.md](errors.md). The index for agents is
   [llms.txt](../llms.txt).
+- **You want to change tailworks.** [CONTRIBUTING.md](../CONTRIBUTING.md):
+  set up, the tests a pull request runs, release-note fragments and status
+  files.
 
 ## Learn: walk-throughs
 
