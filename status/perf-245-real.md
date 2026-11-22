@@ -112,7 +112,7 @@ permission system; it is reported to the coordinator.
 ## Tests
 
 - `make lint`: PASS.
-- `make test` (mbp runner): PASS (rerun after the last change: see PR).
+- `make test` (mbp runner): PASS before the last change. Rerun: one unrelated race in `hostd` `TestTelemetry` (objects.go:402 awaitNode vs http.go:159 egressObjHandler; this branch touches neither), which passed 3× when rerun locally with `-race`.
 - `make e2e-tw-upgrade`: PASS (`TestTwUpgradeSingleMachine` 70 s,
   `TestUpDownBudget` 4.5 s).
 - `make e2e-linux LINUX_DISTROS=ubuntu24-arm64`: 10 runs, all PASS (above).
