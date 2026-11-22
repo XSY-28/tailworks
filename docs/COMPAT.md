@@ -28,7 +28,10 @@ parallel branches don't conflict. Its first cell starts with an anchor,
 tests as `` `<path>:<TestName>[/<subtest>]` `` (a Go package dir, or a test
 file). Add the same `<id>` to the README table, linking
 `docs/COMPAT.md#<id>` with the same status. Put new rows in their area's
-table, in logical position, not at the end. `make lint` runs
+table, in logical position, not at the end. A ✅ or ⚠️ row should cite
+at least one test that CI runs on every PR (`make test`, `e2e/local`,
+`e2e/vitest`); if every test it cites runs only nightly or by hand (the
+other `e2e/` suites), its Tests cell must say "nightly". `make lint` runs
 `internal/compatdoc` to check all of this.
 
 ## Runtime
@@ -108,9 +111,9 @@ table, in logical position, not at the end. `make lint` runs
 
 | Surface | Status | workerd provides | tailworks adds | Different from Cloudflare | Missing | Tests |
 |---|---|---|---|---|---|---|
-| <a id="agents-sdk"></a>Cloudflare Agents SDK (`agents`) | ⚠️ | — | runs unmodified: routing, state, SQL, schedules, WebSockets and hibernation, MCP client and server, in both object modes. `getCaller` in `onRequest` and `onConnect`. `AgentWorkflow` and `waitForApproval`, with the approver's verified identity. [Details](#cloudflare-agents-sdk-agents-0330) | an agent can't call an MCP server on the same host over the tailnet (`forbidden_destination`); `approveWorkflow()`/`rejectWorkflow()` from app code are refused by design ([approvals](#approvals)) | `subAgent()`, `env.AI`, email, browser, codemode; `McpAgent`, `@callable` and `AIChatAgent` not tested | `e2e/sdk:TestCloudflareAgents/RouteAgentRequest`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/sdk:TestCloudflareAgents/AgentAsMCPClient`, `e2e/sdk:TestAgentTemplate`, `e2e/sdk:TestWorkflowApprovals` |
-| <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@tailworks/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`) | — | stdio transport | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet` |
-| <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70177-and-mcp-handler-240) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@tailworks/mcp` `mcpFetch` | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow` |
+| <a id="agents-sdk"></a>Cloudflare Agents SDK (`agents`) | ⚠️ | — | runs unmodified: routing, state, SQL, schedules, WebSockets and hibernation, MCP client and server, in both object modes. `getCaller` in `onRequest` and `onConnect`. `AgentWorkflow` and `waitForApproval`, with the approver's verified identity. [Details](#cloudflare-agents-sdk-agents-0330) | an agent can't call an MCP server on the same host over the tailnet (`forbidden_destination`); `approveWorkflow()`/`rejectWorkflow()` from app code are refused by design ([approvals](#approvals)) | `subAgent()`, `env.AI`, email, browser, codemode; `McpAgent`, `@callable` and `AIChatAgent` not tested | `e2e/sdk:TestCloudflareAgents/RouteAgentRequest`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/sdk:TestCloudflareAgents/AgentAsMCPClient`, `e2e/sdk:TestAgentTemplate`, `e2e/sdk:TestWorkflowApprovals` (nightly: `make test-sdk`) |
+| <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@tailworks/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`) | — | stdio transport | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet` (nightly: `make test-sdk`) |
+| <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70177-and-mcp-handler-240) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@tailworks/mcp` `mcpFetch` | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow` (nightly: `make test-sdk`, `make test-node`) |
 
 ## Tooling
 
