@@ -101,7 +101,16 @@ retention are the other half of the issue, done on another branch.
 - `TestUpStoreFlags` (cmd/tw): validation, the tw-mgmt args and embedded
   options, kept flags, and the custody-switch refusals.
 
-Results: see the PR body (commands and results as run).
+Results (2026-11-21, local; both mbp slots were busy):
+
+- `make lint`: ok (after merging origin/master).
+- `make test`: ok, every package.
+- `make test-pg` (OrbStack Postgres 17): ok, including
+  `TestMigrateStoreCopy/postgres`.
+- `make e2e-tw-upgrade`: ok (`TestTwUpgradeSingleMachine`, which rolls
+  back with KV and D1 data through the changed backup/restore code).
+- `make e2e-upgrade`: ok (`TestUpgradePreviousToCandidate`).
+- `make cli-docs`: docs/cli.md regenerated.
 
 ## Gaps and next steps
 
