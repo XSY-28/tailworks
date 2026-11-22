@@ -850,6 +850,7 @@ func cmdSupervise(args []string) error {
 	}
 	margs := []string{mgmtBin, "-state-dir", filepath.Join(s.Dir, "mgmt"), "-device-delete-delay", s.Cfg.DeviceDeleteDelay, "-version", version}
 	margs = append(margs, s.Cfg.identityMgmtArgs()...)
+	margs = append(margs, "-revoke-warm-keys-on-exit") // tw down leaves no preauthorized key in custody (#158)
 	if s.Cfg.LocalDev {
 		// RT-03: a fresh per-host token on every mgmt start (tw up, a
 		// supervisor/systemd restart). hostd re-reads the file when it
@@ -1016,7 +1017,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	delDelay, _ := time.ParseDuration(s.Cfg.DeviceDeleteDelay)
 	mo := mgmtd.Options{StateDir: filepath.Join(s.Dir, "mgmt"), DeviceDeleteDelay: delDelay, Version: version, TSAPIURL: s.Cfg.TSAPIURL,
 		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: advertisedTags(s.Cfg.headscale(), mgmt.MgmtTag), TSNetTLS: true,
-		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog,
+		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog, RevokeWarmKeysOnClose: true, // tw down leaves no preauthorized key in custody (#158)
 		MetricsPort: obs.DefaultMetricsPort}
 	if mo.TSAPIURL == "" {
 		mo.TSAPIURL = tsapi.DefaultBaseURL
@@ -1221,6 +1222,9 @@ type tenantStatus struct {
 	MintQueue int            `json:"mintQueue"`
 	Rate      float64        `json:"registrationsPerMinute"`
 	Objects   map[string]int `json:"objectsByStatus"`
+
+	// WarmKeys: pooled preauthorized join keys in mgmt custody (#158).
+	WarmKeys int `json:"warmKeys"`
 }
 
 type statusResult struct {
@@ -1253,6 +1257,10 @@ type statusResult struct {
 	// DegradedStores (#147, storedegraded.go): stores whose object stopped
 	// its replay at a journal entry it can't apply.
 	DegradedStores []mgmt.StoreInfo `json:"degradedStores,omitempty"`
+
+	// WarmKeys: the operator tenant's pooled preauthorized join keys in
+	// mgmt custody (#158; per tenant in Tenants).
+	WarmKeys int `json:"warmKeys"`
 }
 
 func cmdStatus(args []string) error {
@@ -1285,9 +1293,10 @@ func cmdStatus(args []string) error {
 		var tn struct {
 			Q    int     `json:"mintQueue"`
 			Rate float64 `json:"effectiveRegistrationsPerMinute"`
+			Warm int     `json:"warmKeys"`
 		}
 		s.mgmt().Do(ctx, "GET", "/v1/tenants/"+s.Cfg.TenantID, nil, &tn)
-		r.MintQueue, r.Rate = tn.Q, tn.Rate
+		r.MintQueue, r.Rate, r.WarmKeys = tn.Q, tn.Rate, tn.Warm
 		var h struct {
 			ID       string `json:"hostID"`
 			LastSeen int64  `json:"lastSeen"`
@@ -1318,9 +1327,10 @@ func cmdStatus(args []string) error {
 			var tn struct {
 				Q    int     `json:"mintQueue"`
 				Rate float64 `json:"effectiveRegistrationsPerMinute"`
+				Warm int     `json:"warmKeys"`
 			}
 			s.mgmt().Do(ctx, "GET", "/v1/tenants/"+t.TenantID, nil, &tn)
-			ts.MintQueue, ts.Rate = tn.Q, tn.Rate
+			ts.MintQueue, ts.Rate, ts.WarmKeys = tn.Q, tn.Rate, tn.Warm
 		}
 		for _, o := range hv.Objects {
 			if o.TenantID == t.TenantID {
@@ -1351,7 +1361,7 @@ func cmdStatus(args []string) error {
 			}
 			fmt.Printf("%s node        %s (%s; API over the tailnet, WhoIs auth) · console %s://%s/ui/\n", mark(r.Mgmt), r.MgmtNode, mgmt.MgmtTag, sch, r.MgmtNode)
 		}
-		fmt.Printf("%s mgmt        tenant %s · mint queue %d · %.0f registrations/min · %d pending device deletes\n", mark(r.Mgmt), r.TenantID, r.MintQueue, r.Rate, r.Pending)
+		fmt.Printf("%s mgmt        tenant %s · mint queue %d · %.0f registrations/min · %s · %d pending device deletes\n", mark(r.Mgmt), r.TenantID, r.MintQueue, r.Rate, warmKeysLabel(r.WarmKeys), r.Pending)
 		where := "own node " + mgmt.HostNodeName(s.Cfg.HostID)
 		switch {
 		case s.Cfg.single():
@@ -1362,7 +1372,7 @@ func cmdStatus(args []string) error {
 		fmt.Printf("%s host        %s (%s) · heartbeat %.1fs ago · objects %v\n", mark(r.Host), s.Cfg.HostID, where, float64(r.HostAgeMS)/1000, r.Objects)
 		if len(r.Tenants) > 1 {
 			for _, t := range r.Tenants {
-				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, t.Objects)
+				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · %s · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, warmKeysLabel(t.WarmKeys), t.Objects)
 			}
 		}
 		for _, w := range r.Workloads {

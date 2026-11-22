@@ -893,6 +893,10 @@
         "hostStatus": {
           "type": "string"
         },
+        "warmKeys": {
+          "type": "integer",
+          "description": "the operator tenant's pooled preauthorized join keys in mgmt custody (per tenant: tenants[].warmKeys); tw down revokes them"
+        },
         "tenants": {
           "type": "array",
           "items": {
