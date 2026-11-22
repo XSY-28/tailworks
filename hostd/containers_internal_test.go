@@ -201,9 +201,22 @@ func TestContainerTimers(t *testing.T) {
 	if _, err := h.ctr.op(context.Background(), inst, k, boxClass(inst), &ctrReq{Op: "setInactivityTimeout", MS: "21600001"}); codeOf(err) != "bad_request" {
 		t.Fatalf("over 6 h: %v", err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && procs.Live() > 0 {
-		time.Sleep(50 * time.Millisecond)
+	// Wait for each run's done, which finish closes after it records the
+	// state and reason. Not procs.Live() == 0: the process is gone a moment
+	// before finish records why, so that raced the "old" stop (issue #239).
+	for _, name := range []string{"old", "idle"} {
+		c := h.ctr.lookup(ctrKey{"t", "w", "Box", name})
+		c.mu.Lock()
+		done := c.done
+		c.mu.Unlock()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s: not stopped after 10 s", name)
+		}
+	}
+	if n := procs.Live(); n != 0 {
+		t.Fatalf("%d processes still live", n)
 	}
 	reasons := map[string]string{}
 	for _, c := range h.Containers() {
