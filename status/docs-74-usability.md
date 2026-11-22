@@ -61,4 +61,4 @@ Last update: 2026-11-21 PT. Issue #74 usability and newcomer gaps: what was left
 - `go test ./cmd/tw -run 'TestDocsNameRealCommands|TestDocRefCheckFindsMistakes'`,
   `go test ./mgmt/ui -run TestConsoleAdmitsTenantAdmins`,
   `go test ./docs/`: ok.
-- `make test` (mbp runner): see the PR.
+- `make test` (mbp runner, `mbp-test.sh test`): ok, exit 0, no failures.
