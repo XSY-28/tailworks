@@ -33,6 +33,10 @@
           "type": "string",
           "description": "the grant that lets tailnet members call the app (not checked)"
         },
+        "serviceCallerGrant": {
+          "type": "string",
+          "description": "for an app behind a Tailscale Service: the grant to its svc: name; callers' app capabilities go on this grant (not checked)"
+        },
         "snippet": {
           "type": "string",
           "description": "everything to add to the policy, in one block"

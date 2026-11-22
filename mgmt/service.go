@@ -3277,6 +3277,8 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
 	}
 	res.AccessWarnings = m.accessWarnings(ctx, t, pol) // tenantscope_lint.go
+	// svccaps_lint.go: caps on the workload tags that calls through its Service lose (#155).
+	res.AccessWarnings = append(res.AccessWarnings, serviceCapWarnings(pol, res.Service, r.WorkloadTags)...)
 	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved && len(res.TagOwnerProblems) == 0
 	return res, nil
 }

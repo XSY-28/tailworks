@@ -363,7 +363,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			return nil, err
 		}
 		whois := func(ctx context.Context, addr string) (mgmt.WhoIsInfo, error) {
-			wi, err := lc.WhoIs(ctx, addr)
+			wi, err := tssvc.WhoIs(ctx, lc, addr) // svc:tw-mgmt flows get svc: grants (H22)
 			if err != nil {
 				return mgmt.WhoIsInfo{}, err
 			}

@@ -92,7 +92,8 @@ func policyApplyStep(ctx context.Context, s *state, f *flags, a *app, tn TenantR
 	}
 	res.Applied, res.Preflight = ar, ar.Preflight
 	res.OK = res.Preflight.OK
-	res.Snippet = policySnippet(res.Preflight, res.CallerGrant)
+	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
+	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
 	if !*f.json {
 		fmt.Println()
 	}
