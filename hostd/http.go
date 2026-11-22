@@ -156,7 +156,10 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 			writeAPIError(w, asAPIError(err))
 			return
 		}
-		if o.Status == statusKilled {
+		h.mu.Lock() // the node's join rewrites Status (objects.go)
+		killed := o.Status == statusKilled
+		h.mu.Unlock()
+		if killed {
 			writeAPIError(w, &apiError{Code: "killed", Detail: "object " + o.ID + " was killed"})
 			return
 		}

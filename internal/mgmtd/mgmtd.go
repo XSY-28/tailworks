@@ -263,6 +263,14 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			ts.AuthKey = k
 		}
 		rt.TS = ts
+		// ADR-019 rule 4: skip the LocalAPI's per-call peer-credential
+		// check (~25 ms per WhoIs on macOS). Set before anything uses the
+		// shared client (writing it later races its users).
+		lc, err := ts.LocalClient()
+		if err != nil {
+			return nil, fmt.Errorf("tsnet start: %w", err)
+		}
+		lc.OmitAuth = true
 		upCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		upStart := time.Now()
 		st, err := tsnetUp(upCtx, rt.bg, ts, ts.AuthKey == "", o.TSNetService == "")

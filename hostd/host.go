@@ -679,6 +679,23 @@ func (h *Host) tick() {
 }
 
 func (h *Host) heartbeat(ctx context.Context) error {
+	resp, err := h.mgmt.Heartbeat(ctx, h.cfg.HostID, h.heartbeatRequest())
+	if err != nil {
+		return err
+	}
+	for _, id := range resp.RevokeObjects {
+		go h.killLocal(id, "revoked by mgmt")
+	}
+	h.purgeTenants(resp.PurgeTenants) // tenantpurge.go
+	if len(resp.Revoke) > 0 {
+		h.revoke(resp.Revoke)
+	}
+	return nil
+}
+
+// heartbeatRequest is the heartbeat body: usage, live nodes, deployment
+// statuses and the leases of the live deployments.
+func (h *Host) heartbeatRequest() mgmtapi.HeartbeatRequest {
 	usage := h.usage()
 	req := mgmtapi.HeartbeatRequest{Leases: []mgmtapi.Lease{}, Usage: &usage, Containers: h.containers.running()}
 	req.PurgedTenants = h.tenantPurge.done() // tenantpurge.go
@@ -708,18 +725,7 @@ func (h *Host) heartbeat(ctx context.Context) error {
 			req.Leases = append(req.Leases, mgmtapi.Lease{Namespace: w.lease(), Epoch: w.epochNow()})
 		}
 	}
-	resp, err := h.mgmt.Heartbeat(ctx, h.cfg.HostID, req)
-	if err != nil {
-		return err
-	}
-	for _, id := range resp.RevokeObjects {
-		go h.killLocal(id, "revoked by mgmt")
-	}
-	h.purgeTenants(resp.PurgeTenants) // tenantpurge.go
-	if len(resp.Revoke) > 0 {
-		h.revoke(resp.Revoke)
-	}
-	return nil
+	return req
 }
 
 // revoke stops serving namespaces whose lease this host lost — unless mgmt

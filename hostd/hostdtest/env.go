@@ -87,6 +87,10 @@ type Options struct {
 	// Backend is the mgmt hostd talks to: BackendFake ("" too) or
 	// BackendReal (realmgmt.go). Fake is ignored with BackendReal.
 	Backend string
+
+	// MgmtClock is the real mgmt's clock and its store's (BackendReal
+	// only; nil: the real time). Tests that age leases move it forward.
+	MgmtClock mgmt.Clock
 }
 
 // Env is fakemgmt (on a unix socket) plus one running tw-hostd.

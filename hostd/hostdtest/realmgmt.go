@@ -68,7 +68,7 @@ type realBackend struct {
 
 // startRealMgmt starts mgmt in dir and returns its clients. Every /v1
 // exchange, on both sides, is checked against api/openapi.yaml.
-func startRealMgmt(t testing.TB, dir, hostID string, log *slog.Logger) *realBackend {
+func startRealMgmt(t testing.TB, dir, hostID string, log *slog.Logger, clock mgmt.Clock) *realBackend {
 	t.Helper()
 	ctx := context.Background()
 	if log == nil {
@@ -78,6 +78,9 @@ func startRealMgmt(t testing.TB, dir, hostID string, log *slog.Logger) *realBack
 	if err != nil {
 		t.Fatal(err)
 	}
+	if clock != nil {
+		st.SetClock(clock) // the store's clock is the one leases expire by
+	}
 	cust, err := mgmt.OpenFileCustody(filepath.Join(dir, "custody"))
 	if err != nil {
 		st.Close()
@@ -85,7 +88,8 @@ func startRealMgmt(t testing.TB, dir, hostID string, log *slog.Logger) *realBack
 	}
 	ts := fakeTailscaleAPI(t)
 	m, err := mgmt.New(mgmt.Config{Store: st, Custody: cust, Broker: &mgmt.Broker{BaseURL: ts.URL},
-		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Second, PolicyMaxAge: time.Minute, Log: log})
+		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Second, PolicyMaxAge: time.Minute, Log: log,
+		Clock: clock})
 	if err != nil {
 		st.Close()
 		t.Fatal(err)
@@ -321,7 +325,7 @@ func startReal(t testing.TB, o Options, dir, wd string, log *slog.Logger) *Env {
 			os.RemoveAll(mdir)
 		}
 	})
-	rb := startRealMgmt(t, mdir, "h1", log)
+	rb := startRealMgmt(t, mdir, "h1", log, o.MgmtClock)
 	var tr struct {
 		TenantID string `json:"tenantID"`
 	}
