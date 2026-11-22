@@ -32,6 +32,9 @@ type policyResult struct {
 	Preflight   mgmt.PreflightResult `json:"preflight"`
 	CallerGrant string               `json:"callerGrant,omitempty"`
 	Snippet     string               `json:"snippet,omitempty"`
+
+	// Applied: --apply's result (policyapply.go).
+	Applied *mgmt.PolicyApplyResult `json:"applied,omitempty"`
 }
 
 func cmdPolicy(args []string) error {
@@ -41,6 +44,8 @@ func cmdPolicy(args []string) error {
 	vars := varFlags{}
 	f.Var(vars, "var", "override a wrangler var (KEY=VALUE, repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
+	apply := f.Bool("apply", false, "write the missing tagOwners, grants and funnel nodeAttrs to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)")
+	yes := f.Bool("yes", false, "with --apply: write without asking (needed without a terminal, and with --json)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -85,6 +90,11 @@ func cmdPolicy(args []string) error {
 	}
 	res.OK = res.Checked && res.Preflight.OK
 	res.Snippet = policySnippet(res.Preflight, res.CallerGrant)
+	if *apply {
+		if err := policyApplyStep(ctx, s, f, a, tn, tb, *yes, &res); err != nil {
+			return err
+		}
+	}
 	if *f.json {
 		if res.Checked && !res.OK {
 			return policyFailure(res, true)
