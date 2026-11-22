@@ -11,6 +11,10 @@ revoked them. `tw status` shows how many warm keys each tenant has in
 custody, and `GET /v1/tenants/{id}` has a new `warmKeys` count (also in
 `tw status --json`).
 
+Two narrow leaks are closed too: a warm key being minted when mgmt shut
+down, and one minted while `tw tenant rm` ran, could stay live at Tailscale
+until it expired. Both are now revoked.
+
 tw-mgmt has a new flag, `-revoke-warm-keys-on-exit` (off by default; `tw up`
 sets it). Leave it off for mgmt replicas that share a store, or every
 replica restart revokes the shared pool.

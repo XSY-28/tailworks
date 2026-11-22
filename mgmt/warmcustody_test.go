@@ -97,11 +97,15 @@ func TestWarmKeysRevokedOnClose(t *testing.T) {
 	})
 	t.Run("replica restart", func(t *testing.T) {
 		e := newPoolEnv(t, 0, nil)
-		e.waitPoolKeys(t, 1)
+		e.waitWarm(t, PoolName([]string{"tag:tw-agent-support"}, false), 1, 5*time.Second)
 		e.m.Close()
-		for _, id := range e.poolKeyIDs() {
-			if e.ts.wasDeleted(id) {
-				t.Fatalf("warm key %s revoked on Close without RevokeWarmKeysOnClose", id)
+		ks, err := e.store.ListWarmKeys(context.Background(), WarmKeyWarm)
+		if err != nil || len(ks) == 0 {
+			t.Fatalf("no warm key left after Close: %v", err)
+		}
+		for _, k := range ks {
+			if e.ts.wasDeleted(k.KeyID) {
+				t.Fatalf("warm key %s revoked on Close without RevokeWarmKeysOnClose", k.KeyID)
 			}
 		}
 	})

@@ -61,3 +61,43 @@ func (m *Mgmt) revokeWarmOnClose() {
 		m.log.Info("shutdown: warm keys revoked", "n", n)
 	}
 }
+
+// markWarmGone stops tenantID's pool for good before a tenant delete drains
+// it: a refill already past its tenant check sees the mark after its row
+// commits and revokes its own key (warmRefillLanded), so no key minted
+// during the delete stays live at the API. undo clears the mark when the
+// delete fails.
+func (m *Mgmt) markWarmGone(tenantID string) (undo func()) {
+	m.mu.Lock()
+	if m.warmGone == nil {
+		m.warmGone = map[string]bool{}
+	}
+	m.warmGone[tenantID] = true
+	m.mu.Unlock()
+	return func() {
+		m.mu.Lock()
+		delete(m.warmGone, tenantID)
+		m.mu.Unlock()
+	}
+}
+
+func (m *Mgmt) isWarmGone(tenantID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.warmGone[tenantID]
+}
+
+// warmRefillLanded runs after a refill committed wk's row: if the tenant's
+// delete has begun, its drain may have missed wk, so revoke it here with
+// the API client the mint used (the tenant row may be gone already).
+func (m *Mgmt) warmRefillLanded(ctx context.Context, ws warmKeyStore, api TailnetAPI, wk WarmKey) bool {
+	if !m.isWarmGone(wk.TenantID) {
+		return false
+	}
+	if err := api.DeleteKey(ctx, wk.KeyID); err != nil {
+		m.log.Warn("warm key minted during a tenant delete not revoked; it expires at the API", "tenant", wk.TenantID, "keyID", wk.KeyID, "err", err)
+	}
+	m.custody.Delete(ctx, poolCustodyName(wk.TenantID, wk.KeyID))
+	ws.DeleteWarmKey(ctx, wk.TenantID, wk.KeyID)
+	return true
+}

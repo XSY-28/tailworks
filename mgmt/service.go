@@ -158,6 +158,10 @@ type Mgmt struct {
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 
+	// warmGone: tenants being (or already) deleted; a refill that lands
+	// after the delete's drain revokes its own key (warmcustody.go).
+	warmGone map[string]bool
+
 	upgradeKick chan struct{} // wakes the upgrade-run driver (upgrades.go)
 
 	// notify.go: the tenants' notification webhooks.
