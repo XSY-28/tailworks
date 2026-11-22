@@ -61,8 +61,10 @@ code wins.
   tenant's process-tier workloads only (§3).
 - **B3 Object ↔ object** within a workload. Per-object nodes and the
   per-object egress MAC bind attribution; spawn `lim` narrows a child at
-  the receiver. Code inside one workload trusts the rest of that workload:
-  `request.cf` is not sealed in-process (H08, #148).
+  the receiver. The caller in `request.cf` is sealed by hostd and
+  verified before an object sees it, so code in one workload cannot
+  forge a caller to a sibling; it can still replay a real caller it was
+  sent, and plain DOs share the Worker's isolate (H08, F5).
 - **B4 Host ↔ mgmt.** A host is `tag:tw-host` by WhoIs, bound to its host
   ID by a one-time registration secret (`tw host add`), and trusted only
   for the leases it holds: every host write is fenced by lease holder and
@@ -143,11 +145,11 @@ which has the full per-platform rows.
 
 | Tier | Native code? | Isolation | Residual attacker power |
 |------|-------------|-----------|-------------------------|
-| **process, macOS** (Seatbelt) | Node app: yes. workerd: only after a V8 escape | V8 isolate (workerd); Seatbelt `(allow default)` for system services (Mach, sysctls), with writes, network, signals and exec denied and allowed back for what the workload needs (`seatbeltProfile`, `hostd/seatbelt_strict.go`) | Can't read or write the home dir, tailworks' state and run dirs or other tenants' credential files. Writes only its own dirs and `/dev/null`, `/dev/zero`, `/dev/dtracehelper`. Network: unix sockets only in its own dirs (not tailworks' sockets or the system tailscaled socket); TCP connect only to `localhost:<port>` for the ports hostd passes (a Node app: its egress proxy and its own port; workerd: none), bind and accept only its own port; no UDP, so no DNS of its own. Signals only itself and its children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload. Exec only of the runtime, the Node prefix, its own dirs and `/System`, `/bin`, `/opt`, `/sbin`, `/usr`. Node-tier egress is `enforced`. **Residual** ([#175](https://github.com/rosskukulinski/tailworks/issues/175), H26): reads outside the deny list (`/etc`, `/tmp`, …) stay open, and TCP is matched as `localhost:<port>` rather than one address. `-sandbox seatbelt-legacy` (kept for one release) brings back the old files-only profile: TCP anywhere, writes to `/tmp`, signals to any same-user process, unix sockets outside the deny list (including the system tailscaled socket), egress `unenforced`. |
-| **process, Linux, Landlock ABI ≥ 4** (kernel 6.7+) | as above | Landlock allow list + seccomp (`internal/procsb`) | Reads only OS dirs, its runtime and its own dirs; writes only its own dirs; TCP connect only to the ports hostd gives it; no AF_UNIX (seccomp), no UDP/raw; signals only its own process group; no ptrace, mount, bpf, namespaces, io_uring. Residual: the kernel's attack surface, and the same uid as tailworks (an escape from the sandbox is the host operator). |
+| **process, macOS** (Seatbelt) | Node app: yes. workerd: only after a V8 escape | V8 isolate (workerd); Seatbelt `(allow default)` for system services (Mach, sysctls), with reads, writes, network, signals and exec denied and allowed back for what the workload needs (`seatbeltProfile`, `hostd/seatbelt_strict.go`) | Reads only the OS dirs (`/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/opt`, `/dev`, the time zone database), its runtime, the Node prefix and its own dirs: not `/tmp`, `/var/folders`, `/Users` or `/Library`, and never the home dir, tailworks' state and run dirs or other tenants' credential files. Writes only its own dirs and `/dev/null`, `/dev/zero`, `/dev/dtracehelper`. Network: unix sockets only in its own dirs (not tailworks' sockets or the system tailscaled socket); TCP over IPv4 only, connect only to the ports hostd passes on IPv4 loopback (`tcp4 "localhost:<port>"`: Seatbelt takes no literal address, and 127.0.0.1 is macOS's only IPv4 loopback address; a Node app: its egress proxy and its own port; workerd: none), no TCP bind or listen for a Node app (it listens on a unix socket in its own dir that hostd's ingress dials, so nothing it opens is reachable from the LAN; H-lan-bind), workerd binds only its `tw dev` inspector port; no UDP, so no DNS of its own. Signals only itself and its children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload. Exec only of the runtime, the Node prefix, its own dirs and `/System`, `/bin`, `/opt`, `/sbin`, `/usr`. Node-tier egress is `enforced`. Reads are an allow list and TCP is pinned to IPv4 loopback since [#175](https://github.com/rosskukulinski/tailworks/issues/175) (H26). `-sandbox seatbelt-legacy` (kept for one release) brings back the old files-only profile: TCP anywhere, writes to `/tmp`, signals to any same-user process, unix sockets outside the deny list (including the system tailscaled socket), egress `unenforced`. |
+| **process, Linux, Landlock ABI ≥ 4** (kernel 6.7+) | as above | Landlock allow list + seccomp (`internal/procsb`) | Reads only OS dirs, its runtime and its own dirs; writes only its own dirs; TCP connect only to the ports hostd gives it; a Node app serves only the listener hostd passes it (127.0.0.1) and every `listen()` of its own is a no-op (seccomp; H-lan-bind); no AF_UNIX (seccomp), no UDP/raw; signals only its own process group; no ptrace, mount, bpf, namespaces, io_uring. Residual: the kernel's attack surface, and the same uid as tailworks (an escape from the sandbox is the host operator). |
 | **process, Linux, Landlock ABI 1–3** | as above | as above, but Landlock has no TCP rules | As ABI ≥ 4 for files, unix sockets, signals and syscalls. TCP is **unrestricted** (loopback, including other tenants' ports; the LAN; the internet); Node-tier egress `unenforced`. |
 | **process, Linux without Landlock** (or `-sandbox none`) | as above | none | Full same-uid access: every tenant's node keys and state, the mgmt token file, every control socket. hostd therefore runs one tenant's process-tier workloads only (`sandbox_unavailable` for a second), unless started with `--insecure-shared-host`. |
-| **microVM, Linux** (Firecracker) | yes, inside the guest | a VM per workload; Firecracker under its jailer (chroot, uid, netns, cgroup); per-VM gateway; node keys never in the guest; DO storage on a dm-crypt volume whose key mgmt releases only to the lease holder | Confined to its own workload. Holds its workload's MAC root, so it can forge egress attribution **among its own workload's objects**. After a VMM escape: the jail uid, and the root vmhelper's message surface (the uffd region table is validated, H11; only a VM hostd started as a base can become a snapshot base, H16). Snapshot-restored guests share kernel state from before the reseed (H24 #157). |
+| **microVM, Linux** (Firecracker) | yes, inside the guest | a VM per workload; Firecracker under its jailer (chroot, uid, netns, cgroup); per-VM gateway; node keys never in the guest; DO storage on a dm-crypt volume whose key mgmt releases only to the lease holder | Confined to its own workload. Holds its workload's MAC root, so it can forge egress attribution **among its own workload's objects**. After a VMM escape: the jail uid, and the root vmhelper's message surface (the uffd region table is validated, H11; only a VM hostd started as a base can become a snapshot base, H16). Snapshot-restored guests share kernel state from before the reseed (TCP and hash-table secrets); not exploitable across tenants, because guest TCP ends at its own VM's gateway (H24 #157, disclosed; ADR-030). |
 | **microVM, macOS** (Virtualization.framework, Apple silicon) | yes, inside the guest | a VM per workload; node keys stay on the host | Confined to its own workload; forges attribution only among its own workload's objects, as above. |
 
 On every tier the workload runs as tailworks' user (or the jail uid) and
@@ -176,8 +178,8 @@ so.
    with a Node app in `listen: "unix"` mode) can reach the system
    tailscaled socket.
    **Open:** on Landlock ABI 1–3 (and macOS under
-   `-sandbox seatbelt-legacy`), TCP to another tenant's loopback ports; on
-   macOS, reads outside the deny list (#175).
+   `-sandbox seatbelt-legacy`), TCP to another tenant's loopback ports.
+   On macOS, reads are an allow list since #175.
 2. **Tenant → platform** (B1): reach A7, forge A4/props, abuse spawn to
    escalate A6 or exhaust A9, SSRF via egress (the host, its LAN or a
    metadata service, directly or through a rebinding DNS name). → props
@@ -190,8 +192,8 @@ so.
    `hostd.TestWorkerInternetEgress`); `lim` is enforced at the receiver (C08, RT-01
    fixed); objects are created only under create admission (F4); tenant
    audit is a `tenant_note` only (C09); the mgmt socket needs the host
-   token (C10). **Open:** in-process `request.cf` forgery within one
-   workload (H08, #148); Node-tier egress is enforced only on Landlock
+   token (C10); a caller forwarded in-process counts only if hostd's seal
+   verifies (H08 fixed, F5). **Open:** Node-tier egress is enforced only on Landlock
    ABI ≥ 4 and macOS (not under `-sandbox seatbelt-legacy`).
 3. **Identity / crypto** (A4/A6/A3). → the egress MAC is per object with
    a replay cache (C11); the Node tier's `x-tw-caller` carries a nonce;
@@ -225,9 +227,9 @@ so.
    `sandbox-exec`), `hostd.TestSeatbeltStrictProfileShape`,
    `hostd.TestMultiTenant` (probes under a running workload's live
    profile), `hostd.TestSeatbeltProfile*` and, in `make test-node`,
-   `TestNodeTier/Sandbox` (from inside the Node app). **Open:** the macOS
-   profile's read deny list and `localhost:<port>` TCP matching (H26,
-   #175). The uffd region table is validated (H11,
+   `TestNodeTier/Sandbox` (from inside the Node app). The macOS profile's
+   reads are an allow list and its TCP is IPv4-loopback only (H26, #175).
+   The uffd region table is validated (H11,
    `helper.TestRT3_H11_UffdBadTableFailsSession`), and only a VM started
    as a base can become a snapshot base (H16, `helper.TestRT3_H16_BaseGuard`).
 8. **Internet → workload** (B8): reach an unlisted path, `/_tw` or a DO;
@@ -246,8 +248,9 @@ so.
 ## 5. What is genuinely strong (do not regress)
 
 - netd ingress strips identity headers by prefix and by name; a caller in
-  `request.cf` that arrives over the network comes only from WhoIs.
-  Within one workload it is not sealed (H08).
+  `request.cf` comes only from WhoIs: hostd seals it under the instance
+  key and the platform verifies the seal before an object, the Worker or
+  `actingFor` uses it (H08).
 - ADR-019 egress guard: netmap-only resolution for tailnet names (never
   host DNS); refuses self, sibling, host, loopback, link-local, multicast
   and metadata addresses; checked in the handler and the dialer

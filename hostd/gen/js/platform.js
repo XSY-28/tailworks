@@ -41,7 +41,9 @@ function errResponse(code, message, extra = {}) {
 }
 
 // principalOf names who a request acts for (audit "actingFor"): the human
-// login for an untagged caller, else the calling node's name.
+// login for an untagged caller, else the calling node's name. Pass it a
+// request sealedRequest() returned: cf.tailscale.caller is then the caller
+// hostd sealed, or absent.
 function principalOf(req) {
   if (isPublic(req)) return "public"; // never a caller name, whatever else cf holds
   const c = req?.cf?.tailscale?.caller;
@@ -309,7 +311,9 @@ function makeHost(cls) {
             // No tenant code runs for an object nobody admitted (RT3-06).
             const d = await hostAdmitted(self, cls);
             if (d) throw new Error("[" + d.code + "] " + d.message);
-            return hostFacet(self, cls)[p](...args);
+            // A Request argument carries only a sealed caller, as a fetch does.
+            const a = await Promise.all(args.map((x) => sealedRequest(self.env, x)));
+            return hostFacet(self, cls)[p](...a);
           };
         },
       });
@@ -317,6 +321,9 @@ function makeHost(cls) {
     async fetch(req) {
       if (this.__killed) return errResponse("killed", "object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
       if (!this.ctx.id.name) return errResponse("bad_request", "tw objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
+      // Only a caller hostd sealed reaches the facet or names a principal
+      // (RT3-08): the sender may be tenant code forwarding in-process.
+      req = await sealedRequest(this.env, req);
       // Internal fetches (e.g. partyserver's set-name) carry no caller.
       const who = principalOf(req);
       if (who && !this.__actingFor) {
@@ -431,6 +438,57 @@ async function objectKey(env, cls, name) {
 async function mac(env, cls, name, s) {
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", await objectKey(env, cls, name), enc.encode(s)));
   return hex(sig);
+}
+
+// ---- caller seals (RT3-08 / H08, #148) ----
+//
+// request.cf is whatever the sender says once tenant code forwards a
+// request in-process, so cf.tailscale.caller alone proves nothing. hostd
+// seals the caller netd got from WhoIs (cf.tailscale.seal, gen.SealCaller):
+// hex(HMAC-SHA256(MAC_KEY, "tw-caller-seal-v1\n" + exp + "\n" + caller)),
+// where caller is the caller's exact JSON. A caller counts only if its seal
+// verifies, and then the sealed copy is used, never cf.tailscale.caller:
+// tenant code can drop a seal or replay one it was given (the same real
+// caller), but cannot make one for anybody else. MAC_KEY never leaves this
+// isolate; the runtime asks here ("unseal").
+const SEAL_DOMAIN = "tw-caller-seal-v1\n";
+const SEAL_MAX_AHEAD_MS = 6 * 60_000; // gen.CallerSealTTL plus a minute of skew
+let sealKey = null;
+
+// verifiedCaller returns the caller a seal vouches for, or null.
+async function verifiedCaller(env, s) {
+  if (!s || typeof s !== "object" || s.v !== 1 || typeof s.caller !== "string" || typeof s.mac !== "string") return null;
+  if (!Number.isSafeInteger(s.exp) || !/^[0-9a-f]{64}$/.test(s.mac)) return null;
+  const now = Date.now();
+  if (now > s.exp || s.exp - now > SEAL_MAX_AHEAD_MS) return null;
+  sealKey ??= await crypto.subtle.importKey("raw", enc.encode(env.MAC_KEY), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const sig = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) sig[i] = parseInt(s.mac.slice(2 * i, 2 * i + 2), 16);
+  if (!(await crypto.subtle.verify("HMAC", sealKey, sig, enc.encode(SEAL_DOMAIN + s.exp + "\n" + s.caller)))) return null;
+  try {
+    const c = JSON.parse(s.caller);
+    return c && typeof c === "object" && !Array.isArray(c) ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+// sealedCf returns cf with only a verified caller (the sealed copy, seal
+// kept so a further forward still verifies), or with no caller and no
+// seal; null when cf has neither (nothing to change).
+async function sealedCf(env, cf) {
+  const ts = cf?.tailscale;
+  if (!ts || typeof ts !== "object" || (!("caller" in ts) && !("seal" in ts))) return null;
+  const caller = await verifiedCaller(env, ts.seal);
+  const { caller: _c, seal, ...rest } = ts;
+  return { ...cf, tailscale: caller ? { ...rest, caller, seal } : rest };
+}
+
+// sealedRequest is req as tenant code may see it (see sealedCf).
+async function sealedRequest(env, req) {
+  if (!(req instanceof Request)) return req;
+  const cf = await sealedCf(env, req.cf);
+  return cf ? new Request(req, { cf }) : req;
 }
 
 // Egress for a facet's fetch(). props were minted by Host_<Class>; tenant code
@@ -562,6 +620,11 @@ export class TailnetApi extends WorkerEntrypoint {
       }
     }
     if (op === "approval") return approvalReport(this.env, p, args);
+    if (op === "unseal") {
+      // The runtime's check of a request's caller seal (RT3-08). A verify
+      // oracle only: nothing here makes a seal.
+      return { ok: true, value: { caller: await verifiedCaller(this.env, args.seal) } };
+    }
     if (op === "admit") {
       // Create admission: may the caller reach, and so create, class/name?
       // hostd decides from who asks: an attested object (as), a tailnet

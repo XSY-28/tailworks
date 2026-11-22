@@ -283,12 +283,14 @@ func TestContainerFailClosedAndRestart(t *testing.T) {
 // The capacity vector: VM dimensions only with a microVM backend; nodes
 // are capacityNodes; usage counts DO microVMs and containers.
 func TestCapacityVector(t *testing.T) {
+	total, _ := memInfo()
+	wantNodes := DefaultCapacityNodes(total) // -capacity-nodes 0: derived from RAM
 	h, _ := admitHost(t, false, roomy)
-	if c := h.capacity(); c.VMs != 0 || c.VMMemMiB != 0 || c.Nodes != 1000 {
+	if c := h.capacity(); c.VMs != 0 || c.VMMemMiB != 0 || c.Nodes != wantNodes {
 		t.Fatalf("no backend: %+v", c)
 	}
 	h, _ = admitHost(t, true, roomy)
-	if c := h.capacity(); c.VMs != 10 || c.Nodes != 1000 {
+	if c := h.capacity(); c.VMs != 10 || c.Nodes != wantNodes {
 		t.Fatalf("with a backend: %+v", c)
 	}
 	h.workloads["tn/w"].active = &instance{tier: "microvm"}

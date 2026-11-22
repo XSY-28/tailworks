@@ -24,6 +24,10 @@ flags:
     	let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
+  -audit-max-age duration
+    	audit retention: delete audit records older than this (e.g. 2160h), keeping a checkpoint so the rest still verify (0 = keep every record, the default)
+  -audit-max-records int
+    	audit retention: keep only the newest N records of each audit chain (0 = keep every record, the default)
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain) (default "tailscale")
   -control-url string
@@ -60,6 +64,8 @@ flags:
     	use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)
   -push-port int
     	port on this host's own tailnet node where mgmt pushes kills (--separate-host) (default 7474)
+  -request-log-max-age duration
+    	also drop request records (tw logs --source requests) older than this, e.g. 168h (0 = only the size rotation, the default)
   -separate-host
     	run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it
   -service
@@ -137,7 +143,7 @@ serve, list, update or remove tenants
 ```text
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
-usage: tw tenant add <tailnet> --oauth-client-file <file> [--policy-apply] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
+usage: tw tenant add <tailnet> --oauth-client-file <file> [--policy-apply] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--max-store-bytes SIZE] [--max-queue-bytes SIZE] [--max-stores N] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -205,6 +211,12 @@ flags:
     	containers (ADR-032): running containers quota
   -max-objects int
     	object quota
+  -max-queue-bytes string
+    	storage quota: bytes of all the tenant's queued messages together, e.g. 2GiB ("-" or 0 = unlimited, the default)
+  -max-store-bytes string
+    	storage quota: bytes of all the tenant's KV, D1 and R2 journals together, e.g. 20GiB ("-" or 0 = unlimited, the default)
+  -max-stores string
+    	storage quota: how many KV namespaces, D1 databases and R2 buckets the tenant may have ("-" or 0 = unlimited, the default)
   -name-prefix string
     	name prefix for the tenant's tailnet names; only before its first deploy ("-" = none)
   -oauth-client-file string
@@ -592,11 +604,13 @@ bundle, place and deploy an app; wait until ready
 ```text
 tw deploy: bundle, preflight grants, build + push Dockerfile container images (docker buildx), place (prints why), deploy, wait until ready; --replace re-places a running workload; --preview runs it next to the workload instead (tw promote)
 
-usage: tw deploy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m] [--preview] [--preview-alias <alias>]
+usage: tw deploy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--apply-policy [--yes]] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m] [--preview] [--preview-alias <alias>]
 
 flags:
   -allow-missing-grants
     	deploy even if tailnet.connects grants are missing
+  -apply-policy
+    	when the preflight finds tagOwners, grants or funnel nodeAttrs missing, write them to the tailnet policy first (as tw policy --apply)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -force-takeover
@@ -631,6 +645,8 @@ flags:
     	also wait (up to this long) until the public URL answers from the public internet (tailworks.jsonc "public")
   -wrangler
     	bundle with the wrangler CLI (wrangler deploy --dry-run --outdir; nothing is sent to Cloudflare) instead of the built-in esbuild
+  -yes
+    	with --apply-policy: write the policy without asking (needed without a terminal, and with --json)
 ```
 
 ### tw policy
@@ -638,11 +654,13 @@ flags:
 the tailnet policy an app needs, before deploying
 
 ```text
-tw policy: print everything an app needs in the tailnet policy as one snippet: missing tagOwners, tailnet.connects grants, service auto-approval and public nodeAttrs (checked against the live policy, like tw deploy's preflight; nothing is deployed), plus the grant that lets people call it; exits acl_denied when a checked part is missing
+tw policy: print everything an app needs in the tailnet policy as one snippet: missing tagOwners, tailnet.connects grants, service auto-approval and public nodeAttrs (checked against the live policy, like tw deploy's preflight; nothing is deployed), plus the grant that lets people call it; exits acl_denied when a checked part is missing; --apply writes the missing tag:tw* lines itself (additive, If-Match)
 
-usage: tw policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>]
+usage: tw policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--apply [--yes]]
 
 flags:
+  -apply
+    	write the missing tagOwners, grants and funnel nodeAttrs to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -from-wrangler-out string
@@ -659,6 +677,8 @@ flags:
     	override a wrangler var (KEY=VALUE, repeatable)
   -wrangler
     	bundle with the wrangler CLI (wrangler deploy --dry-run --outdir; nothing is sent to Cloudflare) instead of the built-in esbuild
+  -yes
+    	with --apply: write without asking (needed without a terminal, and with --json)
 ```
 
 ### tw deployments

@@ -120,6 +120,7 @@ func cmdUp(args []string) error {
 	hb := f.Duration("heartbeat", time.Second, "host heartbeat period")
 	tomb := f.Duration("kill-tombstone", 12*time.Second, "keep a killed node answering object_killed this long")
 	delDelay := f.Duration("device-delete-delay", 8*time.Second, "delete a killed object's device this long after the kill (< --kill-tombstone)")
+	retention := addRetentionFlags(f) // up_retention.go
 	siblings := f.Bool("allow-sibling-egress", false, "let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)")
 	warmKeys := f.Int("warm-keys", 5, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
 	poolNodes := f.Int("pool-nodes", 1, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
@@ -448,6 +449,9 @@ func cmdUp(args []string) error {
 		return fail("bad_request", "--warm-keys and --pool-nodes must be ≥ 0")
 	}
 	s.Cfg.WarmKeys, s.Cfg.PoolNodes, s.Cfg.PortMapping = warmKeys, poolNodes, *portMapping
+	if err := retention.save(&s.Cfg); err != nil {
+		return err
+	}
 	s.Cfg.LocalDev, s.Cfg.PushPort, s.Cfg.Mode = *localDev, *pushPort, layout
 	if err := s.save(); err != nil {
 		return err
@@ -769,7 +773,7 @@ type child struct {
 }
 
 func (c *child) start(slog func(string, ...any)) error {
-	lf, err := os.OpenFile(c.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	lf, err := openDaemonLog(c.logPath) // up_logs.go: rotated
 	if err != nil {
 		return err
 	}
@@ -850,6 +854,8 @@ func cmdSupervise(args []string) error {
 	}
 	margs := []string{mgmtBin, "-state-dir", filepath.Join(s.Dir, "mgmt"), "-device-delete-delay", s.Cfg.DeviceDeleteDelay, "-version", version}
 	margs = append(margs, s.Cfg.identityMgmtArgs()...)
+	margs = append(margs, s.Cfg.retentionMgmtArgs()...) // up_retention.go
+	margs = append(margs, "-revoke-warm-keys-on-exit")  // tw down leaves no preauthorized key in custody (#158)
 	if s.Cfg.LocalDev {
 		// RT-03: a fresh per-host token on every mgmt start (tw up, a
 		// supervisor/systemd restart). hostd re-reads the file when it
@@ -908,6 +914,7 @@ func cmdSupervise(args []string) error {
 		hargs = append(hargs, "-allow-sibling-egress")
 	}
 	hargs = append(hargs, s.Cfg.identityHostdArgs()...)
+	hargs = append(hargs, s.Cfg.retentionHostdArgs()...) // up_retention.go
 	mg := &child{name: "tw-mgmt", args: margs, logPath: s.log("mgmt")}
 	hd := &child{name: "tw-hostd", args: hargs, logPath: s.log("hostd")}
 
@@ -994,8 +1001,8 @@ func cmdSupervise(args []string) error {
 // unchanged. SIGTERM stops hostd first (nodes close in parallel), then
 // mgmt (flushes pending device deletes).
 func superviseSingle(s *state, logf func(string, ...any)) error {
-	openLog := func(name string) (*os.File, *slog.Logger, error) {
-		lf, err := os.OpenFile(s.log(name), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	openLog := func(name string) (io.WriteCloser, *slog.Logger, error) {
+		lf, err := openDaemonLog(s.log(name)) // up_logs.go: rotated
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1016,11 +1023,12 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	delDelay, _ := time.ParseDuration(s.Cfg.DeviceDeleteDelay)
 	mo := mgmtd.Options{StateDir: filepath.Join(s.Dir, "mgmt"), DeviceDeleteDelay: delDelay, Version: version, TSAPIURL: s.Cfg.TSAPIURL,
 		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: advertisedTags(s.Cfg.headscale(), mgmt.MgmtTag), TSNetTLS: true,
-		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog,
+		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog, RevokeWarmKeysOnClose: true, // tw down leaves no preauthorized key in custody (#158)
 		MetricsPort: obs.DefaultMetricsPort}
 	if mo.TSAPIURL == "" {
 		mo.TSAPIURL = tsapi.DefaultBaseURL
 	}
+	s.Cfg.retentionSingle(&mo, nil) // up_retention.go
 	logf("supervising in %s (tailnet %s): single process, mgmt + embedded host %s", s.Dir, s.Cfg.Tailnet, s.Cfg.HostID)
 	mrt, err := mgmtd.Start(ctx, mo)
 	if err != nil {
@@ -1040,6 +1048,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 		DataDir: filepath.Join(s.Dir, "hostd"), RunDir: s.hostdRunDir(), Workerd: s.Cfg.Workerd,
 		Heartbeat: hb, KillTombstone: tomb, HostnamePrefix: s.Cfg.HostnamePrefix, Sandbox: "auto", SandboxDeny: deny, PoolNodes: hostdrun.DefaultPoolNodes,
 		Ephemeral: s.Cfg.Ephemeral, InsecureSharedHost: s.Cfg.InsecureSharedHost, AllowSiblingEgress: s.Cfg.AllowSiblingEgress, Log: hlog}
+	s.Cfg.retentionSingle(nil, &ho) // up_retention.go
 	hrt, err := hostdrun.New(ctx, ho)
 	if err != nil {
 		logf("host agent failed to start: %v", err)
@@ -1221,6 +1230,9 @@ type tenantStatus struct {
 	MintQueue int            `json:"mintQueue"`
 	Rate      float64        `json:"registrationsPerMinute"`
 	Objects   map[string]int `json:"objectsByStatus"`
+
+	// WarmKeys: pooled preauthorized join keys in mgmt custody (#158).
+	WarmKeys int `json:"warmKeys"`
 }
 
 type statusResult struct {
@@ -1253,6 +1265,10 @@ type statusResult struct {
 	// DegradedStores (#147, storedegraded.go): stores whose object stopped
 	// its replay at a journal entry it can't apply.
 	DegradedStores []mgmt.StoreInfo `json:"degradedStores,omitempty"`
+
+	// WarmKeys: the operator tenant's pooled preauthorized join keys in
+	// mgmt custody (#158; per tenant in Tenants).
+	WarmKeys int `json:"warmKeys"`
 }
 
 func cmdStatus(args []string) error {
@@ -1285,9 +1301,10 @@ func cmdStatus(args []string) error {
 		var tn struct {
 			Q    int     `json:"mintQueue"`
 			Rate float64 `json:"effectiveRegistrationsPerMinute"`
+			Warm int     `json:"warmKeys"`
 		}
 		s.mgmt().Do(ctx, "GET", "/v1/tenants/"+s.Cfg.TenantID, nil, &tn)
-		r.MintQueue, r.Rate = tn.Q, tn.Rate
+		r.MintQueue, r.Rate, r.WarmKeys = tn.Q, tn.Rate, tn.Warm
 		var h struct {
 			ID       string `json:"hostID"`
 			LastSeen int64  `json:"lastSeen"`
@@ -1318,9 +1335,10 @@ func cmdStatus(args []string) error {
 			var tn struct {
 				Q    int     `json:"mintQueue"`
 				Rate float64 `json:"effectiveRegistrationsPerMinute"`
+				Warm int     `json:"warmKeys"`
 			}
 			s.mgmt().Do(ctx, "GET", "/v1/tenants/"+t.TenantID, nil, &tn)
-			ts.MintQueue, ts.Rate = tn.Q, tn.Rate
+			ts.MintQueue, ts.Rate, ts.WarmKeys = tn.Q, tn.Rate, tn.Warm
 		}
 		for _, o := range hv.Objects {
 			if o.TenantID == t.TenantID {
@@ -1351,7 +1369,7 @@ func cmdStatus(args []string) error {
 			}
 			fmt.Printf("%s node        %s (%s; API over the tailnet, WhoIs auth) · console %s://%s/ui/\n", mark(r.Mgmt), r.MgmtNode, mgmt.MgmtTag, sch, r.MgmtNode)
 		}
-		fmt.Printf("%s mgmt        tenant %s · mint queue %d · %.0f registrations/min · %d pending device deletes\n", mark(r.Mgmt), r.TenantID, r.MintQueue, r.Rate, r.Pending)
+		fmt.Printf("%s mgmt        tenant %s · mint queue %d · %.0f registrations/min · %s · %d pending device deletes\n", mark(r.Mgmt), r.TenantID, r.MintQueue, r.Rate, warmKeysLabel(r.WarmKeys), r.Pending)
 		where := "own node " + mgmt.HostNodeName(s.Cfg.HostID)
 		switch {
 		case s.Cfg.single():
@@ -1362,7 +1380,7 @@ func cmdStatus(args []string) error {
 		fmt.Printf("%s host        %s (%s) · heartbeat %.1fs ago · objects %v\n", mark(r.Host), s.Cfg.HostID, where, float64(r.HostAgeMS)/1000, r.Objects)
 		if len(r.Tenants) > 1 {
 			for _, t := range r.Tenants {
-				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, t.Objects)
+				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · %s · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, warmKeysLabel(t.WarmKeys), t.Objects)
 			}
 		}
 		for _, w := range r.Workloads {

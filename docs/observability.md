@@ -220,9 +220,12 @@ One noisy object can't fill a host's disk:
 - each workload writes at most 200 records per second (bursts of 1000) to
   its request log. The rest are dropped and counted, and a
   `kind: "dropped"` record says how many;
-- a request log rotates at 8 MiB, keeping one previous file;
+- a request log rotates at 8 MiB, keeping one previous file. With
+  `tw up --request-log-max-age 168h` (`tw-hostd -request-log-max-age`)
+  the host also drops records older than that, every 10 minutes; off by
+  default;
 - `workerd.log` and the node runtime's `app.log` rotate at 16 MiB the same
-  way;
+  way, and `tw up`'s own `mgmt.log` and `hostd.log` at 32 MiB;
 - the export queue is 4096 items per signal and workload; overflow is
   dropped and counted, never buffered to disk.
 

@@ -29,7 +29,7 @@ Status: **Built** as designed · **Differs**: built, but not as this RFC says ·
 | §4.2, §4.8, §15 | `stord` (`tw-stord`): DO storage over vsock, encrypted per object, shipped to a tenant bucket | Not built | DO storage is a host-local directory (on the microVM tier, a per-workload volume). KV, D1 and R2 indexes are journaled in mgmt (ADR-044); Queues live in mgmt (ADR-039) |
 | §4.9, §9, §10 | Async encrypted DO backup, RPO ≤ 5 s, a per-namespace restore drilled in CI | Not built | [ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md) is amended. Back up the state directory ([INSTALL.md](../INSTALL.md#back-up-and-restore)). Moving a workload with Durable Objects to another host starts them empty (`tw host drain --allow-local-state-loss`); see [#38](https://github.com/rosskukulinski/tailworks/issues/38) |
 | §4.9 | Namespace lease on S3 or Postgres, TTL 15 s, renew 5 s | Differs | The database is the lease clock (ADR-028): SQLite or Postgres, no S3. The namespace lease TTL is 45 s, and hosts fence themselves after 30 s without a renewal |
-| §4.9, §9 | Parking, `gcAfter`, 500 online nodes per netd | Not built | Nodes stay online until their object is killed, reaped or undeployed. Hosts advertise a node capacity to placement (`tw-hostd -capacity-nodes`, default 1000). Pool nodes (ADR-031) and warm keys make new objects faster |
+| §4.9, §9 | Parking, `gcAfter`, 500 online nodes per netd | Not built | Nodes stay online until their object is killed, reaped or undeployed. Hosts advertise a node capacity to placement (`tw-hostd -capacity-nodes`; by default a quarter of RAM at 8 MiB per node, 50 to 1000, from measurements: [limits.md](../limits.md#per-node-memory-measured)). Pool nodes (ADR-031) and warm keys make new objects faster. Whether parking and `gcAfter` are built or dropped is an open decision ([§4.9](#49-do-lifecycle)) |
 | §4.9 | macOS pre-sleep hook | Not built | A sleeping Mac takes its nodes offline |
 | §4.4 | Minting with a tenant OAuth client; single-use keys; warm keys; registration throttle | Built | ADR-042. The WIF and API-key modes were built, then removed. Headscale mints with a Headscale API key (ADR-015) |
 | §4.3, §4.4 | Mint-time node attributes (`custom:tw-*`) | Not built | Auth keys carry tags only; lineage lives in tailworks' audit |
@@ -380,6 +380,32 @@ No bucket credential enters the guest, and no storage service is shared across t
 
 - **Parking.** Objects are parked LRU-first when the host exceeds its node budget (§9).
 - **GC.** Parked objects are deleted after `gcAfter`, a first-class setting that bounds the device count.
+
+> As built (v0.2.0), and **open: a decision for Ross.** Neither parking
+> nor `gcAfter` is built. A node stays online until its object is killed,
+> reaped or undeployed, and placement stops sending a host objects at its
+> node capacity, which is now derived from RAM with measured per-node
+> costs: about 2.5 MB idle and 4 MB under load per node with scoped peers
+> ([limits.md](../limits.md#per-node-memory-measured)). At that cost a
+> 16 GiB host's default 512 nodes use about 2 GB, so memory alone doesn't
+> force parking yet. The options:
+>
+> 1. **Drop both.** Keep nodes online; bound a host by its capacity and a
+>    tenant by its quota; spread across hosts. Simplest, and what runs
+>    today. An object that is never used again keeps its node and device
+>    until it is deleted, so device count tracks object count.
+> 2. **Parking only.** Close the least recently used idle nodes when a
+>    host is over its budget, keeping their state so the next request
+>    through the workload rejoins them from saved state (no new
+>    registration, same address). Frees RAM; devices stay (offline). Costs
+>    a wake path through the workload and a first request that waits for
+>    the rejoin.
+> 3. **Parking and `gcAfter`.** Option 2, plus deleting the devices of
+>    objects parked longer than `gcAfter`. Bounds the device count. A
+>    woken object then registers again and gets a new node: a new address
+>    and a new device in flow logs.
+> 4. **Defer.** Keep option 1 and revisit when a host reaches its node
+>    capacity in practice, or when device count becomes the constraint.
 
 **Creation is asynchronous.** `create()` (an implicit first `getByName`, or `ctx.tailnet.spawn`) records the object and returns immediately. The node becomes ready later.
 - Until the node is ready, inbound requests through the workload queue at netd, and the object's own egress waits on `ready`. After `readyTimeout` (default 30 s), both fail with `identity_pending`. Egress never falls back to another identity.
@@ -835,8 +861,11 @@ Measured on Headscale v0.29.7 (ADR-015 has the details):
 
 > Revised (as built, v0.2.0). Parking, `gcAfter` and the per-netd node
 > budget below were not built: nodes stay online, and each host
-> advertises a node capacity to placement (`-capacity-nodes`, default
-> 1000). The RPO targets assume the DO backup, which was not built
+> advertises a node capacity to placement (`-capacity-nodes`, by default
+> derived from RAM). Linux and macOS measurements at N = 10–500, idle and
+> under request load, with scoped and full-mesh peer visibility, are in
+> [limits.md](../limits.md#per-node-memory-measured): about 2.5 MB idle and
+> 4 MB under load per node when objects see only their callers. The RPO targets assume the DO backup, which was not built
 > ([ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md)).
 
 **Derived budgets:**
@@ -1036,7 +1065,7 @@ Headscale: tailworks needs no Headscale changes, only the profile (§7.2).
 
 ## 13. Open questions
 
-1. What per-tailnet registration rate (sustained and burst) applies to API-minted single-use keys from a few source hosts? Does parallelism across processes add up?
+1. What per-tailnet registration rate (sustained and burst) applies to API-minted single-use keys from a few source hosts? Does parallelism across processes add up? *Partly answered (2026-11-21, [limits.md](../limits.md#registration-rate-measured)):* one host registered bursts of 50 fresh nodes in 2.6–6.3 s, with single-use keys minted per object or one reusable key, and the register round trip stayed at 0.43 s with 50 at once. Up to 50 nodes the rate is set by netd's join concurrency, not by control. Still open: sustained rates beyond 50 nodes, and several hosts at once.
 2. What are the TTL and rate limits for `/oauth/token`, `POST /keys`, device attribute writes, and `DELETE /device`?
 3. How quickly do posture-attribute changes and device deletes propagate to peers? Is there a published SLO?
 4. Can OAuth client scopes be restricted to tagged devices (TS-5)?
