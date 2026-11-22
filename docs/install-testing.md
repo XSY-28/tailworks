@@ -108,7 +108,11 @@ its timings are slower than a real x86 host's.
 0.7 s), `tw down --purge --service` (about 6.7 s, was 0.6 s), the
 `systemctl --user restart` command itself (5.2 s, was 3.1 s), and reboot →
 healthy (36.6 s, was 6.6 s). On every stop, mgmt exits about 5 s after
-hostd. The v0.3.0 rows show the same numbers. One Fedora run (master build)
+hostd. The v0.3.0 rows show the same numbers. A re-run of the Ubuntu 24.04
+arm64 row on `0.3.0-cf0e5c16` (master with #231 and #232) passed:
+`tw down` took 3.6 s, the restart command returned in 1.1 s, and reboot →
+healthy was still 37.6 s. Of the 42 warm keys mgmt minted during that run,
+none was still valid after `tw down`; the harness now checks this. One Fedora run (master build)
 finished the restart command in 0.2 s and `tw down` in 1.7 s; its v0.3.0
 run took 5.2 s and 6.7 s like the others.
 
