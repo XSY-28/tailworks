@@ -258,6 +258,7 @@ func New(cfg Config) *Server {
 	m.HandleFunc("PUT /v1/hosts/{id}", s.register)
 	m.HandleFunc("PUT /v1/hosts/{id}/status", s.heartbeat)
 	m.HandleFunc("GET /v1/hosts/{id}/assignments", s.assignments)
+	m.HandleFunc("GET /v1/hosts/{id}/sandbox-deny", s.sandboxDeny)
 	m.HandleFunc("POST /v1/deployments", s.deploy)
 	m.HandleFunc("GET /v1/deployments", s.listDeployments)
 	m.HandleFunc("GET /v1/deployments/{id}", s.getDeployment)
@@ -406,7 +407,11 @@ func (s *Server) hostView(h *host) map[string]any {
 	if time.Since(h.lastSeen) > 10*time.Second {
 		st = "stale"
 	}
-	v := map[string]any{"hostID": h.HostID, "status": st, "capacityNodes": h.CapacityNodes, "tiers": h.Tiers,
+	tiers := h.Tiers
+	if tiers == nil {
+		tiers = []string{} // the spec's Host.tiers is an array, never null (TestRouteDrift)
+	}
+	v := map[string]any{"hostID": h.HostID, "status": st, "capacityNodes": h.CapacityNodes, "tiers": tiers,
 		"liveNodes": h.liveNodes, "lastSeen": ms(h.lastSeen), "createdAt": ms(h.created), "updatedAt": ms(h.lastSeen)}
 	if h.AuditPubKey != "" {
 		v["auditPubKey"] = h.AuditPubKey
