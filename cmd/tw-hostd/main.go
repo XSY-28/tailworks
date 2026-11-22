@@ -125,6 +125,9 @@ func run() error {
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
 		wkInet     = flag.String("worker-internet", "direct", "Workers: how fetch() reaches internet hosts (subject to each workload's tailnet.egress.internet): direct (this host's network, public addresses only) or off")
 	)
+	// Process-tier heap caps (hostd/limits.go).
+	wdHeap := flag.Int("workerd-heap-mib", hostd.DefaultWorkerdHeapMiB, "process tier: cap each V8 isolate's heap in a workerd (the Worker, each Durable Object class) at this many MiB; past it V8 aborts that workload's workerd and it restarts (-1 = no cap)")
+	nodeHeap := flag.Int("node-heap-mib", hostd.DefaultNodeHeapMiB, "Node tier: the app's --max-old-space-size in MiB, unless node.args or NODE_OPTIONS set one (-1 = no cap)")
 	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
 	r2f.Register(flag.CommandLine)
 	flag.Parse()
@@ -156,6 +159,7 @@ func run() error {
 		WorkerInternet: *wkInet,
 		R2:             r2b}
 	o.RequestLogMaxAge = *reqMaxAge // hostd/telemetry_retention.go
+	o.WorkerdHeapMiB, o.NodeHeapMiB = *wdHeap, *nodeHeap
 	restart := make(chan struct{}, 1)
 	if *selfUpg {
 		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix

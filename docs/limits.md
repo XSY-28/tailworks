@@ -30,21 +30,24 @@ row (any common unit counts: `64 MiB` matches `64 << 20`, `2 min` matches
 
 ## Limits that don't exist
 
-These were checked in the workerd config tailworks generates (`hostd/gen`) and in
-the proxies a tailnet request passes through (netd, then hostd, then workerd).
+These were checked in the workerd config tailworks generates (`hostd/gen`), in
+workerd's config schema (`workerd.capnp`), and in the proxies a tailnet
+request passes through (netd, then hostd, then workerd). Each is
+deliberately not provided, for the reason given. What this means for
+tenants sharing a host is in
+[security-model.md](security-model.md#availability-between-tenants).
 
-| Limit | Value | Notes |
+| Limit | Value | Deliberately not provided, because |
 |---|---|---|
-| CPU time per request, alarm, cron or queue run | none | the workerd config sets no CPU limit; wrangler's `limits` key is ignored (`cmd/tw/wranglercfg.go:#wrangler-limits-ignored`) |
-| Memory per isolate | none set by tailworks | V8's own heap limit applies; Durable Objects on the [microVM tier](#hosts-and-the-microvm-tier) are bounded by the guest's memory |
-| Wall time of a tailnet request | none | `netd/ingress.go:#tailnet-no-deadline` and the hostd ingress set no deadline. Requests from the internet do have one: see [Public ingress](#public-ingress) |
-| Tailnet request body size | none | |
-| Request rate over the tailnet | none | your tailnet policy decides who can connect |
-| Outbound `fetch()` duration or count (subrequests) | none | |
-| Concurrent requests per workload or object | none | |
-| WebSocket duration | none | |
+| CPU time per request, alarm, cron or queue run | none | workerd's config schema has no CPU limit to set (Cloudflare's CPU enforcement is not part of open-source workerd), and `RLIMIT_CPU` counts a process's CPU over its whole life, so it would kill a long-running workload rather than a runaway request. wrangler's `limits` key is ignored (`cmd/tw/wranglercfg.go:#wrangler-limits-ignored`). Cron and queue runs have wall-time limits (below) |
+| Memory of a process-tier process beyond the V8 heap | none | the V8 heap is capped (see [Process tier](#process-tier)); a cap on the whole process would need `RLIMIT_AS`, which breaks V8 (it reserves far more address space than it uses), or a cgroup, which needs a delegated cgroup subtree from the service manager. macOS enforces neither. On the [microVM tier](#hosts-and-the-microvm-tier) the guest's memory is the bound |
+| Wall time of a tailnet request | none | streamed responses and WebSockets are long-lived by design, and a request is cancelled when its caller goes away (`netd/ingress.go:#tailnet-no-deadline`). Requests from the internet do have one: see [Public ingress](#public-ingress) |
+| Tailnet request body size | none | bodies are streamed through netd and hostd to workerd, never buffered |
+| Request rate over the tailnet | none | every caller is a WireGuard-identified node your tailnet policy admitted; public traffic is rate-limited (see [Public ingress](#public-ingress)) |
+| Outbound `fetch()` duration or count (subrequests) | none | every `fetch()` goes through netd: tailnet egress leaves as the workload's or object's own node, where your tailnet policy decides what it can reach, and internet egress is allowed, narrowed or turned off per workload (`tailnet.egress.internet`) |
+| Concurrent requests per workload or object | none | WebSockets make an in-flight count a poor bound (one Durable Object can hold thousands), and a flood of requests to one workload mostly costs that workload's own workerd |
+| WebSocket duration | none | as for wall time |
 | Queue message retention | none | a message is kept until it is consumed; a full queue refuses new sends ([queues.md](queues.md#differences-from-cloudflare)) |
-| Rate of mgmt API calls | none | |
 
 ## Deploy and bundles
 
@@ -71,6 +74,20 @@ See [Limits that don't exist](#limits-that-dont-exist) for duration, body and CP
 | Wait for an object's node (`identity_pending` after) | 30 s | no | `hostd/host.go:ReadyTimeout` |
 | `Retry-After` on `identity_pending` | 1 s | no | `mgmt/server.go:#identity-pending-retry-after` |
 | Node-tier caller header clock skew | 60 s | `maxSkewMs` in `@tailworks/node` | `js/packages/node/src/index.ts:DEFAULT_MAX_SKEW_MS` |
+
+## Process tier
+
+Per workload, on every process-tier host (macOS and Linux). Flags are
+`tw-hostd`'s; `tw up` uses the defaults. Past the heap cap V8 aborts the
+workload's whole workerd (every isolate in it, so all of the workload's
+Durable Objects too) or Node process, and hostd restarts it like any
+other crash.
+
+| Limit | Value | Configurable? | Source |
+|---|---|---|---|
+| V8 heap of each isolate in a workerd (the Worker, each Durable Object class) | 1024 MiB | `-workerd-heap-mib` (-1: no cap) | `hostd/limits.go:DefaultWorkerdHeapMiB` |
+| V8 heap of a Node-tier app (`--max-old-space-size`) | 2048 MiB | `-node-heap-mib` (-1: no cap); the app's own `--max-old-space-size` in `node.args` or `NODE_OPTIONS` wins | `hostd/limits.go:DefaultNodeHeapMiB` |
+| Process memory beyond the heap, CPU | none | — | [Limits that don't exist](#limits-that-dont-exist) |
 
 ## Durable Objects
 
@@ -394,13 +411,17 @@ than 50 nodes, and several hosts registering at once, were not measured.
 
 ## Management API
 
-The contract is [contracts/mgmt-api.md](contracts/mgmt-api.md).
+The contract is [contracts/mgmt-api.md](contracts/mgmt-api.md). The rate
+and concurrency limits apply to tailnet callers; mgmt's own node (the
+operator console) and the local socket are not limited.
 
 | Limit | Value | Configurable? | Source |
 |---|---|---|---|
 | Request body (admin, including `POST /v1/deployments`) | 64 MiB | no | `mgmt/server.go:#mgmt-body` |
 | Request body from a host | 1 MiB (store appends 6 MiB, audit batches 64 MiB) | no | `mgmt/v1.go:hostBodyLimit` |
+| Request rate per tailnet caller (WhoIs node; not hosts), then `rate_limited` | 100 requests/s, bursts of 200 | `tw-mgmt -api-rps` (-1: off) | `mgmt/ratelimit.go:DefaultAPIRPS` |
+| Request rate per host | 1000 requests/s, bursts of 2000 | `tw-mgmt -api-host-rps` (-1: off) | `mgmt/ratelimit.go:DefaultAPIHostRPS` |
+| Concurrent requests from non-host tailnet callers, all together (hosts are not counted) | 256, then `rate_limited` | `tw-mgmt -api-inflight` (-1: off) | `mgmt/ratelimit.go:DefaultAPIInFlight` |
 | List page | default 50, at most 500 | `limit` query parameter | `mgmt/page.go:PageDefaultLimit`, `mgmt/page.go:PageMaxLimit` |
 | D1 SQL body | 8 MiB | no | `mgmt/d1.go:d1BodyLimit` |
 | Upgrade artifact upload | 2 GiB | no | `mgmt/v1_upgrades.go:maxArtifactBytes` |
-| Request rate | none | — | |

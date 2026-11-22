@@ -88,6 +88,10 @@ func run() error {
 		auditMaxRec = flag.Int64("audit-max-records", 0, "audit retention: keep only the newest N records of each chain (with a checkpoint, as -audit-max-age); 0 = keep every record (the default)")
 		aliasFile   = flag.String("image-aliases", "", "JSON file [{from, to, arch}] replacing the default image alias map (cloudflare/sandbox → tw.local arm64 rebuilds)")
 	)
+	// Management API limits for tailnet callers (mgmt/ratelimit.go).
+	apiRPS := flag.Float64("api-rps", mgmt.DefaultAPIRPS, "per tailnet caller (WhoIs node; not hosts): sustained mgmt API requests per second, burst twice that; over it is 429 rate_limited (-1 = off)")
+	apiHostRPS := flag.Float64("api-host-rps", mgmt.DefaultAPIHostRPS, "per host: sustained mgmt API requests per second, burst twice that (-1 = off)")
+	apiInFlight := flag.Int("api-inflight", mgmt.DefaultAPIInFlight, "concurrent mgmt API requests from non-host tailnet callers, all together; over it is 429 rate_limited (-1 = off)")
 	flag.Parse()
 	lvl := slog.LevelInfo
 	if *verbose {
@@ -115,6 +119,7 @@ func run() error {
 		MetricsPort: *metricsPort}
 	o.BundleRetention = *bundleKeep
 	o.AuditMaxAge, o.AuditMaxRecords = *auditMaxAge, *auditMaxRec // mgmt/retention.go
+	o.APILimits = mgmt.APILimits{RPS: *apiRPS, HostRPS: *apiHostRPS, InFlight: *apiInFlight}
 	o.RevokeWarmKeysOnClose = *warmRevoke
 	// Like the flags: "" means no tags at all (Options nil means the default).
 	o.TSNetTags = []string{}

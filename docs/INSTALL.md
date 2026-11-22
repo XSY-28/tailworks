@@ -819,10 +819,8 @@ seconds. Measured times are in
   doctor's process checks use `/proc` and `ss`, not `lsof`.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.tailworks`.
-  Caveat: Fedora was tested once, on 2026-11-08, from a pre-release build with
-  API-key minting and before the Landlock sandbox. It is not in the default
-  `make e2e-linux` rows and has not been tested with OAuth-only minting or the
-  sandbox ([install-testing.md](install-testing.md#linux-support-matrix)).
+  Tested on arm64 with OAuth-only minting and the Landlock sandbox
+  ([install-testing.md](install-testing.md#linux-support-matrix)).
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
@@ -864,9 +862,9 @@ arch on either. A guest of the wrong arch is refused (`tw doctor`:
 
 - Linux arm64 or amd64 (x86_64) with `/dev/kvm` (bare metal, or a VM with
   nested virtualization), cgroups v2 and systemd. Tested end to end on
-  Ubuntu 24.04 arm64. On amd64 the guest boots to workerd, but the tier is
-  not yet verified end to end
-  ([why](install-testing.md#the-microvm-tier)).
+  Ubuntu 24.04 arm64. On amd64, `make e2e-vm` passes on a nested KVM test
+  host (2026-11-22); containers on amd64 are not verified yet
+  ([details](install-testing.md#the-microvm-tier)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
 
