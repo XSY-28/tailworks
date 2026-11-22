@@ -801,6 +801,7 @@ func TestCLISingleProcess(t *testing.T) {
 	if !strings.Contains(string(mlog), "tailnet node") || !strings.Contains(string(hlog), "transport=embedded") {
 		t.Fatalf("component logs: mgmt %d bytes, hostd %d bytes (hostd must say transport=embedded)", len(mlog), len(hlog))
 	}
+	backupRestoreRunning(t, e, work) // issue #120
 	e.Down()
 	if fts.setPolicy != 0 {
 		t.Fatalf("tw wrote the policy without --policy-apply (%d times)", fts.setPolicy)

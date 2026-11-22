@@ -98,7 +98,8 @@ Without `--prefix` it stops with `prefix_mismatch` rather than treat the
 extracted directory as the install. From then on, run `tw upgrade` from
 the installed `tw`.
 
-To roll back by hand:
+To roll back by hand (the store part is `tw restore <backup>`,
+[INSTALL.md](INSTALL.md#restore-tw-restore)):
 
 ```sh
 tw down
@@ -134,7 +135,7 @@ tw upgrade status | pause | resume | abort
   a replica that dies hands it to another. Its steps:
   1. **backup:** mgmt can't verify a backup. Take one of the store
      (point-in-time recovery, or a dump) together with custody before you
-     start.
+     start ([postgres.md](postgres.md#back-up-and-restore-with-postgres)).
   2. **mgmt:** roll every tw-mgmt replica to the target with your
      deployment system. The run waits until every live replica reports it.
   3. **contract:** contract migrations deferred while an older replica was

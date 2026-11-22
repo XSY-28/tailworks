@@ -129,6 +129,7 @@ func cmdUp(args []string) error {
 	mgmtKey := f.String("mgmt-authkey-file", "", "TS_AUTHKEY=… file for mgmt's node (unattended join: tests, automation); default: the tenant's credential mints it")
 	localDev := f.Bool("local-dev", false, "DEVELOPMENT ONLY: hostd and the CLI use mgmt's unix socket with the per-host token instead of the tailnet (hermetic tests). Normal operation is tsnet only")
 	pushPort := f.Int("push-port", defaultPushPort, "port on this host's own tailnet node where mgmt pushes kills (--separate-host)")
+	storeF := addStoreFlags(f) // up_store.go: --db, --db-file, --custody, --setec-url
 	separate := f.Bool("separate-host", false, "run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it")
 	pos, err := f.parse(args)
 	if err != nil {
@@ -136,6 +137,9 @@ func cmdUp(args []string) error {
 	}
 	if len(pos) > 0 {
 		return fail("bad_request", "tw up takes no arguments", "usage: tw "+usageOf("up"))
+	}
+	if _, err := storeF.validate(); err != nil {
+		return err
 	}
 	t0 := time.Now()
 	timings := map[string]float64{}
@@ -449,6 +453,9 @@ func cmdUp(args []string) error {
 	}
 	s.Cfg.WarmKeys, s.Cfg.PoolNodes, s.Cfg.PortMapping = warmKeys, poolNodes, *portMapping
 	s.Cfg.LocalDev, s.Cfg.PushPort, s.Cfg.Mode = *localDev, *pushPort, layout
+	if err := storeF.apply(s); err != nil {
+		return err
+	}
 	if err := s.save(); err != nil {
 		return err
 	}
@@ -626,7 +633,7 @@ func cmdUp(args []string) error {
 		if single {
 			mgmtName = "tw-mgmt (in the tailworks supervisor process)"
 		}
-		fmt.Printf("✓ mgmt     %s %s · leases in SQLite (%s) · custody: file (homelab mode)\n", mgmtName, started, filepath.Join(s.Dir, "mgmt", "mgmt.db"))
+		fmt.Printf("✓ mgmt     %s %s · %s\n", mgmtName, started, s.Cfg.storeLabel(s.Dir))
 		if res.MgmtNode != "" {
 			sch := "http"
 			if res.HTTPS {
@@ -850,6 +857,7 @@ func cmdSupervise(args []string) error {
 	}
 	margs := []string{mgmtBin, "-state-dir", filepath.Join(s.Dir, "mgmt"), "-device-delete-delay", s.Cfg.DeviceDeleteDelay, "-version", version}
 	margs = append(margs, s.Cfg.identityMgmtArgs()...)
+	margs = append(margs, s.Cfg.storeMgmtArgs()...)
 	if s.Cfg.LocalDev {
 		// RT-03: a fresh per-host token on every mgmt start (tw up, a
 		// supervisor/systemd restart). hostd re-reads the file when it
@@ -1021,6 +1029,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	if mo.TSAPIURL == "" {
 		mo.TSAPIURL = tsapi.DefaultBaseURL
 	}
+	s.Cfg.storeOptions(&mo) // up_store.go
 	logf("supervising in %s (tailnet %s): single process, mgmt + embedded host %s", s.Dir, s.Cfg.Tailnet, s.Cfg.HostID)
 	mrt, err := mgmtd.Start(ctx, mo)
 	if err != nil {

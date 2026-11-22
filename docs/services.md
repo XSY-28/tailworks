@@ -171,6 +171,10 @@ owning host.
 
 ## mgmt replicas (`svc:tw-mgmt`)
 
+Replicas run `tw-mgmt` directly, not `tw up`. Moving an existing install's
+store to Postgres first, and what each replica needs, is in
+[postgres.md](postgres.md#several-mgmt-replicas-ha).
+
 ```sh
 tw-mgmt -db-file pg.dsn -custody setec -setec-url … \
   -tsnet-hostname tw-mgmt-1 -tsnet-control-url https://controlplane.tailscale.com \

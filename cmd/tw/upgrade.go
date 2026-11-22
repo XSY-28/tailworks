@@ -450,7 +450,8 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 		}
 	}
 	// 1. Back up the store with custody (they are only valid together).
-	before, _ := mgmt.CheckSchema(ctx, filepath.Join(s.Dir, "mgmt", "mgmt.db"))
+	dsn, _ := s.Cfg.storeDSN(s.Dir) // up_store.go
+	before, _ := mgmt.CheckSchema(ctx, dsn)
 	backup, err := backupMgmt(ctx, s, cur)
 	if err != nil {
 		return fail("upgrade_failed", "backup: "+err.Error())
@@ -502,7 +503,7 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 		return nil
 	}
 	res.Health = err.Error()
-	after, _ := mgmt.CheckSchema(ctx, filepath.Join(s.Dir, "mgmt", "mgmt.db"))
+	after, _ := mgmt.CheckSchema(ctx, dsn)
 	contracted := after.MinBinary != "" && after.MinBinary != before.MinBinary
 	if noRollback || contracted {
 		why := "--no-rollback"
@@ -785,12 +786,18 @@ func extractRelease(tgz, stage string) (string, error) {
 // that must match it (custody, ID secret, node state), plus
 // tw.json, into <state>/backups/<time>-<version>.
 func backupMgmt(ctx context.Context, s *state, cur string) (string, error) {
-	dst := filepath.Join(s.Dir, "backups", time.Now().UTC().Format("20060102T150405Z")+"-"+cur)
+	return backupMgmtTo(ctx, s, filepath.Join(s.Dir, "backups", time.Now().UTC().Format("20060102T150405Z")+"-"+cur))
+}
+
+// backupMgmtTo is backupMgmt into dst (tw backup --out).
+func backupMgmtTo(ctx context.Context, s *state, dst string) (string, error) {
 	if err := os.MkdirAll(filepath.Join(dst, "mgmt"), 0o700); err != nil {
 		return "", err
 	}
 	src := filepath.Join(s.Dir, "mgmt")
-	if _, err := os.Stat(filepath.Join(src, "mgmt.db")); err == nil {
+	// A Postgres store is backed up with pg_dump (docs/postgres.md); a
+	// mgmt.db left from before the move is not the store.
+	if _, err := os.Stat(filepath.Join(src, "mgmt.db")); err == nil && s.Cfg.storeIsSQLite() {
 		if err := mgmt.BackupSQLite(ctx, filepath.Join(src, "mgmt.db"), filepath.Join(dst, "mgmt", "mgmt.db")); err != nil {
 			return "", fmt.Errorf("store: %w", err)
 		}
@@ -846,8 +853,10 @@ func copyTree(src, dst string) error {
 // restoreMgmt puts a backup back (tailworks must be stopped).
 func restoreMgmt(s *state, backup string) error {
 	dst := filepath.Join(s.Dir, "mgmt")
-	for _, f := range []string{"mgmt.db", "mgmt.db-wal", "mgmt.db-shm"} {
-		os.Remove(filepath.Join(dst, f))
+	if fileExists(filepath.Join(backup, "mgmt", "mgmt.db")) { // not a Postgres install's backup
+		for _, f := range []string{"mgmt.db", "mgmt.db-wal", "mgmt.db-shm"} {
+			os.Remove(filepath.Join(dst, f))
+		}
 	}
 	ents, err := os.ReadDir(filepath.Join(backup, "mgmt"))
 	if err != nil {
