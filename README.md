@@ -22,11 +22,19 @@ role and by task: [docs/README.md](docs/README.md).
 
 ## Quick start: deploy your first Durable Object
 
-Only want to run the code first? After step 1, `tw init hello && cd hello
-&& tw dev` serves the app on `127.0.0.1:8787` with no tailnet and no
+Only want to see the code first? With Node.js ≥ 20 and nothing else,
+scaffold an app from npm and type-check it:
+
+```sh
+npm create tailworks@latest hello            # also: --template agent, mcp, ai-agent, lock, …
+cd hello && npm install && npx tsc --noEmit  # the @tailworks/* packages and the Workers types
+```
+
+To run it, install tailworks (step 1), then `npm run dev` (that is,
+`tw dev`) serves the app on `127.0.0.1:8787` with no tailnet and no
 credentials ([Try it without a tailnet](docs/INSTALL.md#try-it-without-a-tailnet)).
 
-You need:
+To deploy it to your tailnet, you need:
 - a Mac (Apple silicon) or a Linux machine (arm64 or amd64);
 - a Tailscale tailnet where you're an admin (or a self-hosted Headscale
   server: see [docs/headscale.md](docs/headscale.md)).
@@ -105,13 +113,14 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-tw init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
-cd support
+npm create tailworks@latest support -- --template agent   # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
+cd support && npm install                     # editor types for the Agents SDK and ctx.tailnet
 tw policy                                     # what this app needs in your tailnet policy, as one snippet
 tw deploy                                     # bundles, uploads, waits until the node is ready
 ```
 
-`tw init` names the app's tags after it (`tag:tw-wl-support`,
+With `tw` on your PATH, `npm create tailworks` runs `tw init support
+--template agent`, which you can also run yourself. It names the app's tags after it (`tag:tw-wl-support`,
 `tag:tw-support-support-agent`, …). `tw policy` checks your tailnet
 policy for everything the app needs and prints **one snippet** with what's
 missing: the `tagOwners` for its tags, a grant for each `tailnet.connects`,
