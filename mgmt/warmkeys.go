@@ -401,7 +401,7 @@ func (m *Mgmt) drainWarm(ctx context.Context, tenantID string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n := 0
+	var revoke []tenantKey
 	for _, k := range ks {
 		if tenantID != "" && k.TenantID != tenantID {
 			continue
@@ -413,11 +413,11 @@ func (m *Mgmt) drainWarm(ctx context.Context, tenantID string) (int, error) {
 			continue
 		}
 		if t, err := m.store.GetTenant(ctx, tk.TenantID); err == nil {
-			m.revokeWarm(ctx, t, tk) // the key the take returned, not necessarily k
-			n++
+			revoke = append(revoke, tenantKey{t, tk}) // the key the take returned, not necessarily k
 		}
 	}
-	return n, nil
+	m.revokeWarmAll(ctx, revoke) // warmrevoke.go: in parallel
+	return len(revoke), nil
 }
 
 // WarmKeyStats is the pool size per (tenant, pool), for status and tests.

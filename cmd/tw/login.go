@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/internal/mgmtd"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"tailscale.com/ipn"
 	"tailscale.com/tailcfg/nodecap"
@@ -89,6 +90,13 @@ func joinMgmtNode(ctx context.Context, o joinOpts) (*mgmtNode, error) {
 		}
 		if n.State != nil && *n.State == ipn.Running {
 			break
+		}
+		// Logged in with a netmap is all tw up needs (name, tailnet, tags,
+		// IP); Running would also wait for netcheck and DERP (#245).
+		if n.State != nil || n.SelfChange != nil {
+			if _, ok := mgmtd.LoggedIn(wctx, lc); ok {
+				break
+			}
 		}
 	}
 	st, err := lc.Status(ctx)

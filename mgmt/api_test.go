@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,6 +61,10 @@ type fakeTS struct {
 	policyWrites    int
 	policyConflicts int    // answer 412 to the next N writes
 	validateErr     string // POST /acl/validate's message
+
+	// keyDeleteDelay (ns) is each key DELETE's latency, outside mu
+	// (warmrevoke_test.go).
+	keyDeleteDelay atomic.Int64
 }
 
 type fakeOAuthClient struct {
@@ -87,6 +92,9 @@ func newFakeTS(t *testing.T) *fakeTS {
 }
 
 func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "DELETE" && strings.Contains(r.URL.Path, "/keys/") {
+		time.Sleep(time.Duration(f.keyDeleteDelay.Load()))
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r.URL.Path == "/api/v2/oauth/token" {

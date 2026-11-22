@@ -50,12 +50,14 @@ func (m *Mgmt) revokeWarmOnClose() {
 		m.log.Warn("shutdown: warm keys not revoked; they expire at the API", "err", err)
 	}
 	failed, _ := ws.ListWarmKeys(ctx, WarmKeyExpired)
+	var retry []tenantKey
 	for _, k := range failed {
 		if t, err := m.store.GetTenant(ctx, k.TenantID); err == nil {
-			m.revokeWarm(ctx, t, k)
-			n++
+			retry = append(retry, tenantKey{t, k})
 		}
 	}
+	m.revokeWarmAll(ctx, retry)
+	n += len(retry)
 	if n > 0 {
 		m.audit(ctx, AuditRecord{Kind: "revoke"}, map[string]any{"warmKeys": n, "reason": "mgmt stopped: warm keys revoked"})
 		m.log.Info("shutdown: warm keys revoked", "n", n)

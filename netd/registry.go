@@ -782,6 +782,7 @@ func (o *Object) teardown() {
 	}
 	o.closePublic()
 	o.stopPublicFlusher()
+	o.stopCertPrefetch()
 	o.mu.Lock()
 	srv, hs, tr, ts, shs := o.srv, o.httpSrv, o.tr, o.tombSrv, o.svcHTTP
 	o.services = nil // a closed node advertises nothing
