@@ -7084,7 +7084,9 @@ type ClientInterface interface {
 	// `added` is what was (or, with `dryRun`, would be) added, and
 	// `manual` what is missing that tailworks never writes (the
 	// `autoApprovers.services` entry of a Tailscale Service, tag
-	// ownership problems of a team tenant, grants it refuses); add those
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
 	// in the admin console. `dryRun=true` writes nothing and needs only
 	// Policy File › Read; the write needs the tenant's OAuth client to
 	// hold Policy File write (`403 policy_write_denied` otherwise).
@@ -7118,7 +7120,9 @@ type ClientInterface interface {
 	// `added` is what was (or, with `dryRun`, would be) added, and
 	// `manual` what is missing that tailworks never writes (the
 	// `autoApprovers.services` entry of a Tailscale Service, tag
-	// ownership problems of a team tenant, grants it refuses); add those
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
 	// in the admin console. `dryRun=true` writes nothing and needs only
 	// Policy File › Read; the write needs the tenant's OAuth client to
 	// hold Policy File write (`403 policy_write_denied` otherwise).
@@ -10199,7 +10203,9 @@ func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload Work
 // `added` is what was (or, with `dryRun`, would be) added, and
 // `manual` what is missing that tailworks never writes (the
 // `autoApprovers.services` entry of a Tailscale Service, tag
-// ownership problems of a team tenant, grants it refuses); add those
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
 // in the admin console. `dryRun=true` writes nothing and needs only
 // Policy File › Read; the write needs the tenant's OAuth client to
 // hold Policy File write (`403 policy_write_denied` otherwise).
@@ -10243,7 +10249,9 @@ func (c *Client) ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, w
 // `added` is what was (or, with `dryRun`, would be) added, and
 // `manual` what is missing that tailworks never writes (the
 // `autoApprovers.services` entry of a Tailscale Service, tag
-// ownership problems of a team tenant, grants it refuses); add those
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
 // in the admin console. `dryRun=true` writes nothing and needs only
 // Policy File › Read; the write needs the tenant's OAuth client to
 // hold Policy File write (`403 policy_write_denied` otherwise).
@@ -19043,7 +19051,9 @@ type ClientWithResponsesInterface interface {
 	// `added` is what was (or, with `dryRun`, would be) added, and
 	// `manual` what is missing that tailworks never writes (the
 	// `autoApprovers.services` entry of a Tailscale Service, tag
-	// ownership problems of a team tenant, grants it refuses); add those
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
 	// in the admin console. `dryRun=true` writes nothing and needs only
 	// Policy File › Read; the write needs the tenant's OAuth client to
 	// hold Policy File write (`403 policy_write_denied` otherwise).
@@ -19077,7 +19087,9 @@ type ClientWithResponsesInterface interface {
 	// `added` is what was (or, with `dryRun`, would be) added, and
 	// `manual` what is missing that tailworks never writes (the
 	// `autoApprovers.services` entry of a Tailscale Service, tag
-	// ownership problems of a team tenant, grants it refuses); add those
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
 	// in the admin console. `dryRun=true` writes nothing and needs only
 	// Policy File › Read; the write needs the tenant's OAuth client to
 	// hold Policy File write (`403 policy_write_denied` otherwise).
@@ -31745,7 +31757,9 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 // `added` is what was (or, with `dryRun`, would be) added, and
 // `manual` what is missing that tailworks never writes (the
 // `autoApprovers.services` entry of a Tailscale Service, tag
-// ownership problems of a team tenant, grants it refuses); add those
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
 // in the admin console. `dryRun=true` writes nothing and needs only
 // Policy File › Read; the write needs the tenant's OAuth client to
 // hold Policy File write (`403 policy_write_denied` otherwise).
@@ -31785,7 +31799,9 @@ func (c *ClientWithResponses) ApplyWorkloadPolicyWithBodyWithResponse(ctx contex
 // `added` is what was (or, with `dryRun`, would be) added, and
 // `manual` what is missing that tailworks never writes (the
 // `autoApprovers.services` entry of a Tailscale Service, tag
-// ownership problems of a team tenant, grants it refuses); add those
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
 // in the admin console. `dryRun=true` writes nothing and needs only
 // Policy File › Read; the write needs the tenant's OAuth client to
 // hold Policy File write (`403 policy_write_denied` otherwise).

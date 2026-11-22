@@ -228,6 +228,19 @@ func TestPolicyApplyHostile(t *testing.T) {
 	if !strings.Contains(after, `"tag:tw-wl-app"`) || !strings.Contains(after, "// keep me") {
 		t.Fatalf("policy after apply:\n%s", after)
 	}
+
+	// A connects tag the policy doesn't define (the control plane would
+	// reject the whole policy): its grant is manual, the rest is written.
+	var und PolicyApplyResult
+	e.c.ok("POST", "/v1/tenants/"+tn+"/workloads/other/policy", map[string]any{"bundle": makeBundle(t, map[string]string{
+		"tailworks.jsonc": `{"name": "other", "tailnet": {"tags": ["tag:tw-wl-other"], "connects": ["tag:nowhere"]}}`,
+		"dist/index.js":   "export default {}",
+	})}, &und)
+	after, _ = e.policyState()
+	if !und.Changed || len(und.Manual) != 1 || !strings.Contains(und.Manual[0], "tag:nowhere has no tagOwners entry") ||
+		!strings.Contains(after, `"tag:tw-wl-other"`) || strings.Contains(after, "tag:nowhere") {
+		t.Fatalf("undefined dst: %+v\n%s", und, after)
+	}
 }
 
 // TestPolicyApplyAdminOnly: tenant admins may deploy, but the tailnet

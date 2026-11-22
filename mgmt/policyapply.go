@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/rosskukulinski/tailworks/internal/policy"
 	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
@@ -76,7 +77,11 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 	}
 	res.Preflight = pf
 	popts := policy.Options{Headscale: t.Headscale()}
-	snip, manual, err := preflightSnippet(pf, popts)
+	defined := func(string) bool { return true }
+	if pol, err := m.policies.Get(ctx, t); err == nil {
+		defined = func(tag string) bool { _, ok := pol.TagOwners[tag]; return ok }
+	}
+	snip, manual, err := preflightSnippet(pf, popts, defined)
 	if err != nil {
 		return res, err
 	}
@@ -121,8 +126,9 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 // tailworks may write, parsed from the preflight's own snippets. Entries
 // policy.Check refuses, and what Snippet can't express (a Service's
 // autoApprovers, a team tenant's ownership problems), are returned as
-// manual lines instead.
-func preflightSnippet(pf PreflightResult, o policy.Options) (policy.Snippet, []string, error) {
+// manual lines instead, as are grants to a tag the policy doesn't define
+// (defined): the control plane rejects the whole policy for one of those.
+func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag string) bool) (policy.Snippet, []string, error) {
 	var s policy.Snippet
 	var manual []string
 	add := func(part string) error {
@@ -179,6 +185,11 @@ func preflightSnippet(pf PreflightResult, o policy.Options) (policy.Snippet, []s
 			manual = append(manual, fmt.Sprintf("grant %s (not written: %v)", b, err))
 			continue
 		}
+		if u := undefinedDst(g, keep, defined); u != "" {
+			b, _ := json.Marshal(g)
+			manual = append(manual, fmt.Sprintf("grant %s (not written: %s has no tagOwners entry, and the control plane rejects a grant to an undefined tag; define %s, or drop it from tailnet.connects)", b, u, u))
+			continue
+		}
 		keep.Grants = append(keep.Grants, g)
 	}
 	for _, n := range s.NodeAttrs {
@@ -194,6 +205,23 @@ func preflightSnippet(pf PreflightResult, o policy.Options) (policy.Snippet, []s
 	}
 	manual = append(manual, pf.TagOwnerProblems...)
 	return keep, manual, nil
+}
+
+// undefinedDst is the first dst tag of g that neither the policy nor the
+// snippet's tagOwners defines ("" if none).
+func undefinedDst(g map[string]any, s policy.Snippet, defined func(string) bool) string {
+	dst, _ := g["dst"].([]any)
+	for _, d := range dst {
+		tag, _ := d.(string)
+		if !strings.HasPrefix(tag, "tag:") {
+			continue
+		}
+		if _, ok := s.TagOwners[tag]; ok || defined(tag) {
+			continue
+		}
+		return tag
+	}
+	return ""
 }
 
 // parseHuJSONObject parses a policy fragment (`"key": value, ...`) as the

@@ -899,7 +899,9 @@ paths:
         `added` is what was (or, with `dryRun`, would be) added, and
         `manual` what is missing that tailworks never writes (the
         `autoApprovers.services` entry of a Tailscale Service, tag
-        ownership problems of a team tenant, grants it refuses); add those
+        ownership problems of a team tenant, grants it refuses, and grants
+        to a tag the policy doesn't define, which the control plane would
+        reject); add those
         in the admin console. `dryRun=true` writes nothing and needs only
         Policy File › Read; the write needs the tenant's OAuth client to
         hold Policy File write (`403 policy_write_denied` otherwise).
