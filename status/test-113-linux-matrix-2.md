@@ -79,5 +79,6 @@ hostd on every stop, `mgmtd.Runtime.Close`'s 5 s shutdown grace).
 ## Tests
 
 - 2026-11-22 matrix runs: as in the table above.
-- `make lint`, `make test`: see the PR.
+- `make lint`: PASS (after merging origin/master). `make changes-check`: ok.
+- `make test` (mbp runner, `-race`): PASS.
 - Not run: `e2e-linux-vm`, `e2e-linux-reboot` (KVM VM, not in scope).
