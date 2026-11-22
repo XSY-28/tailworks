@@ -19,6 +19,12 @@ func (h *Host) CronTickAt(now time.Time) int {
 	return len(due)
 }
 
+// SetCronTimeout changes Config.CronTimeout for runs started after it.
+// Call it only between CronTickAt calls, with no run in flight.
+func (h *Host) SetCronTimeout(d time.Duration) {
+	h.cfg.CronTimeout = d
+}
+
 // ApplyPublicConcurrently runs n applyPublic calls for workload name at once,
 // with the spec mgmt last assigned, and waits for them. It first forgets
 // the options the public node was started with: the state a sync sees
