@@ -191,9 +191,10 @@ export function lockClient(opts: LockClientOptions) {
     const lose = (e: LockError) => {
       if (!ac.signal.aborted) ac.abort(e);
     };
+    const expired = () => lose(new LockError("lease_expired", 0, "lease deadline passed without a successful renewal"));
     const arm = () => {
       if (expiry !== undefined) clearTimeout(expiry);
-      expiry = setTimeout(() => lose(new LockError("lease_expired", 0, "lease deadline passed without a successful renewal")), Math.max(0, cur.deadline - Date.now()));
+      expiry = setTimeout(expired, Math.max(0, cur.deadline - Date.now()));
     };
     const tick = async () => {
       if (stopped || ac.signal.aborted) return;
@@ -210,6 +211,10 @@ export function lockClient(opts: LockClientOptions) {
     timer = setTimeout(tick, every);
     try {
       const out = await fn({ name, token: cur.token, signal: ac.signal, lease: () => cur });
+      // Check the deadline itself, not only the expiry timer: on a busy
+      // event loop the timer can still be pending after the deadline has
+      // passed, and then fn's work may have outlived the lease (#196).
+      if (Date.now() >= cur.deadline) expired();
       if (ac.signal.aborted) throw ac.signal.reason;
       return out;
     } finally {

@@ -319,15 +319,57 @@ func TestLockTemplate(t *testing.T) {
 	})
 
 	t.Run("ClientWithLockRenewsAndFences", func(t *testing.T) {
-		// withLock holds a 1 s lease for 2.5 s: it must renew, and a
-		// contender meanwhile gets lock_held.
-		done := make(chan map[string]any, 1)
-		go func() { done <- userGet(t, "/with?name=job:report&hold=2500&ttl=1000") }()
-		time.Sleep(1500 * time.Millisecond)
-		if x := c2.lock(t, base, "job:report", "acquire", nil); x.Status != 409 || x.Holder == nil || !strings.HasPrefix(x.Holder.Node, user.Hostname+".") {
-			t.Fatalf("contender while withLock holds (past its first 1 s lease): %+v", x)
+		// withLock holds a 3 s lease for 4 s: it must renew (every 1 s), and
+		// a contender meanwhile gets lock_held.
+		//
+		// The lease is 3 s, not 1 s (#196, as KillHolderReleases in #136):
+		// with 1 s renewed every 333 ms, a loaded machine under -race let a
+		// renewal or the release land after the deadline, and the lock
+		// rightly showed "expired" instead of "released".
+		type withReply struct {
+			code int
+			m    map[string]any
 		}
-		m := <-done
+		done := make(chan withReply, 1)
+		go func() {
+			// Not userGet: its t.Fatalf, after this subtest has already
+			// failed below, would panic the whole test binary.
+			code, m := s.getJSON("http://" + user.IP + "/with?name=job:report&hold=4000&ttl=3000")
+			done <- withReply{code, m}
+		}()
+		var first lockReply
+		for i := 0; ; i++ {
+			if first = c2.lock(t, base, "job:report", "status", nil); first.Held {
+				break
+			}
+			if i > 100 {
+				t.Fatalf("lockuser never took job:report: %+v", first)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		// Wait until withLock has renewed (the deadline moved), rather than
+		// sleeping past the first lease.
+		for i := 0; ; i++ {
+			x := c2.lock(t, base, "job:report", "status", nil)
+			if !x.Held || x.LastToken != first.LastToken {
+				t.Fatalf("withLock lost job:report while holding it: %+v (took it as %+v)", x, first)
+			}
+			if x.ExpiresAt > first.ExpiresAt {
+				break
+			}
+			if i > 200 {
+				t.Fatalf("withLock never renewed job:report: %+v", x)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if x := c2.lock(t, base, "job:report", "acquire", nil); x.Status != 409 || x.Holder == nil || !strings.HasPrefix(x.Holder.Node, user.Hostname+".") {
+			t.Fatalf("contender while withLock holds (after a renewal): %+v", x)
+		}
+		r := <-done
+		if r.code != 200 {
+			t.Fatalf("lockuser /with: %d %v", r.code, r.m)
+		}
+		m := r.m
 		if m["ok"] != true || m["aborted"] != false || m["renewedByMs"].(float64) < 1000 {
 			t.Fatalf("withLock: %v", m)
 		}
