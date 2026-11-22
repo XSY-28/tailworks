@@ -66,6 +66,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 ## Optional
 
 - [Build status](https://github.com/rosskukulinski/tailworks/blob/master/status/README.md): one file per workstream, with measured results
+- [Contributing](https://github.com/rosskukulinski/tailworks/blob/master/CONTRIBUTING.md): set up, the tests a pull request runs, release-note fragments and status files
 - [Security model](https://github.com/rosskukulinski/tailworks/blob/master/docs/security-model.md): identity, isolation tiers and trust boundaries on one page
 - [Security policy](https://github.com/rosskukulinski/tailworks/blob/master/SECURITY.md): how to report a vulnerability privately
 - [Threat model](https://github.com/rosskukulinski/tailworks/blob/master/security/THREAT-MODEL.md)
