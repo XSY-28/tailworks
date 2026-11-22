@@ -429,13 +429,17 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object, gen uint64) {
 	if w := h.workloadOf(o); w != nil {
 		epoch = w.epochNow()
 	}
-	if err := h.mgmt.Ready(rctx, o.ID, mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: magicDNS, Epoch: epoch}); err != nil {
+	req := mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: magicDNS, Epoch: epoch}
+	if err := h.mgmt.Ready(rctx, o.ID, req); err != nil {
 		h.log.Warn("mgmt ready failed", "object", o.ID, "err", err)
 		if e, ok := mgmtapi.AsError(err); ok && e.Code == mgmtapi.CodeKilled {
 			rcancel()
 			closeOnce(ch)
 			go h.killLocal(o.ID, "killed during join")
 			return
+		}
+		if e, ok := mgmtapi.AsError(err); ok && e.Code == mgmtapi.CodeLeaseLost {
+			go h.retryReady(o, req, gen) // readyretry.go (#210)
 		}
 	}
 	rcancel()
@@ -462,17 +466,7 @@ func (h *Host) retryNode(o *object, fails int) {
 	}
 	backoff := time.Second << (fails - 1)
 	time.AfterFunc(backoff, func() {
-		if as, err := h.mgmt.Assignments(h.ctx, h.cfg.HostID); err == nil {
-			for _, a := range as {
-				if a.TenantID == w.tenantID && a.Workload == w.name {
-					w.mu.Lock()
-					if a.Epoch > w.epoch {
-						w.epoch = a.Epoch
-					}
-					w.mu.Unlock()
-				}
-			}
-		}
+		h.refreshEpoch(w) // readyretry.go
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		if o.live || o.terminal() || o.Status == statusReady || !w.isActive() {
