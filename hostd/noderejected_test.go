@@ -18,7 +18,22 @@ func TestReadyNodeRejectedRemints(t *testing.T) {
 	e := s.e
 	d := e.Deploy(hostdtest.Fixture("probe"), "probe", nil)
 	probe := e.WaitActive("probe", d, 60*time.Second)
-	before, _ := e.FM.Object(probe.ID)
+	// hostd marks the object ready before its ready report reaches mgmt.
+	waitMgmtNode := func(what string, ok func(nodeID string) bool) {
+		t.Helper()
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			o, found := e.FM.Object(probe.ID)
+			if found && o.Status == "ready" && ok(o.NodeID) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%s: mgmt has %+v (first node %s)", what, o, probe.NodeID)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	waitMgmtNode("first ready report", func(id string) bool { return id == probe.NodeID })
 	expired := false
 	for _, n := range s.ctl.Server.AllNodes() {
 		if n.Hostinfo.Valid() && n.Hostinfo.Hostname() == probe.Hostname {
@@ -31,17 +46,7 @@ func TestReadyNodeRejectedRemints(t *testing.T) {
 		t.Fatalf("no control node for %s", probe.Hostname)
 	}
 	st := time.Now()
-	deadline := st.Add(30 * time.Second)
-	for {
-		o, ok := e.FM.Object(probe.ID)
-		if ok && o.Status == "ready" && o.NodeID != "" && o.NodeID != before.NodeID {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("a ready node that control rejected was never re-minted: mgmt has %+v (before node %s)", o, before.NodeID)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	waitMgmtNode("a ready node that control rejected was never re-minted", func(id string) bool { return id != "" && id != probe.NodeID })
 	after := e.WaitActive("probe", d, 30*time.Second)
 	t.Logf("re-minted and reported ready %v after the key expired", time.Since(st).Round(time.Millisecond))
 	if after.Hostname != probe.Hostname || after.NodeID == probe.NodeID {
