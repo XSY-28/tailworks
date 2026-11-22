@@ -81,7 +81,11 @@ The fragment is `changes/fix-148-seal-cf.md` (`kind: security`,
 - `go test ./hostd/ -run TestRT3_H08_ForgedPrincipal`: FAIL before the fix
   (output above), PASS after.
 - `go test ./hostd/gen/ -run TestCallerSeal`: PASS.
-- `make lint`: PASS.
-- `make test` (mbp runner): see the PR.
+- `go test ./hostd/gen/`: PASS (gen tests now send a sealed caller, as hostd does).
+- `make lint`: PASS (after merging origin/master with #213).
+- `make test` (mbp runner, twice): all PASS except `cmd/tw TestCLIEndToEnd`.
+  Both times the agent redeploy after a supervisor restart timed out
+  waiting for its node (`identity_pending … node minted`). It passes
+  locally (twice). Known mbp flake #210 (a lease_lost epoch race in redeploy).
 - `make templates-typecheck test-sdk`: PASS.
 - `e2e-upgrade`: not run (changes-check: not upgrade-relevant; see above).
