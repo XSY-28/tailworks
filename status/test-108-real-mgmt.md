@@ -71,4 +71,6 @@ takes 0.1 s.
   hooks' `SecretGrants` off by 100, and `TestRealMgmtStores/Secrets` failed
   with `secret grants 101`. Then I reverted it.
 - `make lint`: ok.
-- `make test` (mbp runner): see the PR.
+- `make test` (mbp runner, `mbp-test.sh test`): exit 0. `hostd` passed in
+  336.6 s and `hostd/fakemgmt` in 8.3 s.
+- After merging origin/master (#220, CI only): `make lint` ok.
