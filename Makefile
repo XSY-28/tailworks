@@ -466,12 +466,19 @@ e2e-mbp: release
 ## tailworks runs in the VM; the test client + echo run here. ≤2 VMs at a time; each is
 ## stopped (kept) when its row is done. LINUX_DISTROS picks rows (see
 ## scripts/e2e-linux-one.sh; debian11-arm64 / alpine-arm64 check doctor's refusal).
+## LINUX_RELEASE=vX.Y.Z tests that GitHub release's tarballs (no `make release`).
+## The API key stays on this Mac (it creates the run's OAuth client and cleans up);
+## tailworks in the VM gets only that OAuth client. LINUX_APPLY_POLICY=1 first adds the
+## scenario's tagOwners and grants to tailnet 1's policy (as e2e-mac); else it is only read.
 LINUX_DISTROS ?= ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 ubuntu22-arm64
+LINUX_RELEASE ?=
+LINUX_APPLY_POLICY ?= 0
 .PHONY: e2e-linux
-e2e-linux: release
+e2e-linux: $(if $(LINUX_RELEASE),,release)
 	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
 		echo "e2e-linux: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	if ! command -v limactl >/dev/null; then echo "e2e-linux: SKIPPED (no limactl)"; exit 0; fi; \
+	TW_E2E_RELEASE="$(LINUX_RELEASE)" TW_E2E_APPLY_POLICY="$(LINUX_APPLY_POLICY)" \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		TW_E2E_TARBALL_arm64="$(CURDIR)/dist/tailworks-$(RELEASE_VERSION)-linux-arm64.tar.gz" \
 		TW_E2E_TARBALL_amd64="$(CURDIR)/dist/tailworks-$(RELEASE_VERSION)-linux-amd64.tar.gz" \

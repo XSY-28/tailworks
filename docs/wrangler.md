@@ -25,10 +25,12 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
   Funnel ([public-ingress.md](public-ingress.md)).
 - **Callers are tailnet identities.** `getCaller` gives the caller's login
   or tags from WireGuard. There are no API tokens or Access JWTs to check.
-- **Outbound `fetch()` reaches tailnet peers only.** Workers have no
-  internet egress, and no setting turns it on: calls to the internet are
-  refused (`internet_egress_unavailable`). Put what the Worker needs on
-  your tailnet, for example a gateway for an internet API
+- **Outbound `fetch()` reaches tailnet peers and the internet.** Tailnet
+  calls leave from the workload's (or object's) own node. Internet calls
+  work as on Cloudflare, but leave from the host's network, so the API
+  sees the host's address. Private and metadata addresses are refused.
+  `tailnet.egress.internet: false` in tailworks.jsonc turns internet
+  egress off, and a list limits it
   ([recipes.md](recipes.md#call-an-internet-api)).
 - **Each Durable Object is a tailnet node** with its own name, tags and
   grants. Its storage lives on one host's disk, with no replication.
