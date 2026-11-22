@@ -149,7 +149,7 @@ a per-container proxy on the host:
 | Host | Containers | Notes |
 |---|---|---|
 | Linux arm64, KVM (Firecracker) | ✅ verified (Lima, nested KVM) | the stock `cloudflare/sandbox` images are amd64 only, so tailworks swaps in its arm64 rebuilds through the alias map; app code is unchanged |
-| Linux amd64, KVM (Firecracker) | ⚠ built, not verified | stock images run as published (no alias). The only x86 test host so far is a nested guest whose L2 VMs lose interrupts, so no amd64 VM has booted to ready there |
+| Linux amd64, KVM (Firecracker) | ⚠ built, not verified | stock images run as published (no alias). The amd64 microVM tier passed `make e2e-vm` on a nested KVM test host (2026-11-22), but `make e2e-container` has not run on amd64 yet |
 | macOS, Apple silicon (vz) | ✅ verified | needs `mkfs.erofs` (`brew install erofs-utils`). With `tw-hostd -vm-rosetta` the stock amd64 images run under Rosetta; without it, the arm64 rebuilds |
 | no KVM / NAS / process-only hosts | ❌ | they don't offer `containers`; a container bundle is not placed there and `start()` throws `tier_unavailable` (no fallback) |
 

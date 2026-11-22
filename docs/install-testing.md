@@ -174,10 +174,17 @@ before each step, are in
 - **Tested end to end** on Ubuntu 24.04 arm64 (nested virtualization).
   `make e2e-linux-vm` and `make e2e-linux-reboot` ran from the shipped
   tarball; the rows are in STATUS.md, "Final verification".
-- **amd64:** the assets are built and the guest boots to workerd, but the
-  only x86 test host so far (nested KVM in a QEMU VM on an AMD Zen 1 machine,
-  whose TSC it reports unstable) stalls its guests in an interrupt storm,
-  so the amd64 tier is not yet verified end to end.
+- **amd64:** verified on 2026-11-22 on a nested KVM test host (an Ubuntu
+  24.04 guest, not bare metal), at commit 45cd920:
+  - `make e2e-vm` passes: every `hostd/vm` test (pool; snapshot restore,
+    pool, uniqueness and rotation; smoke; volume; datagram NIC),
+    `TestE2EVMKV`, `TestE2EVMR2`, `TestE2EVM` (14/14) and
+    `TestE2EVMSnapshot` (14/14).
+  - Cold boot (`TestSmoke`): boot 0.70 s, ready 0.92 s.
+  - Snapshot restore (`TestSnapshotRestore`): on-demand restore p50 93 ms,
+    p95 130 ms; creating the base snapshot takes 1.9 s.
+  - Not run on amd64 yet: `make e2e-container`, and a separately installed
+    `tw-vmhelper` daemon.
 - **Fast starts** (the warm pool and snapshot restore): the measured times
   are in [ADR-030](design/adr/030-microvm-snapshot-restore.md).
 - **A tarball without the guest.** The red team's second pass found a
