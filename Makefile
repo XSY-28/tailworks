@@ -452,7 +452,7 @@ e2e-mbp: release
 ## The API key stays on this Mac (it creates the run's OAuth client and cleans up);
 ## tailworks in the VM gets only that OAuth client. LINUX_APPLY_POLICY=1 first adds the
 ## scenario's tagOwners and grants to tailnet 1's policy (as e2e-mac); else it is only read.
-LINUX_DISTROS ?= ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 ubuntu22-arm64
+LINUX_DISTROS ?= ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 fedora-arm64 ubuntu22-arm64
 LINUX_RELEASE ?=
 LINUX_APPLY_POLICY ?= 0
 .PHONY: e2e-linux

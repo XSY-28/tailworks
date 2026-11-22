@@ -772,6 +772,17 @@ func TestE2ELinux(t *testing.T) {
 			t.Fatalf("ephemeral: systemctl --user restart tw: %v %s", err, se)
 		}
 		t0 := time.Now()
+		// `tw ls` fails (t.Fatal in FindObject) until the new supervisor's
+		// mgmt is serving again: `systemctl restart` returns before that.
+		for time.Since(t0) < scale(3*time.Minute) {
+			var stt struct {
+				Healthy bool `json:"healthy"`
+			}
+			if so, _, _, err := e.Tw("status", "--json"); err == nil && json.Unmarshal([]byte(so), &stt) == nil && stt.Healthy {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
 		var child2 cliflow.Object
 		var readyAt time.Duration
 		for time.Since(t0) < scale(4*time.Minute) {
