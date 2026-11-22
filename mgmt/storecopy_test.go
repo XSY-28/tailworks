@@ -17,7 +17,8 @@ import (
 // TestMigrateStoreCopy is `tw-mgmt migrate --from sqlite --to <dsn>`
 // (issue #120): a SQLite store holding every kind of data (a store
 // journal with a compacted key, queue messages, secrets indexed in
-// custody_names, the audit chain, a deployment and its lease) is copied
+// custody_names, an audit chain pruned by retention and its checkpoint, a
+// tenant storage quota, a deployment and its lease) is copied
 // into an empty store, on SQLite always and on Postgres with
 // TW_TEST_POSTGRES_DSN (make test-pg). Every row arrives as it was, a
 // Mgmt on the target with the same custody reads the journal and the
@@ -34,6 +35,16 @@ func TestMigrateStoreCopy(t *testing.T) {
 	h1.ok("POST", journal, map[string]any{"after": 2, "incarnation": ar.Incarnation, "entries": []any{entry("a", "a2"), entry("", "log")}}, &ar)
 	h1.ok("POST", q.path("jobs", "/messages", q.epoch), map[string]any{"messages": []any{qmsg(`{"n":1}`, "json"), qmsg("two", "text")}}, nil)
 	q.e.c.ok("PUT", "/v1/tenants/"+q.tenant+"/workloads/support/secrets/API_KEY", map[string]string{"value": "s3cret"}, nil)
+	// A storage quota (a tenants column) and a pruned audit chain (its
+	// checkpoint in audit_checkpoints) are copied too: the pruned chain
+	// verifies on the target only from that checkpoint.
+	var tn Tenant
+	q.e.c.ok("PATCH", "/v1/tenants/"+q.tenant, map[string]any{"maxStoreBytes": 1 << 20}, &tn)
+	q.e.m.cfg.AuditMaxRecords = 2
+	if pruned, err := q.e.m.PruneAudit(ctx); err != nil || pruned["mgmt"] == 0 {
+		t.Fatalf("prune the source audit: %v %v", pruned, err)
+	}
+	q.e.m.cfg.AuditMaxRecords = 0
 
 	src := q.e.store
 	var srcPath string
@@ -50,8 +61,8 @@ func TestMigrateStoreCopy(t *testing.T) {
 	if err != nil || len(wantMsgs) != 2 {
 		t.Fatalf("source queue: %v %d", err, len(wantMsgs))
 	}
-	if _, ok, err := m.VerifyAll(ctx); !ok || err != nil {
-		t.Fatalf("source audit: %v %v", ok, err)
+	if sts, ok, err := m.VerifyAll(ctx); !ok || err != nil || !anyPruned(sts) {
+		t.Fatalf("source audit: %v %v %+v", ok, err, sts)
 	}
 
 	// A replica is live on the source: refused.
@@ -78,7 +89,7 @@ func TestMigrateStoreCopy(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, tbl := range []string{"store_entries", "stores", "queue_messages", "audit", "custody_names", "deployments", "leases", "tenants"} {
+			for _, tbl := range []string{"store_entries", "stores", "queue_messages", "audit", "audit_checkpoints", "custody_names", "deployments", "leases", "tenants"} {
 				if rep.Tables[tbl] == 0 {
 					t.Errorf("copied no %s rows: %v", tbl, rep.Tables)
 				}
@@ -119,8 +130,11 @@ func TestMigrateStoreCopy(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(msgs, wantMsgs) {
 				t.Fatalf("target queue: %v\n got %+v\nwant %+v", err, msgs, wantMsgs)
 			}
-			if sts, ok, err := m2.VerifyAll(ctx); !ok || err != nil || len(sts) == 0 {
+			if sts, ok, err := m2.VerifyAll(ctx); !ok || err != nil || len(sts) == 0 || !anyPruned(sts) {
 				t.Fatalf("target audit chains: %v %v %+v", ok, err, sts)
+			}
+			if tt, err := to.GetTenant(ctx, q.tenant); err != nil || tt.MaxStoreBytes != 1<<20 {
+				t.Fatalf("target tenant quota: %v %+v", err, tt)
 			}
 			secrets, err := m2.ListSecrets(ctx, q.tenant, "support")
 			if err != nil || len(secrets) != 1 || secrets[0].Name != "API_KEY" {
@@ -133,6 +147,16 @@ func TestMigrateStoreCopy(t *testing.T) {
 			}
 		})
 	}
+}
+
+// anyPruned reports whether a chain verified from a retention checkpoint.
+func anyPruned(sts []ChainStatus) bool {
+	for _, st := range sts {
+		if st.PrunedThrough > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // dumpStore is every row of every table but the schema bookkeeping, each
