@@ -272,11 +272,3 @@ The red team's open items are tracked in
   network path to each other. Linux can't re-key these secrets after boot
   ([ADR-030](design/adr/030-microvm-snapshot-restore.md), ledger H24).
 - **On-behalf-of assertions** (`actingFor`) aren't implemented.
-- **Smart placement trusts each host's own path measurements.** A host
-  reports only its own paths, only for tenants it already runs, within
-  bounds, and a report never moves a running workload: a stateful move
-  always needs `--force-takeover` (or a drain with
-  `--allow-local-state-loss`). But a compromised host can claim the best
-  path and so be chosen for that tenant's next new workload, or as the
-  destination of a move you confirm. Check the placement summary that
-  `tw deploy` prints, and pin with `--host` where it matters (ledger H23).

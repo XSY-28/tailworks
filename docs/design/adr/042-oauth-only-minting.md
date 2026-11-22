@@ -51,8 +51,8 @@ tailworks connection, WhoIs auth, `tw link`, the LaunchAgent) stand.
      `--wif-lifecycle-client-id`, `--issuer-authkey-file` and
      `--login-timeout`, and the browser-login branch of `tw up`;
    - `tw tenant add --api-key-file` on Tailscale (it takes
-     `--oauth-client-file`), `tw tenant set --wif-client-id` and
-     `--wif-lifecycle-client-id`, `tw doctor --tailnet/--api-key-file`;
+     `--oauth-client-file`), `tw tenant set`'s `--wif-client-id` and
+     `--wif-lifecycle-client-id`, `tw doctor`'s `--tailnet` and `--api-key-file`;
    - mgmt's OIDC issuer: the discovery and JWKS endpoints, the issuer
      signing key, `tw-mgmt -issuer-url`, `-issuer-listen`, `-funnel` and
      `-issuer-tsnet-*`, and the `tag:tw-issuer` node; `tag:tw-issuer` is

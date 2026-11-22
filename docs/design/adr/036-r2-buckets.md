@@ -143,7 +143,7 @@
    at once. A crash between the two leaves an orphan blob (bytes nothing
    points to); a sweep that lists the bucket's prefix against the index is
    future work. When the bucket's store is deleted
-   (`tw r2 bucket delete`), the store object empties itself on its next
+   (`tw r2 bucket rm`), the store object empties itself on its next
    use (it sees a new incarnation) and deletes the blobs its old index
    pointed to. It doesn't delete the bucket's whole prefix: a replica
    might already be writing blobs for the new incarnation there.
