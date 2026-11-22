@@ -123,6 +123,12 @@ type Config struct {
 	// OnPublicRejected is called at most once per PublicRejectWindow per
 	// public node with the requests the limits refused.
 	OnPublicRejected func(PublicRejectSummary)
+
+	// OnRejected is called after control rejected a READY node (issue
+	// #200, rejected.go): the object is failed and its node state dropped.
+	// The owner restarts it with Create, which re-mints under the same
+	// hostname. Nil: the object stays failed.
+	OnRejected func(objectID string)
 }
 
 // ObjectOptions override registry defaults for one object.
@@ -266,6 +272,9 @@ type Object struct {
 	// pub is non-nil for a public (Funnel) node (ADR-029); set at Create
 	// and never changed.
 	pub *publicState
+
+	// rejectedCancel stops the ready node's watchRejected (rejected.go).
+	rejectedCancel context.CancelFunc
 }
 
 // ObjectInfo is a snapshot of an object, safe to serialize.
@@ -469,11 +478,14 @@ func (o *Object) start(ctx context.Context) error {
 	}
 	rejoin := hasState(o.dir)
 	var key string
+	reminted := false
 	if !rejoin {
 		if r.cfg.Keys == nil {
 			return errors.New("no saved state and no KeySource")
 		}
-		k, err := r.cfg.Keys.AuthKey(ctx, KeyRequest{ObjectID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral})
+		// Control rejected this object's last node after it was ready.
+		reminted = hasRemintMark(o.dir) // rejected.go
+		k, err := r.cfg.Keys.AuthKey(ctx, KeyRequest{ObjectID: o.id, Hostname: o.hostname, Tags: o.tags, Ephemeral: o.ephemeral, Remint: reminted})
 		if err != nil {
 			return fmt.Errorf("auth key: %w", err)
 		}
@@ -493,7 +505,6 @@ func (o *Object) start(ctx context.Context) error {
 	}
 	st := time.Now()
 	lc, sst, err := o.up(ctx, key, rejoin)
-	reminted := false
 	if errors.Is(err, errSavedStateRejected) {
 		// The device is gone from control (an ephemeral node that was
 		// offline during a restart, or one an admin removed). Drop the
@@ -513,6 +524,9 @@ func (o *Object) start(ctx context.Context) error {
 	}
 	if err != nil {
 		return err
+	}
+	if reminted {
+		clearRemintMark(o.dir)
 	}
 	joinDur := time.Since(st)
 	o.mu.Lock()
@@ -569,6 +583,11 @@ func (o *Object) start(ctx context.Context) error {
 	o.svcHTTP.SetKeepAlivesEnabled(false) // until a Service is advertised
 	svcHS := o.svcHTTP
 	o.state = StateReady
+	// Control can still reject the node now that it is ready (#200,
+	// rejected.go).
+	rctx, rcancel := context.WithCancel(r.ctx)
+	o.rejectedCancel = rcancel
+	go o.watchRejected(rctx, lc)
 	hostname := o.hostname // SetHostname may change it once ready
 	if o.pub == nil {
 		close(o.ready)
@@ -766,6 +785,9 @@ func (o *Object) teardown() {
 	o.mu.Lock()
 	srv, hs, tr, ts, shs := o.srv, o.httpSrv, o.tr, o.tombSrv, o.svcHTTP
 	o.services = nil // a closed node advertises nothing
+	if o.rejectedCancel != nil {
+		o.rejectedCancel() // before srv.Close, which waits on open LocalAPI streams
+	}
 	o.mu.Unlock()
 	if hs != nil {
 		hs.Close()
