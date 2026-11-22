@@ -89,7 +89,7 @@ func cmdBackup(args []string) error {
 		Store: "sqlite", Custody: custodyName(s.Cfg.Custody),
 		NotIncluded: []string{
 			filepath.Join(s.Dir, "hostd") + " (Durable Object storage and R2 object bytes: tw down, then copy it)",
-			filepath.Join(s.Dir, "mgmt", "registry") + " (container image blobs: tw deploy pushes them again)",
+			filepath.Join(s.Dir, "mgmt", "registry") + " (container image blobs: copy it separately if you deploy container images)",
 		}}
 	if !s.Cfg.storeIsSQLite() {
 		m.Store = "postgres"

@@ -98,6 +98,8 @@ var cliSurface = []struct {
 	{"host drain", []string{"host", "drain", "h1", "--dry-run"}},
 	{"release ls", []string{"release", "ls"}},
 	{"release import", []string{"release", "import", "/nonexistent/tailworks-0.0.0-linux-amd64.tar.gz"}},
+	{"backup", []string{"backup"}},
+	{"restore", []string{"restore", "/nonexistent/backup", "--yes"}},
 	{"upgrade", []string{"upgrade", "--plan", "--from", "/nonexistent"}},
 	{"host setup", []string{"host", "setup"}},
 	{"host vmcheck", []string{"host", "vmcheck", "app"}},

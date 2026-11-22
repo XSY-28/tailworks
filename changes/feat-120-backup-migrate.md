@@ -1,6 +1,6 @@
 ---
 kind: feature
-upgrade: []
+upgrade: [cli-json]
 ---
 `tw backup [--out <dir>]` backs up a running install: a consistent copy of
 mgmt's SQLite store, custody, the ID secret, mgmt's node state and

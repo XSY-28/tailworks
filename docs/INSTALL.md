@@ -601,8 +601,9 @@ It doesn't hold:
 - **`hostd/`:** Durable Object storage and, with the `fs` backend, R2 object
   bytes. These are files the running workloads write. For a consistent
   copy, `tw down`, copy `~/.tailworks/hostd`, then `tw up`.
-- **`mgmt/registry/`:** container image blobs. The next deploy pushes or
-  mirrors them again.
+- **`mgmt/registry/`:** container image blobs. If you deploy container
+  images, copy it separately; it is content-addressed, so a copy taken
+  while tailworks runs is fine.
 - **Your OAuth client file** (`~/.config/tailworks/oauth.env`).
 - **A Postgres store.** `pg_dump` it ([postgres.md](postgres.md#back-up-and-restore-with-postgres)).
 
