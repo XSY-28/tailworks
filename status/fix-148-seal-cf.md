@@ -2,6 +2,13 @@ Last update: 2026-11-21 PT. Fix #148 (ledger H08 / F5): request.cf's caller is s
 
 # fix-148-seal-cf
 
+## Pre-merge fix-up (2026-11-21, approved by Ross)
+
+Merged origin/master (#214, #219) with no conflicts. `security/RED-TEAM.md`'s
+RT3-08 fix-status row now says Fixed (F4, F5). Results: `make lint` PASS,
+`make test-sdk` PASS, `make test` (mbp runner) PASS,
+`TestRT3_H08_ForgedPrincipal` and `TestHostd/FacetHostInternalsNotRPC` PASS.
+
 ## Merge with #215 / #217 (2026-11-21)
 
 One conflict, in `hostd/gen/js/platform.js`: the facet Host's RPC Proxy.
