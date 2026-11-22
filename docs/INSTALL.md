@@ -766,6 +766,10 @@ seconds. Measured times are in
   doctor's process checks use `/proc` and `ss`, not `lsof`.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.tailworks`.
+  Caveat: Fedora was tested once, on 2026-11-08, from a pre-release build with
+  API-key minting and before the Landlock sandbox. It is not in the default
+  `make e2e-linux` rows and has not been tested with OAuth-only minting or the
+  sandbox ([install-testing.md](install-testing.md#linux-support-matrix)).
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
