@@ -64,8 +64,9 @@ it.
 | Other syscalls | not filtered; exec only of the runtime binary, its own dirs and the OS dirs (`/bin`, `/usr`, `/opt`, …) | seccomp refuses ptrace, `process_vm_readv/writev`, mount, bpf, perf, keyrings, new namespaces, kexec, modules, io_uring, … | same as ABI ≥ 4 |
 | Node-tier egress (`tw status`) | `enforced` | `enforced` | `unenforced`: the egress proxy is cooperative |
 
-On every platform, the process tier sets no CPU or memory limit (see
-[Limits that don't exist](limits.md#limits-that-dont-exist)), and the
+On every platform the process tier caps each workload's V8 heap and sets
+no other CPU or memory limit (see
+[Availability between tenants](#availability-between-tenants)), and the
 workload runs as the same user as tailworks.
 
 So on Landlock ABI 1–3, a hostile Node app, or workerd code after a V8
@@ -103,6 +104,33 @@ macOS with `-sandbox seatbelt-legacy`) **is admitted** as a shared host.
 a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
+
+### Availability between tenants
+
+The sandboxes above are about confidentiality and integrity: what a
+workload can read, write and reach. They don't give tenants their own
+share of the machine. What each tier does about one tenant using up a
+host:
+
+| | process tier | microVM tier |
+|---|---|---|
+| Memory | each V8 isolate's heap is capped (`tw-hostd -workerd-heap-mib`, default 1024 MiB; a Node app's `--max-old-space-size`, default 2048 MiB). Past it, that workload's workerd or Node process aborts and hostd restarts it. Memory outside the V8 heap (native buffers, WebAssembly memory) is not capped | the guest's memory (`-vm-mem-mib`, default 512 MiB) bounds everything in the workload |
+| CPU | not limited: a busy workload competes with every other process on the host | the guest's vCPUs (`-vm-vcpus`, default 2) |
+| Disk, logs, telemetry | bounded per workload ([limits.md](limits.md)) | as on the process tier, plus the guest's volume (`-vm-volume-mib`) |
+| Requests | not limited per workload on the tailnet: your tailnet policy decides who may call it. Public (Funnel) traffic is rate-limited per workload and per client IP | the same |
+
+So **availability isolation between tenants is not provided on the
+process tier**: the heap cap stops one runaway allocation from taking the
+host's memory, but a tenant can still slow its neighbours down with CPU,
+native memory or a flood of requests from callers your policy lets in.
+If tenants that don't trust each other share a host and that matters,
+put them on the microVM tier or on separate hosts.
+
+mgmt protects itself from its tailnet callers: each WhoIs node has its
+own request-rate bucket (hosts a larger one), and non-host callers share a
+bounded number of in-flight requests, so neither a script nor a flood
+from one admin's machine can starve the hosts' heartbeats. Over either
+limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
 
 ## Egress: deny by default
 

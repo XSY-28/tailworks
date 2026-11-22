@@ -334,6 +334,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### r2_too_large
 400 · hostd. **When:** an R2 object or part over 5 GiB − 5 MiB. Surfaces as R2's "exceeds the maximum allowed object size" (code 100100). **Fix:** use a multipart upload, parts up to that size each.
 
+### rate_limited
+429 · mgmt. **When:** a tailnet caller of the mgmt API is over its request rate (each WhoIs node has its own token bucket; hosts get a larger one), or mgmt is already serving its maximum of concurrent requests from non-host callers. `Retry-After` says when to retry. mgmt's own node and the local socket are never limited. **Fix:** retry after `Retry-After` and slow the client down; the operator raises or turns off the limits with `tw-mgmt -api-rps`, `-api-host-rps`, `-api-inflight` ([limits.md](limits.md#management-api)).
+
 ### release_bad_signature
 1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release because its `SHA256SUMS.sig` doesn't verify: it is signed by a key that isn't pinned in this `tw` (or in `TW_RELEASE_SIGNERS`), a file changed after signing, a file isn't in the signed `SHA256SUMS`, or this `tw` build pins no release key. Nothing in the release ran. **Fix:** download the release again from GitHub (`tw upgrade [<version>]`); check it by hand as in [INSTALL.md](INSTALL.md), "Verify a release". For a build you made yourself, add `--allow-unsigned`.
 

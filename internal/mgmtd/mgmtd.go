@@ -92,6 +92,10 @@ type Options struct {
 	// mgmt.DefaultWarmKeyTTL).
 	WarmKeys   int
 	WarmKeyTTL time.Duration
+
+	// APILimits rate-limit tailnet callers of the API (zero: the defaults).
+	APILimits mgmt.APILimits
+
 	// RegistryDir is the OCI registry blob store ("" = <StateDir>/registry,
 	// "off" = no registry); RegistryInsecure lists upstream registry hosts
 	// mirrored over plain HTTP; NoMirror refuses external image refs at
@@ -382,7 +386,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		if err != nil {
 			return nil, err
 		}
-		th := api.TailnetHandler(whois, rt.handler)
+		th := api.TailnetHandler(whois, mgmt.NewAPILimiter(o.APILimits).Wrap(rt.handler))
 		api.Listeners = append(api.Listeners, "tsnet:80")
 		serve("tsnet", ln, th)
 		if o.TSNetService != "" {

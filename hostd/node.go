@@ -234,6 +234,7 @@ func (inst *instance) spawnNode() error {
 		return err
 	}
 	args := append(append(pre, inst.app.Node.Args...), inst.app.Node.Main)
+	args = nodeHeapArgs(args, env, heapMiB(inst.h.cfg.NodeHeapMiB, DefaultNodeHeapMiB)) // limits.go
 	cmd, err := inst.nodeCommand(args)
 	if err != nil {
 		logf.Close()
