@@ -30,4 +30,4 @@ round):
 - after: 0 in 800, twice (0 in 1600).
 
 - `make lint`: ok.
-- `make test` on the mbp runner: see the PR.
+- `make test` on the mbp runner: ok.
