@@ -104,6 +104,7 @@ func run() error {
 		poolNodes  = flag.Int("pool-nodes", hostdrun.DefaultPoolNodes, "pre-joined nodes to keep per hot class (one with a create here in the last hour): a create takes one and renames it (~0.2 s) instead of joining a new node; each is a device; 0 = off")
 		portMap    = flag.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's tailnet nodes (off by default: it adds ~250 ms to every new object node's join and has every node ask the router for a mapping; turn on for hosts behind hard NATs that need router-assisted direct paths)")
 		pathEvery  = flag.Duration("path-every", hostd.DefaultPathEvery, "smart placement: measure and report tailnet paths to assignments' placement targets this often (negative disables)")
+		reqMaxAge  = flag.Duration("request-log-max-age", 0, "also drop request records (tw logs --source requests) older than this, e.g. 168h; 0 = keep them until the size rotation does (the default)")
 		queueVis   = flag.Duration("queue-visibility", hostd.DefaultQueueVisibility, "queues: how long a claimed batch stays hidden in mgmt (extended while queue() runs); bounds how soon a crashed consumer's batch is delivered again")
 		siblings   = flag.Bool("allow-sibling-egress", false, "let objects reach other objects hosted here over the tailnet (hairpin; single-host tests/demos)")
 		ctrOff     = flag.Bool("no-containers", false, "don't offer containers (ctx.container) even with a microVM backend")
@@ -152,6 +153,7 @@ func run() error {
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
 		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log,
 		R2: r2b}
+	o.RequestLogMaxAge = *reqMaxAge // hostd/telemetry_retention.go
 	restart := make(chan struct{}, 1)
 	if *selfUpg {
 		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix

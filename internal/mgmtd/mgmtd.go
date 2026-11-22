@@ -281,7 +281,8 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		mcfg.RegistryDir = o.RegistryDir
 	}
 	mcfg.BundleRetention = o.BundleRetention // ADR-046
-	mcfg.AuditMaxAge, mcfg.AuditMaxRecords = o.AuditMaxAge, o.AuditMaxRecords // mgmt/retention.go
+	// Audit retention: mgmt/retention.go.
+	mcfg.AuditMaxAge, mcfg.AuditMaxRecords = o.AuditMaxAge, o.AuditMaxRecords
 	if len(o.RegistryInsecure) > 0 {
 		mcfg.RegistryInsecure = o.RegistryInsecure
 	}
