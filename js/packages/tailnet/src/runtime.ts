@@ -283,6 +283,63 @@ function killedMark(ctx: any): string | undefined {
   }
 }
 
+// Entry points that check the kill marker themselves (fetch answers 410)
+// or must work on a killed object (__tw_kill).
+const KILL_SELF_GATED = new Set(["constructor", "fetch", "__tw_kill", "__tw_intercept"]);
+// Runtime-invoked handlers: on a killed object they do nothing (throwing
+// would only make workerd retry an alarm).
+const KILL_NOOP = new Set(["alarm", "webSocketMessage", "webSocketClose", "webSocketError"]);
+
+function findDescriptor(o: any, p: string): PropertyDescriptor | undefined {
+  for (let x = o; x && x !== Object.prototype; x = Object.getPrototypeOf(x)) {
+    const d = Object.getOwnPropertyDescriptor(x, p);
+    if (d) return d;
+  }
+  return undefined;
+}
+
+/**
+ * killGate returns the object a plain DO's constructor hands workerd: a
+ * Proxy whose every method (its RPC entry points and runtime handlers)
+ * checks the kill marker before tenant code runs (#211), as the facet
+ * Host's Proxy does in the platform worker. Only lookups from outside go
+ * through it: methods run with `this` the real object, so private fields
+ * and the object's own `this.method` lookups (decorator metadata, e.g.
+ * the Agents SDK's @callable) are unchanged.
+ */
+function killGate(obj: any, cls: string): any {
+  const killedErr = (k: string) => new Error("[killed] object " + cls + "/" + (obj.ctx?.id?.name ?? "") + " was killed: " + k);
+  const wrapped = new Map<PropertyKey, { v: Function; w: Function }>();
+  return new Proxy(obj, {
+    get(t, p) {
+      if (typeof p === "string" && !KILL_SELF_GATED.has(p)) {
+        const k = killedMark(t.ctx);
+        if (k && findDescriptor(t, p)?.get) throw killedErr(k); // a getter is tenant code
+      }
+      const v = Reflect.get(t, p, t);
+      if (typeof v !== "function" || p === "constructor") return v;
+      const c = wrapped.get(p);
+      if (c && c.v === v) return c.w;
+      const gate = typeof p === "string" && !KILL_SELF_GATED.has(p);
+      const w = function (...args: unknown[]) {
+        if (gate) {
+          const k = killedMark(t.ctx);
+          if (k) {
+            if (KILL_NOOP.has(p as string)) return Promise.resolve(undefined);
+            throw killedErr(k); // over RPC the caller's promise rejects with it
+          }
+        }
+        return v.apply(t, args);
+      };
+      wrapped.set(p, { v, w });
+      return w;
+    },
+    set(t, p, v) {
+      return Reflect.set(t, p, v, t);
+    },
+  });
+}
+
 /**
  * wrapPlainClass wraps a tenant DO class run as a plain DO (egress:
  * "workload"): alarms work, egress leaves as the workload node. The wrapper
@@ -304,6 +361,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
+        const gated = killGate(this, name);
         if (tw && oname && opts.node && !killedMark(ctx)) {
           // The object's node comes up only if its creation was admitted
           // (RT3-06/07); fetch answers the refusal below. A killed object
@@ -321,6 +379,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
             /* ignore */
           }
         }
+        return gated;
       }
       async __tw_kill(reason: string) {
         (this as any).ctx.storage.kv.put("__tw_killed", reason || "killed");

@@ -414,6 +414,27 @@ func TestHostd(t *testing.T) {
 		}
 	})
 
+	// #211: a killed plain DO's RPC methods run no tenant code, even through
+	// the raw binding (which skips admit and reaches the object itself).
+	t.Run("KillStopsPlainDORPC", func(t *testing.T) {
+		for _, raw := range []string{"", "&raw=1"} {
+			code, r := s.getJSON("http://" + probe.IP + "/tickrpc?name=tr211" + raw)
+			if code != 200 || get(r, "reply", "hello") != "worker" {
+				t.Fatalf("RPC before kill%s: %d %v", raw, code, r)
+			}
+		}
+		o := e.WaitObject("probe", "Ticker", "tr211", 30*time.Second)
+		if killed, err := e.FM.Kill(context.Background(), o.ID, true, "test kill"); err != nil || len(killed) != 1 {
+			t.Fatal(killed, err)
+		}
+		for _, raw := range []string{"", "&raw=1"} {
+			code, r := s.getJSON("http://" + probe.IP + "/tickrpc?name=tr211" + raw)
+			if code != 410 || r["code"] != "killed" {
+				t.Fatalf("RPC after kill%s: %d %v", raw, code, r)
+			}
+		}
+	})
+
 	t.Run("HibernationKeepsNode", func(t *testing.T) {
 		o, _ := e.Host.Object(e.TenantID, "probe", "Probe", "b")
 		_, r1 := s.getJSON("http://" + objIP["b"] + "/")

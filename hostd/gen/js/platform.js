@@ -260,6 +260,8 @@ function makeHost(cls) {
     }
     // __facet: the tenant class as a facet (callers await __admitted first).
     __facet() {
+      // Every path to tenant code ends here: a killed object runs none (#211).
+      if (this.__killed) throw new Error("[killed] object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
       if (!this.__f) {
         const name = this.ctx.id.name;
         if (!name) throw new Error("[bad_request] tw objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
