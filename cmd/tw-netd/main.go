@@ -118,6 +118,9 @@ func run() error {
 	if err := os.Chmod(*runDir, 0o700); err != nil {
 		return err
 	}
+	// A node control rejects after it is ready is re-minted (#200).
+	var reg *netd.Registry
+	cfg.OnRejected = func(id string) { reg.Create(id, netd.ObjectOptions{}) }
 	reg, err := netd.New(cfg)
 	if err != nil {
 		return err

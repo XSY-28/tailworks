@@ -136,6 +136,7 @@ const (
 	AuditKindNotificationTest    AuditKind = "notification_test"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
+	AuditKindPolicyApply         AuditKind = "policy_apply"
 	AuditKindPreflight           AuditKind = "preflight"
 	AuditKindPrincipal           AuditKind = "principal"
 	AuditKindPublicNameClaim     AuditKind = "public_name_claim"
@@ -258,6 +259,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindObjectUpdate:
 		return true
 	case AuditKindOboRoot:
+		return true
+	case AuditKindPolicyApply:
 		return true
 	case AuditKindPreflight:
 		return true
@@ -490,8 +493,11 @@ const (
 	ErrorCodeNotFound                ErrorCode = "not_found"
 	ErrorCodeNotReady                ErrorCode = "not_ready"
 	ErrorCodeObjectQuotaExceeded     ErrorCode = "object_quota_exceeded"
+	ErrorCodePolicyApplyFailed       ErrorCode = "policy_apply_failed"
+	ErrorCodePolicyConflict          ErrorCode = "policy_conflict"
 	ErrorCodePolicyMissingTagOwners  ErrorCode = "policy_missing_tag_owners"
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
+	ErrorCodePolicyWriteDenied       ErrorCode = "policy_write_denied"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodePreviewConflict         ErrorCode = "preview_conflict"
 	ErrorCodePreviewFailed           ErrorCode = "preview_failed"
@@ -629,9 +635,15 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeObjectQuotaExceeded:
 		return true
+	case ErrorCodePolicyApplyFailed:
+		return true
+	case ErrorCodePolicyConflict:
+		return true
 	case ErrorCodePolicyMissingTagOwners:
 		return true
 	case ErrorCodePolicyUnavailable:
+		return true
+	case ErrorCodePolicyWriteDenied:
 		return true
 	case ErrorCodePreconditionFailed:
 		return true
@@ -1675,6 +1687,7 @@ type AuditBatch struct {
 // `notification_test` (`tw notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
+// `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
 // `host_add`,
 // `credential`,
 // `obo_root`,
@@ -1795,6 +1808,7 @@ type AuditRecord struct {
 	// `notification_test` (`tw notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
+	// `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
 	// `host_add`,
 	// `credential`,
 	// `obo_root`,
@@ -2359,6 +2373,9 @@ type Error struct {
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+	// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+	// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -2457,6 +2474,9 @@ type Error struct {
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 // | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 // | `internal` | 500 | — |
 type ErrorCode string
@@ -2674,6 +2694,9 @@ type HostDrainResult struct {
 		// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 		// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 		// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+		// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+		// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+		// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 		// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 		// | `internal` | 500 | — |
 		Code     ErrorCode `json:"code"`
@@ -3248,6 +3271,37 @@ type PlacementDecisionMode string
 
 // PlacementDecisionReason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
 type PlacementDecisionReason string
+
+// PolicyApply defines model for PolicyApply.
+type PolicyApply struct {
+	// Added The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes.
+	Added *string `json:"added,omitempty"`
+
+	// Changed The policy was written.
+	Changed bool `json:"changed"`
+	DryRun  bool `json:"dryRun"`
+
+	// Manual What the bundle still needs that tailworks doesn't write; add it in the admin console.
+	Manual *[]string `json:"manual,omitempty"`
+
+	// NewETag Its ETag after.
+	NewETag *string `json:"newETag,omitempty"`
+
+	// OldETag The policy's ETag before the write.
+	OldETag   *string         `json:"oldETag,omitempty"`
+	Preflight PreflightResult `json:"preflight"`
+	TenantID  string          `json:"tenantID"`
+	Workload  string          `json:"workload"`
+}
+
+// PolicyApplyCreate defines model for PolicyApplyCreate.
+type PolicyApplyCreate struct {
+	// Bundle The bundle, as for `POST /v1/deployments`.
+	Bundle []byte `json:"bundle"`
+
+	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
+	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
+}
 
 // PreflightMissing defines model for PreflightMissing.
 type PreflightMissing struct {
@@ -4186,6 +4240,13 @@ type Tenant struct {
 	TenantID  string `json:"tenantID"`
 	Tier      *Tier  `json:"tier,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"`
+
+	// WarmKeys Pooled preauthorized join keys of this tenant in mgmt's custody
+	// (the warm-key pool: unused, being adopted, or expired with the
+	// revocation still to retry). Anyone who can read custody can join
+	// a node with one until it expires. `tw down` and `tw tenant rm`
+	// revoke them.
+	WarmKeys *int `json:"warmKeys,omitempty"`
 }
 
 // TenantCreate defines model for TenantCreate.
@@ -4402,6 +4463,9 @@ type TombstoneError struct {
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+	// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+	// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -5092,6 +5156,12 @@ type GetWorkloadLogsParams struct {
 // GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParamsSource string
 
+// ApplyWorkloadPolicyParams defines parameters for ApplyWorkloadPolicy.
+type ApplyWorkloadPolicyParams struct {
+	// DryRun Plan only (`added` is what would be written); the policy is not changed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
+}
+
 // CreatePromotionParams defines parameters for CreatePromotion.
 type CreatePromotionParams struct {
 	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
@@ -5277,6 +5347,9 @@ type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
 type QueryD1JSONRequestBody = D1Query
+
+// ApplyWorkloadPolicyJSONRequestBody defines body for ApplyWorkloadPolicy for application/json ContentType.
+type ApplyWorkloadPolicyJSONRequestBody = PolicyApplyCreate
 
 // CreatePromotionJSONRequestBody defines body for CreatePromotion for application/json ContentType.
 type CreatePromotionJSONRequestBody = PromotionCreate
@@ -6997,6 +7070,78 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyWorkloadPolicyWithBody Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyWorkloadPolicy Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicy(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	//
@@ -10035,6 +10180,98 @@ func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workl
 // Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetWorkloadLogsRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyWorkloadPolicyWithBody Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *Client) ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyWorkloadPolicyRequestWithBody(c.Server, id, workload, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyWorkloadPolicy Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *Client) ApplyWorkloadPolicy(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyWorkloadPolicyRequest(c.Server, id, workload, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -15266,6 +15503,87 @@ func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName
 	return req, nil
 }
 
+// NewApplyWorkloadPolicyRequest calls the generic ApplyWorkloadPolicy builder with application/json body
+func NewApplyWorkloadPolicyRequest(server string, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplyWorkloadPolicyRequestWithBody(server, id, workload, params, "application/json", bodyReader)
+}
+
+// NewApplyWorkloadPolicyRequestWithBody constructs an http.Request for the ApplyWorkloadPolicy method, with any body, and a specified content type
+func NewApplyWorkloadPolicyRequestWithBody(server string, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/policy", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.DryRun != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "dryRun", *params.DryRun, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListWorkloadPreviewsRequest constructs an http.Request for the ListWorkloadPreviews method
 func NewListWorkloadPreviewsRequest(server string, id TenantID, workload WorkloadName) (*http.Request, error) {
 	var err error
@@ -18719,6 +19037,78 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error)
+
+	// ApplyWorkloadPolicyWithBodyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicyWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error)
+
+	// ApplyWorkloadPolicyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error)
 
 	// ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
 	//
@@ -26234,6 +26624,117 @@ func (r GetWorkloadLogsResponse) ContentType() string {
 	return ""
 }
 
+// ApplyWorkloadPolicyResponse400Headers the declared response headers of an HTTP 400 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse400Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponse403Headers the declared response headers of an HTTP 403 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse403Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponse404Headers the declared response headers of an HTTP 404 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse404Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponse409Headers the declared response headers of an HTTP 409 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse409Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponseDefaultHeaders the declared response headers of an HTTP default response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponseDefaultHeaders struct {
+	TwError *string
+}
+
+type ApplyWorkloadPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PolicyApply
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ApplyWorkloadPolicyResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ApplyWorkloadPolicyResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ApplyWorkloadPolicyResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ApplyWorkloadPolicyResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ApplyWorkloadPolicyResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON200() *PolicyApply {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ApplyWorkloadPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplyWorkloadPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplyWorkloadPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ApplyWorkloadPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListWorkloadPreviewsResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadPreviews
 type ListWorkloadPreviewsResponse400Headers struct {
 	TwError *string
@@ -31241,6 +31742,90 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseGetWorkloadLogsResponse(rsp)
+}
+
+// ApplyWorkloadPolicyWithBodyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *ClientWithResponses) ApplyWorkloadPolicyWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error) {
+	rsp, err := c.ApplyWorkloadPolicyWithBody(ctx, id, workload, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyWorkloadPolicyResponse(rsp)
+}
+
+// ApplyWorkloadPolicyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *ClientWithResponses) ApplyWorkloadPolicyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error) {
+	rsp, err := c.ApplyWorkloadPolicy(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyWorkloadPolicyResponse(rsp)
 }
 
 // ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
@@ -39023,6 +39608,120 @@ func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse,
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadLogsResponseDefaultHeaders
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseApplyWorkloadPolicyResponse parses an HTTP response from a ApplyWorkloadPolicyWithResponse call
+func ParseApplyWorkloadPolicyResponse(rsp *http.Response) (*ApplyWorkloadPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplyWorkloadPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PolicyApply
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ApplyWorkloadPolicyResponse400Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ApplyWorkloadPolicyResponse403Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ApplyWorkloadPolicyResponse404Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ApplyWorkloadPolicyResponse409Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ApplyWorkloadPolicyResponseDefaultHeaders
 		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
