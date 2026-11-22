@@ -21,8 +21,13 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   (`Tailscale-*`, `x-tw-*`, `tw-*`, `X_TW_*`, `tw_*`, `CF-*`,
   `X-Forwarded-*`) and by name (`Forwarded`, `X-Real-IP`, …;
   `isIdentityHeader` in `netd/ingress.go`, [COMPAT.md](COMPAT.md#identity)).
-  There are no bearer tokens between workloads. This holds between nodes;
-  inside one workload, see [Known gaps](#known-gaps).
+  There are no bearer tokens between workloads. Inside a workload, hostd
+  seals the caller (an HMAC under the instance's key, which only hostd
+  and the platform wrapper hold), and the platform checks the seal before
+  any object, the Worker, or an audit `actingFor` uses it. A caller that
+  tenant code attaches to an in-process forward without a valid seal is
+  no caller at all. For what a seal doesn't stop, see
+  [Known gaps](#known-gaps).
 - **tailworks' own API works the same way.** tw-mgmt serves `/v1` on its
   tailnet node and authorizes each request by WhoIs: admins hold
   `github.com/rosskukulinski/tailworks/cap/admin`, approvers `github.com/rosskukulinski/tailworks/cap/approve`, MCP tool users
@@ -243,13 +248,18 @@ The red team's open items are tracked in
 [LEDGER.md](../security/LEDGER.md), each with a GitHub issue (label
 `security`). Among them:
 
-- **`request.cf` is not sealed inside a workload.** netd sets the caller
-  for requests that arrive over the tailnet, but tenant code that forwards
-  a request in-process (for example to a Durable Object stub, or by RPC)
-  can attach any `cf` it likes, and the receiving object's `getCaller()`
-  and `caps()` return it. So an object that authorizes on `getCaller()`
-  trusts every other piece of code in its own workload. Across workloads
-  and hosts the network identity holds (ledger C04, C05; H08).
+- **A sealed caller can be replayed inside its workload.** Tenant code
+  that received a request from Alice can forward it, or copy its
+  `request.cf`, to another object in the same workload for five minutes
+  (the seal's lifetime), and that object's `getCaller()` says Alice. It
+  can't make a caller nobody sent: forging or swapping one yields no
+  caller (ledger H08, F5). Three more limits apply. A `cf` passed as
+  plain data, rather than on a `Request`, isn't checked. A `Request` passed
+  as an RPC argument is checked for facet objects but not for plain DOs
+  (`"egress": "workload"`). And plain DOs run in the same isolate as the
+  Worker, so code that rewrites that isolate's JavaScript built-ins can
+  defeat any check made there. Facet objects (the default) each get
+  their own isolate.
 - **Snapshot-restored microVMs share some kernel secrets.** On Linux,
   microVMs restored from one base snapshot (rebuilt at least hourly) get
   fresh randomness before tenant code runs. They still share the kernel

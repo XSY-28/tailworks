@@ -61,8 +61,10 @@ code wins.
   tenant's process-tier workloads only (§3).
 - **B3 Object ↔ object** within a workload. Per-object nodes and the
   per-object egress MAC bind attribution; spawn `lim` narrows a child at
-  the receiver. Code inside one workload trusts the rest of that workload:
-  `request.cf` is not sealed in-process (H08, #148).
+  the receiver. The caller in `request.cf` is sealed by hostd and
+  verified before an object sees it, so code in one workload cannot
+  forge a caller to a sibling; it can still replay a real caller it was
+  sent, and plain DOs share the Worker's isolate (H08, F5).
 - **B4 Host ↔ mgmt.** A host is `tag:tw-host` by WhoIs, bound to its host
   ID by a one-time registration secret (`tw host add`), and trusted only
   for the leases it holds: every host write is fenced by lease holder and
@@ -190,8 +192,8 @@ so.
    `hostd.TestWorkerInternetEgress`); `lim` is enforced at the receiver (C08, RT-01
    fixed); objects are created only under create admission (F4); tenant
    audit is a `tenant_note` only (C09); the mgmt socket needs the host
-   token (C10). **Open:** in-process `request.cf` forgery within one
-   workload (H08, #148); Node-tier egress is enforced only on Landlock
+   token (C10); a caller forwarded in-process counts only if hostd's seal
+   verifies (H08 fixed, F5). **Open:** Node-tier egress is enforced only on Landlock
    ABI ≥ 4 and macOS (not under `-sandbox seatbelt-legacy`).
 3. **Identity / crypto** (A4/A6/A3). → the egress MAC is per object with
    a replay cache (C11); the Node tier's `x-tw-caller` carries a nonce;
@@ -247,8 +249,9 @@ so.
 ## 5. What is genuinely strong (do not regress)
 
 - netd ingress strips identity headers by prefix and by name; a caller in
-  `request.cf` that arrives over the network comes only from WhoIs.
-  Within one workload it is not sealed (H08).
+  `request.cf` comes only from WhoIs: hostd seals it under the instance
+  key and the platform verifies the seal before an object, the Worker or
+  `actingFor` uses it (H08).
 - ADR-019 egress guard: netmap-only resolution for tailnet names (never
   host DNS); refuses self, sibling, host, loopback, link-local, multicast
   and metadata addresses; checked in the handler and the dialer

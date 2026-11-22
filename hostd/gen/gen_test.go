@@ -239,6 +239,13 @@ func (in *inst) ticketed(tw map[string]any) map[string]any {
 	return out
 }
 
+// sealed is cf.tailscale as hostd sends it for a tailnet request: netd's
+// caller plus hostd's seal (RT3-08; without it the platform drops the caller).
+func (in *inst) sealed() map[string]any {
+	cb, _ := json.Marshal(testCaller)
+	return map[string]any{"caller": testCaller, "seal": gen.SealCaller(in.f.key, cb, time.Now())}
+}
+
 func (in *inst) get(path string, tw map[string]any, hdr ...string) (int, http.Header, map[string]any) {
 	if tw["kind"] == "object" {
 		// Delivered on the object's own node: in hostd the object exists, so
@@ -251,7 +258,7 @@ func (in *inst) get(path string, tw map[string]any, hdr ...string) (int, http.He
 		in.f.mu.Unlock()
 	}
 	req, _ := http.NewRequest("GET", "http://app.local"+path, nil)
-	blob := map[string]any{"tailscale": map[string]any{"caller": testCaller}, "objectId": "o1", "tw": in.ticketed(tw)}
+	blob := map[string]any{"tailscale": in.sealed(), "objectId": "o1", "tw": in.ticketed(tw)}
 	b, _ := json.Marshal(blob)
 	req.Header.Set("x-tw-cf", string(b))
 	for i := 0; i+1 < len(hdr); i += 2 {
