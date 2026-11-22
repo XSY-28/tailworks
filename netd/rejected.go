@@ -131,9 +131,10 @@ func (o *Object) rejectReady(lc *local.Client) {
 		return
 	}
 	o.state, o.err = StateFailed, errNodeRejected
+	hostname, node := o.hostname, o.nodeID
 	o.mu.Unlock()
 	r.log.Warn("node rejected by control after ready; closing it so it can be re-minted under the same hostname",
-		"object", o.id, "hostname", o.hostname, "node", string(o.nodeID))
+		"object", o.id, "hostname", hostname, "node", string(node))
 	o.abortFlows()
 	o.teardown()
 	// Drop the node state (object.json and certs stay), as dropSavedState
