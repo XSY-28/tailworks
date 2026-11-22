@@ -172,7 +172,10 @@ Funnel, no HTTPS requirement.**
    - optionally **Policy File › Read**: `tw deploy` preflights your
      app's grants and `spawn()` checks sub-agent tags/caps against the
      policy (without it, deploy says `preflight skipped` and `spawn()`
-     answers `policy_unavailable`);
+     answers `policy_unavailable`). Pick **Policy File › Write** instead
+     if `tw policy --apply` should add each app's `tag:tw*` tagOwners and
+     grants for you ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init));
+     otherwise paste the snippet `tw policy` prints;
    - optionally **Services › Write**: workloads with `tailnet.service` get
      a Tailscale Service, i.e. a stable name and VIP
      ([services.md](services.md)). Without it, such a deploy fails with
