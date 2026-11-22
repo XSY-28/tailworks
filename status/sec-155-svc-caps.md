@@ -35,6 +35,32 @@ So caps on Service flows were both narrower (svc caps missing) and wider
 - `Makefile`: `e2e-svc-caps` (tailnet 2); `e2e-svc` now runs
   `-run 'TestRealService$'` so it doesn't pick up the new test.
 
+## Compatibility (coordinator review)
+
+- **Generated policy never put caps on workload tag grants.** The deploy
+  preflight checks tagOwners, `tailnet.connects` (ip only),
+  `autoApprovers.services` and public nodeAttrs. `tw policy`'s caller grant
+  is network-only. No generator emits app caps for workloads, so caps on a
+  tag grant are always the operator's own. Callers of a Service already
+  needed a `svc:` grant for network access (a tag grant doesn't cover the
+  VIP), so only caps that sit on a tag grant alone are lost.
+- **New preflight warning** (`mgmt/svccaps_lint.go`, one appended line in
+  `Preflight`): for a Service workload, each (src, cap) granted on the
+  workload tags but not on the `svc:` name becomes an `AccessWarnings`
+  entry with the grant to add. `tw deploy` and `tw policy` print it. It
+  is a warning, not a failure: the caps are user policy, and calls to the
+  node name still get them. Test: `mgmt.TestServiceCapWarnings`.
+- **`tw policy` / `tw deploy` caller grant:** a Service workload also gets
+  `{ "src": ["autogroup:member"], "dst": ["svc:<name>"], "ip": ["tcp:80"] }`
+  (`serviceCallerGrant` in `--json`, schema and `docs/cli-json.md`
+  updated). Test: `TestServiceCallerGrant`.
+- **HA `svc:tw-mgmt`:** `docs/services.md` already puts the admin cap on the
+  `svc:tw-mgmt` grant, and so does the H12 e2e policy
+  (`e2e/multimgmt/svc_real_test.go`). Single-mgmt `tw up` (`AdminGrant` to
+  `tag:tw-mgmt`, reached by node name) is unchanged.
+- `changes/sec-155-svc-caps.md`: kind security, `upgrade: [config-default,
+  cli-json]`, with the policy lines operators must add.
+
 ## Tests
 
 - `netd.TestServiceCapsScopedToVIP` (hermetic, testcontrol with a raw
@@ -47,5 +73,8 @@ So caps on Service flows were both narrower (svc caps missing) and wider
   0 Services left; policy restored byte-identical to the backup (same ETag).
 - `make lint`: ok. `make changes-check`: ok (no fragment needed).
 - `make test` (mbp runner, before merging #221): exit 0, every package ok. After merging origin/master (#221: docs, mgmt/ui test): `make lint` ok, `go test ./docs/... ./cmd/tw -run Doc` ok.
+- After the compatibility changes and merging origin/master (#223):
+  `make lint` ok; `make test` (local, mbp slots busy) exit 0, no FAIL;
+  `make changes-check` ok with the fragment.
 
 Not run: `make e2e-svc` / `e2e-mm-svc` (tailnet 1, used by other agents).
