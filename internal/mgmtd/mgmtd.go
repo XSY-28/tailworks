@@ -29,6 +29,7 @@ import (
 	"github.com/rosskukulinski/tailworks/internal/approvecap"
 	"github.com/rosskukulinski/tailworks/internal/obs"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsnetlc"
 	"github.com/rosskukulinski/tailworks/internal/tssvc"
 	"github.com/rosskukulinski/tailworks/mgmt"
 	"tailscale.com/client/local"
@@ -263,6 +264,11 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			ts.AuthKey = k
 		}
 		rt.TS = ts
+		// Before anything uses the node's LocalAPI client: Close drains it
+		// (internal/tsnetlc).
+		if _, err := tsnetlc.Client(ts); err != nil {
+			return nil, fmt.Errorf("tsnet start: %w", err)
+		}
 		upCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		upStart := time.Now()
 		st, err := tsnetUp(upCtx, rt.bg, ts, ts.AuthKey == "", o.TSNetService == "")
@@ -531,7 +537,7 @@ func (rt *Runtime) Close() error {
 	}
 	lap("mgmt")
 	if rt.TS != nil {
-		rt.TS.Close()
+		tsnetlc.Close(rt.TS)
 		rt.TS = nil
 	}
 	lap("tsnet")

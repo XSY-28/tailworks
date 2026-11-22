@@ -585,11 +585,15 @@ func (h *Host) tiers() []string {
 
 // Close stops every workload and node (node state is kept for rejoin).
 func (h *Host) Close() error {
+	cl := newCloseLog(h.log) // closelog.go
+	defer cl.done()
 	if h.cancel != nil {
 		h.cancel()
 	}
 	h.wg.Wait()
+	cl.lap("loops")
 	h.closePushServers()
+	cl.lap("push")
 	h.mu.Lock()
 	wls := make([]*workload, 0, len(h.workloads))
 	for _, w := range h.workloads {
@@ -604,12 +608,14 @@ func (h *Host) Close() error {
 	for _, w := range wls {
 		w.stopAll()
 	}
+	cl.lap("workloads")
 	var wg sync.WaitGroup
 	for _, t := range ts {
 		wg.Add(1)
 		go func() { defer wg.Done(); t.reg.Close() }()
 	}
 	wg.Wait()
+	cl.lap("nodes")
 	h.tel.close()
 	h.flushAudit(context.Background())
 	h.saveObjects()
