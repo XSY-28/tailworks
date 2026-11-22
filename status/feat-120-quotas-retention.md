@@ -80,7 +80,9 @@ migration, the HA flags of `tw up`) is a separate branch.
 - `make lint`: ok.
 - `make test-pg` (local OrbStack Postgres 17): ok, including the new
   audit-retention store test under Postgres (the changed trigger function).
-- `make test`: see the PR (both mbp slots were busy; run locally).
+- `make test` (local; both mbp slots were busy): ok. The first run failed
+  `TestDoctor` (its expected check list lacked the new checks); fixed.
+- `make e2e-queues`, `make e2e-observability`, `make e2e-upgrade`: ok.
 
 ## Gaps and notes
 
