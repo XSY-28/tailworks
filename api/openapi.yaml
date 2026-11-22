@@ -4452,6 +4452,7 @@ components:
         | `object_quota_exceeded` | 429 | tenant `maxObjects` |
         | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
         | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+        | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
         | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
         | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
         | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -4537,6 +4538,7 @@ components:
         - object_quota_exceeded
         - spawn_budget_exceeded
         - container_quota_exceeded
+        - rate_limited
         - bootstrap_failed
         - host_unavailable
         - host_token_unconfigured
