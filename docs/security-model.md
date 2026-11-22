@@ -35,7 +35,9 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   Each object's key is single use, pre-authorized, tagged and expires
   within 5 minutes (`KeyExpiry` in `mgmt/types.go`). Warm keys, minted
   ahead of time so new objects start faster, wait in mgmt's custody for up
-  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)). Revoking the credential
+  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)).
+  `tw status` shows how many each tenant has; `tw down` and `tw tenant rm`
+  revoke them. Revoking the credential
   stops all future minting.
 - **Kill is a network cut.** `tw kill` tombstones the object, its node
   stops answering (410), and with the Devices scope the device is deleted.
@@ -220,6 +222,17 @@ The red team's open items are tracked in
   and `caps()` return it. So an object that authorizes on `getCaller()`
   trusts every other piece of code in its own workload. Across workloads
   and hosts the network identity holds (ledger C04, C05; H08).
+- **Snapshot-restored microVMs share some kernel secrets.** On Linux,
+  microVMs restored from one base snapshot (rebuilt at least hourly) get
+  fresh randomness before tenant code runs. They still share the kernel
+  secrets created before the snapshot: the TCP sequence-number and port
+  keys, the hash-table seeds, and the kernel layout (on amd64 the layout
+  is the same for every guest anyway: Firecracker guests there have no
+  KASLR slide). A
+  tenant can't use these against another tenant. A guest's TCP never
+  leaves its host: it ends at that VM's own gateway, and guests have no
+  network path to each other. Linux can't re-key these secrets after boot
+  ([ADR-030](design/adr/030-microvm-snapshot-restore.md), ledger H24).
 - **On-behalf-of assertions** (`actingFor`) aren't implemented.
 - **Smart placement trusts each host's own path measurements.** A host
   reports only its own paths, only for tenants it already runs, within

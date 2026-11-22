@@ -81,6 +81,7 @@ var tenantOperatorRoutes = map[string]bool{
 	"GET /v1/tenants/{id}/approvals":  true, // approvers (github.com/rosskukulinski/tailworks/cap/approve)
 	"PATCH /v1/tenants/{id}":          true, // limits, pool, tier, credentials
 	"POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}": true, // approvers
+	"POST /v1/tenants/{id}/workloads/{workload}/policy":                          true, // writes the tailnet policy (issue #116)
 	"POST /v1/tenants/{id}/workloads/{workload}/secret-grants":                   true, // hosts
 	"POST /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status":     true, // hosts (a store object's degraded report)
 	"POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants":                true, // hosts
