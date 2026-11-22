@@ -39,4 +39,9 @@ reached mgmt), `mgmt.TestCreateObjectRefusesControlNames` (202).
 `netd.TestRT3_H21_OnceDecoded` passed before and after (it pins existing
 behaviour).
 
-Results of the full runs are in the PR's Tests section.
+Full runs (branch up to date with origin/master at addf27d):
+
+- `make lint`: ok (api-check, changes-check `protocol`, staticcheck, vet).
+- `make test` via `mbp-test.sh test` (mbp slot2): exit 0, no failures.
+- `make test-pg`: not run. No store or migration change (`mgmt/service.go`
+  gets one validation call before the insert; no SQL touched).
