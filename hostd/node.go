@@ -241,6 +241,7 @@ func (inst *instance) spawnNode() error {
 	}
 	pre = append(lpre, pre...)
 	args := append(append(pre, inst.app.Node.Args...), inst.app.Node.Main)
+	args = nodeHeapArgs(args, env, heapMiB(inst.h.cfg.NodeHeapMiB, DefaultNodeHeapMiB)) // limits.go
 	cmd, err := inst.nodeCommand(args)
 	if err == nil {
 		err = np.attach(cmd)

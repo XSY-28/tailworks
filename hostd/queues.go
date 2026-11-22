@@ -65,11 +65,12 @@ type queueAPIReq struct {
 }
 
 var queueErrStatus = map[string]int{
-	"bad_request":         400,
-	"queue_limit":         400,
-	"forbidden":           403,
-	"unknown_queue":       404,
-	mgmtapi.CodeLeaseLost: 409,
+	"bad_request":            400,
+	"queue_limit":            400,
+	"storage_quota_exceeded": 429,
+	"forbidden":              403,
+	"unknown_queue":          404,
+	mgmtapi.CodeLeaseLost:    409,
 }
 
 func writeQueueError(w http.ResponseWriter, e *apiError) {

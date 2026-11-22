@@ -619,6 +619,37 @@ tailworks on this tailnet, revoke the OAuth client, delete `~/.config/tailworks/
 tags and grants from your tailnet policy, and remove the `PATH` line from
 your shell profile.
 
+## Disk, storage quotas and retention
+
+Everything tailworks keeps is under the state dir (`~/.tailworks`): mgmt's
+database (`mgmt/mgmt.db`, the only copy of every tenant's KV, D1, R2 index
+and queue data), Durable Object storage, R2 objects and logs. `tw doctor`
+checks the free space on that volume (`data_disk`: a warning under 5 GiB or
+10% free, a failure under 1 GiB) and how full each tenant's stores and
+queues are (`store_sizes`: a warning at 80% of a limit or quota).
+`tw tenant ls` shows each tenant's usage.
+
+Each KV namespace, D1 database, R2 bucket index and queue is capped at
+1 GiB. To bound a tenant as a whole, for example on a host several teams
+share, set its storage quotas. They are unlimited unless you set them:
+
+```sh
+tw tenant set <tenant> --max-store-bytes 20GiB --max-queue-bytes 2GiB --max-stores 50
+tw tenant set <tenant> --max-store-bytes -     # back to unlimited
+```
+
+A write past a quota fails with
+[`storage_quota_exceeded`](errors.md#storage_quota_exceeded); deletes and
+overwrites that don't grow a store still work.
+
+Retention is off by default: audit records are kept forever, request
+records until their log rotates (8 MiB per workload, one previous file).
+`tw up --audit-max-age 2160h` (or `--audit-max-records N`) deletes older
+audit records and keeps a checkpoint, so the rest still verify;
+`tw up --request-log-max-age 168h` drops older request records. `tw up`
+remembers them. `mgmt.log` and `hostd.log` rotate at 32 MiB. See
+[limits.md](limits.md#tenant-storage).
+
 ## Tuning: how fast a new object's own node comes up
 
 A new Durable Object answers through its workload in milliseconds. Its
@@ -788,10 +819,8 @@ seconds. Measured times are in
   doctor's process checks use `/proc` and `ss`, not `lsof`.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.tailworks`.
-  Caveat: Fedora was tested once, on 2026-11-08, from a pre-release build with
-  API-key minting and before the Landlock sandbox. It is not in the default
-  `make e2e-linux` rows and has not been tested with OAuth-only minting or the
-  sandbox ([install-testing.md](install-testing.md#linux-support-matrix)).
+  Tested on arm64 with OAuth-only minting and the Landlock sandbox
+  ([install-testing.md](install-testing.md#linux-support-matrix)).
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
@@ -833,9 +862,9 @@ arch on either. A guest of the wrong arch is refused (`tw doctor`:
 
 - Linux arm64 or amd64 (x86_64) with `/dev/kvm` (bare metal, or a VM with
   nested virtualization), cgroups v2 and systemd. Tested end to end on
-  Ubuntu 24.04 arm64. On amd64 the guest boots to workerd, but the tier is
-  not yet verified end to end
-  ([why](install-testing.md#the-microvm-tier)).
+  Ubuntu 24.04 arm64. On amd64, `make e2e-vm` passes on a nested KVM test
+  host (2026-11-22); containers on amd64 are not verified yet
+  ([details](install-testing.md#the-microvm-tier)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
 

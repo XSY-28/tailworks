@@ -559,6 +559,9 @@ func cmdAudit(args []string) error {
 			} else if strings.HasPrefix(c.Chain, "host:") {
 				st = "signature ok"
 			}
+			if c.OK && c.PrunedThrough > 0 {
+				st += fmt.Sprintf(" (from %d: retention pruned the older records)", c.PrunedThrough+1)
+			}
 			cs = append(cs, fmt.Sprintf("%s %s", tsafe(c.Chain), st))
 		}
 		v := "verified"

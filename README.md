@@ -22,8 +22,16 @@ role and by task: [docs/README.md](docs/README.md).
 
 ## Quick start: deploy your first Durable Object
 
-Only want to run the code first? After step 1, `tw init hello && cd hello
-&& tw dev` serves the app on `127.0.0.1:8787` with no tailnet and no
+Only want to see the code first? With Node.js ≥ 20 and nothing else,
+scaffold an app from npm and type-check it:
+
+```sh
+npm create tailworks@latest hello            # also: --template agent, mcp, ai-agent, lock, …
+cd hello && npm install && npx tsc --noEmit  # the @tailworks/* packages and the Workers types
+```
+
+To run it, install tailworks (step 1), then `npm run dev` (that is,
+`tw dev`) serves the app on `127.0.0.1:8787` with no tailnet and no
 credentials ([Try it without a tailnet](docs/INSTALL.md#try-it-without-a-tailnet)).
 
 ### Prerequisites
@@ -31,6 +39,7 @@ credentials ([Try it without a tailnet](docs/INSTALL.md#try-it-without-a-tailnet
 | To | You need |
 |---|---|
 | Run tailworks (the release) | macOS 14 or later on Apple silicon, or Linux arm64/amd64 with glibc ≥ 2.35 ([details](docs/INSTALL.md)); a Tailscale tailnet where you're an admin, or a self-hosted Headscale server ([docs/headscale.md](docs/headscale.md)). No Go and no Node.js. |
+| Scaffold an app and type-check it (`npm create tailworks`) | Node.js ≥ 20 only. |
 | Try an app locally (`tw dev`) | The release only: no tailnet, no credentials. |
 | Build tailworks from source | Go ≥ 1.27 and Node.js ≥ 20. |
 | Run a Node.js app (`"runtime": "node"`, the `node-workflow` template) | Node.js ≥ 24 on each host that runs it, and `npm install` on the deploying machine ([docs/node-tier.md](docs/node-tier.md)). |
@@ -117,12 +126,15 @@ SQLite storage, **and** its own tailnet node.
 ```sh
 tw init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
 cd support
+npm install                                   # optional (needs Node.js): editor types for the Agents SDK and ctx.tailnet
 tw policy                                     # what this app needs in your tailnet policy, as one snippet
 tw policy --apply                             # or: let tailworks add it (needs Policy File › Write)
 tw deploy                                     # bundles, uploads, waits until the node is ready
 ```
 
-`tw init` names the app's tags after it (`tag:tw-wl-support`,
+`npm create tailworks@latest support -- --template agent` does the same
+(it runs `tw init` when `tw` is on your PATH). `tw init` names the app's
+tags after it (`tag:tw-wl-support`,
 `tag:tw-support-support-agent`, …). `tw policy` checks your tailnet
 policy for everything the app needs and prints **one snippet** with what's
 missing: the `tagOwners` for its tags, a grant for each `tailnet.connects`,
