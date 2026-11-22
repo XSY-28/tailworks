@@ -78,5 +78,6 @@ branch should pass it.
 - `go test ./hostd -run 'TestRejoinsWithPoolNodes|TestPoolable|TestIdlePool'`: PASS
   (and FAIL with the old condition).
 - `make lint`: PASS. `make changes-check`: ok.
-- `make test`: see the PR.
+- `make test` (mbp runner, slot2, `-race`): PASS (hostd 301 s, cmd/tw 294 s, mgmt 265 s).
+- `make lint` again after merging origin/master: PASS.
 - Not run: the matrix itself (blocked above); `e2e-linux-vm`, `e2e-linux-reboot`.
