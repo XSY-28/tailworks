@@ -13,7 +13,7 @@ import (
 func TestObjectNameControlsRefused(t *testing.T) {
 	h, inst, creates := admitKillHost(t)
 	as := map[string]any{"class": "Room", "name": "parent"}
-	bad := []string{"a\x1b[31mb", "a\x00", "a\r\nb", "a\tb", "a\x7f", "a\u009bb", "a‮b", "a⁦b"}
+	bad := []string{"a\x1b[31mb", "a\x00", "a\r\nb", "a\tb", "a\x7f", "a\u009bb", "a\u202eb", "a\u2066b"}
 	for _, name := range bad {
 		if code, r := platformCall(t, h, inst, "admit", map[string]any{"class": "Room", "name": name, "as": as}); code != 400 || r["code"] != "bad_object_name" {
 			t.Errorf("admit Room/%q (attested): %d %v, want 400 bad_object_name", name, code, r)

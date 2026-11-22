@@ -17,7 +17,7 @@ func TestCreateObjectRefusesControlNames(t *testing.T) {
 	h1.ok("PUT", "/v1/hosts/h1", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
 	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, nil)
-	for _, name := range []string{"a\x1b[31mb", "a\x00", "a\r\nb", "a\x7f", "a\u009bb", "a‮b"} {
+	for _, name := range []string{"a\x1b[31mb", "a\x00", "a\r\nb", "a\x7f", "a\u009bb", "a\u202eb"} {
 		h1.fail("POST", "/v1/objects", map[string]any{"tenantID": tn.TenantID, "namespace": "SupportAgent", "objectName": name}, 400, "bad_object_name")
 	}
 	var objs []Object
