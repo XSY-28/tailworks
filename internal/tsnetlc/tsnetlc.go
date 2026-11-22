@@ -27,15 +27,14 @@ import (
 
 var transports sync.Map // *tsnet.Server → *http.Transport
 
-// dialDelay slows LocalAPI dials (tests: it makes the transport's dial race,
-// and so the stray connection, likely).
+// dialDelay slows LocalAPI dials (tests: a request given up on during the
+// dial leaves the stray connection behind).
 var dialDelay time.Duration
 
 // Client starts ts and returns its LocalAPI client, with a transport Close
 // drains. Call it before anything uses ts.LocalClient (tsnet hands out one
 // shared *local.Client, which picks its transport on first use), on the
-// goroutine that set ts up. It also sets OmitAuth (ADR-019 rule 4: tsnet's
-// LocalAPI needs no system token).
+// goroutine that set ts up. Nothing else about the client changes.
 func Client(ts *tsnet.Server) (*local.Client, error) {
 	lc, err := ts.LocalClient()
 	if err != nil {
@@ -51,7 +50,6 @@ func Client(ts *tsnet.Server) (*local.Client, error) {
 		}}
 		if _, loaded := transports.LoadOrStore(ts, tr); !loaded {
 			lc.Transport = tr
-			lc.OmitAuth = true
 		}
 	}
 	return lc, nil
