@@ -32,6 +32,10 @@ type policyResult struct {
 	Preflight   mgmt.PreflightResult `json:"preflight"`
 	CallerGrant string               `json:"callerGrant,omitempty"`
 	Snippet     string               `json:"snippet,omitempty"`
+
+	// ServiceCallerGrant: for a workload behind a Tailscale Service, the
+	// grant to its svc: name (callers' app caps go on this one, #155).
+	ServiceCallerGrant string `json:"serviceCallerGrant,omitempty"`
 }
 
 func cmdPolicy(args []string) error {
@@ -84,7 +88,8 @@ func cmdPolicy(args []string) error {
 		return err
 	}
 	res.OK = res.Checked && res.Preflight.OK
-	res.Snippet = policySnippet(res.Preflight, res.CallerGrant)
+	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
+	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
 	if *f.json {
 		if res.Checked && !res.OK {
 			return policyFailure(res, true)
@@ -101,18 +106,21 @@ func cmdPolicy(args []string) error {
 
 // policySnippet is one block to paste into the tailnet policy: what the
 // preflight found missing, then the caller grant.
-func policySnippet(pf mgmt.PreflightResult, caller string) string {
+func policySnippet(pf mgmt.PreflightResult, caller, svcCaller string) string {
 	var b strings.Builder
 	if len(pf.MissingTagOwners) > 0 && pf.TagOwnersSnippet != "" && !(len(pf.MissingNodeAttrs) > 0 && onlyPublicTagOwner(pf.MissingTagOwners)) {
 		b.WriteString(pf.TagOwnersSnippet + ",\n")
 	}
-	if len(pf.Missing) > 0 || caller != "" {
+	if len(pf.Missing) > 0 || caller != "" || svcCaller != "" {
 		b.WriteString("\"grants\": [\n")
 		for _, m := range pf.Missing {
 			b.WriteString("  " + m.Snippet + ", // tailnet.connects\n")
 		}
 		if caller != "" {
 			b.WriteString("  " + caller + ", // who may call it (not checked: narrow src to a user, group or tag)\n")
+		}
+		if svcCaller != "" {
+			b.WriteString("  " + svcCaller + ", // calls through " + pf.Service + ": callers' app caps go on this grant\n")
 		}
 		b.WriteString("],\n")
 	}
