@@ -475,6 +475,12 @@ func (a *v1api) UpdateTenant(w http.ResponseWriter, r *http.Request, id v1.Tenan
 			}
 			p.MaxContainerVCPU = &f
 			continue
+		case QuotaMaxStoreBytes, QuotaMaxQueueBytes, QuotaMaxStores: // quota.go
+			if err := p.quotaPatch(k, raw); err != nil {
+				writeErr(w, r, err)
+				return
+			}
+			continue
 		case "registrationsPerMinute", "maxObjects", "maxContainers", "maxContainerMemMiB":
 			var n int
 			if null {

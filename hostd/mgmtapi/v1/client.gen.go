@@ -508,6 +508,7 @@ const (
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSharedOwnerTag          ErrorCode = "shared_owner_tag"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
+	ErrorCodeStorageQuotaExceeded    ErrorCode = "storage_quota_exceeded"
 	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
 	ErrorCodeStoreDegraded           ErrorCode = "store_degraded"
 	ErrorCodeStoreLimit              ErrorCode = "store_limit"
@@ -664,6 +665,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSharedOwnerTag:
 		return true
 	case ErrorCodeSpawnBudgetExceeded:
+		return true
+	case ErrorCodeStorageQuotaExceeded:
 		return true
 	case ErrorCodeStoreConflict:
 		return true
@@ -1865,7 +1868,10 @@ type ChainStatus struct {
 	Chain    string  `json:"chain"`
 	Error    *string `json:"error,omitempty"`
 	Ok       bool    `json:"ok"`
-	Records  int     `json:"records"`
+
+	// PrunedThrough Audit retention (`tw-mgmt -audit-max-age`, `-audit-max-records`) deleted this chain's records up to this seq. The records kept still verify: the first one links to the checkpointed hash of the last one deleted. Absent: nothing was pruned.
+	PrunedThrough *int64 `json:"prunedThrough,omitempty"`
+	Records       int    `json:"records"`
 }
 
 // ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
@@ -2350,6 +2356,7 @@ type Error struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
 	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2448,6 +2455,7 @@ type Error struct {
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 // | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
 // | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 // | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2665,6 +2673,7 @@ type HostDrainResult struct {
 		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+		// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
 		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 		// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 		// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -4143,6 +4152,15 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
+	// MaxQueueBytes Bytes of all the tenant's queued messages together; past it a send is `429 storage_quota_exceeded`. Absent or 0: unlimited (each queue still has its own 1 GiB).
+	MaxQueueBytes *int64 `json:"maxQueueBytes,omitempty"`
+
+	// MaxStoreBytes Bytes kept by all the tenant's platform stores together (KV, D1, R2 index journals); past it an append that grows a store is `429 storage_quota_exceeded`. Absent or 0: unlimited (each store still has its own 1 GiB).
+	MaxStoreBytes *int64 `json:"maxStoreBytes,omitempty"`
+
+	// MaxStores Platform stores the tenant may have; past it creating one is `429 storage_quota_exceeded`. Absent or 0: unlimited.
+	MaxStores *int `json:"maxStores,omitempty"`
+
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
@@ -4268,6 +4286,15 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
+	// MaxQueueBytes 0 or null: unlimited.
+	MaxQueueBytes nullable.Nullable[int64] `json:"maxQueueBytes,omitempty"`
+
+	// MaxStoreBytes 0 or null: unlimited.
+	MaxStoreBytes nullable.Nullable[int64] `json:"maxStoreBytes,omitempty"`
+
+	// MaxStores 0 or null: unlimited.
+	MaxStores nullable.Nullable[int] `json:"maxStores,omitempty"`
+
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode *MintMode `json:"mintMode,omitempty"`
 
@@ -4284,6 +4311,53 @@ type TenantPatch struct {
 	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int                      `json:"registrationsPerMinute,omitempty"`
 	Tier                   *Tier                     `json:"tier,omitempty"`
+}
+
+// TenantUsage defines model for TenantUsage.
+type TenantUsage struct {
+	// Largest The tenant's largest stores and queues (at most 5), biggest first.
+	Largest []struct {
+		Bytes int64 `json:"bytes"`
+
+		// Kind `kv`, `d1`, `r2`, … or `queue`.
+		Kind string `json:"kind"`
+
+		// Limit Its own size limit.
+		Limit int64  `json:"limit"`
+		Name  string `json:"name"`
+
+		// Workload The store's workload (absent for a queue).
+		Workload *string `json:"workload,omitempty"`
+	} `json:"largest"`
+	Limits struct {
+		// MaxQueueBytes The tenant's quota; 0 = unlimited.
+		MaxQueueBytes int64 `json:"maxQueueBytes"`
+
+		// MaxStoreBytes The tenant's quota; 0 = unlimited.
+		MaxStoreBytes int64 `json:"maxStoreBytes"`
+
+		// MaxStores The tenant's quota; 0 = unlimited.
+		MaxStores int `json:"maxStores"`
+
+		// QueueMaxBytes One queue's own limit.
+		QueueMaxBytes int64 `json:"queueMaxBytes"`
+
+		// StoreMaxBytes One store's own limit.
+		StoreMaxBytes int64 `json:"storeMaxBytes"`
+	} `json:"limits"`
+	Queues struct {
+		// Bytes Bytes of the queued messages (what counts against `maxQueueBytes`).
+		Bytes    int64 `json:"bytes"`
+		Count    int64 `json:"count"`
+		Messages int64 `json:"messages"`
+	} `json:"queues"`
+	Stores struct {
+		// Bytes Bytes kept by the stores' journals (what counts against `maxStoreBytes`).
+		Bytes   int64 `json:"bytes"`
+		Count   int64 `json:"count"`
+		Entries int64 `json:"entries"`
+	} `json:"stores"`
+	TenantID string `json:"tenantID"`
 }
 
 // Tier defines model for Tier.
@@ -4393,6 +4467,7 @@ type TombstoneError struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
 	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -6462,7 +6537,8 @@ type ClientInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -6476,7 +6552,8 @@ type ClientInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -6490,7 +6567,8 @@ type ClientInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -6845,6 +6923,18 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTenantUsage What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+	//
+	// The bytes and counts of the tenant's platform stores (KV, D1, R2
+	// bucket indexes: their journals) and queues, its storage quotas
+	// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+	// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+	// the tenant's `ETag` doesn't change with every write.
+	// `404 unknown_tenant`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+	GetTenantUsage(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
@@ -9159,7 +9249,8 @@ func (c *Client) GetTenant(ctx context.Context, id TenantID, params *GetTenantPa
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -9183,7 +9274,8 @@ func (c *Client) UpdateTenantWithBody(ctx context.Context, id TenantID, params *
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -9207,7 +9299,8 @@ func (c *Client) UpdateTenant(ctx context.Context, id TenantID, params *UpdateTe
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -9813,6 +9906,28 @@ func (c *Client) PutTenantTelemetryWithBody(ctx context.Context, id TenantID, co
 // Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 func (c *Client) PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutTenantTelemetryRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTenantUsage What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+//
+// The bytes and counts of the tenant's platform stores (KV, D1, R2
+// bucket indexes: their journals) and queues, its storage quotas
+// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+// the tenant's `ETag` doesn't change with every write.
+// `404 unknown_tenant`.
+//
+// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+func (c *Client) GetTenantUsage(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTenantUsageRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -14833,6 +14948,40 @@ func NewPutTenantTelemetryRequestWithBody(server string, id TenantID, contentTyp
 	return req, nil
 }
 
+// NewGetTenantUsageRequest constructs an http.Request for the GetTenantUsage method
+func NewGetTenantUsageRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/usage", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDecideApprovalRequest calls the generic DecideApproval builder with application/json body
 func NewDecideApprovalRequest(server string, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -18148,7 +18297,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -18162,7 +18312,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -18176,7 +18327,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -18561,6 +18713,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetryWithResponse(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
+
+	// GetTenantUsageWithResponse What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+	//
+	// The bytes and counts of the tenant's platform stores (KV, D1, R2
+	// bucket indexes: their journals) and queues, its storage quotas
+	// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+	// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+	// the tenant's `ETag` doesn't change with every write.
+	// `404 unknown_tenant`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+	GetTenantUsageWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantUsageResponse, error)
 
 	// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
@@ -25735,6 +25901,89 @@ func (r PutTenantTelemetryResponse) ContentType() string {
 	return ""
 }
 
+// GetTenantUsageResponse403Headers the declared response headers of an HTTP 403 response for GetTenantUsage
+type GetTenantUsageResponse403Headers struct {
+	TwError *string
+}
+
+// GetTenantUsageResponse404Headers the declared response headers of an HTTP 404 response for GetTenantUsage
+type GetTenantUsageResponse404Headers struct {
+	TwError *string
+}
+
+// GetTenantUsageResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenantUsage
+type GetTenantUsageResponseDefaultHeaders struct {
+	TwError *string
+}
+
+type GetTenantUsageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TenantUsage
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetTenantUsageResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetTenantUsageResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetTenantUsageResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTenantUsageResponse) GetJSON200() *TenantUsage {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetTenantUsageResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetTenantUsageResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetTenantUsageResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTenantUsageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTenantUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTenantUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTenantUsageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // DecideApprovalResponse400Headers the declared response headers of an HTTP 400 response for DecideApproval
 type DecideApprovalResponse400Headers struct {
 	TwError *string
@@ -30461,7 +30710,8 @@ func (c *ClientWithResponses) GetTenantWithResponse(ctx context.Context, id Tena
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -30481,7 +30731,8 @@ func (c *ClientWithResponses) UpdateTenantWithBodyWithResponse(ctx context.Conte
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -30501,7 +30752,8 @@ func (c *ClientWithResponses) UpdateTenantWithResponse(ctx context.Context, id T
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -31041,6 +31293,26 @@ func (c *ClientWithResponses) PutTenantTelemetryWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParsePutTenantTelemetryResponse(rsp)
+}
+
+// GetTenantUsageWithResponse What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+//
+// The bytes and counts of the tenant's platform stores (KV, D1, R2
+// bucket indexes: their journals) and queues, its storage quotas
+// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+// the tenant's `ETag` doesn't change with every write.
+// `404 unknown_tenant`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+func (c *ClientWithResponses) GetTenantUsageWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantUsageResponse, error) {
+	rsp, err := c.GetTenantUsage(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTenantUsageResponse(rsp)
 }
 
 // DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
@@ -38515,6 +38787,86 @@ func ParsePutTenantTelemetryResponse(rsp *http.Response) (*PutTenantTelemetryRes
 		response.Headers404 = &headers
 	case true:
 		var headers PutTenantTelemetryResponseDefaultHeaders
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetTenantUsageResponse parses an HTTP response from a GetTenantUsageWithResponse call
+func ParseGetTenantUsageResponse(rsp *http.Response) (*GetTenantUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTenantUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TenantUsage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetTenantUsageResponse403Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetTenantUsageResponse404Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetTenantUsageResponseDefaultHeaders
 		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
