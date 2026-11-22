@@ -632,6 +632,21 @@ created (p95 ~0.3 s), down from ~7 s
 ([how it was measured](install-testing.md#fast-identity)).
 `--warm-keys 0 --pool-nodes 0` turns both pools off.
 
+## Sizing: how many objects a host holds
+
+Each object with its own node costs the host about **2.5 MB idle and 4 MB
+under request load** (measured on Linux and macOS at 100 and 500 nodes,
+when objects can't see one another), on top of its workload's own memory.
+A host advertises a node capacity to placement and takes no more objects
+than that. By default the capacity comes from RAM: a quarter of it at 8 MiB
+per node, between 50 and 1000. So an 8 GiB host takes 256 objects, a 16 GiB
+host 512, and 32 GiB or more 1000. Set `tw-hostd -capacity-nodes N` to
+override it. Lower it if your policy lets objects see one another: then
+every node holds every other in its netmap, and at 100 nodes each costs
+5–12 MB. Don't give hundreds of objects on one host that visibility. The
+measurements, and the command that reproduces them, are in
+[limits.md](limits.md#per-node-memory-measured).
+
 ## Linux
 
 The same flow on a Linux host: one tarball per architecture, `install.sh`
