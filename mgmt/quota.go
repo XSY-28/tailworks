@@ -98,6 +98,7 @@ func (m *Mgmt) checkStoreCount(ctx context.Context, tenantID, what string) error
 	if err != nil {
 		return err
 	}
+	// limits.md#tenant-max-stores
 	if u.Stores.Count >= int64(t.MaxStores) {
 		e, _ := asQuotaError(&quotaError{Quota: QuotaMaxStores, Limit: int64(t.MaxStores), Used: u.Stores.Count, Requested: 1}, tenantID, what)
 		return e

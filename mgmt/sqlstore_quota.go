@@ -27,6 +27,7 @@ func (s *SQLStore) checkTenantStoreBytes(ctx context.Context, tx *sql.Tx, st Sto
 		st.TenantID, st.Workload, st.Kind, st.Name).Scan(&others); err != nil {
 		return err
 	}
+	// limits.md#tenant-store-bytes
 	if others+st.Bytes > tenantMax {
 		return &quotaError{Quota: QuotaMaxStoreBytes, Limit: tenantMax, Used: others + before, Requested: st.Bytes - before}
 	}
@@ -46,6 +47,7 @@ func (s *SQLStore) checkTenantQueueBytes(ctx context.Context, tx *sql.Tx, tenant
 	if err := tx.QueryRowContext(ctx, s.q("SELECT COALESCE(SUM(bytes), 0) FROM queues WHERE tenant_id=?"), tenantID).Scan(&used); err != nil {
 		return err
 	}
+	// limits.md#tenant-queue-bytes
 	if used+add > tenantMax {
 		return &quotaError{Quota: QuotaMaxQueueBytes, Limit: tenantMax, Used: used, Requested: add}
 	}

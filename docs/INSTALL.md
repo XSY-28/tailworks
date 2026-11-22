@@ -612,6 +612,37 @@ tailworks on this tailnet, revoke the OAuth client, delete `~/.config/tailworks/
 tags and grants from your tailnet policy, and remove the `PATH` line from
 your shell profile.
 
+## Disk, storage quotas and retention
+
+Everything tailworks keeps is under the state dir (`~/.tailworks`): mgmt's
+database (`mgmt/mgmt.db`, the only copy of every tenant's KV, D1, R2 index
+and queue data), Durable Object storage, R2 objects and logs. `tw doctor`
+checks the free space on that volume (`data_disk`: a warning under 5 GiB or
+10% free, a failure under 1 GiB) and how full each tenant's stores and
+queues are (`store_sizes`: a warning at 80% of a limit or quota).
+`tw tenant ls` shows each tenant's usage.
+
+Each KV namespace, D1 database, R2 bucket index and queue is capped at
+1 GiB. To bound a tenant as a whole, for example on a host several teams
+share, set its storage quotas. They are unlimited unless you set them:
+
+```sh
+tw tenant set <tenant> --max-store-bytes 20GiB --max-queue-bytes 2GiB --max-stores 50
+tw tenant set <tenant> --max-store-bytes -     # back to unlimited
+```
+
+A write past a quota fails with
+[`storage_quota_exceeded`](errors.md#storage_quota_exceeded); deletes and
+overwrites that don't grow a store still work.
+
+Retention is off by default: audit records are kept forever, request
+records until their log rotates (8 MiB per workload, one previous file).
+`tw up --audit-max-age 2160h` (or `--audit-max-records N`) deletes older
+audit records and keeps a checkpoint, so the rest still verify;
+`tw up --request-log-max-age 168h` drops older request records. `tw up`
+remembers them. `mgmt.log` and `hostd.log` rotate at 32 MiB. See
+[limits.md](limits.md#tenant-storage).
+
 ## Tuning: how fast a new object's own node comes up
 
 A new Durable Object answers through its workload in milliseconds. Its

@@ -104,6 +104,7 @@ const (
 	AuditKindApprovalRequested   AuditKind = "approval_requested"
 	AuditKindApprovalTimeout     AuditKind = "approval_timeout"
 	AuditKindAuditDropped        AuditKind = "audit_dropped"
+	AuditKindAuditPruned         AuditKind = "audit_pruned"
 	AuditKindContainerRelease    AuditKind = "container_release"
 	AuditKindContainerReserve    AuditKind = "container_reserve"
 	AuditKindContainerStart      AuditKind = "container_start"
@@ -194,6 +195,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindApprovalTimeout:
 		return true
 	case AuditKindAuditDropped:
+		return true
+	case AuditKindAuditPruned:
 		return true
 	case AuditKindContainerRelease:
 		return true
@@ -1629,6 +1632,7 @@ type AuditBatch struct {
 // `container_stop` (an object's container, ADR-032),
 // `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 // mgmt chain:
+// `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
 // `tenant_create`,
 // `tenant_update`,
 // `tenant_delete`,
@@ -1749,6 +1753,7 @@ type AuditRecord struct {
 	// `container_stop` (an object's container, ADR-032),
 	// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 	// mgmt chain:
+	// `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
 	// `tenant_create`,
 	// `tenant_update`,
 	// `tenant_delete`,
