@@ -4,8 +4,8 @@
 #   suite    one matrix job per Makefile target, so they run in parallel and
 #            report separately. Each needs only `make deps` (npm ci, workerd,
 #            the JS builds), Go and Node; e2e-headscale also uses the
-#            runner's Docker, templates-typecheck and test-vitest the npm
-#            registry.
+#            runner's Docker. (e2e-local, templates-typecheck and
+#            test-vitest moved to ci.yml, so every PR runs them: #163.)
 #   test-pg  `make test-pg` against a Postgres 17 service container
 #            (scripts/test-pg.sh uses TW_TEST_POSTGRES_DSN instead of
 #            starting its own). Also runs on PRs that touch the store.
@@ -60,9 +60,6 @@ jobs:
           - target: e2e-headscale
             timeout: 45
             allow_failure: ""
-          - target: e2e-local
-            timeout: 30
-            allow_failure: ""
           - target: e2e-locks
             timeout: 30
             allow_failure: ""
@@ -81,16 +78,10 @@ jobs:
           - target: e2e-wrangler
             timeout: 30
             allow_failure: ""
-          - target: templates-typecheck
-            timeout: 30
-            allow_failure: ""
           - target: test-node
             timeout: 30
             allow_failure: ""
           - target: test-sdk
-            timeout: 30
-            allow_failure: ""
-          - target: test-vitest
             timeout: 30
             allow_failure: ""
     steps:
