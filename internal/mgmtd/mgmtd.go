@@ -92,6 +92,9 @@ type Options struct {
 	// mgmt.DefaultWarmKeyTTL).
 	WarmKeys   int
 	WarmKeyTTL time.Duration
+	// RevokeWarmKeysOnClose: Close revokes the unused pooled keys
+	// (mgmt.Config; tw-mgmt -revoke-warm-keys-on-exit).
+	RevokeWarmKeysOnClose bool
 
 	// APILimits rate-limit tailnet callers of the API (zero: the defaults).
 	APILimits mgmt.APILimits
@@ -271,7 +274,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	mcfg := mgmt.Config{Store: store, Custody: custody, Broker: &mgmt.Broker{BaseURL: o.TSAPIURL},
 		IDSecret: secret, ReplicaID: replicaID, ReapInterval: o.ReapInterval, DeviceDeleteDelay: o.DeviceDeleteDelay, Log: log,
 		OperatorTailnet: self.Tailnet, OperatorControlURL: o.TSNetControlURL, NoMirror: o.NoMirror, WarmKeys: o.WarmKeys, WarmKeyTTL: o.WarmKeyTTL,
-		Version: o.Version, ReleaseDir: filepath.Join(o.StateDir, "releases")}
+		RevokeWarmKeysOnClose: o.RevokeWarmKeysOnClose, Version: o.Version, ReleaseDir: filepath.Join(o.StateDir, "releases")}
 	switch o.RegistryDir {
 	case "off":
 	case "":

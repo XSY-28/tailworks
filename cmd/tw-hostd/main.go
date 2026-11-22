@@ -122,6 +122,7 @@ func run() error {
 		selfUpg    = flag.Bool("self-upgrade", false, "let tw-mgmt's upgrade runs install a new release here and restart this host (exits with status 75 after installing; run under a service manager that restarts it, e.g. systemd Restart=always)")
 		instPrefix = flag.String("install-prefix", "", "with -self-upgrade: the install.sh prefix to upgrade (default: the prefix this tw-hostd runs from, if it has share/tailworks and VERSION)")
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
+		wkInet     = flag.String("worker-internet", "direct", "Workers: how fetch() reaches internet hosts (subject to each workload's tailnet.egress.internet): direct (this host's network, public addresses only) or off")
 	)
 	// Process-tier heap caps (hostd/limits.go).
 	wdHeap := flag.Int("workerd-heap-mib", hostd.DefaultWorkerdHeapMiB, "process tier: cap each V8 isolate's heap in a workerd (the Worker, each Durable Object class) at this many MiB; past it V8 aborts that workload's workerd and it restarts (-1 = no cap)")
@@ -154,7 +155,8 @@ func run() error {
 		ContainerImageMaxMiB: *ctrImgMB, ContainerImageCacheMaxMiB: *ctrCacheMB,
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
 		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log,
-		R2: r2b}
+		WorkerInternet: *wkInet,
+		R2:             r2b}
 	o.WorkerdHeapMiB, o.NodeHeapMiB = *wdHeap, *nodeHeap
 	restart := make(chan struct{}, 1)
 	if *selfUpg {

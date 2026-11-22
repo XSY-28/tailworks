@@ -44,7 +44,7 @@ tenants sharing a host is in
 | Wall time of a tailnet request | none | streamed responses and WebSockets are long-lived by design, and a request is cancelled when its caller goes away (`netd/ingress.go:#tailnet-no-deadline`). Requests from the internet do have one: see [Public ingress](#public-ingress) |
 | Tailnet request body size | none | bodies are streamed through netd and hostd to workerd, never buffered |
 | Request rate over the tailnet | none | every caller is a WireGuard-identified node your tailnet policy admitted; public traffic is rate-limited (see [Public ingress](#public-ingress)) |
-| Outbound `fetch()` duration or count (subrequests) | none | egress goes through netd as the object's own node, where your tailnet policy decides what it can reach |
+| Outbound `fetch()` duration or count (subrequests) | none | every `fetch()` goes through netd: tailnet egress leaves as the workload's or object's own node, where your tailnet policy decides what it can reach, and internet egress is allowed, narrowed or turned off per workload (`tailnet.egress.internet`) |
 | Concurrent requests per workload or object | none | WebSockets make an in-flight count a poor bound (one Durable Object can hold thousands), and a flood of requests to one workload mostly costs that workload's own workerd |
 | WebSocket duration | none | as for wall time |
 | Queue message retention | none | a message is kept until it is consumed; a full queue refuses new sends ([queues.md](queues.md#differences-from-cloudflare)) |

@@ -4989,6 +4989,7 @@ Enum: `logs`, `metrics`, `traces`
 | `tenantID` | string | yes |  |
 | `tier` | `Tier` | no |  |
 | `updatedAt` | integer (int64) | yes |  |
+| `warmKeys` | integer | no | Pooled preauthorized join keys of this tenant in mgmt's custody (the warm-key pool: unused, being adopted, or expired with the revocation still to retry). Anyone who can read custody can join a node with one until it expires. `tw down` and `tw tenant rm` revoke them. |
 
 #### `TenantCreate`
 
