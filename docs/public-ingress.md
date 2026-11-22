@@ -45,10 +45,13 @@ In `tailworks.jsonc`:
 
 - **No `"public": true` shorthand.** If you mean every path, write `"/*"`.
 - **Never public:** anything under `/_tw` (the platform's own object
-  addressing), paths with dot segments or doubled slashes, and encoded
-  slashes or backslashes.
+  addressing), paths with dot segments or doubled slashes, encoded
+  slashes or backslashes, and control characters (`%00`–`%1F`, `%7F`):
+  these get `400 bad_request`.
 - **Unlisted paths** get `404 not_public` from netd and never reach your
   code.
+- **Your app receives the path decoded once** (`/%252e%252e/x` arrives as
+  `/%2e%2e/x`), which is the form netd checked; don't decode it again.
 
 ### The tenant gate
 
