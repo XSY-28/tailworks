@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
@@ -79,6 +80,34 @@ func TestPoolable(t *testing.T) {
 	for class, want := range map[string]bool{"SupportAgent": true, "": false, PoolClass: false, "_workload": false, "_public": false} {
 		if got := poolable(class); got != want {
 			t.Errorf("poolable(%q) = %v, want %v", class, got, want)
+		}
+	}
+}
+
+// A host restart rejoins idle pool nodes from saved state, like the
+// objects they will be handed to (ADR-031), but only for a class that
+// still has its own node in the app being started. (Before the fix, a
+// pool node never matched: its Class is PoolClass, not one of app's.)
+func TestRejoinsWithPoolNodes(t *testing.T) {
+	app := &bundle.App{Classes: map[string]*bundle.Class{
+		"SupportAgent": {Name: "SupportAgent", Node: true},
+		"Counter":      {Name: "Counter"},
+	}}
+	for _, tc := range []struct {
+		o    *object
+		want bool
+	}{
+		{&object{ID: "entry"}, true},
+		{&object{ID: "agent", Class: "SupportAgent", Name: "a"}, true},
+		{&object{ID: "counter", Class: "Counter", Name: "c"}, false},
+		{&object{ID: "gone", Class: "Removed", Name: "g"}, false},
+		{&object{ID: "pool-agent", Class: PoolClass, Name: "SupportAgent/x"}, true},
+		{&object{ID: "pool-counter", Class: PoolClass, Name: "Counter/x"}, false},
+		{&object{ID: "pool-gone", Class: PoolClass, Name: "Removed/x"}, false},
+		{&object{ID: "pool-bad", Class: PoolClass}, false},
+	} {
+		if got := rejoinsWith(tc.o, app); got != tc.want {
+			t.Errorf("rejoinsWith(%s) = %v, want %v", tc.o.ID, got, tc.want)
 		}
 	}
 }
