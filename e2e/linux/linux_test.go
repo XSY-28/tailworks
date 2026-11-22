@@ -86,6 +86,19 @@ func matrixVM(name string) bool {
 	return strings.HasPrefix(name, "twl-") || strings.HasPrefix(name, "twdl-")
 }
 
+// warmKeyIDs returns the distinct keyIDs in mgmt's "warm key minted" log lines.
+func warmKeyIDs(log string) []string {
+	var ids []string
+	for _, m := range warmKeyRE.FindAllStringSubmatch(log, -1) {
+		if !slices.Contains(ids, m[1]) {
+			ids = append(ids, m[1])
+		}
+	}
+	return ids
+}
+
+var warmKeyRE = regexp.MustCompile(`keyID=([A-Za-z0-9]+)`)
+
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // timed runs argv in dir in the VM; the VM measures its own wall time
@@ -317,6 +330,11 @@ func TestE2ELinux(t *testing.T) {
 		for _, n := range nodes {
 			n.Close()
 		}
+		// Warm keys (mgmt's pre-minted join keys) appear in mgmt's log, not
+		// the audit chain: read their IDs before the state dir goes, so the
+		// check below can see whether tw down revoked them (#158).
+		warmLog, _, _ := v.run(`grep -ho 'warm key minted.*keyID=[A-Za-z0-9]*' ~/.tailworks-e2e/state/logs/mgmt.log* 2>/dev/null; true`, nil)
+		warmKeys := warmKeyIDs(warmLog)
 		us := time.Now()
 		so, se, err := v.run(`systemctl --user disable --now tw.service >/dev/null 2>&1; rm -f ~/.config/systemd/user/tw.service; systemctl --user daemon-reload 2>/dev/null
 			pkill -TERM -f "$HOME/.tailworks/bin/" 2>/dev/null; sleep 0.5; pkill -KILL -f "$HOME/.tailworks/bin/" 2>/dev/null
@@ -340,6 +358,18 @@ func TestE2ELinux(t *testing.T) {
 		res.Cleanup["tw_keys_tracked"] = len(res.KeyIDs)
 		res.Cleanup["tw_devices_left_after_down"] = len(devs)
 		res.Cleanup["tw_keys_valid_after_down"] = len(keys)
+		var warmLeft []string
+		for _, id := range warmKeys {
+			if k, err := api.GetKey(cctx, id); err == nil && !k.Invalid && k.Revoked == "" {
+				warmLeft = append(warmLeft, id)
+				api.DeleteKey(cctx, id)
+			}
+		}
+		res.Cleanup["warm_keys_minted"] = len(warmKeys)
+		res.Cleanup["warm_keys_valid_after_down"] = len(warmLeft)
+		if len(warmLeft) > 0 {
+			t.Errorf("after tw down: %d of %d warm keys still valid (deleted by cleanup): %v", len(warmLeft), len(warmKeys), warmLeft)
+		}
 		for _, id := range res.NodeIDs {
 			tracker.Track(id, "tw")
 		}
