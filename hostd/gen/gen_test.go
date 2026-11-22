@@ -143,6 +143,9 @@ type inst struct {
 	hc  *http.Client
 	cmd *exec.Cmd
 	f   *fakeHost
+
+	cfg string // config.capnp
+	log string // workerd's stdout and stderr
 }
 
 func start(t *testing.T, appDir string, vars map[string]string) *inst {
@@ -160,6 +163,12 @@ func start(t *testing.T, appDir string, vars map[string]string) *inst {
 // startFiles runs an already-built bundle (path -> contents).
 func startFiles(t *testing.T, files map[string][]byte) *inst {
 	t.Helper()
+	return startFilesOpts(t, files, nil)
+}
+
+// startFilesOpts is startFiles with mod applied to the generator options.
+func startFilesOpts(t *testing.T, files map[string][]byte, mod func(*gen.Options)) *inst {
+	t.Helper()
 	wdBin, err := nettest.WorkerdBinary()
 	if err != nil {
 		t.Skip(err)
@@ -173,7 +182,11 @@ func startFiles(t *testing.T, files map[string][]byte) *inst {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	res, err := gen.Generate(app, gen.Options{Dir: filepath.Join(dir, "i1"), DOStorage: filepath.Join(dir, "do"), DeploymentID: "d1", Workload: app.Name})
+	opts := gen.Options{Dir: filepath.Join(dir, "i1"), DOStorage: filepath.Join(dir, "do"), DeploymentID: "d1", Workload: app.Name}
+	if mod != nil {
+		mod(&opts)
+	}
+	res, err := gen.Generate(app, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +212,7 @@ func startFiles(t *testing.T, files map[string][]byte) *inst {
 		return (&net.Dialer{}).DialContext(ctx, "unix", res.Sockets.Ingress)
 	}}}
 	in := &inst{t: t, hc: hc, cmd: cmd, f: f}
+	in.cfg, in.log = res.Config, filepath.Join(dir, "workerd.log")
 	deadline := time.Now().Add(20 * time.Second)
 	for {
 		code, _, _ := in.get("/", map[string]any{"kind": "admin", "op": "health"})

@@ -61,18 +61,19 @@ it.
 
 | | macOS (Seatbelt) | Linux, Landlock ABI ≥ 4 (kernel 6.7+) | Linux, Landlock ABI 1–3 |
 |---|---|---|---|
-| Profile shape | `(allow default)` (Mach services, sysctls) with writes, network, signals and exec denied, then allowed back for what the workload needs, plus a read deny list (`seatbeltProfile` in `hostd/seatbelt_strict.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
-| Reads | denied under your home dir, tailworks' state and run dirs, hostd's data and run dirs, and every tenant's credential files; **everything else is readable** (`/etc`, `/tmp`, …) | only the OS dirs (`/usr`, `/lib`, `/bin`, `/etc`, `/opt`, …), the runtime binary (and a Node install prefix), a few global `/proc` and `/sys` files, the process's own `/proc` entries and its own dirs | same as ABI ≥ 4 |
+| Profile shape | `(allow default)` (Mach services, sysctls) with reads, writes, network, signals and exec denied, then allowed back for what the workload needs (`seatbeltProfile` in `hostd/seatbelt_strict.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
+| Reads | only the OS dirs (`/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/opt`, `/dev`, the time zone database), the runtime binary (and a Node install prefix) and its own dirs; `/tmp`, `/var/folders`, `/Users`, `/Library` and the rest of the disk are refused. Your home dir, tailworks' state and run dirs, hostd's data and run dirs and every tenant's credential files are refused even where they sit inside an allowed dir. Outside the allow list a workload can only `stat` `/` and the parent dirs of the paths it may read | only the OS dirs (`/usr`, `/lib`, `/bin`, `/etc`, `/opt`, …), the runtime binary (and a Node install prefix), a few global `/proc` and `/sys` files, the process's own `/proc` entries and its own dirs | same as ABI ≥ 4 |
 | Writes | own dirs only (plus `/dev/null` and similar devices); `/tmp` and the rest of the disk are refused | own dirs only | own dirs only (ABI 1 also refuses renames and links across directories) |
 | Unix sockets | only its own (in its own dirs); every other socket, including the system tailscaled socket and DNS (mDNSResponder), is refused | none: seccomp refuses `socket(AF_UNIX)` (except a Node app in `listen: "unix"` mode) | same as ABI ≥ 4 |
-| TCP | connect only to `localhost:<port>` for the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: none); bind only its own port | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); bind only its own port. Landlock matches port numbers, not addresses | **unrestricted** (Landlock has no TCP rules before ABI 4) |
+| TCP | IPv4 only: connect only to the ports hostd gives it on IPv4 loopback (a Node app: its egress proxy and its own port; workerd: none), so `[::1]:<port>` is refused. Seatbelt can't name a literal address, so the rule is `tcp4 "localhost:<port>"`; `127.0.0.1`, where hostd listens, is the only IPv4 loopback address macOS configures. A Node app may not bind or listen on TCP at all: it listens on a unix socket in its instance dir, which hostd's ingress dials, and hostd forwards `127.0.0.1:<PORT>` to it for self-calls. (Seatbelt's bind rule matches the port, not the address, so an allowed port could be bound on `0.0.0.0` and reached from the LAN.) workerd binds only its inspector port, under `tw dev` | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); a Node app binds nothing: hostd passes it its listener (`127.0.0.1:<PORT>`, or its unix socket) as fd 3, and seccomp makes every `listen()` a no-op, so no socket the app creates ever listens, on any address. (Landlock matches port numbers, not addresses, and doesn't see an unbound socket's `listen()`.) | **unrestricted** (Landlock has no TCP rules before ABI 4) |
 | Other sockets | none (no UDP, so no DNS of its own; netd resolves names) | TCP only for IPv4/IPv6 (no UDP, ICMP, raw or MPTCP); netlink route only | same as ABI ≥ 4 |
 | Signals | only itself and its own children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload | only itself and its own process group | same as ABI ≥ 4 |
 | Other syscalls | not filtered; exec only of the runtime binary, its own dirs and the OS dirs (`/bin`, `/usr`, `/opt`, …) | seccomp refuses ptrace, `process_vm_readv/writev`, mount, bpf, perf, keyrings, new namespaces, kexec, modules, io_uring, … | same as ABI ≥ 4 |
 | Node-tier egress (`tw status`) | `enforced` | `enforced` | `unenforced`: the egress proxy is cooperative |
 
-On every platform, the process tier sets no CPU or memory limit (see
-[Limits that don't exist](limits.md#limits-that-dont-exist)), and the
+On every platform the process tier caps each workload's V8 heap and sets
+no other CPU or memory limit (see
+[Availability between tenants](#availability-between-tenants)), and the
 workload runs as the same user as tailworks.
 
 So on Landlock ABI 1–3, a hostile Node app, or workerd code after a V8
@@ -110,6 +111,33 @@ macOS with `-sandbox seatbelt-legacy`) **is admitted** as a shared host.
 a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
+
+### Availability between tenants
+
+The sandboxes above are about confidentiality and integrity: what a
+workload can read, write and reach. They don't give tenants their own
+share of the machine. What each tier does about one tenant using up a
+host:
+
+| | process tier | microVM tier |
+|---|---|---|
+| Memory | each V8 isolate's heap is capped (`tw-hostd -workerd-heap-mib`, default 1024 MiB; a Node app's `--max-old-space-size`, default 2048 MiB). Past it, that workload's workerd or Node process aborts and hostd restarts it. Memory outside the V8 heap (native buffers, WebAssembly memory) is not capped | the guest's memory (`-vm-mem-mib`, default 512 MiB) bounds everything in the workload |
+| CPU | not limited: a busy workload competes with every other process on the host | the guest's vCPUs (`-vm-vcpus`, default 2) |
+| Disk, logs, telemetry | bounded per workload ([limits.md](limits.md)) | as on the process tier, plus the guest's volume (`-vm-volume-mib`) |
+| Requests | not limited per workload on the tailnet: your tailnet policy decides who may call it. Public (Funnel) traffic is rate-limited per workload and per client IP | the same |
+
+So **availability isolation between tenants is not provided on the
+process tier**: the heap cap stops one runaway allocation from taking the
+host's memory, but a tenant can still slow its neighbours down with CPU,
+native memory or a flood of requests from callers your policy lets in.
+If tenants that don't trust each other share a host and that matters,
+put them on the microVM tier or on separate hosts.
+
+mgmt protects itself from its tailnet callers: each WhoIs node has its
+own request-rate bucket (hosts a larger one), and non-host callers share a
+bounded number of in-flight requests, so neither a script nor a flood
+from one admin's machine can starve the hosts' heartbeats. Over either
+limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
 
 ## Egress
 
@@ -232,6 +260,17 @@ The red team's open items are tracked in
   Worker, so code that rewrites that isolate's JavaScript built-ins can
   defeat any check made there. Facet objects (the default) each get
   their own isolate.
+- **Snapshot-restored microVMs share some kernel secrets.** On Linux,
+  microVMs restored from one base snapshot (rebuilt at least hourly) get
+  fresh randomness before tenant code runs. They still share the kernel
+  secrets created before the snapshot: the TCP sequence-number and port
+  keys, the hash-table seeds, and the kernel layout (on amd64 the layout
+  is the same for every guest anyway: Firecracker guests there have no
+  KASLR slide). A
+  tenant can't use these against another tenant. A guest's TCP never
+  leaves its host: it ends at that VM's own gateway, and guests have no
+  network path to each other. Linux can't re-key these secrets after boot
+  ([ADR-030](design/adr/030-microvm-snapshot-restore.md), ledger H24).
 - **On-behalf-of assertions** (`actingFor`) aren't implemented.
 - **Smart placement trusts each host's own path measurements.** A host
   reports only its own paths, only for tenants it already runs, within

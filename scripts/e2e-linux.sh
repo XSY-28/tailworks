@@ -7,7 +7,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 : "${TW_E2E_OUT:=$ROOT/e2e/real/results/linux-$(date +%Y%m%d-%H%M%S)}"
 export TW_E2E_OUT
 mkdir -p "$TW_E2E_OUT"
-[ $# -gt 0 ] || set -- ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 ubuntu22-arm64
+[ $# -gt 0 ] || set -- ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 fedora-arm64 ubuntu22-arm64
 # TW_E2E_RELEASE=vX.Y.Z: test that GitHub release's linux tarballs (gh release
 # download, checked against its SHA256SUMS here; install.sh checks the
 # signature in the VM) instead of TW_E2E_TARBALL_<arch> from `make release`.

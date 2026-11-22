@@ -546,7 +546,14 @@ func (m *Mgmt) SendQueue(ctx context.Context, tenantID, name string, c QueueCall
 			rows[i] = queueMsgRow{ID: id, ContentType: msg.ContentType, Size: int64(len(msg.Body)), Body: sealed, SentAt: now, VisibleAt: now + d}
 			res.IDs[i] = id
 		}
-		q, err = qs.SendQueue(ctx, tenantID, name, q.Incarnation, rows, QueueMaxBytes, now)
+		quota, err := m.tenantQuotas(ctx, tenantID) // quota.go
+		if err != nil {
+			return QueueSendResult{}, err
+		}
+		q, err = qs.SendQueue(ctx, tenantID, name, q.Incarnation, rows, QueueMaxBytes, quota.MaxQueueBytes, now)
+		if qe, ok := asQuotaError(err, tenantID, "queue "+name); ok {
+			return QueueSendResult{}, qe
+		}
 		switch {
 		case errors.Is(err, errQueueGone) && attempt < 2:
 			continue // deleted under us: send to the new queue

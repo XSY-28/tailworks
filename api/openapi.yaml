@@ -292,7 +292,8 @@ paths:
       description: |
         Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
         `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-        `tier`. Switching mode or changing a client ID / credential file drops
+        `tier`, the container quotas and the storage quotas
+        (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
         cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
         can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
         `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -373,6 +374,31 @@ paths:
                 doc_url: https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#tenant_has_live_objects
                 trace_id: 7f3a…
         "412": { $ref: "#/components/responses/PreconditionFailed" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/usage:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [tenants]
+      operationId: GetTenantUsage
+      summary: What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+      description: |
+        The bytes and counts of the tenant's platform stores (KV, D1, R2
+        bucket indexes: their journals) and queues, its storage quotas
+        (`0` = unlimited), the fixed per-store and per-queue limits, and its
+        largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+        the tenant's `ETag` doesn't change with every write.
+        `404 unknown_tenant`.
+      x-tw-role: admin|tenant:read
+      responses:
+        "200":
+          description: The tenant's storage usage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantUsage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/tenants/{id}/objects:
@@ -866,6 +892,67 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Promotion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/workloads/{workload}/policy:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+    post:
+      tags: [tenants, deployments]
+      operationId: ApplyWorkloadPolicy
+      summary: Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+      description: |
+        Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+        does, turns what is missing into a policy snippet (the `tagOwners`
+        of its tags, a grant per `tailnet.connects`, and for public routes
+        `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+        tenant's tailnet policy:
+
+        1. read the policy with its ETag;
+        2. merge additively (comments kept; no existing entry is changed,
+           reordered or removed), refusing anything outside `tag:tw*`
+           (RT-06, `internal/policy.Check`);
+        3. validate it with the control plane;
+        4. write it with `If-Match`. If the policy changed in between
+           (`412`), steps 1–4 run once more; a second conflict is
+           `409 policy_conflict` and nothing is written.
+
+        `added` is what was (or, with `dryRun`, would be) added, and
+        `manual` what is missing that tailworks never writes (the
+        `autoApprovers.services` entry of a Tailscale Service, tag
+        ownership problems of a team tenant, grants it refuses, and grants
+        to a tag the policy doesn't define, which the control plane would
+        reject); add those
+        in the admin console. `dryRun=true` writes nothing and needs only
+        Policy File › Read; the write needs the tenant's OAuth client to
+        hold Policy File write (`403 policy_write_denied` otherwise).
+
+        Admins only: this edits the tailnet policy, which tenant admins
+        don't own. Audited (`kind: policy_apply`, with the additions and
+        both ETags, or the refusal).
+      x-tw-role: admin
+      x-tw-audit: true
+      parameters:
+        - name: dryRun
+          in: query
+          description: Plan only (`added` is what would be written); the policy is not changed.
+          schema: { type: boolean, default: false }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PolicyApplyCreate" }
+      responses:
+        "200":
+          description: What was added (or would be, with `dryRun`), and the preflight of the bundle against the policy as it now is.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PolicyApply" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -4391,6 +4478,8 @@ components:
         | `object_quota_exceeded` | 429 | tenant `maxObjects` |
         | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
         | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+        | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+        | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
         | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
         | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
         | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -4400,6 +4489,9 @@ components:
         | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
         | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
         | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+        | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+        | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+        | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
         | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
         | `internal` | 500 | — |
       enum:
@@ -4473,12 +4565,17 @@ components:
         - object_quota_exceeded
         - spawn_budget_exceeded
         - container_quota_exceeded
+        - storage_quota_exceeded
+        - rate_limited
         - bootstrap_failed
         - host_unavailable
         - host_token_unconfigured
         - identity_pending
         - no_host
         - policy_unavailable
+        - policy_write_denied
+        - policy_conflict
+        - policy_apply_failed
         - image_unavailable
         - registry_unavailable
         - mirror_disabled
@@ -4772,6 +4869,9 @@ components:
         maxContainers: { type: integer, minimum: 1, default: 10, description: "Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`." }
         maxContainerMemMiB: { type: integer, minimum: 1, default: 16384, description: Total guest memory of the tenant's running containers. }
         maxContainerVCPU: { type: number, exclusiveMinimum: 0, default: 8, description: "Total vCPUs of the tenant's running containers (fractional: `lite` is 1/16)." }
+        maxStoreBytes: { type: integer, format: int64, minimum: 0, default: 0, description: "Bytes kept by all the tenant's platform stores together (KV, D1, R2 index journals); past it an append that grows a store is `429 storage_quota_exceeded`. Absent or 0: unlimited (each store still has its own 1 GiB)." }
+        maxQueueBytes: { type: integer, format: int64, minimum: 0, default: 0, description: "Bytes of all the tenant's queued messages together; past it a send is `429 storage_quota_exceeded`. Absent or 0: unlimited (each queue still has its own 1 GiB)." }
+        maxStores: { type: integer, minimum: 0, default: 0, description: "Platform stores the tenant may have; past it creating one is `429 storage_quota_exceeded`. Absent or 0: unlimited." }
         pool:
           type: string
           description: Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host).
@@ -4839,6 +4939,9 @@ components:
         maxContainers: { type: integer, minimum: 1 }
         maxContainerMemMiB: { type: integer, minimum: 1 }
         maxContainerVCPU: { type: number, exclusiveMinimum: 0 }
+        maxStoreBytes: { type: [integer, "null"], format: int64, minimum: 0, description: "0 or null: unlimited." }
+        maxQueueBytes: { type: [integer, "null"], format: int64, minimum: 0, description: "0 or null: unlimited." }
+        maxStores: { type: [integer, "null"], minimum: 0, description: "0 or null: unlimited." }
         pool: { type: [string, "null"] }
         tier: { $ref: "#/components/schemas/Tier" }
         publicIngress:
@@ -4941,6 +5044,46 @@ components:
           type: object
           description: What the delete removed, by kind (rows, custody entries, hosts to purge).
           additionalProperties: { type: integer, format: int64 }
+    TenantUsage:
+      type: object
+      required: [tenantID, stores, queues, limits, largest]
+      properties:
+        tenantID: { type: string }
+        stores:
+          type: object
+          required: [count, bytes, entries]
+          properties:
+            count: { type: integer, format: int64 }
+            bytes: { type: integer, format: int64, description: Bytes kept by the stores' journals (what counts against `maxStoreBytes`). }
+            entries: { type: integer, format: int64 }
+        queues:
+          type: object
+          required: [count, bytes, messages]
+          properties:
+            count: { type: integer, format: int64 }
+            bytes: { type: integer, format: int64, description: Bytes of the queued messages (what counts against `maxQueueBytes`). }
+            messages: { type: integer, format: int64 }
+        limits:
+          type: object
+          required: [maxStoreBytes, maxQueueBytes, maxStores, storeMaxBytes, queueMaxBytes]
+          properties:
+            maxStoreBytes: { type: integer, format: int64, description: The tenant's quota; 0 = unlimited. }
+            maxQueueBytes: { type: integer, format: int64, description: The tenant's quota; 0 = unlimited. }
+            maxStores: { type: integer, description: The tenant's quota; 0 = unlimited. }
+            storeMaxBytes: { type: integer, format: int64, description: One store's own limit. }
+            queueMaxBytes: { type: integer, format: int64, description: One queue's own limit. }
+        largest:
+          type: array
+          description: The tenant's largest stores and queues (at most 5), biggest first.
+          items:
+            type: object
+            required: [kind, name, bytes, limit]
+            properties:
+              workload: { type: string, description: The store's workload (absent for a queue). }
+              kind: { type: string, description: "`kv`, `d1`, `r2`, … or `queue`." }
+              name: { type: string }
+              bytes: { type: integer, format: int64 }
+              limit: { type: integer, format: int64, description: Its own size limit. }
     PurgeResult:
       type: object
       required: [purged]
@@ -5665,6 +5808,34 @@ components:
             Grants to `tag:tw-mgmt` that don't do what they look like: values on `github.com/rosskukulinski/tailworks/cap/admin` (they don't narrow it),
             invalid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants,
             `github.com/rosskukulinski/tailworks/cap/mcp` or `github.com/rosskukulinski/tailworks/cap/approve` grants (they apply to every tenant). Never make `ok` false.
+    PolicyApplyCreate:
+      type: object
+      required: [bundle]
+      properties:
+        bundle: { type: string, contentEncoding: base64, description: "The bundle, as for `POST /v1/deployments`." }
+        namespaces:
+          type: array
+          description: Override the classes read from `tailworks.jsonc` (tests).
+          items: { $ref: "#/components/schemas/ClassConfig" }
+      additionalProperties: false
+    PolicyApply:
+      type: object
+      required: [tenantID, workload, dryRun, changed, preflight]
+      properties:
+        tenantID: { type: string }
+        workload: { type: string }
+        dryRun: { type: boolean }
+        changed: { type: boolean, description: The policy was written. }
+        added:
+          type: string
+          description: The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes.
+        manual:
+          type: array
+          items: { type: string }
+          description: What the bundle still needs that tailworks doesn't write; add it in the admin console.
+        oldETag: { type: string, description: The policy's ETag before the write. }
+        newETag: { type: string, description: Its ETag after. }
+        preflight: { $ref: "#/components/schemas/PreflightResult" }
 
     # ------------------------------------------------------------- objects
     ObjectStatus:
@@ -5854,6 +6025,7 @@ components:
         `container_stop` (an object's container, ADR-032),
         `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
         mgmt chain:
+        `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
         `tenant_create`,
         `tenant_update`,
         `tenant_delete`,
@@ -5903,6 +6075,7 @@ components:
         `notification_test` (`tw notify test`; the origin and the outcome),
         `reap`,
         `preflight` (optional; dryRun deploys),
+        `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
         `host_add`,
         `credential`,
         `obo_root`,
@@ -5939,6 +6112,7 @@ components:
         - container_start
         - container_stop
         - audit_dropped
+        - audit_pruned
         - tenant_create
         - tenant_update
         - tenant_delete
@@ -5987,6 +6161,7 @@ components:
         - notification_test
         - reap
         - preflight
+        - policy_apply
         - host_add
         - credential
         - obo_root
@@ -6055,6 +6230,10 @@ components:
         records: { type: integer }
         brokenAt: { type: integer, format: int64, description: seq of the first bad record }
         error: { type: string }
+        prunedThrough:
+          type: integer
+          format: int64
+          description: "Audit retention (`tw-mgmt -audit-max-age`, `-audit-max-records`) deleted this chain's records up to this seq. The records kept still verify: the first one links to the checkpointed hash of the last one deleted. Absent: nothing was pruned."
     AuditAppendResult:
       type: object
       required: [accepted, chain]

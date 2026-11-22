@@ -441,15 +441,21 @@ CREATE INDEX IF NOT EXISTS host_paths_host ON host_paths (host_id, measured_at);
 `
 
 // Append-only audit: UPDATE/DELETE on audit rows abort (defence in depth;
-// the hash chain is what detects tampering).
+// the hash chain is what detects tampering). The one DELETE allowed is of
+// records at or below their chain's retention checkpoint (retention.go:
+// the pruner writes the checkpoint first). audit_no_delete was the
+// trigger before retention; it is dropped for audit_no_delete_kept.
 const sqliteTriggers = `
 CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
+DROP TRIGGER IF EXISTS audit_no_delete;
+CREATE TRIGGER IF NOT EXISTS audit_no_delete_kept BEFORE DELETE ON audit WHEN NOT EXISTS (SELECT 1 FROM audit_checkpoints c WHERE c.chain = OLD.chain AND OLD.seq <= c.seq) BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
 `
 
 const pgTriggers = `
 CREATE OR REPLACE FUNCTION tw_audit_append_only() RETURNS trigger AS $$
-BEGIN RAISE EXCEPTION 'audit is append-only'; END; $$ LANGUAGE plpgsql;
+BEGIN
+IF TG_OP = 'DELETE' AND EXISTS (SELECT 1 FROM audit_checkpoints c WHERE c.chain = OLD.chain AND OLD.seq <= c.seq) THEN RETURN OLD; END IF;
+RAISE EXCEPTION 'audit is append-only'; END; $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS audit_append_only ON audit;
 CREATE TRIGGER audit_append_only BEFORE UPDATE OR DELETE ON audit FOR EACH ROW EXECUTE FUNCTION tw_audit_append_only();
 `
@@ -814,13 +820,15 @@ func jsonStr(v any) string {
 // columns stay in the schema (rows written by older tailworks versions; no
 // migration needed) but nothing reads them since the wif mint mode was
 // removed, and UpdateTenant clears them.
-const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress, owner_tag, name_prefix"
+const tenantCols = "id, tailnet, control_url, mint_mode, api_key_file, rpm, max_objects, created_at, pool, tier, updated_at, oauth_client_id, oauth_client_file, max_containers, max_container_mem, max_container_uvcpu, public_ingress, owner_tag, name_prefix, max_store_bytes, max_queue_bytes, max_stores"
 
 func scanTenant(sc interface{ Scan(...any) error }) (Tenant, error) {
 	var t Tenant
-	var rpm, mo, mc, mm, mv int64
+	var rpm, mo, mc, mm, mv, ms int64
 	err := sc.Scan(&t.ID, &t.Tailnet, &t.ControlURL, &t.MintMode, &t.APIKeyFile, &rpm, &mo, &t.CreatedAt, &t.Pool, &t.Tier, &t.UpdatedAt, &t.OAuthClientID, &t.OAuthClientFile,
-		&mc, &mm, &mv, &t.PublicIngress, &t.OwnerTag, &t.NamePrefix)
+		&mc, &mm, &mv, &t.PublicIngress, &t.OwnerTag, &t.NamePrefix,
+		&t.MaxStoreBytes, &t.MaxQueueBytes, &ms)
+	t.MaxStores = int(ms)
 	t.RegistrationsPerMinute, t.MaxObjects = int(rpm), int(mo)
 	t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU = int(mc), int(mm), float64(mv)/1e6
 	t.containerDefaults() // rows from before the columns
@@ -840,10 +848,11 @@ func (s *SQLStore) CreateTenant(ctx context.Context, t Tenant) error {
 	if t.UpdatedAt == 0 {
 		t.UpdatedAt = t.CreatedAt
 	}
-	_, err := s.db.ExecContext(ctx, s.q("INSERT INTO tenants ("+tenantCols+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
+	_, err := s.db.ExecContext(ctx, s.q("INSERT INTO tenants ("+tenantCols+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"),
 		t.ID, t.Tailnet, t.ControlURL, t.MintMode, t.APIKeyFile,
 		t.RegistrationsPerMinute, t.MaxObjects, t.CreatedAt, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
-		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.OwnerTag, t.NamePrefix)
+		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.OwnerTag, t.NamePrefix,
+		t.MaxStoreBytes, t.MaxQueueBytes, t.MaxStores)
 	if isUnique(err) {
 		return ErrExists
 	}
@@ -853,9 +862,10 @@ func (s *SQLStore) CreateTenant(ctx context.Context, t Tenant) error {
 // UpdateTenant rewrites a tenant's mint configuration (mode, credential
 // files) and limits; ID, tailnet and createdAt are immutable.
 func (s *SQLStore) UpdateTenant(ctx context.Context, t Tenant) error {
-	res, err := s.db.ExecContext(ctx, s.q("UPDATE tenants SET control_url=?, mint_mode=?, api_key_file=?, wif_client_id='', wif_lifecycle_client_id='', rpm=?, max_objects=?, pool=?, tier=?, updated_at=?, oauth_client_id=?, oauth_client_file=?, max_containers=?, max_container_mem=?, max_container_uvcpu=?, public_ingress=?, owner_tag=?, name_prefix=? WHERE id=?"),
+	res, err := s.db.ExecContext(ctx, s.q("UPDATE tenants SET control_url=?, mint_mode=?, api_key_file=?, wif_client_id='', wif_lifecycle_client_id='', rpm=?, max_objects=?, pool=?, tier=?, updated_at=?, oauth_client_id=?, oauth_client_file=?, max_containers=?, max_container_mem=?, max_container_uvcpu=?, public_ingress=?, owner_tag=?, name_prefix=?, max_store_bytes=?, max_queue_bytes=?, max_stores=? WHERE id=?"),
 		t.ControlURL, t.MintMode, t.APIKeyFile, t.RegistrationsPerMinute, t.MaxObjects, t.Pool, t.Tier, t.UpdatedAt, t.OAuthClientID, t.OAuthClientFile,
-		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.OwnerTag, t.NamePrefix, t.ID)
+		t.MaxContainers, t.MaxContainerMemMiB, micro(t.MaxContainerVCPU), t.PublicIngress, t.OwnerTag, t.NamePrefix,
+		t.MaxStoreBytes, t.MaxQueueBytes, t.MaxStores, t.ID)
 	if err != nil {
 		return err
 	}

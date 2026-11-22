@@ -104,6 +104,7 @@ const (
 	AuditKindApprovalRequested   AuditKind = "approval_requested"
 	AuditKindApprovalTimeout     AuditKind = "approval_timeout"
 	AuditKindAuditDropped        AuditKind = "audit_dropped"
+	AuditKindAuditPruned         AuditKind = "audit_pruned"
 	AuditKindContainerRelease    AuditKind = "container_release"
 	AuditKindContainerReserve    AuditKind = "container_reserve"
 	AuditKindContainerStart      AuditKind = "container_start"
@@ -136,6 +137,7 @@ const (
 	AuditKindNotificationTest    AuditKind = "notification_test"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
+	AuditKindPolicyApply         AuditKind = "policy_apply"
 	AuditKindPreflight           AuditKind = "preflight"
 	AuditKindPrincipal           AuditKind = "principal"
 	AuditKindPublicNameClaim     AuditKind = "public_name_claim"
@@ -194,6 +196,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindApprovalTimeout:
 		return true
 	case AuditKindAuditDropped:
+		return true
+	case AuditKindAuditPruned:
 		return true
 	case AuditKindContainerRelease:
 		return true
@@ -258,6 +262,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindObjectUpdate:
 		return true
 	case AuditKindOboRoot:
+		return true
+	case AuditKindPolicyApply:
 		return true
 	case AuditKindPreflight:
 		return true
@@ -490,8 +496,11 @@ const (
 	ErrorCodeNotFound                ErrorCode = "not_found"
 	ErrorCodeNotReady                ErrorCode = "not_ready"
 	ErrorCodeObjectQuotaExceeded     ErrorCode = "object_quota_exceeded"
+	ErrorCodePolicyApplyFailed       ErrorCode = "policy_apply_failed"
+	ErrorCodePolicyConflict          ErrorCode = "policy_conflict"
 	ErrorCodePolicyMissingTagOwners  ErrorCode = "policy_missing_tag_owners"
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
+	ErrorCodePolicyWriteDenied       ErrorCode = "policy_write_denied"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodePreviewConflict         ErrorCode = "preview_conflict"
 	ErrorCodePreviewFailed           ErrorCode = "preview_failed"
@@ -501,6 +510,7 @@ const (
 	ErrorCodePublicNameInUse         ErrorCode = "public_name_in_use"
 	ErrorCodePublicNameOwned         ErrorCode = "public_name_owned"
 	ErrorCodeQueueLimit              ErrorCode = "queue_limit"
+	ErrorCodeRateLimited             ErrorCode = "rate_limited"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
 	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
@@ -508,6 +518,7 @@ const (
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSharedOwnerTag          ErrorCode = "shared_owner_tag"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
+	ErrorCodeStorageQuotaExceeded    ErrorCode = "storage_quota_exceeded"
 	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
 	ErrorCodeStoreDegraded           ErrorCode = "store_degraded"
 	ErrorCodeStoreLimit              ErrorCode = "store_limit"
@@ -629,9 +640,15 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeObjectQuotaExceeded:
 		return true
+	case ErrorCodePolicyApplyFailed:
+		return true
+	case ErrorCodePolicyConflict:
+		return true
 	case ErrorCodePolicyMissingTagOwners:
 		return true
 	case ErrorCodePolicyUnavailable:
+		return true
+	case ErrorCodePolicyWriteDenied:
 		return true
 	case ErrorCodePreconditionFailed:
 		return true
@@ -651,6 +668,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeQueueLimit:
 		return true
+	case ErrorCodeRateLimited:
+		return true
 	case ErrorCodeRegistryUnavailable:
 		return true
 	case ErrorCodeReplicaConflict:
@@ -664,6 +683,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSharedOwnerTag:
 		return true
 	case ErrorCodeSpawnBudgetExceeded:
+		return true
+	case ErrorCodeStorageQuotaExceeded:
 		return true
 	case ErrorCodeStoreConflict:
 		return true
@@ -1626,6 +1647,7 @@ type AuditBatch struct {
 // `container_stop` (an object's container, ADR-032),
 // `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 // mgmt chain:
+// `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
 // `tenant_create`,
 // `tenant_update`,
 // `tenant_delete`,
@@ -1675,6 +1697,7 @@ type AuditBatch struct {
 // `notification_test` (`tw notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
+// `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
 // `host_add`,
 // `credential`,
 // `obo_root`,
@@ -1746,6 +1769,7 @@ type AuditRecord struct {
 	// `container_stop` (an object's container, ADR-032),
 	// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 	// mgmt chain:
+	// `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
 	// `tenant_create`,
 	// `tenant_update`,
 	// `tenant_delete`,
@@ -1795,6 +1819,7 @@ type AuditRecord struct {
 	// `notification_test` (`tw notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
+	// `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
 	// `host_add`,
 	// `credential`,
 	// `obo_root`,
@@ -1865,7 +1890,10 @@ type ChainStatus struct {
 	Chain    string  `json:"chain"`
 	Error    *string `json:"error,omitempty"`
 	Ok       bool    `json:"ok"`
-	Records  int     `json:"records"`
+
+	// PrunedThrough Audit retention (`tw-mgmt -audit-max-age`, `-audit-max-records`) deleted this chain's records up to this seq. The records kept still verify: the first one links to the checkpointed hash of the last one deleted. Absent: nothing was pruned.
+	PrunedThrough *int64 `json:"prunedThrough,omitempty"`
+	Records       int    `json:"records"`
 }
 
 // ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
@@ -2350,6 +2378,8 @@ type Error struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+	// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2359,6 +2389,9 @@ type Error struct {
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+	// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+	// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -2448,6 +2481,8 @@ type Error struct {
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 // | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 // | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 // | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2457,6 +2492,9 @@ type Error struct {
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 // | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 // | `internal` | 500 | — |
 type ErrorCode string
@@ -2665,6 +2703,8 @@ type HostDrainResult struct {
 		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+		// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+		// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 		// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 		// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2674,6 +2714,9 @@ type HostDrainResult struct {
 		// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 		// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 		// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+		// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+		// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+		// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 		// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 		// | `internal` | 500 | — |
 		Code     ErrorCode `json:"code"`
@@ -3248,6 +3291,37 @@ type PlacementDecisionMode string
 
 // PlacementDecisionReason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
 type PlacementDecisionReason string
+
+// PolicyApply defines model for PolicyApply.
+type PolicyApply struct {
+	// Added The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes.
+	Added *string `json:"added,omitempty"`
+
+	// Changed The policy was written.
+	Changed bool `json:"changed"`
+	DryRun  bool `json:"dryRun"`
+
+	// Manual What the bundle still needs that tailworks doesn't write; add it in the admin console.
+	Manual *[]string `json:"manual,omitempty"`
+
+	// NewETag Its ETag after.
+	NewETag *string `json:"newETag,omitempty"`
+
+	// OldETag The policy's ETag before the write.
+	OldETag   *string         `json:"oldETag,omitempty"`
+	Preflight PreflightResult `json:"preflight"`
+	TenantID  string          `json:"tenantID"`
+	Workload  string          `json:"workload"`
+}
+
+// PolicyApplyCreate defines model for PolicyApplyCreate.
+type PolicyApplyCreate struct {
+	// Bundle The bundle, as for `POST /v1/deployments`.
+	Bundle []byte `json:"bundle"`
+
+	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
+	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
+}
 
 // PreflightMissing defines model for PreflightMissing.
 type PreflightMissing struct {
@@ -4143,6 +4217,15 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
+	// MaxQueueBytes Bytes of all the tenant's queued messages together; past it a send is `429 storage_quota_exceeded`. Absent or 0: unlimited (each queue still has its own 1 GiB).
+	MaxQueueBytes *int64 `json:"maxQueueBytes,omitempty"`
+
+	// MaxStoreBytes Bytes kept by all the tenant's platform stores together (KV, D1, R2 index journals); past it an append that grows a store is `429 storage_quota_exceeded`. Absent or 0: unlimited (each store still has its own 1 GiB).
+	MaxStoreBytes *int64 `json:"maxStoreBytes,omitempty"`
+
+	// MaxStores Platform stores the tenant may have; past it creating one is `429 storage_quota_exceeded`. Absent or 0: unlimited.
+	MaxStores *int `json:"maxStores,omitempty"`
+
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
@@ -4275,6 +4358,15 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
+	// MaxQueueBytes 0 or null: unlimited.
+	MaxQueueBytes nullable.Nullable[int64] `json:"maxQueueBytes,omitempty"`
+
+	// MaxStoreBytes 0 or null: unlimited.
+	MaxStoreBytes nullable.Nullable[int64] `json:"maxStoreBytes,omitempty"`
+
+	// MaxStores 0 or null: unlimited.
+	MaxStores nullable.Nullable[int] `json:"maxStores,omitempty"`
+
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode *MintMode `json:"mintMode,omitempty"`
 
@@ -4291,6 +4383,53 @@ type TenantPatch struct {
 	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int                      `json:"registrationsPerMinute,omitempty"`
 	Tier                   *Tier                     `json:"tier,omitempty"`
+}
+
+// TenantUsage defines model for TenantUsage.
+type TenantUsage struct {
+	// Largest The tenant's largest stores and queues (at most 5), biggest first.
+	Largest []struct {
+		Bytes int64 `json:"bytes"`
+
+		// Kind `kv`, `d1`, `r2`, … or `queue`.
+		Kind string `json:"kind"`
+
+		// Limit Its own size limit.
+		Limit int64  `json:"limit"`
+		Name  string `json:"name"`
+
+		// Workload The store's workload (absent for a queue).
+		Workload *string `json:"workload,omitempty"`
+	} `json:"largest"`
+	Limits struct {
+		// MaxQueueBytes The tenant's quota; 0 = unlimited.
+		MaxQueueBytes int64 `json:"maxQueueBytes"`
+
+		// MaxStoreBytes The tenant's quota; 0 = unlimited.
+		MaxStoreBytes int64 `json:"maxStoreBytes"`
+
+		// MaxStores The tenant's quota; 0 = unlimited.
+		MaxStores int `json:"maxStores"`
+
+		// QueueMaxBytes One queue's own limit.
+		QueueMaxBytes int64 `json:"queueMaxBytes"`
+
+		// StoreMaxBytes One store's own limit.
+		StoreMaxBytes int64 `json:"storeMaxBytes"`
+	} `json:"limits"`
+	Queues struct {
+		// Bytes Bytes of the queued messages (what counts against `maxQueueBytes`).
+		Bytes    int64 `json:"bytes"`
+		Count    int64 `json:"count"`
+		Messages int64 `json:"messages"`
+	} `json:"queues"`
+	Stores struct {
+		// Bytes Bytes kept by the stores' journals (what counts against `maxStoreBytes`).
+		Bytes   int64 `json:"bytes"`
+		Count   int64 `json:"count"`
+		Entries int64 `json:"entries"`
+	} `json:"stores"`
+	TenantID string `json:"tenantID"`
 }
 
 // Tier defines model for Tier.
@@ -4400,6 +4539,8 @@ type TombstoneError struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+	// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -4409,6 +4550,9 @@ type TombstoneError struct {
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+	// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+	// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -5099,6 +5243,12 @@ type GetWorkloadLogsParams struct {
 // GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParamsSource string
 
+// ApplyWorkloadPolicyParams defines parameters for ApplyWorkloadPolicy.
+type ApplyWorkloadPolicyParams struct {
+	// DryRun Plan only (`added` is what would be written); the policy is not changed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
+}
+
 // CreatePromotionParams defines parameters for CreatePromotion.
 type CreatePromotionParams struct {
 	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
@@ -5284,6 +5434,9 @@ type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
 type QueryD1JSONRequestBody = D1Query
+
+// ApplyWorkloadPolicyJSONRequestBody defines body for ApplyWorkloadPolicy for application/json ContentType.
+type ApplyWorkloadPolicyJSONRequestBody = PolicyApplyCreate
 
 // CreatePromotionJSONRequestBody defines body for CreatePromotion for application/json ContentType.
 type CreatePromotionJSONRequestBody = PromotionCreate
@@ -6469,7 +6622,8 @@ type ClientInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -6483,7 +6637,8 @@ type ClientInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -6497,7 +6652,8 @@ type ClientInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -6853,6 +7009,18 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetry(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetTenantUsage What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+	//
+	// The bytes and counts of the tenant's platform stores (KV, D1, R2
+	// bucket indexes: their journals) and queues, its storage quotas
+	// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+	// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+	// the tenant's `ETag` doesn't change with every write.
+	// `404 unknown_tenant`.
+	//
+	// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+	GetTenantUsage(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DecideApprovalWithBody Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
@@ -7004,6 +7172,78 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyWorkloadPolicyWithBody Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApplyWorkloadPolicy Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicy(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	//
@@ -9166,7 +9406,8 @@ func (c *Client) GetTenant(ctx context.Context, id TenantID, params *GetTenantPa
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -9190,7 +9431,8 @@ func (c *Client) UpdateTenantWithBody(ctx context.Context, id TenantID, params *
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -9214,7 +9456,8 @@ func (c *Client) UpdateTenant(ctx context.Context, id TenantID, params *UpdateTe
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -9830,6 +10073,28 @@ func (c *Client) PutTenantTelemetry(ctx context.Context, id TenantID, body PutTe
 	return c.Client.Do(req)
 }
 
+// GetTenantUsage What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+//
+// The bytes and counts of the tenant's platform stores (KV, D1, R2
+// bucket indexes: their journals) and queues, its storage quotas
+// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+// the tenant's `ETag` doesn't change with every write.
+// `404 unknown_tenant`.
+//
+// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+func (c *Client) GetTenantUsage(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTenantUsageRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // DecideApprovalWithBody Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
@@ -10042,6 +10307,98 @@ func (c *Client) ListWorkloadDeployments(ctx context.Context, id TenantID, workl
 // Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetWorkloadLogsRequest(c.Server, id, workload, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyWorkloadPolicyWithBody Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *Client) ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyWorkloadPolicyRequestWithBody(c.Server, id, workload, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApplyWorkloadPolicy Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *Client) ApplyWorkloadPolicy(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApplyWorkloadPolicyRequest(c.Server, id, workload, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -14840,6 +15197,40 @@ func NewPutTenantTelemetryRequestWithBody(server string, id TenantID, contentTyp
 	return req, nil
 }
 
+// NewGetTenantUsageRequest constructs an http.Request for the GetTenantUsage method
+func NewGetTenantUsageRequest(server string, id TenantID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/usage", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDecideApprovalRequest calls the generic DecideApproval builder with application/json body
 func NewDecideApprovalRequest(server string, id TenantID, workload WorkloadName, workflow string, instance string, body DecideApprovalJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -15269,6 +15660,87 @@ func NewGetWorkloadLogsRequest(server string, id TenantID, workload WorkloadName
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewApplyWorkloadPolicyRequest calls the generic ApplyWorkloadPolicy builder with application/json body
+func NewApplyWorkloadPolicyRequest(server string, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApplyWorkloadPolicyRequestWithBody(server, id, workload, params, "application/json", bodyReader)
+}
+
+// NewApplyWorkloadPolicyRequestWithBody constructs an http.Request for the ApplyWorkloadPolicy method, with any body, and a specified content type
+func NewApplyWorkloadPolicyRequestWithBody(server string, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/policy", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.DryRun != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "dryRun", *params.DryRun, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -18155,7 +18627,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -18169,7 +18642,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -18183,7 +18657,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 	// `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-	// `tier`. Switching mode or changing a client ID / credential file drops
+	// `tier`, the container quotas and the storage quotas
+	// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 	// cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 	// can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 	// `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -18569,6 +19044,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/tenants/{id}/telemetry (the `PutTenantTelemetry` operationId).
 	PutTenantTelemetryWithResponse(ctx context.Context, id TenantID, body PutTenantTelemetryJSONRequestBody, reqEditors ...RequestEditorFn) (*PutTenantTelemetryResponse, error)
 
+	// GetTenantUsageWithResponse What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+	//
+	// The bytes and counts of the tenant's platform stores (KV, D1, R2
+	// bucket indexes: their journals) and queues, its storage quotas
+	// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+	// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+	// the tenant's `ETag` doesn't change with every write.
+	// `404 unknown_tenant`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+	GetTenantUsageWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantUsageResponse, error)
+
 	// DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	//
 	// The decision is made by the caller's own tailnet identity: mgmt's
@@ -18726,6 +19215,78 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/logs (the `GetWorkloadLogs` operationId).
 	GetWorkloadLogsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *GetWorkloadLogsParams, reqEditors ...RequestEditorFn) (*GetWorkloadLogsResponse, error)
+
+	// ApplyWorkloadPolicyWithBodyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicyWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error)
+
+	// ApplyWorkloadPolicyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	//
+	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+	// does, turns what is missing into a policy snippet (the `tagOwners`
+	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+	// tenant's tailnet policy:
+	//
+	// 1. read the policy with its ETag;
+	// 2. merge additively (comments kept; no existing entry is changed,
+	//    reordered or removed), refusing anything outside `tag:tw*`
+	//    (RT-06, `internal/policy.Check`);
+	// 3. validate it with the control plane;
+	// 4. write it with `If-Match`. If the policy changed in between
+	//    (`412`), steps 1–4 run once more; a second conflict is
+	//    `409 policy_conflict` and nothing is written.
+	//
+	// `added` is what was (or, with `dryRun`, would be) added, and
+	// `manual` what is missing that tailworks never writes (the
+	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// ownership problems of a team tenant, grants it refuses, and grants
+	// to a tag the policy doesn't define, which the control plane would
+	// reject); add those
+	// in the admin console. `dryRun=true` writes nothing and needs only
+	// Policy File › Read; the write needs the tenant's OAuth client to
+	// hold Policy File write (`403 policy_write_denied` otherwise).
+	//
+	// Admins only: this edits the tailnet policy, which tenant admins
+	// don't own. Audited (`kind: policy_apply`, with the additions and
+	// both ETags, or the refusal).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+	ApplyWorkloadPolicyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error)
 
 	// ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
 	//
@@ -25742,6 +26303,89 @@ func (r PutTenantTelemetryResponse) ContentType() string {
 	return ""
 }
 
+// GetTenantUsageResponse403Headers the declared response headers of an HTTP 403 response for GetTenantUsage
+type GetTenantUsageResponse403Headers struct {
+	TwError *string
+}
+
+// GetTenantUsageResponse404Headers the declared response headers of an HTTP 404 response for GetTenantUsage
+type GetTenantUsageResponse404Headers struct {
+	TwError *string
+}
+
+// GetTenantUsageResponseDefaultHeaders the declared response headers of an HTTP default response for GetTenantUsage
+type GetTenantUsageResponseDefaultHeaders struct {
+	TwError *string
+}
+
+type GetTenantUsageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TenantUsage
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetTenantUsageResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *GetTenantUsageResponse404Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetTenantUsageResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTenantUsageResponse) GetJSON200() *TenantUsage {
+	return r.JSON200
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetTenantUsageResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetTenantUsageResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetTenantUsageResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTenantUsageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTenantUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTenantUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTenantUsageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // DecideApprovalResponse400Headers the declared response headers of an HTTP 400 response for DecideApproval
 type DecideApprovalResponse400Headers struct {
 	TwError *string
@@ -26235,6 +26879,117 @@ func (r GetWorkloadLogsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetWorkloadLogsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ApplyWorkloadPolicyResponse400Headers the declared response headers of an HTTP 400 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse400Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponse403Headers the declared response headers of an HTTP 403 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse403Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponse404Headers the declared response headers of an HTTP 404 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse404Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponse409Headers the declared response headers of an HTTP 409 response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponse409Headers struct {
+	TwError *string
+}
+
+// ApplyWorkloadPolicyResponseDefaultHeaders the declared response headers of an HTTP default response for ApplyWorkloadPolicy
+type ApplyWorkloadPolicyResponseDefaultHeaders struct {
+	TwError *string
+}
+
+type ApplyWorkloadPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PolicyApply
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ApplyWorkloadPolicyResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ApplyWorkloadPolicyResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ApplyWorkloadPolicyResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ApplyWorkloadPolicyResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ApplyWorkloadPolicyResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON200() *PolicyApply {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ApplyWorkloadPolicyResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ApplyWorkloadPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ApplyWorkloadPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApplyWorkloadPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ApplyWorkloadPolicyResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -30468,7 +31223,8 @@ func (c *ClientWithResponses) GetTenantWithResponse(ctx context.Context, id Tena
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -30488,7 +31244,8 @@ func (c *ClientWithResponses) UpdateTenantWithBodyWithResponse(ctx context.Conte
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -30508,7 +31265,8 @@ func (c *ClientWithResponses) UpdateTenantWithResponse(ctx context.Context, id T
 //
 // Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
 // `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-// `tier`. Switching mode or changing a client ID / credential file drops
+// `tier`, the container quotas and the storage quotas
+// (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
 // cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
 // can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
 // `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -31050,6 +31808,26 @@ func (c *ClientWithResponses) PutTenantTelemetryWithResponse(ctx context.Context
 	return ParsePutTenantTelemetryResponse(rsp)
 }
 
+// GetTenantUsageWithResponse What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+//
+// The bytes and counts of the tenant's platform stores (KV, D1, R2
+// bucket indexes: their journals) and queues, its storage quotas
+// (`0` = unlimited), the fixed per-store and per-queue limits, and its
+// largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+// the tenant's `ETag` doesn't change with every write.
+// `404 unknown_tenant`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/usage (the `GetTenantUsage` operationId).
+func (c *ClientWithResponses) GetTenantUsageWithResponse(ctx context.Context, id TenantID, reqEditors ...RequestEditorFn) (*GetTenantUsageResponse, error) {
+	rsp, err := c.GetTenantUsage(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTenantUsageResponse(rsp)
+}
+
 // DecideApprovalWithBodyWithResponse Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 //
 // The decision is made by the caller's own tailnet identity: mgmt's
@@ -31248,6 +32026,90 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseGetWorkloadLogsResponse(rsp)
+}
+
+// ApplyWorkloadPolicyWithBodyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *ClientWithResponses) ApplyWorkloadPolicyWithBodyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error) {
+	rsp, err := c.ApplyWorkloadPolicyWithBody(ctx, id, workload, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyWorkloadPolicyResponse(rsp)
+}
+
+// ApplyWorkloadPolicyWithResponse Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+//
+// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
+// does, turns what is missing into a policy snippet (the `tagOwners`
+// of its tags, a grant per `tailnet.connects`, and for public routes
+// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
+// tenant's tailnet policy:
+//
+//  1. read the policy with its ETag;
+//  2. merge additively (comments kept; no existing entry is changed,
+//     reordered or removed), refusing anything outside `tag:tw*`
+//     (RT-06, `internal/policy.Check`);
+//  3. validate it with the control plane;
+//  4. write it with `If-Match`. If the policy changed in between
+//     (`412`), steps 1–4 run once more; a second conflict is
+//     `409 policy_conflict` and nothing is written.
+//
+// `added` is what was (or, with `dryRun`, would be) added, and
+// `manual` what is missing that tailworks never writes (the
+// `autoApprovers.services` entry of a Tailscale Service, tag
+// ownership problems of a team tenant, grants it refuses, and grants
+// to a tag the policy doesn't define, which the control plane would
+// reject); add those
+// in the admin console. `dryRun=true` writes nothing and needs only
+// Policy File › Read; the write needs the tenant's OAuth client to
+// hold Policy File write (`403 policy_write_denied` otherwise).
+//
+// Admins only: this edits the tailnet policy, which tenant admins
+// don't own. Audited (`kind: policy_apply`, with the additions and
+// both ETags, or the refusal).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tenants/{id}/workloads/{workload}/policy (the `ApplyWorkloadPolicy` operationId).
+func (c *ClientWithResponses) ApplyWorkloadPolicyWithResponse(ctx context.Context, id TenantID, workload WorkloadName, params *ApplyWorkloadPolicyParams, body ApplyWorkloadPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyWorkloadPolicyResponse, error) {
+	rsp, err := c.ApplyWorkloadPolicy(ctx, id, workload, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApplyWorkloadPolicyResponse(rsp)
 }
 
 // ListWorkloadPreviewsWithResponse A workload's running previews (`tw previews`)
@@ -38535,6 +39397,86 @@ func ParsePutTenantTelemetryResponse(rsp *http.Response) (*PutTenantTelemetryRes
 	return response, nil
 }
 
+// ParseGetTenantUsageResponse parses an HTTP response from a GetTenantUsageWithResponse call
+func ParseGetTenantUsageResponse(rsp *http.Response) (*GetTenantUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTenantUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TenantUsage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 403:
+		var headers GetTenantUsageResponse403Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers GetTenantUsageResponse404Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers404 = &headers
+	case true:
+		var headers GetTenantUsageResponseDefaultHeaders
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
 // ParseDecideApprovalResponse parses an HTTP response from a DecideApprovalWithResponse call
 func ParseDecideApprovalResponse(rsp *http.Response) (*DecideApprovalResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -39030,6 +39972,120 @@ func ParseGetWorkloadLogsResponse(rsp *http.Response) (*GetWorkloadLogsResponse,
 		response.Headers404 = &headers
 	case true:
 		var headers GetWorkloadLogsResponseDefaultHeaders
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseApplyWorkloadPolicyResponse parses an HTTP response from a ApplyWorkloadPolicyWithResponse call
+func ParseApplyWorkloadPolicyResponse(rsp *http.Response) (*ApplyWorkloadPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApplyWorkloadPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PolicyApply
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers ApplyWorkloadPolicyResponse400Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ApplyWorkloadPolicyResponse403Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ApplyWorkloadPolicyResponse404Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ApplyWorkloadPolicyResponse409Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ApplyWorkloadPolicyResponseDefaultHeaders
 		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

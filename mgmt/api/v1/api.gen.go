@@ -106,6 +106,7 @@ const (
 	AuditKindApprovalRequested   AuditKind = "approval_requested"
 	AuditKindApprovalTimeout     AuditKind = "approval_timeout"
 	AuditKindAuditDropped        AuditKind = "audit_dropped"
+	AuditKindAuditPruned         AuditKind = "audit_pruned"
 	AuditKindContainerRelease    AuditKind = "container_release"
 	AuditKindContainerReserve    AuditKind = "container_reserve"
 	AuditKindContainerStart      AuditKind = "container_start"
@@ -138,6 +139,7 @@ const (
 	AuditKindNotificationTest    AuditKind = "notification_test"
 	AuditKindObjectUpdate        AuditKind = "object_update"
 	AuditKindOboRoot             AuditKind = "obo_root"
+	AuditKindPolicyApply         AuditKind = "policy_apply"
 	AuditKindPreflight           AuditKind = "preflight"
 	AuditKindPrincipal           AuditKind = "principal"
 	AuditKindPublicNameClaim     AuditKind = "public_name_claim"
@@ -196,6 +198,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindApprovalTimeout:
 		return true
 	case AuditKindAuditDropped:
+		return true
+	case AuditKindAuditPruned:
 		return true
 	case AuditKindContainerRelease:
 		return true
@@ -260,6 +264,8 @@ func (e AuditKind) Valid() bool {
 	case AuditKindObjectUpdate:
 		return true
 	case AuditKindOboRoot:
+		return true
+	case AuditKindPolicyApply:
 		return true
 	case AuditKindPreflight:
 		return true
@@ -492,8 +498,11 @@ const (
 	ErrorCodeNotFound                ErrorCode = "not_found"
 	ErrorCodeNotReady                ErrorCode = "not_ready"
 	ErrorCodeObjectQuotaExceeded     ErrorCode = "object_quota_exceeded"
+	ErrorCodePolicyApplyFailed       ErrorCode = "policy_apply_failed"
+	ErrorCodePolicyConflict          ErrorCode = "policy_conflict"
 	ErrorCodePolicyMissingTagOwners  ErrorCode = "policy_missing_tag_owners"
 	ErrorCodePolicyUnavailable       ErrorCode = "policy_unavailable"
+	ErrorCodePolicyWriteDenied       ErrorCode = "policy_write_denied"
 	ErrorCodePreconditionFailed      ErrorCode = "precondition_failed"
 	ErrorCodePreviewConflict         ErrorCode = "preview_conflict"
 	ErrorCodePreviewFailed           ErrorCode = "preview_failed"
@@ -503,6 +512,7 @@ const (
 	ErrorCodePublicNameInUse         ErrorCode = "public_name_in_use"
 	ErrorCodePublicNameOwned         ErrorCode = "public_name_owned"
 	ErrorCodeQueueLimit              ErrorCode = "queue_limit"
+	ErrorCodeRateLimited             ErrorCode = "rate_limited"
 	ErrorCodeRegistryUnavailable     ErrorCode = "registry_unavailable"
 	ErrorCodeReplicaConflict         ErrorCode = "replica_conflict"
 	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
@@ -510,6 +520,7 @@ const (
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
 	ErrorCodeSharedOwnerTag          ErrorCode = "shared_owner_tag"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
+	ErrorCodeStorageQuotaExceeded    ErrorCode = "storage_quota_exceeded"
 	ErrorCodeStoreConflict           ErrorCode = "store_conflict"
 	ErrorCodeStoreDegraded           ErrorCode = "store_degraded"
 	ErrorCodeStoreLimit              ErrorCode = "store_limit"
@@ -631,9 +642,15 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeObjectQuotaExceeded:
 		return true
+	case ErrorCodePolicyApplyFailed:
+		return true
+	case ErrorCodePolicyConflict:
+		return true
 	case ErrorCodePolicyMissingTagOwners:
 		return true
 	case ErrorCodePolicyUnavailable:
+		return true
+	case ErrorCodePolicyWriteDenied:
 		return true
 	case ErrorCodePreconditionFailed:
 		return true
@@ -653,6 +670,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeQueueLimit:
 		return true
+	case ErrorCodeRateLimited:
+		return true
 	case ErrorCodeRegistryUnavailable:
 		return true
 	case ErrorCodeReplicaConflict:
@@ -666,6 +685,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSharedOwnerTag:
 		return true
 	case ErrorCodeSpawnBudgetExceeded:
+		return true
+	case ErrorCodeStorageQuotaExceeded:
 		return true
 	case ErrorCodeStoreConflict:
 		return true
@@ -1628,6 +1649,7 @@ type AuditBatch struct {
 // `container_stop` (an object's container, ADR-032),
 // `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 // mgmt chain:
+// `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
 // `tenant_create`,
 // `tenant_update`,
 // `tenant_delete`,
@@ -1677,6 +1699,7 @@ type AuditBatch struct {
 // `notification_test` (`tw notify test`; the origin and the outcome),
 // `reap`,
 // `preflight` (optional; dryRun deploys),
+// `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
 // `host_add`,
 // `credential`,
 // `obo_root`,
@@ -1748,6 +1771,7 @@ type AuditRecord struct {
 	// `container_stop` (an object's container, ADR-032),
 	// `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
 	// mgmt chain:
+	// `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
 	// `tenant_create`,
 	// `tenant_update`,
 	// `tenant_delete`,
@@ -1797,6 +1821,7 @@ type AuditRecord struct {
 	// `notification_test` (`tw notify test`; the origin and the outcome),
 	// `reap`,
 	// `preflight` (optional; dryRun deploys),
+	// `policy_apply` (`tw policy --apply`: the additions written to the tailnet policy and both ETags, or why nothing was written),
 	// `host_add`,
 	// `credential`,
 	// `obo_root`,
@@ -1867,7 +1892,10 @@ type ChainStatus struct {
 	Chain    string  `json:"chain"`
 	Error    *string `json:"error,omitempty"`
 	Ok       bool    `json:"ok"`
-	Records  int     `json:"records"`
+
+	// PrunedThrough Audit retention (`tw-mgmt -audit-max-age`, `-audit-max-records`) deleted this chain's records up to this seq. The records kept still verify: the first one links to the checkpointed hash of the last one deleted. Absent: nothing was pruned.
+	PrunedThrough *int64 `json:"prunedThrough,omitempty"`
+	Records       int    `json:"records"`
 }
 
 // ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
@@ -2352,6 +2380,8 @@ type Error struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+	// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2361,6 +2391,9 @@ type Error struct {
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+	// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+	// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -2450,6 +2483,8 @@ type Error struct {
 // | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 // | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 // | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 // | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 // | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 // | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2459,6 +2494,9 @@ type Error struct {
 // | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 // | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 // | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 // | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 // | `internal` | 500 | — |
 type ErrorCode string
@@ -2667,6 +2705,8 @@ type HostDrainResult struct {
 		// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 		// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 		// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+		// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+		// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 		// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 		// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 		// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -2676,6 +2716,9 @@ type HostDrainResult struct {
 		// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 		// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 		// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+		// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+		// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+		// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 		// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 		// | `internal` | 500 | — |
 		Code     ErrorCode `json:"code"`
@@ -3250,6 +3293,37 @@ type PlacementDecisionMode string
 
 // PlacementDecisionReason pinned: `host` was given; sticky: kept on the current lease holder; smart: the best measured path; capacity: no measured path decided, so the most free capacity.
 type PlacementDecisionReason string
+
+// PolicyApply defines model for PolicyApply.
+type PolicyApply struct {
+	// Added The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes.
+	Added *string `json:"added,omitempty"`
+
+	// Changed The policy was written.
+	Changed bool `json:"changed"`
+	DryRun  bool `json:"dryRun"`
+
+	// Manual What the bundle still needs that tailworks doesn't write; add it in the admin console.
+	Manual *[]string `json:"manual,omitempty"`
+
+	// NewETag Its ETag after.
+	NewETag *string `json:"newETag,omitempty"`
+
+	// OldETag The policy's ETag before the write.
+	OldETag   *string         `json:"oldETag,omitempty"`
+	Preflight PreflightResult `json:"preflight"`
+	TenantID  string          `json:"tenantID"`
+	Workload  string          `json:"workload"`
+}
+
+// PolicyApplyCreate defines model for PolicyApplyCreate.
+type PolicyApplyCreate struct {
+	// Bundle The bundle, as for `POST /v1/deployments`.
+	Bundle []byte `json:"bundle"`
+
+	// Namespaces Override the classes read from `tailworks.jsonc` (tests).
+	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
+}
 
 // PreflightMissing defines model for PreflightMissing.
 type PreflightMissing struct {
@@ -4145,6 +4219,15 @@ type Tenant struct {
 	MaxContainers *int `json:"maxContainers,omitempty"`
 	MaxObjects    int  `json:"maxObjects"`
 
+	// MaxQueueBytes Bytes of all the tenant's queued messages together; past it a send is `429 storage_quota_exceeded`. Absent or 0: unlimited (each queue still has its own 1 GiB).
+	MaxQueueBytes *int64 `json:"maxQueueBytes,omitempty"`
+
+	// MaxStoreBytes Bytes kept by all the tenant's platform stores together (KV, D1, R2 index journals); past it an append that grows a store is `429 storage_quota_exceeded`. Absent or 0: unlimited (each store still has its own 1 GiB).
+	MaxStoreBytes *int64 `json:"maxStoreBytes,omitempty"`
+
+	// MaxStores Platform stores the tenant may have; past it creating one is `429 storage_quota_exceeded`. Absent or 0: unlimited.
+	MaxStores *int `json:"maxStores,omitempty"`
+
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode MintMode `json:"mintMode"`
 
@@ -4277,6 +4360,15 @@ type TenantPatch struct {
 	MaxContainers      *int                      `json:"maxContainers,omitempty"`
 	MaxObjects         *int                      `json:"maxObjects,omitempty"`
 
+	// MaxQueueBytes 0 or null: unlimited.
+	MaxQueueBytes nullable.Nullable[int64] `json:"maxQueueBytes,omitempty"`
+
+	// MaxStoreBytes 0 or null: unlimited.
+	MaxStoreBytes nullable.Nullable[int64] `json:"maxStoreBytes,omitempty"`
+
+	// MaxStores 0 or null: unlimited.
+	MaxStores nullable.Nullable[int] `json:"maxStores,omitempty"`
+
 	// MintMode `oauth`: a Tailscale OAuth client (scope `auth_keys`, tag `tag:tw`; optionally `devices:core` and `policy_file:read`) whose secret stays in a 0600 file on the mgmt host: the only mint mode for Tailscale tailnets. `headscale`: the Headscale profile (ADR-015): a Headscale server at `controlURL` mints tagged pre-auth keys with the Headscale API key in `apiKeyFile` (`HEADSCALE_API_KEY=…`); no Tailscale Services, no Funnel (public routes), no posture. `static`: fakemgmt only (testcontrol accepts any key). `apikey` and `wif` were removed (ADR-042): mgmt refuses to set them (`400 mint_mode_removed`); a tenant an older tailworks created in one still reports it here, but can't mint until it is switched to `oauth`.
 	MintMode *MintMode `json:"mintMode,omitempty"`
 
@@ -4293,6 +4385,53 @@ type TenantPatch struct {
 	PublicIngress          nullable.Nullable[string] `json:"publicIngress,omitempty"`
 	RegistrationsPerMinute *int                      `json:"registrationsPerMinute,omitempty"`
 	Tier                   *Tier                     `json:"tier,omitempty"`
+}
+
+// TenantUsage defines model for TenantUsage.
+type TenantUsage struct {
+	// Largest The tenant's largest stores and queues (at most 5), biggest first.
+	Largest []struct {
+		Bytes int64 `json:"bytes"`
+
+		// Kind `kv`, `d1`, `r2`, … or `queue`.
+		Kind string `json:"kind"`
+
+		// Limit Its own size limit.
+		Limit int64  `json:"limit"`
+		Name  string `json:"name"`
+
+		// Workload The store's workload (absent for a queue).
+		Workload *string `json:"workload,omitempty"`
+	} `json:"largest"`
+	Limits struct {
+		// MaxQueueBytes The tenant's quota; 0 = unlimited.
+		MaxQueueBytes int64 `json:"maxQueueBytes"`
+
+		// MaxStoreBytes The tenant's quota; 0 = unlimited.
+		MaxStoreBytes int64 `json:"maxStoreBytes"`
+
+		// MaxStores The tenant's quota; 0 = unlimited.
+		MaxStores int `json:"maxStores"`
+
+		// QueueMaxBytes One queue's own limit.
+		QueueMaxBytes int64 `json:"queueMaxBytes"`
+
+		// StoreMaxBytes One store's own limit.
+		StoreMaxBytes int64 `json:"storeMaxBytes"`
+	} `json:"limits"`
+	Queues struct {
+		// Bytes Bytes of the queued messages (what counts against `maxQueueBytes`).
+		Bytes    int64 `json:"bytes"`
+		Count    int64 `json:"count"`
+		Messages int64 `json:"messages"`
+	} `json:"queues"`
+	Stores struct {
+		// Bytes Bytes kept by the stores' journals (what counts against `maxStoreBytes`).
+		Bytes   int64 `json:"bytes"`
+		Count   int64 `json:"count"`
+		Entries int64 `json:"entries"`
+	} `json:"stores"`
+	TenantID string `json:"tenantID"`
 }
 
 // Tier defines model for Tier.
@@ -4402,6 +4541,8 @@ type TombstoneError struct {
 	// | `object_quota_exceeded` | 429 | tenant `maxObjects` |
 	// | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
 	// | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+	// | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
+	// | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
 	// | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
 	// | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
 	// | `mirror_disabled` | 409 | this tw-mgmt does not mirror external images (`-no-mirror`) |
@@ -4411,6 +4552,9 @@ type TombstoneError struct {
 	// | `identity_pending` | 503 | mint still queued (`Retry-After: 1`) |
 	// | `no_host` | 503 | no live host for the deployment (in the tenant's pool, offering its tier, and `containers` for the image's `arch` when it declares containers, with a free node and, for the microVM tier or containers, a free VM in its capacity vector) |
 	// | `policy_unavailable` | 503 | mgmt cannot read the tenant policy |
+	// | `policy_write_denied` | 403 | the tenant's credential may not write the tailnet policy (an OAuth client without Policy File write) |
+	// | `policy_conflict` | 409 | the tailnet policy changed during the write, and again on the retry (`If-Match`) |
+	// | `policy_apply_failed` | 500 | the control plane refused the merged policy, or tailworks refused the snippet (RT-06) |
 	// | `approval_not_pending` | 409 | no approval of that Workflow instance is waiting (decided, timed out, or never asked) |
 	// | `internal` | 500 | — |
 	Code    ErrorCode `json:"code"`
@@ -5101,6 +5245,12 @@ type GetWorkloadLogsParams struct {
 // GetWorkloadLogsParamsSource defines parameters for GetWorkloadLogs.
 type GetWorkloadLogsParamsSource string
 
+// ApplyWorkloadPolicyParams defines parameters for ApplyWorkloadPolicy.
+type ApplyWorkloadPolicyParams struct {
+	// DryRun Plan only (`added` is what would be written); the policy is not changed.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
+}
+
 // CreatePromotionParams defines parameters for CreatePromotion.
 type CreatePromotionParams struct {
 	// DryRun Preflight only (`200 PreflightResult`); nothing is deployed.
@@ -5286,6 +5436,9 @@ type DecideApprovalJSONRequestBody = ApprovalDecisionRequest
 
 // QueryD1JSONRequestBody defines body for QueryD1 for application/json ContentType.
 type QueryD1JSONRequestBody = D1Query
+
+// ApplyWorkloadPolicyJSONRequestBody defines body for ApplyWorkloadPolicy for application/json ContentType.
+type ApplyWorkloadPolicyJSONRequestBody = PolicyApplyCreate
 
 // CreatePromotionJSONRequestBody defines body for CreatePromotion for application/json ContentType.
 type CreatePromotionJSONRequestBody = PromotionCreate
@@ -5650,6 +5803,9 @@ type ServerInterface interface {
 	// PutTenantTelemetry Set the tenant's OTLP export (`tw telemetry set`)
 	// (PUT /v1/tenants/{id}/telemetry)
 	PutTenantTelemetry(w http.ResponseWriter, r *http.Request, id TenantID)
+	// GetTenantUsage What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+	// (GET /v1/tenants/{id}/usage)
+	GetTenantUsage(w http.ResponseWriter, r *http.Request, id TenantID)
 	// DecideApproval Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string)
@@ -5665,6 +5821,9 @@ type ServerInterface interface {
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params GetWorkloadLogsParams)
+	// ApplyWorkloadPolicy Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	// (POST /v1/tenants/{id}/workloads/{workload}/policy)
+	ApplyWorkloadPolicy(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ApplyWorkloadPolicyParams)
 	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/previews)
 	ListWorkloadPreviews(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName)
@@ -8538,6 +8697,32 @@ func (siw *ServerInterfaceWrapper) PutTenantTelemetry(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetTenantUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetTenantUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTenantUsage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DecideApproval operation middleware
 func (siw *ServerInterfaceWrapper) DecideApproval(w http.ResponseWriter, r *http.Request) {
 
@@ -8902,6 +9087,57 @@ func (siw *ServerInterfaceWrapper) GetWorkloadLogs(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetWorkloadLogs(w, r, id, workload, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyWorkloadPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ApplyWorkloadPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyWorkloadPolicyParams
+
+	// ------------- Optional query parameter "dryRun" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "dryRun", r.URL.Query(), &params.DryRun, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "dryRun"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dryRun", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyWorkloadPolicy(w, r, id, workload, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10445,6 +10681,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}", wrapper.DeleteTenant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}", wrapper.GetTenant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}", wrapper.UpdateTenant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/usage", wrapper.GetTenantUsage)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/objects", wrapper.PurgeTenantObjects)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/logs", wrapper.GetWorkloadLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/approvals", wrapper.ListApprovals)
@@ -10457,6 +10694,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/rollbacks", wrapper.CreateRollback)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/previews", wrapper.ListWorkloadPreviews)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/promotions", wrapper.CreatePromotion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/policy", wrapper.ApplyWorkloadPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.GetWorkloadPublic)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/public", wrapper.UpdateWorkloadPublic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/public-names", wrapper.ListPublicNames)
@@ -17117,6 +17355,83 @@ func (response PutTenantTelemetrydefaultJSONResponse) VisitPutTenantTelemetryRes
 	return err
 }
 
+type GetTenantUsageRequestObject struct {
+	ID TenantID `json:"id"`
+}
+
+type GetTenantUsageResponseObject interface {
+	VisitGetTenantUsageResponse(w http.ResponseWriter) error
+}
+
+type GetTenantUsage200JSONResponse TenantUsage
+
+func (response GetTenantUsage200JSONResponse) VisitGetTenantUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantUsage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetTenantUsage403JSONResponse) VisitGetTenantUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantUsage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTenantUsage404JSONResponse) VisitGetTenantUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTenantUsagedefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetTenantUsagedefaultJSONResponse) VisitGetTenantUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DecideApprovalRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -17664,6 +17979,120 @@ type GetWorkloadLogsdefaultJSONResponse struct {
 }
 
 func (response GetWorkloadLogsdefaultJSONResponse) VisitGetWorkloadLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyWorkloadPolicyRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Params   ApplyWorkloadPolicyParams
+	Body     *ApplyWorkloadPolicyJSONRequestBody
+}
+
+type ApplyWorkloadPolicyResponseObject interface {
+	VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error
+}
+
+type ApplyWorkloadPolicy200JSONResponse PolicyApply
+
+func (response ApplyWorkloadPolicy200JSONResponse) VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyWorkloadPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ApplyWorkloadPolicy400JSONResponse) VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyWorkloadPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ApplyWorkloadPolicy403JSONResponse) VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyWorkloadPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ApplyWorkloadPolicy404JSONResponse) VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyWorkloadPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ApplyWorkloadPolicy409JSONResponse) VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyWorkloadPolicydefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response ApplyWorkloadPolicydefaultJSONResponse) VisitApplyWorkloadPolicyResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -20783,6 +21212,9 @@ type StrictServerInterface interface {
 	// PutTenantTelemetry Set the tenant's OTLP export (`tw telemetry set`)
 	// (PUT /v1/tenants/{id}/telemetry)
 	PutTenantTelemetry(ctx context.Context, request PutTenantTelemetryRequestObject) (PutTenantTelemetryResponseObject, error)
+	// GetTenantUsage What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+	// (GET /v1/tenants/{id}/usage)
+	GetTenantUsage(ctx context.Context, request GetTenantUsageRequestObject) (GetTenantUsageResponseObject, error)
 	// DecideApproval Approve or reject a waiting Workflow instance (`tw approve`, the admin UI)
 	// (POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance})
 	DecideApproval(ctx context.Context, request DecideApprovalRequestObject) (DecideApprovalResponseObject, error)
@@ -20798,6 +21230,9 @@ type StrictServerInterface interface {
 	// GetWorkloadLogs Read (or follow) a workload's workerd / node log (`tw logs` from a linked machine)
 	// (GET /v1/tenants/{id}/workloads/{workload}/logs)
 	GetWorkloadLogs(ctx context.Context, request GetWorkloadLogsRequestObject) (GetWorkloadLogsResponseObject, error)
+	// ApplyWorkloadPolicy Add what a bundle needs to the tailnet policy (`tw policy --apply`), or plan it with dryRun
+	// (POST /v1/tenants/{id}/workloads/{workload}/policy)
+	ApplyWorkloadPolicy(ctx context.Context, request ApplyWorkloadPolicyRequestObject) (ApplyWorkloadPolicyResponseObject, error)
 	// ListWorkloadPreviews A workload's running previews (`tw previews`)
 	// (GET /v1/tenants/{id}/workloads/{workload}/previews)
 	ListWorkloadPreviews(ctx context.Context, request ListWorkloadPreviewsRequestObject) (ListWorkloadPreviewsResponseObject, error)
@@ -22862,6 +23297,32 @@ func (sh *strictHandler) PutTenantTelemetry(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// GetTenantUsage operation middleware
+func (sh *strictHandler) GetTenantUsage(w http.ResponseWriter, r *http.Request, id TenantID) {
+	var request GetTenantUsageRequestObject
+
+	request.ID = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTenantUsage(ctx, request.(GetTenantUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTenantUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTenantUsageResponseObject); ok {
+		if err := validResponse.VisitGetTenantUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DecideApproval operation middleware
 func (sh *strictHandler) DecideApproval(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, workflow string, instance string) {
 	var request DecideApprovalRequestObject
@@ -23010,6 +23471,41 @@ func (sh *strictHandler) GetWorkloadLogs(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetWorkloadLogsResponseObject); ok {
 		if err := validResponse.VisitGetWorkloadLogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyWorkloadPolicy operation middleware
+func (sh *strictHandler) ApplyWorkloadPolicy(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ApplyWorkloadPolicyParams) {
+	var request ApplyWorkloadPolicyRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Params = params
+
+	var body ApplyWorkloadPolicyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyWorkloadPolicy(ctx, request.(ApplyWorkloadPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyWorkloadPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyWorkloadPolicyResponseObject); ok {
+		if err := validResponse.VisitApplyWorkloadPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

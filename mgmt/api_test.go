@@ -53,6 +53,13 @@ type fakeTS struct {
 	devices   []map[string]any
 	svcPuts   int
 	svcDenied bool // 403 on /services (credential without the Services scope)
+
+	// Policy writes (policyapply_test.go): POST /acl with If-Match and
+	// POST /acl/validate. policyETag replaces "p1" once the policy changed.
+	policyETag      string
+	policyWrites    int
+	policyConflicts int    // answer 412 to the next N writes
+	validateErr     string // POST /acl/validate's message
 }
 
 type fakeOAuthClient struct {
@@ -139,18 +146,20 @@ func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.deletedDevices = append(f.deletedDevices, strings.TrimPrefix(r.URL.Path, "/api/v2/device/"))
+	case r.Method == "POST" && (strings.HasSuffix(r.URL.Path, "/acl") || strings.HasSuffix(r.URL.Path, "/acl/validate")):
+		f.policyWrite(w, r, auth)
 	case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/acl"):
 		if !f.oauthScope(auth, "policy_file:read") {
 			w.WriteHeader(403)
 			return
 		}
 		f.policyFetches++
-		if r.Header.Get("If-None-Match") == `"p1"` {
+		if r.Header.Get("If-None-Match") == f.curPolicyETag() {
 			f.notModified++
 			w.WriteHeader(304)
 			return
 		}
-		w.Header().Set("ETag", `"p1"`)
+		w.Header().Set("ETag", f.curPolicyETag())
 		if f.policy != "" {
 			w.Write([]byte(f.policy))
 			return
