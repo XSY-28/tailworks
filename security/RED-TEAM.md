@@ -934,3 +934,35 @@ fail only their own session (I8).
 | ID | Verdict | Evidence |
 |----|------|------|
 | RT3-11 | **Fixed** (F8) | `helper.TestRT3_H11_UffdBadTableFailsSession` (Linux, no root): a fake VMM connects to `listenUffd`'s socket, sends a crafted table with a pipe as the userfaultfd and queues a page fault; each table fails its session and a good table after them is served up to `UFFDIO_COPY`. With the old check, the wrapped-offset, offset-wraps and unaligned-base tables pass the handshake. `helper.TestRT3_H11_UffdRegionValidation` (any OS, table-driven) and `helper.FuzzRegionTable`: every accepted table keeps every fault and prefetch page inside the memory file. |
+
+---
+
+# Note 2026-11-21: H22 confirmed and fixed (#155)
+
+This note records the CapMap half of H22. The earlier passes are left as
+written.
+
+Run on test tailnet 2 (production control) with `tssvc.TestRealServiceCaps`
+(`make e2e-svc-caps`). The caller was `tag:ttest` and the Service host
+`tag:ttest-rt-svch`. One app cap was granted with `dst: ["svc:ttest-rt-caps"]`,
+another with `dst: ["tag:ttest-rt-svch"]`, and no other grant between the two
+tags carried a cap.
+
+| Flow | plain `WhoIs` (what netd and mgmt used) | `WhoIsForIP(local addr)` / `WhoIsForService` |
+|----|----|----|
+| through the VIP (IPv6 and IPv4) | the tag grant's cap only | the `svc:` cap only |
+| to the node's own address | the tag grant's cap only | the tag grant's cap only |
+| through the VIP, tag grant removed | no caps | the `svc:` cap only |
+
+Plain WhoIs (`LocalBackend.PeerCaps`) evaluates the packet filter's cap
+grants against the node's own address, whatever the flow's destination. On a
+Service flow a workload therefore saw caps narrower than the policy reads
+(the `svc:` grant's caps were missing, so an app that authorizes on `caps()`
+denied) and wider (a grant to the node's tags appeared although the caller
+dialed the Service). Severity stays Medium: both caps come from the same
+tailnet's policy, and the wider case needs the admin to grant the node tag
+something the Service grant withholds.
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| H22 (CapMap) | **Fixed** | netd's attributed ingress (`netd/ingress.go`) and mgmt's WhoIs (`internal/mgmtd`) call `tssvc.WhoIs`, which uses `WhoIsForIP` with the connection's local address from the request context. `netd.TestServiceCapsScopedToVIP` drives `serveIngress` on testcontrol with a packet filter granting one cap to the VIP and one to the node's addresses; it failed before the change (Service flow: svc cap missing, node cap present) and passes after. `tssvc.TestRealServiceCaps` checks `tssvc.WhoIs` against production control. |

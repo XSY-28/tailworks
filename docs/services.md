@@ -36,6 +36,19 @@ ingress (WhoIs, `request.cf.tailscale.caller`, cap narrowing) works exactly
 as it does on the node's own address. Kill RSTs Service flows like any
 other flow.
 
+**App capabilities follow the address the caller dialed.** netd and mgmt
+resolve the caller with `tssvc.WhoIs`, which asks for the caps that apply to
+the connection's local address (`WhoIsForIP`):
+
+- on a flow to the Service VIP, the caller has the caps of grants whose
+  `dst` is the `svc:` name (or covers the VIP), and *not* those of grants to
+  the host node's tags or address;
+- on a flow to the node's own address, it is the other way round.
+
+Plain `WhoIs` would compute caps for the node's own address on every flow:
+on a VIP flow it misses the `svc:` grant's caps and shows the node grant's
+caps the caller didn't use (H22, measured below).
+
 ## Workloads
 
 ```jsonc
@@ -76,9 +89,12 @@ other flow.
 
 **Callers need a grant to the `svc:` name**, for example
 `{"src": ["tag:agent"], "dst": ["svc:support"], "ip": ["tcp:80"]}`.
-(Not yet verified: whether app capabilities granted with a `svc:`
-destination show up in the workload's WhoIs CapMap. The real-tailnet runs
-also had tag-to-tag grants carrying the same caps.)
+App capabilities go in that same grant
+(`"app": {"example.com/cap/support": [{"role": "agent"}]}`): a call through
+the Service sees exactly those in `caps()`. A grant to the workload's tags
+(`"dst": ["tag:tw-wl-support"]`) applies only to calls to the workload
+node's own name or address, so a caller that uses both needs its caps in
+both grants.
 
 **When the host advertises the Service (`hostd/service.go`).** Tailscale
 doesn't health-check Service hosts, so each host gates its own
@@ -202,6 +218,9 @@ tw-hostd -mgmt http://tw-mgmt.<tailnet> …
   ```
   Create the Service definition (`svc:tw-mgmt`, `tcp:80`) in the admin
   console. `tw up --policy-apply` doesn't write `autoApprovers`.
+  The admin cap in the `svc:tw-mgmt` grant counts on calls through the
+  Service; a grant to `tag:tw-mgmt` counts only on calls to a replica's own
+  node name.
 - **Limitation:** a replica that is stalled outright (SIGSTOP, a wedged
   process) can't withdraw itself. Callers time out and retry, and a later
   connection may land on it again until control sees the node go offline.
@@ -214,4 +233,5 @@ tw-hostd -mgmt http://tw-mgmt.<tailnet> …
 | `internal/tssvc` real (`TestRealService`) | VIP answered 3.5 s after advertise; WhoIs saw the caller's node ID through the VIP; after withdraw the next fresh request failed (within one 3 s timeout); re-advertise answered in 14 ms |
 | E2E-SVC (`make e2e-svc`, tailworks CLI) | `tw deploy` created the definition (owner comment, VIPs). First call through the VIP 11.1 s after deploy, caller = the client node. Redeploy kept the same VIPs and was served again at once. `tw kill` of the workload node: the VIP stopped answering on the next request (≤ 3 s). `tw down`: 0 leftover devices/keys; definition kept |
 | E2E-REPLICAS (`TestE2EReplicas` in `make e2e-svc`; host A from `tw up`, host B a second `tw-hostd` joined with `tw host add`) | `replicas: 2` placed on both hosts. The Service answered 5.6 s after deploy, caller = the client node, 20/20 fresh connections to one replica. Stalling that replica's workerd (SIGSTOP): its host withdrew, and 5 consecutive answers came from the other replica 11.1 s later; re-advertised 0.2 s after SIGCONT. Scale to 1: the second replica was undeployed and the Service kept answering. 0 leftovers |
+| H22 caps (`make e2e-svc-caps`, `TestRealServiceCaps`; tailnet 2, 2026-11-21) | Caller `tag:ttest`, host `tag:ttest-rt-svch`; one cap granted to `svc:ttest-rt-caps`, another to the host's tag. Through the VIP (IPv6 via MagicDNS, and the IPv4 VIP): `WhoIsForIP(VIP)`, `WhoIsForService` and `tssvc.WhoIs` = the `svc:` cap only; plain `WhoIs` = the tag grant's cap only. To the node's address: the tag grant's cap only, every way. With the tag grant removed (no tag-to-tag grant at all), plain `WhoIs` on the VIP flow had no caps and `tssvc.WhoIs` the `svc:` cap |
 | H12 real (`make e2e-mm-svc`, 2 replicas on Postgres; needs `TW_MM_PG_DSN` pointing at a database of its own) | `svc:ttest-mgmt` answered 5.6 s after start; `/v1/whoami` through the VIP = the client node, admin. Serving replica's store reset → 5 consecutive answers from the other replica 8.2 s later; it re-advertised 0.5 s after its store came back. SIGTERM of the serving replica → steady on the other 7.7 s later |
