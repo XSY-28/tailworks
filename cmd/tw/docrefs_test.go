@@ -11,15 +11,19 @@ import (
 
 // docRefGlobs are the docs whose `tw …` commands TestDocsNameRealCommands
 // checks (issue #74), relative to the repo root. docs/cli.md is left out:
-// it is generated from the flag sets (TestCLIReferenceUpToDate). So is
-// docs/design/: the RFC and ADRs record proposals and removed commands
-// as they were decided.
+// it is generated from the flag sets (TestCLIReferenceUpToDate). The RFC
+// and the numbered ADRs are in: they name today's commands, and say in
+// words what was never built or was removed. An ADR drafted on a branch
+// under a slug name (docs/design/adr/<slug>.md, AGENTS.md rule 5) is
+// left out until it gets its number.
 var docRefGlobs = []string{
 	"README.md",
 	"CONTRIBUTING.md",
 	"SECURITY.md",
 	"docs/*.md",
 	"docs/contracts/*.md",
+	"docs/design/*.md",
+	"docs/design/adr/[0-9][0-9][0-9]-*.md",
 }
 
 // docRefAliases are spellings the commands accept but their usage lines

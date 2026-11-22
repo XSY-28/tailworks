@@ -21,8 +21,13 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   (`Tailscale-*`, `x-tw-*`, `tw-*`, `X_TW_*`, `tw_*`, `CF-*`,
   `X-Forwarded-*`) and by name (`Forwarded`, `X-Real-IP`, …;
   `isIdentityHeader` in `netd/ingress.go`, [COMPAT.md](COMPAT.md#identity)).
-  There are no bearer tokens between workloads. This holds between nodes;
-  inside one workload, see [Known gaps](#known-gaps).
+  There are no bearer tokens between workloads. Inside a workload, hostd
+  seals the caller (an HMAC under the instance's key, which only hostd
+  and the platform wrapper hold), and the platform checks the seal before
+  any object, the Worker, or an audit `actingFor` uses it. A caller that
+  tenant code attaches to an in-process forward without a valid seal is
+  no caller at all. For what a seal doesn't stop, see
+  [Known gaps](#known-gaps).
 - **tailworks' own API works the same way.** tw-mgmt serves `/v1` on its
   tailnet node and authorizes each request by WhoIs: admins hold
   `github.com/rosskukulinski/tailworks/cap/admin`, approvers `github.com/rosskukulinski/tailworks/cap/approve`, MCP tool users
@@ -35,7 +40,9 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   Each object's key is single use, pre-authorized, tagged and expires
   within 5 minutes (`KeyExpiry` in `mgmt/types.go`). Warm keys, minted
   ahead of time so new objects start faster, wait in mgmt's custody for up
-  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)). Revoking the credential
+  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)).
+  `tw status` shows how many each tenant has; `tw down` and `tw tenant rm`
+  revoke them. Revoking the credential
   stops all future minting.
 - **Kill is a network cut.** `tw kill` tombstones the object, its node
   stops answering (410), and with the Devices scope the device is deleted.
@@ -54,18 +61,19 @@ it.
 
 | | macOS (Seatbelt) | Linux, Landlock ABI ≥ 4 (kernel 6.7+) | Linux, Landlock ABI 1–3 |
 |---|---|---|---|
-| Profile shape | `(allow default)` (Mach services, sysctls) with writes, network, signals and exec denied, then allowed back for what the workload needs, plus a read deny list (`seatbeltProfile` in `hostd/seatbelt_strict.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
-| Reads | denied under your home dir, tailworks' state and run dirs, hostd's data and run dirs, and every tenant's credential files; **everything else is readable** (`/etc`, `/tmp`, …) | only the OS dirs (`/usr`, `/lib`, `/bin`, `/etc`, `/opt`, …), the runtime binary (and a Node install prefix), a few global `/proc` and `/sys` files, the process's own `/proc` entries and its own dirs | same as ABI ≥ 4 |
+| Profile shape | `(allow default)` (Mach services, sysctls) with reads, writes, network, signals and exec denied, then allowed back for what the workload needs (`seatbeltProfile` in `hostd/seatbelt_strict.go`) | allow list (`internal/procsb`) | allow list (`internal/procsb`) |
+| Reads | only the OS dirs (`/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/opt`, `/dev`, the time zone database), the runtime binary (and a Node install prefix) and its own dirs; `/tmp`, `/var/folders`, `/Users`, `/Library` and the rest of the disk are refused. Your home dir, tailworks' state and run dirs, hostd's data and run dirs and every tenant's credential files are refused even where they sit inside an allowed dir. Outside the allow list a workload can only `stat` `/` and the parent dirs of the paths it may read | only the OS dirs (`/usr`, `/lib`, `/bin`, `/etc`, `/opt`, …), the runtime binary (and a Node install prefix), a few global `/proc` and `/sys` files, the process's own `/proc` entries and its own dirs | same as ABI ≥ 4 |
 | Writes | own dirs only (plus `/dev/null` and similar devices); `/tmp` and the rest of the disk are refused | own dirs only | own dirs only (ABI 1 also refuses renames and links across directories) |
 | Unix sockets | only its own (in its own dirs); every other socket, including the system tailscaled socket and DNS (mDNSResponder), is refused | none: seccomp refuses `socket(AF_UNIX)` (except a Node app in `listen: "unix"` mode) | same as ABI ≥ 4 |
-| TCP | connect only to `localhost:<port>` for the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: none); bind only its own port | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); bind only its own port. Landlock matches port numbers, not addresses | **unrestricted** (Landlock has no TCP rules before ABI 4) |
+| TCP | IPv4 only: connect only to the ports hostd gives it on IPv4 loopback (a Node app: its egress proxy and its own port; workerd: none), so `[::1]:<port>` is refused. Seatbelt can't name a literal address, so the rule is `tcp4 "localhost:<port>"`; `127.0.0.1`, where hostd listens, is the only IPv4 loopback address macOS configures. A Node app may not bind or listen on TCP at all: it listens on a unix socket in its instance dir, which hostd's ingress dials, and hostd forwards `127.0.0.1:<PORT>` to it for self-calls. (Seatbelt's bind rule matches the port, not the address, so an allowed port could be bound on `0.0.0.0` and reached from the LAN.) workerd binds only its inspector port, under `tw dev` | connect only to the ports hostd gives it (a Node app: its egress proxy and its own port; workerd: hostd's loopback services); a Node app binds nothing: hostd passes it its listener (`127.0.0.1:<PORT>`, or its unix socket) as fd 3, and seccomp makes every `listen()` a no-op, so no socket the app creates ever listens, on any address. (Landlock matches port numbers, not addresses, and doesn't see an unbound socket's `listen()`.) | **unrestricted** (Landlock has no TCP rules before ABI 4) |
 | Other sockets | none (no UDP, so no DNS of its own; netd resolves names) | TCP only for IPv4/IPv6 (no UDP, ICMP, raw or MPTCP); netlink route only | same as ABI ≥ 4 |
 | Signals | only itself and its own children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload | only itself and its own process group | same as ABI ≥ 4 |
 | Other syscalls | not filtered; exec only of the runtime binary, its own dirs and the OS dirs (`/bin`, `/usr`, `/opt`, …) | seccomp refuses ptrace, `process_vm_readv/writev`, mount, bpf, perf, keyrings, new namespaces, kexec, modules, io_uring, … | same as ABI ≥ 4 |
 | Node-tier egress (`tw status`) | `enforced` | `enforced` | `unenforced`: the egress proxy is cooperative |
 
-On every platform, the process tier sets no CPU or memory limit (see
-[Limits that don't exist](limits.md#limits-that-dont-exist)), and the
+On every platform the process tier caps each workload's V8 heap and sets
+no other CPU or memory limit (see
+[Availability between tenants](#availability-between-tenants)), and the
 workload runs as the same user as tailworks.
 
 So on Landlock ABI 1–3, a hostile Node app, or workerd code after a V8
@@ -104,22 +112,73 @@ a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
 
-## Egress: deny by default
+### Availability between tenants
 
-- A Worker's outbound `fetch()` reaches **tailnet peers only**. A name that
-  isn't in the node's netmap is refused (`peer_not_visible`; an internet
-  name gets `internet_egress_unavailable`), as are loopback, link-local,
-  metadata and the host's own addresses. There is no internet egress for
-  Workers, and no setting that turns it on; put what they need on the tailnet
-  ([recipes.md](recipes.md)). This is netd's guard on the path every
-  `fetch()` takes; code that escapes workerd's V8 sandbox, and a Node app,
-  are held to it only where the OS sandbox confines TCP (see the table
-  above). Containers may reach an `egress.internet`
-  allowlist ([containers.md](containers.md)).
-- Traffic leaves from the workload's node, or from the object's own node
-  in facet mode ([egress-modes.md](egress-modes.md)), so your tailnet
-  policy decides what each object can reach, and the other side's
-  `getCaller` sees which object called.
+The sandboxes above are about confidentiality and integrity: what a
+workload can read, write and reach. They don't give tenants their own
+share of the machine. What each tier does about one tenant using up a
+host:
+
+| | process tier | microVM tier |
+|---|---|---|
+| Memory | each V8 isolate's heap is capped (`tw-hostd -workerd-heap-mib`, default 1024 MiB; a Node app's `--max-old-space-size`, default 2048 MiB). Past it, that workload's workerd or Node process aborts and hostd restarts it. Memory outside the V8 heap (native buffers, WebAssembly memory) is not capped | the guest's memory (`-vm-mem-mib`, default 512 MiB) bounds everything in the workload |
+| CPU | not limited: a busy workload competes with every other process on the host | the guest's vCPUs (`-vm-vcpus`, default 2) |
+| Disk, logs, telemetry | bounded per workload ([limits.md](limits.md)) | as on the process tier, plus the guest's volume (`-vm-volume-mib`) |
+| Requests | not limited per workload on the tailnet: your tailnet policy decides who may call it. Public (Funnel) traffic is rate-limited per workload and per client IP | the same |
+
+So **availability isolation between tenants is not provided on the
+process tier**: the heap cap stops one runaway allocation from taking the
+host's memory, but a tenant can still slow its neighbours down with CPU,
+native memory or a flood of requests from callers your policy lets in.
+If tenants that don't trust each other share a host and that matters,
+put them on the microVM tier or on separate hosts.
+
+mgmt protects itself from its tailnet callers: each WhoIs node has its
+own request-rate bucket (hosts a larger one), and non-host callers share a
+bounded number of in-flight requests, so neither a script nor a flood
+from one admin's machine can starve the hosts' heartbeats. Over either
+limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
+
+## Egress
+
+- **Tailnet egress** leaves from the workload's node, or from the object's
+  own node in facet mode ([egress-modes.md](egress-modes.md)), so your
+  tailnet policy decides what each object can reach, and the other side's
+  `getCaller` sees which object called. Tailnet names resolve from the
+  node's netmap only, never from host DNS; a tailnet name that isn't in the
+  netmap is refused (`peer_not_visible`).
+- **Internet egress is on by default** (ADR-049). A
+  `fetch()` to a public host leaves from the **host's own network**, never
+  from a tailnet node: the destination sees the host's source address
+  (different on each host) and no tailnet identity, and tailworks strips
+  its identity headers. `tailnet.egress.internet: false` turns it off and a
+  list limits it ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet));
+  `tw-hostd -worker-internet=off` turns it off for a whole host. A refused
+  destination is `internet_egress_unavailable`.
+- **The SSRF guard always applies.** netd refuses loopback, private
+  (RFC 1918, ULA), link-local (including `169.254.169.254` and other cloud
+  metadata), CGNAT `100.64.0.0/10` and the tailnet ranges, the host's own
+  addresses, and translated forms of these (IPv4-mapped, NAT64, 6to4,
+  Teredo), with `forbidden_destination`. It checks the address it actually
+  dials, after DNS: a name with **any** forbidden answer is refused (no DNS
+  rebinding), and names under special-use suffixes (`.internal`, `.local`,
+  `.localhost`, `.lan`, …) are refused without being looked up.
+- **What host DNS sees.** An internet name that the workload's setting
+  allows is resolved by the host's resolver, which sees the name (not which
+  tenant asked). Tenants on one host share that resolver's cache. A
+  workload that must not leak its lookups turns internet egress off and
+  uses a gateway on the tailnet ([recipes.md](recipes.md#call-an-internet-api)).
+- **Audit.** The first internet flow per object and destination is an
+  `egress` audit record naming the address dialled; refusals are `deny`
+  records.
+- **What this means for your data.** A Worker that can read something on
+  the tailnet can now send it to the internet. Give a workload that holds
+  sensitive tailnet data `"internet": false` unless it needs the internet.
+- This is netd's guard on the path every `fetch()` takes; code that
+  escapes workerd's V8 sandbox, and a Node app, are held to it only where
+  the OS sandbox confines TCP (see the table above). Containers' internet
+  egress uses the same guard and the same setting
+  ([containers.md](containers.md)).
 
 ## Trust boundaries
 
@@ -173,7 +232,8 @@ The only request the CLI makes without being asked is the update check:
   (`~/.tailworks` by default); when a newer release is out, `tw` prints a
   one-line notice on stderr.
 - **Never:** after `tw init` or `tw dev` (both run with no tailnet, no
-  credentials and no outbound request), `tw version`, `tw completion` or
+  credentials and no outbound request of their own; under `tw dev`, your
+  Worker's internet `fetch()` calls do go out, as on a host), `tw version`, `tw completion` or
   `tw mcp`; with `--json`; when stderr isn't a terminal; with `CI` set; or
   in a development build.
 - **Off:** `TW_NO_UPDATE_CHECK=1`. `tw version --json` reports whether it
@@ -188,19 +248,27 @@ The red team's open items are tracked in
 [LEDGER.md](../security/LEDGER.md), each with a GitHub issue (label
 `security`). Among them:
 
-- **`request.cf` is not sealed inside a workload.** netd sets the caller
-  for requests that arrive over the tailnet, but tenant code that forwards
-  a request in-process (for example to a Durable Object stub, or by RPC)
-  can attach any `cf` it likes, and the receiving object's `getCaller()`
-  and `caps()` return it. So an object that authorizes on `getCaller()`
-  trusts every other piece of code in its own workload. Across workloads
-  and hosts the network identity holds (ledger C04, C05; H08).
+- **A sealed caller can be replayed inside its workload.** Tenant code
+  that received a request from Alice can forward it, or copy its
+  `request.cf`, to another object in the same workload for five minutes
+  (the seal's lifetime), and that object's `getCaller()` says Alice. It
+  can't make a caller nobody sent: forging or swapping one yields no
+  caller (ledger H08, F5). Three more limits apply. A `cf` passed as
+  plain data, rather than on a `Request`, isn't checked. A `Request` passed
+  as an RPC argument is checked for facet objects but not for plain DOs
+  (`"egress": "workload"`). And plain DOs run in the same isolate as the
+  Worker, so code that rewrites that isolate's JavaScript built-ins can
+  defeat any check made there. Facet objects (the default) each get
+  their own isolate.
+- **Snapshot-restored microVMs share some kernel secrets.** On Linux,
+  microVMs restored from one base snapshot (rebuilt at least hourly) get
+  fresh randomness before tenant code runs. They still share the kernel
+  secrets created before the snapshot: the TCP sequence-number and port
+  keys, the hash-table seeds, and the kernel layout (on amd64 the layout
+  is the same for every guest anyway: Firecracker guests there have no
+  KASLR slide). A
+  tenant can't use these against another tenant. A guest's TCP never
+  leaves its host: it ends at that VM's own gateway, and guests have no
+  network path to each other. Linux can't re-key these secrets after boot
+  ([ADR-030](design/adr/030-microvm-snapshot-restore.md), ledger H24).
 - **On-behalf-of assertions** (`actingFor`) aren't implemented.
-- **Smart placement trusts each host's own path measurements.** A host
-  reports only its own paths, only for tenants it already runs, within
-  bounds, and a report never moves a running workload: a stateful move
-  always needs `--force-takeover` (or a drain with
-  `--allow-local-state-loss`). But a compromised host can claim the best
-  path and so be chosen for that tenant's next new workload, or as the
-  destination of a move you confirm. Check the placement summary that
-  `tw deploy` prints, and pin with `--host` where it matters (ledger H23).

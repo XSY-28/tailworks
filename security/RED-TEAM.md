@@ -857,7 +857,7 @@ still `t.Skip`s.
 | RT3-05 | **Fixed** (F1/F3): audit ingest needs the host's registered key, verifies every `hostSig`, refuses objects of workloads the host never served | `mgmt/service.go` `IngestAudit` |
 | RT3-06 | **Fixed** (F4): the Host DO asks hostd before any tenant code runs, for fetch and RPC; hostd creates only admitted names | `hostd/gen/js/platform.js`, `hostd/objects.go` `ensure`; `hostd.TestPublicIngress` §3b, `gen.TestGeneratedWrapperPublic` |
 | RT3-07 | **Fixed** (F4): `__TW` stripped from every tenant env; Worker-level spawn needs the ticket; `ready` never creates | `js/packages/tailnet/src/runtime.ts`, `hostd/http.go` |
-| RT3-08 | **Partial** (F4): `principal` on spawn is `inherit`/`none` only; `actingFor`/`public` stripped from tenant op args. In-process `request.cf` forgery toward siblings (`getCaller`, Host DO `principalOf`) remains: F5 | `hostd/http.go` spawn, `platform.js` `TailnetApi` |
+| RT3-08 | **Fixed** (F4, then F5 in #148): `principal` on spawn is `inherit`/`none` only; `actingFor`/`public` stripped from tenant op args (F4). hostd seals the caller under the instance `MAC_KEY`, and the platform and runtime honour only a verified seal, so an in-process forgery toward a sibling (`getCaller`, Host DO `principalOf`) yields no caller (F5). Residual replay of the same real caller is in `security/LEDGER.md` H08 | `hostd/http.go` spawn, `hostd/sealcf.go`, `platform.js` `sealedRequest`/`TailnetApi`, `js/packages/tailnet/src/seal.ts`; `hostd.TestRT3_H08_ForgedPrincipal` |
 | RT3-12 | **Fixed** (F1): deployment status updates are scoped to the deployment's host | `mgmt/sqlstore.go` `SetDeploymentStatus` |
 | others | open; see `security/LEDGER.md` | — |
 
@@ -934,3 +934,59 @@ fail only their own session (I8).
 | ID | Verdict | Evidence |
 |----|------|------|
 | RT3-11 | **Fixed** (F8) | `helper.TestRT3_H11_UffdBadTableFailsSession` (Linux, no root): a fake VMM connects to `listenUffd`'s socket, sends a crafted table with a pipe as the userfaultfd and queues a page fault; each table fails its session and a good table after them is served up to `UFFDIO_COPY`. With the old check, the wrapped-offset, offset-wraps and unaligned-base tables pass the handshake. `helper.TestRT3_H11_UffdRegionValidation` (any OS, table-driven) and `helper.FuzzRegionTable`: every accepted table keeps every fault and prefetch page inside the memory file. |
+
+---
+
+# Note 2026-11-21: RT3-16 fixed (#151)
+
+This note updates RT3-16. The earlier passes are left as written.
+
+hostd marks the VM it boots for the base snapshot with `StartRequest.Base`
+(`hostd/vm/snapshot_linux.go` → `bootOpts.base`), and the helper keeps the
+flag on the session (`hostd/vm/helper/baseguard_linux.go`). `snapshot-base`
+now needs a session started with `Base` that has a volume slot, no volume
+and is not a restored copy; any other target is refused before the helper
+pauses it, and is left running (before, a refused target was killed).
+`attach` is refused on a `Base` session, so the base never holds a DO
+volume, and the old race between an attach on the VM's own connection and
+a `snapshot-base` from another is gone. `start` refuses `Base` without a
+volume slot, with a container image or with a restore.
+
+The helper still can't see what hostd sends the guest over vsock (a bundle,
+a MAC key): hostd's fresh-boot and `fsscan` checks stay the main guard.
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| RT3-16 | **Fixed** (F8) | `helper.TestRT3_H16_BaseGuard` (Linux, no KVM or root): a claimed pool VM without a volume, a VM with a volume, a restored copy and cold boots are refused `snapshot-base` with `bad_request`, with no call to the VMM's API and without being stopped; a `Base` session is refused `attach`; `start` refuses the three bad `Base` combinations. With the old check, the claimed pool VM and the restored copy reach the VMM's pause call. |
+
+---
+
+# Note 2026-11-21: H22 confirmed and fixed (#155)
+
+This note records the CapMap half of H22. The earlier passes are left as
+written.
+
+Run on test tailnet 2 (production control) with `tssvc.TestRealServiceCaps`
+(`make e2e-svc-caps`). The caller was `tag:ttest` and the Service host
+`tag:ttest-rt-svch`. One app cap was granted with `dst: ["svc:ttest-rt-caps"]`,
+another with `dst: ["tag:ttest-rt-svch"]`, and no other grant between the two
+tags carried a cap.
+
+| Flow | plain `WhoIs` (what netd and mgmt used) | `WhoIsForIP(local addr)` / `WhoIsForService` |
+|----|----|----|
+| through the VIP (IPv6 and IPv4) | the tag grant's cap only | the `svc:` cap only |
+| to the node's own address | the tag grant's cap only | the tag grant's cap only |
+| through the VIP, tag grant removed | no caps | the `svc:` cap only |
+
+Plain WhoIs (`LocalBackend.PeerCaps`) evaluates the packet filter's cap
+grants against the node's own address, whatever the flow's destination. On a
+Service flow a workload therefore saw caps narrower than the policy reads
+(the `svc:` grant's caps were missing, so an app that authorizes on `caps()`
+denied) and wider (a grant to the node's tags appeared although the caller
+dialed the Service). Severity stays Medium: both caps come from the same
+tailnet's policy, and the wider case needs the admin to grant the node tag
+something the Service grant withholds.
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| H22 (CapMap) | **Fixed** | netd's attributed ingress (`netd/ingress.go`) and mgmt's WhoIs (`internal/mgmtd`) call `tssvc.WhoIs`, which uses `WhoIsForIP` with the connection's local address from the request context. `netd.TestServiceCapsScopedToVIP` drives `serveIngress` on testcontrol with a packet filter granting one cap to the VIP and one to the node's addresses; it failed before the change (Service flow: svc cap missing, node cap present) and passes after. `tssvc.TestRealServiceCaps` checks `tssvc.WhoIs` against production control. |

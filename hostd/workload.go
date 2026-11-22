@@ -399,7 +399,7 @@ func (h *Host) rejoinObjects(w *workload, app *bundle.App) {
 	defer h.mu.Unlock()
 	for _, o := range h.objects {
 		if o.TenantID == w.tenantID && o.Workload == w.name && !o.live && !o.terminal() {
-			if o.Class == "" || app.Classes[o.Class] != nil && app.Classes[o.Class].Node {
+			if rejoinsWith(o, app) {
 				h.startNodeLocked(o)
 			}
 		}
@@ -557,6 +557,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		DOStorage:    filepath.Join(h.tenantDir(w.tenantID), "workloads", w.name, "do"),
 		DeploymentID: depID,
 		Workload:     w.name,
+		HeapMiB:      h.workerdHeapMiB(),
 	}
 	vmTier := tier == bundle.TierMicroVM
 	if vmTier {

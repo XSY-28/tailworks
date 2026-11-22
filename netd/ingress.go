@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/tailworks/internal/caps"
+	"github.com/rosskukulinski/tailworks/internal/tssvc"
 	"tailscale.com/client/tailscale/apitype"
 )
 
@@ -158,7 +159,8 @@ func (o *Object) serveIngress(w http.ResponseWriter, req *http.Request) {
 	}
 	// limits.md#whois-timeout
 	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
-	who, err := lc.WhoIs(ctx, req.RemoteAddr)
+	// Caps scoped to the address dialed: a Service VIP gets svc: grants (H22).
+	who, err := tssvc.WhoIs(ctx, lc, req.RemoteAddr)
 	cancel()
 	if err != nil {
 		WriteError(w, newErr(CodeNoIdentity, "WhoIs failed for the transport peer"))

@@ -96,6 +96,12 @@ type Config struct {
 	// (default 2 s; a take also triggers a refill at once).
 	WarmPoolInterval time.Duration
 
+	// RevokeWarmKeysOnClose: Close revokes every unused pooled key and
+	// deletes its custody entry (warmcustody.go), so a stopped mgmt holds no
+	// preauthorized join keys. For a single mgmt (`tw up`); replicas sharing
+	// a store would revoke each other's pool on every restart.
+	RevokeWarmKeysOnClose bool
+
 	// Version is this replica's tw-mgmt version ("" = internal/version's),
 	// checked against hosts and other replicas (versions.go). ReleaseDir
 	// holds imported release artifacts ("" = none: hosts can't upgrade
@@ -107,6 +113,12 @@ type Config struct {
 	// keeps for rollback (deployhistory.go): 0 = DefaultBundleRetention,
 	// < 0 = every bundle.
 	BundleRetention int
+
+	// Audit retention (retention.go): delete each chain's records older
+	// than AuditMaxAge and all but its newest AuditMaxRecords, keeping a
+	// checkpoint so the rest still verify. 0 = keep (the default).
+	AuditMaxAge     time.Duration
+	AuditMaxRecords int64
 }
 
 // Mgmt is tw-mgmt's core: tenants, deployments, objects, the mint broker
@@ -151,6 +163,10 @@ type Mgmt struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+
+	// warmGone: tenants being (or already) deleted; a refill that lands
+	// after the delete's drain revokes its own key (warmcustody.go).
+	warmGone map[string]bool
 
 	upgradeKick chan struct{} // wakes the upgrade-run driver (upgrades.go)
 
@@ -256,6 +272,7 @@ func (m *Mgmt) Start() error {
 	}
 	m.wg.Add(1)
 	go m.upgradeLoop() // upgrades.go
+	m.startRetention() // retention.go
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -294,6 +311,9 @@ func (m *Mgmt) Close() {
 	}
 	m.cancel()
 	m.wg.Wait()
+	if m.cfg.RevokeWarmKeysOnClose {
+		m.revokeWarmOnClose() // after the pool loop stopped: nothing refills
+	}
 }
 
 // now is the shared time source: the store's clock when the store provides
@@ -3257,6 +3277,8 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
 	}
 	res.AccessWarnings = m.accessWarnings(ctx, t, pol) // tenantscope_lint.go
+	// svccaps_lint.go: caps on the workload tags that calls through its Service lose (#155).
+	res.AccessWarnings = append(res.AccessWarnings, serviceCapWarnings(pol, res.Service, r.WorkloadTags)...)
 	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved && len(res.TagOwnerProblems) == 0
 	return res, nil
 }

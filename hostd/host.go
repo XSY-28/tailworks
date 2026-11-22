@@ -118,6 +118,12 @@ type Config struct {
 	// capacity.go). Its nodes are always CapacityNodes; without a microVM
 	// backend every VM dimension is 0.
 	Capacity *mgmtapi.HostCapacity
+	// WorkerdHeapMiB caps each V8 isolate's heap in a workerd, and
+	// NodeHeapMiB a Node-tier app's (limits.go; 0 = the default, negative
+	// = no cap).
+	WorkerdHeapMiB int
+	NodeHeapMiB    int
+
 	// VMMemMiB and VMVCPUs are a microVM DO instance's guest size, for usage
 	// accounting (defaults 512 and 2, tw-hostd's -vm-mem-mib / -vm-vcpus).
 	VMMemMiB, VMVCPUs int
@@ -204,6 +210,15 @@ type Config struct {
 	// workload's egress.internet allowlist. Nil: none; such flows are
 	// refused. tw-hostd sets DirectInternet unless -container-internet=off.
 	ContainerInternet *ContainerInternet
+
+	// WorkerInternet is the Worker internet egress path
+	// (ADR-049, internet.go): how fetch() from Worker
+	// and Node app code reaches destinations that are not on the tailnet,
+	// subject to each workload's tailnet.egress.internet and the SSRF
+	// guard. Nil: none; such fetches are refused. tw-hostd and tw up set
+	// DirectInternet unless -worker-internet=off.
+	WorkerInternet *ContainerInternet
+
 	// PathEvery is how often hostd measures and reports the tailnet paths
 	// to its assignments' placement targets (smart placement, ADR-033).
 	// 0 = DefaultPathEvery (60 s); negative disables measuring.
@@ -242,9 +257,11 @@ type Config struct {
 	Restart       func()
 }
 
-// ContainerInternet dials allowlisted internet hosts for containers. The
-// sandbox egress proxy (netd/sbxnet) applies the allowlist and the ADR-019
-// blocks to every resolved address before Dial is called.
+// ContainerInternet dials allowlisted internet hosts for containers (and,
+// as Config.WorkerInternet, for Workers). The sandbox egress proxy
+// (netd/sbxnet) and netd's internet path apply the allowlist and the
+// ADR-019 blocks (netd/publicip) to every resolved address before Dial is
+// called.
 type ContainerInternet struct {
 	Dial    func(ctx context.Context, network, addr string) (net.Conn, error)
 	Resolve func(ctx context.Context, host string) ([]netip.Addr, error)
@@ -384,7 +401,8 @@ func New(cfg Config) (*Host, error) {
 		cfg.SandboxDeny = append(cfg.SandboxDeny, f.Root)
 	}
 	if cfg.CapacityNodes == 0 {
-		cfg.CapacityNodes = 1000
+		total, _ := memInfo()
+		cfg.CapacityNodes = DefaultCapacityNodes(total) // capacitynodes.go
 	}
 	if cfg.VMMemMiB == 0 {
 		cfg.VMMemMiB = 512

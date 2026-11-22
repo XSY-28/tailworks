@@ -3,7 +3,7 @@ var DOC_BASE = "https://github.com/rosskukulinski/tailworks/blob/master/docs/err
 var CATALOG = Object.freeze({
   peer_not_visible: { status: 403, title: "the destination is not in this node's netmap (a grant is missing, or the name does not exist)" },
   forbidden_destination: { status: 403, title: "the destination class is refused by netd (loopback, self, sibling, host, non-tailnet)" },
-  internet_egress_unavailable: { status: 403, title: "the destination is not a tailnet name; Workers have no internet egress (call a gateway on your tailnet)" },
+  internet_egress_unavailable: { status: 403, title: "internet egress is turned off for this workload or host (tailnet.egress.internet), or the host is not on its allowlist" },
   acl_denied: { status: 403, title: "the peer is visible but the port or service is not granted" },
   cap_missing: { status: 403, title: "the caller lacks the app capability (or the tool) required" },
   cap_limit_exceeded: { status: 403, title: "within the granted tool, but above a numeric limit or budget" },
@@ -830,6 +830,44 @@ function wrapStores(env) {
   }
 }
 
+// js/packages/tailnet/src/seal.ts
+var CACHE_MAX = 1024;
+var verified = /* @__PURE__ */ new Map();
+function hasCaller(req) {
+  const ts = req?.cf?.tailscale;
+  return !!ts && typeof ts === "object" && ("caller" in ts || "seal" in ts);
+}
+async function unseal(tw, seal) {
+  if (!seal || typeof seal !== "object" || typeof seal.mac !== "string" || typeof seal.exp !== "number") return null;
+  const hit = verified.get(seal.mac);
+  if (hit) {
+    if (Date.now() <= hit.exp) return hit.caller;
+    verified.delete(seal.mac);
+  }
+  if (!tw || typeof tw.call !== "function") return null;
+  let r;
+  try {
+    r = await tw.call("unseal", { seal });
+  } catch {
+    return null;
+  }
+  const caller = r?.ok ? r.value?.caller ?? null : null;
+  if (caller) {
+    if (verified.size >= CACHE_MAX) verified.delete(verified.keys().next().value);
+    verified.set(seal.mac, { caller, exp: seal.exp });
+  }
+  return caller;
+}
+async function sealedRequest(tw, req) {
+  if (!hasCaller(req)) return req;
+  const cf = req.cf;
+  const caller = await unseal(tw, cf.tailscale.seal);
+  const { caller: _c, seal, ...rest } = cf.tailscale;
+  const out = { ...cf, tailscale: caller ? { ...rest, caller, seal } : rest };
+  if (typeof Request === "function" && req instanceof Request) return new Request(req, { cf: out });
+  return { ...req, cf: out };
+}
+
 // js/packages/tailnet/src/trace.ts
 import { AsyncLocalStorage } from "node:async_hooks";
 var MAX_SPANS = 64;
@@ -1229,6 +1267,7 @@ function wrapPlainClass(C, name, bindings, opts) {
     W.prototype.fetch = async function(req) {
       const k = this.ctx.storage.kv.get("__tw_killed");
       if (k) return killedResponse(k);
+      req = await sealedRequest(twOf.get(this), req);
       if (this.__tw_ensure) await this.__tw_ensure;
       if (this.__tw_denied) return this.__tw_denied.toResponse();
       return runTraced(req, () => proto.fetch.call(this, req), spanFlusher(twOf.get(this), this.ctx));
@@ -1445,6 +1484,7 @@ function wrapHandler(H, bindings) {
       const f = H.prototype.fetch;
       C.prototype.fetch = async function(req) {
         const tw = this.__tw;
+        req = await sealedRequest(tw, req);
         if (isPublicReq(req)) {
           this.env = guardEnv(this.env, bindings, "public", admitter(tw, {}));
           if (tw) define(this.ctx, publicTailnet(createTailnetContext(tw, this.env, bindings)));
@@ -1483,7 +1523,7 @@ function wrapHandler(H, bindings) {
   const out = { ...H };
   for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
-    out[k] = function(a, env, ctx) {
+    const inner = function(a, env, ctx) {
       const tw = env?.__TW;
       const pub = k === "fetch" && isPublicReq(a);
       if (pub) {
@@ -1514,6 +1554,9 @@ function wrapHandler(H, bindings) {
         if (resp) return resp;
         throw e;
       });
+    };
+    out[k] = k !== "fetch" ? inner : function(a, env, ctx) {
+      return sealedRequest(env?.__TW, a).then((r) => inner.call(this, r, env, ctx));
     };
   }
   return out;

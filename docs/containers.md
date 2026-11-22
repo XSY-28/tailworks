@@ -122,7 +122,9 @@ a per-container proxy on the host:
   `/etc/cloudflare/certs/cloudflare-containers-ca.crt` and in its trust
   bundles. Up to 128 interceptors per container.
 - **`enableInternet: true`** reaches only the hosts on the workload's
-  `tailnet.egress.internet` allowlist in tailworks.jsonc, never a private, tailnet,
+  `tailnet.egress.internet` allowlist in tailworks.jsonc (or any public
+  host when it is `true`; none when it is absent or `false`,
+  [tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet)), never a private, tailnet,
   metadata or host address (even through a DNS name that resolves to one).
   Each new destination is audited as `egress` with `actingFor: "sandbox-of
   <object>"`, and refusals as `deny`. There is no tenant exit node yet, so
@@ -147,7 +149,7 @@ a per-container proxy on the host:
 | Host | Containers | Notes |
 |---|---|---|
 | Linux arm64, KVM (Firecracker) | ✅ verified (Lima, nested KVM) | the stock `cloudflare/sandbox` images are amd64 only, so tailworks swaps in its arm64 rebuilds through the alias map; app code is unchanged |
-| Linux amd64, KVM (Firecracker) | ⚠ built, not verified | stock images run as published (no alias). The only x86 test host so far is a nested guest whose L2 VMs lose interrupts, so no amd64 VM has booted to ready there |
+| Linux amd64, KVM (Firecracker) | ⚠ built, not verified | stock images run as published (no alias). The amd64 microVM tier passed `make e2e-vm` on a nested KVM test host (2026-11-22), but `make e2e-container` has not run on amd64 yet |
 | macOS, Apple silicon (vz) | ✅ verified | needs `mkfs.erofs` (`brew install erofs-utils`). With `tw-hostd -vm-rosetta` the stock amd64 images run under Rosetta; without it, the arm64 rebuilds |
 | no KVM / NAS / process-only hosts | ❌ | they don't offer `containers`; a container bundle is not placed there and `start()` throws `tier_unavailable` (no fallback) |
 
@@ -312,7 +314,8 @@ gateway; that is the only DNS server it has.
   the interception. `interceptAllOutboundHttp` is HTTP only; TLS to a host
   with no HTTPS intercept is never terminated.
 - **`enableInternet: true`** reaches only hosts on the workload's
-  `tailnet.egress.internet` allowlist (names, `*.suffix`, IPs or CIDRs),
+  `tailnet.egress.internet` allowlist (names, `*.suffix`, IPs or CIDRs;
+  `true` allows any public host),
   spliced as raw TCP (TLS stays end to end). The name is resolved on the
   host and refused if **any** address is forbidden (ADR-019: loopback,
   private and link-local/metadata ranges, `100.64/10` and the tailnet IPv6

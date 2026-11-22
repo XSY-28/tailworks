@@ -20,9 +20,10 @@ import (
 //     ever, never deleted), are clamped at ingest.
 //   - Plausible fake numbers can't move a running stateful workload: a
 //     plain redeploy stays sticky, --replace is refused (move_unconfirmed).
-//   - Disclosed (H23): plausible fake numbers do choose the host of a NEW
+//   - Not covered: plausible fake numbers do choose the host of a NEW
 //     workload of a tenant h1 already runs. Nothing can tell a fake
-//     "direct 0.1 ms" from a real one; see the ledger row.
+//     "direct 0.1 ms" from a real one, and #156 decided against adding
+//     a second measurement to check it.
 func TestRT3_H23_PlacementPoison(t *testing.T) {
 	a := newAuthzEnv(t)
 	type sample = map[string]any

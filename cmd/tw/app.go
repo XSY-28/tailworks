@@ -325,12 +325,17 @@ type deployResult struct {
 	// Preview (--preview, ADR-048): the preview's own workload
 	// name; Workload is the workload it previews.
 	Preview string `json:"preview,omitempty"`
+
+	// PolicyApplied: --apply-policy's result (policyapply.go).
+	PolicyApplied *mgmt.PolicyApplyResult `json:"policyApplied,omitempty"`
 }
 
 func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
 	name := f.String("name", "", "workload name (default: tailworks.jsonc name)")
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
+	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants or funnel nodeAttrs missing, write them to the tailnet policy first (as tw policy --apply)")
+	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
 	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
 	platform := f.String("platform", "", "containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)")
@@ -411,6 +416,14 @@ func cmdDeploy(args []string) error {
 			printPreflight(a, pf)
 			printPublicPreflight(pf)
 		}
+	}
+	if !pf.OK && *applyPolicy {
+		ar, err := applyAppPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, *yes, "tw deploy --apply-policy")
+		if err != nil {
+			return err
+		}
+		pf, res.Preflight, res.PolicyApplied = ar.Preflight, ar.Preflight, ar
+		ev.emit("policy", map[string]any{"changed": ar.Changed, "added": ar.Added, "manual": ar.Manual, "ok": pf.OK})
 	}
 	if !pf.OK && !*allowMissing {
 		return preflightFailure(pf)
@@ -594,7 +607,7 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 	if len(pf.Missing) > 0 || len(pf.MissingTagOwners) > 0 {
 		if len(pf.MissingTagOwners) > 0 {
 			fmt.Printf("  add to your tailnet policy:\n    %s\n", pf.TagOwnersSnippet)
-			printCallerGrant(a.Cfg.Tailnet.Tags) // callergrant.go
+			printCallerGrant(a.Cfg.Tailnet.Tags, pf.Service) // callergrant.go
 		}
 		if len(pf.Missing) > 0 {
 			fmt.Printf("  add to \"grants\" in your tailnet policy:\n")

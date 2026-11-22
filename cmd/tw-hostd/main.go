@@ -76,7 +76,7 @@ func run() error {
 		ephemeral  = flag.Bool("ephemeral", false, "join nodes as ephemeral (dev/test)")
 		prefix     = flag.String("hostname-prefix", "", "prefix for every node hostname")
 		controlURL = flag.String("control-url", "", "override every tenant's control URL (testing)")
-		capacity   = flag.Int("capacity-nodes", 1000, "advertised node capacity")
+		capacity   = flag.Int("capacity-nodes", 0, "advertised node capacity (0: derived from RAM, see docs/limits.md)")
 		tombstone  = flag.Duration("kill-tombstone", 10*time.Second, "keep killed nodes RST-ing new connections this long")
 		logLevel   = flag.String("log-level", "info", "debug|info|warn|error")
 		tsnetLogs  = flag.Bool("tsnet-logs", false, "forward tsnet logs at debug level")
@@ -104,6 +104,7 @@ func run() error {
 		poolNodes  = flag.Int("pool-nodes", hostdrun.DefaultPoolNodes, "pre-joined nodes to keep per hot class (one with a create here in the last hour): a create takes one and renames it (~0.2 s) instead of joining a new node; each is a device; 0 = off")
 		portMap    = flag.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's tailnet nodes (off by default: it adds ~250 ms to every new object node's join and has every node ask the router for a mapping; turn on for hosts behind hard NATs that need router-assisted direct paths)")
 		pathEvery  = flag.Duration("path-every", hostd.DefaultPathEvery, "smart placement: measure and report tailnet paths to assignments' placement targets this often (negative disables)")
+		reqMaxAge  = flag.Duration("request-log-max-age", 0, "also drop request records (tw logs --source requests) older than this, e.g. 168h; 0 = keep them until the size rotation does (the default)")
 		queueVis   = flag.Duration("queue-visibility", hostd.DefaultQueueVisibility, "queues: how long a claimed batch stays hidden in mgmt (extended while queue() runs); bounds how soon a crashed consumer's batch is delivered again")
 		siblings   = flag.Bool("allow-sibling-egress", false, "let objects reach other objects hosted here over the tailnet (hairpin; single-host tests/demos)")
 		ctrOff     = flag.Bool("no-containers", false, "don't offer containers (ctx.container) even with a microVM backend")
@@ -122,7 +123,11 @@ func run() error {
 		selfUpg    = flag.Bool("self-upgrade", false, "let tw-mgmt's upgrade runs install a new release here and restart this host (exits with status 75 after installing; run under a service manager that restarts it, e.g. systemd Restart=always)")
 		instPrefix = flag.String("install-prefix", "", "with -self-upgrade: the install.sh prefix to upgrade (default: the prefix this tw-hostd runs from, if it has share/tailworks and VERSION)")
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
+		wkInet     = flag.String("worker-internet", "direct", "Workers: how fetch() reaches internet hosts (subject to each workload's tailnet.egress.internet): direct (this host's network, public addresses only) or off")
 	)
+	// Process-tier heap caps (hostd/limits.go).
+	wdHeap := flag.Int("workerd-heap-mib", hostd.DefaultWorkerdHeapMiB, "process tier: cap each V8 isolate's heap in a workerd (the Worker, each Durable Object class) at this many MiB; past it V8 aborts that workload's workerd and it restarts (-1 = no cap)")
+	nodeHeap := flag.Int("node-heap-mib", hostd.DefaultNodeHeapMiB, "Node tier: the app's --max-old-space-size in MiB, unless node.args or NODE_OPTIONS set one (-1 = no cap)")
 	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
 	r2f.Register(flag.CommandLine)
 	flag.Parse()
@@ -151,7 +156,10 @@ func run() error {
 		ContainerImageMaxMiB: *ctrImgMB, ContainerImageCacheMaxMiB: *ctrCacheMB,
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
 		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log,
-		R2: r2b}
+		WorkerInternet: *wkInet,
+		R2:             r2b}
+	o.RequestLogMaxAge = *reqMaxAge // hostd/telemetry_retention.go
+	o.WorkerdHeapMiB, o.NodeHeapMiB = *wdHeap, *nodeHeap
 	restart := make(chan struct{}, 1)
 	if *selfUpg {
 		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix

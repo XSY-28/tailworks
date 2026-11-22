@@ -94,6 +94,12 @@ type Config struct {
 	KillTombstone     string `json:"killTombstone"`
 	DeviceDeleteDelay string `json:"deviceDeleteDelay"`
 	CreatedAt         string `json:"createdAt"`
+
+	// Retention (up_retention.go; empty or 0 = off, the default).
+	AuditMaxAge      string `json:"auditMaxAge,omitempty"`
+	AuditMaxRecords  int64  `json:"auditMaxRecords,omitempty"`
+	RequestLogMaxAge string `json:"requestLogMaxAge,omitempty"`
+
 	// Tenants are the tenants added with `tw tenant add` (the operator
 	// tenant above is the default for every command).
 	Tenants []TenantRef `json:"tenants,omitempty"`

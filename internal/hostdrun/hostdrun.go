@@ -140,12 +140,26 @@ type Options struct {
 	ContainerInternet         string
 	Log                       *slog.Logger
 
+	// WorkerInternet is "direct" (default: Workers' fetch() reaches public
+	// internet hosts from this host's network, subject to each workload's
+	// tailnet.egress.internet) or "off" (ADR-049).
+	WorkerInternet string
+
 	// R2 holds R2 bucket bytes (hostd.Config.R2; nil: files under
 	// <DataDir>/r2).
 	R2 r2.Backend
 
 	// QueueVisibility is hostd.Config.QueueVisibility (0 = default).
 	QueueVisibility time.Duration
+
+	// RequestLogMaxAge is hostd.TelemetryOptions.RecordMaxAge: drop request
+	// records older than this (0 = only the size rotation, the default).
+	RequestLogMaxAge time.Duration
+
+	// WorkerdHeapMiB and NodeHeapMiB are hostd.Config's (process-tier
+	// heap caps; 0 = default, negative = none).
+	WorkerdHeapMiB int
+	NodeHeapMiB    int
 
 	// SelfUpgrade, InstallPrefix and Restart are hostd.Config's (upgrade
 	// runs install a pushed release here and restart the host).
@@ -253,9 +267,8 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	if o.Heartbeat == 0 {
 		o.Heartbeat = 3 * time.Second
 	}
-	if o.CapacityNodes == 0 {
-		o.CapacityNodes = 1000
-	}
+	// CapacityNodes 0 stays 0: hostd derives it from RAM
+	// (hostd.DefaultCapacityNodes).
 	if o.KillTombstone == 0 {
 		o.KillTombstone = 10 * time.Second
 	}
@@ -270,6 +283,9 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	}
 	if o.ContainerInternet == "" {
 		o.ContainerInternet = "direct"
+	}
+	if o.WorkerInternet == "" {
+		o.WorkerInternet = "direct"
 	}
 	o.VM = o.VM.withDefaults(home)
 	wd, err := FindWorkerd(o.Workerd, home)
@@ -356,6 +372,9 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		Restart:       o.Restart,
 	}
 	hcfg.QueueVisibility = o.QueueVisibility
+	hcfg.Telemetry.RecordMaxAge = o.RequestLogMaxAge
+	hcfg.WorkerdHeapMiB = o.WorkerdHeapMiB
+	hcfg.NodeHeapMiB = o.NodeHeapMiB
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {
@@ -394,6 +413,13 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	case "off":
 	default:
 		return nil, fmt.Errorf("-container-internet %q: want direct or off", o.ContainerInternet)
+	}
+	switch o.WorkerInternet {
+	case "direct":
+		hcfg.WorkerInternet = hostd.DirectInternet()
+	case "off":
+	default:
+		return nil, fmt.Errorf("-worker-internet %q: want direct or off", o.WorkerInternet)
 	}
 	if pushLn != nil {
 		lc, err := rt.TS.LocalClient()

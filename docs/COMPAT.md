@@ -38,7 +38,7 @@ other `e2e/` suites), its Tests cell must say "nightly". `make lint` runs
 
 | Surface | Status | workerd provides | tailworks adds | Different from Cloudflare | Missing | Tests |
 |---|---|---|---|---|---|---|
-| <a id="fetch"></a>`fetch` handler and outbound `fetch()` | ⚠️ | the `fetch` handler, `Request`/`Response`, streams, outbound `fetch()` through the worker's `globalOutbound` | requests arrive over WireGuard with the caller's identity (`getCaller`, [below](#identity)); outbound `fetch()` leaves from the workload's node, or from the object's own node (facet mode), so tailnet policy decides what each can reach | outbound `fetch()` reaches **tailnet peers only**: a tailnet name that isn't in the netmap is refused with `peer_not_visible`, and an internet name with `internet_egress_unavailable` (a gateway on your tailnet is how to [call an internet API](recipes.md#call-an-internet-api)). There is no switch for Worker internet egress. Inbound is tailnet-only unless you add [public routes](#public-routes) | internet egress for Workers (only containers have an `egress.internet` allowlist, [containers](#containers)) | `hostd:TestHostd/HelloVerifiedCaller`, `hostd:TestHostd/EgressAttributedPerObject`, `hostd/gen:TestGeneratedWrapperProbe/WorkloadEgressIsWorkload`, `netd:TestChain/PeerNotVisible`, `netd:TestChain/InternetEgressUnavailable` |
+| <a id="fetch"></a>`fetch` handler and outbound `fetch()` | ⚠️ | the `fetch` handler, `Request`/`Response`, streams, outbound `fetch()` through the worker's `globalOutbound` | requests arrive over WireGuard with the caller's identity (`getCaller`, [below](#identity)); outbound `fetch()` leaves from the workload's node, or from the object's own node (facet mode), so tailnet policy decides what each can reach | a tailnet name that isn't in the netmap is refused with `peer_not_visible` (tailnet names are never looked up on the host). Internet egress is **on by default**: a public host is reached from the host's own network, not from a tailnet node, so its source address is the host's ([recipes.md](recipes.md#call-an-internet-api)). Private, link-local (metadata), loopback, tailnet and host addresses are refused with `forbidden_destination`, checked on the address dialled after DNS. `tailnet.egress.internet: false` turns it off and a list limits it ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet)); a refused internet destination is `internet_egress_unavailable`. Inbound is tailnet-only unless you add [public routes](#public-routes) | a fixed internet source address (use a gateway on your tailnet) | `hostd:TestHostd/HelloVerifiedCaller`, `hostd:TestHostd/EgressAttributedPerObject`, `hostd/gen:TestGeneratedWrapperProbe/WorkloadEgressIsWorkload`, `netd:TestChain/PeerNotVisible`, `netd:TestChain/InternetEgressUnavailable`, `netd:TestInternetEgress`, `hostd:TestWorkerInternetEgress` |
 | <a id="websockets"></a>WebSockets | ✅ | `WebSocketPair`, upgrade responses, the hibernation API | the upgrade is proxied through netd ingress and hostd to the object's own node | — | — | `e2e/sdk:TestCloudflareAgents/WebSocketsAndHibernation`, `netd:TestPublicUpgrade` |
 | <a id="connect"></a>TCP sockets (`connect()`, `cloudflare:sockets`) | ❌ | `connect()` | — | — | tailworks' egress paths carry HTTP only, so `connect()` fails ("cannot connect to the specified address"). Raw TCP egress through netd isn't built; `ctx.tailnet.connect()` throws `plan_feature_missing` | `hostd/gen:TestRuntimeCompat/ConnectTCPRefused` |
 | <a id="wasm"></a>WebAssembly modules | ✅ | `.wasm` modules (`import mod from "./x.wasm"`), `WebAssembly.Instance` | the platform loads `.wasm` modules from the bundle, in the Worker and in both object modes; `tw deploy`'s bundlers ship them as wrangler does (`<sha1>-<file>.wasm`, also `.wasm?module`) | — | — | `hostd/gen:TestRuntimeCompatWasm`, `internal/esbundle:TestBuildAppWranglerSettings`, `e2e/wrangler:TestDevWrangler/BuiltinEsbuild` |
@@ -324,7 +324,7 @@ container is its own microVM attached to one Durable Object; see
 |---|---|---|---|---|---|
 | `ctx.container` in a DO (`start`, `running`, `inspect`, `exec`, `getTcpPort().fetch`, `monitor`, `signal`, `destroy`, `setInactivityTimeout`) | ✅ | ⚠ not verified | ✅ | ❌ `tier_unavailable` | `TestE2EContainer` `B_raw_ctx_container_python_Files`, `Lifecycle`, `PortsAndAttribution`, `InactivityTimeout`, `KillCascades` |
 | `interceptOutboundHttp` / `interceptAllOutboundHttp` / `interceptOutboundHttps` | ✅ enforced | ⚠ | ✅ | ❌ | `Egress/InterceptToParentIdentity`, `Egress/InterceptHTTPS` (e2e), `TestContainerEgress` (hostd) |
-| `enableInternet` | ✅ allowlist only (`tailnet.egress.internet`), host's own network | ⚠ | ✅ | ❌ | `Egress/AllowlistedInternet` |
+| `enableInternet` | ✅ `tailnet.egress.internet` (`true` or an allowlist; absent: none), host's own network | ⚠ | ✅ | ❌ | `Egress/AllowlistedInternet` |
 | `getTcpPort().connect()`, WebSocket to a container port | ❌ deferred | ❌ | ❌ | ❌ | |
 | `snapshotContainer`, `containerSnapshot`, directory snapshots | ❌ v1.1 / deferred | ❌ | ❌ | ❌ | |
 | `@cloudflare/containers` `Container` class (0.3.x) | ✅ (what Sandbox 0.x runs on) | ⚠ | ✅ | ❌ | `A_SandboxSDK0x_minimal` |
@@ -335,9 +335,11 @@ container is its own microVM attached to one Durable Object; see
 | Sandbox SDK backups, bucket mounts (R2) | ❌ | ❌ | ❌ | ❌ | |
 | Images from the app's own Dockerfile via `tw deploy` (built on the developer machine, pinned by digest, pulled by the host) | ✅ | ⚠ (pinning by arch is unit-tested) | not run end to end (host pull uses the same code) | ❌ | `TestE2EContainerRegistry` |
 
-amd64 is "⚠ not verified": the code and the amd64 guest assets exist, but
-the only x86 test host (a nested KVM guest) loses interrupts in its L2 VMs, so
-no amd64 microVM has booted to ready there (STATUS.md, ADR-032 section).
+amd64 is "⚠ not verified": the code and the amd64 guest assets exist, and
+the amd64 microVM tier itself passed `make e2e-vm` and snapshot restore on a
+nested KVM test host on 2026-11-22
+([details](install-testing.md#the-microvm-tier)), but `make e2e-container`
+has not run on amd64 yet.
 
 ## Workers platform config
 

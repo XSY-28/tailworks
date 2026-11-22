@@ -33,9 +33,17 @@
           "type": "string",
           "description": "the grant that lets tailnet members call the app (not checked)"
         },
+        "serviceCallerGrant": {
+          "type": "string",
+          "description": "for an app behind a Tailscale Service: the grant to its svc: name; callers' app capabilities go on this grant (not checked)"
+        },
         "snippet": {
           "type": "string",
           "description": "everything to add to the policy, in one block"
+        },
+        "applied": {
+          "type": "object",
+          "description": "--apply: what mgmt wrote to the tailnet policy (changed, added, manual, oldETag, newETag, and the preflight after it)"
         }
       },
       "required": [
@@ -893,6 +901,10 @@
         "hostStatus": {
           "type": "string"
         },
+        "warmKeys": {
+          "type": "integer",
+          "description": "the operator tenant's pooled preauthorized join keys in mgmt custody (per tenant: tenants[].warmKeys); tw down revokes them"
+        },
         "tenants": {
           "type": "array",
           "items": {
@@ -1507,6 +1519,10 @@
           "type": "string",
           "description": "--preview: the preview's own workload name (<workload>--preview-<alias>); workload is the workload it previews"
         },
+        "policyApplied": {
+          "type": "object",
+          "description": "--apply-policy: what mgmt wrote to the tailnet policy before the deploy (as tw policy --apply's applied)"
+        },
         "bundleBytes": {
           "type": "integer"
         },
@@ -1529,13 +1545,14 @@
     },
     "deploy.event": {
       "type": "object",
-      "description": "tw deploy --json: one per line on stderr: start, preflight, build, log (container image builds), placed, status (each change), ready, then public_wait and public with --wait-public. A failure ends with an error line ({\"error\": ...}) instead. tw rollback --json prints the same lines without build, log and public",
+      "description": "tw deploy --json: one per line on stderr: start, preflight, policy (--apply-policy), build, log (container image builds), placed, status (each change), ready, then public_wait and public with --wait-public. A failure ends with an error line ({\"error\": ...}) instead. tw rollback --json prints the same lines without build, log and public",
       "properties": {
         "event": {
           "type": "string",
           "enum": [
             "start",
             "preflight",
+            "policy",
             "build",
             "log",
             "placed",
