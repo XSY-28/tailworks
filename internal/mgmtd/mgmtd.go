@@ -97,6 +97,10 @@ type Options struct {
 	// RevokeWarmKeysOnClose: Close revokes the unused pooled keys
 	// (mgmt.Config; tw-mgmt -revoke-warm-keys-on-exit).
 	RevokeWarmKeysOnClose bool
+
+	// APILimits rate-limit tailnet callers of the API (zero: the defaults).
+	APILimits mgmt.APILimits
+
 	// RegistryDir is the OCI registry blob store ("" = <StateDir>/registry,
 	// "off" = no registry); RegistryInsecure lists upstream registry hosts
 	// mirrored over plain HTTP; NoMirror refuses external image refs at
@@ -116,6 +120,11 @@ type Options struct {
 	// BundleRetention is how many bundles per workload mgmt keeps for
 	// rollback (mgmt.Config; 0 = mgmt.DefaultBundleRetention, < 0 = all).
 	BundleRetention int
+
+	// Audit retention (mgmt.Config, mgmt/retention.go): 0 = keep every
+	// record (the default).
+	AuditMaxAge     time.Duration
+	AuditMaxRecords int64
 }
 
 // Runtime is a running mgmt.
@@ -290,6 +299,8 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		mcfg.RegistryDir = o.RegistryDir
 	}
 	mcfg.BundleRetention = o.BundleRetention // ADR-046
+	// Audit retention: mgmt/retention.go.
+	mcfg.AuditMaxAge, mcfg.AuditMaxRecords = o.AuditMaxAge, o.AuditMaxRecords
 	if len(o.RegistryInsecure) > 0 {
 		mcfg.RegistryInsecure = o.RegistryInsecure
 	}
@@ -363,7 +374,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			return nil, err
 		}
 		whois := func(ctx context.Context, addr string) (mgmt.WhoIsInfo, error) {
-			wi, err := lc.WhoIs(ctx, addr)
+			wi, err := tssvc.WhoIs(ctx, lc, addr) // svc:tw-mgmt flows get svc: grants (H22)
 			if err != nil {
 				return mgmt.WhoIsInfo{}, err
 			}
@@ -396,7 +407,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		if err != nil {
 			return nil, err
 		}
-		th := api.TailnetHandler(whois, rt.handler)
+		th := api.TailnetHandler(whois, mgmt.NewAPILimiter(o.APILimits).Wrap(rt.handler))
 		api.Listeners = append(api.Listeners, "tsnet:80")
 		serve("tsnet", ln, th)
 		if o.TSNetService != "" {

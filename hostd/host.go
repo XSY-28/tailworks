@@ -118,6 +118,12 @@ type Config struct {
 	// capacity.go). Its nodes are always CapacityNodes; without a microVM
 	// backend every VM dimension is 0.
 	Capacity *mgmtapi.HostCapacity
+	// WorkerdHeapMiB caps each V8 isolate's heap in a workerd, and
+	// NodeHeapMiB a Node-tier app's (limits.go; 0 = the default, negative
+	// = no cap).
+	WorkerdHeapMiB int
+	NodeHeapMiB    int
+
 	// VMMemMiB and VMVCPUs are a microVM DO instance's guest size, for usage
 	// accounting (defaults 512 and 2, tw-hostd's -vm-mem-mib / -vm-vcpus).
 	VMMemMiB, VMVCPUs int

@@ -27,7 +27,7 @@ Status: **Built** as designed · **Differs**: built, but not as this RFC says ·
 | §4.8 | Per-object egress through a platform wrapper with a request MAC | Differs | Facet mode (the default) sends each object's `fetch()` from its own node; plain-DO mode sends it from the workload's node ([egress-modes.md](../egress-modes.md)) |
 | §4.8 | Internet egress opt-in per class (`egress.internet`) | Revised | Internet egress is on by default per workload and leaves from the host's network through netd's SSRF guard, not via an exit node or gateway. `tailnet.egress.internet` (`false`, or an allowlist) turns it off or limits it, for Workers and containers alike (ADR-049, ADR-032); see §4.8 |
 | §4.2, §4.8, §15 | `stord` (`tw-stord`): DO storage over vsock, encrypted per object, shipped to a tenant bucket | Not built | DO storage is a host-local directory (on the microVM tier, a per-workload volume). KV, D1 and R2 indexes are journaled in mgmt (ADR-044); Queues live in mgmt (ADR-039) |
-| §4.9, §9, §10 | Async encrypted DO backup, RPO ≤ 5 s, `tw restore --namespace` drilled in CI | Not built | [ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md) is amended. Back up the state directory ([INSTALL.md](../INSTALL.md#back-up-and-restore)). Moving a workload with Durable Objects to another host starts them empty (`tw host drain --allow-local-state-loss`); see [#38](https://github.com/rosskukulinski/tailworks/issues/38) |
+| §4.9, §9, §10 | Async encrypted DO backup, RPO ≤ 5 s, a per-namespace restore drilled in CI | Not built | [ADR-012](adr/012-mvp-single-host-per-tenant-namespace.md) is amended. Back up the state directory ([INSTALL.md](../INSTALL.md#back-up-and-restore)). Moving a workload with Durable Objects to another host starts them empty (`tw host drain --allow-local-state-loss`); see [#38](https://github.com/rosskukulinski/tailworks/issues/38) |
 | §4.9 | Namespace lease on S3 or Postgres, TTL 15 s, renew 5 s | Differs | The database is the lease clock (ADR-028): SQLite or Postgres, no S3. The namespace lease TTL is 45 s, and hosts fence themselves after 30 s without a renewal |
 | §4.9, §9 | Parking, `gcAfter`, 500 online nodes per netd | Not built | Nodes stay online until their object is killed, reaped or undeployed. Hosts advertise a node capacity to placement (`tw-hostd -capacity-nodes`; by default a quarter of RAM at 8 MiB per node, 50 to 1000, from measurements: [limits.md](../limits.md#per-node-memory-measured)). Pool nodes (ADR-031) and warm keys make new objects faster. Whether parking and `gcAfter` are built or dropped is an open decision ([§4.9](#49-do-lifecycle)) |
 | §4.9 | macOS pre-sleep hook | Not built | A sleeping Mac takes its nodes offline |
@@ -35,7 +35,7 @@ Status: **Built** as designed · **Differs**: built, but not as this RFC says ·
 | §4.3, §4.4 | Mint-time node attributes (`custom:tw-*`) | Not built | Auth keys carry tags only; lineage lives in tailworks' audit |
 | §4.3, §8 | Node keys rotated on migration and every 30 days | Not built | A node keeps its key for its lifetime |
 | §4.4, §4.8 | Node keys and DEKs in setec; the OBO root key in KMS | Differs | Node state lives in the host's state directory. mgmt's custody is a file store (AES-GCM, the default) or setec (`tw-mgmt -custody setec`); there is no KMS and no per-object DEK ([ADR-018](adr/018-use-setec-node-key-dek-custody.md) stays Proposed) |
-| §4.4 | `tw login` (browser OIDC); CI deploys by OIDC token exchange | Not built | Developers, agents and CI runners on the tailnet use `tw link`: mgmt identifies the machine by WhoIs |
+| §4.4 | Browser OIDC login; CI deploys by OIDC token exchange | Not built | Developers, agents and CI runners on the tailnet use `tw link`: mgmt identifies the machine by WhoIs |
 | §4.5 | `getCaller()`: WhoIs at ingress, `request.cf`, client identity headers stripped | Built | [COMPAT.md](../COMPAT.md#identity) |
 | §4.6 | Node certificates with `lim`; spawn budgets (64 live, depth 3); `--cascade` | Built | ADR-025 |
 | §4.6, §6 | Per-request on-behalf-of assertions (`Tailnet-Assertion`, `actingFor`); `forward()` re-signs the act chain | Not built | A receiver sees the calling node, not the human it acts for. `ctx.tailnet.forward()` re-sends the request from the calling node ([COMPAT.md](../COMPAT.md#identity)) |
@@ -44,8 +44,8 @@ Status: **Built** as designed · **Differs**: built, but not as this RFC says ·
 | §4.11, §5.5 | Kill tiers 1 and 2 | Built | Tier 1 resets flows and closes the node; tier 2 deletes the device after a tombstone window |
 | §4.11, §5.5 | Kill tier 3 (posture flip on `custom:tw-live`) | Not built | `tw kill` reports it as unavailable |
 | §4.10 | Hash-chained, host-signed audit; `tw audit`; trace IDs | Built | Request logs, metrics and traces are ADR-045 (`tw logs`, `tw telemetry`) |
-| §4.10 | `tw tail` | Not built | `tw logs -f` |
-| §3, §5.1, §7.2 | `tw connect` | Not built | `tw up --oauth-client-file` serves the first tailnet, `tw tenant add` the next ones; `tw up --control=headscale` for Headscale |
+| §4.10 | A live log tail | Built | `tw logs -f` (ADR-045) |
+| §3, §5.1, §7.2 | One command that connects a tailnet | Differs | `tw up --oauth-client-file` serves the first tailnet, `tw tenant add` the next ones; `tw up --control=headscale` for Headscale |
 | §4.5, §4.6, §7, §9, §12 | `tw policy lint`, `tw policy test`, `tw policy push`, `policy.tw-tests.hujson` | Not built | `tw policy [dir]` prints the policy snippet an app needs, checked against the live policy; `tw deploy` runs the same preflight |
 | §4.7 | A Tailscale Service per workload | Built | Opt-in per workload ([services.md](../services.md)) |
 | §3 | Non-goals: KV, R2, D1 and Queues out of scope; not a VM platform | Revised | KV, R2, D1, Queues, Workflows (ADR-036 to ADR-040) and containers (ADR-032) ship; see §3 |
@@ -246,7 +246,7 @@ We call the REST API ourselves because tsnet can't set `nodeAttributes` on a joi
 | `tw dev` | None. An embedded control plane | No |
 
 **Developers and CI** (no secret anywhere):
-- `tw login`: self-hosted tw-mgmt identifies the developer by WhoIs over the tailnet; hosted tw-mgmt uses a browser OIDC flow. (Not built: `tw link` does the WhoIs part.)
+- `tw link`: self-hosted tw-mgmt identifies the developer by WhoIs over the tailnet. (Hosted tw-mgmt's browser OIDC login is not built.)
 - CI deploys exchange GitHub/GitLab OIDC tokens with tw-mgmt (trust rules per repo and environment). (Not built.)
 - Hosts enrol in the operator tailnet with a single-use key minted by tw-mgmt, then persist their node key.
 - `tw link` binds a checkout to a tenant and namespace in `.tailworks/`, which is gitignored.
@@ -434,7 +434,7 @@ No bucket credential enters the guest, and no storage service is shared across t
 
 - **Attribution chain.** Lineage lives in tw-mgmt (`human → agent → sub-agent`). Each request carries a signed `act` chain. Each object has its own node ID in Tailscale flow logs, where the plan includes flow logs. Joining the node ID to the object record to the lineage is `tw audit`.
 - **Trace ID.** netd generates the W3C trace ID; the guest can't set it. A guest-supplied ID is kept only as `parentHint`. The ID goes into the assertion's `txn`, so it survives hops through platform and non-platform servers.
-- **Audit log.** netd writes L7 records `{ts, tenant, srcNode, dstNode, srcObject, dstObject, sub, chain, tool, verdict, grant, traceId}`. Records are **hash-chained per host and signed with the host key**, exported over OTLP, and indexed by tw-mgmt. Commands are `tw audit <object|human|trace>` and `tw logs -f` (the design's `tw tail` was not built).
+- **Audit log.** netd writes L7 records `{ts, tenant, srcNode, dstNode, srcObject, dstObject, sub, chain, tool, verdict, grant, traceId}`. Records are **hash-chained per host and signed with the host key**, exported over OTLP, and indexed by tw-mgmt. Commands are `tw audit <object|human|trace>` and `tw logs -f`.
 - **Independent cross-check.** The Tailscale configuration audit log records every mint and delete under the federated credentials.
 
 ### 4.11 Safety and kill switch
@@ -997,7 +997,7 @@ Drains are refused while placement is frozen.
 
 - Encrypted WAL plus periodic SQLite snapshots per object, in the tenant prefix. Versioning is on.
 - The durable store (leases, object records, lineage, wrapped DEKs) is backed up with point-in-time recovery. KMS keys are backed up separately.
-- `tw restore --namespace` is drilled in CI. (Not built.)
+- A per-namespace restore is drilled in CI. (Not built.)
 - If the store is lost permanently, the system is restored from backup. Running hosts keep serving until their leases expire.
 
 ## 11. Alternatives considered

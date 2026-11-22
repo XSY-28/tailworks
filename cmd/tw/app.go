@@ -607,7 +607,7 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 	if len(pf.Missing) > 0 || len(pf.MissingTagOwners) > 0 {
 		if len(pf.MissingTagOwners) > 0 {
 			fmt.Printf("  add to your tailnet policy:\n    %s\n", pf.TagOwnersSnippet)
-			printCallerGrant(a.Cfg.Tailnet.Tags) // callergrant.go
+			printCallerGrant(a.Cfg.Tailnet.Tags, pf.Service) // callergrant.go
 		}
 		if len(pf.Missing) > 0 {
 			fmt.Printf("  add to \"grants\" in your tailnet policy:\n")

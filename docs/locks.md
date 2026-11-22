@@ -169,8 +169,8 @@ token = max(lastToken + 1, epoch × 1 000 000 000 + 1)
 move, and never reuses one. So even when a takeover starts the lock with
 empty storage on another host, its first token beats anything the old host
 handed out. That holds across a restore of mgmt's store from a backup too:
-the restore fence (`tw-mgmt restore-fence`, run by `tw upgrade`'s
-rollback; [upgrading.md](upgrading.md)) raises every lease epoch by 2²⁰, far
+the restore fence (`tw-mgmt restore-fence`, run by `tw restore` and
+`tw upgrade`'s rollback; [upgrading.md](upgrading.md)) raises every lease epoch by 2²⁰, far
 past anything handed out after the backup.
 
 **Worked example.** A report table in Postgres (or any store with a

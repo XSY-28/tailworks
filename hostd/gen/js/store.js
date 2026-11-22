@@ -241,6 +241,15 @@ export class Store extends DurableObject {
           this.#setMeta("inc", inc);
         }
       }
+      if (inc !== "" && (p.head ?? 0) < this.seq) {
+        // The journal is behind this copy: mgmt's store was restored from
+        // a backup (tw restore, an upgrade's rollback). The journal is
+        // authoritative, so start over from it; otherwise every write
+        // would conflict with a head this copy is already past.
+        this.#wipe(inc);
+        after = 0;
+        continue;
+      }
       mgmtDegraded = p.degraded ?? null;
       const entries = (p.entries ?? []).map((e) => ({ seq: e.seq, data: b64dec(e.data) }));
       let bad = null;

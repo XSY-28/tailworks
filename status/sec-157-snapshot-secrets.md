@@ -33,19 +33,16 @@ Last update: 2026-11-21 PT. H24 (#157): what snapshot-restored microVMs still sh
 - `make lint`: ok.
 - `make test` (mbp runner, `mbp-test.sh test`): ok.
 - `GOOS=linux go vet ./hostd/vm/`: ok. The probe builds for linux/amd64 (`go build`, `go vet`).
-- **Probe method, validated on Linux (the twd-amd64 host kernel, 6.8, not a guest):**
+- **Probe method, validated on Linux (a test host's own kernel, 6.8, not a guest):**
   two root runs gave ISN keys `0x2a8d0774` and `0x2a8d0761` (19 units apart; the
   tolerance is 2^16) and the same timestamp key. Run unprivileged, it fails as
   expected: TCP_REPAIR needs CAP_NET_ADMIN, and guestd's `run` is root. The
   ephemeral port moved by 12 between runs (the perturbation table advances), so
   the port is recorded, not compared.
-- **`vm.TestSnapshotKernelState` in a real guest: not run (harness broken).** On
-  `twd-amd64` (nested KVM on nas-1, 2026-11-22) every Firecracker boot stalls
-  after `PCI: Fatal: No config space access function found`, with a guest soft
-  lockup at ~28 s. That includes master's own `TestSmoke` and
-  `TestSnapshotUniqueness`, with and without hugepages, at 1 or 2 vCPUs, with
-  the VM idle and under load. So the copies' measured sharing is still to be
-  recorded. The run that would do it:
-  `sudo env PATH=$PATH TW_VM_HUGEPAGES=on TW_VM_KERNEL=… TW_VM_ROOTFS=… bin/vmsmoke.test -test.run TestSnapshotKernelState -test.v`
-  (or `make e2e-vm`) on a working KVM host (Lima tw-dev).
-- `make e2e-vm`: skipped (it needs a working KVM host; see above).
+- **`vm.TestSnapshotKernelState` in a real guest:** run after this PR merged,
+  on 2026-11-22, on a nested KVM test host (amd64): it passes. The results are
+  in ADR-030 (d) and `status/docs-amd64-verified.md`. The first attempt, on the
+  same host before its KVM was fixed, stalled every Firecracker boot (master's
+  own `TestSmoke` included).
+- `make e2e-vm`: passes on the same host, 2026-11-22 (see
+  `status/docs-amd64-verified.md`).

@@ -36,6 +36,11 @@ func keepSavedUpFlags(fs *flag.FlagSet, c Config) {
 	keep("heartbeat", c.Heartbeat)
 	keep("kill-tombstone", c.KillTombstone)
 	keep("device-delete-delay", c.DeviceDeleteDelay)
+	keep("db", c.DB)
+	keep("db-file", c.DBFile)
+	keep("custody", c.Custody)
+	keep("setec-url", c.SetecURL)
+	keepSavedRetention(keep, c) // up_retention.go
 	if c.PushPort != 0 {
 		keep("push-port", strconv.Itoa(c.PushPort))
 	}

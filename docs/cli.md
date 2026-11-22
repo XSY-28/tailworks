@@ -24,10 +24,20 @@ flags:
     	let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
+  -audit-max-age duration
+    	audit retention: delete audit records older than this (e.g. 2160h), keeping a checkpoint so the rest still verify (0 = keep every record, the default)
+  -audit-max-records int
+    	audit retention: keep only the newest N records of each audit chain (0 = keep every record, the default)
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain) (default "tailscale")
   -control-url string
     	coordination server for the tailnet's nodes (default "https://controlplane.tailscale.com")
+  -custody string
+    	where mgmt keeps secrets: file (default: AES-GCM in <state>/mgmt/custody) or setec (with --setec-url; what several mgmt replicas on one store need)
+  -db string
+    	mgmt's store: a postgres://… DSN (saved in tw.json; prefer --db-file for a DSN with a password). Default: SQLite in <state>/mgmt/mgmt.db. Move an existing install first: tw-mgmt migrate --from sqlite --to-file <file>
+  -db-file string
+    	read mgmt's store DSN from this 0600 file at every start (keeps a Postgres password out of tw.json and argv)
   -device-delete-delay duration
     	delete a killed object's device this long after the kill (< --kill-tombstone) (default 8s)
   -ephemeral
@@ -60,10 +70,14 @@ flags:
     	use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)
   -push-port int
     	port on this host's own tailnet node where mgmt pushes kills (--separate-host) (default 7474)
+  -request-log-max-age duration
+    	also drop request records (tw logs --source requests) older than this, e.g. 168h (0 = only the size rotation, the default)
   -separate-host
     	run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it
   -service
     	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist)
+  -setec-url string
+    	--custody setec: the setec server URL
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tailnet string
@@ -137,7 +151,7 @@ serve, list, update or remove tenants
 ```text
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
-usage: tw tenant add <tailnet> --oauth-client-file <file> [--policy-apply] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
+usage: tw tenant add <tailnet> --oauth-client-file <file> [--policy-apply] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--max-store-bytes SIZE] [--max-queue-bytes SIZE] [--max-stores N] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -205,6 +219,12 @@ flags:
     	containers (ADR-032): running containers quota
   -max-objects int
     	object quota
+  -max-queue-bytes string
+    	storage quota: bytes of all the tenant's queued messages together, e.g. 2GiB ("-" or 0 = unlimited, the default)
+  -max-store-bytes string
+    	storage quota: bytes of all the tenant's KV, D1 and R2 journals together, e.g. 20GiB ("-" or 0 = unlimited, the default)
+  -max-stores string
+    	storage quota: how many KV namespaces, D1 databases and R2 buckets the tenant may have ("-" or 0 = unlimited, the default)
   -name-prefix string
     	name prefix for the tenant's tailnet names; only before its first deploy ("-" = none)
   -oauth-client-file string
@@ -2081,6 +2101,42 @@ flags:
     	machine-readable output
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+### tw backup
+
+back up mgmt's store, custody and tw.json, online
+
+```text
+tw backup: back up this install's control plane while it runs: mgmt's store (a consistent SQLite copy), custody, the ID secret, mgmt's node state and tw.json, into a new directory (tw restore puts it back)
+
+usage: tw backup [--out <dir>]
+
+flags:
+  -json
+    	machine-readable output
+  -out string
+    	write the backup to this new directory (default <state>/backups/<time>-backup-<version>)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+### tw restore
+
+put a tw backup back (tailworks stopped)
+
+```text
+tw restore: restore a tw backup (or a tw upgrade backup) with tailworks stopped: the current state is kept in <state>/backups first, then the restore fence moves every lease epoch past any handed out since the backup
+
+usage: tw restore <backup-dir> [--yes]
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ### tw upgrade

@@ -323,6 +323,8 @@ it (pending) and writes a single-use join key file; on the new machine run
 start `tw-hostd -host-id <id> -mgmt http://tw-mgmt.<tailnet> -tsnet-control-url …`.
 `tw host ls` / `tw host rm <id> [--drain]` manage hosts; `tw tenant set`
 (PATCH) and `tw tenant rm`, `tw undeploy <workload>` round out the CRUD.
+More hosts still share one mgmt; for more than one mgmt replica, see
+[When to switch to Postgres](#when-to-switch-to-postgres).
 
 #### Where a workload runs (placement, multi-host)
 
@@ -585,23 +587,86 @@ Everything tailworks keeps is in its state dir (`~/.tailworks`, or `--state-dir`
   `fs` backend, R2 object bytes ([r2.md](r2.md)).
 - `tw.json`: how `tw up` was run (mint mode, credential file path).
 
-To back up, stop tailworks so SQLite is consistent, copy the directory, and
-start it again:
+### Back up a running install: `tw backup`
+
+```sh
+tw backup --out ~/tw-backup-$(date +%F)
+```
+
+`tw backup` works while tailworks runs. It writes a new directory with:
+
+- a consistent copy of `mgmt.db` (SQLite `VACUUM INTO`),
+- the rest of `mgmt/`: custody, the ID secret, mgmt's node state,
+- `tw.json`,
+- `backup.json`, which says what the backup holds and what it doesn't.
+
+Without `--out` it writes to `~/.tailworks/backups/`. The backup holds the
+custody key and mgmt's node key, so store it like a secret.
+
+It doesn't hold:
+
+- **`hostd/`:** Durable Object storage and, with the `fs` backend, R2 object
+  bytes. These are files the running workloads write. For a consistent
+  copy, `tw down`, copy `~/.tailworks/hostd`, then `tw up`.
+- **`mgmt/registry/`:** container image blobs. If you deploy container
+  images, copy it separately; it is content-addressed, so a copy taken
+  while tailworks runs is fine.
+- **Your OAuth client file** (`~/.config/tailworks/oauth.env`).
+- **A Postgres store.** `pg_dump` it ([postgres.md](postgres.md#back-up-and-restore-with-postgres)).
+
+For one database, `tw d1 export <db> --output <file>` also works while
+tailworks runs ([d1.md](d1.md)). `tw upgrade` takes the same kind of
+backup before it installs, in `~/.tailworks/backups/`
+([upgrading.md](upgrading.md)).
+
+To copy everything, `hostd/` included, stop tailworks first:
 
 ```sh
 tw down
 tar -czf tw-state-$(date +%F).tgz -C ~ .tailworks
-tw up …
+tw up
 ```
 
-The copy contains node keys and the custody key: store it like a secret.
-To restore, `tw down`, put the directory back in the same place, and run
-`tw up`. Never run two copies of the same state at once: they share node
-identities. For one database, `tw d1 export <db> --output <file>` works
-while tailworks runs ([d1.md](d1.md)). Your OAuth client file
-(`~/.config/tailworks/oauth.env`) is not in the state dir. `tw upgrade` takes
-its own backup before it installs, in `~/.tailworks/backups/`
-([upgrading.md](upgrading.md)).
+To restore that copy, `tw down`, put the directory back in the same place,
+and run `tw up`.
+
+### Restore: `tw restore`
+
+```sh
+tw down
+tw restore ~/tw-backup-2026-11-21 --yes
+tw up
+```
+
+`tw restore` needs tailworks stopped. It also takes a `tw upgrade` backup.
+It:
+
+1. copies the state it replaces to `~/.tailworks/backups/<time>-before-restore`,
+   so you can undo the restore with another `tw restore`;
+2. puts the backup's `mgmt/` and `tw.json` back;
+3. runs the **restore fence**: every lease epoch moves up past any epoch
+   handed out since the backup, so no fencing token
+   ([locks.md](locks.md)) is ever issued twice.
+
+Everything that changed after the backup is gone: KV and D1 writes, Queue
+messages, deploys and secrets. Store objects on the host whose copy is
+ahead of the restored journal start over from it on their next sync.
+Objects created after the backup are not in it, and their devices may be
+left in the admin console. Delete them there.
+
+Restore on the same machine, or on a new one that takes its place. Never
+run two copies of the same state at once: they share node identities.
+
+### When to switch to Postgres
+
+SQLite in `~/.tailworks/mgmt/mgmt.db` suits one machine, or one mgmt with a
+few hosts. Move mgmt's store to Postgres when the store's disk must
+outlive the machine (a managed database with its own backups), or before
+you run more than one mgmt replica. A replica set keeps the API answering
+while one replica is down; one mgmt on Postgres doesn't. `tw-mgmt migrate
+--from sqlite` copies a stopped install's store, then `tw up --db-file`
+runs on it. HA runs `tw-mgmt` directly on each replica machine. Both are in
+[postgres.md](postgres.md).
 
 ## Uninstall
 
@@ -618,6 +683,37 @@ if you had one) in the admin console › Machines. Then, if you're done with
 tailworks on this tailnet, revoke the OAuth client, delete `~/.config/tailworks/oauth.env`, remove the tailworks
 tags and grants from your tailnet policy, and remove the `PATH` line from
 your shell profile.
+
+## Disk, storage quotas and retention
+
+Everything tailworks keeps is under the state dir (`~/.tailworks`): mgmt's
+database (`mgmt/mgmt.db`, the only copy of every tenant's KV, D1, R2 index
+and queue data), Durable Object storage, R2 objects and logs. `tw doctor`
+checks the free space on that volume (`data_disk`: a warning under 5 GiB or
+10% free, a failure under 1 GiB) and how full each tenant's stores and
+queues are (`store_sizes`: a warning at 80% of a limit or quota).
+`tw tenant ls` shows each tenant's usage.
+
+Each KV namespace, D1 database, R2 bucket index and queue is capped at
+1 GiB. To bound a tenant as a whole, for example on a host several teams
+share, set its storage quotas. They are unlimited unless you set them:
+
+```sh
+tw tenant set <tenant> --max-store-bytes 20GiB --max-queue-bytes 2GiB --max-stores 50
+tw tenant set <tenant> --max-store-bytes -     # back to unlimited
+```
+
+A write past a quota fails with
+[`storage_quota_exceeded`](errors.md#storage_quota_exceeded); deletes and
+overwrites that don't grow a store still work.
+
+Retention is off by default: audit records are kept forever, request
+records until their log rotates (8 MiB per workload, one previous file).
+`tw up --audit-max-age 2160h` (or `--audit-max-records N`) deletes older
+audit records and keeps a checkpoint, so the rest still verify;
+`tw up --request-log-max-age 168h` drops older request records. `tw up`
+remembers them. `mgmt.log` and `hostd.log` rotate at 32 MiB. See
+[limits.md](limits.md#tenant-storage).
 
 ## Tuning: how fast a new object's own node comes up
 
@@ -788,10 +884,8 @@ seconds. Measured times are in
   doctor's process checks use `/proc` and `ss`, not `lsof`.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.tailworks`.
-  Caveat: Fedora was tested once, on 2026-11-08, from a pre-release build with
-  API-key minting and before the Landlock sandbox. It is not in the default
-  `make e2e-linux` rows and has not been tested with OAuth-only minting or the
-  sandbox ([install-testing.md](install-testing.md#linux-support-matrix)).
+  Tested on arm64 with OAuth-only minting and the Landlock sandbox
+  ([install-testing.md](install-testing.md#linux-support-matrix)).
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
@@ -833,9 +927,9 @@ arch on either. A guest of the wrong arch is refused (`tw doctor`:
 
 - Linux arm64 or amd64 (x86_64) with `/dev/kvm` (bare metal, or a VM with
   nested virtualization), cgroups v2 and systemd. Tested end to end on
-  Ubuntu 24.04 arm64. On amd64 the guest boots to workerd, but the tier is
-  not yet verified end to end
-  ([why](install-testing.md#the-microvm-tier)).
+  Ubuntu 24.04 arm64. On amd64, `make e2e-vm` passes on a nested KVM test
+  host (2026-11-22); containers on amd64 are not verified yet
+  ([details](install-testing.md#the-microvm-tier)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
 

@@ -68,6 +68,14 @@ type Tenant struct {
 	MaxContainers      int     `json:"maxContainers"`
 	MaxContainerMemMiB int     `json:"maxContainerMemMiB"`
 	MaxContainerVCPU   float64 `json:"maxContainerVCPU"`
+
+	// Storage quotas (quota.go; 0 = unlimited, the default): the bytes
+	// kept by all the tenant's platform stores (KV, D1, R2 index), by all
+	// its queues, and how many platform stores it may have.
+	MaxStoreBytes int64 `json:"maxStoreBytes,omitempty"`
+	MaxQueueBytes int64 `json:"maxQueueBytes,omitempty"`
+	MaxStores     int   `json:"maxStores,omitempty"`
+
 	// Pool places the tenant's deployments on hosts with the same pool
 	// ("" = any host). Tier is the default isolation tier.
 	Pool string `json:"pool,omitempty"`

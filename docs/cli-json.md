@@ -116,8 +116,9 @@ deployment's history record (`target`). Progress goes to **stderr** as
 
 `tw policy --json` (`$defs/policy`) is one document: `ok`, `checked`
 (false when mgmt can't read the policy), the dry-run `preflight`, the
-`callerGrant` tailworks can't check, and `snippet`, everything to add in one
-block. When a checked part is missing, it is an `acl_denied` (or
+`callerGrant` tailworks can't check, for an app behind a Tailscale Service
+also `serviceCallerGrant` (the grant to its `svc:` name, where callers' app
+capabilities go), and `snippet`, everything to add in one block. When a checked part is missing, it is an `acl_denied` (or
 `funnel_required`) error instead, and the snippet is in its `fix`.
 
 `tw deployments <workload> --json` (`$defs/deployments`) is one document:

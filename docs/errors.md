@@ -29,7 +29,7 @@ printed anywhere.
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
 
 ### already_running
-409 · cli. **When:** `tw up` finds a supervisor already running from this state dir. **Fix:** `tw status`; `tw down` first if you meant to restart.
+409 · cli. **When:** `tw up` finds a supervisor already running from this state dir, or `tw restore` was run while tailworks runs. **Fix:** `tw status`; `tw down` first if you meant to restart or restore.
 
 ### already_stopped
 409 · cli. **When:** `tw undeploy <workload>` of a workload whose latest deployment is already undeployed. **Fix:** `tw ls --all` to see what is live.
@@ -48,6 +48,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### audit_unverified
 500 · cli. **When:** `tw audit` found an audit chain whose hashes or host signatures do not verify (tampering, or a store problem). **Fix:** treat the trail as suspect; `tw logs --component mgmt` and report it.
+
+### backup_failed
+500 · cli. **When:** `tw backup` could not copy the store, custody or `tw.json` (a full disk, an unreadable file); nothing is left in `--out`. **Fix:** free space or fix the permission it names, then `tw backup` again.
 
 ### bad_bundle
 400 · mgmt. **When:** a deploy bundle has no `tailworks.jsonc`, or neither `tailnet.tags` nor `tailnet.objects`. **Fix:** add `"tailnet": { "tags": ["tag:tw-wl-<name>"] }` to `tailworks.jsonc` (`tw init` templates show the shape).
@@ -340,6 +343,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### r2_too_large
 400 · hostd. **When:** an R2 object or part over 5 GiB − 5 MiB. Surfaces as R2's "exceeds the maximum allowed object size" (code 100100). **Fix:** use a multipart upload, parts up to that size each.
 
+### rate_limited
+429 · mgmt. **When:** a tailnet caller of the mgmt API is over its request rate (each WhoIs node has its own token bucket; hosts get a larger one), or mgmt is already serving its maximum of concurrent requests from non-host callers. `Retry-After` says when to retry. mgmt's own node and the local socket are never limited. **Fix:** retry after `Retry-After` and slow the client down; the operator raises or turns off the limits with `tw-mgmt -api-rps`, `-api-host-rps`, `-api-inflight` ([limits.md](limits.md#management-api)).
+
 ### release_bad_signature
 1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release because its `SHA256SUMS.sig` doesn't verify: it is signed by a key that isn't pinned in this `tw` (or in `TW_RELEASE_SIGNERS`), a file changed after signing, a file isn't in the signed `SHA256SUMS`, or this `tw` build pins no release key. Nothing in the release ran. **Fix:** download the release again from GitHub (`tw upgrade [<version>]`); check it by hand as in [INSTALL.md](INSTALL.md), "Verify a release". For a build you made yourself, add `--allow-unsigned`.
 
@@ -347,7 +353,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release (a download or `--from`) that has no `SHA256SUMS.sig` or no `SHA256SUMS` inside it. Nothing in the release ran. **Fix:** upgrade to a published release (`tw upgrade [<version>]`). For a build you made yourself (`make release`), add `--allow-unsigned` (or set `TW_ALLOW_UNSIGNED=1`).
 
 ### remote_unsupported
-400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs`, `tw tenant add`) was run on a linked developer machine. **Fix:** run it on the host.
+400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs`, `tw tenant add`, `tw backup`, `tw restore`) was run on a linked developer machine. **Fix:** run it on the host.
 
 ### queue_limit
 400 · mgmt, hostd. **When:** a queue send is too big: a message over 128 KB, a `sendBatch` over 100 messages or 256 KB, a `delaySeconds` over 43200, or a queue over 1 GiB of kept messages. In a Worker, `send()` throws `Error: [queue_limit] … (400)`. **Fix:** send smaller messages (store large payloads elsewhere and send a reference), or let consumers drain the queue.
@@ -357,6 +363,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### reserved_tag
 400 · mgmt. **When:** a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`). **Fix:** use your app's tags (`tag:tw-wl-<name>`, class tags) in `tailworks.jsonc`.
+
+### restore_failed
+500 · cli. **When:** `tw restore` could not save the current state first, copy the backup in, or run the restore fence. **Fix:** the message names the step. If the copy failed, `tw restore <the before-restore backup it printed> --yes` puts the old state back; then fix the cause and restore again.
 
 ### sandbox_unavailable
 409 · hostd, cli. **When:** a second tenant's process-tier workload on a host that must not be shared: no process sandbox (Linux without Landlock, or `-sandbox none`), or the tailworks user can reach a container engine socket, is in the docker/podman/lxd/incus group, or can reach the system tailscaled while a workload could use it. **Fix:** run tailworks as a dedicated user without those sockets and groups, enable Landlock, use TCP listen mode for Node apps, deploy with `"tier": "microvm"`; or (tenants NOT isolated) `tw up --insecure-shared-host`.
@@ -384,6 +393,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### stop_timeout
 500 · cli. **When:** `tw down` waited 3 min for the supervisor to stop and killed it. **Fix:** `tw status`; `tw logs --component supervisor`.
+
+### storage_quota_exceeded
+429 · mgmt, hostd. **When:** a write would take the tenant past one of its storage quotas (`missing: {quota, limit, used, requested}`): a KV, D1 or R2 write that grows its store past `maxStoreBytes` (the journals of all the tenant's stores together), a queue send past `maxQueueBytes` (all its queued messages), or a new store past `maxStores`. A write that doesn't grow its store (an overwrite with something no bigger, a delete) is never refused, so a full tenant can free space. The quotas are unlimited unless an operator set them. **Fix:** delete data the tenant no longer needs, consume or purge its queues (`tw queues purge`), or raise the quota: `tw tenant set <tenant> --max-store-bytes 20GiB` (`--max-queue-bytes`, `--max-stores`; `-` = unlimited). `tw tenant ls` shows each tenant's usage.
 
 ### store_conflict
 409 · mgmt. **When:** a platform store journal append named a head (`after`) or incarnation that is no longer current: another writer (a replica, an admin) appended first, or the store was deleted. **Fix:** nothing for app code: the store object catches up and retries on its own. A client of the REST API reads the journal from its `after` and retries.

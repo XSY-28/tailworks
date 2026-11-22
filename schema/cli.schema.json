@@ -33,6 +33,10 @@
           "type": "string",
           "description": "the grant that lets tailnet members call the app (not checked)"
         },
+        "serviceCallerGrant": {
+          "type": "string",
+          "description": "for an app behind a Tailscale Service: the grant to its svc: name; callers' app capabilities go on this grant (not checked)"
+        },
         "snippet": {
           "type": "string",
           "description": "everything to add to the policy, in one block"
@@ -3127,6 +3131,40 @@
         "versions",
         "artifacts"
       ]
+    },
+    "backup": {
+      "type": "object",
+      "description": "tw backup: the new backup directory and its backup.json",
+      "properties": {
+        "backup": { "type": "string" },
+        "bytes": { "type": "integer" },
+        "manifest": {
+          "type": "object",
+          "properties": {
+            "v": { "type": "integer" },
+            "version": { "type": "string" },
+            "createdAt": { "type": "string" },
+            "stateDir": { "type": "string" },
+            "store": { "enum": ["sqlite", "postgres"] },
+            "custody": { "enum": ["file", "setec"] },
+            "schema": { "type": "object" },
+            "notIncluded": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["v", "version", "createdAt", "store", "custody", "notIncluded"]
+        }
+      },
+      "required": ["backup", "manifest", "bytes"]
+    },
+    "restore": {
+      "type": "object",
+      "description": "tw restore: what was restored, where the replaced state was kept, and the restore generation after the fence (SQLite stores)",
+      "properties": {
+        "restored": { "type": "string" },
+        "safetyBackup": { "type": "string" },
+        "store": { "enum": ["sqlite", "postgres"] },
+        "restoreGeneration": { "type": "integer" }
+      },
+      "required": ["restored", "store"]
     },
     "upgrade": {
       "type": "object",

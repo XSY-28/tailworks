@@ -66,6 +66,7 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 - Use the admin console: [ADMIN-UI.md](ADMIN-UI.md)
 - Let a team manage only its own tenant: [teams.md](teams.md)
 - Upgrade tailworks: [upgrading.md](upgrading.md)
+- Move mgmt to Postgres, run mgmt replicas: [postgres.md](postgres.md)
 - Run on Headscale: [headscale.md](headscale.md)
 
 ## Look up: reference

@@ -353,9 +353,19 @@ e2e-svc: deps
 	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
 		echo "e2e-svc: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
-		$(GO) test -tags e2ereal -count=1 -v -run TestRealService ./internal/tssvc/ && \
+		$(GO) test -tags e2ereal -count=1 -v -run 'TestRealService$$' ./internal/tssvc/ && \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2esvc -count=1 -v -timeout 20m ./e2e/svc/...
+
+## e2e-svc-caps: H22 on tailnet 2: which app caps a Service host sees through the VIP vs the node's
+## own address (svc: grant vs tag grant). Needs the policy entries in internal/tssvc/real_caps_test.go;
+## TW_E2E_SVC_ONLY=1 when the tag grant is left out.
+.PHONY: e2e-svc-caps
+e2e-svc-caps:
+	@if [ ! -f "$(TS_CREDS)/tailnet2_api.env" ]; then \
+		echo "e2e-svc-caps: SKIPPED ($(TS_CREDS)/tailnet2_api.env not found)"; exit 0; fi; \
+	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet2_api.env" \
+		$(GO) test -tags e2ereal -count=1 -v -timeout 10m -run TestRealServiceCaps ./internal/tssvc/
 
 ## e2e-mm-svc: H12 on tailnet 1: two tw-mgmt replicas hosting svc:ttest-mgmt. Needs TW_MM_PG_DSN: a
 ## Postgres of its own (never the multimgmt suite's tw-mm-pg container, which other runs may be using).
@@ -470,7 +480,7 @@ e2e-mbp: release
 ## The API key stays on this Mac (it creates the run's OAuth client and cleans up);
 ## tailworks in the VM gets only that OAuth client. LINUX_APPLY_POLICY=1 first adds the
 ## scenario's tagOwners and grants to tailnet 1's policy (as e2e-mac); else it is only read.
-LINUX_DISTROS ?= ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 ubuntu22-arm64
+LINUX_DISTROS ?= ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 fedora-arm64 ubuntu22-arm64
 LINUX_RELEASE ?=
 LINUX_APPLY_POLICY ?= 0
 .PHONY: e2e-linux
