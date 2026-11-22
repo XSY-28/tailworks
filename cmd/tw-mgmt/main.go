@@ -77,6 +77,7 @@ func run() error {
 		delDelay    = flag.Duration("device-delete-delay", 0, "defer kill tier 2 (device delete) this long after the tier-1 push, so the host's tombstone answers new connections with object_killed (keep < hostd -kill-tombstone)")
 		warmKeys    = flag.Int("warm-keys", mgmtd.DefaultWarmKeys, "warm-key pool: pre-minted single-use keys per (tenant, tag set), so a create skips the CreateKey call (sized from the recent create rate, capped here; 0 = off)")
 		warmKeyTTL  = flag.Duration("warm-key-ttl", mgmt.DefaultWarmKeyTTL, "-warm-keys: a pooled key's expiry; unused keys are revoked shortly before it")
+		warmRevoke  = flag.Bool("revoke-warm-keys-on-exit", false, "-warm-keys: on shutdown, revoke every unused pooled key at the API and delete it from custody (tw up sets it; leave it off for replicas that share a store, or each restart revokes the others' pool)")
 		metricsPort = flag.Int("metrics-port", obs.DefaultMetricsPort, "port on mgmt's own tailnet node serving GET /metrics (Prometheus; who may scrape is a tailnet policy grant); 0 = off")
 		verbose     = flag.Bool("v", false, "debug logging")
 		registryDir = flag.String("registry-dir", "", "OCI registry blob store (ADR-032 D3; default <state-dir>/registry; \"off\" disables the registry). Replicas serving the registry must share it")
@@ -111,6 +112,7 @@ func run() error {
 		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log,
 		MetricsPort: *metricsPort}
 	o.BundleRetention = *bundleKeep
+	o.RevokeWarmKeysOnClose = *warmRevoke
 	// Like the flags: "" means no tags at all (Options nil means the default).
 	o.TSNetTags = []string{}
 	if *tsTags != "" {
