@@ -32,7 +32,10 @@ import (
 // customMetadata, checksums, ranged gets, onlyIf on get and put,
 // multipart upload, and that blobs are named by tenant, workload and
 // bucket.
-func TestR2Binding(t *testing.T) {
+func TestR2Binding(t *testing.T) { testR2Binding(t, hostdtest.BackendFake) }
+
+// testR2Binding is TestR2Binding against backend (realmgmt_test.go).
+func testR2Binding(t *testing.T, backend string) {
 	fake := r2test.StartFakeS3(t.TempDir())
 	defer fake.Close()
 	for _, tc := range []struct {
@@ -44,9 +47,9 @@ func TestR2Binding(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			blobDir := t.TempDir()
-			s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, func(o *hostdtest.Options) {
+			s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, onBackend(backend, func(o *hostdtest.Options) {
 				o.R2 = tc.be(blobDir)
-			})
+			}))
 			e := s.e
 			dep := e.Deploy(hostdtest.Fixture("r2probe"), "r2probe", nil)
 			wl := e.WaitActive("r2probe", dep, 60*time.Second)

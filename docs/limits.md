@@ -308,7 +308,7 @@ heartbeat, 12 s kill tombstone).
 | Free disk offered as container scratch | 90% | no | `hostd/capacity.go:defaultScratchShare` |
 | Warm VM pool | auto (at most 2) | `-vm-pool` | `cmd/tw-hostd/main.go:-vm-pool` |
 | microVM boot | 60 s | no | `hostd/workload.go:#vm-boot` |
-| Tailnet nodes advertised per host | 1000 | `-capacity-nodes` | `cmd/tw-hostd/main.go:-capacity-nodes` |
+| Tailnet nodes advertised per host | 25% of RAM at 8 MiB per node, at least 50 and at most 1000 (500 when RAM can't be read); see [Per-node memory](#per-node-memory-measured) | `-capacity-nodes` (0: derived) | `hostd/capacitynodes.go:nodeMemShare`, `hostd/capacitynodes.go:NodeMemMiB`, `hostd/capacitynodes.go:MinCapacityNodes`, `hostd/capacitynodes.go:MaxCapacityNodes`, `hostd/capacitynodes.go:FallbackCapacityNodes` |
 | Pre-joined nodes per hot class | 1 | `-pool-nodes` | `internal/hostdrun/hostdrun.go:DefaultPoolNodes` |
 | Concurrent node joins | 16 | `tw-netd -join-parallel` | `cmd/tw-netd/main.go:-join-parallel` |
 | One node join | 2 min | no | `netd/registry.go:JoinTimeout` |
@@ -321,6 +321,76 @@ heartbeat, 12 s kill tombstone).
 | Node-tier stop: SIGTERM to SIGKILL | 3 s | no | `hostd/node.go:#node-stop-grace` |
 | Warm keys per (tenant, tag set) | 5 | `tw-mgmt -warm-keys` | `internal/mgmtd/mgmtd.go:DefaultWarmKeys` |
 | Warm key lifetime | 30 min | `tw-mgmt -warm-key-ttl` | `mgmt/warmkeys.go:DefaultWarmKeyTTL` |
+
+### Per-node memory (measured)
+
+What one object node costs a host: the resident memory (RSS) of one
+process holding N netd object nodes, minus the same process before its
+first join, divided by N. "Idle" is 15 s after the last join; "load" is the
+peak while 32 concurrent callers send keep-alive HTTP requests round-robin
+to every node for 10 s, through netd's ingress (WhoIs, attribution) to an
+upstream that answers `ok`. Hermetic: testcontrol, DERP and STUN on
+loopback in another process, so they aren't counted.
+
+**Scoped** visibility is each object seeing only its callers, as grants
+that keep objects from seeing one another give (RFC §9). **Mesh** is
+every node seeing every other, the worst case: each node's netmap holds N
+peers, so the total grows as N².
+
+| Host | Peers | N=10 idle / load | N=100 idle / load | N=500 idle / load |
+|---|---|---|---|---|
+| Linux arm64 (Ubuntu 24.04, 8 vCPU VM on Apple M5 Pro) | scoped | 3.4 / 8.8 MB | 2.3 / 4.6 MB | 2.7 / 3.9 MB |
+| Linux amd64 (Ubuntu 24.04, 2 vCPU KVM guest, AMD Ryzen R1600) | scoped | 2.8 / 5.8 MB | 2.1 / 3.0 MB | 2.5 / 2.5 MB¹ |
+| macOS arm64 (Apple M5 Pro) | scoped | 4.4 / 9.8 MB | 2.3 / 5.3 MB | 2.4 / 4.1 MB |
+| Linux arm64 | mesh | 4.1 / 9.9 MB | 4.7 / 7.3 MB | did not finish² |
+| Linux amd64 | mesh | 3.5 / 5.9 MB | 6.1 / 6.2 MB | not run |
+| macOS arm64 | mesh | 5.7 / 9.9 MB | 12.2 / 12.2 MB | 32.6 / 33.1 MB |
+
+All per node. The process before its first join is 21–23 MB. At N=10 the
+load column is mostly fixed per-process buffers spread over few nodes.
+tsnet runs 73 goroutines per node on Linux arm64, 49 on the amd64 guest
+and 113 on macOS. With scoped peers, a host serves 1,600–2,300 requests
+per second at N=500 (arm64; one netd process, the caller on the same
+machine), with p50 2.7–4.8 ms. Zero requests failed in any run.
+
+¹ The 2-vCPU guest was CPU-bound at N=500 (36 requests per second), so the
+load figure there is not a load figure.
+² At mesh N=500 on Linux, tsnet's LocalBackend watchdog panicked the
+process (`ipnlocal: watchdog timeout`) at about 10 GB during the joins. On
+macOS the same run held 16 GB and served 4 requests per second. Don't give
+hundreds of objects on one host visibility of one another.
+
+The default node capacity budgets **8 MiB per node**: twice the scoped
+figure under load, which leaves room for some visible peers. It offers
+object nodes 25% of the host's RAM, so a 16 GiB host advertises 512 nodes
+and an 8 GiB host 256. Hosts whose objects see one another (mesh) need a
+lower `-capacity-nodes`, from the mesh rows. The 1000 ceiling isn't a
+memory limit: past it, a restart's rejoin and netmap size are.
+
+Reproduce with `make bench` (`BenchmarkRegistryNodes` in
+`netd/bench_test.go`; `BENCH_NODES='10|100'` for fewer sizes). For a Linux
+VM or another machine, build the test binary with
+`GOOS=linux GOARCH=arm64 go test -c -o netd.test ./netd/` and run
+`./netd.test -test.run '^$' -test.bench RegistryNodes -test.benchtime=1x`.
+Measured 2026-11-21 at the commit that added this section. The macOS runs
+shared the machine with other work, so its request rates are low bounds.
+
+### Registration rate (measured)
+
+How fast one host registers fresh object nodes with Tailscale's production
+control: up to 50 fresh, ephemeral nodes from one netd registry, on a test
+tailnet, `make e2e-regrate-real` (`e2e/regrate`).
+
+| Keys | Concurrent joins | 50 nodes ready in | Rate | Join p50 / max | Register request p50 / max |
+|---|---|---|---|---|---|
+| one reusable key | 16 (netd's default) | 5.8 s | 513 per min | 1.50 / 1.71 s | 0.43 / 0.46 s |
+| one single-use key per object, minted in the join | 16 | 6.3 s | 479 per min | 1.38 / 1.53 s | 0.43 / 0.45 s |
+| one reusable key | 50 | 2.6 s | 1,148 per min | 2.00 / 2.58 s | 0.43 / 0.44 s |
+
+No registration was refused or slowed: the register round trip stayed at
+0.43 s at 50-way. At these sizes the rate is concurrent joins ÷ join time,
+set by netd's `-join-parallel`, not by control. Sustained rates over more
+than 50 nodes, and several hosts registering at once, were not measured.
 
 ## Management API
 

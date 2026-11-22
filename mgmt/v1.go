@@ -337,6 +337,8 @@ type tenantView struct {
 	OBOPublicKey  string  `json:"oboPublicKey"`
 	MintQueue     int     `json:"mintQueue"`
 	EffectiveRate float64 `json:"effectiveRegistrationsPerMinute"`
+	// WarmKeys: pooled preauthorized join keys in custody (warmcustody.go).
+	WarmKeys int `json:"warmKeys"`
 }
 
 func (a *v1api) tenantView(r *http.Request, t Tenant) (tenantView, error) {
@@ -345,7 +347,8 @@ func (a *v1api) tenantView(r *http.Request, t Tenant) (tenantView, error) {
 	if err != nil {
 		return tenantView{}, err
 	}
-	return tenantView{Tenant: t, OBOPublicKey: pub, MintQueue: m.QueueDepth(t.ID), EffectiveRate: m.throttle(t).Rate()}, nil
+	return tenantView{Tenant: t, OBOPublicKey: pub, MintQueue: m.QueueDepth(t.ID), EffectiveRate: m.throttle(t).Rate(),
+		WarmKeys: m.warmKeysHeld(r.Context(), t.ID)}, nil
 }
 
 func (a *v1api) CreateTenant(w http.ResponseWriter, r *http.Request) {

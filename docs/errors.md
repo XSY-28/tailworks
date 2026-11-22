@@ -23,7 +23,7 @@ agent, cli = `tw`). Detail text is redacted of key material before it is
 printed anywhere.
 
 ### acl_denied
-403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or deploy with `--allow-missing-grants`.
+403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or let tailworks add its `tag:tw*` lines with `tw policy --apply` / `tw deploy --apply-policy` (needs the OAuth client's Policy File write scope), or deploy with `--allow-missing-grants`.
 
 ### already_joined
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
@@ -125,7 +125,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · mgmt, hostd. **When:** the caller's role is fine but the record is not its own: a host reading another host's deployment or lease, a request to a workerd instance from the wrong peer; a host node asking for the admin UI (`/ui/`); or, with the message `cross-site request refused`, a browser-originated mutation (it carried `Origin` or `Sec-Fetch-Mode`) whose `Sec-Fetch-Site` was not `same-origin`/`none`, whose `Origin` was not the request's own host and one of mgmt's own names, or which hit `/v1` without the `X-Tw-UI: 1` header (docs/ADMIN-UI.md). **Fix:** usually a bug or stale state; `tw status` and report it. For the cross-site refusal, use the admin UI from mgmt's own URL (`http(s)://tw-mgmt.<tailnet>/ui/`), never through another origin; CLI and hostd clients send none of those headers and are never affected.
 
 ### forbidden_destination
-403 · netd. **When:** egress to a destination class netd refuses: loopback, link-local, multicast, cloud metadata, the object itself, a sibling object on the same host, the host, or a non-tailnet IP address (ADR-019; an internet name is [`internet_egress_unavailable`](#internet_egress_unavailable)). **Fix:** only tailnet peers are reachable from an object; talk to siblings through the tailnet name of another host, or `tw up --allow-sibling-egress` for dev.
+403 · netd. **When:** egress to a destination class netd always refuses: loopback, private (RFC 1918, ULA), link-local, multicast, cloud metadata, CGNAT and tailnet addresses that aren't peers, the object itself, a sibling object on the same host, or the host (ADR-019). For internet egress this is checked on the address actually dialled, so an internet name that resolves to any such address is refused too, as is a name under a special-use suffix (`.internal`, `.local`, `.localhost`, `.lan`, …), which is never looked up. On a host with no internet path, any non-tailnet IP address. **Fix:** call tailnet peers by their tailnet name; talk to siblings through the tailnet name of another host, or `tw up --allow-sibling-egress` for dev. A service on your LAN isn't reachable as "internet": put it on the tailnet.
 
 ### funnel_required
 412 · cli. **When:** `tw deploy` of an app with tailworks.jsonc `"public"` routes, and the tenant policy has no `funnel` node attribute for `tag:tw-public` (ADR-029). **Fix:** add the printed `nodeAttrs` entry for `tag:tw-public` (never `tag:tw-mgmt`) and deploy again.
@@ -176,7 +176,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 500 · mgmt, cli. **When:** an unexpected error with no better code; the CLI wraps any untyped error this way. **Fix:** the detail is redacted but usually names the cause; `tw logs --component mgmt|hostd`; report it with the `trace_id`.
 
 ### internet_egress_unavailable
-403 · netd. **When:** a Worker (or Node app) called a name that is not a tailnet name, such as `https://api.github.com/`. A tailnet name is a bare short name, a name under a tailnet's MagicDNS suffix, or any `*.ts.net` name; anything else would be internet egress, and Workers have none. There is no setting that turns it on; names are never resolved via host DNS. **Fix:** put a gateway for the API on your tailnet and call that ([recipes.md](recipes.md#call-an-internet-api)). Containers are the exception: one started with `enableInternet: true` may reach the hosts in `tailnet.egress.internet` ([containers.md](containers.md)). A tailnet name that isn't in the netmap is [`peer_not_visible`](#peer_not_visible) instead.
+403 · netd. **When:** a Worker (or Node app) called an internet destination, such as `https://api.github.com/`, and internet egress is turned off by config: the workload's `tailnet.egress.internet` is `false` or `[]`, the host isn't on its allowlist, or the host's operator runs `tw-hostd -worker-internet=off`. Internet egress is on by default ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet)). An internet destination is a public IP, or a name that is not a tailnet name (a bare short name, a name under a tailnet's MagicDNS suffix, or any `*.ts.net` name); a refused one is never looked up in DNS. **Fix:** allow the host in `tailnet.egress.internet` (or remove the setting) and redeploy, or put a gateway for the API on your tailnet and call that ([recipes.md](recipes.md#call-an-internet-api)). A tailnet name that isn't in the netmap is [`peer_not_visible`](#peer_not_visible) instead, and a private or metadata address is [`forbidden_destination`](#forbidden_destination).
 
 ### keys_in_guest
 1 · cli. **When:** `tw host vmcheck --keyscan` found key material inside a microVM guest. **Fix:** this must never happen (keys stay in hostd); report it with the output.
@@ -284,19 +284,25 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 429 · mgmt. **When:** the tenant's `maxObjects` is reached. **Fix:** `tw tenant set <tenant> --max-objects N`, or kill idle objects.
 
 ### peer_not_visible
-403 · netd. **When:** the destination is a tailnet name or address that is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes). An internet name gets [`internet_egress_unavailable`](#internet_egress_unavailable) instead. **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
+403 · netd. **When:** the destination is a tailnet name or address that is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes). A tailnet name is never looked up in host DNS. An internet name goes out the internet path instead ([`internet_egress_unavailable`](#internet_egress_unavailable) when that is off). **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
 
 ### plan_feature_missing
 501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use; also `ctx.tailnet.connect()` (raw TCP egress), which is not implemented yet. **Fix:** use `fetch()`; see STATUS.md for what is built.
 
 ### policy_apply_failed
-500 · cli. **When:** `--policy-apply` could not write the policy snippet (validation failed, or the ETag changed). **Fix:** add the printed snippet in the admin console.
+500 · mgmt, cli. **When:** `--policy-apply` could not write the policy snippet (validation failed, or the ETag changed); or `tw policy --apply` / `tw deploy --apply-policy`: the control plane rejected the merged policy (for example a grant to a tag no `tagOwners` entry defines), or tailworks refused the snippet (RT-06). Nothing was written. **Fix:** add the printed snippet in the admin console, after fixing what the message names.
+
+### policy_conflict
+409 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tailnet policy changed between tailworks' read and its `If-Match` write, and again on the one retry. Nothing was written. **Fix:** run it again; if someone keeps editing the policy, wait for them, or add the printed snippet yourself.
 
 ### policy_missing_tag_owners
 403 · mgmt, cli. **When:** the control plane refused to mint a key for tailworks' own tags: `tag:tw` does not own `tag:tw-mgmt` / `tag:tw-host`. Nothing was minted. **Fix:** add the printed `tagOwners` snippet and re-run `tw up`.
 
 ### policy_unavailable
 503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `tw deploy` says `preflight skipped`.
+
+### policy_write_denied
+403 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.

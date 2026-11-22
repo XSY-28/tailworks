@@ -68,8 +68,27 @@ STATUS.md "Integration (Linux: L2+L3+L1)" and "Final verification"). The
 microVM tier's own rows (`make e2e-linux-vm`, `make e2e-linux-reboot` on a
 nested-virt VM, from the shipped tarball) are there too.
 
+**How old these numbers are.** Every number in the table below comes from
+the 2026-11-08 run: a local build (`0.1.0-bb3a3296`, never published),
+API-key minting (the key file in the VM) and no sandbox. That was before
+OAuth-only minting ([ADR-042](design/adr/042-oauth-only-minting.md)), the
+single-process layout and the `tw` rename. No row has been measured from a
+published release in OAuth mode with the sandbox on yet. A re-run from
+`v0.3.0` on 2026-11-21 stopped before the first row, because the test
+tailnet's policy has no tagOwners for the renamed tags (`tag:tw`,
+`tag:tw-*`), so the run's OAuth client couldn't be created. See
+`status/test-113-linux-matrix.md`. To measure a published release:
+`make e2e-linux LINUX_RELEASE=vX.Y.Z` (downloads its linux tarballs and
+checks them against its `SHA256SUMS`; `install.sh` checks the signature
+in the VM). Add `LINUX_APPLY_POLICY=1` to first add the scenario's
+tagOwners and grants to the test tailnet's policy.
+
 | | Ubuntu 24.04 arm64 | Debian 12 arm64 | Ubuntu 22.04 arm64 | Fedora 45 arm64 | Ubuntu 24.04 **amd64** (qemu, emulated) |
 |---|---|---|---|---|---|
+| measured (date · build · minting · sandbox) | 2026-11-08 · `0.1.0-bb3a3296` · API key · none | 2026-11-08 · `0.1.0-bb3a3296` · API key · none | 2026-11-08 · `0.1.0-bb3a3296` · API key · none | 2026-11-08 · `0.1.0-bb3a3296` · API key · none | 2026-11-08 · `0.1.0-bb3a3296` · API key · none |
+| re-run with the sandbox on (pass, numbers not in this table) | 2026-11-08 · `0.1.0-d4e06750` · API key · Landlock ABI 4 | 2026-11-08 · `0.1.0-e676bdc2` · API key · Landlock ABI 2 | not re-run | not re-run | 2026-11-08 · `0.1.0-7e6c53aa` · API key · Landlock ABI 4 |
+| from a published release, OAuth only, sandbox on | not yet measured | not yet measured | not yet measured | not yet measured | not yet measured |
+| in `make e2e-linux`'s default rows | yes | yes | yes | **no** (`LINUX_DISTROS=fedora-arm64`) | yes |
 | result | **PASS** | **PASS** | **PASS** | **PASS** | **PASS** |
 | glibc · kernel · Landlock ABI | 2.39 · 6.8 · 4 | 2.36 · 6.1 · 2 | 2.35 · 5.15 · 1 | 2.44 · 7.2 · 10 | 2.39 · 6.8 · 4 |
 | `install.sh` | 0.41 s | 0.81 s | 0.84 s | 0.47 s | 9.1 s |
@@ -96,7 +115,8 @@ about 3 s for the workload node to rejoin. The amd64 column ran under qemu
 x86-64 emulation on an Apple-silicon Mac, so its timings are slower than a
 real x86 host's.
 
-Unsupported hosts (bonus rows; `TestUnsupportedHost`):
+Unsupported hosts (bonus rows; `TestUnsupportedHost`; measured 2026-11-08
+on `0.1.0-bb3a3296`; no tailnet or minting involved):
 
 | | Debian 11 arm64 (glibc 2.31, kernel 5.10) | Alpine 3.24 arm64 (musl) |
 |---|---|---|

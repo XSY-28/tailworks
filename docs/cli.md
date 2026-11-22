@@ -604,11 +604,13 @@ bundle, place and deploy an app; wait until ready
 ```text
 tw deploy: bundle, preflight grants, build + push Dockerfile container images (docker buildx), place (prints why), deploy, wait until ready; --replace re-places a running workload; --preview runs it next to the workload instead (tw promote)
 
-usage: tw deploy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m] [--preview] [--preview-alias <alias>]
+usage: tw deploy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--host <id>] [--replace] [--force-takeover] [--allow-missing-grants] [--apply-policy [--yes]] [--no-wait] [--platform linux/amd64,linux/arm64] [--wait-public 5m] [--preview] [--preview-alias <alias>]
 
 flags:
   -allow-missing-grants
     	deploy even if tailnet.connects grants are missing
+  -apply-policy
+    	when the preflight finds tagOwners, grants or funnel nodeAttrs missing, write them to the tailnet policy first (as tw policy --apply)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -force-takeover
@@ -643,6 +645,8 @@ flags:
     	also wait (up to this long) until the public URL answers from the public internet (tailworks.jsonc "public")
   -wrangler
     	bundle with the wrangler CLI (wrangler deploy --dry-run --outdir; nothing is sent to Cloudflare) instead of the built-in esbuild
+  -yes
+    	with --apply-policy: write the policy without asking (needed without a terminal, and with --json)
 ```
 
 ### tw policy
@@ -650,11 +654,13 @@ flags:
 the tailnet policy an app needs, before deploying
 
 ```text
-tw policy: print everything an app needs in the tailnet policy as one snippet: missing tagOwners, tailnet.connects grants, service auto-approval and public nodeAttrs (checked against the live policy, like tw deploy's preflight; nothing is deployed), plus the grant that lets people call it; exits acl_denied when a checked part is missing
+tw policy: print everything an app needs in the tailnet policy as one snippet: missing tagOwners, tailnet.connects grants, service auto-approval and public nodeAttrs (checked against the live policy, like tw deploy's preflight; nothing is deployed), plus the grant that lets people call it; exits acl_denied when a checked part is missing; --apply writes the missing tag:tw* lines itself (additive, If-Match)
 
-usage: tw policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>]
+usage: tw policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [--wrangler | --from-wrangler-out <dir>] [--apply [--yes]]
 
 flags:
+  -apply
+    	write the missing tagOwners, grants and funnel nodeAttrs to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -from-wrangler-out string
@@ -671,6 +677,8 @@ flags:
     	override a wrangler var (KEY=VALUE, repeatable)
   -wrangler
     	bundle with the wrangler CLI (wrangler deploy --dry-run --outdir; nothing is sent to Cloudflare) instead of the built-in esbuild
+  -yes
+    	with --apply: write without asking (needed without a terminal, and with --json)
 ```
 
 ### tw deployments

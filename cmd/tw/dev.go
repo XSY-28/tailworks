@@ -136,6 +136,8 @@ func cmdDev(args []string) error {
 		// tw dev is explicitly process-tier: a "tier": "microvm" app runs
 		// in a local process here (never on a host serving tenants).
 		ForceProcessTier: true,
+		// Workers reach the internet as on a host (tailnet.egress.internet).
+		WorkerInternet: hostd.DirectInternet(),
 		// --inspector-port: each workerd gets an inspector (hostd/inspector.go).
 		WorkerdInspector: *inspectorPort > 0})
 	if err != nil {

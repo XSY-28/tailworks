@@ -187,7 +187,7 @@ func TestCLIEndToEnd(t *testing.T) {
 		os.RemoveAll(state)
 	})
 	e.Run()
-	e.Down()
+	downRevokesWarmKeys(t, e, fts)
 	// `tw down --purge && tw up && tw deploy` on the same state dir.
 	e.RedeployAfterPurge()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
