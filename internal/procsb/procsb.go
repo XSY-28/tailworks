@@ -71,6 +71,14 @@ type Profile struct {
 	// allowed for STREAM/SEQPACKET (internal IPC; such sockets are
 	// connected and can't be re-pointed).
 	NoUnixSockets bool `json:"noUnixSockets,omitempty"`
+
+	// NoListen makes every listen() a no-op that reports success (seccomp):
+	// the process can't turn a socket of its own into a listener, on any
+	// address or port (an unbound socket's listen() would pick
+	// *:<ephemeral>, which Landlock doesn't see). It serves only listeners
+	// it inherits, already listening (hostd's 127.0.0.1 socket for a Node
+	// app: ledger H-lan-bind).
+	NoListen bool `json:"noListen,omitempty"`
 	// Deny documents what hostd denies explicitly (the home dir, state
 	// and run dirs, key files). Landlock is deny-by-default, so these are
 	// denied because they are not allowed; tests and doctor check them.
@@ -117,6 +125,8 @@ const (
 	ProbeConnectUnix = "connect-unix"
 	ProbeConnectTCP  = "connect-tcp" // host:port
 	ProbeBindTCP     = "bind-tcp"    // host:port
+	ProbeListenTCP   = "listen-tcp"  // listen on IPv4 host:port ("": unbound); ok only if it really listens
+	ProbeAcceptFD    = "accept-fd"   // listen() again on inherited fd 3 and accept one connection
 	ProbeUDP         = "udp"         // send a datagram to host:port
 	ProbePtrace      = "ptrace"      // PTRACE_ATTACH pid
 	ProbeVMRead      = "vmread"      // process_vm_readv pid
