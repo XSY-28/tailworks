@@ -147,7 +147,7 @@ which has the full per-platform rows.
 | **process, Linux, Landlock ABI ≥ 4** (kernel 6.7+) | as above | Landlock allow list + seccomp (`internal/procsb`) | Reads only OS dirs, its runtime and its own dirs; writes only its own dirs; TCP connect only to the ports hostd gives it; no AF_UNIX (seccomp), no UDP/raw; signals only its own process group; no ptrace, mount, bpf, namespaces, io_uring. Residual: the kernel's attack surface, and the same uid as tailworks (an escape from the sandbox is the host operator). |
 | **process, Linux, Landlock ABI 1–3** | as above | as above, but Landlock has no TCP rules | As ABI ≥ 4 for files, unix sockets, signals and syscalls. TCP is **unrestricted** (loopback, including other tenants' ports; the LAN; the internet); Node-tier egress `unenforced`. |
 | **process, Linux without Landlock** (or `-sandbox none`) | as above | none | Full same-uid access: every tenant's node keys and state, the mgmt token file, every control socket. hostd therefore runs one tenant's process-tier workloads only (`sandbox_unavailable` for a second), unless started with `--insecure-shared-host`. |
-| **microVM, Linux** (Firecracker) | yes, inside the guest | a VM per workload; Firecracker under its jailer (chroot, uid, netns, cgroup); per-VM gateway; node keys never in the guest; DO storage on a dm-crypt volume whose key mgmt releases only to the lease holder | Confined to its own workload. Holds its workload's MAC root, so it can forge egress attribution **among its own workload's objects**. After a VMM escape: the jail uid, and the root vmhelper's message surface (H16 #151; the uffd region table is validated, H11). Snapshot-restored guests share kernel state from before the reseed (H24 #157). |
+| **microVM, Linux** (Firecracker) | yes, inside the guest | a VM per workload; Firecracker under its jailer (chroot, uid, netns, cgroup); per-VM gateway; node keys never in the guest; DO storage on a dm-crypt volume whose key mgmt releases only to the lease holder | Confined to its own workload. Holds its workload's MAC root, so it can forge egress attribution **among its own workload's objects**. After a VMM escape: the jail uid, and the root vmhelper's message surface (the uffd region table is validated, H11; only a VM hostd started as a base can become a snapshot base, H16). Snapshot-restored guests share kernel state from before the reseed (H24 #157). |
 | **microVM, macOS** (Virtualization.framework, Apple silicon) | yes, inside the guest | a VM per workload; node keys stay on the host | Confined to its own workload; forges attribution only among its own workload's objects, as above. |
 
 On every tier the workload runs as tailworks' user (or the jail uid) and
@@ -228,8 +228,9 @@ so.
    profile), `hostd.TestSeatbeltProfile*` and, in `make test-node`,
    `TestNodeTier/Sandbox` (from inside the Node app). **Open:** the macOS
    profile's read deny list and `localhost:<port>` TCP matching (H26,
-   #175); vmhelper snapshot-base guard (H16). The uffd region table
-   is validated (H11, `helper.TestRT3_H11_UffdBadTableFailsSession`).
+   #175). The uffd region table is validated (H11,
+   `helper.TestRT3_H11_UffdBadTableFailsSession`), and only a VM started
+   as a base can become a snapshot base (H16, `helper.TestRT3_H16_BaseGuard`).
 8. **Internet → workload** (B8): reach an unlisted path, `/_tw` or a DO;
    mint nodes; exhaust a limit from one address; squat a name. → routes,
    `/_tw` and path tricks are refused (C13); `getCaller()` throws on a
