@@ -51,7 +51,7 @@ export const DOC_BASE = "https://github.com/rosskukulinski/tailworks/blob/master
 export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.freeze({
   peer_not_visible: { status: 403, title: "the destination is not in this node's netmap (a grant is missing, or the name does not exist)" },
   forbidden_destination: { status: 403, title: "the destination class is refused by netd (loopback, self, sibling, host, non-tailnet)" },
-  internet_egress_unavailable: { status: 403, title: "the destination is not a tailnet name; Workers have no internet egress (call a gateway on your tailnet)" },
+  internet_egress_unavailable: { status: 403, title: "internet egress is turned off for this workload or host (tailnet.egress.internet), or the host is not on its allowlist" },
   acl_denied: { status: 403, title: "the peer is visible but the port or service is not granted" },
   cap_missing: { status: 403, title: "the caller lacks the app capability (or the tool) required" },
   cap_limit_exceeded: { status: 403, title: "within the granted tool, but above a numeric limit or budget" },

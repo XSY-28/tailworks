@@ -58,6 +58,11 @@ type Options struct {
 	ContainerQuota    hostd.ContainerQuota
 	ContainerMaxLife  time.Duration
 	ContainerInternet *hostd.ContainerInternet
+
+	// WorkerInternet is passed to hostd (nil: Workers have no internet
+	// path, so tests never reach the real internet).
+	WorkerInternet *hostd.ContainerInternet
+
 	// FenceAfter is passed to hostd (0: its default).
 	FenceAfter time.Duration
 	// PublicListen is passed to hostd (ADR-029 public nodes; tests inject a
@@ -184,7 +189,7 @@ func hostConfig(o Options, dir, wd string, log *slog.Logger, hc *mgmtapi.Client)
 		VM: o.VM, DefaultTier: o.DefaultTier, VMDebug: o.VMDebug, Sandbox: testSandbox(o.Sandbox), InsecureSharedHost: o.InsecureSharedHost, HostSockets: o.HostSockets, AllowSiblingEgress: o.AllowSiblingEgress,
 		Containers: o.Containers, Images: o.Images, ContainerIdle: o.ContainerIdle, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: o.ContainerCapacity, ContainerQuota: o.ContainerQuota, ContainerMaxLife: o.ContainerMaxLife,
-		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter,
+		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter, WorkerInternet: o.WorkerInternet,
 		PublicListen: o.PublicListen,
 		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
 		Telemetry: o.Telemetry,
