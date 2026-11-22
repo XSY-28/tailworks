@@ -18,6 +18,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/r2"
 	"github.com/rosskukulinski/tailworks/hostd/sandbox"
 	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/mgmt"
 	v1 "github.com/rosskukulinski/tailworks/mgmt/api/v1"
 	"github.com/rosskukulinski/tailworks/netd"
 	"github.com/rosskukulinski/tailworks/netd/nettest"
@@ -57,6 +58,11 @@ type Options struct {
 	ContainerQuota    hostd.ContainerQuota
 	ContainerMaxLife  time.Duration
 	ContainerInternet *hostd.ContainerInternet
+
+	// WorkerInternet is passed to hostd (nil: Workers have no internet
+	// path, so tests never reach the real internet).
+	WorkerInternet *hostd.ContainerInternet
+
 	// FenceAfter is passed to hostd (0: its default).
 	FenceAfter time.Duration
 	// PublicListen is passed to hostd (ADR-029 public nodes; tests inject a
@@ -77,19 +83,28 @@ type Options struct {
 	// R2 is passed to hostd (R2 bucket blobs; nil: its default, files
 	// under its data dir).
 	R2 r2.Backend
+
+	// Backend is the mgmt hostd talks to: BackendFake ("" too) or
+	// BackendReal (realmgmt.go). Fake is ignored with BackendReal.
+	Backend string
 }
 
 // Env is fakemgmt (on a unix socket) plus one running tw-hostd.
 type Env struct {
 	T        testing.TB
-	FM       *fakemgmt.Server
-	Mgmt     *mgmtapi.Client // CLI-side client
+	FM       *fakemgmt.Server // nil with BackendReal
+	Mgmt     *mgmtapi.Client  // CLI-side client
 	Host     *hostd.Host
 	TenantID string
 	Dir      string
 
 	// cfg is the hostd config (hosts.go: Restart, StartHost).
 	cfg hostd.Config
+
+	// Hooks are the backend's test controls (fakemgmt's, or realmgmt.go's
+	// for the real mgmt); RealMgmt is the real mgmt (nil with fakemgmt).
+	Hooks    Hooks
+	RealMgmt *mgmt.Mgmt
 }
 
 // Start starts fakemgmt, creates the tenant and starts hostd.
@@ -115,6 +130,9 @@ func Start(t testing.TB, o Options) *Env {
 	if o.Verbose || os.Getenv("TW_TEST_LOG") != "" {
 		log = slog.New(netd.NewRedactingHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 		o.Fake.Logger = log
+	}
+	if o.Backend == BackendReal {
+		return startReal(t, o, dir, wd, log)
 	}
 	fm := fakemgmt.New(o.Fake)
 	sock := filepath.Join(dir, "mgmt.sock")
@@ -147,23 +165,7 @@ func Start(t testing.TB, o Options) *Env {
 		pc.HostID = "h1"
 		o.Images.Puller = image.RegistryPuller{Client: pc.OCI()}
 	}
-	if o.HeartbeatEvery == 0 {
-		o.HeartbeatEvery = 200 * time.Millisecond
-	}
-	cfg := hostd.Config{
-		HostID: "h1", Mgmt: hc, DataDir: filepath.Join(dir, "data"), RunDir: filepath.Join(dir, "run"),
-		WorkerdBin: wd, HeartbeatEvery: o.HeartbeatEvery, Ephemeral: o.Ephemeral, ControlURL: o.ControlURL,
-		KillTombstone: o.KillTombstone, HostnamePrefix: o.HostnamePrefix, Logger: log,
-		VM: o.VM, DefaultTier: o.DefaultTier, VMDebug: o.VMDebug, Sandbox: testSandbox(o.Sandbox), InsecureSharedHost: o.InsecureSharedHost, HostSockets: o.HostSockets, AllowSiblingEgress: o.AllowSiblingEgress,
-		Containers: o.Containers, Images: o.Images, ContainerIdle: o.ContainerIdle, ContainerGrace: o.ContainerGrace,
-		ContainerCapacity: o.ContainerCapacity, ContainerQuota: o.ContainerQuota, ContainerMaxLife: o.ContainerMaxLife,
-		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter,
-		PublicListen: o.PublicListen,
-		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
-		Telemetry: o.Telemetry,
-		R2:        o.R2,
-	}
-	cfg.QueueVisibility = o.QueueVisibility
+	cfg := hostConfig(o, dir, wd, log, hc)
 	h, err := hostd.New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +174,29 @@ func Start(t testing.TB, o Options) *Env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { h.Close() })
-	return &Env{T: t, FM: fm, Mgmt: cli, Host: h, TenantID: tr.TenantID, Dir: dir, cfg: cfg}
+	return &Env{T: t, FM: fm, Mgmt: cli, Host: h, TenantID: tr.TenantID, Dir: dir, cfg: cfg, Hooks: fm}
+}
+
+// hostConfig is the hostd config for o, talking to mgmt through hc.
+func hostConfig(o Options, dir, wd string, log *slog.Logger, hc *mgmtapi.Client) hostd.Config {
+	if o.HeartbeatEvery == 0 {
+		o.HeartbeatEvery = 200 * time.Millisecond
+	}
+	return hostd.Config{
+		HostID: "h1", Mgmt: hc, DataDir: filepath.Join(dir, "data"), RunDir: filepath.Join(dir, "run"),
+		WorkerdBin: wd, HeartbeatEvery: o.HeartbeatEvery, Ephemeral: o.Ephemeral, ControlURL: o.ControlURL,
+		KillTombstone: o.KillTombstone, HostnamePrefix: o.HostnamePrefix, Logger: log,
+		VM: o.VM, DefaultTier: o.DefaultTier, VMDebug: o.VMDebug, Sandbox: testSandbox(o.Sandbox), InsecureSharedHost: o.InsecureSharedHost, HostSockets: o.HostSockets, AllowSiblingEgress: o.AllowSiblingEgress,
+		Containers: o.Containers, Images: o.Images, ContainerIdle: o.ContainerIdle, ContainerGrace: o.ContainerGrace,
+		ContainerCapacity: o.ContainerCapacity, ContainerQuota: o.ContainerQuota, ContainerMaxLife: o.ContainerMaxLife,
+		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter, WorkerInternet: o.WorkerInternet,
+		PublicListen: o.PublicListen,
+		CronTimeout:  o.CronTimeout, CronClock: o.CronClock,
+		Telemetry: o.Telemetry,
+		R2:        o.R2,
+
+		QueueVisibility: o.QueueVisibility,
+	}
 }
 
 // tenantCreate is the spec's TenantCreate body (no read-only fields).

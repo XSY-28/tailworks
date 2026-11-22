@@ -294,7 +294,7 @@ func (m *ctrManager) start(ctx context.Context, inst *instance, k ctrKey, cc *co
 	id := fmt.Sprintf("c%d", m.seq)
 	m.mu.Unlock()
 	// The guest's only network: its own sandbox egress proxy (ADR-032 D4).
-	pn, err := sbxnet.New(m.netConfig(c, k, r.EnableInternet, inst.app.Internet))
+	pn, err := sbxnet.New(m.netConfig(c, k, r.EnableInternet, inst.app.Internet.Containers()))
 	if err != nil {
 		release()
 		return fail(ctrError("container_start_failed", "egress proxy: %v", err))
