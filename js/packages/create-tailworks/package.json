@@ -12,6 +12,9 @@
   "bin": { "create-tailworks": "bin/create-tailworks.js" },
   "exports": { "./build": "./lib/build.mjs", "./build-node": "./lib/build-node.mjs" },
   "files": ["bin", "lib", "templates"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
   "dependencies": { "esbuild": "0.28.2" },
   "publishConfig": {
     "access": "public"

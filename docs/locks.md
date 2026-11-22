@@ -124,11 +124,15 @@ await locks.withLock("job:nightly-report", async (l) => {
 `withLock` acquires the lock and renews it every third of the lease. It
 releases the lock at the end. If a renewal says the lock is gone, or the
 lease's **deadline** passes without a successful renewal, it aborts `signal`
-and throws once your function returns. The deadline is counted from when the
-granting request was **sent**, on the client's own clock, so the client
-always stops trusting a lease no later than the service lets it go
-(`hostd:TestLockTemplate/ClientWithLockRenewsAndFences`: a 1 s lease held
-for 2.5 s by renewing, with a contender refused meanwhile). The lower-level
+and throws once your function returns. It also checks the deadline when
+your function returns, so a busy event loop that delays the expiry timer
+can't hide a lapsed lease: `withLock` throws `lease_expired` then too. The
+deadline is counted from when the granting request was **sent**, on the
+client's own clock, so the client always stops trusting a lease no later
+than the service lets it go
+(`hostd:TestLockTemplate/ClientWithLockRenewsAndFences`: a 3 s lease held
+for 4 s by renewing, with a contender refused meanwhile;
+`create-tailworks/test/lockclient.test.mjs`: the deadline check). The lower-level
 calls are `acquire`, `tryAcquire`, `renew`, `release` and `status`.
 
 **Where to run it.**
