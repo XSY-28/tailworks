@@ -2,6 +2,25 @@ Last update: 2026-11-21 PT. Fix #148 (ledger H08 / F5): request.cf's caller is s
 
 # fix-148-seal-cf
 
+## Merge with #215 / #217 (2026-11-21)
+
+One conflict, in `hostd/gen/js/platform.js`: the facet Host's RPC Proxy.
+#215 replaced `self.__facet()` with the module function `hostFacet(self,
+cls)`, and this branch seals `Request` arguments there. Both are kept:
+`hostFacet(self, cls)[p](...await sealed args)`. `Host_<Class>.fetch`
+merged cleanly: the seal check runs before `principalOf`, then
+`hostAdmitted`/`hostFacet`. The seal helpers (`verifiedCaller`,
+`sealedCf`, `sealedRequest`) are module functions, not Host methods, so
+they are not reachable over RPC (#215's rule). The seal MAC's domain
+(`tw-caller-seal-v1\n…`) is distinct from `hostCap`'s
+(`tw-host-internal-v1`). Results after the merge:
+
+- `go test ./hostd/ -run 'TestRT3_H08_ForgedPrincipal|TestHostd/FacetHostInternalsNotRPC' -v`: both PASS.
+- `go test ./hostd/gen/`: PASS.
+- `make lint`: PASS. `make test-sdk`: PASS.
+- `make test` (mbp runner): PASS, including `TestCLIEndToEnd` (#217's
+  lease_lost retry fixed the #210 failure seen earlier).
+
 ## Problem
 
 netd puts the WhoIs caller in `request.cf.tailscale.caller`. Once tenant
