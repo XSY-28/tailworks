@@ -103,6 +103,7 @@ func (h *Host) ensureTenant(ctx context.Context, id string) (*tenant, error) {
 		Upstream:      h.ingressHandler(t),
 		CallerCerts:   certSrc,
 		AllowSiblings: h.cfg.AllowSiblingEgress,
+		Internet:      h.internetConfig(), // internet.go
 		Ephemeral:     h.cfg.Ephemeral,
 		Hostname:      func(oid string) string { return oid },
 		ReadyTimeout:  h.cfg.ReadyTimeout,

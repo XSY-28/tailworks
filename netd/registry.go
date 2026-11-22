@@ -95,6 +95,13 @@ type Config struct {
 	AllowSiblings bool
 	// ExtraForbidden prefixes are always refused on egress (platform endpoints).
 	ExtraForbidden []netip.Prefix
+
+	// Internet is the internet egress path for destinations that are not
+	// on the tailnet (internet.go, ADR-worker-internet-egress). Nil: there
+	// is none; internet names are refused with internet_egress_unavailable
+	// and non-tailnet IPs with forbidden_destination.
+	Internet *InternetConfig
+
 	// OnDelete, if set, is called after a killed object's node is closed
 	// (kill tier 2: delete the device at the coordination server).
 	OnDelete func(ctx context.Context, info ObjectInfo) error
