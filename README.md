@@ -26,10 +26,17 @@ Only want to run the code first? After step 1, `tw init hello && cd hello
 && tw dev` serves the app on `127.0.0.1:8787` with no tailnet and no
 credentials ([Try it without a tailnet](docs/INSTALL.md#try-it-without-a-tailnet)).
 
-You need:
-- a Mac (Apple silicon) or a Linux machine (arm64 or amd64);
-- a Tailscale tailnet where you're an admin (or a self-hosted Headscale
-  server: see [docs/headscale.md](docs/headscale.md)).
+### Prerequisites
+
+| To | You need |
+|---|---|
+| Run tailworks (the release) | macOS 14 or later on Apple silicon, or Linux arm64/amd64 with glibc ≥ 2.35 ([details](docs/INSTALL.md)); a Tailscale tailnet where you're an admin, or a self-hosted Headscale server ([docs/headscale.md](docs/headscale.md)). No Go and no Node.js. |
+| Try an app locally (`tw dev`) | The release only: no tailnet, no credentials. |
+| Build tailworks from source | Go ≥ 1.27 and Node.js ≥ 20. |
+| Run a Node.js app (`"runtime": "node"`, the `node-workflow` template) | Node.js ≥ 24 on each host that runs it, and `npm install` on the deploying machine ([docs/node-tier.md](docs/node-tier.md)). |
+| Use the Linux microVM tier | `/dev/kvm`, cgroups v2, systemd and a one-time sudo setup ([details](docs/INSTALL.md#linux-the-microvm-tier-firecracker-kvm)). |
+
+Windows isn't supported, not even as a CLI client.
 
 **1. Install** (no sudo; everything goes into `~/.tailworks`). Download the latest
 [release](https://github.com/rosskukulinski/tailworks/releases), verify its
@@ -43,8 +50,8 @@ export PATH="$HOME/.tailworks/bin:$PATH"             # add this to your shell pr
 tw doctor                                     # every check prints a fix if it fails
 ```
 
-Or build the release yourself (needs Go ≥ 1.27 and Node.js ≥ 20; the
-installed tailworks needs neither):
+Or build the release yourself (Go and Node.js, as in
+[Prerequisites](#prerequisites); the installed tailworks needs neither):
 
 ```sh
 git clone https://github.com/rosskukulinski/tailworks && cd tailworks
@@ -263,7 +270,8 @@ off; `tw version --json` reports it as `updateCheck`. Details:
 - **CLI reference:** [docs/cli.md](docs/cli.md), every command and flag
   (generated from `--help`); `tw help` groups the commands.
 - **What changed in each release:** [CHANGELOG.md](CHANGELOG.md).
-  Security reports: [SECURITY.md](SECURITY.md).
+  Security reports: [SECURITY.md](SECURITY.md). Contributing:
+  [CONTRIBUTING.md](CONTRIBUTING.md).
 - **The words tailworks uses** (tenant, workload, tier, facet mode, pool node,
   …): [docs/concepts.md](docs/concepts.md).
 - **A first deploy that doesn't answer:**
