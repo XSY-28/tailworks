@@ -32,7 +32,7 @@ today (2026-11-15, 46ff0c3):
   nodes rejoin and nothing re-registers.
 - **Missing verbs.** There is no `tw upgrade`. There is no graceful drain:
   `host rm --drain` kills the host's objects and deletes the host. There is
-  no `tw mgmt migrate` either (still not built).
+  no `tw-mgmt migrate` either (now built: `--check` and `--apply`, §3).
 - **`install.sh`** swaps `bin/` and `share/` but doesn't restart anything,
   and it deletes the previous copy. The root-owned vmhelper changes only when
   `sudo tw host setup --microvm` is re-run.
@@ -197,8 +197,8 @@ per contract:
       `fs` blobs, `approvals.json`, request logs) are refused unless
       `--allow-local-state-loss` is given. On a single-host MVP namespace
       there is nowhere to move them, so the answer is a bounce, not a drain.
-  - **Bounce** (the default for `tw host upgrade` on a host that can't
-    drain):
+  - **Bounce** (the default when an upgrade run (`tw upgrade --fleet`)
+    reaches a host that can't drain):
     1. Install the new tarball side by side.
     2. Upgrade vmhelper first. It speaks old and new (§2), and the VMs restart
        with hostd anyway.
@@ -323,7 +323,7 @@ per contract:
 - **Production: a mgmt-side upgrade orchestrator.** The fleet upgrade runs
   in mgmt, not in the CLI, so it survives a laptop disconnecting and is
   visible to every operator.
-  - `tw upgrade --plan --to vX.Y.Z` asks mgmt for a plan
+  - `tw upgrade vX.Y.Z --plan` asks mgmt for a plan
     (`POST /v1/upgrades?dryRun=true`). mgmt computes it from the catalog
     and the fleet's reported versions and features:
     1. Check the store backup (point-in-time recovery is on).
@@ -334,7 +334,7 @@ per contract:
 
     The plan flags hosts that lack a feature some deployment needs, and
     every intermediate minor that has a contract migration.
-  - `tw upgrade --to vX.Y.Z` creates an **upgrade run**
+  - `tw upgrade vX.Y.Z` creates an **upgrade run**
     (`POST /v1/upgrades`), a durable record in the store: the plan, the
     current step, and per-host state. Its steps are driven by the existing
     stateless-replica model (ADR-011): whichever replica holds the run's
@@ -362,7 +362,7 @@ per contract:
     of its embedded mgmt.
 - **Restore must not reuse lease epochs.** Lock fencing tokens (#26) and the
   ADR-028 fences are built from epochs. Every restore, including the
-  automatic rollback and a future SQLite→Postgres `tw mgmt migrate` (not built),
+  automatic rollback and a future SQLite→Postgres store copy (not built),
   raises each lease's epoch past anything handed out before the backup by
   writing a restore generation into `schema_meta`.
 

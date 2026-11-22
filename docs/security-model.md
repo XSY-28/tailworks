@@ -221,11 +221,3 @@ The red team's open items are tracked in
   trusts every other piece of code in its own workload. Across workloads
   and hosts the network identity holds (ledger C04, C05; H08).
 - **On-behalf-of assertions** (`actingFor`) aren't implemented.
-- **Smart placement trusts each host's own path measurements.** A host
-  reports only its own paths, only for tenants it already runs, within
-  bounds, and a report never moves a running workload: a stateful move
-  always needs `--force-takeover` (or a drain with
-  `--allow-local-state-loss`). But a compromised host can claim the best
-  path and so be chosen for that tenant's next new workload, or as the
-  destination of a move you confirm. Check the placement summary that
-  `tw deploy` prints, and pin with `--host` where it matters (ledger H23).

@@ -217,9 +217,8 @@ so.
    within `tag:tw*` (C12). Releases are signature-checked on every install
    and upgrade path (B9). A host's path reports cover only its own rows
    and its own tenants, are bounded at ingest, and never move a running
-   workload by themselves (H23). **Open:** a host's plausible but false
-   path report still chooses where a new workload of its tenants lands
-   (H23, #156); warm keys in custody (H25, #158).
+   workload by themselves (H23). **Open:** warm keys in custody (H25,
+   #158).
 7. **Sandboxes.** → as in §3. The Linux escape battery
    (`attacks.TestRT08_LinuxSandboxEscapeBattery`) and the Seatbelt tests
    pin them: `hostd.TestSeatbeltStrictProbes` (real probes under
