@@ -21,3 +21,5 @@ the README quick start now starts from npm:
   then `npm install && npx tsc --noEmit`: pass.
 - `make changes-check`: ok (no fragment needed).
 - `make lint test`: pass (before and after merging origin/master).
+
+Follow-up: publishing the `tw` CLI itself to npm is #240.
