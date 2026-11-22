@@ -27,13 +27,13 @@ func TestService(t *testing.T) {
 	const svc, vip = "svc:hello", "100.99.0.10"
 	const echoSvc, echoVIP = "svc:echo-svc", "100.99.0.11"
 
+	// netd already set OmitAuth on these clients (writing it here again
+	// races with its own watchers).
 	alc, err := e.reg.Get("a").Server().LocalClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	alc.OmitAuth = true
 	blc, _ := e.reg.Get("b").Server().LocalClient()
-	blc.OmitAuth = true
 	for _, n := range []*nettest.Node{e.client} {
 		if err := nettest.AcceptRoutes(ctx, n.LC); err != nil {
 			t.Fatal(err)
