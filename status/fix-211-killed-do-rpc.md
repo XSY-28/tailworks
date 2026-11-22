@@ -47,7 +47,15 @@ The facet path was already gated: `Host_<Class>`'s Proxy checks
   against master's runtime (kept stub and fresh stub ran tenant code; no
   410 through the handler), all 4 pass after. The full JS suite passes
   (42/42).
-- See the PR for `make lint`, `make test` and the extra suites.
+- `make lint`: ok. `make changes-check`: ok (fragment
+  `changes/fix-211-killed-do-rpc.md` added, kind security).
+- `make test` (mbp runner): ok, exit 0.
+- `make test-sdk` (mbp runner): ok. That includes `TestCloudflareAgents`, a
+  plain-DO Agents SDK app, so the Proxy works with the SDK's callables.
+- `make templates-typecheck`: ok.
+- `make e2e-locks`: ok. lockpulse uses plain DOs.
+- Skipped: the container and VM suites (`ctr` is a plain DO with a
+  container). They need Docker or KVM.
 
 ## Gaps
 
