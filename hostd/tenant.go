@@ -105,6 +105,7 @@ func (h *Host) ensureTenant(ctx context.Context, id string) (*tenant, error) {
 		AllowSiblings: h.cfg.AllowSiblingEgress,
 		Ephemeral:     h.cfg.Ephemeral,
 		Hostname:      func(oid string) string { return oid },
+		OnRejected:    func(nid string) { h.onNodeRejected(id, nid) }, // noderejected.go (#200)
 		ReadyTimeout:  h.cfg.ReadyTimeout,
 		JoinParallel:  h.cfg.JoinParallel,
 		Logger:        h.log.With("tenant", id),
