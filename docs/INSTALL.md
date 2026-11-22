@@ -2,7 +2,9 @@
 
 tailworks runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 ≥ 2.35)**. Each has a self-contained release tarball and the same
-`install.sh`; nothing needs root.
+`install.sh`; nothing needs root. Windows isn't supported, not even for
+the `tw` CLI alone. Every prerequisite in one table:
+[README › Prerequisites](../README.md#prerequisites).
 
 The path through this page: install on [macOS](#macos) or [Linux](#linux),
 then your first deploy (the [README quick start](../README.md#quick-start-deploy-your-first-durable-object),
@@ -158,6 +160,8 @@ Funnel, no HTTPS requirement.**
      {"src": ["tag:tw-mgmt"], "dst": ["tag:tw-host"], "ip": ["tcp:7474"]},
      // admins may use tw over the tailnet (tw link)
      {"src": ["autogroup:admin"], "dst": ["tag:tw-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}},
+     // optional: let your Prometheus scrape /metrics (observability.md)
+     // {"src": ["tag:prometheus"], "dst": ["tag:tw-host", "tag:tw-mgmt"], "ip": ["tcp:9464"]},
    ],
    // no nodeAttrs: mgmt never uses Funnel
    ```
