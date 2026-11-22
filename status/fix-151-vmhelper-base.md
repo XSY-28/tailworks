@@ -35,16 +35,16 @@ The helper protocol stays at 2 and the field is additive.
 ## Tests
 
 - `GOOS=linux go vet ./hostd/vm/...`, `GOOS=linux go test -c ./hostd/vm/helper`: ok.
-- `helper.TestRT3_H16_BaseGuard` on twd-amd64 (Linux amd64, no root): passes.
+- `helper.TestRT3_H16_BaseGuard` on a Linux amd64 test host (no root): passes.
   The same test built against the old guard conditions fails: the claimed
   pool VM and the restored copy reach the VMM's pause call and are stopped,
   attach on a base session isn't refused, and `start` accepts the bad
   `Base` combinations.
-- Whole `hostd/vm/helper` package on twd-amd64: PASS.
+- Whole `hostd/vm/helper` package on the same host: PASS.
 - `make lint`: ok. `make changes-check`: ok (fragment added anyway, `protocol`).
 - `make test` on the mbp runner: ok (exit 0).
 - `make e2e-vm` / the KVM snapshot smoke test (`TestSnapshotRestore`): not
-  run to completion. On twd-amd64 I built a current guest image and ran
+  run to completion. On that host I built a current guest image and ran
   `TestSnapshotRestore`, and also the cold-boot `TestSmoke` as a control,
   with the in-process helper. Both failed the same way before reaching any
   changed code: the guest kernel soft-locks during boot ("microVM not pooled
