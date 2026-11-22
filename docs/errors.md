@@ -23,7 +23,7 @@ agent, cli = `tw`). Detail text is redacted of key material before it is
 printed anywhere.
 
 ### acl_denied
-403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or deploy with `--allow-missing-grants`.
+403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or let tailworks add its `tag:tw*` lines with `tw policy --apply` / `tw deploy --apply-policy` (needs the OAuth client's Policy File write scope), or deploy with `--allow-missing-grants`.
 
 ### already_joined
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
@@ -290,13 +290,19 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use; also `ctx.tailnet.connect()` (raw TCP egress), which is not implemented yet. **Fix:** use `fetch()`; see STATUS.md for what is built.
 
 ### policy_apply_failed
-500 · cli. **When:** `--policy-apply` could not write the policy snippet (validation failed, or the ETag changed). **Fix:** add the printed snippet in the admin console.
+500 · mgmt, cli. **When:** `--policy-apply` could not write the policy snippet (validation failed, or the ETag changed); or `tw policy --apply` / `tw deploy --apply-policy`: the control plane rejected the merged policy (for example a grant to a tag no `tagOwners` entry defines), or tailworks refused the snippet (RT-06). Nothing was written. **Fix:** add the printed snippet in the admin console, after fixing what the message names.
+
+### policy_conflict
+409 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tailnet policy changed between tailworks' read and its `If-Match` write, and again on the one retry. Nothing was written. **Fix:** run it again; if someone keeps editing the policy, wait for them, or add the printed snippet yourself.
 
 ### policy_missing_tag_owners
 403 · mgmt, cli. **When:** the control plane refused to mint a key for tailworks' own tags: `tag:tw` does not own `tag:tw-mgmt` / `tag:tw-host`. Nothing was minted. **Fix:** add the printed `tagOwners` snippet and re-run `tw up`.
 
 ### policy_unavailable
 503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `tw deploy` says `preflight skipped`.
+
+### policy_write_denied
+403 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.

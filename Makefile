@@ -43,6 +43,14 @@ js-build: $(WORKERD)
 templates-typecheck: js-build
 	sh scripts/templates-typecheck.sh
 
+## bench: per-node memory and request load of a netd registry at N = 10/100/500 (BenchmarkRegistryNodes;
+## hermetic testcontrol, full peer visibility; results in docs/limits.md "Hosts"). BENCH_NODES picks
+## sizes, e.g. BENCH_NODES='10|100'.
+BENCH_NODES ?= 10|100|500
+.PHONY: bench
+bench:
+	$(GO) test -run '^$$' -bench 'RegistryNodes/N=($(BENCH_NODES))$$' -benchtime=1x -timeout 60m ./netd/
+
 ## test: hermetic unit + integration tests (testcontrol + local DERP/STUN + stock workerd).
 .PHONY: test
 test: deps test-go test-js
@@ -168,6 +176,16 @@ e2e-coldid-real:
 		echo "e2e-coldid-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestColdIdentityReal ./e2e/coldid/
+
+## e2e-regrate-real: registration rate on tailnet 1 (production control): up to 50 fresh ephemeral
+## ttest-bench-* nodes from one registry, registrations/min (issue #114, RFC §13 Q1). TW_REGRATE_N,
+## TW_REGRATE_PAR (JoinParallel, default 16). Deletes its devices and key by ID afterwards.
+.PHONY: e2e-regrate-real
+e2e-regrate-real:
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-regrate-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestRegistrationRateReal ./e2e/regrate/
 
 ## guest-image / guest-kernel / vm-assets: the microVM guest (Linux only; reproducible; inputs
 ## pinned in guest/inputs.sh) for GUEST_ARCH (Go's name, amd64 or arm64; default: this machine).
