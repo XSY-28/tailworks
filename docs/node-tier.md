@@ -108,9 +108,10 @@ pathname socket, so tailworks' own sockets (hostd's, mgmt's, the instance
 egress sockets) refuse sandboxed peers themselves; see INSTALL.md.
 
 **On macOS it is enforced too.** The Seatbelt profile refuses every
-network operation except TCP connects to `localhost:<proxy port>` and
-`localhost:<own port>`, a bind of its own port, and unix sockets in its own
-dirs; `make test-node` checks the same probes there (`EPERM`).
+network operation except IPv4 TCP connects to `127.0.0.1:<proxy port>` and
+`127.0.0.1:<own port>` (not `[::1]`), a bind of its own port, and unix
+sockets in its own dirs; `make test-node` checks the same probes there
+(`EPERM`).
 
 **Elsewhere it is cooperative.** On Linux kernels with Landlock ABI < 4
 (and under `tw-hostd -sandbox seatbelt-legacy`), a malicious or
