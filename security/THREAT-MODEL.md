@@ -127,7 +127,7 @@ which has the full per-platform rows.
 
 | Tier | Native code? | Isolation | Residual attacker power |
 |------|-------------|-----------|-------------------------|
-| **process, macOS** (Seatbelt) | Node app: yes. workerd: only after a V8 escape | V8 isolate (workerd); Seatbelt `(allow default)` for system services (Mach, sysctls), with writes, network, signals and exec denied and allowed back for what the workload needs (`seatbeltProfile`, `hostd/seatbelt_strict.go`) | Can't read or write the home dir, tailworks' state and run dirs or other tenants' credential files. Writes only its own dirs and `/dev/null`, `/dev/zero`, `/dev/dtracehelper`. Network: unix sockets only in its own dirs (not tailworks' sockets or the system tailscaled socket); TCP connect only to `localhost:<port>` for the ports hostd passes (a Node app: its egress proxy and its own port; workerd: none), bind and accept only its own port; no UDP, so no DNS of its own. Signals only itself and its children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload. Exec only of the runtime, the Node prefix, its own dirs and `/System`, `/bin`, `/opt`, `/sbin`, `/usr`. Node-tier egress is `enforced`. **Residual** ([#175](https://github.com/rosskukulinski/tailworks/issues/175), H26): reads outside the deny list (`/etc`, `/tmp`, …) stay open, and TCP is matched as `localhost:<port>` rather than one address. `-sandbox seatbelt-legacy` (kept for one release) brings back the old files-only profile: TCP anywhere, writes to `/tmp`, signals to any same-user process, unix sockets outside the deny list (including the system tailscaled socket), egress `unenforced`. |
+| **process, macOS** (Seatbelt) | Node app: yes. workerd: only after a V8 escape | V8 isolate (workerd); Seatbelt `(allow default)` for system services (Mach, sysctls), with reads, writes, network, signals and exec denied and allowed back for what the workload needs (`seatbeltProfile`, `hostd/seatbelt_strict.go`) | Reads only the OS dirs (`/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/opt`, `/dev`, the time zone database), its runtime, the Node prefix and its own dirs: not `/tmp`, `/var/folders`, `/Users` or `/Library`, and never the home dir, tailworks' state and run dirs or other tenants' credential files. Writes only its own dirs and `/dev/null`, `/dev/zero`, `/dev/dtracehelper`. Network: unix sockets only in its own dirs (not tailworks' sockets or the system tailscaled socket); TCP over IPv4 only, connect only to the ports hostd passes on IPv4 loopback (`tcp4 "localhost:<port>"`: Seatbelt takes no literal address, and 127.0.0.1 is macOS's only IPv4 loopback address; a Node app: its egress proxy and its own port; workerd: none), bind and accept only its own port (by port: an app listening on `0.0.0.0` is reachable on it from the LAN, as under Landlock); no UDP, so no DNS of its own. Signals only itself and its children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload. Exec only of the runtime, the Node prefix, its own dirs and `/System`, `/bin`, `/opt`, `/sbin`, `/usr`. Node-tier egress is `enforced`. Reads are an allow list and TCP is pinned to IPv4 loopback since [#175](https://github.com/rosskukulinski/tailworks/issues/175) (H26). `-sandbox seatbelt-legacy` (kept for one release) brings back the old files-only profile: TCP anywhere, writes to `/tmp`, signals to any same-user process, unix sockets outside the deny list (including the system tailscaled socket), egress `unenforced`. |
 | **process, Linux, Landlock ABI ≥ 4** (kernel 6.7+) | as above | Landlock allow list + seccomp (`internal/procsb`) | Reads only OS dirs, its runtime and its own dirs; writes only its own dirs; TCP connect only to the ports hostd gives it; no AF_UNIX (seccomp), no UDP/raw; signals only its own process group; no ptrace, mount, bpf, namespaces, io_uring. Residual: the kernel's attack surface, and the same uid as tailworks (an escape from the sandbox is the host operator). |
 | **process, Linux, Landlock ABI 1–3** | as above | as above, but Landlock has no TCP rules | As ABI ≥ 4 for files, unix sockets, signals and syscalls. TCP is **unrestricted** (loopback, including other tenants' ports; the LAN; the internet); Node-tier egress `unenforced`. |
 | **process, Linux without Landlock** (or `-sandbox none`) | as above | none | Full same-uid access: every tenant's node keys and state, the mgmt token file, every control socket. hostd therefore runs one tenant's process-tier workloads only (`sandbox_unavailable` for a second), unless started with `--insecure-shared-host`. |
@@ -160,8 +160,8 @@ so.
    with a Node app in `listen: "unix"` mode) can reach the system
    tailscaled socket.
    **Open:** on Landlock ABI 1–3 (and macOS under
-   `-sandbox seatbelt-legacy`), TCP to another tenant's loopback ports; on
-   macOS, reads outside the deny list (#175).
+   `-sandbox seatbelt-legacy`), TCP to another tenant's loopback ports.
+   On macOS, reads are an allow list since #175.
 2. **Tenant → platform** (B1): reach A7, forge A4/props, abuse spawn to
    escalate A6 or exhaust A9, SSRF via egress. → props and the caller are
    unforgeable across nodes; every Worker and facet `fetch()`, redirect,
@@ -203,9 +203,9 @@ so.
    `sandbox-exec`), `hostd.TestSeatbeltStrictProfileShape`,
    `hostd.TestMultiTenant` (probes under a running workload's live
    profile), `hostd.TestSeatbeltProfile*` and, in `make test-node`,
-   `TestNodeTier/Sandbox` (from inside the Node app). **Open:** the macOS
-   profile's read deny list and `localhost:<port>` TCP matching (H26,
-   #175); vmhelper snapshot-base guard (H16). The uffd region table
+   `TestNodeTier/Sandbox` (from inside the Node app). The macOS profile's
+   reads are an allow list and its TCP is IPv4-loopback only (H26, #175).
+   **Open:** vmhelper snapshot-base guard (H16). The uffd region table
    is validated (H11, `helper.TestRT3_H11_UffdBadTableFailsSession`).
 8. **Internet → workload** (B8): reach an unlisted path, `/_tw` or a DO;
    mint nodes; exhaust a limit from one address; squat a name. → routes,
