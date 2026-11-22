@@ -72,7 +72,14 @@ Commands run (results below as they finish):
 - `go test ./netd/... -count=1`: PASS.
 - `go test ./hostd/ -run TestWorkerInternetEgress -count=1`: PASS.
 - `go test ./schema/ ./hostd/bundle/ ./internal/features/`: PASS.
-- `make lint`: PASS (`check-changes: ok (no upgrade-relevant paths changed)`).
+- `make lint`: PASS (`check-changes: ok (no upgrade-relevant paths changed)`,
+  so `make e2e-upgrade` was not required and not run).
+- `make test` (local; both mbp slots busy): PASS, before and after merging
+  origin/master (ac62faa).
+- `make templates-typecheck`: PASS (7 templates). `make test-sdk`: PASS.
+- `CI=1 go test ./docs/ -run TestADRIndex` (after numbering ADR-049): PASS.
+- Not run: credential/tailnet/Docker/KVM suites (`e2e-real`,
+  `e2e-container`, `e2e-vm`, …).
 
 ## Decisions taken where the direction didn't settle it (conservative)
 
