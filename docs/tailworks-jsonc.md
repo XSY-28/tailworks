@@ -68,10 +68,47 @@ schema. `tw init` writes this line for you:
 | `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
 | `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
-| `egress.internet` | `[host, "*.suffix", IP, CIDR]` | internet destinations the workload's **containers** may reach when started with `enableInternet: true` ([containers.md](containers.md)). Worker code stays tailnet-only either way; for internet APIs, see [recipes.md](recipes.md#call-an-internet-api) |
+| `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
 | `spawn.maxDepth` | integer | the deepest spawn chain |
 | `objects` | map of class → [object](#tailnetobjectsclass) | the Durable Object classes that get a tailnet node per instance |
+
+### `tailnet.egress.internet`
+
+Whether outbound `fetch()` from the workload's Worker, Durable Objects and
+Node app may reach the public internet, and which hosts a container
+started with `enableInternet: true` may reach
+([containers.md](containers.md)). Tailnet egress is not affected.
+
+| value | Workers and Node apps | containers (`enableInternet: true`) |
+|---|---|---|
+| absent | any public host | none |
+| `true` | any public host | any public host |
+| `false` or `[]` | none | none |
+| `["api.example.com", "*.github.com", "203.0.113.0/24"]` | only these | only these |
+
+```jsonc
+{ "tailnet": { "tags": ["tag:tw-wl-app"], "egress": { "internet": false } } }
+```
+
+- Internet traffic leaves from the **host's own network**, not from a
+  tailnet node, so the other side sees the host's address (each host has
+  its own) and no tailnet identity. For a fixed source address, use a
+  gateway on your tailnet ([recipes.md](recipes.md#call-an-internet-api)).
+- Loopback, private, link-local (cloud metadata), CGNAT and tailnet
+  ranges and the host's own addresses are always refused
+  (`forbidden_destination`), even when listed, and even through a DNS name
+  that resolves to one. Names under `.internal`, `.local`, `.localhost`,
+  `.lan` and other special-use suffixes are never looked up.
+- A destination the setting refuses gets `internet_egress_unavailable`.
+  The host's operator can also turn internet egress off for every
+  workload on a host (`tw-hostd -worker-internet=off`).
+- A list entry is an exact host name, `*.suffix` (any name under it),
+  `*` (any name), an IP or a CIDR. An IP literal in a URL matches only IP
+  and CIDR entries.
+- A change takes effect when the deployment that makes it becomes active.
+- `true` and `false` need hosts that offer the `worker-internet` feature
+  ([upgrading.md](upgrading.md)); `[]` works on older hosts too.
 
 ### `tailnet.objects.<Class>`
 

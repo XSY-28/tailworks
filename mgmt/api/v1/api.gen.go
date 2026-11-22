@@ -4242,6 +4242,13 @@ type Tenant struct {
 	TenantID  string `json:"tenantID"`
 	Tier      *Tier  `json:"tier,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"`
+
+	// WarmKeys Pooled preauthorized join keys of this tenant in mgmt's custody
+	// (the warm-key pool: unused, being adopted, or expired with the
+	// revocation still to retry). Anyone who can read custody can join
+	// a node with one until it expires. `tw down` and `tw tenant rm`
+	// revoke them.
+	WarmKeys *int `json:"warmKeys,omitempty"`
 }
 
 // TenantCreate defines model for TenantCreate.

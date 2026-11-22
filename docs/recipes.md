@@ -19,19 +19,36 @@ each has a README.md. Limits that apply to all of these are in
 
 ## Call an internet API
 
-A Worker's outbound `fetch()` reaches **tailnet peers only**, and there is
-no setting that gives Workers internet egress. A request to
-`https://api.example.com` is refused with 403
-[`internet_egress_unavailable`](errors.md#internet_egress_unavailable),
-whose detail links here ([COMPAT.md](COMPAT.md#fetch)). To call an
-internet API, put a gateway for it on your tailnet and grant the workload
-access to that gateway. The gateway is where internet egress happens, so
-it's also the place to log, cache or rate-limit it.
+**Directly.** Workers have internet egress by default, as on Cloudflare:
+`fetch("https://api.example.com/...")` just works. The request leaves from
+the host's own network, not from a tailnet node, so the API sees the
+host's source address (a different one on each host), never a tailnet
+identity. Private, link-local (cloud metadata), loopback, tailnet and host
+addresses are always refused, including through a DNS name that resolves
+to one ([security-model.md](security-model.md#egress)).
 
-(Containers are the exception: on the microVM tier, a container started
-with `enableInternet: true` may reach the hosts in the workload's
-`tailnet.egress.internet` allowlist; see [containers.md](containers.md).
-`egress.internet` doesn't open the internet to Worker code.)
+To turn it off, or limit it to a few hosts, set `tailnet.egress.internet`
+([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet)):
+
+```jsonc
+// tailworks.jsonc
+{
+  "tailnet": {
+    "tags": ["tag:tw-wl-weather"],
+    "egress": { "internet": ["api.open-meteo.com"] } // or false: no internet at all
+  }
+}
+```
+
+A destination that the setting refuses gets 403
+[`internet_egress_unavailable`](errors.md#internet_egress_unavailable),
+whose detail links here. The same setting caps a container's
+`enableInternet` ([containers.md](containers.md)).
+
+**Through a gateway.** When internet egress is off, or the API allowlists
+a fixed source address, or you want one place to log, cache or rate-limit
+calls, put a gateway for the API on your tailnet and grant the workload
+access to it.
 
 **The gateway.** Any HTTP reverse proxy on a tailnet machine works. Tag
 the machine `tag:api-gw`. With [Caddy](https://caddyserver.com/), for

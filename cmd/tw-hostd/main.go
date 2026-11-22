@@ -76,7 +76,7 @@ func run() error {
 		ephemeral  = flag.Bool("ephemeral", false, "join nodes as ephemeral (dev/test)")
 		prefix     = flag.String("hostname-prefix", "", "prefix for every node hostname")
 		controlURL = flag.String("control-url", "", "override every tenant's control URL (testing)")
-		capacity   = flag.Int("capacity-nodes", 1000, "advertised node capacity")
+		capacity   = flag.Int("capacity-nodes", 0, "advertised node capacity (0: derived from RAM, see docs/limits.md)")
 		tombstone  = flag.Duration("kill-tombstone", 10*time.Second, "keep killed nodes RST-ing new connections this long")
 		logLevel   = flag.String("log-level", "info", "debug|info|warn|error")
 		tsnetLogs  = flag.Bool("tsnet-logs", false, "forward tsnet logs at debug level")
@@ -122,6 +122,7 @@ func run() error {
 		selfUpg    = flag.Bool("self-upgrade", false, "let tw-mgmt's upgrade runs install a new release here and restart this host (exits with status 75 after installing; run under a service manager that restarts it, e.g. systemd Restart=always)")
 		instPrefix = flag.String("install-prefix", "", "with -self-upgrade: the install.sh prefix to upgrade (default: the prefix this tw-hostd runs from, if it has share/tailworks and VERSION)")
 		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
+		wkInet     = flag.String("worker-internet", "direct", "Workers: how fetch() reaches internet hosts (subject to each workload's tailnet.egress.internet): direct (this host's network, public addresses only) or off")
 	)
 	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
 	r2f.Register(flag.CommandLine)
@@ -151,7 +152,8 @@ func run() error {
 		ContainerImageMaxMiB: *ctrImgMB, ContainerImageCacheMaxMiB: *ctrCacheMB,
 		ContainerIdle: *ctrIdle, ContainerMaxLife: *ctrMaxLife, ContainerGrace: *ctrGrace,
 		ContainerMax: *ctrMax, ContainerMemMiB: *ctrMemMiB, ContainerVCPU: *ctrVCPU, ContainerInternet: *ctrInet, Log: log,
-		R2: r2b}
+		WorkerInternet: *wkInet,
+		R2:             r2b}
 	restart := make(chan struct{}, 1)
 	if *selfUpg {
 		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix

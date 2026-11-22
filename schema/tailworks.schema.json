@@ -89,7 +89,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "internet": { "type": "array", "items": { "type": "string" }, "description": "Internet hosts the workload's containers may reach when started with enableInternet: true (docs/containers.md). Worker code has no internet egress either way (docs/recipes.md#call-an-internet-api)." }
+            "internet": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "Internet egress for Worker code and containers (docs/tailworks-jsonc.md#tailnetegressinternet). Absent: Workers may reach any public host, containers none. true: both may reach any public host. false or []: neither. A list of hosts (\"*.suffix\", IPs, CIDRs): both only those. Private, link-local, loopback and tailnet addresses are always refused." }
           }
         },
         "spawn": {

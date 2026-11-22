@@ -421,7 +421,7 @@ type testEnv struct {
 	ts      *fakeTS
 	c       *apiClient
 	keyFile string
-	logs    *bytes.Buffer
+	logs    *lockedBuffer
 	store   *SQLStore
 	token   string
 	sock    string
@@ -460,10 +460,10 @@ func newTestEnvWith(t *testing.T, mutate func(*Config)) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logs := &bytes.Buffer{}
+	logs := &lockedBuffer{}
 	cfg := Config{Store: st, Custody: cust, Broker: &Broker{BaseURL: ts.srv.URL},
 		IDSecret: bytes.Repeat([]byte{7}, 32), ReapInterval: time.Hour, PolicyMaxAge: time.Minute,
-		Log: slog.New(slog.NewTextHandler(&lockedWriter{w: logs}, nil))}
+		Log: slog.New(slog.NewTextHandler(logs, nil))}
 	if mutate != nil {
 		mutate(&cfg)
 	}
@@ -499,15 +499,23 @@ func newTestEnvWith(t *testing.T, mutate func(*Config)) *testEnv {
 	return &testEnv{m: m, ts: ts, c: &apiClient{t: t, hc: hc, token: hostToken}, keyFile: keyFile, logs: logs, store: st, token: hostToken, sock: sock}
 }
 
-type lockedWriter struct {
+// lockedBuffer is mgmt's log in tests: the logger writes it from mgmt's
+// goroutines while the test reads it, so both go through mu (#222).
+type lockedBuffer struct {
 	mu sync.Mutex
-	w  io.Writer
+	b  bytes.Buffer
 }
 
-func (l *lockedWriter) Write(p []byte) (int, error) {
+func (l *lockedBuffer) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.w.Write(p)
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 func (e *testEnv) asHost(id string) *apiClient {
