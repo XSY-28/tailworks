@@ -70,6 +70,10 @@ type Options struct {
 	// LocalTokenHeader (hostd checks and strips it). The sandbox then needs
 	// no AF_UNIX socket() at all: its ingress listener is an inherited fd.
 	Loopback *LoopbackNet
+
+	// HeapMiB, if > 0, caps each V8 isolate's heap in this workerd
+	// (limits.go).
+	HeapMiB int
 }
 
 // LoopbackNet are hostd's per-instance loopback listeners (127.0.0.1:port).
@@ -352,7 +356,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	fmt.Fprintf(&c, "    (name = \"egress-wl\", external = (address = %s, http = (%s))),\n", cq(addrWL), sep("style = proxy"))
 	fmt.Fprintf(&c, "    (name = \"hostd\", external = (address = %s, http = (%s))),\n", cq(addrAPI), sep(""))
 	fmt.Fprintf(&c, "    (name = \"do-storage\", disk = (path = %s, writable = true)),\n  ],\n", cq(doPath))
-	fmt.Fprintf(&c, "  sockets = [ (name = \"ingress\", address = %s, service = \"platform\", http = (cfBlobHeader = \"x-tw-cf\")) ],\n);\n\n", cq(addrIngress))
+	fmt.Fprintf(&c, "  sockets = [ (name = \"ingress\", address = %s, service = \"platform\", http = (cfBlobHeader = \"x-tw-cf\")) ],\n%s);\n\n", cq(addrIngress), v8Flags(o))
 
 	uk := func(cls string) string { return cq("tw-" + o.Workload + "-" + cls) }
 

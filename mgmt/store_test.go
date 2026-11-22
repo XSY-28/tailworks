@@ -203,7 +203,7 @@ func dropGuards(t *testing.T, s *SQLStore) {
 	if s.d == dialectPostgres {
 		err = s.rawExec(ctx, "DROP TRIGGER audit_append_only ON audit")
 	} else {
-		err = errors.Join(s.rawExec(ctx, "DROP TRIGGER audit_no_update"), s.rawExec(ctx, "DROP TRIGGER audit_no_delete"))
+		err = errors.Join(s.rawExec(ctx, "DROP TRIGGER audit_no_update"), s.rawExec(ctx, "DROP TRIGGER audit_no_delete_kept"))
 	}
 	if err != nil {
 		t.Fatal(err)

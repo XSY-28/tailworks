@@ -189,6 +189,9 @@ func (inst *instance) nodeCommand(args []string) (*exec.Cmd, error) {
 	if np.port != 0 {
 		bind, connect = []uint16{uint16(np.port)}, []uint16{uint16(np.port)}
 	}
+	if np.confined() { // nodelisten.go: hostd owns the listener
+		bind = nil
+	}
 	if a, ok := np.proxy.Addr().(*net.TCPAddr); ok {
 		connect = append(connect, uint16(a.Port))
 	}
@@ -223,6 +226,7 @@ func (inst *instance) sandboxed(bin string, args, own, readOnly, readOnlyTrees [
 		noUnix := inst.ingressLn != nil || inst.node != nil && inst.node.listen != "unix"
 		prof := &procsb.Profile{Launcher: launcher, Exec: readOnly, ReadOnly: readOnlyTrees, Own: own,
 			BindTCP: bindTCP, ConnectTCP: connectTCP, NoUnixSockets: noUnix, Deny: inst.h.sandboxDeny()}
+		prof.NoListen = inst.node != nil && inst.node.confined() // nodelisten.go
 		p := filepath.Join(inst.dir, "sandbox.json")
 		if err := prof.Write(p); err != nil {
 			return nil, err

@@ -49,7 +49,11 @@ interface WireCaller {
  * getCaller returns the verified tailnet caller of a request delivered by
  * netd (request.cf.tailscale). Throws TailnetError("no_identity") otherwise.
  * request.cf survives entry Worker → DO stub → facet, so pass the original
- * request along (or its cf) when you forward it in-process.
+ * request along (or a Request with its cf) when you forward it in-process.
+ * On tailworks the caller is sealed by hostd and checked before your code
+ * sees a request: a caller attached in-process without that seal is
+ * dropped (RT3-08). A cf passed as plain data (not on a Request) is not
+ * checked; don't authorize on it.
  */
 export function getCaller(req: Request | { cf?: any } | null | undefined): Caller {
   const cf = (req as any)?.cf;

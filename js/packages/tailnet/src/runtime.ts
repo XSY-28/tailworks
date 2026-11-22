@@ -13,6 +13,7 @@ import { workflowClient } from "./workflows.js";
 
 export { wrapWorkflowClass, isApprovalType } from "./workflows.js";
 import { wrapStores } from "./d1.js";
+import { sealedRequest } from "./seal.js";
 import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
 
 // Egress fetch() carries the running handler's trace context
@@ -399,6 +400,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
     W.prototype.fetch = async function (this: any, req: Request) {
       const k = this.ctx.storage.kv.get("__tw_killed");
       if (k) return killedResponse(k);
+      req = await sealedRequest(twOf.get(this), req); // seal.ts (#148)
       if (this.__tw_ensure) await this.__tw_ensure;
       if (this.__tw_denied) return (this.__tw_denied as TailnetError).toResponse();
       return runTraced(req, () => proto.fetch.call(this, req), spanFlusher(twOf.get(this), this.ctx));
@@ -709,6 +711,7 @@ export function wrapHandler(H: any, bindings: BindingMap) {
       const f = H.prototype.fetch;
       (C.prototype as any).fetch = async function (this: any, req: Request) {
         const tw: TailnetApiStub | undefined = this.__tw;
+        req = await sealedRequest(tw, req); // seal.ts (#148)
         if (isPublicReq(req)) {
           this.env = guardEnv(this.env, bindings, "public", admitter(tw, {}));
           if (tw) define(this.ctx, publicTailnet(createTailnetContext(tw, this.env, bindings)));
@@ -747,7 +750,7 @@ export function wrapHandler(H: any, bindings: BindingMap) {
   const out: Record<string, unknown> = { ...H };
   for (const k of handlerKeys(H)) {
     if (typeof H[k] !== "function") continue;
-    out[k] = function (this: unknown, a: unknown, env: any, ctx: any) {
+    const inner = function (this: unknown, a: unknown, env: any, ctx: any) {
       const tw: TailnetApiStub | undefined = env?.__TW;
       const pub = k === "fetch" && isPublicReq(a);
       if (pub) {
@@ -784,6 +787,9 @@ export function wrapHandler(H: any, bindings: BindingMap) {
         if (resp) return resp;
         throw e;
       });
+    };
+    out[k] = k !== "fetch" ? inner : function (this: unknown, a: unknown, env: any, ctx: any) {
+      return sealedRequest(env?.__TW, a).then((r) => inner.call(this, r, env, ctx)); // seal.ts (#148)
     };
   }
   return out;

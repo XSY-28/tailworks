@@ -51,6 +51,10 @@ type TelemetryOptions struct {
 	ExportEvery, MetricsEvery, RefreshEvery time.Duration
 	// QueueMax bounds each workload's export queue per signal (4096).
 	QueueMax int
+
+	// RecordMaxAge also drops request records older than this
+	// (telemetry_retention.go; 0 = only the size rotation, the default).
+	RecordMaxAge time.Duration
 }
 
 func (o TelemetryOptions) withDefaults() TelemetryOptions {
@@ -155,6 +159,7 @@ func newTelemetry(h *Host) *telemetry {
 func (t *telemetry) start() {
 	t.wg.Add(1)
 	go t.loop()
+	t.startRecordPruner() // telemetry_retention.go
 }
 
 func (t *telemetry) close() {
