@@ -5,8 +5,12 @@
 #          fragments, against the merge base), check-secrets.
 #   test   `make test`: Go unit + integration tests with -race (testcontrol,
 #          local DERP/STUN, stock workerd) and the JS package tests.
-#   ci-ok  needs both. Branch protection requires this one check, so
-#          adding or renaming a job here never needs a settings change.
+#   suite  the fast, deterministic suites, one matrix job each so they run
+#          in parallel with test (issue #163): test-vitest, e2e-local and
+#          templates-typecheck (which uses the npm registry).
+#   ci-ok  needs all of them. Branch protection requires this one check,
+#          so adding or renaming a job here never needs a settings change
+#          (add it to ci-ok's needs, though).
 #
 # merge_group runs the same gates on master + the queued PRs combined, which
 # is what catches two PRs that pass alone and break master together. The
@@ -66,9 +70,37 @@ jobs:
       - name: make test
         run: make test
 
+  suite:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - e2e-local
+          - templates-typecheck
+          - test-vitest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: make deps
+        run: make deps
+      - name: make ${{ matrix.target }}
+        run: make ${{ matrix.target }}
+
   ci-ok:
     if: always()
-    needs: [lint, test]
+    needs:
+      - lint
+      - suite
+      - test
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
