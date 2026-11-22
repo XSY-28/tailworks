@@ -32,6 +32,12 @@ flags:
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain) (default "tailscale")
   -control-url string
     	coordination server for the tailnet's nodes (default "https://controlplane.tailscale.com")
+  -custody string
+    	where mgmt keeps secrets: file (default: AES-GCM in <state>/mgmt/custody) or setec (with --setec-url; what several mgmt replicas on one store need)
+  -db string
+    	mgmt's store: a postgres://… DSN (saved in tw.json; prefer --db-file for a DSN with a password). Default: SQLite in <state>/mgmt/mgmt.db. Move an existing install first: tw-mgmt migrate --from sqlite --to-file <file>
+  -db-file string
+    	read mgmt's store DSN from this 0600 file at every start (keeps a Postgres password out of tw.json and argv)
   -device-delete-delay duration
     	delete a killed object's device this long after the kill (< --kill-tombstone) (default 8s)
   -ephemeral
@@ -70,6 +76,8 @@ flags:
     	run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it
   -service
     	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist)
+  -setec-url string
+    	--custody setec: the setec server URL
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tailnet string
@@ -2093,6 +2101,42 @@ flags:
     	machine-readable output
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+### tw backup
+
+back up mgmt's store, custody and tw.json, online
+
+```text
+tw backup: back up this install's control plane while it runs: mgmt's store (a consistent SQLite copy), custody, the ID secret, mgmt's node state and tw.json, into a new directory (tw restore puts it back)
+
+usage: tw backup [--out <dir>]
+
+flags:
+  -json
+    	machine-readable output
+  -out string
+    	write the backup to this new directory (default <state>/backups/<time>-backup-<version>)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+### tw restore
+
+put a tw backup back (tailworks stopped)
+
+```text
+tw restore: restore a tw backup (or a tw upgrade backup) with tailworks stopped: the current state is kept in <state>/backups first, then the restore fence moves every lease epoch past any handed out since the backup
+
+usage: tw restore <backup-dir> [--yes]
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ### tw upgrade

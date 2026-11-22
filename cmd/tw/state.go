@@ -64,6 +64,13 @@ type Config struct {
 	// on its own tag:tw-host node). Empty means separate: state written
 	// before Mode existed keeps its shape.
 	Mode string `json:"mode,omitempty"`
+	// The store and custody mgmt runs with (tw up --db / --db-file,
+	// --custody setec --setec-url; up_store.go). Empty: SQLite in
+	// <state>/mgmt/mgmt.db and file custody in <state>/mgmt/custody.
+	DB       string `json:"db,omitempty"`
+	DBFile   string `json:"dbFile,omitempty"`
+	Custody  string `json:"custody,omitempty"`
+	SetecURL string `json:"setecURL,omitempty"`
 	// PushPort is the port on hostd's node where mgmt pushes kills.
 	PushPort       int    `json:"pushPort,omitempty"`
 	HostID         string `json:"hostID"`

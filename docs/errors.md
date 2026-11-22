@@ -29,7 +29,7 @@ printed anywhere.
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
 
 ### already_running
-409 · cli. **When:** `tw up` finds a supervisor already running from this state dir. **Fix:** `tw status`; `tw down` first if you meant to restart.
+409 · cli. **When:** `tw up` finds a supervisor already running from this state dir, or `tw restore` was run while tailworks runs. **Fix:** `tw status`; `tw down` first if you meant to restart or restore.
 
 ### already_stopped
 409 · cli. **When:** `tw undeploy <workload>` of a workload whose latest deployment is already undeployed. **Fix:** `tw ls --all` to see what is live.
@@ -48,6 +48,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### audit_unverified
 500 · cli. **When:** `tw audit` found an audit chain whose hashes or host signatures do not verify (tampering, or a store problem). **Fix:** treat the trail as suspect; `tw logs --component mgmt` and report it.
+
+### backup_failed
+500 · cli. **When:** `tw backup` could not copy the store, custody or `tw.json` (a full disk, an unreadable file); nothing is left in `--out`. **Fix:** free space or fix the permission it names, then `tw backup` again.
 
 ### bad_bundle
 400 · mgmt. **When:** a deploy bundle has no `tailworks.jsonc`, or neither `tailnet.tags` nor `tailnet.objects`. **Fix:** add `"tailnet": { "tags": ["tag:tw-wl-<name>"] }` to `tailworks.jsonc` (`tw init` templates show the shape).
@@ -350,7 +353,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release (a download or `--from`) that has no `SHA256SUMS.sig` or no `SHA256SUMS` inside it. Nothing in the release ran. **Fix:** upgrade to a published release (`tw upgrade [<version>]`). For a build you made yourself (`make release`), add `--allow-unsigned` (or set `TW_ALLOW_UNSIGNED=1`).
 
 ### remote_unsupported
-400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs`, `tw tenant add`) was run on a linked developer machine. **Fix:** run it on the host.
+400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs`, `tw tenant add`, `tw backup`, `tw restore`) was run on a linked developer machine. **Fix:** run it on the host.
 
 ### queue_limit
 400 · mgmt, hostd. **When:** a queue send is too big: a message over 128 KB, a `sendBatch` over 100 messages or 256 KB, a `delaySeconds` over 43200, or a queue over 1 GiB of kept messages. In a Worker, `send()` throws `Error: [queue_limit] … (400)`. **Fix:** send smaller messages (store large payloads elsewhere and send a reference), or let consumers drain the queue.
@@ -360,6 +363,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### reserved_tag
 400 · mgmt. **When:** a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`). **Fix:** use your app's tags (`tag:tw-wl-<name>`, class tags) in `tailworks.jsonc`.
+
+### restore_failed
+500 · cli. **When:** `tw restore` could not save the current state first, copy the backup in, or run the restore fence. **Fix:** the message names the step. If the copy failed, `tw restore <the before-restore backup it printed> --yes` puts the old state back; then fix the cause and restore again.
 
 ### sandbox_unavailable
 409 · hostd, cli. **When:** a second tenant's process-tier workload on a host that must not be shared: no process sandbox (Linux without Landlock, or `-sandbox none`), or the tailworks user can reach a container engine socket, is in the docker/podman/lxd/incus group, or can reach the system tailscaled while a workload could use it. **Fix:** run tailworks as a dedicated user without those sockets and groups, enable Landlock, use TCP listen mode for Node apps, deploy with `"tier": "microvm"`; or (tenants NOT isolated) `tw up --insecure-shared-host`.
