@@ -55,6 +55,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### bad_cursor
 400 · mgmt. **When:** a `cursor` query parameter does not decode. **Fix:** pass `nextCursor` from the previous page unchanged, with the same filters.
 
+### bad_object_name
+400 · hostd, mgmt. **When:** code created (`get`, `idFromName`, `spawn`, a public create) an object whose name contains a control character: a C0 control (NUL, TAB, CR, LF, ESC, …), DEL, a C1 control or a bidi control (U+202A–U+202E, U+2066–U+2069, LRM/RLM). Objects created with such a name before this check are not renamed or deleted. **Fix:** name objects with printable text; if the name comes from user input, strip or encode those characters first (for example `encodeURIComponent`).
+
 ### bad_request
 400 · netd, mgmt, hostd, cli. **When:** a malformed body, parameter, filter or command line (the CLI uses it for every usage error: missing argument, unknown template, unreadable key file, bad `tailworks.jsonc`). **Fix:** the detail says what was wrong; `tw <command> --help` lists the flags.
 

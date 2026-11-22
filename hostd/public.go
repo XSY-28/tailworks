@@ -303,6 +303,9 @@ func (h *Host) admitPublic(w *workload, app *bundle.App, class, name string) (ex
 	if h.pubCreates.has(w.tenantID, w.name, class, name) {
 		return true, nil
 	}
+	if e := badObjectName(class, name); e != nil { // objname.go
+		return false, e
+	}
 	if c.Public == nil || !c.Public.Create {
 		return false, &apiError{Code: "public_create_denied", Detail: "a public request may not create " + class + "/" + name +
 			": it does not exist, and class " + class + " does not set \"public\": {\"create\": true, \"maxObjects\": N}"}
@@ -348,6 +351,9 @@ func (h *Host) admitCreate(w *workload, app *bundle.App, class, name string) (ex
 	}
 	if h.killedLocked(objKey(w.tenantID, w.name, class, name)) { // admitkill.go
 		return false, killedName(class, name)
+	}
+	if e := badObjectName(class, name); e != nil { // objname.go
+		return false, e
 	}
 	h.admitLocalLocked(w, class, name)
 	return false, nil

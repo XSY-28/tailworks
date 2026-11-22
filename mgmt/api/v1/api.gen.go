@@ -452,6 +452,7 @@ const (
 	ErrorCodeBadBundle               ErrorCode = "bad_bundle"
 	ErrorCodeBadCursor               ErrorCode = "bad_cursor"
 	ErrorCodeBadHostSig              ErrorCode = "bad_host_sig"
+	ErrorCodeBadObjectName           ErrorCode = "bad_object_name"
 	ErrorCodeBadRequest              ErrorCode = "bad_request"
 	ErrorCodeBootstrapFailed         ErrorCode = "bootstrap_failed"
 	ErrorCodeCapMissing              ErrorCode = "cap_missing"
@@ -549,6 +550,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeBadCursor:
 		return true
 	case ErrorCodeBadHostSig:
+		return true
+	case ErrorCodeBadObjectName:
 		return true
 	case ErrorCodeBadRequest:
 		return true
@@ -2281,6 +2284,7 @@ type Error struct {
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `bad_object_name` | 400 | a new object name (`objectName`) contains a C0 control, DEL, a C1 control or a bidi control |
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
@@ -2378,6 +2382,7 @@ type Error struct {
 // | `bad_request` | 400 | malformed body, parameter or filter |
 // | `bad_cursor` | 400 | `cursor` does not decode |
 // | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+// | `bad_object_name` | 400 | a new object name (`objectName`) contains a C0 control, DEL, a C1 control or a bidi control |
 // | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 // | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 // | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
@@ -2594,6 +2599,7 @@ type HostDrainResult struct {
 		// | `bad_request` | 400 | malformed body, parameter or filter |
 		// | `bad_cursor` | 400 | `cursor` does not decode |
 		// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+		// | `bad_object_name` | 400 | a new object name (`objectName`) contains a C0 control, DEL, a C1 control or a bidi control |
 		// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 		// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 		// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |
@@ -4321,6 +4327,7 @@ type TombstoneError struct {
 	// | `bad_request` | 400 | malformed body, parameter or filter |
 	// | `bad_cursor` | 400 | `cursor` does not decode |
 	// | `bad_bundle` | 400 | bundle has no `tailworks.jsonc`, neither `tailnet.tags` nor `tailnet.objects`, or invalid `triggers.crons` |
+	// | `bad_object_name` | 400 | a new object name (`objectName`) contains a C0 control, DEL, a C1 control or a bidi control |
 	// | `reserved_tag` | 400 | a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`) |
 	// | `immutable_field` | 400 | PATCH touches a field the caller may not change |
 	// | `mint_mode_removed` | 400 | a create or PATCH names the removed `apikey` or `wif` mint mode, or a tenant stored in one tries to mint (switch it to `oauth`) |

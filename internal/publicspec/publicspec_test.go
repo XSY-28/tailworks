@@ -59,7 +59,8 @@ func TestCanonicalPath(t *testing.T) {
 			t.Errorf("%q: %v", s, err)
 		}
 	}
-	bad := []string{"/a/../b", "/a//b", "/a/./b", "/a%2F..%2Fb", "/a%5cb", "/_tw/o/Room/x", "/_tw", "/x/%2e%2e/y"}
+	bad := []string{"/a/../b", "/a//b", "/a/./b", "/a%2F..%2Fb", "/a%5cb", "/_tw/o/Room/x", "/_tw", "/x/%2e%2e/y",
+		"/x%00", "/x%1b[31m", "/x%0d%0ay", "/x%09", "/x%7F", "/x%1F"}
 	for _, s := range bad {
 		u, err := url.Parse(s)
 		if err != nil {
