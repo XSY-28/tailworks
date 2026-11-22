@@ -89,8 +89,8 @@ func TestRejoinFromNetmapCacheRejectedRemints(t *testing.T) {
 			var reg2 *netd.Registry
 			rejected := make(chan string, 4)
 			cfg.OnRejected = func(id string) {
-				rejected <- id
 				reg2.Create(id, opts) // the owner restarts the node (hostd: startNodeLocked)
+				rejected <- id
 			}
 			reg2, err = netd.New(cfg)
 			if err != nil {
@@ -184,7 +184,10 @@ func TestReadyNodeRejectedLater(t *testing.T) {
 			}
 			return nettest.DummyKey, nil
 		}),
-		OnRejected: func(id string) { rejected <- id; reg.Create(id, netd.ObjectOptions{}) }})
+		// Re-create before signalling: the test reads reg.Get as soon as
+		// it hears of the rejection, and must see the new object, not the
+		// failed one (sending first raced; CI saw bootstrap_failed).
+		OnRejected: func(id string) { reg.Create(id, netd.ObjectOptions{}); rejected <- id }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +209,9 @@ func TestReadyNodeRejectedLater(t *testing.T) {
 		t.Errorf("the rejected node: %+v", in)
 	}
 	o2 := reg.Get("l")
+	if o2 == o {
+		t.Fatal("OnRejected signalled before the object was re-created")
+	}
 	if err := o2.Ready(ctx); err != nil {
 		t.Fatal(err)
 	}
