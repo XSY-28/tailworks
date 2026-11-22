@@ -112,7 +112,11 @@ hostd. The v0.3.0 rows show the same numbers. A re-run of the Ubuntu 24.04
 arm64 row on `0.3.0-cf0e5c16` (master with #231 and #232) passed:
 `tw down` took 3.6 s, the restart command returned in 1.1 s, and reboot →
 healthy was still 37.6 s. Of the 42 warm keys mgmt minted during that run,
-none was still valid after `tw down`; the harness now checks this. One Fedora run (master build)
+none was still valid after `tw down`; the harness now checks this. After
+#250, the same row on `0.3.0-0401f5c4` (2026-11-22) passed with
+`tw down --purge --service` at **0.60 s**, back to the 2026-11-08 figure.
+`tw up --service` took 5.8 s, the restart command 5.3 s, and reboot →
+healthy 37.4 s, all still open in #245. One Fedora run (master build)
 finished the restart command in 0.2 s and `tw down` in 1.7 s; its v0.3.0
 run took 5.2 s and 6.7 s like the others.
 
