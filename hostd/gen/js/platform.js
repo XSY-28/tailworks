@@ -126,7 +126,7 @@ async function admin(req, env, ctx, t) {
       return json(200, { ok: true, deploymentID: CFG.deploymentID, workload: CFG.workload });
     case "kill": {
       try {
-        await objectStub(env, ctx, t.class, t.name).__tw_kill(t.reason || "killed");
+        await objectStub(env, ctx, t.class, t.name).__tw_kill(t.reason || "killed", await hostCap(env));
       } catch (e) {
         return json(500, errBody("bad_request", "kill: " + String(e)));
       }
@@ -181,7 +181,7 @@ export default {
         if (!t.name || typeof t.key !== "string" || typeof t.url !== "string") return errResponse("bad_request", "bad intercept route");
         const hasBody = req.method !== "GET" && req.method !== "HEAD";
         const r = new Request(t.url, { method: req.method, headers: req.headers, body: hasBody ? req.body : undefined, redirect: "manual" });
-        return objectStub(env, ctx, t.class, t.name).__tw_intercept(t.key, r);
+        return objectStub(env, ctx, t.class, t.name).__tw_intercept(t.key, r, await hostCap(env));
       }
       case "workload": {
         // /_tw/o/<Class>/<name>/... on the workload node reaches an object
@@ -215,6 +215,84 @@ export default {
 // class runs as a facet in a Dynamic Worker whose ONLY network path
 // (globalOutbound) is Egress specialised with this object's class+name.
 // Any RPC method is forwarded to the facet via a Proxy.
+//
+// Tenant code can hold a Host stub: the tenant service's raw binding
+// (import { env } from "cloudflare:workers") is the Host namespace itself,
+// and workerd exposes a DO's prototype methods over RPC. So the Host's
+// helpers are module functions (hostAdmitted, hostEnsure, hostFacet), and
+// the entry points only the platform calls (__tw_kill, __tw_intercept,
+// __tw_alarm_op) refuse a call without hostCap.
+
+// hostAdmitted: hostd must know this object (it exists, or a tailnet
+// request / an attested object / public.create admitted its creation)
+// before any tenant code runs. A refused create is final; other hostd
+// errors (unavailable) are not fatal here, as before.
+async function hostAdmitted(h, cls) {
+  try {
+    await hostEnsure(h, cls);
+  } catch (e) {
+    const c = e.body?.code;
+    if (c === "create_not_admitted" || c === "public_create_denied" || c === "killed") return { code: c, message: e.body?.message ?? String(e) };
+  }
+  return null;
+}
+function hostEnsure(h, cls) {
+  if (!h.__ensured) {
+    h.__ensured = hostd(h.env, "ensure", { as: { class: cls, name: h.ctx.id.name }, wake: true, actingFor: h.__actingFor || undefined }).catch((e) => {
+      h.__ensured = null;
+      throw e;
+    });
+  }
+  return h.__ensured;
+}
+// hostFacet: the tenant class as a facet (callers await hostAdmitted first).
+function hostFacet(h, cls) {
+  // Every path to tenant code ends here: a killed object runs none (#211).
+  if (h.__killed) throw new Error("[killed] object " + cls + "/" + h.ctx.id.name + " was killed: " + h.__killed);
+  if (!h.__f) {
+    const name = h.ctx.id.name;
+    if (!name) throw new Error("[bad_request] tw objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
+    const exp = h.ctx.exports;
+    const w = h.env.LOADER.get(CFG.deploymentID + ":" + cls + ":" + name, () => {
+      const env = { ...CFG.vars };
+      for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
+      for (const w of CFG.workflows ?? []) env[w.binding] = exp.WorkflowGate({ props: { workflow: w.name } });
+      env.__TW = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
+      for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
+      for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
+      const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
+      if (Object.keys(wrap).length) env.__TW_WRAP = wrap; // tw-rt.js puts the API around these stubs (D1)
+      return {
+        compatibilityDate: CFG.compatDate,
+        compatibilityFlags: CFG.compatFlags,
+        mainModule: "__tw_facet.js",
+        modules: FACET_MODULES,
+        globalOutbound: exp.Egress({ props: { class: cls, name } }),
+        // The facet's console.*, exceptions and outcomes, attested as
+        // this object (ADR-045).
+        tails: [exp.Tail({ props: { kind: "object", class: cls, name } })],
+        env,
+      };
+    });
+    h.__f = h.ctx.facets.get("app", () => ({ class: w.getDurableObjectClass(cls) }));
+  }
+  return h.__f;
+}
+
+// hostCap is the capability the platform passes to a Host's internal entry
+// points: derived from MAC_KEY, which only the platform worker holds.
+let hostCapP = null;
+function hostCap(env) {
+  hostCapP ??= (async () => hex(new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(env.MAC_KEY), enc.encode("tw-host-internal-v1")))))().catch((e) => {
+    hostCapP = null;
+    throw e;
+  });
+  return hostCapP;
+}
+async function checkHostCap(env, cap) {
+  if (typeof cap !== "string" || cap !== (await hostCap(env))) throw new Error("[forbidden] platform-internal method");
+}
+
 function makeHost(cls) {
   const H = class extends DurableObject {
     constructor(ctx, env) {
@@ -231,69 +309,14 @@ function makeHost(cls) {
           return async (...args) => {
             if (self.__killed) throw new Error("[killed] object " + cls + "/" + self.ctx.id.name + " was killed: " + self.__killed);
             // No tenant code runs for an object nobody admitted (RT3-06).
-            const d = await self.__admitted();
+            const d = await hostAdmitted(self, cls);
             if (d) throw new Error("[" + d.code + "] " + d.message);
             // A Request argument carries only a sealed caller, as a fetch does.
             const a = await Promise.all(args.map((x) => sealedRequest(self.env, x)));
-            return self.__facet()[p](...a);
+            return hostFacet(self, cls)[p](...a);
           };
         },
       });
-    }
-    // __admitted: hostd must know this object (it exists, or a tailnet
-    // request / an attested object / public.create admitted its creation)
-    // before any tenant code runs. A refused create is final; other hostd
-    // errors (unavailable) are not fatal here, as before.
-    async __admitted() {
-      try {
-        await this.__ensure();
-      } catch (e) {
-        const c = e.body?.code;
-        if (c === "create_not_admitted" || c === "public_create_denied" || c === "killed") return { code: c, message: e.body?.message ?? String(e) };
-      }
-      return null;
-    }
-    __ensure() {
-      if (!this.__ensured) {
-        this.__ensured = hostd(this.env, "ensure", { as: { class: cls, name: this.ctx.id.name }, wake: true, actingFor: this.__actingFor || undefined }).catch((e) => {
-          this.__ensured = null;
-          throw e;
-        });
-      }
-      return this.__ensured;
-    }
-    // __facet: the tenant class as a facet (callers await __admitted first).
-    __facet() {
-      // Every path to tenant code ends here: a killed object runs none (#211).
-      if (this.__killed) throw new Error("[killed] object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
-      if (!this.__f) {
-        const name = this.ctx.id.name;
-        if (!name) throw new Error("[bad_request] tw objects must be addressed by name (getByName/idFromName); newUniqueId() is not supported yet");
-        const exp = this.ctx.exports;
-        const w = this.env.LOADER.get(CFG.deploymentID + ":" + cls + ":" + name, () => {
-          const env = { ...CFG.vars };
-          for (const b of CFG.bindings) env[b.name] = exp.NsProxy({ props: { class: b.class } });
-          for (const w of CFG.workflows ?? []) env[w.binding] = exp.WorkflowGate({ props: { workflow: w.name } });
-          env.__TW = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
-          for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
-          for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
-          const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
-          if (Object.keys(wrap).length) env.__TW_WRAP = wrap; // tw-rt.js puts the API around these stubs (D1)
-          return {
-            compatibilityDate: CFG.compatDate,
-            compatibilityFlags: CFG.compatFlags,
-            mainModule: "__tw_facet.js",
-            modules: FACET_MODULES,
-            globalOutbound: exp.Egress({ props: { class: cls, name } }),
-            // The facet's console.*, exceptions and outcomes, attested as
-            // this object (ADR-045).
-            tails: [exp.Tail({ props: { kind: "object", class: cls, name } })],
-            env,
-          };
-        });
-        this.__f = this.ctx.facets.get("app", () => ({ class: w.getDurableObjectClass(cls) }));
-      }
-      return this.__f;
     }
     async fetch(req) {
       if (this.__killed) return errResponse("killed", "object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
@@ -319,14 +342,15 @@ function makeHost(cls) {
       // Whether the request is public or not is not read from req.cf here:
       // hostd decides from what it admitted (a public request's guarded env
       // admits only under public.create; a raw binding admits nothing).
-      const d = await this.__admitted();
+      const d = await hostAdmitted(this, cls);
       if (d) return errResponse(d.code, d.message);
-      return this.__facet().fetch(req);
+      return hostFacet(this, cls).fetch(req);
     }
     // Facet alarm delegation (facets cannot set alarms in workerd): the
     // facet's ctx.storage.{set,get,delete}Alarm land here via TailnetApi
     // "alarm", and alarm() runs the facet's alarm handler.
-    async __tw_alarm_op(action, time) {
+    async __tw_alarm_op(action, time, cap) {
+      await checkHostCap(this.env, cap);
       if (this.__killed) throw new Error("[killed] object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
       if (action === "set") {
         await this.ctx.storage.setAlarm(time);
@@ -339,16 +363,18 @@ function makeHost(cls) {
       return await this.ctx.storage.getAlarm();
     }
     // A request the object's container sent to an intercepted destination.
-    async __tw_intercept(key, req) {
+    async __tw_intercept(key, req, cap) {
+      await checkHostCap(this.env, cap);
       if (this.__killed) return errResponse("killed", "object " + cls + "/" + this.ctx.id.name + " was killed: " + this.__killed);
-      return this.__facet(true).__tw_intercept(key, req);
+      return hostFacet(this, cls).__tw_intercept(key, req);
     }
     async alarm(info) {
       if (this.__killed) return;
       // AlarmInvocationInfo is not serializable; pass its fields.
-      await this.__facet().__tw_alarm({ retryCount: info?.retryCount ?? 0, isRetry: !!info?.isRetry });
+      await hostFacet(this, cls).__tw_alarm({ retryCount: info?.retryCount ?? 0, isRetry: !!info?.isRetry });
     }
-    async __tw_kill(reason) {
+    async __tw_kill(reason, cap) {
+      await checkHostCap(this.env, cap);
       this.__killed = reason || "killed";
       this.ctx.storage.kv.put("__tw_killed", this.__killed);
       try {
@@ -587,7 +613,7 @@ export class TailnetApi extends WorkerEntrypoint {
       if (!["set", "get", "delete"].includes(act)) return { ok: false, error: errBody("bad_request", "bad alarm action") };
       if (act === "set" && !Number.isFinite(args.time)) return { ok: false, error: errBody("bad_request", "bad alarm time") };
       try {
-        return { ok: true, value: await this.ctx.exports["Host_" + p.class].getByName(p.name).__tw_alarm_op(act, args.time) };
+        return { ok: true, value: await this.ctx.exports["Host_" + p.class].getByName(p.name).__tw_alarm_op(act, args.time, await hostCap(this.env)) };
       } catch (e) {
         const m = String(e?.message ?? e);
         return { ok: false, error: errBody(m.includes("[killed]") ? "killed" : "bad_request", m) };

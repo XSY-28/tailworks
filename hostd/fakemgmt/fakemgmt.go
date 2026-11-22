@@ -120,6 +120,8 @@ type Server struct {
 
 	// readyCalls: object ID -> ready PATCHes (readycalls.go).
 	readyCalls map[string]int
+	// leaseLostReady: the next N ready PATCHes fail with lease_lost (readycalls.go).
+	leaseLostReady int
 
 	// Queues (queues.go): tenant|queue -> queue.
 	queues map[string]*fakeQueue
@@ -1261,6 +1263,10 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 	}
 	if o.Status == "killed" {
 		s.writeGone(w, o)
+		return
+	}
+	if s.refuseReadyLocked() { // readycalls.go
+		writeErr(w, 409, mgmtapi.CodeLeaseLost, "the caller does not hold the namespace lease at this epoch (test knob)")
 		return
 	}
 	s.countReadyLocked(o.ObjectID)

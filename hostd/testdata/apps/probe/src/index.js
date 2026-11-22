@@ -29,6 +29,27 @@ function stream() {
 
 let boots = 0;
 
+// hostRPC: tenant code calls a facet Host's internal member (m) over RPC on
+// ns.getByName(name). ?then=1 calls hello() on the result (pipelined), as
+// tenant code would on a facet stub it got back. A refusal is a 403.
+async function hostRPC(ns, url) {
+  const q = (k) => url.searchParams.get(k);
+  try {
+    const stub = ns.getByName(q("name"));
+    const p = q("get") ? stub[q("m")] : stub[q("m")](...JSON.parse(q("args") ?? "[]"));
+    const v = q("then") ? await p.hello("bypass") : await p;
+    let out = null;
+    try {
+      out = JSON.parse(JSON.stringify(v ?? null));
+    } catch {
+      out = String(v);
+    }
+    return Response.json({ reached: true, value: out });
+  } catch (e) {
+    return Response.json({ refused: String(e?.message ?? e) }, { status: 403 });
+  }
+}
+
 export class Probe extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -100,6 +121,8 @@ export class Probe extends DurableObject {
         return Response.json(await tailnet(this.ctx).kill({ reason: "self" }));
       case "/sibling":
         return Response.json({ reply: await this.env.PROBE.getByName(q("name")).hello("sibling") });
+      case "/hostrpc":
+        return hostRPC(this.env.PROBE, url);
       case "/ticker":
         return this.env.TICKER.getByName(q("name")).fetch(new Request("http://t/" + (q("op") ?? "")));
     }
@@ -149,6 +172,8 @@ export default {
       const ns = url.searchParams.get("raw") ? rawEnv.TICKER : env.TICKER;
       return Response.json({ reply: await ns.getByName(url.searchParams.get("name")).hello("worker") });
     }
+    // The raw binding is the platform's Host_Probe namespace itself.
+    if (url.pathname === "/hostrpc") return hostRPC(rawEnv.PROBE, url);
     if (url.pathname === "/rpc") return Response.json({ reply: await env.PROBE.getByName(url.searchParams.get("name")).hello("worker") });
     return Response.json({ kind: "worker", caller: getCaller(req), sawHeaders: SEEN(req), hasTailnet: !!ctx.tailnet, env: Object.keys(env).sort() });
   },
