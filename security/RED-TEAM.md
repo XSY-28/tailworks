@@ -857,7 +857,7 @@ still `t.Skip`s.
 | RT3-05 | **Fixed** (F1/F3): audit ingest needs the host's registered key, verifies every `hostSig`, refuses objects of workloads the host never served | `mgmt/service.go` `IngestAudit` |
 | RT3-06 | **Fixed** (F4): the Host DO asks hostd before any tenant code runs, for fetch and RPC; hostd creates only admitted names | `hostd/gen/js/platform.js`, `hostd/objects.go` `ensure`; `hostd.TestPublicIngress` §3b, `gen.TestGeneratedWrapperPublic` |
 | RT3-07 | **Fixed** (F4): `__TW` stripped from every tenant env; Worker-level spawn needs the ticket; `ready` never creates | `js/packages/tailnet/src/runtime.ts`, `hostd/http.go` |
-| RT3-08 | **Partial** (F4): `principal` on spawn is `inherit`/`none` only; `actingFor`/`public` stripped from tenant op args. In-process `request.cf` forgery toward siblings (`getCaller`, Host DO `principalOf`) remains: F5 | `hostd/http.go` spawn, `platform.js` `TailnetApi` |
+| RT3-08 | **Fixed** (F4, then F5 in #148): `principal` on spawn is `inherit`/`none` only; `actingFor`/`public` stripped from tenant op args (F4). hostd seals the caller under the instance `MAC_KEY`, and the platform and runtime honour only a verified seal, so an in-process forgery toward a sibling (`getCaller`, Host DO `principalOf`) yields no caller (F5). Residual replay of the same real caller is in `security/LEDGER.md` H08 | `hostd/http.go` spawn, `hostd/sealcf.go`, `platform.js` `sealedRequest`/`TailnetApi`, `js/packages/tailnet/src/seal.ts`; `hostd.TestRT3_H08_ForgedPrincipal` |
 | RT3-12 | **Fixed** (F1): deployment status updates are scoped to the deployment's host | `mgmt/sqlstore.go` `SetDeploymentStatus` |
 | others | open; see `security/LEDGER.md` | — |
 
