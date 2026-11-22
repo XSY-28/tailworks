@@ -52,6 +52,22 @@ every time under `-race` before the fix and is clean after.
 `TestTelemetry -race -count=50` without the fix did not reproduce it
 (0 races in 50 runs), which is why the deterministic test exists.
 
-## Tests run
+## Also changed
 
-See the PR body for the final list and results.
+`e2e/twupgrade` `checkData` waits (up to 30 s) while the app is still
+"starting". One run after the fix failed because the check came 30 ms
+before the rolled-back release's redeploy finished: a rollback returns
+when `tw up` is back, not when the app is active again.
+
+## Tests run (after merging origin/master with #253)
+
+- `make lint`: PASS.
+- `make test` (mbp runner): PASS.
+- `make e2e-tw-upgrade` with `OmitAuth` set: before the fix 1 of 1 FAIL
+  (`lease_lost`, as in #253). After the fix, before the checkData wait:
+  2 PASS, 1 FAIL (the "starting" check above; its log shows the renewal
+  working). After the wait: 4 of 4 PASS.
+- `make e2e-upgrade`: PASS.
+- `go test -race -count=50 -run 'TestTelemetry$|TestEgressObjHandlerReadsStatusUnderLock' ./hostd/`: PASS, 0 races.
+- `TestRedeployAfterLeaseExpired`: fails without the fix, passes with it
+  (`-race -count=3`), alongside `TestRealMgmtStores`.
