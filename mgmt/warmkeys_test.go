@@ -294,6 +294,28 @@ func TestWarmKeyExpiry(t *testing.T) {
 			t.Fatal("expired warm keys were not revoked")
 		}
 	}
+	// revokeWarm deletes the custody copy after DeleteKey returns and the row
+	// last, so the API seeing the delete doesn't mean custody is clean yet
+	// (#248). Wait for the rows to go, then custody must be clean.
+	rowsLeft := func() []string {
+		ks, _ := ws.ListWarmKeys(context.Background(), "")
+		have := map[string]bool{}
+		for _, k := range ks {
+			have[k.KeyID] = true
+		}
+		var left []string
+		for _, k := range before {
+			if have[k.KeyID] {
+				left = append(left, k.KeyID)
+			}
+		}
+		return left
+	}
+	for dl := time.Now().Add(5 * time.Second); len(rowsLeft()) > 0; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(dl) {
+			t.Fatalf("rows of revoked keys %v kept", rowsLeft())
+		}
+	}
 	for _, k := range before {
 		if _, err := e.m.custody.Get(context.Background(), poolCustodyName(e.tenant, k.KeyID)); err == nil {
 			t.Errorf("custody copy of revoked key %s kept", k.KeyID)

@@ -335,9 +335,11 @@ container is its own microVM attached to one Durable Object; see
 | Sandbox SDK backups, bucket mounts (R2) | ❌ | ❌ | ❌ | ❌ | |
 | Images from the app's own Dockerfile via `tw deploy` (built on the developer machine, pinned by digest, pulled by the host) | ✅ | ⚠ (pinning by arch is unit-tested) | not run end to end (host pull uses the same code) | ❌ | `TestE2EContainerRegistry` |
 
-amd64 is "⚠ not verified": the code and the amd64 guest assets exist, but
-the only x86 test host (a nested KVM guest) loses interrupts in its L2 VMs, so
-no amd64 microVM has booted to ready there (STATUS.md, ADR-032 section).
+amd64 is "⚠ not verified": the code and the amd64 guest assets exist, and
+the amd64 microVM tier itself passed `make e2e-vm` and snapshot restore on a
+nested KVM test host on 2026-11-22
+([details](install-testing.md#the-microvm-tier)), but `make e2e-container`
+has not run on amd64 yet.
 
 ## Workers platform config
 

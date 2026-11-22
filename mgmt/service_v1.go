@@ -41,6 +41,11 @@ type TenantPatch struct {
 	// before the tenant's first deploy).
 	OwnerTag   *string
 	NamePrefix *string
+
+	// quota.go: storage quotas (0 = unlimited).
+	MaxStoreBytes *int64
+	MaxQueueBytes *int64
+	MaxStores     *int64
 }
 
 // UpdateTenant applies a merge patch. Changing the mode, client ID or
@@ -111,6 +116,9 @@ func (m *Mgmt) UpdateTenant(ctx context.Context, id string, p TenantPatch) (Tena
 		}
 		t.MaxContainerVCPU = *p.MaxContainerVCPU
 		changed["maxContainerVCPU"] = t.MaxContainerVCPU
+	}
+	if err := applyQuotaPatch(&t, p, changed); err != nil { // quota.go
+		return Tenant{}, err
 	}
 	if p.Pool != nil {
 		t.Pool = *p.Pool
