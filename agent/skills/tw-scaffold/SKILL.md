@@ -77,7 +77,9 @@ bindings and static assets have no binding on tailworks. Durable Object storage
 `fetch("http://<magicdns-name>/...")`; the call leaves from the workload's
 own node. The full table: `tw docs show COMPAT.md`.
 
-Outbound `fetch()` reaches tailnet peers only, not the internet.
+Outbound `fetch()` reaches tailnet peers, and public internet hosts from
+the host's network (on by default; `tailnet.egress.internet: false` turns
+it off, a list limits it).
 
 ## Next
 

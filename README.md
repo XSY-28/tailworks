@@ -34,10 +34,18 @@ To run it, install tailworks (step 1), then `npm run dev` (that is,
 `tw dev`) serves the app on `127.0.0.1:8787` with no tailnet and no
 credentials ([Try it without a tailnet](docs/INSTALL.md#try-it-without-a-tailnet)).
 
-To deploy it to your tailnet, you need:
-- a Mac (Apple silicon) or a Linux machine (arm64 or amd64);
-- a Tailscale tailnet where you're an admin (or a self-hosted Headscale
-  server: see [docs/headscale.md](docs/headscale.md)).
+### Prerequisites
+
+| To | You need |
+|---|---|
+| Run tailworks (the release) | macOS 14 or later on Apple silicon, or Linux arm64/amd64 with glibc ≥ 2.35 ([details](docs/INSTALL.md)); a Tailscale tailnet where you're an admin, or a self-hosted Headscale server ([docs/headscale.md](docs/headscale.md)). No Go and no Node.js. |
+| Scaffold an app and type-check it (`npm create tailworks`) | Node.js ≥ 20 only. |
+| Try an app locally (`tw dev`) | The release only: no tailnet, no credentials. |
+| Build tailworks from source | Go ≥ 1.27 and Node.js ≥ 20. |
+| Run a Node.js app (`"runtime": "node"`, the `node-workflow` template) | Node.js ≥ 24 on each host that runs it, and `npm install` on the deploying machine ([docs/node-tier.md](docs/node-tier.md)). |
+| Use the Linux microVM tier | `/dev/kvm`, cgroups v2, systemd and a one-time sudo setup ([details](docs/INSTALL.md#linux-the-microvm-tier-firecracker-kvm)). |
+
+Windows isn't supported, not even as a CLI client.
 
 **1. Install** (no sudo; everything goes into `~/.tailworks`). Download the latest
 [release](https://github.com/rosskukulinski/tailworks/releases), verify its
@@ -51,8 +59,8 @@ export PATH="$HOME/.tailworks/bin:$PATH"             # add this to your shell pr
 tw doctor                                     # every check prints a fix if it fails
 ```
 
-Or build the release yourself (needs Go ≥ 1.27 and Node.js ≥ 20; the
-installed tailworks needs neither):
+Or build the release yourself (Go and Node.js, as in
+[Prerequisites](#prerequisites); the installed tailworks needs neither):
 
 ```sh
 git clone https://github.com/rosskukulinski/tailworks && cd tailworks
@@ -113,14 +121,16 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-npm create tailworks@latest support -- --template agent   # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
-cd support && npm install                     # editor types for the Agents SDK and ctx.tailnet
+tw init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
+cd support
+npm install                                   # optional (needs Node.js): editor types for the Agents SDK and ctx.tailnet
 tw policy                                     # what this app needs in your tailnet policy, as one snippet
 tw deploy                                     # bundles, uploads, waits until the node is ready
 ```
 
-With `tw` on your PATH, `npm create tailworks` runs `tw init support
---template agent`, which you can also run yourself. It names the app's tags after it (`tag:tw-wl-support`,
+`npm create tailworks@latest support -- --template agent` does the same
+(it runs `tw init` when `tw` is on your PATH). `tw init` names the app's
+tags after it (`tag:tw-wl-support`,
 `tag:tw-support-support-agent`, …). `tw policy` checks your tailnet
 policy for everything the app needs and prints **one snippet** with what's
 missing: the `tagOwners` for its tags, a grant for each `tailnet.connects`,
@@ -197,7 +207,7 @@ prove every ✅ and ⚠️.
 
 | Area | Surface | Status | Note |
 |---|---|---|---|
-| Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers only; no internet egress for Workers ([call an internet API](docs/recipes.md#call-an-internet-api) through a gateway on your tailnet) |
+| Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers from the workload's (or object's) own node, and public internet hosts from the host's network (on by default; `tailnet.egress.internet: false` turns it off, [call an internet API](docs/recipes.md#call-an-internet-api)) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
 | Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
@@ -272,7 +282,8 @@ off; `tw version --json` reports it as `updateCheck`. Details:
 - **CLI reference:** [docs/cli.md](docs/cli.md), every command and flag
   (generated from `--help`); `tw help` groups the commands.
 - **What changed in each release:** [CHANGELOG.md](CHANGELOG.md).
-  Security reports: [SECURITY.md](SECURITY.md).
+  Security reports: [SECURITY.md](SECURITY.md). Contributing:
+  [CONTRIBUTING.md](CONTRIBUTING.md).
 - **The words tailworks uses** (tenant, workload, tier, facet mode, pool node,
   …): [docs/concepts.md](docs/concepts.md).
 - **A first deploy that doesn't answer:**
