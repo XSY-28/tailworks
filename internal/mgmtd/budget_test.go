@@ -17,8 +17,8 @@ import (
 //   - Start used to wait for the node's state Running: its first netcheck
 //     and a live DERP connection. That took ~3 s with STUN unanswered (a
 //     Linux VM, a boot before the network is up) although mgmt can serve
-//     as soon as it is logged in with a netmap. The restart below has no
-//     DERP or STUN at all; it took 3.1 s before, 0.1–0.3 s now.
+//     as soon as it is logged in with a netmap. Both starts below have no
+//     DERP or STUN at all; the restart took 3.1 s before, 0.1–0.3 s now.
 //   - Close must not wait out tsnet.Server.Close's 5 s LocalAPI grace for
 //     a request still in flight (the HTTPS certificate prefetch did, on
 //     every `tw down` right after a start: e2e/twupgrade TestUpDownBudget
@@ -32,6 +32,14 @@ func TestStartCloseBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(ctl.Close)
+	// No DERP or STUN: nothing listens on port 9 (a boot before the
+	// network is up). Set before any node talks to control, which reads
+	// the map on every map response.
+	for _, r := range ctl.Server.DERPMap.Regions {
+		for _, n := range r.Nodes {
+			n.DERPPort, n.STUNPort = 9, 9
+		}
+	}
 	dir := t.TempDir()
 	keyFile := filepath.Join(dir, "mgmt.key")
 	if err := os.WriteFile(keyFile, []byte("TS_AUTHKEY="+nettest.DummyKey+"\n"), 0o600); err != nil {
@@ -45,13 +53,8 @@ func TestStartCloseBudget(t *testing.T) {
 		before      func()
 	}{
 		{name: "first start (join)", start: 10 * time.Second, stop: 2500 * time.Millisecond},
-		{name: "restart without DERP or STUN (saved node state)", start: 2 * time.Second, stop: 2500 * time.Millisecond, before: func() {
+		{name: "restart (saved node state)", start: 2 * time.Second, stop: 2500 * time.Millisecond, before: func() {
 			opts.TSNetAuthKeyFile = ""
-			for _, r := range ctl.Server.DERPMap.Regions { // nothing listens on port 9
-				for _, n := range r.Nodes {
-					n.DERPPort, n.STUNPort = 9, 9
-				}
-			}
 		}},
 	} {
 		if p.before != nil {

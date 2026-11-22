@@ -20,6 +20,7 @@ import (
 	"tailscale.com/envknob"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/internal/tsnetlc"
 	"github.com/rosskukulinski/tailworks/internal/tssvc"
 	"tailscale.com/client/local"
 	"tailscale.com/ipn"
@@ -667,7 +668,7 @@ func (o *Object) up(ctx context.Context, key string, rejoin bool) (*local.Client
 		return nil, nil, fmt.Errorf("start %s: %w", o.hostname, err)
 	}
 	o.spans.at(func(s *JoinSpans) *float64 { return &s.Start })
-	lc, err := srv.LocalClient()
+	lc, err := tsnetlc.Client(srv) // Close drains it (#245)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -752,7 +753,7 @@ func (o *Object) dropSavedState() {
 	o.srv = nil
 	o.mu.Unlock()
 	if srv != nil {
-		srv.Close()
+		tsnetlc.Close(srv)
 	}
 	os.Remove(filepath.Join(o.dir, "tailscaled.state"))
 }
@@ -803,7 +804,7 @@ func (o *Object) teardown() {
 		tr.CloseIdleConnections()
 	}
 	if srv != nil {
-		srv.Close()
+		tsnetlc.Close(srv)
 	}
 	o.reg.forgetIPs(o)
 }
