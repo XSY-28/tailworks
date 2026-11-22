@@ -2,19 +2,21 @@
 
 // E2E-LINUX (docs/install-testing.md, "Linux requirements" item 2): the
 // e2e-mbp flow against a fresh Lima VM that mounts nothing from this Mac. From here: `limactl copy` the linux
-// release tarball and the tailnet-1 API key file into the VM
-// (~/.tailworks-e2e, 0700 dir, 0600 key), run install.sh and `tw doctor`
+// release tarball and this run's own OAuth client file into the VM
+// (~/.tailworks-e2e, 0700 dir, 0600 file; tailworks mints in OAuth mode and
+// never sees the harness's API key, which stays on this Mac to create and
+// delete that client and to clean up), run install.sh and `tw doctor`
 // there, then `tw up --service` (a systemd user unit) / `tw init` /
 // `tw deploy` in the VM over ssh. The tag:ttest test client and the
 // private echo run HERE as tsnet nodes, so checks (a)–(f) cross machines
 // over tailnet 1. Then `systemctl --user restart tw` must come back and
 // stay reachable, `tw down` + `tw down --service`, uninstall, remove
-// ~/.tailworks-e2e (the key file goes even on failure: t.Cleanup here, and the
+// ~/.tailworks-e2e (the OAuth client file goes even on failure: t.Cleanup here, and the
 // trap in scripts/e2e-linux-one.sh), and zero leftover devices and keys
 // from this run, by ID.
 //
-// Safety: tailnet 1 only (allow list); no policy writes (M4 added the
-// grants); keys are never printed; the VM's own tailscaled (if any) is
+// Safety: tailnet 1 only (allow list); no policy writes unless
+// TW_E2E_APPLY_POLICY=1 (additions only, with a saved copy); keys are never printed; the VM's own tailscaled (if any) is
 // never logged in or used.
 package linux
 
@@ -77,6 +79,13 @@ func (v *vm) must(cmd string) string {
 	return so
 }
 
+// matrixVM reports whether name is a matrix VM this suite may wipe:
+// twl-<distro> (scripts/e2e-linux-one.sh), or twdl-<distro> from before the
+// rename (TW_E2E_VM_PREFIX=twdl-).
+func matrixVM(name string) bool {
+	return strings.HasPrefix(name, "twl-") || strings.HasPrefix(name, "twdl-")
+}
+
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // timed runs argv in dir in the VM; the VM measures its own wall time
@@ -136,8 +145,8 @@ func TestE2ELinux(t *testing.T) {
 	if !allowedTailnets[tailnet] {
 		t.Fatalf("refusing to run against tailnet %q (not in the allow list)", tailnet)
 	}
-	if !strings.HasPrefix(vmName, "twl-") {
-		t.Fatalf("refusing to use VM %q (matrix VMs are twl-*)", vmName)
+	if !matrixVM(vmName) {
+		t.Fatalf("refusing to use VM %q (matrix VMs are twl-* or twdl-*)", vmName)
 	}
 	if _, err := os.Stat(tarball); err != nil {
 		t.Fatalf("tarball: %v (make release)", err)
@@ -156,12 +165,32 @@ func TestE2ELinux(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
-	// tailworks mints with an OAuth client: this run's own, created with the
-	// harness's API key and deleted when the test ends.
-	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "tw-e2e-linux-oauth")
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
+	// TW_E2E_APPLY_POLICY=1 (make e2e-linux LINUX_APPLY_POLICY=1): add the
+	// scenario's tagOwners and grants first (additions only, validated,
+	// If-Match; the previous policy is saved next to the credentials), as
+	// e2e/mac does. Otherwise the policy is only read, below.
+	var policyNote string
+	if os.Getenv("TW_E2E_APPLY_POLICY") == "1" {
+		pctx, pcancel := context.WithTimeout(context.Background(), time.Minute)
+		ar, err := policy.ApplyWith(pctx, api, cliflow.Policy(), policy.Options{AllowTags: []string{cliflow.TestTag}})
+		pcancel()
+		if err != nil {
+			t.Fatalf("policy: %v", netd.RedactError(err))
+		}
+		if ar.Changed {
+			bk := filepath.Join(filepath.Dir(keyFile), "tailnet1_acl.pre-l1-"+run+"-"+time.Now().Format("20060102")+".hujson")
+			if err := os.WriteFile(bk, ar.Before, 0o600); err != nil {
+				t.Fatalf("policy backup: %v", err)
+			}
+			policyNote = "policy changed (validated, If-Match " + ar.OldETag + "): added " + ar.Added.HuJSON() + " (previous copy: " + filepath.Base(bk) + ")"
+		}
+	}
+	// tailworks mints with an OAuth client: this run's own, created with the
+	// harness's API key and deleted when the test ends.
+	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "tw-e2e-linux-oauth")
 	testPrefix, twPrefix, _ := cliflow.RunPrefixes("l1", run) // this Mac's client + echo; every node tw creates in the VM
 	root, _ := nettest.FindRepoRoot()
 	res := cliflow.NewResults("l1-"+vmName+"-"+run, tailnet)
@@ -181,7 +210,11 @@ func TestE2ELinux(t *testing.T) {
 	if miss, err := policy.Missing(pol, cliflow.Policy()); err != nil || !miss.Empty() {
 		t.Fatalf("tailnet 1's policy lacks the scenario's grants/tagOwners (not writing it in this run): %v %s", err, miss.HuJSON())
 	}
-	res.Notes = append(res.Notes, "policy has the scenario's tagOwners and grants (read only; not written)")
+	if policyNote != "" {
+		res.Notes = append(res.Notes, policyNote)
+	} else {
+		res.Notes = append(res.Notes, "policy has the scenario's tagOwners and grants (read only; not written)")
+	}
 
 	home, _ := os.UserHomeDir()
 	v := &vm{t: t, name: vmName, cfg: filepath.Join(home, ".lima", vmName, "ssh.config")}
@@ -360,7 +393,7 @@ func TestE2ELinux(t *testing.T) {
 	if m := strings.TrimSpace(v.must("stat -c %a " + shq(rKey))); m != "600" {
 		t.Fatalf("key file mode in the VM: %s", m)
 	}
-	res.Checks["copy"] = "PASS tarball + key file (0600, in a 0700 dir) via limactl copy"
+	res.Checks["copy"] = "PASS tarball + OAuth client file (0600, in a 0700 dir) via limactl copy"
 
 	// install.sh
 	tgz := filepath.Base(tarball)
