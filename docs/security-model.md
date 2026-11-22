@@ -195,6 +195,17 @@ The red team's open items are tracked in
   and `caps()` return it. So an object that authorizes on `getCaller()`
   trusts every other piece of code in its own workload. Across workloads
   and hosts the network identity holds (ledger C04, C05; H08).
+- **Snapshot-restored microVMs share some kernel secrets.** On Linux,
+  microVMs restored from one base snapshot (rebuilt at least hourly) get
+  fresh randomness before tenant code runs. They still share the kernel
+  secrets created before the snapshot: the TCP sequence-number and port
+  keys, the hash-table seeds, and the kernel layout (on amd64 the layout
+  is the same for every guest anyway: Firecracker guests there have no
+  KASLR slide). A
+  tenant can't use these against another tenant. A guest's TCP never
+  leaves its host: it ends at that VM's own gateway, and guests have no
+  network path to each other. Linux can't re-key these secrets after boot
+  ([ADR-030](design/adr/030-microvm-snapshot-restore.md), ledger H24).
 - **On-behalf-of assertions** (`actingFor`) aren't implemented.
 - **Smart placement trusts each host's own path measurements.** A host
   reports only its own paths, only for tenants it already runs, within
