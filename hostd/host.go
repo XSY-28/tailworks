@@ -401,7 +401,8 @@ func New(cfg Config) (*Host, error) {
 		cfg.SandboxDeny = append(cfg.SandboxDeny, f.Root)
 	}
 	if cfg.CapacityNodes == 0 {
-		cfg.CapacityNodes = 1000
+		total, _ := memInfo()
+		cfg.CapacityNodes = DefaultCapacityNodes(total) // capacitynodes.go
 	}
 	if cfg.VMMemMiB == 0 {
 		cfg.VMMemMiB = 512

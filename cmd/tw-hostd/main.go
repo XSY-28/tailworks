@@ -76,7 +76,7 @@ func run() error {
 		ephemeral  = flag.Bool("ephemeral", false, "join nodes as ephemeral (dev/test)")
 		prefix     = flag.String("hostname-prefix", "", "prefix for every node hostname")
 		controlURL = flag.String("control-url", "", "override every tenant's control URL (testing)")
-		capacity   = flag.Int("capacity-nodes", 1000, "advertised node capacity")
+		capacity   = flag.Int("capacity-nodes", 0, "advertised node capacity (0: derived from RAM, see docs/limits.md)")
 		tombstone  = flag.Duration("kill-tombstone", 10*time.Second, "keep killed nodes RST-ing new connections this long")
 		logLevel   = flag.String("log-level", "info", "debug|info|warn|error")
 		tsnetLogs  = flag.Bool("tsnet-logs", false, "forward tsnet logs at debug level")

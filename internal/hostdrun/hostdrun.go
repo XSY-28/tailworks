@@ -263,9 +263,8 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	if o.Heartbeat == 0 {
 		o.Heartbeat = 3 * time.Second
 	}
-	if o.CapacityNodes == 0 {
-		o.CapacityNodes = 1000
-	}
+	// CapacityNodes 0 stays 0: hostd derives it from RAM
+	// (hostd.DefaultCapacityNodes).
 	if o.KillTombstone == 0 {
 		o.KillTombstone = 10 * time.Second
 	}
