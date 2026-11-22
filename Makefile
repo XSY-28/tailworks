@@ -43,6 +43,14 @@ js-build: $(WORKERD)
 templates-typecheck: js-build
 	sh scripts/templates-typecheck.sh
 
+## bench: per-node memory and request load of a netd registry at N = 10/100/500 (BenchmarkRegistryNodes;
+## hermetic testcontrol, full peer visibility; results in docs/limits.md "Hosts"). BENCH_NODES picks
+## sizes, e.g. BENCH_NODES='10|100'.
+BENCH_NODES ?= 10|100|500
+.PHONY: bench
+bench:
+	$(GO) test -run '^$$' -bench 'RegistryNodes/N=($(BENCH_NODES))$$' -benchtime=1x -timeout 60m ./netd/
+
 ## test: hermetic unit + integration tests (testcontrol + local DERP/STUN + stock workerd).
 .PHONY: test
 test: deps test-go test-js
@@ -168,6 +176,16 @@ e2e-coldid-real:
 		echo "e2e-coldid-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestColdIdentityReal ./e2e/coldid/
+
+## e2e-regrate-real: registration rate on tailnet 1 (production control): up to 50 fresh ephemeral
+## ttest-bench-* nodes from one registry, registrations/min (issue #114, RFC §13 Q1). TW_REGRATE_N,
+## TW_REGRATE_PAR (JoinParallel, default 16). Deletes its devices and key by ID afterwards.
+.PHONY: e2e-regrate-real
+e2e-regrate-real:
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-regrate-real: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2ereal -count=1 -v -timeout 15m -run TestRegistrationRateReal ./e2e/regrate/
 
 ## guest-image / guest-kernel / vm-assets: the microVM guest (Linux only; reproducible; inputs
 ## pinned in guest/inputs.sh) for GUEST_ARCH (Go's name, amd64 or arm64; default: this machine).
@@ -448,12 +466,19 @@ e2e-mbp: release
 ## tailworks runs in the VM; the test client + echo run here. ≤2 VMs at a time; each is
 ## stopped (kept) when its row is done. LINUX_DISTROS picks rows (see
 ## scripts/e2e-linux-one.sh; debian11-arm64 / alpine-arm64 check doctor's refusal).
+## LINUX_RELEASE=vX.Y.Z tests that GitHub release's tarballs (no `make release`).
+## The API key stays on this Mac (it creates the run's OAuth client and cleans up);
+## tailworks in the VM gets only that OAuth client. LINUX_APPLY_POLICY=1 first adds the
+## scenario's tagOwners and grants to tailnet 1's policy (as e2e-mac); else it is only read.
 LINUX_DISTROS ?= ubuntu24-amd64 ubuntu24-arm64 debian12-arm64 ubuntu22-arm64
+LINUX_RELEASE ?=
+LINUX_APPLY_POLICY ?= 0
 .PHONY: e2e-linux
-e2e-linux: release
+e2e-linux: $(if $(LINUX_RELEASE),,release)
 	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
 		echo "e2e-linux: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	if ! command -v limactl >/dev/null; then echo "e2e-linux: SKIPPED (no limactl)"; exit 0; fi; \
+	TW_E2E_RELEASE="$(LINUX_RELEASE)" TW_E2E_APPLY_POLICY="$(LINUX_APPLY_POLICY)" \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		TW_E2E_TARBALL_arm64="$(CURDIR)/dist/tailworks-$(RELEASE_VERSION)-linux-arm64.tar.gz" \
 		TW_E2E_TARBALL_amd64="$(CURDIR)/dist/tailworks-$(RELEASE_VERSION)-linux-amd64.tar.gz" \

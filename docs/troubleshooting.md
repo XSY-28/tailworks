@@ -97,10 +97,10 @@ header `tw-error: peer_not_visible`. The destination isn't in the calling
 node's netmap: no grant lets that node see it, or the name doesn't exist.
 ([`acl_denied`](errors.md#acl_denied) is the next step: the peer is
 visible, but not on that port.) A call to an internet name, such as
-`https://api.github.com/`, gets
-[`internet_egress_unavailable`](errors.md#internet_egress_unavailable)
-instead: Workers have no internet egress, so call it through a gateway on
-your tailnet ([recipes.md](recipes.md#call-an-internet-api)).
+`https://api.github.com/`, goes out from the host's network instead; it
+gets [`internet_egress_unavailable`](errors.md#internet_egress_unavailable)
+only when the workload's `tailnet.egress.internet` (or the host) turns
+internet egress off ([recipes.md](recipes.md#call-an-internet-api)).
 
 Which node calls depends on the class's mode
 ([concepts.md](concepts.md#facet-mode-and-plain-do-mode)): in facet mode,

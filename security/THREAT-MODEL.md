@@ -42,7 +42,8 @@ code wins.
 ```
  tailnet client ──(WhoIs)── netd ingress ── hostd ── platform wrapper ──┐
  internet ──(Funnel, tag:tw-public)── netd public ──┘                    ├─ tenant isolate / process / VM (HOSTILE)
- tenant code ── globalOutbound (platform Egress + MAC) ── hostd ── netd egress (ADR-019) ── tailnet
+ tenant code ── globalOutbound (platform Egress + MAC) ── hostd ── netd egress (ADR-019) ─┬─ tailnet (object's node)
+                                                                         └─ SSRF guard ── host network ── internet
                          │                                   │
                    hostapi.sock                  mgmt: unix socket (token) · /v1 · /mcp · /ui (WhoIs)
                                                      │              │
@@ -117,6 +118,21 @@ code wins.
   probes and upgrade orders to `POST /v1/push/*` on the host. On the
   tailnet the push API admits only mgmt's node (`tag:tw-mgmt`, pinned at
   start; `hostd/pushauth.go`).
+- **B11 Workload → internet (egress).** On by default
+  (ADR-049); `tailnet.egress.internet` turns it off or
+  limits it, and `tw-hostd -worker-internet=off` turns it off per host.
+  Flows leave from the host's network, never from a tailnet node, and
+  carry no tailnet identity or identity headers. Held by the SSRF guard
+  (`netd/publicip`, shared with containers' `enableInternet`): loopback,
+  private (RFC 1918, ULA), link-local and metadata, CGNAT and tailnet
+  ranges, the host's own addresses and translated forms are refused on the
+  address actually dialled, after DNS; any forbidden answer refuses the
+  name (no rebinding); special-use names are never looked up. Tailnet
+  names never reach host DNS. **Residual:** a Worker can send whatever it
+  can read on the tailnet to the internet; the host's resolver sees the
+  internet names it looks up, and tenants on one host share its cache (a
+  timing side channel); an upstream sees the host's address, so it can't
+  tell tenants on one host apart.
 
 ## 3. Attacker capabilities per tier
 
@@ -163,11 +179,15 @@ so.
    `-sandbox seatbelt-legacy`), TCP to another tenant's loopback ports; on
    macOS, reads outside the deny list (#175).
 2. **Tenant → platform** (B1): reach A7, forge A4/props, abuse spawn to
-   escalate A6 or exhaust A9, SSRF via egress. → props and the caller are
+   escalate A6 or exhaust A9, SSRF via egress (the host, its LAN or a
+   metadata service, directly or through a rebinding DNS name). → props
+   and the caller are
    unforgeable across nodes; every Worker and facet `fetch()`, redirect,
    WebSocket, `connect()`, Cache API and `node:net` attempt either goes
    through hostd's egress socket to netd's ADR-019 guard or fails (C17,
-   `gen.TestEgressSink`); `lim` is enforced at the receiver (C08, RT-01
+   `gen.TestEgressSink`); internet egress passes the SSRF guard on the
+   dialled address (B11, `netd.TestInternetEgress`,
+   `hostd.TestWorkerInternetEgress`); `lim` is enforced at the receiver (C08, RT-01
    fixed); objects are created only under create admission (F4); tenant
    audit is a `tenant_note` only (C09); the mgmt socket needs the host
    token (C10). **Open:** in-process `request.cf` forgery within one
@@ -229,10 +249,12 @@ so.
 - netd ingress strips identity headers by prefix and by name; a caller in
   `request.cf` that arrives over the network comes only from WhoIs.
   Within one workload it is not sealed (H08).
-- ADR-019 egress guard: netmap-only name/IP resolution; refuses self,
-  sibling, host, loopback, link-local, multicast and metadata addresses;
-  checked in the handler and the dialer (`netd.TestChain`), and workerd
-  has no other way out (C17).
+- ADR-019 egress guard: netmap-only resolution for tailnet names (never
+  host DNS); refuses self, sibling, host, loopback, link-local, multicast
+  and metadata addresses; checked in the handler and the dialer
+  (`netd.TestChain`), and workerd has no other way out (C17). Internet
+  egress dials only an address that passed `netd/publicip` after DNS,
+  never a name, and never from a tailnet node (`netd.TestInternetEgress`).
 - Per-object egress attribution via unforgeable `ctx.props` and the
   per-object egress MAC; tenant code can't read the MAC key in-isolate.
 - Lease epoch fencing (single conditional writes), host-scoped reads,

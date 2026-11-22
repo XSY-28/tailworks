@@ -176,7 +176,10 @@ Funnel, no HTTPS requirement.**
    - optionally **Policy File › Read**: `tw deploy` preflights your
      app's grants and `spawn()` checks sub-agent tags/caps against the
      policy (without it, deploy says `preflight skipped` and `spawn()`
-     answers `policy_unavailable`);
+     answers `policy_unavailable`). Pick **Policy File › Write** instead
+     if `tw policy --apply` should add each app's `tag:tw*` tagOwners and
+     grants for you ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init));
+     otherwise paste the snippet `tw policy` prints;
    - optionally **Services › Write**: workloads with `tailnet.service` get
      a Tailscale Service, i.e. a stable name and VIP
      ([services.md](services.md)). Without it, such a deploy fails with
@@ -609,8 +612,8 @@ sudo ~/.tailworks/bin/tw host setup --undo          # Linux, only if you ran hos
 rm -rf ~/.tailworks                                  # or: <release dir>/install.sh --uninstall --purge
 ```
 
-`tw down --purge` deletes the objects' devices (and revokes unused warm
-keys), but not tailworks' own nodes: remove `tw-mgmt` (and `tw-host-<id>`
+`tw down --purge` deletes the objects' devices (any `tw down` revokes
+unused warm keys), but not tailworks' own nodes: remove `tw-mgmt` (and `tw-host-<id>`
 if you had one) in the admin console › Machines. Then, if you're done with
 tailworks on this tailnet, revoke the OAuth client, delete `~/.config/tailworks/oauth.env`, remove the tailworks
 tags and grants from your tailnet policy, and remove the `PATH` line from
@@ -626,7 +629,7 @@ defaults are on, and each `tw up` stores them for the service:
 
 | flag | default | what it does | what it costs |
 |---|---|---|---|
-| `--warm-keys N` | 5 | keeps up to N pre-minted, single-use keys per tag set, so a new object skips the key-API call (145 ms normally, seconds when the API is slow) | unused keys sit in tailworks' custody for up to 30 min; `tw down --purge` revokes them |
+| `--warm-keys N` | 5 | keeps up to N pre-minted, single-use keys per tag set, so a new object skips the key-API call (145 ms normally, seconds when the API is slow) | unused keys sit in tailworks' custody for up to 30 min (`tw status` shows how many); `tw down` revokes them |
 | `--pool-nodes N` | 1 | keeps N pre-joined nodes per class that had a new object on this host in the last hour; the next new object of that class is renamed onto one (~0.2 s) instead of joining a new node (1.5 s typical, 4–6 s when control is slow) | each pool node is a device on your tailnet (listed under `_pool` in `tw ls`); idle ones are deleted after an hour without new objects |
 | `--port-mapping` | off | asks your router for port mappings (UPnP / NAT-PMP / PCP) for tailworks' nodes | off saves ~250 ms on every new node and keeps tailworks' nodes from each asking the router for a mapping; turn it on only if this host is behind a NAT that needs router-assisted direct connections (otherwise traffic goes direct or over DERP as usual) |
 
@@ -635,6 +638,21 @@ object's first request on its own node arrives **~0.23 s** after it is
 created (p95 ~0.3 s), down from ~7 s
 ([how it was measured](install-testing.md#fast-identity)).
 `--warm-keys 0 --pool-nodes 0` turns both pools off.
+
+## Sizing: how many objects a host holds
+
+Each object with its own node costs the host about **2.5 MB idle and 4 MB
+under request load** (measured on Linux and macOS at 100 and 500 nodes,
+when objects can't see one another), on top of its workload's own memory.
+A host advertises a node capacity to placement and takes no more objects
+than that. By default the capacity comes from RAM: a quarter of it at 8 MiB
+per node, between 50 and 1000. So an 8 GiB host takes 256 objects, a 16 GiB
+host 512, and 32 GiB or more 1000. Set `tw-hostd -capacity-nodes N` to
+override it. Lower it if your policy lets objects see one another: then
+every node holds every other in its netmap, and at 100 nodes each costs
+5–12 MB. Don't give hundreds of objects on one host that visibility. The
+measurements, and the command that reproduces them, are in
+[limits.md](limits.md#per-node-memory-measured).
 
 ## Linux
 
@@ -770,6 +788,10 @@ seconds. Measured times are in
   doctor's process checks use `/proc` and `ss`, not `lsof`.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.tailworks`.
+  Caveat: Fedora was tested once, on 2026-11-08, from a pre-release build with
+  API-key minting and before the Landlock sandbox. It is not in the default
+  `make e2e-linux` rows and has not been tested with OAuth-only minting or the
+  sandbox ([install-testing.md](install-testing.md#linux-support-matrix)).
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),

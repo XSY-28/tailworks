@@ -34,6 +34,13 @@ func (m *Mgmt) purgeTenant(ctx context.Context, id string) (map[string]int64, er
 	if !ok {
 		return nil, m.store.DeleteTenant(ctx, id)
 	}
+	undoGone := m.markWarmGone(id) // no refill from here on (one in flight revokes its own key)
+	done := false
+	defer func() {
+		if !done {
+			undoGone() // the delete failed: the tenant keeps its pool
+		}
+	}()
 	if _, err := m.drainWarm(ctx, id); err != nil { // revoke unused pool keys while the credential is here
 		m.log.Warn("tenant delete: warm keys not revoked; they expire at the API", "tenant", id, "err", err)
 	}
@@ -49,6 +56,7 @@ func (m *Mgmt) purgeTenant(ctx context.Context, id string) (map[string]int64, er
 	if err != nil {
 		return nil, err
 	}
+	done = true // the tenant is gone: its mark stays, for refills still in flight
 	// Names indexed after the read above (a racing write) go too.
 	seen := map[string]bool{}
 	for _, n := range names {

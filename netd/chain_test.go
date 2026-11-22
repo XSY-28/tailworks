@@ -47,6 +47,12 @@ func newRundir(t *testing.T) string {
 
 func startEnv(t *testing.T, objects ...string) *env {
 	t.Helper()
+	return startEnvWith(t, nil, objects...)
+}
+
+// startEnvWith is startEnv with a hook that adjusts the registry's Config.
+func startEnvWith(t *testing.T, tweak func(*netd.Config), objects ...string) *env {
+	t.Helper()
 	wdBin, err := nettest.WorkerdBinary()
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +76,7 @@ func startEnv(t *testing.T, objects ...string) *env {
 	t.Cleanup(wd.Stop)
 	t.Logf("workerd cold start %v", wd.ColdStart)
 
-	e.reg, err = netd.New(netd.Config{
+	cfg := netd.Config{
 		ControlURL: ctl.URL,
 		StateRoot:  filepath.Join(e.rundir, "state"),
 		Keys:       netd.StaticKey(nettest.DummyKey),
@@ -79,7 +85,11 @@ func startEnv(t *testing.T, objects ...string) *env {
 			e.deleted <- info
 			return nil
 		},
-	})
+	}
+	if tweak != nil {
+		tweak(&cfg)
+	}
+	e.reg, err = netd.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
