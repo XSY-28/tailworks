@@ -49,4 +49,13 @@ hosts' pings to it, so their honest reports say `unreachable`.
 
 ## Tests run
 
-See the PR's Tests section (filled in at PR time).
+- `make lint`: ok.
+- `make test` (mbp runner): every package ok except `mgmt`, which failed
+  only on `TestWarmKeyPool`, a data race in test code (`e.logs` read
+  without its lock). That race is unrelated to this change; it is filed as
+  #222 (flaky-test). Rerun: `go test -race -count=1 ./mgmt/` ok (201 s).
+- `make e2e-placement`: ok (`TestSmartPlacementHermetic`,
+  `TestR2MoveBetweenHosts`).
+- `go test ./mgmt -run TestRT3_H23` with the fix removed: both tests fail
+  (shown above).
+- `make test-pg`: not run, because the store is unchanged.
