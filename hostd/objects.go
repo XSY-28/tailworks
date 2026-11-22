@@ -187,6 +187,10 @@ func (h *Host) ensure(ctx context.Context, w *workload, class, name string, pare
 				return nil, &apiError{Code: "identity_pending", Detail: "object creation still in progress"}
 			}
 		}
+		if e := badObjectName(class, name); e != nil { // objname.go
+			h.mu.Unlock()
+			return nil, e
+		}
 		if needsAdmission(class, parent) && !pubOK && !h.takeAdmissionLocked(key) {
 			h.mu.Unlock()
 			if !h.pubCreates.has(w.tenantID, w.name, class, name) {

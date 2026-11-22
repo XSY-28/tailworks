@@ -1523,6 +1523,9 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		}
 		return CreateObjectResponse{ObjectID: o.ID, Status: o.Status, Tags: o.Tags, Hostname: o.Hostname}, nil
 	}
+	if err := checkObjectName(r.ObjectName); err != nil { // objname.go
+		return resp, err
+	}
 	if n, err := m.store.CountLive(ctx, t.ID, ""); err != nil {
 		return resp, err
 	} else if n >= t.MaxObjects {

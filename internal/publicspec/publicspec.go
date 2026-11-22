@@ -280,10 +280,25 @@ func MatchAny(pats []string, p string) (string, bool) {
 	return "", false
 }
 
+// hasControl reports a C0 control or DEL byte. p is the decoded path, so
+// this covers the raw %00..%1f and %7f forms (#185): no legitimate URL
+// path contains one, and NUL or CR/LF can be read differently by the app
+// (a filesystem, a storage key, a C library) than by the route match.
+func hasControl(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] < 0x20 || p[i] == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
 // CanonicalPath returns the request path netd matches routes against, or
 // an error for a path that could be read differently by netd and by the
-// app (dot segments, doubled slashes, encoded slashes or backslashes), or
-// that is under ReservedPrefix. A trailing slash is kept.
+// app (dot segments, doubled slashes, encoded slashes or backslashes,
+// control characters), or that is under ReservedPrefix. A trailing slash
+// is kept. The path returned is decoded exactly once; the app receives it
+// in that form (ledger H21).
 func CanonicalPath(u *url.URL) (string, error) {
 	p := u.Path
 	if p == "" {
@@ -295,6 +310,9 @@ func CanonicalPath(u *url.URL) (string, error) {
 	raw := strings.ToLower(u.RawPath)
 	if strings.Contains(raw, "%2f") || strings.Contains(raw, "%5c") || strings.Contains(p, "\\") {
 		return "", errors.New("encoded slashes and backslashes are refused")
+	}
+	if hasControl(p) {
+		return "", errors.New("control characters (%00-%1F, %7F) are refused")
 	}
 	trimmed := p
 	if len(p) > 1 {

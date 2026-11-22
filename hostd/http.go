@@ -33,6 +33,8 @@ var errStatus = map[string]int{
 	// Create admission (docs/create-admission.md): a new name nobody admitted.
 	"create_not_admitted": 403,
 	"push_unauthorized":   403,
+	// Object names (objname.go): a new name with a control character.
+	"bad_object_name": 400,
 	// Approvals (approvals.go): nothing is waiting for that decision.
 	"approval_not_pending": 409,
 }
