@@ -45,7 +45,7 @@ type App struct {
 	Modules       map[string][]byte // path -> contents (js/mjs/json/txt/wasm)
 	SpawnMaxLive  int
 	SpawnMaxDepth int
-	Internet      []string // egress.internet: the containers' allowlist (Worker code has no internet egress)
+	Internet      InternetEgress // tailnet.egress.internet: Workers' and containers' internet egress (internet.go)
 	// Tier is the requested isolation tier (tailworks.jsonc "tier"): "" (host
 	// default), "process" or "microvm".
 	Tier string
@@ -190,7 +190,7 @@ type twConfig struct {
 			MaxDepth int `json:"maxDepth"`
 		} `json:"spawn"`
 		Egress struct {
-			Internet []string `json:"internet"`
+			Internet InternetEgress `json:"internet"`
 		} `json:"egress"`
 	} `json:"tailnet"`
 }

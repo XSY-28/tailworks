@@ -89,8 +89,11 @@ func kvJournal(e *hostdtest.Env, workload, name string) mgmtapi.StoreJournalPage
 // get types, metadata, TTL validation and expiry (with the alarm that
 // journals the delete), list with prefix/limit/cursor, bulk get, limits,
 // namespace sharing between bindings, and one journal entry per write.
-func TestWorkersKV(t *testing.T) {
-	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, nil)
+func TestWorkersKV(t *testing.T) { testWorkersKV(t, hostdtest.BackendFake) }
+
+// testWorkersKV is TestWorkersKV against backend (realmgmt_test.go).
+func testWorkersKV(t *testing.T, backend string) {
+	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, onBackend(backend, nil))
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("kv"), "kv", nil)
 	wl := e.WaitActive("kv", dep, 60*time.Second)
@@ -228,9 +231,9 @@ func TestWorkersKV(t *testing.T) {
 		c.t = t
 		c.must(W, "KV", "delete", "greeting")
 		eq(t, "deleted", c.must(W, "KV", "get", "greeting"), nil)
-		n := e.FM.StoreAppends()
+		n := e.Hooks.StoreAppends()
 		c.must(W, "KV", "delete", "never-existed")
-		if e.FM.StoreAppends() != n {
+		if e.Hooks.StoreAppends() != n {
 			t.Fatal("deleting a key that does not exist wrote to the journal")
 		}
 		c.fails("Key name cannot be empty", W, "KV", "get", "")

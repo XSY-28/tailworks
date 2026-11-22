@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/hostd/bundle"
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
@@ -48,6 +49,26 @@ func (o *object) isPool() bool { return o.Class == PoolClass }
 
 // poolClassOf is the class a pool node is for ("<Class>/<suffix>").
 func (o *object) poolClassOf() string { c, _, _ := strings.Cut(o.Name, "/"); return c }
+
+// rejoinsWith reports whether a saved object of a workload rejoins from
+// saved state when app starts: the workload's entry node, an object of a
+// class that has its own node, and a pool node warmed for such a class. A
+// pool node's Class is PoolClass, never one of app's, so without the last
+// case an idle pool node stayed offline after a host restart while mgmt
+// still listed it as ready (ADR-031: a restart re-uses pool nodes).
+func rejoinsWith(o *object, app *bundle.App) bool {
+	class := o.Class
+	if o.isPool() {
+		if class = o.poolClassOf(); class == "" {
+			return false
+		}
+	}
+	if class == "" {
+		return true
+	}
+	c := app.Classes[class]
+	return c != nil && c.Node
+}
 
 // takePoolLocked reserves a ready, idle pool node for (tenant, workload,
 // class), or returns nil. h.mu must be held.

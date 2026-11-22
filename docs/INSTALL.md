@@ -2,7 +2,9 @@
 
 tailworks runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 ≥ 2.35)**. Each has a self-contained release tarball and the same
-`install.sh`; nothing needs root.
+`install.sh`; nothing needs root. Windows isn't supported, not even for
+the `tw` CLI alone. Every prerequisite in one table:
+[README › Prerequisites](../README.md#prerequisites).
 
 The path through this page: install on [macOS](#macos) or [Linux](#linux),
 then your first deploy (the [README quick start](../README.md#quick-start-deploy-your-first-durable-object),
@@ -158,6 +160,8 @@ Funnel, no HTTPS requirement.**
      {"src": ["tag:tw-mgmt"], "dst": ["tag:tw-host"], "ip": ["tcp:7474"]},
      // admins may use tw over the tailnet (tw link)
      {"src": ["autogroup:admin"], "dst": ["tag:tw-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}},
+     // optional: let your Prometheus scrape /metrics (observability.md)
+     // {"src": ["tag:prometheus"], "dst": ["tag:tw-host", "tag:tw-mgmt"], "ip": ["tcp:9464"]},
    ],
    // no nodeAttrs: mgmt never uses Funnel
    ```
@@ -766,6 +770,10 @@ seconds. Measured times are in
   doctor's process checks use `/proc` and `ss`, not `lsof`.
 - **Fedora 45 (Cloud)**: glibc 2.44, kernel 7.2 (Landlock ABI 10). No extra
   packages and no policy changes; everything runs as your user under `~/.tailworks`.
+  Caveat: Fedora was tested once, on 2026-11-08, from a pre-release build with
+  API-key minting and before the Landlock sandbox. It is not in the default
+  `make e2e-linux` rows and has not been tested with OAuth-only minting or the
+  sandbox ([install-testing.md](install-testing.md#linux-support-matrix)).
 - **amd64**: the same release built for x86-64 (`@cloudflare/workerd-linux-64`).
 - **Debian 11** (glibc 2.31) is refused by `install.sh` and fails doctor's
   `glibc` check. The pinned workerd does start there (`workerd --version`),
