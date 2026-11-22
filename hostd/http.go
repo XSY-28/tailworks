@@ -99,6 +99,7 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			// hostd-verified) is what the runtime's guarded env presents to
 			// "admit". Public requests get none (RT3-06/07).
 			route["ticket"] = gen.CreateTicket(inst.macKey(), trace, time.Now())
+			sealCaller(blob, inst.macKey(), time.Now()) // sealcf.go (#148)
 		}
 		b, _ := json.Marshal(blob)
 		r.Header.Set(netd.HeaderCF, string(b))
