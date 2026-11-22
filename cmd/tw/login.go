@@ -10,6 +10,7 @@ import (
 
 	"github.com/rosskukulinski/tailworks/internal/mgmtd"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsnetlc"
 	"tailscale.com/ipn"
 	"tailscale.com/tailcfg/nodecap"
 	"tailscale.com/tsnet"
@@ -45,8 +46,8 @@ type joinOpts struct {
 func joinMgmtNode(ctx context.Context, o joinOpts) (*mgmtNode, error) {
 	ts := &tsnet.Server{Hostname: o.Hostname, Dir: o.Dir, ControlURL: o.ControlURL, AdvertiseTags: o.Tags, AuthKey: o.AuthKey,
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
-	defer ts.Close()
-	lc, err := ts.LocalClient()
+	defer tsnetlc.Close(ts)
+	lc, err := tsnetlc.Client(ts)
 	if err != nil {
 		return nil, fail("bootstrap_failed", "could not start mgmt's tailnet node", err.Error())
 	}

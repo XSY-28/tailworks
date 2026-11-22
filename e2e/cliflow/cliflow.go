@@ -499,8 +499,9 @@ func (e *Env) Run() {
 	d := e.MustJSON(&up, upArgs...)
 	res.Numbers["up_ready_ms"] = msOf(d)
 	e.TrackInfra(up.MgmtNodeID)
-	res.Numbers["up_mgmt_ready_ms"] = up.Timings["mgmt_ready"]
-	res.Numbers["up_host_ready_ms"] = up.Timings["host_ready"]
+	for phase, at := range up.Timings { // up_mgmt_ready_ms, up_host_ready_ms, …: ms from the start of tw up
+		res.Numbers["up_"+phase+"_ms"] = at
+	}
 	res.pass("up", fmt.Sprintf("tenant %s host %s in %v", up.TenantID, up.HostID, d.Round(time.Millisecond)))
 	var st struct {
 		Healthy bool `json:"healthy"`

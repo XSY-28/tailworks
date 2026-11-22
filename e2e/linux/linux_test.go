@@ -271,6 +271,8 @@ func TestE2ELinux(t *testing.T) {
 		// --service: an --ephemeral node that goes offline for a restart
 		// may be removed by control and then can't rejoin (see STATUS L1).
 		UpArgs: []string{"--service"}, Persistent: true,
+		// TW_E2E_LAYOUT=single: tw up's default single-process layout (else --separate-host).
+		SingleProcess: os.Getenv("TW_E2E_LAYOUT") == "single",
 		Exec: func(args []string) (string, string, time.Duration, error) {
 			return v.timed(rWork, append([]string{rTw}, args...)...)
 		},
@@ -335,6 +337,14 @@ func TestE2ELinux(t *testing.T) {
 		// check below can see whether tw down revoked them (#158).
 		warmLog, _, _ := v.run(`grep -ho 'warm key minted.*keyID=[A-Za-z0-9]*' ~/.tailworks-e2e/state/logs/mgmt.log* 2>/dev/null; true`, nil)
 		warmKeys := warmKeyIDs(warmLog)
+		// The VM's tailworks logs (and the unit's journal), kept next to the
+		// results: the timings above are explained by them (#245).
+		if logs, _, err := v.run(`for f in $(find ~/.tailworks-e2e -name '*.log' -path '*logs*' 2>/dev/null); do echo "==== $f"; cat "$f"; done
+			echo "==== journalctl --user -u tw.service"; journalctl --user -u tw.service --no-pager -o short-precise 2>/dev/null | tail -400; true`, nil); err == nil {
+			if err := os.WriteFile(strings.TrimSuffix(resultsTo, ".json")+".logs.txt", []byte(netd.Redact(logs)), 0o600); err != nil {
+				t.Logf("saving the VM logs: %v", err)
+			}
+		}
 		us := time.Now()
 		so, se, err := v.run(`systemctl --user disable --now tw.service >/dev/null 2>&1; rm -f ~/.config/systemd/user/tw.service; systemctl --user daemon-reload 2>/dev/null
 			pkill -TERM -f "$HOME/.tailworks/bin/" 2>/dev/null; sleep 0.5; pkill -KILL -f "$HOME/.tailworks/bin/" 2>/dev/null

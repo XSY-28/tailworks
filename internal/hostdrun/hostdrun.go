@@ -32,6 +32,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/sandbox"
 	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
+	"github.com/rosskukulinski/tailworks/internal/tsnetlc"
 	"github.com/rosskukulinski/tailworks/netd"
 	"tailscale.com/tsnet"
 )
@@ -344,17 +345,11 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		}
 		// mgmt's node must be in our netmap before the first request.
 		wctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		for {
-			err := mc.Do(wctx, "GET", "/v1/healthz", nil, nil)
-			if _, typed := mgmtapi.AsError(err); err == nil || typed {
-				break // any answer from mgmt means the path is open
-			} else if wctx.Err() != nil {
-				cancel()
-				return nil, fmt.Errorf("mgmt %s unreachable over the tailnet: %w (does the policy grant tag:tw-host → tag:tw-mgmt?)", o.MgmtAddr, err)
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
+		err := waitMgmt(wctx, func(ctx context.Context) error { return mc.Do(ctx, "GET", "/v1/healthz", nil, nil) }, log) // mgmtwait.go
 		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("mgmt %s unreachable over the tailnet: %w (does the policy grant tag:tw-host → tag:tw-mgmt?)", o.MgmtAddr, err)
+		}
 	}
 	rt.Client, rt.mgmtAddr = mc, o.MgmtAddr
 	hcfg := hostd.Config{HostID: o.HostID, Mgmt: mc, DataDir: o.DataDir, RunDir: o.RunDir, WorkerdBin: wd,
@@ -461,7 +456,7 @@ func (rt *Runtime) Close() error {
 		err = rt.Host.Close()
 	}
 	if rt.TS != nil {
-		rt.TS.Close()
+		tsnetlc.Close(rt.TS)
 	}
 	return err
 }
@@ -497,9 +492,14 @@ func JoinHostNode(ctx context.Context, dir, hostname, control, joinFile string, 
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(500 * time.Millisecond):
+			case <-time.After(50 * time.Millisecond):
 			}
 		}
+	}
+	// Before anything uses the node's LocalAPI client: Close drains it
+	// (internal/tsnetlc).
+	if _, err := tsnetlc.Client(ts); err != nil {
+		return nil, fmt.Errorf("start the node %s: %w", hostname, err)
 	}
 	uctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
