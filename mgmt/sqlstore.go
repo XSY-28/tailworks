@@ -441,15 +441,21 @@ CREATE INDEX IF NOT EXISTS host_paths_host ON host_paths (host_id, measured_at);
 `
 
 // Append-only audit: UPDATE/DELETE on audit rows abort (defence in depth;
-// the hash chain is what detects tampering).
+// the hash chain is what detects tampering). The one DELETE allowed is of
+// records at or below their chain's retention checkpoint (retention.go:
+// the pruner writes the checkpoint first). audit_no_delete was the
+// trigger before retention; it is dropped for audit_no_delete_kept.
 const sqliteTriggers = `
 CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
+DROP TRIGGER IF EXISTS audit_no_delete;
+CREATE TRIGGER IF NOT EXISTS audit_no_delete_kept BEFORE DELETE ON audit WHEN NOT EXISTS (SELECT 1 FROM audit_checkpoints c WHERE c.chain = OLD.chain AND OLD.seq <= c.seq) BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
 `
 
 const pgTriggers = `
 CREATE OR REPLACE FUNCTION tw_audit_append_only() RETURNS trigger AS $$
-BEGIN RAISE EXCEPTION 'audit is append-only'; END; $$ LANGUAGE plpgsql;
+BEGIN
+IF TG_OP = 'DELETE' AND EXISTS (SELECT 1 FROM audit_checkpoints c WHERE c.chain = OLD.chain AND OLD.seq <= c.seq) THEN RETURN OLD; END IF;
+RAISE EXCEPTION 'audit is append-only'; END; $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS audit_append_only ON audit;
 CREATE TRIGGER audit_append_only BEFORE UPDATE OR DELETE ON audit FOR EACH ROW EXECUTE FUNCTION tw_audit_append_only();
 `

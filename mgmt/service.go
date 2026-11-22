@@ -107,6 +107,12 @@ type Config struct {
 	// keeps for rollback (deployhistory.go): 0 = DefaultBundleRetention,
 	// < 0 = every bundle.
 	BundleRetention int
+
+	// Audit retention (retention.go): delete each chain's records older
+	// than AuditMaxAge and all but its newest AuditMaxRecords, keeping a
+	// checkpoint so the rest still verify. 0 = keep (the default).
+	AuditMaxAge     time.Duration
+	AuditMaxRecords int64
 }
 
 // Mgmt is tw-mgmt's core: tenants, deployments, objects, the mint broker
@@ -256,6 +262,7 @@ func (m *Mgmt) Start() error {
 	}
 	m.wg.Add(1)
 	go m.upgradeLoop() // upgrades.go
+	m.startRetention() // retention.go
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()

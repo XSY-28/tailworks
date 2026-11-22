@@ -111,6 +111,11 @@ type Options struct {
 	// BundleRetention is how many bundles per workload mgmt keeps for
 	// rollback (mgmt.Config; 0 = mgmt.DefaultBundleRetention, < 0 = all).
 	BundleRetention int
+
+	// Audit retention (mgmt.Config, mgmt/retention.go): 0 = keep every
+	// record (the default).
+	AuditMaxAge     time.Duration
+	AuditMaxRecords int64
 }
 
 // Runtime is a running mgmt.
@@ -276,6 +281,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		mcfg.RegistryDir = o.RegistryDir
 	}
 	mcfg.BundleRetention = o.BundleRetention // ADR-046
+	mcfg.AuditMaxAge, mcfg.AuditMaxRecords = o.AuditMaxAge, o.AuditMaxRecords // mgmt/retention.go
 	if len(o.RegistryInsecure) > 0 {
 		mcfg.RegistryInsecure = o.RegistryInsecure
 	}
