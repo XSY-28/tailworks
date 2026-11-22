@@ -7,7 +7,7 @@ import (
 )
 
 // InternetEgress is tailworks.jsonc tailnet.egress.internet
-// (ADR-worker-internet-egress): one setting for Workers and containers.
+// (ADR-049): one setting for Workers and containers.
 //
 //	absent  Workers may reach any public host; containers reach none
 //	true    Workers and containers (with enableInternet) may reach any public host

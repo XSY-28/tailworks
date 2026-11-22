@@ -112,7 +112,7 @@ default Seatbelt profile.
   `getCaller` sees which object called. Tailnet names resolve from the
   node's netmap only, never from host DNS; a tailnet name that isn't in the
   netmap is refused (`peer_not_visible`).
-- **Internet egress is on by default** (ADR-worker-internet-egress). A
+- **Internet egress is on by default** (ADR-049). A
   `fetch()` to a public host leaves from the **host's own network**, never
   from a tailnet node: the destination sees the host's source address
   (different on each host) and no tailnet identity, and tailworks strips

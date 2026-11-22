@@ -18,7 +18,7 @@ import (
 const RecipeInternetAPI = "https://github.com/rosskukulinski/tailworks/blob/master/docs/recipes.md#call-an-internet-api"
 
 // InternetConfig is the Worker internet egress path
-// (ADR-worker-internet-egress). A flow to a destination that is not on the
+// (ADR-049). A flow to a destination that is not on the
 // tailnet leaves from this host's own network, never from the object's
 // tailnet node, after the SSRF guard (publicip) has checked the address
 // that is actually dialled.

@@ -1,5 +1,5 @@
 // Package publicip is the SSRF guard shared by both internet egress paths:
-// Workers' fetch() (netd, ADR-worker-internet-egress) and containers'
+// Workers' fetch() (netd, ADR-049) and containers'
 // enableInternet (netd/sbxnet, ADR-032 D4). It decides which addresses an
 // internet flow may dial (ADR-019) and matches tailnet.egress.internet
 // allowlists, so the two paths can never disagree about either.

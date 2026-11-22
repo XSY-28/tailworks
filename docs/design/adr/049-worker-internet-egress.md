@@ -1,4 +1,4 @@
-# ADR-worker-internet-egress: Workers have internet egress by default, from the host's network through netd's SSRF guard; `tailnet.egress.internet` turns it off or limits it
+# ADR-049: Workers have internet egress by default, from the host's network through netd's SSRF guard; `tailnet.egress.internet` turns it off or limits it
 
 **Date:** 2026-11-21
 **Status:** Accepted (2026-11-21, decided by the maintainer on issue #161;

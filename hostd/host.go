@@ -206,7 +206,7 @@ type Config struct {
 	ContainerInternet *ContainerInternet
 
 	// WorkerInternet is the Worker internet egress path
-	// (ADR-worker-internet-egress, internet.go): how fetch() from Worker
+	// (ADR-049, internet.go): how fetch() from Worker
 	// and Node app code reaches destinations that are not on the tailnet,
 	// subject to each workload's tailnet.egress.internet and the SSRF
 	// guard. Nil: none; such fetches are refused. tw-hostd and tw up set

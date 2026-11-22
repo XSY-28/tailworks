@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-07
 **Status:** Accepted (measured; prototype/per-object-identity/README.md).
-Rule 1 amended 2026-11-21 by ADR-worker-internet-egress: internet egress
+Rule 1 amended 2026-11-21 by ADR-049: internet egress
 is on by default and leaves from the host's network through netd's SSRF
 guard, not via an exit node or Aperture. Tailnet names still resolve from
 the netmap only.

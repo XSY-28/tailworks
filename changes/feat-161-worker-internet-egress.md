@@ -3,7 +3,7 @@ kind: breaking
 upgrade: [feature-string, config-default]
 ---
 Workers now have internet egress, on by default, as on Cloudflare
-(ADR-worker-internet-egress, #161). A Worker's, Durable Object's or Node
+(ADR-049, #161). A Worker's, Durable Object's or Node
 app's `fetch("https://api.example.com/...")` now works instead of failing
 with `internet_egress_unavailable`. The request leaves from the host's own
 network, not from a tailnet node, so the API sees the host's address (each

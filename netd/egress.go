@@ -25,7 +25,7 @@ import (
 // destinations are resolved from that object's netmap only (ADR-019); a
 // tailnet-shaped name never goes to host DNS. A destination that is not on
 // the tailnet takes the internet path (internet.go,
-// ADR-worker-internet-egress) when Config.Internet is set.
+// ADR-049) when Config.Internet is set.
 func (r *Registry) EgressHandler() http.Handler {
 	rp := &httputil.ReverseProxy{
 		FlushInterval: -1,

@@ -62,3 +62,4 @@ has no row below.
 | [046](046-deploy-rollback.md) | Deployment history and rollback as a new deploy of a stored bundle; data moves forward only, secrets are not versioned | 2026-11-15 | Accepted |
 | [047](047-approval-notifications.md) | Tenant notification webhooks, starting with `approval_requested` | 2026-11-15 | Accepted |
 | [048](048-deploy-preview.md) | A preview is a workload of its own next to the workload; promote deploys its bundle to the workload | 2026-11-15 | Accepted |
+| [049](049-worker-internet-egress.md) | Workers have internet egress by default, from the host's network through netd's SSRF guard; `tailnet.egress.internet` turns it off or limits it, for Workers and containers alike | 2026-11-21 | Accepted |

@@ -5,7 +5,7 @@ import (
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
-// Worker internet egress (ADR-worker-internet-egress): a Worker's (or Node
+// Worker internet egress (ADR-049): a Worker's (or Node
 // app's, or Durable Object's) fetch() to a destination that is not on the
 // tailnet leaves from this host's own network through netd's internet
 // path, after the SSRF guard, never as the object's tailnet node. The

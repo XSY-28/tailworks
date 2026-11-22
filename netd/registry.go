@@ -97,7 +97,7 @@ type Config struct {
 	ExtraForbidden []netip.Prefix
 
 	// Internet is the internet egress path for destinations that are not
-	// on the tailnet (internet.go, ADR-worker-internet-egress). Nil: there
+	// on the tailnet (internet.go, ADR-049). Nil: there
 	// is none; internet names are refused with internet_egress_unavailable
 	// and non-tailnet IPs with forbidden_destination.
 	Internet *InternetConfig

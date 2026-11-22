@@ -25,7 +25,7 @@ const (
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).
 	Telemetry = "telemetry"
 	// WorkerInternet is tailnet.egress.internet's boolean form (true or
-	// false) and Worker internet egress (ADR-worker-internet-egress). An
+	// false) and Worker internet egress (ADR-049). An
 	// older hostd can't parse a boolean there; the list form needs nothing.
 	WorkerInternet = "worker-internet"
 	// Workflows is wrangler "workflows" on workerd's engine, with approvals

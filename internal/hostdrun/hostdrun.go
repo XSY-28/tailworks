@@ -142,7 +142,7 @@ type Options struct {
 
 	// WorkerInternet is "direct" (default: Workers' fetch() reaches public
 	// internet hosts from this host's network, subject to each workload's
-	// tailnet.egress.internet) or "off" (ADR-worker-internet-egress).
+	// tailnet.egress.internet) or "off" (ADR-049).
 	WorkerInternet string
 
 	// R2 holds R2 bucket bytes (hostd.Config.R2; nil: files under

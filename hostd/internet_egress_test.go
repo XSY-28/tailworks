@@ -20,7 +20,7 @@ import (
 	"tailscale.com/tailcfg"
 )
 
-// TestWorkerInternetEgress (ADR-worker-internet-egress): a Worker's
+// TestWorkerInternetEgress (ADR-049): a Worker's
 // fetch() to an internet name, end to end through real workerd, hostd and
 // netd, with a hermetic stand-in for the internet: api.example.com and
 // other.example.com resolve to a documentation address the dialer sends to

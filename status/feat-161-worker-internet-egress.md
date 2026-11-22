@@ -1,4 +1,4 @@
-Last update: 2026-11-21 22:40 PT. Worker internet egress, on by default (#161, ADR-worker-internet-egress).
+Last update: 2026-11-21 22:40 PT. Worker internet egress, on by default (#161, ADR-049).
 
 # Worker internet egress (#161)
 
@@ -8,8 +8,8 @@ ADR and builds it.
 
 ## What's built
 
-- **ADR** `docs/design/adr/worker-internet-egress.md`
-  (`ADR-worker-internet-egress`, Accepted; numbered at merge per AGENTS.md
+- **ADR** `docs/design/adr/049-worker-internet-egress.md`
+  (ADR-049, Accepted; drafted as `ADR-worker-internet-egress` and numbered in this PR per AGENTS.md
   rule 5). Traffic leaves from the **host's network** through netd, not an
   exit node or gateway; never as the object's tailnet identity; the source
   address is per host. Covers DNS (what the host resolver sees), audit,

@@ -19,7 +19,7 @@ import (
 )
 
 // fakeInternet is a hermetic stand-in for the internet path
-// (ADR-worker-internet-egress): Resolve answers from a fixed table, and
+// (ADR-049): Resolve answers from a fixed table, and
 // Dial sends flows to the public test addresses (203.0.113.0/24) to one
 // local HTTP server. Any other dial is a guard failure, recorded and
 // refused, so a test sees an unchecked address even if the dial "fails".

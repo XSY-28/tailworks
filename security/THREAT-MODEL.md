@@ -119,7 +119,7 @@ code wins.
   tailnet the push API admits only mgmt's node (`tag:tw-mgmt`, pinned at
   start; `hostd/pushauth.go`).
 - **B11 Workload → internet (egress).** On by default
-  (ADR-worker-internet-egress); `tailnet.egress.internet` turns it off or
+  (ADR-049); `tailnet.egress.internet` turns it off or
   limits it, and `tw-hostd -worker-internet=off` turns it off per host.
   Flows leave from the host's network, never from a tailnet node, and
   carry no tailnet identity or identity headers. Held by the SSRF guard
