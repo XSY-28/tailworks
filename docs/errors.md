@@ -388,6 +388,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### stop_timeout
 500 · cli. **When:** `tw down` waited 3 min for the supervisor to stop and killed it. **Fix:** `tw status`; `tw logs --component supervisor`.
 
+### storage_quota_exceeded
+429 · mgmt, hostd. **When:** a write would take the tenant past one of its storage quotas (`missing: {quota, limit, used, requested}`): a KV, D1 or R2 write that grows its store past `maxStoreBytes` (the journals of all the tenant's stores together), a queue send past `maxQueueBytes` (all its queued messages), or a new store past `maxStores`. A write that doesn't grow its store (an overwrite with something no bigger, a delete) is never refused, so a full tenant can free space. The quotas are unlimited unless an operator set them. **Fix:** delete data the tenant no longer needs, consume or purge its queues (`tw queues purge`), or raise the quota: `tw tenant set <tenant> --max-store-bytes 20GiB` (`--max-queue-bytes`, `--max-stores`; `-` = unlimited). `tw tenant ls` shows each tenant's usage.
+
 ### store_conflict
 409 · mgmt. **When:** a platform store journal append named a head (`after`) or incarnation that is no longer current: another writer (a replica, an admin) appended first, or the store was deleted. **Fix:** nothing for app code: the store object catches up and retries on its own. A client of the REST API reads the journal from its `after` and retries.
 

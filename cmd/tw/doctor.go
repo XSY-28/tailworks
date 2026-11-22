@@ -247,6 +247,7 @@ func cmdDoctor(args []string) error {
 	})
 
 	doctorPublic(run, s)
+	doctorStorage(run, s) // doctor_storage.go: data_disk, store_sizes
 
 	run("sandbox", func() (string, string, string) { return doctorSandbox(s) })
 	run("host_sockets", func() (string, string, string) { return doctorHostSockets(s) })

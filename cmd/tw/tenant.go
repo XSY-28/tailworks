@@ -409,6 +409,9 @@ type tenantLsEntry struct {
 	Objects  map[string]int `json:"objectsByStatus"`
 	Rate     float64        `json:"registrationsPerMinute"`
 	Queue    int            `json:"mintQueue"`
+
+	// Usage is what the tenant keeps in mgmt (tenant_quota.go).
+	Usage *mgmt.TenantUsage `json:"usage,omitempty"`
 }
 
 func cmdTenantLs(args []string) error {
@@ -439,16 +442,17 @@ func cmdTenantLs(args []string) error {
 				e.Objects[o.Status]++
 			}
 		}
+		e.Usage = s.tenantUsage(ctx, t.TenantID)
 		out = append(out, e)
 	}
 	emit(f, out, func() {
-		fmt.Printf("  %-24s %-18s %-9s %-14s %s\n", "TAILNET", "TENANT", "ROLE", "THROTTLE", "OBJECTS")
+		fmt.Printf("  %-24s %-18s %-9s %-14s %s\n", "TAILNET", "TENANT", "ROLE", "THROTTLE", "OBJECTS · STORAGE")
 		for _, e := range out {
 			role := "tenant"
 			if e.Operator {
 				role = "operator"
 			}
-			fmt.Printf("  %-24s %-18s %-9s %-14s %v\n", e.Tailnet, e.TenantID, role, fmt.Sprintf("%.0f/min", e.Rate), e.Objects)
+			fmt.Printf("  %-24s %-18s %-9s %-14s %v · %s\n", e.Tailnet, e.TenantID, role, fmt.Sprintf("%.0f/min", e.Rate), e.Objects, usageLine(e.Usage))
 		}
 	})
 	return nil
@@ -502,6 +506,7 @@ func cmdTenantSet(args []string) error {
 	pubIngress := f.String("public-ingress", "", "public (Funnel) ingress gate for tailworks.jsonc \"public\" routes: allow | deny (ADR-029)")
 	ownerTag := f.String("owner-tag", "", "move the tenant to its own owner tag, e.g. tag:tw-t-ops (\"-\" = back to tag:tw); pair it with --oauth-client-file scoped to that tag (docs/teams.md)")
 	namePrefix := f.String("name-prefix", "", "name prefix for the tenant's tailnet names; only before its first deploy (\"-\" = none)")
+	quotas := addTenantQuotaFlags(f) // tenant_quota.go
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -575,6 +580,9 @@ func cmdTenantSet(args []string) error {
 	default:
 		return fail("bad_request", "--public-ingress must be allow or deny", "usage: tw "+usageOf("tenant"))
 	}
+	if err := quotas.apply(patch); err != nil {
+		return err
+	}
 	if len(patch) == 0 {
 		return fail("bad_request", "nothing to set", "usage: tw "+usageOf("tenant"))
 	}
@@ -607,6 +615,7 @@ func cmdTenantSet(args []string) error {
 		}
 		fmt.Printf("✓ tenant   %s (%s) updated · mint mode %s · %d objects max · %d registrations/min · pool %q · tier %q · containers ≤ %d, ≤ %d MiB, ≤ %g vCPU · public ingress %s\n",
 			t.Tailnet, t.ID, t.MintMode, t.MaxObjects, t.RegistrationsPerMinute, t.Pool, t.Tier, t.MaxContainers, t.MaxContainerMemMiB, t.MaxContainerVCPU, gate)
+		fmt.Printf("           %s\n", quotaSummary(t))
 	})
 	return nil
 }

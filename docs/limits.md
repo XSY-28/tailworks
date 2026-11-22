@@ -166,10 +166,32 @@ Details: [queues.md](queues.md#delivery).
 | `max_retries` | 0 to 100, default 3 | consumer config | `internal/queuecfg/queuecfg.go:MaxRetries` |
 | `max_concurrency` | 1 to 20, default 1 | consumer config | `internal/queuecfg/queuecfg.go:MaxConcurrency` |
 | Queue size (stored bytes) | 1 GiB, then `queue_limit` | no | `mgmt/queues.go:QueueMaxBytes` |
+| All of a tenant's queues together | unlimited, else `storage_quota_exceeded` ([below](#tenant-storage)) | `tw tenant set --max-queue-bytes` | `mgmt/sqlstore_quota.go:#tenant-queue-bytes` |
 | One `queue()` run | 15 min wall time | no | `hostd/queues.go:DefaultQueueTimeout` |
 | Claimed batch hidden (push consumer) | 60 s, extended while `queue()` runs | `tw-hostd -queue-visibility` | `hostd/queues.go:DefaultQueueVisibility` |
 | HTTP pull visibility timeout | 1 s to 12 h, default 30 s | per call | `internal/queuecfg/queuecfg.go:MaxVisibilityMillis`, `mgmt/queues.go:queueDefaultVisibility` |
 | HTTP pull wait | up to 20 s | per call | `mgmt/queues.go:queueMaxWait` |
+
+## Tenant storage
+
+What one tenant may keep in mgmt across all its workloads, on top of the
+per-store and per-queue limits above. The quotas are unlimited (0) unless
+an operator sets them, so an upgrade never starts refusing a tenant's
+writes. `tw tenant ls` shows each tenant's usage against them (`GET
+/v1/tenants/{id}/usage`); past a quota a write fails 429
+[`storage_quota_exceeded`](errors.md#storage_quota_exceeded). An append
+that doesn't grow its store (an overwrite, a delete) is never refused, so a
+full tenant can free space. On Postgres, concurrent writes to different
+stores can take a tenant over by at most one in-flight write each.
+
+| Limit | Value | Configurable? | Source |
+|---|---|---|---|
+| All of a tenant's KV, D1 and R2 journals together | unlimited (0) | `tw tenant set --max-store-bytes` (`20GiB`, `-` = unlimited) | `mgmt/sqlstore_quota.go:#tenant-store-bytes`, `cmd/tw/tenant_quota.go:-max-store-bytes` |
+| All of a tenant's queued messages together | unlimited (0) | `tw tenant set --max-queue-bytes` | `mgmt/sqlstore_quota.go:#tenant-queue-bytes`, `cmd/tw/tenant_quota.go:-max-queue-bytes` |
+| Platform stores (KV namespaces, D1 databases, R2 buckets) per tenant | unlimited (0) | `tw tenant set --max-stores` | `mgmt/quota.go:#tenant-max-stores`, `cmd/tw/tenant_quota.go:-max-stores` |
+| Largest stores and queues listed per tenant | 5 | no | `mgmt/quota.go:UsageLargestN` |
+| `tw doctor` `store_sizes`: warn when a store, queue or tenant quota is this full | 80% | no | `cmd/tw/doctor_storage.go:doctorStoreWarnPct` |
+| `tw doctor` `data_disk`: free space on the state dir's volume | warn under 5 GiB or 10%, fail under 1 GiB | no | `cmd/tw/doctor_storage.go:doctorDiskWarn`, `cmd/tw/doctor_storage.go:doctorDiskWarnPct`, `cmd/tw/doctor_storage.go:doctorDiskFail` |
 
 ## Cron triggers
 
@@ -233,7 +255,26 @@ Details: [observability.md](observability.md#volume-bounds).
 | OTLP headers / header value / endpoint | 16 / 4 KiB / 2048 bytes | no | `mgmt/telemetry.go:TelemetryMaxHeaders`, `mgmt/telemetry.go:TelemetryMaxHeaderValue`, `mgmt/telemetry.go:TelemetryMaxEndpoint` |
 | `tw logs` lines | default 50, at most 10,000 | `tw logs -n` | `cmd/tw/ops.go:#logs-n`, `mgmt/logs.go:MaxLogLines` |
 | One `tw logs -f` stream | 1 h (the CLI reconnects) | no | `hostd/logs.go:maxLogFollow` |
-| Log retention | none beyond the rotation above | — | |
+| Request record max age | none (0): only the rotation above | `tw up --request-log-max-age`, `tw-hostd -request-log-max-age` (e.g. `168h`) | `cmd/tw-hostd/main.go:-request-log-max-age`, `cmd/tw/up_retention.go:-request-log-max-age` |
+| Request record max age applied every | 10 min (or the max age, if shorter) | no | `hostd/telemetry_retention.go:RecordPruneEvery` |
+| `tw up` daemon logs (`mgmt.log`, `hostd.log`) rotation | 32 MiB, one previous file kept | no | `cmd/tw/up_logs.go:daemonLogMax` |
+| Console log (`workerd.log`, `app.log`) retention | none beyond the rotation above | — | |
+| Audit records | kept forever (0) | `tw up --audit-max-age`, `--audit-max-records`; `tw-mgmt -audit-max-age`, `-audit-max-records` ([audit retention](#audit-retention)) | `cmd/tw-mgmt/main.go:-audit-max-age`, `cmd/tw-mgmt/main.go:-audit-max-records` |
+| Audit retention applied every | 1 h (and at start), 5000 records per transaction | no | `mgmt/retention.go:AuditPruneInterval`, `mgmt/retention.go:auditPruneBatch` |
+
+### Audit retention
+
+Off by default: the audit log is the record of who did what and is
+hash-chained, so deleting from it is opt-in. With a max age or a max record
+count, mgmt deletes each chain's oldest records and keeps a checkpoint, the
+seq and hash of the last one it deleted, in the same transaction. `tw audit`
+verification starts from the checkpoint, so the records that remain still
+verify, and an edit, gap or truncated tail among them is still caught
+(`prunedThrough` in `GET /v1/audit/verification`). Every prune is itself an
+audit record (`audit_pruned`). The store's append-only guard still refuses
+deleting any record the checkpoint doesn't cover. The age rule stops at the
+first record that isn't old enough, so a record with a skewed timestamp is
+kept along with every record after it.
 
 ## Workflows and approvals
 

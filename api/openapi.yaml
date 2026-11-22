@@ -292,7 +292,8 @@ paths:
       description: |
         Updatable: `mintMode`, `apiKeyFile`, `oauthClientID`,
         `oauthClientFile`, `registrationsPerMinute`, `maxObjects`, `pool`,
-        `tier`. Switching mode or changing a client ID / credential file drops
+        `tier`, the container quotas and the storage quotas
+        (`maxStoreBytes`, `maxQueueBytes`, `maxStores`). Switching mode or changing a client ID / credential file drops
         cached tokens. A tenant left in a removed mint mode (`apikey`, `wif`)
         can't mint until it is switched: `{mintMode: oauth, oauthClientFile: …}`.
         `tailnet` and `controlURL` are immutable (`400 immutable_field`).
@@ -373,6 +374,31 @@ paths:
                 doc_url: https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#tenant_has_live_objects
                 trace_id: 7f3a…
         "412": { $ref: "#/components/responses/PreconditionFailed" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/tenants/{id}/usage:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+    get:
+      tags: [tenants]
+      operationId: GetTenantUsage
+      summary: What a tenant keeps in mgmt (`tw tenant ls`, `tw doctor`)
+      description: |
+        The bytes and counts of the tenant's platform stores (KV, D1, R2
+        bucket indexes: their journals) and queues, its storage quotas
+        (`0` = unlimited), the fixed per-store and per-queue limits, and its
+        largest stores and queues. Separate from `GET /v1/tenants/{id}` so
+        the tenant's `ETag` doesn't change with every write.
+        `404 unknown_tenant`.
+      x-tw-role: admin|tenant:read
+      responses:
+        "200":
+          description: The tenant's storage usage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantUsage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/tenants/{id}/objects:
@@ -4452,6 +4478,7 @@ components:
         | `object_quota_exceeded` | 429 | tenant `maxObjects` |
         | `spawn_budget_exceeded` | 429 | `maxLive` / `maxDepth` |
         | `container_quota_exceeded` | 429 | tenant `maxContainers` / `maxContainerMemMiB` / `maxContainerVCPU`, or the class's `max_instances` (`missing: {quota, limit, used, requested}`) |
+        | `storage_quota_exceeded` | 429 | a store append or queue send would take the tenant past `maxStoreBytes` / `maxQueueBytes`, or a new store past `maxStores` (`missing: {quota, limit, used, requested}`) |
         | `rate_limited` | 429 | a tailnet caller is over its API request rate, or mgmt is serving its maximum of concurrent requests from non-host callers (`Retry-After` given) |
         | `image_unavailable` | 502 | a container image could not be pinned at deploy (not in tailworks' registry, no image for any of the pool's arches, or the upstream mirror failed) |
         | `registry_unavailable` | 409 | this tw-mgmt serves no OCI registry (`-registry-dir off`) |
@@ -4538,6 +4565,7 @@ components:
         - object_quota_exceeded
         - spawn_budget_exceeded
         - container_quota_exceeded
+        - storage_quota_exceeded
         - rate_limited
         - bootstrap_failed
         - host_unavailable
@@ -4841,6 +4869,9 @@ components:
         maxContainers: { type: integer, minimum: 1, default: 10, description: "Running containers (ADR-032), across the tenant's workloads. Not objects: they don't count against `maxObjects`." }
         maxContainerMemMiB: { type: integer, minimum: 1, default: 16384, description: Total guest memory of the tenant's running containers. }
         maxContainerVCPU: { type: number, exclusiveMinimum: 0, default: 8, description: "Total vCPUs of the tenant's running containers (fractional: `lite` is 1/16)." }
+        maxStoreBytes: { type: integer, format: int64, minimum: 0, default: 0, description: "Bytes kept by all the tenant's platform stores together (KV, D1, R2 index journals); past it an append that grows a store is `429 storage_quota_exceeded`. Absent or 0: unlimited (each store still has its own 1 GiB)." }
+        maxQueueBytes: { type: integer, format: int64, minimum: 0, default: 0, description: "Bytes of all the tenant's queued messages together; past it a send is `429 storage_quota_exceeded`. Absent or 0: unlimited (each queue still has its own 1 GiB)." }
+        maxStores: { type: integer, minimum: 0, default: 0, description: "Platform stores the tenant may have; past it creating one is `429 storage_quota_exceeded`. Absent or 0: unlimited." }
         pool:
           type: string
           description: Host pool the tenant's deployments are placed on (hosts with a matching `pool`; empty = any host).
@@ -4908,6 +4939,9 @@ components:
         maxContainers: { type: integer, minimum: 1 }
         maxContainerMemMiB: { type: integer, minimum: 1 }
         maxContainerVCPU: { type: number, exclusiveMinimum: 0 }
+        maxStoreBytes: { type: [integer, "null"], format: int64, minimum: 0, description: "0 or null: unlimited." }
+        maxQueueBytes: { type: [integer, "null"], format: int64, minimum: 0, description: "0 or null: unlimited." }
+        maxStores: { type: [integer, "null"], minimum: 0, description: "0 or null: unlimited." }
         pool: { type: [string, "null"] }
         tier: { $ref: "#/components/schemas/Tier" }
         publicIngress:
@@ -5010,6 +5044,46 @@ components:
           type: object
           description: What the delete removed, by kind (rows, custody entries, hosts to purge).
           additionalProperties: { type: integer, format: int64 }
+    TenantUsage:
+      type: object
+      required: [tenantID, stores, queues, limits, largest]
+      properties:
+        tenantID: { type: string }
+        stores:
+          type: object
+          required: [count, bytes, entries]
+          properties:
+            count: { type: integer, format: int64 }
+            bytes: { type: integer, format: int64, description: Bytes kept by the stores' journals (what counts against `maxStoreBytes`). }
+            entries: { type: integer, format: int64 }
+        queues:
+          type: object
+          required: [count, bytes, messages]
+          properties:
+            count: { type: integer, format: int64 }
+            bytes: { type: integer, format: int64, description: Bytes of the queued messages (what counts against `maxQueueBytes`). }
+            messages: { type: integer, format: int64 }
+        limits:
+          type: object
+          required: [maxStoreBytes, maxQueueBytes, maxStores, storeMaxBytes, queueMaxBytes]
+          properties:
+            maxStoreBytes: { type: integer, format: int64, description: The tenant's quota; 0 = unlimited. }
+            maxQueueBytes: { type: integer, format: int64, description: The tenant's quota; 0 = unlimited. }
+            maxStores: { type: integer, description: The tenant's quota; 0 = unlimited. }
+            storeMaxBytes: { type: integer, format: int64, description: One store's own limit. }
+            queueMaxBytes: { type: integer, format: int64, description: One queue's own limit. }
+        largest:
+          type: array
+          description: The tenant's largest stores and queues (at most 5), biggest first.
+          items:
+            type: object
+            required: [kind, name, bytes, limit]
+            properties:
+              workload: { type: string, description: The store's workload (absent for a queue). }
+              kind: { type: string, description: "`kv`, `d1`, `r2`, … or `queue`." }
+              name: { type: string }
+              bytes: { type: integer, format: int64 }
+              limit: { type: integer, format: int64, description: Its own size limit. }
     PurgeResult:
       type: object
       required: [purged]
@@ -5951,6 +6025,7 @@ components:
         `container_stop` (an object's container, ADR-032),
         `audit_dropped` (records refused before they were chained, e.g. tenant notes over their rate during a flood; `detail.n` and `detail.byReason` count them, so the gap is visible and the chain still verifies).
         mgmt chain:
+        `audit_pruned` (audit retention deleted a chain's oldest records: the chain, how many, and the seq and hash of the last one deleted, its new checkpoint),
         `tenant_create`,
         `tenant_update`,
         `tenant_delete`,
@@ -6037,6 +6112,7 @@ components:
         - container_start
         - container_stop
         - audit_dropped
+        - audit_pruned
         - tenant_create
         - tenant_update
         - tenant_delete
@@ -6154,6 +6230,10 @@ components:
         records: { type: integer }
         brokenAt: { type: integer, format: int64, description: seq of the first bad record }
         error: { type: string }
+        prunedThrough:
+          type: integer
+          format: int64
+          description: "Audit retention (`tw-mgmt -audit-max-age`, `-audit-max-records`) deleted this chain's records up to this seq. The records kept still verify: the first one links to the checkpointed hash of the last one deleted. Absent: nothing was pruned."
     AuditAppendResult:
       type: object
       required: [accepted, chain]

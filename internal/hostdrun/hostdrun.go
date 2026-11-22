@@ -152,6 +152,10 @@ type Options struct {
 	// QueueVisibility is hostd.Config.QueueVisibility (0 = default).
 	QueueVisibility time.Duration
 
+	// RequestLogMaxAge is hostd.TelemetryOptions.RecordMaxAge: drop request
+	// records older than this (0 = only the size rotation, the default).
+	RequestLogMaxAge time.Duration
+
 	// WorkerdHeapMiB and NodeHeapMiB are hostd.Config's (process-tier
 	// heap caps; 0 = default, negative = none).
 	WorkerdHeapMiB int
@@ -368,6 +372,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		Restart:       o.Restart,
 	}
 	hcfg.QueueVisibility = o.QueueVisibility
+	hcfg.Telemetry.RecordMaxAge = o.RequestLogMaxAge
 	hcfg.WorkerdHeapMiB = o.WorkerdHeapMiB
 	hcfg.NodeHeapMiB = o.NodeHeapMiB
 	// Containers (ADR-032) run on the microVM backend; without it this host

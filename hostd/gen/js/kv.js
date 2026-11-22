@@ -200,6 +200,7 @@ function storeStatus(e) {
   const code = e?.code ?? /^\[([a-z_]+)\]/.exec(msg)?.[1];
   switch (code) {
     case "store_limit":
+    case "storage_quota_exceeded":
       return [413, msg];
     case "store_unavailable":
     case "lease_lost":

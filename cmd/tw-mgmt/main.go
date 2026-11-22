@@ -84,6 +84,8 @@ func run() error {
 		regInsecure = flag.String("registry-insecure", "", "comma-separated upstream registry hosts mirrored over plain HTTP (tests: a local upstream)")
 		noMirror    = flag.Bool("no-mirror", false, "refuse external image refs at deploy (only tw deploy builds and public bases); mgmt then makes no registry egress")
 		bundleKeep  = flag.Int("bundle-retention", mgmt.DefaultBundleRetention, "bundles kept per workload for tw rollback (older deployments keep their record and hash, not the bundle); 0 = the default, -1 = keep every bundle")
+		auditMaxAge = flag.Duration("audit-max-age", 0, "audit retention: delete audit records older than this (e.g. 2160h), keeping a checkpoint so the rest still verify; 0 = keep every record (the default)")
+		auditMaxRec = flag.Int64("audit-max-records", 0, "audit retention: keep only the newest N records of each chain (with a checkpoint, as -audit-max-age); 0 = keep every record (the default)")
 		aliasFile   = flag.String("image-aliases", "", "JSON file [{from, to, arch}] replacing the default image alias map (cloudflare/sandbox → tw.local arm64 rebuilds)")
 	)
 	// Management API limits for tailnet callers (mgmt/ratelimit.go).
@@ -116,6 +118,7 @@ func run() error {
 		RegistryDir: *registryDir, NoMirror: *noMirror, ImageAliasesFile: *aliasFile, Log: log,
 		MetricsPort: *metricsPort}
 	o.BundleRetention = *bundleKeep
+	o.AuditMaxAge, o.AuditMaxRecords = *auditMaxAge, *auditMaxRec // mgmt/retention.go
 	o.APILimits = mgmt.APILimits{RPS: *apiRPS, HostRPS: *apiHostRPS, InFlight: *apiInFlight}
 	o.RevokeWarmKeysOnClose = *warmRevoke
 	// Like the flags: "" means no tags at all (Options nil means the default).
