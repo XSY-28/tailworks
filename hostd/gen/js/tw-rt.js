@@ -1138,6 +1138,47 @@ function killedMark(ctx) {
     return void 0;
   }
 }
+var KILL_SELF_GATED = /* @__PURE__ */ new Set(["constructor", "fetch", "__tw_kill", "__tw_intercept"]);
+var KILL_NOOP = /* @__PURE__ */ new Set(["alarm", "webSocketMessage", "webSocketClose", "webSocketError"]);
+function findDescriptor(o, p) {
+  for (let x = o; x && x !== Object.prototype; x = Object.getPrototypeOf(x)) {
+    const d = Object.getOwnPropertyDescriptor(x, p);
+    if (d) return d;
+  }
+  return void 0;
+}
+function killGate(obj, cls) {
+  const killedErr = (k) => new Error("[killed] object " + cls + "/" + (obj.ctx?.id?.name ?? "") + " was killed: " + k);
+  const wrapped2 = /* @__PURE__ */ new Map();
+  return new Proxy(obj, {
+    get(t, p) {
+      if (typeof p === "string" && !KILL_SELF_GATED.has(p)) {
+        const k = killedMark(t.ctx);
+        if (k && findDescriptor(t, p)?.get) throw killedErr(k);
+      }
+      const v = Reflect.get(t, p, t);
+      if (typeof v !== "function" || p === "constructor") return v;
+      const c = wrapped2.get(p);
+      if (c && c.v === v) return c.w;
+      const gate = typeof p === "string" && !KILL_SELF_GATED.has(p);
+      const w = function(...args) {
+        if (gate) {
+          const k = killedMark(t.ctx);
+          if (k) {
+            if (KILL_NOOP.has(p)) return Promise.resolve(void 0);
+            throw killedErr(k);
+          }
+        }
+        return v.apply(t, args);
+      };
+      wrapped2.set(p, { v, w });
+      return w;
+    },
+    set(t, p, v) {
+      return Reflect.set(t, p, v, t);
+    }
+  });
+}
 function wrapPlainClass(C, name, bindings, opts) {
   if (typeof C !== "function") throw new Error(`tw: durable_objects class ${name} is not exported by the main module`);
   const proto = C.prototype;
@@ -1153,6 +1194,7 @@ function wrapPlainClass(C, name, bindings, opts) {
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
+        const gated = killGate(this, name);
         if (tw && oname && opts.node && !killedMark(ctx)) {
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
@@ -1167,6 +1209,7 @@ function wrapPlainClass(C, name, bindings, opts) {
           } catch {
           }
         }
+        return gated;
       }
       async __tw_kill(reason) {
         this.ctx.storage.kv.put("__tw_killed", reason || "killed");
