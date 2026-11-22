@@ -46,6 +46,6 @@ So caps on Service flows were both narrower (svc caps missing) and wider
   `TW_E2E_SVC_ONLY=1` (tag grant removed). Cleanup: 0 devices, 0 test keys,
   0 Services left; policy restored byte-identical to the backup (same ETag).
 - `make lint`: ok. `make changes-check`: ok (no fragment needed).
-- `make test`: see the PR.
+- `make test` (mbp runner, before merging #221): exit 0, every package ok. After merging origin/master (#221: docs, mgmt/ui test): `make lint` ok, `go test ./docs/... ./cmd/tw -run Doc` ok.
 
 Not run: `make e2e-svc` / `e2e-mm-svc` (tailnet 1, used by other agents).
