@@ -1,6 +1,6 @@
 // Test fixture for tw-hostd: an ordinary Worker + DOs that expose what the
 // platform did (caller, attribution, headers) so the Go tests can check it.
-import { DurableObject } from "cloudflare:workers";
+import { DurableObject, env as rawEnv } from "cloudflare:workers";
 import { getCaller, tailnet, isTailnetError } from "@tailworks/tailnet";
 
 const SEEN = (req) => Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-tw-") || k.startsWith("cf-") || k === "x-forwarded-for" || k === "tailnet-assertion"));
@@ -128,6 +128,10 @@ export class Ticker extends DurableObject {
   async alarm() {
     await this.ctx.storage.put("alarms", ((await this.ctx.storage.get("alarms")) ?? 0) + 1);
   }
+  // An RPC method (#211: a killed Ticker must not run it).
+  async hello(x) {
+    return { hello: x, name: this.ctx.id.name };
+  }
 }
 
 export default {
@@ -139,6 +143,11 @@ export default {
       const u = new URL(req.url);
       u.pathname = "/" + rest.join("/");
       return env.PROBE.getByName(name).fetch(new Request(u, req));
+    }
+    // ?raw=1: the raw binding, which admits nothing (it reaches only existing objects).
+    if (url.pathname === "/tickrpc") {
+      const ns = url.searchParams.get("raw") ? rawEnv.TICKER : env.TICKER;
+      return Response.json({ reply: await ns.getByName(url.searchParams.get("name")).hello("worker") });
     }
     if (url.pathname === "/rpc") return Response.json({ reply: await env.PROBE.getByName(url.searchParams.get("name")).hello("worker") });
     return Response.json({ kind: "worker", caller: getCaller(req), sawHeaders: SEEN(req), hasTailnet: !!ctx.tailnet, env: Object.keys(env).sort() });
