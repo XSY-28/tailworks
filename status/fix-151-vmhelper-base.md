@@ -1,5 +1,13 @@
 Last update: 2026-11-21 21:40 PT. vmhelper snapshot-base guard (#151, ledger H16 / F8).
 
+## Follow-up, 2026-11-22: the KVM path has run
+
+The gap noted under Tests below is closed. On a nested KVM test host
+(Linux amd64), the base-snapshot path (`makeBase` with `Base: true`, then
+`snapshot-base`) and `helper.TestRT3_H16_BaseGuard` ran on real KVM and
+passed, along with `TestSnapshotRestore` and the rest of `make e2e-vm`.
+Details: `status/docs-amd64-verified.md`.
+
 ## What changed
 
 - `helperapi.StartRequest.Base`: hostd sets it on the base boot only
