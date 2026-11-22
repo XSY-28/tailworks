@@ -4793,6 +4793,15 @@ components:
             one may go without (`409 name_prefix_required`). Fixed once the tenant
             has deployed.
         oboPublicKey: { type: string, description: base64 Ed25519 key that verifies this tenant's node certificates; hostd pins it. }
+        warmKeys:
+          type: integer
+          minimum: 0
+          description: |
+            Pooled preauthorized join keys of this tenant in mgmt's custody
+            (the warm-key pool: unused, being adopted, or expired with the
+            revocation still to retry). Anyone who can read custody can join
+            a node with one until it expires. `tw down` and `tw tenant rm`
+            revoke them.
         createdAt: { type: integer, format: int64 }
         updatedAt: { type: integer, format: int64 }
     TenantCreate:

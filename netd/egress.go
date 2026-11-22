@@ -21,9 +21,11 @@ import (
 // Egress entrypoint; serve it only on a socket tenant code cannot reach
 // directly (a 0700 directory shared with workerd).
 //
-// Each request leaves via its object's own node. Destinations are resolved
-// from that object's netmap only (ADR-019): names never go to host DNS and
-// non-tailnet IPs never go to the host network.
+// Each tailnet request leaves via its object's own node. Tailnet
+// destinations are resolved from that object's netmap only (ADR-019); a
+// tailnet-shaped name never goes to host DNS. A destination that is not on
+// the tailnet takes the internet path (internet.go,
+// ADR-049) when Config.Internet is set.
 func (r *Registry) EgressHandler() http.Handler {
 	rp := &httputil.ReverseProxy{
 		FlushInterval: -1,
@@ -81,7 +83,7 @@ func (r *Registry) EgressHandler() http.Handler {
 			return
 		}
 		// Resolve up front for a typed error; dialEgress re-checks at dial time.
-		if _, e := o.resolveEgress(req.Context(), req.URL.Host, req.URL.Scheme); e != nil {
+		if _, _, e := o.resolveEgress(req.Context(), req.URL.Host, req.URL.Scheme); e != nil {
 			WriteError(w, e)
 			return
 		}
@@ -150,9 +152,12 @@ func (egressTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // request URL (a name or an IP); it is resolved and checked again here so no
 // code path can reach tsnet.Server.Dial with an unchecked destination.
 func (o *Object) dialEgress(ctx context.Context, network, addr string) (net.Conn, error) {
-	ap, e := o.resolveEgress(ctx, addr, "")
+	ap, inet, e := o.resolveEgress(ctx, addr, "")
 	if e != nil {
 		return nil, e
+	}
+	if inet != nil {
+		return o.dialInternet(ctx, inet)
 	}
 	o.mu.Lock()
 	srv, state := o.srv, o.state
@@ -173,12 +178,17 @@ func (o *Object) dialEgress(ctx context.Context, network, addr string) (net.Conn
 }
 
 // resolveEgress applies the ADR-019 egress policy to hostport and returns the
-// tailnet address to dial. scheme supplies the default port.
-func (o *Object) resolveEgress(ctx context.Context, hostport, scheme string) (netip.AddrPort, *Error) {
-	refuse := func(code, detail string) (netip.AddrPort, *Error) {
+// tailnet address to dial, or an internet destination for dialInternet
+// (resolved and checked only when dialled). scheme supplies the default port.
+func (o *Object) resolveEgress(ctx context.Context, hostport, scheme string) (netip.AddrPort, *internetDst, *Error) {
+	refuse := func(code, detail string) (netip.AddrPort, *internetDst, *Error) {
 		e := newErr(code, detail)
 		e.Object, e.Destination = o.id, hostport
-		return netip.AddrPort{}, e
+		return netip.AddrPort{}, nil, e
+	}
+	internet := func(host string, port uint64, literal bool) (netip.AddrPort, *internetDst, *Error) {
+		d, e := o.internetRoute(host, uint16(port), literal)
+		return netip.AddrPort{}, d, e
 	}
 	host, portStr, err := net.SplitHostPort(hostport)
 	if err != nil {
@@ -213,13 +223,16 @@ func (o *Object) resolveEgress(ctx context.Context, hostport, scheme string) (ne
 	ip, err := netip.ParseAddr(host)
 	if err == nil {
 		ip = ip.Unmap()
+		if !tsaddr.IsTailscaleIP(ip) && o.reg.cfg.Internet != nil {
+			return internet(ip.String(), port, true)
+		}
 		if code, detail := o.reg.classify(o, ip); code != "" {
 			return refuse(code, detail)
 		}
 		for _, p := range st.Peer {
 			for _, a := range p.TailscaleIPs {
 				if a == ip {
-					return netip.AddrPortFrom(ip, uint16(port)), nil
+					return netip.AddrPortFrom(ip, uint16(port)), nil, nil
 				}
 			}
 		}
@@ -227,7 +240,7 @@ func (o *Object) resolveEgress(ctx context.Context, hostport, scheme string) (ne
 			if code != "" {
 				return refuse(code, detail)
 			}
-			return netip.AddrPortFrom(ip, uint16(port)), nil
+			return netip.AddrPortFrom(ip, uint16(port)), nil, nil
 		}
 		return refuse(CodePeerNotVisible, "no peer with address "+ip.String()+" in this object's netmap (a grant is missing, or the peer is offline or deleted)")
 	}
@@ -264,17 +277,17 @@ func (o *Object) resolveEgress(ctx context.Context, hostport, scheme string) (ne
 			if code, detail := o.reg.classify(o, vip); code != "" {
 				return refuse(code, detail)
 			}
-			return netip.AddrPortFrom(vip, uint16(port)), nil
+			return netip.AddrPortFrom(vip, uint16(port)), nil, nil
 		}
 		if !tailnetShaped(want, st) {
-			return refuse(CodeInternetEgressUnavailable, internetEgressDetail(host))
+			return internet(want, port, false)
 		}
 		return refuse(CodePeerNotVisible, "no peer named "+host+" in this object's netmap (names are never resolved via host DNS; a grant may be missing)")
 	}
 	if code, detail := o.reg.classify(o, found); code != "" {
 		return refuse(code, detail)
 	}
-	return netip.AddrPortFrom(found, uint16(port)), nil
+	return netip.AddrPortFrom(found, uint16(port)), nil, nil
 }
 
 // classify returns a refusal for ip, or "" if it is an allowed tailnet peer
@@ -310,7 +323,7 @@ func (r *Registry) classify(o *Object, ip netip.Addr) (code, detail string) {
 		}
 	}
 	if !tsaddr.IsTailscaleIP(ip) {
-		return CodeForbiddenDestination, "non-tailnet destination (internet egress needs an exit node or gateway; none configured)"
+		return CodeForbiddenDestination, "non-tailnet destination (this host has no internet egress path)"
 	}
 	return "", ""
 }

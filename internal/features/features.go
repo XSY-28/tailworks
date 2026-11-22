@@ -24,6 +24,10 @@ const (
 	Queues = "queues"
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).
 	Telemetry = "telemetry"
+	// WorkerInternet is tailnet.egress.internet's boolean form (true or
+	// false) and Worker internet egress (ADR-049). An
+	// older hostd can't parse a boolean there; the list form needs nothing.
+	WorkerInternet = "worker-internet"
 	// Workflows is wrangler "workflows" on workerd's engine, with approvals
 	// by tailnet identity (ADR-040).
 	Workflows = "workflows"
@@ -35,6 +39,7 @@ func Host() []string {
 	out := []string{
 		Queues,
 		Telemetry,
+		WorkerInternet,
 		Workflows,
 	}
 	out = append(out, bundle.StoreKindNames()...)
@@ -53,6 +58,9 @@ func Required(app *bundle.App) []string {
 	}
 	if app.Queues != nil && (len(app.Queues.Producers) > 0 || len(app.Queues.Consumers) > 0) {
 		out = append(out, Queues)
+	}
+	if app.Internet.Boolean() {
+		out = append(out, WorkerInternet)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)

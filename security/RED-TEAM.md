@@ -937,6 +937,30 @@ fail only their own session (I8).
 
 ---
 
+# Note 2026-11-21: RT3-16 fixed (#151)
+
+This note updates RT3-16. The earlier passes are left as written.
+
+hostd marks the VM it boots for the base snapshot with `StartRequest.Base`
+(`hostd/vm/snapshot_linux.go` → `bootOpts.base`), and the helper keeps the
+flag on the session (`hostd/vm/helper/baseguard_linux.go`). `snapshot-base`
+now needs a session started with `Base` that has a volume slot, no volume
+and is not a restored copy; any other target is refused before the helper
+pauses it, and is left running (before, a refused target was killed).
+`attach` is refused on a `Base` session, so the base never holds a DO
+volume, and the old race between an attach on the VM's own connection and
+a `snapshot-base` from another is gone. `start` refuses `Base` without a
+volume slot, with a container image or with a restore.
+
+The helper still can't see what hostd sends the guest over vsock (a bundle,
+a MAC key): hostd's fresh-boot and `fsscan` checks stay the main guard.
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| RT3-16 | **Fixed** (F8) | `helper.TestRT3_H16_BaseGuard` (Linux, no KVM or root): a claimed pool VM without a volume, a VM with a volume, a restored copy and cold boots are refused `snapshot-base` with `bad_request`, with no call to the VMM's API and without being stopped; a `Base` session is refused `attach`; `start` refuses the three bad `Base` combinations. With the old check, the claimed pool VM and the restored copy reach the VMM's pause call. |
+
+---
+
 # Note 2026-11-21: H22 confirmed and fixed (#155)
 
 This note records the CapMap half of H22. The earlier passes are left as

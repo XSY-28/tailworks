@@ -35,7 +35,9 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   Each object's key is single use, pre-authorized, tagged and expires
   within 5 minutes (`KeyExpiry` in `mgmt/types.go`). Warm keys, minted
   ahead of time so new objects start faster, wait in mgmt's custody for up
-  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)). Revoking the credential
+  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)).
+  `tw status` shows how many each tenant has; `tw down` and `tw tenant rm`
+  revoke them. Revoking the credential
   stops all future minting.
 - **Kill is a network cut.** `tw kill` tombstones the object, its node
   stops answering (410), and with the Devices scope the device is deleted.
@@ -104,22 +106,46 @@ a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
 
-## Egress: deny by default
+## Egress
 
-- A Worker's outbound `fetch()` reaches **tailnet peers only**. A name that
-  isn't in the node's netmap is refused (`peer_not_visible`; an internet
-  name gets `internet_egress_unavailable`), as are loopback, link-local,
-  metadata and the host's own addresses. There is no internet egress for
-  Workers, and no setting that turns it on; put what they need on the tailnet
-  ([recipes.md](recipes.md)). This is netd's guard on the path every
-  `fetch()` takes; code that escapes workerd's V8 sandbox, and a Node app,
-  are held to it only where the OS sandbox confines TCP (see the table
-  above). Containers may reach an `egress.internet`
-  allowlist ([containers.md](containers.md)).
-- Traffic leaves from the workload's node, or from the object's own node
-  in facet mode ([egress-modes.md](egress-modes.md)), so your tailnet
-  policy decides what each object can reach, and the other side's
-  `getCaller` sees which object called.
+- **Tailnet egress** leaves from the workload's node, or from the object's
+  own node in facet mode ([egress-modes.md](egress-modes.md)), so your
+  tailnet policy decides what each object can reach, and the other side's
+  `getCaller` sees which object called. Tailnet names resolve from the
+  node's netmap only, never from host DNS; a tailnet name that isn't in the
+  netmap is refused (`peer_not_visible`).
+- **Internet egress is on by default** (ADR-049). A
+  `fetch()` to a public host leaves from the **host's own network**, never
+  from a tailnet node: the destination sees the host's source address
+  (different on each host) and no tailnet identity, and tailworks strips
+  its identity headers. `tailnet.egress.internet: false` turns it off and a
+  list limits it ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet));
+  `tw-hostd -worker-internet=off` turns it off for a whole host. A refused
+  destination is `internet_egress_unavailable`.
+- **The SSRF guard always applies.** netd refuses loopback, private
+  (RFC 1918, ULA), link-local (including `169.254.169.254` and other cloud
+  metadata), CGNAT `100.64.0.0/10` and the tailnet ranges, the host's own
+  addresses, and translated forms of these (IPv4-mapped, NAT64, 6to4,
+  Teredo), with `forbidden_destination`. It checks the address it actually
+  dials, after DNS: a name with **any** forbidden answer is refused (no DNS
+  rebinding), and names under special-use suffixes (`.internal`, `.local`,
+  `.localhost`, `.lan`, …) are refused without being looked up.
+- **What host DNS sees.** An internet name that the workload's setting
+  allows is resolved by the host's resolver, which sees the name (not which
+  tenant asked). Tenants on one host share that resolver's cache. A
+  workload that must not leak its lookups turns internet egress off and
+  uses a gateway on the tailnet ([recipes.md](recipes.md#call-an-internet-api)).
+- **Audit.** The first internet flow per object and destination is an
+  `egress` audit record naming the address dialled; refusals are `deny`
+  records.
+- **What this means for your data.** A Worker that can read something on
+  the tailnet can now send it to the internet. Give a workload that holds
+  sensitive tailnet data `"internet": false` unless it needs the internet.
+- This is netd's guard on the path every `fetch()` takes; code that
+  escapes workerd's V8 sandbox, and a Node app, are held to it only where
+  the OS sandbox confines TCP (see the table above). Containers' internet
+  egress uses the same guard and the same setting
+  ([containers.md](containers.md)).
 
 ## Trust boundaries
 
@@ -173,7 +199,8 @@ The only request the CLI makes without being asked is the update check:
   (`~/.tailworks` by default); when a newer release is out, `tw` prints a
   one-line notice on stderr.
 - **Never:** after `tw init` or `tw dev` (both run with no tailnet, no
-  credentials and no outbound request), `tw version`, `tw completion` or
+  credentials and no outbound request of their own; under `tw dev`, your
+  Worker's internet `fetch()` calls do go out, as on a host), `tw version`, `tw completion` or
   `tw mcp`; with `--json`; when stderr isn't a terminal; with `CI` set; or
   in a development build.
 - **Off:** `TW_NO_UPDATE_CHECK=1`. `tw version --json` reports whether it
