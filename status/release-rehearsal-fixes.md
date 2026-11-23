@@ -22,3 +22,29 @@ failed on:
 Seen, not failing: on vz the "no keys in guest memory" scan couldn't save
 VM state ("permission denied"), so guest memory wasn't scanned under the
 runner; files and disks were.
+
+## Rehearsal 2 → real-tailnet suites (2026-11-23)
+
+Run locally on the release runner's machine (same credentials) before the
+next rehearsal, one suite at a time:
+
+- e2e-oauth: pass after #265 (tag:tw-wl-mcp2 owned).
+- e2e-mm-svc, e2e-coldid-real: pass.
+- e2e-svc (TestE2EService, TestE2EReplicas): two stale assumptions, both
+  from changes the suite hadn't been run against: `tw up` is single-process
+  by default (the suite now passes `--separate-host`, as cliflow does), and
+  minting is OAuth-only, so the run's OAuth client needs the `services`
+  scope for a workload with a Service (cliflow.RealOAuthClientScopes). Now
+  pass.
+- e2e-svc-caps: tailnet 2's policy had lost the H22 entries. The test now
+  adds them itself (internal/tssvc/real_caps_policy_test.go: additive,
+  validated, If-Match, previous policy saved next to the key file), with
+  the user's OK. Now pass.
+- e2e-public: the first run got its first public answer in 48 s, then a
+  route fetch failed on a transport error (IPv6 no route; next run, DNS no
+  such host). fetch now retries dial/DNS errors 3× (any response is
+  returned as is). A third run never got a Funnel certificate in 12 min
+  (cert prefetch timed out twice; CI saw an ACME DNS-01 NXDOMAIN for a mgmt
+  name): certificate issuance, not tailworks. Open: every run mints certs
+  for fresh *.tail7906d5.ts.net names, and Let's Encrypt limits certs per
+  registered domain per week.

@@ -25,11 +25,13 @@ package public
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -108,12 +110,35 @@ type resp struct {
 	err  error
 }
 
+// fetch makes one request. A failure to resolve or connect (no response at
+// all) is retried a few times, 2 s apart: right after a Funnel name first
+// answers, public DNS and the edge's IPv6 path can still flap for a few
+// seconds. That is not what the checks test, and any response, whatever its
+// status, is returned as is.
 func fetch(hc *http.Client, method, u string, body io.Reader, hdr ...string) resp {
-	req, _ := http.NewRequest(method, u, body)
-	for i := 0; i+1 < len(hdr); i += 2 {
-		req.Header.Set(hdr[i], hdr[i+1])
+	var payload []byte
+	if body != nil {
+		payload, _ = io.ReadAll(body)
 	}
-	r, err := hc.Do(req)
+	var r *http.Response
+	var err error
+	for attempt := 0; ; attempt++ {
+		var rd io.Reader
+		if payload != nil {
+			rd = bytes.NewReader(payload)
+		}
+		req, _ := http.NewRequest(method, u, rd)
+		for i := 0; i+1 < len(hdr); i += 2 {
+			req.Header.Set(hdr[i], hdr[i+1])
+		}
+		r, err = hc.Do(req)
+		var dnsErr *net.DNSError
+		var opErr *net.OpError
+		if err == nil || attempt == 3 || !(errors.As(err, &dnsErr) || (errors.As(err, &opErr) && opErr.Op == "dial")) {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
 		return resp{err: err}
 	}
