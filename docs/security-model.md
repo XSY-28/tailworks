@@ -44,6 +44,14 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   `tw status` shows how many each tenant has; `tw down` and `tw tenant rm`
   revoke them. Revoking the credential
   stops all future minting.
+- **mgmt's own node key is handed over in a single-use file.** On the
+  first start, `tw up` mints mgmt's `tag:tw-mgmt` key (single use,
+  pre-authorized, expires within 5 minutes) and writes it to
+  `~/.tailworks/mgmt/join.env`, a 0600 file in mgmt's 0700 state
+  directory that workloads' sandboxes can't read. mgmt reads the key and
+  deletes the file before it joins; a failed start deletes it too, and so
+  does `tw up` when it returns. A host's own join key
+  (`~/.tailworks/hostd/join.env`) is handled the same way.
 - **Kill is a network cut.** `tw kill` tombstones the object, its node
   stops answering (410), and with the Devices scope the device is deleted.
 

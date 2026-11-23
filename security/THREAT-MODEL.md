@@ -74,7 +74,14 @@ code wins.
 - **B5 Platform ↔ Tailscale control.** One revocable mint credential per
   tenant (OAuth client, or Headscale API key). Object keys are single use,
   pre-authorized, tagged, and expire within 5 minutes; warm keys wait in
-  custody for up to 30 minutes.
+  custody for up to 30 minutes. mgmt's own first join key (tag:tw-mgmt,
+  single use, pre-authorized, 5-minute expiry) is minted by `tw up` and
+  handed to mgmt in `<state>/mgmt/join.env`: 0600, in mgmt's 0700 state
+  dir, which the process sandbox denies to workloads. mgmt reads it and
+  deletes it before it joins; a failed start deletes it too, and so does
+  `tw up` when it returns. A same-uid reader in that window gets one
+  short-lived key for a node mgmt is about to take. hostd's join file
+  (`<state>/hostd/join.env`) works the same way.
 - **B6 Admin's browser ↔ mgmt.** An admin's browser is on the tailnet and
   carries the admin's WhoIs identity to mgmt's `/ui` and `/v1` (plain HTTP
   on :80, HTTPS on :443 when the tailnet has certificates). Any web page

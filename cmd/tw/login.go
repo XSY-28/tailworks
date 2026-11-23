@@ -37,12 +37,14 @@ type joinOpts struct {
 	Out                       io.Writer // where the login URL and progress go
 }
 
-// joinMgmtNode joins (or re-opens) mgmt's tsnet node from the CLI, so the
+// joinMgmtNode joins (or re-opens) a tsnet node from the CLI, so an
 // interactive login happens in the operator's terminal: it prints the
 // login URL, waits for the login, reads the netmap (tailnet name, DNS
-// name, HTTPS, funnel) and closes the node again. tw-mgmt then re-opens
-// the same state dir without any login. The system tailscaled is never
-// used: this is a separate tsnet node whose state lives under Dir.
+// name, HTTPS, funnel) and closes the node again. `tw link --tsnet` uses
+// it for the CLI's own node. `tw up` no longer does: mgmt joins its own
+// node with the single-use key tw up hands it in a 0600 file
+// (up_mgmtjoin.go). The system tailscaled is never used: this is a
+// separate tsnet node whose state lives under Dir.
 func joinMgmtNode(ctx context.Context, o joinOpts) (*mgmtNode, error) {
 	ts := &tsnet.Server{Hostname: o.Hostname, Dir: o.Dir, ControlURL: o.ControlURL, AdvertiseTags: o.Tags, AuthKey: o.AuthKey,
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}

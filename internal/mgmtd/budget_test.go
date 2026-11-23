@@ -45,27 +45,26 @@ func TestStartCloseBudget(t *testing.T) {
 	if err := os.WriteFile(keyFile, []byte("TS_AUTHKEY="+nettest.DummyKey+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// As tw up starts it: the key is a single-use handoff (joinkey.go), so
+	// the restart runs with the same options and no file.
 	opts := Options{StateDir: filepath.Join(dir, "mgmt"), TSNetHostname: "tw-budget-mgmt", TSNetControlURL: ctl.URL,
-		TSNetAuthKeyFile: keyFile, TSNetTLS: true, RegistryDir: "off", Version: "test"}
+		TSNetAuthKeyFile: keyFile, TSNetAuthKeyOnce: true, TSNetTLS: true, RegistryDir: "off", Version: "test"}
 	for _, p := range []struct {
 		name        string
 		start, stop time.Duration
-		before      func()
 	}{
 		{name: "first start (join)", start: 10 * time.Second, stop: 2500 * time.Millisecond},
-		{name: "restart (saved node state)", start: 2 * time.Second, stop: 2500 * time.Millisecond, before: func() {
-			opts.TSNetAuthKeyFile = ""
-		}},
+		{name: "restart (saved node state)", start: 2 * time.Second, stop: 2500 * time.Millisecond},
 	} {
-		if p.before != nil {
-			p.before()
-		}
 		st := time.Now()
 		rt, err := Start(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("%s: %v", p.name, err)
 		}
 		started := time.Since(st)
+		if _, err := os.Stat(keyFile); !os.IsNotExist(err) {
+			t.Errorf("%s: the single-use key file is still there (stat: %v)", p.name, err)
+		}
 		st = time.Now()
 		rt.Close()
 		closed := time.Since(st)
