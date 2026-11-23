@@ -48,3 +48,27 @@ next rehearsal, one suite at a time:
   name): certificate issuance, not tailworks. Open: every run mints certs
   for fresh *.tail7906d5.ts.net names, and Let's Encrypt limits certs per
   registered domain per week.
+
+## Rehearsal 3 (run 45283961679)
+
+Hosted suites, both Firecracker jobs, gates, build: pass. Six of seven
+templates pass on all three tarballs; e2e-public got its Funnel certificate
+this time.
+
+- **Product bug, fixed:** the node-workflow template couldn't build from an
+  installed release (`Cannot find package 'esbuild'`): build.mjs and
+  build-node.mjs imported esbuild statically from create-tailworks, and a
+  release vendors only pure-JS modules (esbuild is native; tw has its own
+  built in). build-node.mjs now loads esbuild from the app (as it loads
+  @workflow/builders), build.mjs loads it lazily, and the template depends
+  on esbuild 0.28.2 itself. Reproduced with create-tailworks copied away
+  from any esbuild: failed before, serves after.
+- e2e-public: a route fetch got NXDOMAIN from public DNS for the new Funnel
+  name (cached negative answer). fetch retries dial/DNS errors for up to a
+  minute (was 3 × 2 s).
+- **mac-vz TestContainerSmoke: canary hits 2** while every guest probe was
+  refused. Not reproduced: 13/13 passes locally with the same images and
+  guest. The canary listens on all of the runner machine's addresses, so
+  the hits may be another process on that machine, but that is not shown:
+  the test now records each hit's source and local address, so a recurrence
+  says where it came from. Not loosened.
