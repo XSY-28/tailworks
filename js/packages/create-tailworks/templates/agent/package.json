@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "@tailworks/tailnet": "^0.3.0",
+    "@tailworks/tailnet": "^0.4.0",
     "agents": "0.33.0"
   },
   "devDependencies": {

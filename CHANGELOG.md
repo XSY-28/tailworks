@@ -7,6 +7,565 @@ work and what may break: [docs/RELEASING.md](docs/RELEASING.md#versions).
 What may run together, and how to upgrade:
 [docs/upgrading.md](docs/upgrading.md).
 
+## v0.4.0 (2026-11-23)
+
+workerd 1.20261118.1.
+
+### Breaking
+
+#### feat-161-worker-internet-egress
+
+Workers now have internet egress, on by default, as on Cloudflare
+(ADR-049, #161). A Worker's, Durable Object's or Node
+app's `fetch("https://api.example.com/...")` now works instead of failing
+with `internet_egress_unavailable`. The request leaves from the host's own
+network, not from a tailnet node, so the API sees the host's address (each
+host has its own) and no tailnet identity. Tailnet egress is unchanged.
+
+An SSRF guard always applies: loopback, private (RFC 1918, ULA),
+link-local (including cloud metadata at `169.254.169.254`), CGNAT and
+tailnet ranges and the host's own addresses are refused with
+`forbidden_destination`. The check is on the address actually dialled,
+so a DNS name that resolves to any such address is refused too. Names
+under `.internal`, `.local`, `.localhost`, `.lan` and other special-use
+suffixes are never looked up. The first internet flow per object and
+destination is an `egress` audit record.
+
+`tailnet.egress.internet` in tailworks.jsonc is now one setting for
+Workers and containers: `false` (or `[]`) turns internet egress off, a
+list of hosts limits it, and `true` also lets containers started with
+`enableInternet` reach any public host. When it is absent, Workers may
+reach any public host and containers none, as before.
+`internet_egress_unavailable` now means internet egress is turned off by
+config. `tw-hostd` has a new `-worker-internet` flag (`direct`, the
+default, or `off`), and hosts advertise the `worker-internet` feature,
+which a bundle that uses `true` or `false` needs.
+
+Operator action: workloads without `tailnet.egress.internet` gain internet
+egress as soon as their host runs this release, without a redeploy. To
+keep a workload off the internet, set `"egress": {"internet": false}` (or
+`[]` while some hosts are still on an older release) and redeploy it
+before upgrading, or run `tw-hostd -worker-internet=off`. Workloads with an
+allowlist keep it for containers, and their Workers may now reach the
+listed hosts.
+
+### Security
+
+#### fix-148-seal-cf
+
+A caller in `request.cf` is now sealed. hostd seals the caller of every
+tailnet request with an HMAC under the instance's key, and the platform
+checks the seal before a Durable Object, the Worker or an audit
+`actingFor` uses it. Tenant code that forwards a request in-process with a
+caller it made up (a Durable Object stub `fetch`, or a `Request` passed by
+RPC to a facet object) now delivers no caller, so `getCaller()` throws
+`no_identity`. Forwarding the request you received still carries its
+caller. A seal lasts five minutes and can be replayed only for the same
+real caller, inside the same workload (RT3-08 / H08, #148).
+
+#### fix-151-vmhelper-base
+
+tw-vmhelper now decides for itself which microVM may become a base
+snapshot. hostd marks the VM it boots for the base (`StartRequest.Base`),
+and the helper refuses `snapshot-base` on every other VM (a claimed pool
+VM, a VM with a Durable Object volume, a restored copy) and refuses to
+attach a volume to the base VM. Before, it accepted any VM that still had
+a free volume slot, which included a claimed workload without a volume.
+
+Upgrade: the field is additive and the helper protocol stays at 2. A newer
+hostd with an older helper works as before (the helper ignores the field).
+An older hostd with a newer helper gets its `snapshot-base` refused, logs
+"microVM base snapshot failed; booting instead of restoring", and boots
+VMs cold until hostd is upgraded too. Only hosts with microVM snapshots
+turned on are affected.
+
+#### fix-156-placement-poison
+
+Smart placement bounds what a host's path report can claim. A huge `rttMs`
+or `ageMs` used to overflow, so a host could make its own path look like the
+best one, or keep a measurement fresh for ever. mgmt now clamps a reported
+RTT to 1 minute and an age to 1 hour, and placement ignores stored
+measurements outside those bounds. `docs/security-model.md` now says what a
+compromised host's path reports can and can't do (ledger H23).
+
+#### fix-158-warm-keys
+
+Warm keys (pre-minted, preauthorized single-use join keys that make new
+objects start faster) no longer outlive the mgmt that holds them. `tw down`
+now revokes every unused warm key with Tailscale and deletes it from mgmt's
+custody as mgmt stops (before, only `tw down --purge` did; otherwise they
+stayed in custody until they expired, up to 30 min). `tw tenant rm` already
+revoked them. `tw status` shows how many warm keys each tenant has in
+custody, and `GET /v1/tenants/{id}` has a new `warmKeys` count (also in
+`tw status --json`).
+
+Two narrow leaks are closed too: a warm key being minted when mgmt shut
+down, and one minted while `tw tenant rm` ran, could stay live at Tailscale
+until it expired. Both are now revoked.
+
+tw-mgmt has a new flag, `-revoke-warm-keys-on-exit` (off by default; `tw up`
+sets it). Leave it off for mgmt replicas that share a store, or every
+replica restart revokes the shared pool.
+
+Operator action: none. After a `tw up` restart (including `tw upgrade`) the
+pool refills on the next create or deploy.
+
+#### fix-175-seatbelt-reads
+
+On macOS, the process-tier Seatbelt profile now allows reads only from the
+OS dirs (`/System`, `/usr`, `/bin`, `/sbin`, `/etc`, `/opt`, `/dev`, the
+time zone database), the runtime binary, the Node install prefix and the
+workload's own dirs. Before, a workload could read anything your user can
+read outside a deny list (`/tmp`, `/var/folders`, shared dirs, other
+users' world-readable files). Its TCP rules are also IPv4-only now, so it
+reaches its egress proxy and its own port on `127.0.0.1` but not on `[::1]`.
+
+A Node app that reads files outside its own dirs (for example under `/tmp`
+or `/Library`), or listens on `localhost` (which Node resolves to `::1`)
+instead of `$HOST`, now gets `EPERM`. `tw-hostd -sandbox seatbelt-legacy`
+still runs the old files-only profile for one release.
+
+#### fix-185-154-ingress-controls
+
+Public ingress refuses paths with control characters (`%00`–`%1F`, `%7F`)
+with `400 bad_request`, counted in the `public_rejected` summary like other
+bad paths, so NUL, ESC and CR/LF never reach your app. New object names
+containing a C0 control, DEL, a C1 control or a bidi control are refused
+with the new error code `400 bad_object_name` (hostd ensure/admit and mgmt
+`POST /v1/objects`). Objects that already have such a name are not renamed
+or deleted. `docs/public-ingress.md` now says that apps receive the path
+decoded once and should not decode it again.
+
+Operator action: none. In a mixed-version fleet, an upgraded hostd or an
+upgraded mgmt is enough to refuse such names.
+
+#### fix-211-killed-do-rpc
+
+A killed plain Durable Object (`"egress": "workload"`) no longer runs tenant
+code through its RPC methods. Before, only its `fetch` checked the kill, so
+a stub kept from before `tw kill`, or the raw binding from
+`import { env } from "cloudflare:workers"`, could still call its methods.
+Now every method or getter reached from outside the object fails with
+`[killed]` (the caller's request gets `410 killed`), and its `alarm` and
+WebSocket handlers do nothing. A facet object's platform host refuses to
+start a killed object's code by any path.
+
+#### fix-facet-host-rpc
+
+A facet object's platform host no longer answers tenant code on its
+internal methods. The Worker's raw binding (`import { env } from
+"cloudflare:workers"`) and a facet's bindings both reach that host, and
+workerd exposes a Durable Object's methods over RPC. Its helpers are no
+longer methods, and the calls only the platform makes (kill, container
+intercept, alarm delegation) now need a key only the platform holds, so
+tenant code can no longer start an object hostd did not admit, set its
+alarm, or kill it without `tw kill`.
+
+#### fix-lan-bind-exposure
+
+A sandboxed Node app can now be reached only through tailworks' ingress.
+Before, an app that ignored `HOST` and called `listen(PORT)` (which binds
+every interface), or that opened its own listener on `0.0.0.0`, could be
+reached on its port at the host's LAN address, without WireGuard identity
+or tailnet ACLs. That was possible on both macOS and Linux.
+
+hostd now owns the app's listener. On Linux it passes `127.0.0.1:<PORT>`
+to the app as fd 3, and a seccomp rule makes any other `listen()` a no-op.
+On macOS the app listens on a unix socket in its instance dir, and hostd
+forwards `127.0.0.1:<PORT>` to that socket for self-calls. A preload points
+`server.listen(PORT)` at hostd's listener, so apps need no change.
+
+Behaviour change: under a sandbox, a listen on any port other than `PORT`
+(or a native module's own TCP listener) now fails. On Linux kernels with
+Landlock ABI < 4 it returns success instead, but the socket never accepts
+connections.
+
+#### sec-155-svc-caps
+
+App capabilities on calls through a Tailscale Service now match the policy
+(H22, #155). Before, a workload (and `tw-mgmt` behind `svc:tw-mgmt`) worked
+out a caller's caps as if the call had gone to the node's own address. So on
+a call through the Service VIP, `caps()` was missing the caps of grants to
+the `svc:` name, and it showed the caps of grants to the workload's tags even
+though the caller hadn't dialed the node. Now a call through the VIP gets
+exactly the caps of grants whose `dst` is the `svc:` name. A call to the
+node's own name or address gets the caps of grants to its tags, as before.
+
+`tw deploy` and `tw policy` warn (`! preflight  access:`) for each caller
+whose caps are on the workload tags but not on its `svc:` name, and print the
+grant to add. `tw policy` also prints the caller grant to the `svc:` name
+(`serviceCallerGrant` in `--json`).
+
+Operator action: this can take away caps that callers of a Service used to
+get. If a caller of a workload behind a Service gets its app capabilities
+from a grant to the workload's tags, for example
+
+    {"src": ["tag:agent"], "dst": ["tag:tw-wl-support"], "app": {"example.com/cap/mcp": [{"tools": ["lookup_order"]}]}}
+
+then add the same `app` to its grant to the Service, or add one:
+
+    {"src": ["tag:agent"], "dst": ["svc:support"], "ip": ["tcp:80"], "app": {"example.com/cap/mcp": [{"tools": ["lookup_order"]}]}}
+
+Run `tw policy` in the app's directory to list the grants to add (`tw deploy`
+prints the same warnings). For HA mgmt behind `svc:tw-mgmt`, the admin cap must be on the
+grant to `svc:tw-mgmt`, as `docs/services.md` already shows:
+
+    {"src": ["autogroup:admin"], "dst": ["svc:tw-mgmt"], "ip": ["tcp:80"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}}
+
+Without it, admins who reach mgmt through the Service are no longer admins.
+Workloads that aren't behind a Service, and single-mgmt `tw up`
+installs (admins reach `tag:tw-mgmt` by node name), are unchanged.
+
+### Upgrade actions
+
+#### bench-114-node-density
+
+A host's default node capacity now comes from its RAM: a quarter of it at
+8 MiB per object node, at least 50 and at most 1000. Before, every host
+advertised 1000. That figure is twice the measured cost of a node under
+request load. Per-node memory and registration rates on Linux and macOS
+are published in docs/limits.md ("Per-node memory" and "Registration
+rate"), and `make bench` reproduces them. docs/INSTALL.md has a sizing
+section.
+
+Operator action: a host with less than 32 GiB of RAM now advertises fewer
+than 1000 nodes (an 8 GiB host 256, a 16 GiB host 512). To keep the old
+figure, pass `tw-hostd -capacity-nodes 1000`.
+
+#### feat-115-limits
+
+Process-tier workloads now have a V8 heap cap: each isolate in a workerd
+(the Worker and each Durable Object class) is capped at 1024 MiB
+(`tw-hostd -workerd-heap-mib`), and a Node-tier app runs with
+`--max-old-space-size=2048` (`tw-hostd -node-heap-mib`) unless its
+`node.args` or `NODE_OPTIONS` set their own. Past the cap the workload's
+process aborts and hostd restarts it, so one runaway allocation can't take
+the host's memory. `-1` turns either cap off.
+
+The mgmt API rate-limits its tailnet callers: each WhoIs node may make 100
+requests/s (bursts of 200), each host 1000/s (bursts of 2000), and non-host
+callers together hold at most 256 requests at once. Over a limit is the new
+error code `429 rate_limited` with `Retry-After`. mgmt's own node (the
+operator console) and the local socket are not limited. Configure with
+`tw-mgmt -api-rps`, `-api-host-rps` and `-api-inflight` (`-1` = off).
+
+`docs/security-model.md` now states what availability isolation each tier
+gives (the process tier gives none beyond the heap cap), and
+`docs/limits.md` gives the reason for every limit tailworks deliberately
+doesn't set.
+
+Operator action: none, unless a workload legitimately needs a V8 heap over
+1 GiB (raise `-workerd-heap-mib`) or a script drives the API faster than
+100 requests/s from one node (raise `-api-rps`).
+
+#### feat-116-policy-apply
+
+`tw policy --apply` and `tw deploy --apply-policy` write an app's missing
+policy lines to the tailnet policy for you, so you no longer have to paste
+them into the admin console. That covers the `tagOwners` of its tags, the
+`tailnet.connects` grants, and `tag:tw-public` with its funnel `nodeAttrs`.
+tw prints the lines first and asks before writing; pass `--yes` when there
+is no terminal. mgmt then merges in only what is missing. Comments are kept,
+nothing is changed or removed, and nothing outside `tag:tw*` is written.
+It validates the result and writes it with `If-Match`. If the policy changed
+in the meantime, it retries once, then fails with `policy_conflict`. Each
+write is audited as `policy_apply`. The new route is
+`POST /v1/tenants/{id}/workloads/{workload}/policy`. It is for admins only,
+and `dryRun=true` gives a plan without writing. The new error codes are
+`policy_conflict` and `policy_write_denied`. `tw deploy --json` gains a
+`policy` event.
+
+Operator action: to use it, the tenant's OAuth client needs the Policy File
+write scope. If it doesn't have that scope, paste the snippet `tw policy`
+prints, as before.
+
+#### feat-161-worker-internet-egress
+
+Workers now have internet egress, on by default, as on Cloudflare
+(ADR-049, #161). A Worker's, Durable Object's or Node
+app's `fetch("https://api.example.com/...")` now works instead of failing
+with `internet_egress_unavailable`. The request leaves from the host's own
+network, not from a tailnet node, so the API sees the host's address (each
+host has its own) and no tailnet identity. Tailnet egress is unchanged.
+
+An SSRF guard always applies: loopback, private (RFC 1918, ULA),
+link-local (including cloud metadata at `169.254.169.254`), CGNAT and
+tailnet ranges and the host's own addresses are refused with
+`forbidden_destination`. The check is on the address actually dialled,
+so a DNS name that resolves to any such address is refused too. Names
+under `.internal`, `.local`, `.localhost`, `.lan` and other special-use
+suffixes are never looked up. The first internet flow per object and
+destination is an `egress` audit record.
+
+`tailnet.egress.internet` in tailworks.jsonc is now one setting for
+Workers and containers: `false` (or `[]`) turns internet egress off, a
+list of hosts limits it, and `true` also lets containers started with
+`enableInternet` reach any public host. When it is absent, Workers may
+reach any public host and containers none, as before.
+`internet_egress_unavailable` now means internet egress is turned off by
+config. `tw-hostd` has a new `-worker-internet` flag (`direct`, the
+default, or `off`), and hosts advertise the `worker-internet` feature,
+which a bundle that uses `true` or `false` needs.
+
+Operator action: workloads without `tailnet.egress.internet` gain internet
+egress as soon as their host runs this release, without a redeploy. To
+keep a workload off the internet, set `"egress": {"internet": false}` (or
+`[]` while some hosts are still on an older release) and redeploy it
+before upgrading, or run `tw-hostd -worker-internet=off`. Workloads with an
+allowlist keep it for containers, and their Workers may now reach the
+listed hosts.
+
+#### fix-158-warm-keys
+
+Warm keys (pre-minted, preauthorized single-use join keys that make new
+objects start faster) no longer outlive the mgmt that holds them. `tw down`
+now revokes every unused warm key with Tailscale and deletes it from mgmt's
+custody as mgmt stops (before, only `tw down --purge` did; otherwise they
+stayed in custody until they expired, up to 30 min). `tw tenant rm` already
+revoked them. `tw status` shows how many warm keys each tenant has in
+custody, and `GET /v1/tenants/{id}` has a new `warmKeys` count (also in
+`tw status --json`).
+
+Two narrow leaks are closed too: a warm key being minted when mgmt shut
+down, and one minted while `tw tenant rm` ran, could stay live at Tailscale
+until it expired. Both are now revoked.
+
+tw-mgmt has a new flag, `-revoke-warm-keys-on-exit` (off by default; `tw up`
+sets it). Leave it off for mgmt replicas that share a store, or every
+replica restart revokes the shared pool.
+
+Operator action: none. After a `tw up` restart (including `tw upgrade`) the
+pool refills on the next create or deploy.
+
+#### sec-155-svc-caps
+
+App capabilities on calls through a Tailscale Service now match the policy
+(H22, #155). Before, a workload (and `tw-mgmt` behind `svc:tw-mgmt`) worked
+out a caller's caps as if the call had gone to the node's own address. So on
+a call through the Service VIP, `caps()` was missing the caps of grants to
+the `svc:` name, and it showed the caps of grants to the workload's tags even
+though the caller hadn't dialed the node. Now a call through the VIP gets
+exactly the caps of grants whose `dst` is the `svc:` name. A call to the
+node's own name or address gets the caps of grants to its tags, as before.
+
+`tw deploy` and `tw policy` warn (`! preflight  access:`) for each caller
+whose caps are on the workload tags but not on its `svc:` name, and print the
+grant to add. `tw policy` also prints the caller grant to the `svc:` name
+(`serviceCallerGrant` in `--json`).
+
+Operator action: this can take away caps that callers of a Service used to
+get. If a caller of a workload behind a Service gets its app capabilities
+from a grant to the workload's tags, for example
+
+    {"src": ["tag:agent"], "dst": ["tag:tw-wl-support"], "app": {"example.com/cap/mcp": [{"tools": ["lookup_order"]}]}}
+
+then add the same `app` to its grant to the Service, or add one:
+
+    {"src": ["tag:agent"], "dst": ["svc:support"], "ip": ["tcp:80"], "app": {"example.com/cap/mcp": [{"tools": ["lookup_order"]}]}}
+
+Run `tw policy` in the app's directory to list the grants to add (`tw deploy`
+prints the same warnings). For HA mgmt behind `svc:tw-mgmt`, the admin cap must be on the
+grant to `svc:tw-mgmt`, as `docs/services.md` already shows:
+
+    {"src": ["autogroup:admin"], "dst": ["svc:tw-mgmt"], "ip": ["tcp:80"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}}
+
+Without it, admins who reach mgmt through the Service are no longer admins.
+Workloads that aren't behind a Service, and single-mgmt `tw up`
+installs (admins reach `tag:tw-mgmt` by node name), are unchanged.
+
+### Features
+
+#### bench-114-node-density
+
+A host's default node capacity now comes from its RAM: a quarter of it at
+8 MiB per object node, at least 50 and at most 1000. Before, every host
+advertised 1000. That figure is twice the measured cost of a node under
+request load. Per-node memory and registration rates on Linux and macOS
+are published in docs/limits.md ("Per-node memory" and "Registration
+rate"), and `make bench` reproduces them. docs/INSTALL.md has a sizing
+section.
+
+Operator action: a host with less than 32 GiB of RAM now advertises fewer
+than 1000 nodes (an 8 GiB host 256, a 16 GiB host 512). To keep the old
+figure, pass `tw-hostd -capacity-nodes 1000`.
+
+#### feat-115-limits
+
+Process-tier workloads now have a V8 heap cap: each isolate in a workerd
+(the Worker and each Durable Object class) is capped at 1024 MiB
+(`tw-hostd -workerd-heap-mib`), and a Node-tier app runs with
+`--max-old-space-size=2048` (`tw-hostd -node-heap-mib`) unless its
+`node.args` or `NODE_OPTIONS` set their own. Past the cap the workload's
+process aborts and hostd restarts it, so one runaway allocation can't take
+the host's memory. `-1` turns either cap off.
+
+The mgmt API rate-limits its tailnet callers: each WhoIs node may make 100
+requests/s (bursts of 200), each host 1000/s (bursts of 2000), and non-host
+callers together hold at most 256 requests at once. Over a limit is the new
+error code `429 rate_limited` with `Retry-After`. mgmt's own node (the
+operator console) and the local socket are not limited. Configure with
+`tw-mgmt -api-rps`, `-api-host-rps` and `-api-inflight` (`-1` = off).
+
+`docs/security-model.md` now states what availability isolation each tier
+gives (the process tier gives none beyond the heap cap), and
+`docs/limits.md` gives the reason for every limit tailworks deliberately
+doesn't set.
+
+Operator action: none, unless a workload legitimately needs a V8 heap over
+1 GiB (raise `-workerd-heap-mib`) or a script drives the API faster than
+100 requests/s from one node (raise `-api-rps`).
+
+#### feat-116-policy-apply
+
+`tw policy --apply` and `tw deploy --apply-policy` write an app's missing
+policy lines to the tailnet policy for you, so you no longer have to paste
+them into the admin console. That covers the `tagOwners` of its tags, the
+`tailnet.connects` grants, and `tag:tw-public` with its funnel `nodeAttrs`.
+tw prints the lines first and asks before writing; pass `--yes` when there
+is no terminal. mgmt then merges in only what is missing. Comments are kept,
+nothing is changed or removed, and nothing outside `tag:tw*` is written.
+It validates the result and writes it with `If-Match`. If the policy changed
+in the meantime, it retries once, then fails with `policy_conflict`. Each
+write is audited as `policy_apply`. The new route is
+`POST /v1/tenants/{id}/workloads/{workload}/policy`. It is for admins only,
+and `dryRun=true` gives a plan without writing. The new error codes are
+`policy_conflict` and `policy_write_denied`. `tw deploy --json` gains a
+`policy` event.
+
+Operator action: to use it, the tenant's OAuth client needs the Policy File
+write scope. If it doesn't have that scope, paste the snippet `tw policy`
+prints, as before.
+
+#### feat-120-backup-migrate
+
+`tw backup [--out <dir>]` backs up a running install: a consistent copy of
+mgmt's SQLite store, custody, the ID secret, mgmt's node state and
+`tw.json`, with a `backup.json` that says what is and isn't included.
+`tw restore <dir>` puts a backup (or a `tw upgrade` backup) back with
+tailworks stopped. It keeps the state it replaces and runs the restore
+fence.
+
+`tw-mgmt migrate --from sqlite --to-file <dsn file>` copies a stopped
+install's SQLite store into an empty Postgres database in one transaction,
+then fences it. `tw up --db-file <file>` (or `--db`) runs mgmt on that
+store, and `--custody setec --setec-url` uses setec custody on a new
+install. docs/postgres.md covers when to switch, backups with Postgres, and
+HA replicas, which still run `tw-mgmt` directly.
+
+A store object on a host whose copy is ahead of mgmt's journal (after a
+restore or an upgrade's rollback) now starts over from the journal.
+Before, its writes kept failing with `store_conflict`.
+
+#### feat-120-quotas-retention
+
+Per-tenant storage quotas, usage, disk checks and retention (#120).
+
+- `tw tenant set --max-store-bytes 20GiB --max-queue-bytes 2GiB --max-stores 50`
+  bounds what one tenant keeps in mgmt: all its KV, D1 and R2 journals, all
+  its queued messages, and how many stores it has. A write past a quota fails
+  `429 storage_quota_exceeded`; deletes and overwrites that don't grow a store
+  still work. The quotas are unlimited unless set (`-` clears one).
+- `tw tenant ls` shows each tenant's storage usage against its quotas
+  (`GET /v1/tenants/{id}/usage`, which also lists its largest stores and queues).
+- `tw doctor` checks the free space on the state dir's volume (`data_disk`) and
+  warns when a store, queue or tenant quota is 80% full (`store_sizes`).
+- Audit retention, off by default: `tw up --audit-max-age 2160h` or
+  `--audit-max-records N` (`tw-mgmt -audit-max-age`, `-audit-max-records`)
+  deletes each chain's oldest records and keeps a checkpoint, so what remains
+  still verifies (`prunedThrough` in `GET /v1/audit/verification`). Each prune
+  is audited (`audit_pruned`).
+- Request records, off by default: `tw up --request-log-max-age 168h`
+  (`tw-hostd -request-log-max-age`) drops request records older than that.
+- `tw up`'s `mgmt.log` and `hostd.log` now rotate at 32 MiB (one previous file kept).
+
+Operator action: none to upgrade. Two new migrations add three `tenants`
+columns and the `audit_checkpoints` table. The audit table's append-only
+guard now lets the pruner delete records its checkpoint covers; while an
+older tw-mgmt replica is still running against the same Postgres store, its
+start reinstalls the older guard and pruning waits for the next pass after
+the upgrade finishes.
+
+### Fixes
+
+#### deflake-196-lock-renew
+
+The lock template's client (`templates/lock/src/client.ts`): `withLock` now
+throws `lease_expired` when the lease's deadline passed before your function
+returned, even if its expiry timer hadn't fired yet (a busy event loop). It
+used to return normally, though the work may have outlived the lease. Apps
+that copied `client.ts` from an earlier template can copy it again.
+
+#### deflake-210-cli-e2e
+
+`tw deploy` no longer ends in `identity_pending` ("not ready after 3m0s
+(status active, node minted)") when it runs while a freshly started host is
+still bringing up the previous deployment of the same workload, for example
+right after `tw up`. The host's node joined, but its ready report still
+carried the old lease epoch, and mgmt refused it with `lease_lost`. The host
+now refreshes the epoch from mgmt and sends the report again.
+
+#### fix-200-cached-rejoin
+
+A node that the coordination server rejects after it came up is now
+re-minted under the same hostname instead of staying "ready" on a dead
+device. This happened after a host restart when the node had a saved
+netmap cache (it comes up from the cache before control answers), and when
+a running node's key expired or its device was removed. The host closes the
+dead node, joins a new one with a fresh key, and reports the new node to
+mgmt. A node that is being killed or stopped is not brought back.
+
+#### perf-245-real
+
+After a reboot, tw is healthy again about 1 s after its service starts.
+It used to take about 30 s: the host agent's first request to mgmt left
+before the tailnet knew the route, and it waited out TCP's retransmits.
+`systemctl --user restart tw` no longer sometimes takes 5 s extra. A
+tailnet node could wait out a 5 s grace on close for a local connection
+nobody was using. On a Linux VM against production control, restart to
+healthy went from 8.0 s to 3.0 s (two-process layout) or 1.4 s
+(single-process), and reboot to healthy went from 38 s to 7.3–7.7 s.
+
+#### perf-245-up-down
+
+`tw down` and `systemctl --user restart tw` no longer take 5 s extra: mgmt
+stopped its node while the HTTPS certificate prefetch was still waiting on
+the node, and the node waited out a 5 s grace for it. `tw up` no longer
+waits for its first network check and a relay (DERP) connection before
+mgmt serves: it is ready once mgmt's node is logged in. On a Linux VM,
+`tw up --service` went from 3.5 s to 0.5 s and `tw down --service` from
+5.1 s to 0.25 s. tw also keeps serving the local CLI right after a restart
+while the relay is unreachable, for example during a boot before the
+network is up. On `tw down`, mgmt revokes its unused warm keys 8 at a time
+instead of one by one.
+
+#### perf-tw-up-keyfile
+
+`tw up` is faster: it no longer joins mgmt's tailnet node itself and then
+closes it for tw-mgmt to open again. Each node start costs about a second
+of round trips to Tailscale's control plane, and `tw up` now does one
+(two with `--separate-host`) instead of two (three). On a Linux VM against
+production control, `tw up --service` to ready went from 3.8 s to
+about 2.5 s (single process) and from 5.4 s to 4.2–4.5 s
+(`--separate-host`). On macOS, `tw up` went from about 3.1–3.5 s to about
+1.8–2.0 s.
+
+On the first start, `tw up` now hands mgmt its single-use join key in
+`<state>/mgmt/join.env` (0600, in mgmt's 0700 state dir) instead of using
+it in-process. mgmt deletes the file once it has read the key; a failed
+start deletes it too, and so does `tw up` when it returns. The key is
+pre-authorized, tagged `tag:tw-mgmt` and expires within 5 minutes. A
+host's own join file already worked this way. If mgmt's join fails, `tw
+up` reports control's reason and stops the supervisor (on a first
+`tw up --service`, it also removes the service).
+
+#### test-113-linux-matrix
+
+Idle pre-joined pool nodes (ADR-031) now rejoin from saved state when
+tailworks restarts or the host reboots. Before, they stayed offline while
+mgmt still listed them as ready, so the first create of their class after a
+restart registered a new node instead of using the warm one, and the old
+device was left behind.
+
 ## v0.3.0 (2026-11-21)
 
 workerd 1.20261118.1.
