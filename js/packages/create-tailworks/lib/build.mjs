@@ -2,7 +2,6 @@
 // dist/index.js, the way wrangler does for Workers: workerd conditions, Node
 // builtins mapped to node:* (needs "nodejs_compat"), cloudflare:* external.
 // cloudflare:email is stubbed (email is not supported on tailworks).
-import * as esbuild from "esbuild";
 import { builtinModules } from "node:module";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -29,6 +28,10 @@ export function readJSONC(file) {
 export async function buildApp(dir, { outfile = "dist/index.js", minify = false } = {}) {
   const w = readJSONC(path.join(dir, "wrangler.jsonc"));
   if (!w.main) throw new Error("wrangler.jsonc has no main");
+  // Loaded here, not at the top: build-node.mjs imports readJSONC from this
+  // file, and from an installed release esbuild (native, not vendored) is
+  // only in the app's node_modules (build-node.mjs's loadEsbuild).
+  const esbuild = await import("esbuild");
   const r = await esbuild.build({
     entryPoints: [path.join(dir, w.main)],
     outfile: path.resolve(dir, outfile),

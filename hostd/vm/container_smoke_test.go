@@ -185,6 +185,8 @@ for a in [("192.168.72.1",3128),("192.168.72.1",3130),("192.168.72.1",22),("10.0
 	}
 	defer canary.Close()
 	var hits atomic.Int32
+	var hitMu sync.Mutex
+	var hitFrom []string // every connection's source, to tell a guest escape from another process
 	go func() {
 		for {
 			cn, err := canary.Accept()
@@ -192,6 +194,9 @@ for a in [("192.168.72.1",3128),("192.168.72.1",3130),("192.168.72.1",22),("10.0
 				return
 			}
 			hits.Add(1)
+			hitMu.Lock()
+			hitFrom = append(hitFrom, cn.RemoteAddr().String()+" → "+cn.LocalAddr().String())
+			hitMu.Unlock()
 			cn.Close()
 		}
 	}()
@@ -214,7 +219,10 @@ for a in [` + strings.Join(targets, ",") + `]:
 `}}, "")
 	t.Logf("host canary probes (%d host addresses):\n%s", len(targets)-3, r.out)
 	if strings.Contains(r.out, "CONNECTED") || hits.Load() != 0 {
-		t.Fatalf("the guest reached the host (canary hits %d):\n%s", hits.Load(), r.out)
+		hitMu.Lock()
+		from := strings.Join(hitFrom, ", ")
+		hitMu.Unlock()
+		t.Fatalf("the guest reached the host (canary hits %d, from %s):\n%s", hits.Load(), from, r.out)
 	}
 	// pids.max: a process storm stops at the cgroup limit.
 	r = runExec(t, c, sandbox.ExecSpec{Argv: []string{"sh", "-c", "for i in $(seq 1 200); do sleep 3 & done; echo all-200-started"}}, "")
