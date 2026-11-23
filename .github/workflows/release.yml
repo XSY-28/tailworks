@@ -205,6 +205,8 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: crane
         run: go install github.com/google/go-containerregistry/cmd/crane@v0.20.6
+      - name: make deps (TestCLIImages needs workerd and node)
+        run: make deps
       - name: make test-images
         run: scripts/ci-suite.sh make test-images CRANE="$(go env GOPATH)/bin/crane"
 
@@ -497,9 +499,15 @@ jobs:
       - name: make deps
         run: make deps
       # -o guest-image: test the shipped rootfs, don't build another.
+      # Allowed skips: TestBootBench is an opt-in benchmark; TestContainerSmoke
+      # runs in the e2e-container step below, with the images.
       - name: make e2e-vm (shipped amd64 guest)
+        env:
+          TW_CI_ALLOW_SKIP: "TestBootBench|TestContainerSmoke"
         run: scripts/ci-suite.sh make -o guest-image e2e-vm GUEST_ARCH=amd64 GUEST_OUT=dist/vm-assets-amd64 TW_VM_KERNEL="$ASSETS/vmlinux"
       - name: make e2e-container (shipped amd64 guest)
+        env:
+          TW_CI_ALLOW_SKIP: "TestBootBench"
         run: scripts/ci-suite.sh make -o guest-image e2e-container GUEST_ARCH=amd64 GUEST_OUT=dist/vm-assets-amd64 TW_VM_KERNEL="$ASSETS/vmlinux" CTR_IMAGES="$RUNNER_TEMP/ctr-images" CTR_APPS="$RUNNER_TEMP/ctr-apps"
 
   # Real tailnet, one suite at a time (they share the test tailnets).
@@ -598,9 +606,16 @@ jobs:
           scripts/e2e-container-prep.sh "$RUNNER_TEMP/ctr-apps"
       - name: make deps
         run: make deps
+      # Allowed skips: TestE2EVMSnapshot is Firecracker-only (no warm pool or
+      # snapshots on vz); TestBootBench is an opt-in benchmark; the container
+      # tests run in the e2e-vz-container step below, with the images.
       - name: make e2e-vz (shipped vz guest)
+        env:
+          TW_CI_ALLOW_SKIP: "TestE2EVMSnapshot|TestBootBench|TestContainerSmoke|TestVZContainer"
         run: scripts/ci-suite.sh make -o vz-assets e2e-vz VZ_ASSETS="$VZ"
       - name: make e2e-vz-container (shipped vz guest)
+        env:
+          TW_CI_ALLOW_SKIP: "TestBootBench"
         run: scripts/ci-suite.sh make -o vz-assets e2e-vz-container VZ_ASSETS="$VZ" CTR_IMAGES="$CTR_IMAGES" CTR_IMAGES_AMD64="$CTR_IMAGES_AMD64" CTR_APPS="$RUNNER_TEMP/ctr-apps"
 
   # Self-hosted: the linux-arm64 Firecracker tier on the SHIPPED arm64
@@ -631,7 +646,11 @@ jobs:
           echo "CTR_IMAGES_HOST=$d" >>"$GITHUB_ENV"
           scripts/e2e-container-prep.sh "$RUNNER_TEMP/ctr-apps"
           scripts/ci-suite.sh make e2e-container-build CTR_APPS="$RUNNER_TEMP/ctr-apps" CTR_BUILT="$RUNNER_TEMP/ctr-built"
+      # Allowed skips: TestBootBench is an opt-in benchmark; e2e-vm's
+      # TestContainerSmoke skip is covered by e2e-container's run of it.
       - name: e2e-vm, e2e-container, e2e-container-registry in Lima (shipped arm64 guest)
+        env:
+          TW_CI_ALLOW_SKIP: "TestBootBench|TestContainerSmoke"
         run: |
           scripts/ci-suite.sh scripts/ci-lima-make.sh \
             -c "dist/vm-assets-arm64:vm-assets" \

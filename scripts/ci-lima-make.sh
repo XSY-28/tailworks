@@ -44,6 +44,24 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# The Go that go.mod names (the Makefile sets GOTOOLCHAIN=local, so an older
+# go in the VM fails `make deps`): installed into /usr/local/go when it
+# differs, from go.dev, checked against go.dev's published SHA-256.
+want=go$(sed -n 's/^go \([0-9.]*\)$/\1/p' go.mod)
+have=$(limactl shell "$DEV" -- bash -lc 'go env GOVERSION 2>/dev/null' || true)
+if [ "$have" != "$want" ]; then
+	arch=$(limactl shell "$DEV" -- uname -m)
+	case $arch in aarch64 | arm64) arch=arm64 ;; x86_64) arch=amd64 ;; esac
+	f=$want.linux-$arch.tar.gz
+	sum=$(curl -fsS 'https://go.dev/dl/?mode=json&include=all' | node -e '
+		let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+		for (const r of JSON.parse(s)) for (const x of r.files) if (x.filename===process.argv[1]) { console.log(x.sha256); return; } })' "$f")
+	[ -n "$sum" ] || { echo "ci-lima-make: no checksum for $f on go.dev" >&2; exit 1; }
+	echo "ci-lima-make: $DEV has ${have:-no go}; installing $want"
+	limactl shell "$DEV" -- bash -lc "set -e; cd /tmp; curl -fsSLo '$f' 'https://go.dev/dl/$f';
+		echo '$sum  $f' | sha256sum -c -; sudo rm -rf /usr/local/go; sudo tar -C /usr/local -xzf '$f'; rm -f '$f'; go version"
+fi
+
 limactl shell "$DEV" -- mkdir -p "$dir"
 git ls-files -co --exclude-standard | tar cf - -T - | limactl shell "$DEV" -- tar xf - -C "$dir"
 for c in $copies; do
