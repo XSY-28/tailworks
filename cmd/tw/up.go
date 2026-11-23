@@ -376,64 +376,52 @@ func cmdUp(args []string) error {
 	if s.configured() && s.Cfg.MgmtHostname != "" && mgmtHostname != "" && mgmtHostname != s.Cfg.MgmtHostname {
 		return fail("state_conflict", "mgmt's node in "+s.Dir+" is named "+s.Cfg.MgmtHostname).withFix("drop --mgmt-hostname, or use another --state-dir")
 	}
-	if mgmtHostname != "" && !s.supervisorAlive() {
-		// The join runs in this process with a key the credential mints,
-		// then the node is handed to tw-mgmt. While
-		// the supervisor runs, mgmt holds the node and its state is
-		// authoritative.
-		authKey := ""
-		if *mgmtKey != "" {
-			if authKey, err = tsapi.LoadEnvFile(*mgmtKey, "TS_AUTHKEY"); err != nil {
-				return fail("bad_request", "can't read TS_AUTHKEY from "+*mgmtKey, err.Error())
-			}
-		}
-		firstJoin := !isFile(filepath.Join(s.mgmtTsnetDir(), "tailscaled.state"))
-		if firstJoin && authKey == "" {
-			// The credential mints mgmt's node key (tag:tw-mgmt): no
-			// browser login. The key is used in-process and never stored.
-			if authKey, err = mintNodeKey(ctx, capi, mgmt.MgmtTag, "tw mgmt node "+mgmtHostname); err != nil {
-				return err
-			}
-		}
-		js := time.Now()
-		if err := os.MkdirAll(s.mgmtTsnetDir(), 0o700); err != nil {
-			return err
-		}
-		node, err := joinMgmtNode(ctx, joinOpts{Dir: s.mgmtTsnetDir(), Hostname: mgmtHostname, ControlURL: *control, Tags: advertisedTags(hsMode, mgmt.MgmtTag),
-			AuthKey: authKey, Out: out})
+	// mgmt joins its own node (up_mgmtjoin.go): on the first start tw up
+	// mints the single-use key and hands it over in a 0600 file that mgmt
+	// deletes once it has read it. While the supervisor runs, mgmt holds
+	// the node and its state is authoritative.
+	freshStart := mgmtHostname != "" && !s.supervisorAlive()
+	firstUp := !s.configured()
+	handedKey := false
+	mintMgmtKey := func() error {
+		key, err := mintNodeKey(ctx, capi, mgmt.MgmtTag, "tw mgmt node "+mgmtHostname)
 		if err != nil {
 			return err
 		}
-		timings["mgmt_join"] = ms(time.Since(js))
-		res.MgmtNode, res.MgmtNodeID, res.MgmtIP, res.HTTPS = node.DNSName, node.NodeID, node.IP, node.HTTPS
-		if !slices.Contains(node.Tags, mgmt.MgmtTag) && *control == prodControl {
-			return fail("bootstrap_failed", "mgmt's node joined without the "+mgmt.MgmtTag+" tag (tags: "+strings.Join(node.Tags, ",")+")",
-				"the account that logged in is not a tagOwner of "+mgmt.MgmtTag+", so control dropped the tag").
-				withFix("add to tagOwners: \"" + mgmt.MgmtTag + "\": [\"autogroup:admin\", \"tag:tw\"], then remove the node " + node.DNSName + " in the admin console and run tw up again")
+		handedKey = true
+		return s.writeMgmtJoinKey(key)
+	}
+	if freshStart {
+		defer os.Remove(s.mgmtJoinFile()) // a key mgmt never read doesn't outlive tw up
+		os.Remove(s.mgmtStartErr())
+		switch {
+		case *mgmtKey != "":
+			k, err := tsapi.LoadEnvFile(*mgmtKey, "TS_AUTHKEY")
+			if err != nil {
+				return fail("bad_request", "can't read TS_AUTHKEY from "+*mgmtKey, err.Error())
+			}
+			if err := s.writeMgmtJoinKey(k); err != nil {
+				return err
+			}
+			handedKey = true
+		case s.mgmtNeedsKey():
+			// The credential mints mgmt's node key (tag:tw-mgmt): no
+			// browser login.
+			if err := mintMgmtKey(); err != nil {
+				return err
+			}
 		}
-		if *tailnet == "" {
-			*tailnet = node.Tailnet
-		} else if *control == prodControl && node.Tailnet != "" && node.Tailnet != *tailnet {
-			return fail("state_conflict", "mgmt's node joined tailnet "+node.Tailnet+", not --tailnet "+*tailnet).
-				withFix("drop --tailnet (it is discovered), or use the right credential")
-		}
-		if node.Funnel {
-			// mgmt never serves Funnel; a funnel attribute on its tag (from
-			// an older tailworks' keyless snippet) is only exposure to remove.
-			fmt.Fprintf(os.Stderr, "! policy   %s has the funnel attribute; tailworks doesn't use it: remove {\"target\": [\"%s\"], \"attr\": [\"funnel\"]} from nodeAttrs\n",
-				mgmt.MgmtTag, mgmt.MgmtTag)
-		}
-		s.Cfg.MgmtHostname, s.Cfg.MgmtDNSName, s.Cfg.MgmtNodeID, s.Cfg.MgmtIP, s.Cfg.HTTPS = mgmtHostname, node.DNSName, node.NodeID, node.IP, node.HTTPS
+		timings["mgmt_key"] = ms(time.Since(t0))
+		s.Cfg.MgmtHostname = mgmtHostname
 	} else if mgmtHostname != "" {
 		res.MgmtNode, res.MgmtNodeID, res.MgmtIP, res.HTTPS = s.Cfg.MgmtDNSName, s.Cfg.MgmtNodeID, s.Cfg.MgmtIP, s.Cfg.HTTPS
 		if *tailnet == "" {
 			*tailnet = s.Cfg.Tailnet
 		}
 	}
-	if *tailnet == "" {
+	if *tailnet == "" && !freshStart {
 		return fail("tailnet_required", "could not determine the tailnet").withFix("tw up --tailnet <tailnet>")
 	}
-	res.Tailnet = *tailnet
 	if !s.configured() {
 		s.Cfg = Config{Tailnet: *tailnet, CreatedAt: time.Now().UTC().Format(time.RFC3339), MgmtHostname: s.Cfg.MgmtHostname, MgmtDNSName: s.Cfg.MgmtDNSName,
 			MgmtNodeID: s.Cfg.MgmtNodeID, MgmtIP: s.Cfg.MgmtIP, HTTPS: s.Cfg.HTTPS}
@@ -463,33 +451,82 @@ func cmdUp(args []string) error {
 	if err := s.save(); err != nil {
 		return err
 	}
-	if *service {
-		was := s.supervisorAlive()
-		changed, err := installService(s)
-		if err != nil {
-			return err
+	launch := func() error {
+		if *service {
+			was := s.supervisorAlive()
+			changed, err := installService(s)
+			if err != nil {
+				return err
+			}
+			res.Started = !was || changed
+			res.Service = serviceUnitPath()
+			res.LingerHint = lingerHint()
+			res.SleepHint = sleepHint()
+		} else if inst, act := serviceOf(s); inst && act {
+			return fail("service_running", "tw runs as the "+serviceKind()+" "+serviceUnit+" (installed by tw up --service)").
+				withFix("tw up --service … to change its settings", serviceRestartHint(), "tw down --service to remove it")
+		} else if !s.supervisorAlive() {
+			if err := startSupervisor(s); err != nil {
+				return err
+			}
+			res.Started = true
 		}
-		res.Started = !was || changed
-		res.Service = serviceUnitPath()
-		res.LingerHint = lingerHint()
-		res.SleepHint = sleepHint()
-	} else if inst, act := serviceOf(s); inst && act {
-		return fail("service_running", "tw runs as the "+serviceKind()+" "+serviceUnit+" (installed by tw up --service)").
-			withFix("tw up --service … to change its settings", serviceRestartHint(), "tw down --service to remove it")
-	} else if !s.supervisorAlive() {
-		if err := startSupervisor(s); err != nil {
-			return err
-		}
-		res.Started = true
+		return nil
+	}
+	if err := launch(); err != nil {
+		return err
 	}
 	ms0 := time.Now()
 	for !s.mgmtHealthy(ctx) {
+		if msg, failed := s.mgmtStartFailure(); failed && freshStart {
+			stopFailedStart(s, firstUp) // up_mgmtjoin.go
+			if !needsLogin(msg) || handedKey {
+				return joinFailure(mgmtHostname, advertisedTags(hsMode, mgmt.MgmtTag), msg)
+			}
+			// mgmt's node was logged out (removed in the admin console, say):
+			// mint a key and start again, once.
+			os.Remove(s.mgmtStartErr())
+			if err := mintMgmtKey(); err != nil {
+				return err
+			}
+			if err := launch(); err != nil {
+				return err
+			}
+			continue
+		}
 		if time.Since(ms0) > 90*time.Second || !s.supervisorAlive() {
+			if msg, failed := s.mgmtStartFailure(); failed && freshStart {
+				stopFailedStart(s, firstUp)
+				return joinFailure(mgmtHostname, advertisedTags(hsMode, mgmt.MgmtTag), msg)
+			}
 			return fail("mgmt_unavailable", "tw-mgmt did not become healthy", "log: "+s.log("mgmt")).withFix("tw logs --component mgmt")
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	timings["mgmt_ready"] = ms(time.Since(t0))
+	if freshStart {
+		// mgmt's node as it joined (its loopback descriptor), checked as tw
+		// up's own join used to be, then saved.
+		lb := s.loopback()
+		if lb == nil {
+			return fail("mgmt_unavailable", "tw-mgmt is healthy but published no node", "log: "+s.log("mgmt"))
+		}
+		tn, err := checkMgmtNode(lb, *control, *tailnet)
+		if err == nil && tn == "" {
+			err = fail("tailnet_required", "could not determine the tailnet").withFix("tw up --tailnet <tailnet>")
+		}
+		if err != nil {
+			stopFailedStart(s, firstUp)
+			return err
+		}
+		*tailnet = tn
+		res.MgmtNode, res.MgmtNodeID, res.MgmtIP, res.HTTPS = lb.DNSName, lb.NodeID, lb.MgmtIP, lb.HTTPS
+		s.Cfg.Tailnet, s.Cfg.MgmtDNSName, s.Cfg.MgmtNodeID, s.Cfg.MgmtIP, s.Cfg.HTTPS = *tailnet, lb.DNSName, lb.NodeID, lb.MgmtIP, lb.HTTPS
+		if err := s.save(); err != nil {
+			return err
+		}
+	}
+	res.Tailnet = *tailnet
 
 	// Tenant (operator = tenant = you). In normal operation the host's own
 	// node needs a join key minted through the tenant's credential, so the
@@ -829,7 +866,7 @@ func cmdSupervise(args []string) error {
 	if err != nil {
 		return err
 	}
-	if !s.configured() {
+	if !s.configured() && !s.firstStartPending() { // up_mgmtjoin.go
 		return fail("not_up", "no config in "+s.Dir)
 	}
 	logf := func(format string, a ...any) {
@@ -875,13 +912,14 @@ func cmdSupervise(args []string) error {
 		margs = append(margs, "-tsapi-url", s.Cfg.TSAPIURL)
 	}
 	if s.Cfg.MgmtHostname != "" {
-		// mgmt's own tailnet node (joined by tw up): the API over WhoIs
+		// mgmt's own tailnet node (it joins with tw up's key): the API over WhoIs
 		// (never Funnel).
 		margs = append(margs, "-tsnet-hostname", s.Cfg.MgmtHostname, "-tsnet-control-url", s.Cfg.ControlURL)
-		if !s.Cfg.headscale() {
-			margs = append(margs, "-tsnet-tags", mgmt.MgmtTag)
-		}
+		margs = append(margs, "-tsnet-tags="+strings.Join(advertisedTags(s.Cfg.headscale(), mgmt.MgmtTag), ","))
+		// tw up's single-use join key (up_mgmtjoin.go), when there is one.
+		margs = append(margs, "-tsnet-authkey-file", s.mgmtJoinFile(), "-tsnet-authkey-once")
 	}
+	mgmtURLArg := 0 // hargs index of -mgmt's value (normal operation)
 	hargs := []string{hostdBin, "-host-id", s.Cfg.HostID,
 		"-data-dir", filepath.Join(s.Dir, "hostd"), "-run-dir", s.hostdRunDir(), "-workerd", s.Cfg.Workerd,
 		"-heartbeat", s.Cfg.Heartbeat, "-kill-tombstone", s.Cfg.KillTombstone, "-hostname-prefix", s.Cfg.HostnamePrefix,
@@ -902,6 +940,7 @@ func cmdSupervise(args []string) error {
 		if s.Cfg.MgmtIP == "" {
 			mgmtURL = "http://" + s.Cfg.MgmtDNSName
 		}
+		mgmtURLArg = len(hargs) + 1
 		port := s.Cfg.PushPort
 		if port == 0 {
 			port = defaultPushPort
@@ -990,7 +1029,17 @@ func cmdSupervise(args []string) error {
 	logf("supervising in %s (tailnet %s)", s.Dir, s.Cfg.Tailnet)
 	wg.Add(2)
 	go supervise(mg, nil)
-	go supervise(hd, waitMgmt)
+	go supervise(hd, func() bool {
+		if !waitMgmt() {
+			return false
+		}
+		// mgmt's tailnet IP from its loopback descriptor: on tw up's first
+		// start, mgmt joins its node after this supervisor started.
+		if lb := s.loopback(); lb != nil && mgmtURLArg > 0 {
+			hd.args[mgmtURLArg] = "http://" + lb.MgmtIP
+		}
+		return true
+	})
 	<-stopping
 	logf("stopping: hostd first (nodes close in parallel), then mgmt (flushes pending device deletes)")
 	hd.stop(45 * time.Second)
@@ -1031,6 +1080,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	delDelay, _ := time.ParseDuration(s.Cfg.DeviceDeleteDelay)
 	mo := mgmtd.Options{StateDir: filepath.Join(s.Dir, "mgmt"), DeviceDeleteDelay: delDelay, Version: version, TSAPIURL: s.Cfg.TSAPIURL,
 		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: advertisedTags(s.Cfg.headscale(), mgmt.MgmtTag), TSNetTLS: true,
+		TSNetAuthKeyFile: s.mgmtJoinFile(), TSNetAuthKeyOnce: true, // tw up's single-use join key, when there is one (up_mgmtjoin.go)
 		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog, RevokeWarmKeysOnClose: true, // tw down leaves no preauthorized key in custody (#158)
 		MetricsPort: obs.DefaultMetricsPort}
 	if mo.TSAPIURL == "" {

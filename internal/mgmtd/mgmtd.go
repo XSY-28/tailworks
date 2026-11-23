@@ -35,6 +35,7 @@ import (
 	"tailscale.com/client/local"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/tailcfg/nodecap"
 	"tailscale.com/tsnet"
 )
 
@@ -66,7 +67,7 @@ type Options struct {
 	// TSNetHostname names mgmt's own tailnet node (required unless
 	// LocalDev); TSNetControlURL is required with it. TSNetAuthKeyFile
 	// holds TS_AUTHKEY=… for the first join (else the node state must be
-	// logged in already: tw up joins it first). TSNetTags are
+	// logged in already; tw up hands the key over: TSNetAuthKeyOnce). TSNetTags are
 	// the tags the node advertises (nil = mgmt.MgmtTag; empty = none).
 	// TSNetService also hosts a Tailscale Service (svc:…) on :80,
 	// advertised only while this replica's store answers. TSNetTLS also
@@ -77,6 +78,13 @@ type Options struct {
 	TSNetTags        []string
 	TSNetService     string
 	TSNetTLS         bool
+
+	// TSNetAuthKeyOnce makes TSNetAuthKeyFile a single-use handoff (`tw
+	// up`, joinkey.go): the key is read and the file deleted before the
+	// join, a missing file is no key, and a failed Start deletes the file
+	// and records why in StartErrFile.
+	TSNetAuthKeyOnce bool
+
 	// NoLoopback skips publishing <StateDir>/loopback.json for the local CLI.
 	NoLoopback bool
 	// Version is reported by GET /v1/status.
@@ -186,6 +194,18 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			rt.Close()
 		}
 	}()
+	if o.TSNetAuthKeyOnce {
+		defer func() { // joinkey.go
+			if err == nil {
+				os.Remove(StartErrFile(o.StateDir))
+				return
+			}
+			if o.TSNetAuthKeyFile != "" {
+				os.Remove(o.TSNetAuthKeyFile) // single use, also when Start fails before reading it
+			}
+			recordStartErr(o.StateDir, err)
+		}()
+	}
 
 	dsn := o.DB
 	if o.DBFile != "" {
@@ -236,6 +256,8 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 	// Operator-tailnet node (optional).
 	var ts *tsnet.Server
 	self := mgmt.SelfInfo{}
+	var selfTags []string // for the loopback descriptor: tw up checks them
+	var selfFunnel bool
 	if o.TSNetService != "" {
 		if o.TSNetHostname == "" {
 			return nil, errors.New("-tsnet-service needs -tsnet-hostname")
@@ -257,7 +279,11 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 			ts.AdvertiseTags = o.TSNetTags
 		}
 		if o.TSNetAuthKeyFile != "" {
-			k, err := tsapi.LoadEnvFile(o.TSNetAuthKeyFile, "TS_AUTHKEY")
+			load := tsapi.LoadEnvFile
+			if o.TSNetAuthKeyOnce {
+				load = func(path, _ string) (string, error) { return readJoinKeyOnce(path) } // joinkey.go
+			}
+			k, err := load(o.TSNetAuthKeyFile, "TS_AUTHKEY")
 			if err != nil {
 				return nil, err
 			}
@@ -293,6 +319,8 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		if st.Self.Tags != nil {
 			tags = st.Self.Tags.AsSlice()
 		}
+		selfTags = tags
+		_, selfFunnel = st.Self.CapMap[nodecap.Funnel]
 		log.Info("tailnet node", "name", self.DNSName, "tailnet", self.Tailnet, "tags", tags, "https", self.HTTPS, "ips", st.TailscaleIPs,
 			"state", st.BackendState, "ms", time.Since(upStart).Milliseconds())
 	}
@@ -446,6 +474,7 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 				return nil, fmt.Errorf("tsnet loopback: %w", err)
 			}
 			lb := mgmt.Loopback{Addr: addr, ProxyCred: cred, MgmtIP: self.IP, DNSName: self.DNSName, HTTPS: self.HTTPS, PID: os.Getpid()}
+			lb.NodeID, lb.Tailnet, lb.Tags, lb.Funnel = self.NodeID, self.Tailnet, selfTags, selfFunnel
 			b, _ := json.Marshal(lb)
 			if err := os.WriteFile(loopbackPath+".tmp", b, 0o600); err != nil {
 				return nil, err

@@ -137,7 +137,7 @@ func doctorHeadscaleKey(s *state, kf string) (string, string, string) {
 }
 
 // headscaleUpPolicy makes sure the Headscale policy defines tailworks' tags
-// before `tw up` joins mgmt's node: Headscale refuses a registration
+// before mgmt joins its node: Headscale refuses a registration
 // whose tags the policy doesn't define ("requested tags [...] are invalid
 // or not permitted"), even with a key minted by the API key. With apply
 // it writes the profile's snippet (checked by the server first); without,

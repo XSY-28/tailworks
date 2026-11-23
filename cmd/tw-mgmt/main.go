@@ -66,8 +66,9 @@ func run() error {
 		noLoopback  = flag.Bool("no-loopback", false, "don't publish the node's loopback proxy for the local tw CLI (<state-dir>/loopback.json)")
 		versionFlag = flag.String("version", "", "deprecated: the version is built in (internal/version); a non-empty value overrides it for GET /v1/status")
 		tsControl   = flag.String("tsnet-control-url", "", "operator tailnet control URL (required with -tsnet-hostname)")
-		tsAuthFile  = flag.String("tsnet-authkey-file", "", "file with the operator-tailnet auth key for the first join (TS_AUTHKEY=…); without it the node state must already be logged in (tw up joins it first)")
+		tsAuthFile  = flag.String("tsnet-authkey-file", "", "file with the operator-tailnet auth key for the first join (TS_AUTHKEY=…); without it the node state must already be logged in (tw up hands it over: -tsnet-authkey-once)")
 		tsTags      = flag.String("tsnet-tags", mgmt.MgmtTag, "comma-separated tags the mgmt node advertises")
+		tsAuthOnce  = flag.Bool("tsnet-authkey-once", false, "-tsnet-authkey-file is a single-use handoff (tw up): read and deleted before the join, a missing file is no key, and a failed start deletes it and records why in <state-dir>/start.err")
 		tsService   = flag.String("tsnet-service", "", "also host this Tailscale Service (e.g. svc:tw-mgmt) on :80, advertised only while this replica's store answers: point every host at http://<label>.<tailnet> and run each replica with its own -tsnet-hostname (e.g. tw-mgmt-1). Policy needs autoApprovers.services for the mgmt tag and grants to the svc: name")
 		tsTLS       = flag.Bool("tsnet-tls", true, "also serve the API on :443 with the node's HTTPS certificate when the tailnet has HTTPS enabled (plain :80 is always served)")
 		admins      = flag.String("admins", "", "comma-separated tailnet logins admitted as admins even without the "+mgmt.AdminCap+" capability (override; the normal path is the cap, granted to "+mgmt.MgmtTag+")")
@@ -121,6 +122,7 @@ func run() error {
 	o.AuditMaxAge, o.AuditMaxRecords = *auditMaxAge, *auditMaxRec // mgmt/retention.go
 	o.APILimits = mgmt.APILimits{RPS: *apiRPS, HostRPS: *apiHostRPS, InFlight: *apiInFlight}
 	o.RevokeWarmKeysOnClose = *warmRevoke
+	o.TSNetAuthKeyOnce = *tsAuthOnce
 	// Like the flags: "" means no tags at all (Options nil means the default).
 	o.TSNetTags = []string{}
 	if *tsTags != "" {
