@@ -136,21 +136,36 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    versions, if the notes aren't finalized for the tag or a fragment is
    still pending in `changes/`, or if no signing key is pinned. The
    `gates` job runs it again on the tag.
-5. **Watch `.github/workflows/release.yml`.** It runs:
+5. **Watch `.github/workflows/release.yml`.** It tests every runtime the
+   release ships, on the guests and tarballs it ships, before it drafts
+   anything. The header of release.yml lists every job. In short:
    - `gates`: `scripts/release-check.sh`, `make lint test`, the npm
-     publish dry run, the install.sh rollback test, and
-     `make e2e-upgrade`, which upgrades from the newest published release
-     to this commit and checks data, rejoin and old bundles. While no
-     release is published it upgrades from this tree stamped an older
-     version (`scripts/upgrade-from.sh`);
-   - `headscale`: `make e2e-headscale` against each supported Headscale
-     minor;
-   - `vm-assets` and `vz-assets`: the microVM guests for each arch;
-   - `release`: the three tarballs with `SHA256SUMS`, `SHA256SUMS.sig`
-     (see [Signing](#signing)) and the catalog, and a **draft** GitHub
-     release whose body comes from `release-notes.sh`.
+     publish dry run, the install.sh rollback test, `make e2e-upgrade`
+     (newest published release → this commit: data, rejoin, old bundles;
+     while none is published, this tree stamped an older version,
+     `scripts/upgrade-from.sh`) and `make e2e-tw-upgrade`;
+   - `suites`, `test-images`, `test-pg`, `headscale`: every hermetic
+     suite (the ones ci.yml and nightly.yml run, and more);
+   - `vm-assets`, `vz-assets`, `build`: the microVM guests, then the three
+     signed tarballs;
+   - `tarballs`: each tarball on a clean runner of its platform
+     (`scripts/ci-tarball-check.sh`: signature, install.sh, `tw doctor`,
+     every template under `tw dev`);
+   - `microvm-amd64`, `mac-firecracker`, `mac-vz`: the Firecracker tier
+     (amd64 on a hosted runner's KVM, arm64 in Lima on the release
+     runner) and the vz tier, each with the shipped guest: `e2e-vm`,
+     `e2e-container`, `e2e-vz`, `e2e-vz-container`;
+   - `tailnet`, `mac-tailnet`: the real-tailnet suites, one at a time,
+     including `e2e-linux` on every distro row and `e2e-linux-vm` from the
+     tarballs;
+   - `release`: a **draft** GitHub release with the tarballs,
+     `SHA256SUMS`, `SHA256SUMS.sig` (see [Signing](#signing)) and the
+     notes from `release-notes.sh`.
 
-   A failed gate means no draft.
+   A failed job means no draft, and no suite may pass by skipping
+   (`scripts/ci-suite.sh`). Before tagging, rehearse on master; it runs
+   everything and drafts nothing:
+   `gh workflow run release.yml -f tag=master -f rehearsal=true`.
 6. **Review the draft.**
    - Check that the notes read well, and that the Breaking and Upgrade
      actions sections are complete.
@@ -226,6 +241,35 @@ scripts/release-notes.sh v0.1.0 v0.2.0
        maintainer approves it with 2FA: `npm stage list`, then
        `npm stage approve <stage-id>` (or on npmjs.com).
    - A maintainer can still publish by hand with `npm login` (above).
+
+## Release runner
+
+The vz tier and nested KVM need real Apple silicon, which hosted macOS
+runners don't offer, so the `mac-*` jobs run on a self-hosted runner with
+the labels `self-hosted, macOS, ARM64, tw-release`. The machine needs Go
+and Node (the setup actions install them), Docker (OrbStack or Docker
+Desktop, for the sandbox images), `mkfs.erofs` (`brew install
+erofs-utils`), `jq`, Lima with a running-capable dev VM, and the
+nested-virt VM from `e2e/linuxvm/twl-kvm-u24.yaml`. The Linux distro rows
+of `e2e-linux` are created on demand. Plan for tens of GiB free: the guests,
+sandbox images (cached in `~/tw-ci-cache`) and Lima VMs.
+
+- Install: download `actions-runner-osx-arm64` from
+  github.com/actions/runner (check its SHA-256 against the release notes),
+  `./config.sh --url https://github.com/rosskukulinski/tailworks --token
+  <registration token> --labels tw-release`, then `./svc.sh install &&
+  ./svc.sh start` (a LaunchAgent, so it needs the user logged in).
+- The runner's `.env` sets `PATH` (Homebrew first) and, when the Lima VMs
+  are named differently, `TW_DEV_VM`, `TW_E2E_VM_PREFIX` and `LINUX_VM`.
+- Security: the repository is public, so the runner must only ever run
+  release.yml. Fork pull requests need approval for every outside
+  contributor (Settings → Actions), and the `release` environment, which
+  holds the signing key and the tailnet API keys, deploys only from `v*`
+  tags and master.
+- Tailnet secrets (`release` environment): `TW_E2E_TAILNET1` (the tailnet
+  name), `TW_E2E_TAILNET1_API_KEY`, `TW_E2E_TAILNET2_API_KEY`. Tailscale
+  API keys expire: rotate them with
+  `gh secret set TW_E2E_TAILNET1_API_KEY --env release` before they do.
 
 ## Signing
 
