@@ -48,4 +48,4 @@ Idle, `-race`: 15.0 s before, 2.7 s after.
 - `make lint`: ok
 - `make changes-check`: ok (no upgrade-relevant paths)
 - `go test ./mgmt/api/v1/ -run 'Base64|ByteFormat'`: ok
-- `make test` (mbp runner): see the PR
+- `make test` (mbp runner, after merging origin/master at 59e8abad): exit 0 (mgmt 259.6 s, mgmt/api/v1 ok)
