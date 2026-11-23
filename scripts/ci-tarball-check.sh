@@ -13,7 +13,12 @@
 #      microVM tier; LICENSE and THIRD_PARTY_NOTICES are there;
 #   4. tw doctor passes (binaries, workerd, bundler, sandbox);
 #   5. every template: tw init, then tw dev --once (the installed tw-hostd,
-#      netd and workerd serve it; the smoke request must be a 2xx).
+#      netd and workerd serve it). The smoke request must get the app's own
+#      answer: any status under 500 (lock has no route at /, ai-agent needs
+#      a capability). The templates use the tarball's vendored modules, no
+#      npm, except node-workflow, which needs `npm install` as a user runs
+#      it; its @tailworks/* come from TW_CI_PKGS (npm pack of this checkout:
+#      the release's versions aren't on npm yet).
 set -euo pipefail
 DIST=$(cd "${1:?dist dir}" && pwd)
 PLATFORM=${2:?platform, e.g. linux-amd64}
@@ -58,11 +63,17 @@ say "5. every template under tw dev --once"
 export PATH=$PREFIX/bin:$PATH
 for t in hello agent mcp ai-agent lock refund-approval node-workflow; do
 	echo "-- $t"
-	"$TW" init "$WORK/apps/$t" --template "$t" >/dev/null
-	out=$("$TW" dev "$WORK/apps/$t" --once --port 0 --json)
-	status=$(printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s.trim().split("\n").pop());console.log(r.smoke&&r.smoke.status)})')
+	app=$WORK/apps/$t
+	"$TW" init "$app" --template "$t" >/dev/null
+	if [ "$t" = node-workflow ]; then
+		: "${TW_CI_PKGS:?TW_CI_PKGS: a dir of npm pack tarballs of @tailworks/*}"
+		node "$ROOT/scripts/ci-npm-overrides.mjs" "$app/package.json" "$TW_CI_PKGS"
+		(cd "$app" && npm install --no-audit --no-fund --loglevel=error)
+	fi
+	out=$("$TW" dev "$app" --once --port 0 --json) || { echo "$out"; echo "template $t: tw dev --once failed"; exit 1; }
+	status=$(printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);console.log(r.smoke&&r.smoke.status)})')
 	echo "   smoke status $status"
-	case $status in 2??) ;; *) echo "$out"; echo "template $t: tw dev --once smoke status $status"; exit 1 ;; esac
+	case $status in [1-4]??) ;; *) echo "$out"; echo "template $t: tw dev --once smoke status $status"; exit 1 ;; esac
 done
 echo
 echo "ci-tarball-check: $PLATFORM $VERSION ok"
