@@ -449,9 +449,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.TAG }}
-      # Node only for the node-workflow template (it needs Node on the
-      # deploying machine) and to read tw dev's JSON; no Go: tw comes from
-      # the tarball.
+      # Node for the node-workflow template (it needs Node on the deploying
+      # machine), npm pack, and tw dev's JSON; no Go: tw comes from the
+      # tarball.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -459,6 +459,14 @@ jobs:
         with:
           name: release-dist
           path: dist
+      # node-workflow is the one template that needs `npm install`; its
+      # @tailworks/* at this release's version aren't on npm yet.
+      - name: "@tailworks/* from this checkout (npm pack)"
+        run: |
+          npm ci --no-audit --no-fund --loglevel=error
+          mkdir -p "$RUNNER_TEMP/pkgs"
+          npm pack --silent -w @tailworks/node -w @tailworks/tailnet -w @tailworks/mcp --pack-destination "$RUNNER_TEMP/pkgs"
+          echo "TW_CI_PKGS=$RUNNER_TEMP/pkgs" >>"$GITHUB_ENV"
       - name: Validate the ${{ matrix.platform }} tarball
         run: scripts/ci-tarball-check.sh dist ${{ matrix.platform }} "${{ needs.setup.outputs.version }}"
 
@@ -505,9 +513,11 @@ jobs:
         env:
           TW_CI_ALLOW_SKIP: "TestBootBench|TestContainerSmoke"
         run: scripts/ci-suite.sh make -o guest-image e2e-vm GUEST_ARCH=amd64 GUEST_OUT=dist/vm-assets-amd64 TW_VM_KERNEL="$ASSETS/vmlinux"
+      # TestE2EContainerRegistry needs the D3 build (e2e-container-build);
+      # it runs in mac-firecracker's e2e-container-registry.
       - name: make e2e-container (shipped amd64 guest)
         env:
-          TW_CI_ALLOW_SKIP: "TestBootBench"
+          TW_CI_ALLOW_SKIP: "TestBootBench|TestE2EContainerRegistry"
         run: scripts/ci-suite.sh make -o guest-image e2e-container GUEST_ARCH=amd64 GUEST_OUT=dist/vm-assets-amd64 TW_VM_KERNEL="$ASSETS/vmlinux" CTR_IMAGES="$RUNNER_TEMP/ctr-images" CTR_APPS="$RUNNER_TEMP/ctr-apps"
 
   # Real tailnet, one suite at a time (they share the test tailnets).
@@ -647,10 +657,11 @@ jobs:
           scripts/e2e-container-prep.sh "$RUNNER_TEMP/ctr-apps"
           scripts/ci-suite.sh make e2e-container-build CTR_APPS="$RUNNER_TEMP/ctr-apps" CTR_BUILT="$RUNNER_TEMP/ctr-built"
       # Allowed skips: TestBootBench is an opt-in benchmark; e2e-vm's
-      # TestContainerSmoke skip is covered by e2e-container's run of it.
+      # TestContainerSmoke is run by e2e-container, and e2e-container's
+      # TestE2EContainerRegistry by e2e-container-registry, in this step.
       - name: e2e-vm, e2e-container, e2e-container-registry in Lima (shipped arm64 guest)
         env:
-          TW_CI_ALLOW_SKIP: "TestBootBench|TestContainerSmoke"
+          TW_CI_ALLOW_SKIP: "TestBootBench|TestContainerSmoke|TestE2EContainerRegistry"
         run: |
           scripts/ci-suite.sh scripts/ci-lima-make.sh \
             -c "dist/vm-assets-arm64:vm-assets" \
