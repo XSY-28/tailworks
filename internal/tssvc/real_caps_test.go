@@ -8,7 +8,8 @@
 //
 // The tailnet policy needs (the caller is tag:ttest, the host is
 // tag:ttest-rt-svch, and no grant between those two tags carries the
-// Service cap):
+// Service cap); the test adds what is missing itself (real_caps_policy_test.go:
+// additive, validated, If-Match):
 //
 //	"tagOwners":     {"tag:ttest-rt-svch": ["autogroup:admin"]},
 //	"autoApprovers": {"services": {"svc:ttest-rt-caps": ["tag:ttest-rt-svch"]}},
@@ -99,6 +100,7 @@ func TestRealServiceCaps(t *testing.T) {
 	rand.Read(b)
 	run := hex.EncodeToString(b)
 	prefix := "ttest-rt-caps-" + run
+	applyCapsPolicy(t, ctx, api, keyFile, run)
 
 	def, err := api.PutService(ctx, tsapi.Service{Name: capsSvc, Comment: "tw H22 e2e " + run, Ports: []string{"tcp:80"}})
 	if err != nil {

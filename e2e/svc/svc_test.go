@@ -83,7 +83,7 @@ func TestE2EService(t *testing.T) {
 	api := &tsapi.Client{Tailnet: tailnet, APIKey: apiKey}
 	// tailworks mints with an OAuth client: this run's own, created with the
 	// harness's API key and deleted when the test ends.
-	oauthFile := cliflow.RealOAuthClient(t, keyFile, tailnet, t.TempDir(), "tw-e2e-svc-oauth")
+	oauthFile := cliflow.RealOAuthClientScopes(t, keyFile, tailnet, t.TempDir(), "tw-e2e-svc-oauth", []string{"services"}) // the workload has a Service
 	b := make([]byte, 3)
 	rand.Read(b)
 	run := hex.EncodeToString(b)
@@ -154,7 +154,8 @@ func TestE2EService(t *testing.T) {
 		MgmtNodeID string `json:"mgmtNodeID"`
 	}
 	e.MustJSON(&up, "up", "--oauth-client-file", oauthFile, "--tailnet", tailnet, "--yes", "--hostname-prefix", prefix,
-		"--control-url", prodControl, "--mgmt-hostname", prefix+"mgmt", "--host-id", strings.TrimSuffix(prefix, "-"), "--ephemeral")
+		"--control-url", prodControl, "--mgmt-hostname", prefix+"mgmt", "--host-id", strings.TrimSuffix(prefix, "-"), "--ephemeral",
+		"--separate-host") // the two-process layout this suite was written against (cliflow.Env.SingleProcess)
 	e.TrackInfra(up.MgmtNodeID)
 
 	// The app: hello with its own tag and a Service.
