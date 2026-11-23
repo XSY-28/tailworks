@@ -24,6 +24,7 @@ func newStoreEnv(t *testing.T) *storeEnv {
 	bundle := makeBundle(t, map[string]string{"tailworks.jsonc": testTwJSONC, "dist/index.js": "export default {}"})
 	var dep DeployResponse
 	c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn.TenantID, "workload": "support", "bundle": bundle}, &dep)
+	keepLease(t, e.m, "h1", tn.TenantID, "support", dep.Epoch)
 	return &storeEnv{e: e, tenant: tn.TenantID, epoch: dep.Epoch}
 }
 
