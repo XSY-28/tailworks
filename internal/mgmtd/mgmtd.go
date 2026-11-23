@@ -265,10 +265,14 @@ func Start(ctx context.Context, o Options) (rt *Runtime, err error) {
 		}
 		rt.TS = ts
 		// Before anything uses the node's LocalAPI client: Close drains it
-		// (internal/tsnetlc).
-		if _, err := tsnetlc.Client(ts); err != nil {
+		// (internal/tsnetlc). ADR-019 rule 4: OmitAuth skips the LocalAPI's
+		// per-call peer-credential check (~25 ms per WhoIs on macOS); it is
+		// set here because writing it later races the client's users.
+		lc, err := tsnetlc.Client(ts)
+		if err != nil {
 			return nil, fmt.Errorf("tsnet start: %w", err)
 		}
+		lc.OmitAuth = true
 		upCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		upStart := time.Now()
 		st, err := tsnetUp(upCtx, rt.bg, ts, ts.AuthKey == "", o.TSNetService == "")

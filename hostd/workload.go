@@ -230,7 +230,7 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 		return
 	}
 	// Worker secrets, released to this lease holder only (secrets.go).
-	if app, err = h.withSecrets(ctx, w, app, tier, a.Epoch); err != nil {
+	if app, err = h.deploySecrets(ctx, w, app, tier); err != nil { // deploylease.go
 		w.fail(a.DeploymentID, err)
 		return
 	}

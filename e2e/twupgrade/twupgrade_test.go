@@ -135,13 +135,21 @@ func (m *machine) checkData(when string) {
 	var ls struct {
 		Deployments []struct{ Workload, Status string }
 	}
-	m.mustJSON(&ls, "ls")
-	active := false
-	for _, d := range ls.Deployments {
-		active = active || d.Workload == "upgapp" && d.Status == "active"
-	}
-	if !active {
-		m.t.Fatalf("%s: upgapp is not active: %+v", when, ls.Deployments)
+	// A rollback returns once tw up is back, which can be a moment before
+	// the host has redeployed the app ("starting"): wait for it.
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		m.mustJSON(&ls, "ls")
+		active, starting := false, false
+		for _, d := range ls.Deployments {
+			active = active || d.Workload == "upgapp" && d.Status == "active"
+			starting = starting || d.Workload == "upgapp" && d.Status == "starting"
+		}
+		if active {
+			break
+		}
+		if !starting || time.Now().After(deadline) {
+			m.t.Fatalf("%s: upgapp is not active: %+v", when, ls.Deployments)
+		}
 	}
 	if got := m.must("kv", "key", "get", "greeting", "--binding", "CACHE"); got != "hello from "+oldV {
 		m.t.Fatalf("%s: KV greeting = %q", when, got)
