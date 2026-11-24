@@ -45,6 +45,11 @@ the control is) is in docs/security-model.md.
   policy" (decided, deferred, why), security/LEDGER.md (H-egress-abuse
   fixed/disclosed, C-egress-port25 pinned, run log line),
   changes/fix-339-egress-port25.md (`security`, `feature-string`).
+- **Code registries**: `netd/errors.go` (status 403), `hostd/http.go`
+  `errStatus`, the SDK's `TailnetErrorCode` and `CATALOG`
+  (`js/packages/tailnet/src/errors.ts`, bundled into
+  `hostd/gen/js/tw-rt.js` by `make gen-js`), `agent/skills/tw-debug`,
+  docs/COMPAT.md's `connect()` row (Cloudflare refuses port 25 too).
 
 ## Tests
 
@@ -56,7 +61,10 @@ Run from this worktree on 2026-11-24.
 | `go test -count=1 -v -run TestInternetEgress ./netd` | ok, 13 subtests incl. new `Port25Refused`, `SubmissionPortsProceed`, `Port25Override` (real workerd and netd) |
 | **Before/after:** same run with `origin/master`'s `netd/internet.go` in place | `Port25Refused` FAILS (`connect(smtp.example.com:25): <nil>, want internet_port_refused`), `Port25Override` FAILS (`connect(smtp.example.com:587) with only :25 listed: <nil>`); both pass with the fix |
 | `go test -count=1 -v -run TestWorkerInternetEgress ./hostd` | ok, 5 subtests incl. new `Port25` (a Worker's `fetch()` to `api.example.com:25` end to end: 403 `internet_port_refused`, no dial, a `deny` record with the code, 200 with `["api.example.com:25"]`) |
-| `go test -count=1 ./docs/... .` | ok (limits citations, error docs) |
+| `go test -count=1 -v -run TestTCPEgressInternet ./hostd` | ok, 4 subtests incl. new `Port25` (stock `connect()` and `ctx.tailnet.connect()` from a facet object through real workerd: `ctx.tailnet.connect` rejects with `internet_port_refused`, stock `connect()` fails opaquely, two `deny` records with the code; with `["tcp.example.com:25"]` both connect and `:5432` is `internet_egress_unavailable`) |
+| `go test -count=1 ./docs/... . ./hostd/gen ./agent/... ./internal/compatdoc/...` | ok (limits citations, error docs, the runtime bundle, skills, COMPAT.md) |
+| `make gen-js` | regenerated `hostd/gen/js/tw-rt.js` (one line: the `internet_port_refused` catalog entry from `js/packages/tailnet/src/errors.ts`) |
+| `make test-js` | ok (package tests and the npm CLI tests) |
 | `make lint` | ok (gofmt, vet, staticcheck, vulncheck, api-check, compat-check, changes-check, check-secrets) |
 | `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp) | see below |
 

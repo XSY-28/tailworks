@@ -197,6 +197,8 @@ removed for `fetch()`.
 `connect()` and `fetch()`; the refusal subtests fail without
 `internetPortPolicy`), `hostd.TestWorkerInternetEgress/Port25` (a Worker's
 `fetch()` to port 25 end to end: refused, audited as `deny`, allowed with
-the entry), `sbxnet.TestInternetPortPolicy`, `publicip.TestAllowlistPorts`,
+the entry), `hostd.TestTCPEgressInternet/Port25` (stock `connect()` and
+`ctx.tailnet.connect()` from a facet object through real workerd),
+`sbxnet.TestInternetPortPolicy`, `publicip.TestAllowlistPorts`,
 `bundle.TestInternetEgressPorts`, `features.TestRequiredInternetPorts`.
 Ledger: H-egress-abuse, C-egress-port25.
