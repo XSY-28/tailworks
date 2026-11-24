@@ -40,6 +40,7 @@ func (r *Registry) EgressHandler() http.Handler {
 			}
 			stripIdentityHeaders(pr.Out.Header)
 			pr.Out.Header.Del("proxy-connection")
+			KeepBodyEOF(pr) // proxybody.go (#138)
 		},
 		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
 			if e, ok := AsError(err); ok {

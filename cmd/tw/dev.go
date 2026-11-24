@@ -218,6 +218,7 @@ func cmdDev(args []string) error {
 			// req.url matches wrangler dev's; identity is WhoIs of this
 			// proxy's dev node, never the Host header (docs/COMPAT.md).
 			pr.Out.URL.Scheme, pr.Out.URL.Host, pr.Out.Host = "http", ip, pr.In.Host
+			netd.KeepBodyEOF(pr) // #138
 		},
 	}
 	pl, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
