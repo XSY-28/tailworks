@@ -35,7 +35,7 @@ when it merges). Builds on ADR-050 (static assets).
 - **Host:** nothing new. The bundle is an ordinary ADR-050 assets bundle,
   so it needs the existing `assets` feature and runs the same on both tiers.
 - **Docs:** `docs/wrangler.md#pages`, `docs/COMPAT.md` (`pages` row and a
-  wrangler-config row), README compat row and a pointer, `changes/tough-hamster.md`.
+  wrangler-config row), README compat row and a pointer, `changes/pages-functions-issue-285.md`.
 
 ## Tests (2026-11-23, after merging origin/master at e4d4422e)
 

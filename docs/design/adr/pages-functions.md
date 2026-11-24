@@ -1,7 +1,7 @@
 # ADR-pages-functions: Cloudflare Pages projects are compiled by `tw` onto Workers with static assets
 
 **Date:** 2026-11-23
-**Status:** Proposed (issue #285, branch `tough-hamster`). Numbered when
+**Status:** Proposed (issue #285, branch `pages-functions-issue-285`). Numbered when
 it merges.
 
 **Context.**
