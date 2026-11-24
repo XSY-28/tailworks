@@ -8,6 +8,7 @@ import (
 )
 
 func TestCallerGrant(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		tags []string
 		want string
@@ -25,6 +26,7 @@ func TestCallerGrant(t *testing.T) {
 // TestServiceCallerGrant (#155): a workload behind a Service also gets the
 // grant to its svc: name, where callers' app caps must go.
 func TestServiceCallerGrant(t *testing.T) {
+	t.Parallel()
 	if got := serviceCallerGrant(""); got != "" {
 		t.Errorf("no Service: %q", got)
 	}

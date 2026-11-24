@@ -13,6 +13,7 @@ import (
 )
 
 func TestDevCallerFlag(t *testing.T) {
+	t.Parallel()
 	var c callerFlags
 	for _, ok := range []string{"alice", "ci=tag:ci", "bot=tag:a,tag:b"} {
 		if err := c.Set(ok); err != nil {
@@ -33,14 +34,14 @@ func TestDevCallerFlag(t *testing.T) {
 // (a user's, a tagged one), each with its own local URL; the app's
 // getCaller() sees each one, verified by netd.
 func TestDevCallers(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	bin := cliflow.BuildBinaries(t)
 	work := t.TempDir()
 	app := filepath.Join(work, "hello")
@@ -64,10 +65,11 @@ func TestDevCallers(t *testing.T) {
 // through @tailworks/tailnet/testing/dev, i.e. tw dev with --caller) against
 // this build of tailworks, from a copy of the template outside the repo.
 func TestTemplateTests(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
@@ -78,7 +80,6 @@ func TestTemplateTests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TW_WORKERD", wd)
 	bin := cliflow.BuildBinaries(t)
 	for _, tm := range []string{"hello", "lock", "agent", "mcp", "ai-agent", "refund-approval", "static-site"} {
 		t.Run(tm, func(t *testing.T) {

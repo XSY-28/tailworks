@@ -8,6 +8,7 @@ import (
 // Several tenants on one tailnet (ADR-043 D4, D5, D7).
 
 func TestTeamsTenantRules(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c := e.c
 	mk := func(extra map[string]any) map[string]any {
@@ -71,6 +72,7 @@ func TestTeamsTenantRules(t *testing.T) {
 }
 
 func TestTeamsTagOwnership(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	e.ts.policy = `{"tagOwners": {
 		"tag:a-api": ["autogroup:admin", "tag:tw-t-a"],
@@ -109,6 +111,7 @@ func TestTeamsTagOwnership(t *testing.T) {
 }
 
 func TestTeamsPublicSnippet(t *testing.T) {
+	t.Parallel()
 	if s := publicFunnelSnippet(Tenant{}); s != PublicFunnelSnippet {
 		t.Fatalf("default: %s", s)
 	}
@@ -121,6 +124,7 @@ func TestTeamsPublicSnippet(t *testing.T) {
 }
 
 func TestTeamsServiceName(t *testing.T) {
+	t.Parallel()
 	cfg := &TwConfig{}
 	cfg.Tailnet.Service = []byte("true")
 	classes := []ClassConfig{{Class: WorkloadNamespace, Tags: []string{"tag:x"}}}

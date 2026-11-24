@@ -129,14 +129,14 @@ func (f *fakeTS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestCLIEndToEnd(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		t.Fatal(err)
@@ -214,11 +214,10 @@ func TestCLILink(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		t.Fatal(err)
@@ -375,14 +374,14 @@ func TestCLILink(t *testing.T) {
 }
 
 func TestDevOnce(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	bin := cliflow.BuildBinaries(t)
 	work := t.TempDir()
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
@@ -405,14 +404,14 @@ func TestDevOnce(t *testing.T) {
 // tenant A (testcontrol A) and tenant B (`tw tenant add`, testcontrol B)
 // with the same agent app; e2e/cliflow MultiEnv checks (a)–(f).
 func TestCLIMultiTenant(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctls := map[string]*nettest.Control{}
 	for _, k := range []string{"a", "b"} {
 		c, err := nettest.StartControl()
@@ -475,14 +474,14 @@ func TestCLIMultiTenant(t *testing.T) {
 }
 
 func TestDoctor(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil {
 		t.Skip("needs workerd (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	bin := cliflow.BuildBinaries(t)
 	work := t.TempDir()
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
@@ -563,14 +562,14 @@ func sandboxAvailable() bool {
 // before anything is minted), then the whole E2E-MAC scenario (a)–(f) in
 // oauth mode, with every key minted by OAuth access tokens.
 func TestCLIOAuth(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		t.Fatal(err)
@@ -701,14 +700,14 @@ func TestCLIOAuth(t *testing.T) {
 // join key, status/doctor describe it, --separate-host on this state is a
 // state_conflict, and tw down stops everything.
 func TestCLISingleProcess(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		t.Fatal(err)

@@ -138,6 +138,7 @@ func js(v any) string { b, _ := json.Marshal(v); return string(b) }
 // TestHostd is the hermetic M3 suite: testcontrol + local DERP + fakemgmt +
 // tw-hostd (stock workerd) + tsnet client/echo nodes.
 func TestHostd(t *testing.T) {
+	t.Parallel()
 	s := startSuite(t, fakemgmt.Config{})
 	e := s.e
 	echoURL := "http://ttest-echo/"
@@ -580,6 +581,7 @@ func TestHostd(t *testing.T) {
 // TestKillViaHeartbeat: with no push (what M2's tw-mgmt does), kills
 // arrive in the heartbeat's revokeObjects.
 func TestKillViaHeartbeat(t *testing.T) {
+	t.Parallel()
 	s := startSuite(t, fakemgmt.Config{NoPush: true})
 	e := s.e
 	d := e.Deploy(hostdtest.Fixture("probe"), "probe", nil)
@@ -611,6 +613,7 @@ func TestKillViaHeartbeat(t *testing.T) {
 // a refreshed epoch instead of leaving the workload active with a dead
 // entry node.
 func TestNodeRetriesAfterLeaseLost(t *testing.T) {
+	t.Parallel()
 	s := startSuite(t, fakemgmt.Config{NoPush: true})
 	e := s.e
 	e.FM.SetLeaseLostCredentials(1)

@@ -69,6 +69,7 @@ func (q *queueEnv) pull(c *apiClient, queue string, epoch int64, o map[string]an
 // lease; a lease that is no longer current is stale; bodies are sealed at
 // rest; and a host may only use the queues its deployment declares.
 func TestQueuesSendPullAck(t *testing.T) {
+	t.Parallel()
 	q := newQueueEnv(t)
 	h1 := q.e.asHost("h1")
 
@@ -151,6 +152,7 @@ func TestQueuesSendPullAck(t *testing.T) {
 // delivery or from a lease that expired (a consumer crash); a consumer
 // without a DLQ drops it.
 func TestQueuesDelayRetriesDLQ(t *testing.T) {
+	t.Parallel()
 	q := newQueueEnv(t)
 	h1 := q.e.asHost("h1")
 	send := func(queue, body string, delay int) string {
@@ -255,6 +257,7 @@ func TestQueuesDelayRetriesDLQ(t *testing.T) {
 // TestQueuesLongPoll: a claim waiting on an empty queue returns as soon as
 // a message is sent.
 func TestQueuesLongPoll(t *testing.T) {
+	t.Parallel()
 	q := newQueueEnv(t)
 	h1 := q.e.asHost("h1")
 	q.pull(h1, "jobs", q.epoch, nil) // creates the queue
@@ -281,6 +284,7 @@ func TestQueuesLongPoll(t *testing.T) {
 // after the lease moves, the old holder is refused and the new holder
 // gets the old holder's in-flight messages once their leases expire.
 func TestQueuesFence(t *testing.T) {
+	t.Parallel()
 	q := newQueueEnv(t)
 	h1, h2 := q.e.asHost("h1"), q.e.asHost("h2")
 	h2.ok("PUT", "/v1/hosts/h2", map[string]any{"capacityNodes": 100, "tiers": []string{"process"}}, nil)
@@ -316,6 +320,7 @@ func TestQueuesFence(t *testing.T) {
 // peek, purge, delete (with its data key; a later send makes a new
 // queue), audit; and a bad queues config fails the deploy.
 func TestQueuesLifecycle(t *testing.T) {
+	t.Parallel()
 	q := newQueueEnv(t)
 	c := q.e.c
 	var qi QueueInfo

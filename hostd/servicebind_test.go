@@ -22,6 +22,7 @@ import (
 // another host (over the tailnet). The same-host half also runs against
 // the real mgmt (its GET .../service-bindings/{binding}).
 func TestServiceBindings(t *testing.T) {
+	t.Parallel()
 	for _, backend := range hostdtest.Backends {
 		t.Run(backend, func(t *testing.T) { testServiceBindings(t, backend) })
 	}

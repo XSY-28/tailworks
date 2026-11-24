@@ -12,6 +12,7 @@ import (
 // own tags only, next to the tagOwners it already writes; the preflight
 // then passes and a second apply writes nothing.
 func TestPolicyApplyService(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	e.ts.policy = operatorOnly
 	grantPolicyWrite(e)
@@ -56,6 +57,7 @@ func TestPolicyApplyService(t *testing.T) {
 // serviceApprover writes nothing wider than the workload's own Service and
 // tags: anything else in the preflight's snippet stays manual.
 func TestServiceApproverNarrow(t *testing.T) {
+	t.Parallel()
 	defined := func(string) bool { return true }
 	pf := func(snip string) PreflightResult {
 		return PreflightResult{Service: "svc:support", ServiceUnapproved: true, ServiceSnippet: snip, workloadTags: []string{"tag:tw-wl-support"}}

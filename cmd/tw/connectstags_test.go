@@ -13,6 +13,7 @@ import (
 // snippet tw policy prints (and deploy's failure fix) defines it, so pasting
 // it isn't rejected for a grant to an undefined tag.
 func TestPolicySnippetDefinesConnectsTag(t *testing.T) {
+	t.Parallel()
 	pf := mgmt.PreflightResult{
 		MissingTagOwners:  []string{},
 		UndefinedConnects: []string{"tag:tw-wl-mcp"},
@@ -30,6 +31,7 @@ func TestPolicySnippetDefinesConnectsTag(t *testing.T) {
 // Two of an app's tags missing the same grant: one grant with both srcs,
 // in the snippet and in the checks.
 func TestPolicySnippetMergesSrcs(t *testing.T) {
+	t.Parallel()
 	pf := mgmt.PreflightResult{Missing: []mgmt.PreflightMissing{
 		{Src: "tag:tw-ai-agent-ai-agent", Dst: "tag:tw-wl-mcp", Snippet: `{ "src": ["tag:tw-ai-agent-ai-agent"], "dst": ["tag:tw-wl-mcp"], "ip": ["tcp:80"] }`},
 		{Src: "tag:tw-wl-ai-agent", Dst: "tag:tw-wl-mcp", Snippet: `{ "src": ["tag:tw-wl-ai-agent"], "dst": ["tag:tw-wl-mcp"], "ip": ["tcp:80"] }`},

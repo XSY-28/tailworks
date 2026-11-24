@@ -157,6 +157,7 @@ func TestCLISecretNoApp(t *testing.T) {
 }
 
 func TestParseDotenv(t *testing.T) {
+	t.Parallel()
 	got, err := parseDotenv("# comment\n\nA=1\nexport B = two words # trailing\nC=\"line1\\nline2 \\\"q\\\"\"\nD='lit\\n $x'\nE=\"multi\nline\"\nF=\nG=a=b\r\n")
 	if err != nil {
 		t.Fatal(err)

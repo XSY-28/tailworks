@@ -11,6 +11,7 @@ import (
 // its tagOwners entry written with the grants to it, instead of leaving the
 // grants manual (the control plane rejects a grant to an undefined tag).
 func TestPolicyApplyDefinesConnectsTag(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	e.ts.policy = operatorOnly
 	grantPolicyWrite(e)
@@ -42,6 +43,7 @@ func TestPolicyApplyDefinesConnectsTag(t *testing.T) {
 }
 
 func TestUndefinedConnectsTags(t *testing.T) {
+	t.Parallel()
 	pol := &Policy{TagOwners: map[string][]string{"tag:tw-wl-db": {"autogroup:admin"}}}
 	src := []string{"tag:tw-wl-app"}
 	connects := []string{"tag:db", "tag:tw-wl-mcp", "tag:tw-wl-db", "tag:tw-wl-app", "tag:tw-wl-mcp", "svc:x", "tag:twx"}
@@ -55,6 +57,7 @@ func TestUndefinedConnectsTags(t *testing.T) {
 }
 
 func TestMissingGrantsMerge(t *testing.T) {
+	t.Parallel()
 	pf := PreflightResult{Missing: []PreflightMissing{
 		{Src: "tag:a", Dst: "tag:db", Snippet: `{ "src": ["tag:a"], "dst": ["tag:db"], "ip": ["tcp:5432"] }`},
 		{Src: "tag:b", Dst: "tag:x", Snippet: `{ "src": ["tag:b"], "dst": ["tag:x"], "ip": ["tcp:80"] }`},

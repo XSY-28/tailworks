@@ -13,6 +13,7 @@ import (
 // with the expected token for the tunnel's preamble check; other methods
 // still need the header.
 func TestLocalTokenConnect(t *testing.T) {
+	t.Parallel()
 	var got string
 	h := localToken("tok", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ = r.Context().Value(localTokenKey{}).(string)

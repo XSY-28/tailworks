@@ -58,6 +58,7 @@ func serveWhoisTCP(t *testing.T, n *nettest.Node, port string) {
 // same refusals as fetch(), a kill resets an open socket, and flows are
 // audited.
 func TestTCPEgress(t *testing.T) {
+	t.Parallel()
 	s := startSuite(t, fakemgmt.Config{})
 	e := s.e
 	serveWhoisTCP(t, s.echo, "5432")
@@ -209,6 +210,7 @@ func TestTCPEgress(t *testing.T) {
 // hermetic stand-in: tcp.example.com and other.example.com resolve to a
 // documentation address the dialer sends to a local TCP server.
 func TestTCPEgressInternet(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -297,6 +299,7 @@ func TestTCPEgressInternet(t *testing.T) {
 // real Postgres reached over the tailnet (ttest-pg:5432 forwards to
 // TW_TEST_POSTGRES_DSN's server). make e2e-pg-socket starts one.
 func TestTCPEgressPostgres(t *testing.T) {
+	t.Parallel()
 	dsn := os.Getenv("TW_TEST_POSTGRES_DSN")
 	if dsn == "" {
 		t.Skip("TW_TEST_POSTGRES_DSN not set (make e2e-pg-socket)")

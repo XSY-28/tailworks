@@ -256,6 +256,7 @@ func TestCLIExpose(t *testing.T) {
 }
 
 func TestDescribePublicKinds(t *testing.T) {
+	t.Parallel()
 	mk := func(kind, detail string) mgmt.AuditRecord {
 		return mgmt.AuditRecord{Kind: kind, Detail: []byte(detail)}
 	}

@@ -15,6 +15,7 @@ import (
 // into their tailnet policy, so they must say exactly what tw up checks:
 // operatorSnippet. They drifted once (tag:tw-issuer in the OAuth one).
 func TestDocPolicySnippetsMatchCode(t *testing.T) {
+	t.Parallel()
 	block := regexp.MustCompile("(?s)```jsonc\n(.*?)```")
 	n := 0
 	for _, f := range []string{"../../README.md", "../../docs/INSTALL.md"} {

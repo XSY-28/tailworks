@@ -40,6 +40,7 @@ func groupGone(pgid int) bool { return errors.Is(syscall.Kill(-pgid, 0), syscall
 // comes back by itself and serves; its old process group is gone. The
 // crash loop itself is TestWorkerdStuckSocketCrashLoop.
 func TestWorkerdCrashRecovery(t *testing.T) {
+	t.Parallel()
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.Sandbox = "auto" })
 	e := s.e
 	dep := e.Deploy(hostdtest.Fixture("probe"), "probe", nil)

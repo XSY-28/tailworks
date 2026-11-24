@@ -10,6 +10,7 @@ import (
 // TestStripRoutingHeaders: hostd drops netd's routing headers (#303) before
 // the request reaches workerd, keeping only the cf blob workerd consumes.
 func TestStripRoutingHeaders(t *testing.T) {
+	t.Parallel()
 	h := http.Header{}
 	h.Set(netd.HeaderObject, "obj-1")
 	h.Set(netd.HeaderCF, `{"objectId":"obj-1"}`)

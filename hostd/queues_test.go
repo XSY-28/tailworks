@@ -38,7 +38,10 @@ type queueRec struct {
 // queue() creating a Durable Object (the batch's create ticket), a
 // workerd crash mid-batch losing nothing, and a fenced host consuming
 // nothing until it is back.
-func TestQueues(t *testing.T) { testQueues(t, hostdtest.BackendFake) }
+func TestQueues(t *testing.T) {
+	t.Parallel()
+	testQueues(t, hostdtest.BackendFake)
+}
 
 // testQueues is TestQueues against backend (realmgmt_test.go).
 func testQueues(t *testing.T, backend string) {

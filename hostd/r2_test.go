@@ -32,7 +32,10 @@ import (
 // customMetadata, checksums, ranged gets, onlyIf on get and put,
 // multipart upload, and that blobs are named by tenant, workload and
 // bucket.
-func TestR2Binding(t *testing.T) { testR2Binding(t, hostdtest.BackendFake) }
+func TestR2Binding(t *testing.T) {
+	t.Parallel()
+	testR2Binding(t, hostdtest.BackendFake)
+}
 
 // testR2Binding is TestR2Binding against backend (realmgmt_test.go).
 func testR2Binding(t *testing.T, backend string) {
@@ -382,6 +385,9 @@ func filesUnder(t *testing.T, dir string) []string {
 // from a JS generator, which is not measured: its chunks are V8 garbage,
 // about 150 MiB of RSS per 512 MiB even without R2.) Request bodies of known length also stream from the
 // tailnet into a bucket and back, from the worker and from a facet.
+//
+// Not parallel: the heap it samples is the whole test process's, which
+// the parallel tests would inflate.
 func TestR2Streaming(t *testing.T) {
 	if testing.Short() {
 		t.Skip("moves 1 GiB")
@@ -493,6 +499,7 @@ func r2Mem(pid int) (heap, rss uint64) {
 // Deleting the bucket (its store, as `tw r2 bucket delete` does) empties
 // it and deletes the blobs the index pointed to.
 func TestR2IndexSurvivesMove(t *testing.T) {
+	t.Parallel()
 	fake := r2test.StartFakeS3(t.TempDir())
 	defer fake.Close()
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, func(o *hostdtest.Options) {

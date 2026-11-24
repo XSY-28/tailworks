@@ -37,6 +37,7 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 }
 
 func TestFindWranglerConfigPrecedence(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if f, _ := findWranglerConfig(dir); f != "" {
 		t.Fatalf("empty dir: %q", f)
@@ -56,6 +57,7 @@ func TestFindWranglerConfigPrecedence(t *testing.T) {
 }
 
 func TestReadWranglerTOML(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"wrangler.toml": `
 name = "t"
@@ -94,6 +96,7 @@ crons = ["*/5 * * * *"]
 }
 
 func TestApplyWranglerEnv(t *testing.T) {
+	t.Parallel()
 	cfg := map[string]any{
 		"name": "app", "main": "src/i.ts", "compatibility_date": "2026-04-01",
 		"migrations": []any{"m"}, "triggers": map[string]any{"crons": []any{"* * * * *"}},
@@ -141,6 +144,7 @@ func errFix(err error) string {
 }
 
 func TestWranglerWarnings(t *testing.T) {
+	t.Parallel()
 	cfg := map[string]any{
 		"name": "a", "main": "m.ts", "compatibility_date": "x", "compatibility_flags": []any{}, "vars": map[string]any{},
 		"migrations": []any{}, "triggers": map[string]any{}, "placement": map[string]any{}, "containers": []any{},
@@ -402,6 +406,7 @@ func TestReadWranglerOutEntry(t *testing.T) {
 // TestWranglerWarningsStoreKinds: a key registered as a platform store
 // binding (ADR-044) is supported, so it isn't warned about.
 func TestWranglerWarningsStoreKinds(t *testing.T) {
+	t.Parallel()
 	cfg := map[string]any{hostdtest.ProbeStoreKey: []any{map[string]any{"binding": "P", "name": "main"}}}
 	if w := wranglerWarnings("wrangler.toml", cfg, "esbuild"); len(w) != 1 || !strings.Contains(w[0], "unknown key") {
 		t.Fatalf("unregistered: %q", w)

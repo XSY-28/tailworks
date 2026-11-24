@@ -76,6 +76,7 @@ func TestUpWorkerInternet(t *testing.T) {
 }
 
 func TestWorkerInternetDetail(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		saved, running, problem, prefix string
 		restart                         bool
@@ -105,6 +106,7 @@ func TestWorkerInternetDetail(t *testing.T) {
 }
 
 func TestDoctorWorkerInternet(t *testing.T) {
+	t.Parallel()
 	s := &state{Dir: t.TempDir(), Cfg: Config{Tailnet: "t.ts.net", WorkerInternet: "off"}}
 	if st, d, _ := doctorWorkerInternet(s); st != "info" || !strings.HasPrefix(d, "off (") {
 		t.Fatalf("off: %s %q", st, d)

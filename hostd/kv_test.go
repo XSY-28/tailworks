@@ -89,7 +89,10 @@ func kvJournal(e *hostdtest.Env, workload, name string) mgmtapi.StoreJournalPage
 // get types, metadata, TTL validation and expiry (with the alarm that
 // journals the delete), list with prefix/limit/cursor, bulk get, limits,
 // namespace sharing between bindings, and one journal entry per write.
-func TestWorkersKV(t *testing.T) { testWorkersKV(t, hostdtest.BackendFake) }
+func TestWorkersKV(t *testing.T) {
+	t.Parallel()
+	testWorkersKV(t, hostdtest.BackendFake)
+}
 
 // testWorkersKV is TestWorkersKV against backend (realmgmt_test.go).
 func testWorkersKV(t *testing.T, backend string) {

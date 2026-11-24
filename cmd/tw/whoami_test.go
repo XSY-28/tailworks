@@ -121,6 +121,7 @@ func TestWhoami(t *testing.T) {
 // TestWhoamiOldMgmt: a mgmt from before /v1/whoami said approver and
 // mcpTools leaves them null (unknown), not false.
 func TestWhoamiOldMgmt(t *testing.T) {
+	t.Parallel()
 	var w whoamiWire
 	json.Unmarshal([]byte(`{"kind":"user","login":"a@b","admin":true,"actor":"a@b","mgmt":{"https":true}}`), &w)
 	r := whoamiFrom(&state{Dir: t.TempDir(), Link: &Link{Endpoint: "https://tw-mgmt.x.ts.net"}}, w)

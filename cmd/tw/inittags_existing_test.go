@@ -31,6 +31,7 @@ func mustOverrides(t *testing.T, tags string, objectTags ...string) initTagOverr
 }
 
 func TestSetTags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		tags       string
@@ -69,6 +70,7 @@ func TestSetTags(t *testing.T) {
 }
 
 func TestSetTagsRefuses(t *testing.T) {
+	t.Parallel()
 	shared := `{"tailnet": {"tags": ["tag:x"], "objects": {"A": {"tags": ["tag:x"]}}}}`
 	for name, tc := range map[string]struct {
 		cfg        string
@@ -95,6 +97,7 @@ func TestSetTagsRefuses(t *testing.T) {
 }
 
 func TestParseInitTagOverridesRefuses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		tags       string
 		objectTags []string
