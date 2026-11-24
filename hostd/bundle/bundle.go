@@ -90,6 +90,9 @@ type App struct {
 	// workerd's built-in engine.
 	Workflows []Workflow
 
+	// Assets is wrangler.jsonc "assets" and its files (assets.go); nil: none.
+	Assets *Assets
+
 	// SourceMaps are the bundler's source maps (<module>.map, e.g.
 	// dist/index.js.map), not modules: hostd maps exception stacks in
 	// request records with them (hostd/stackmap.go).
@@ -289,7 +292,11 @@ func Parse(files map[string][]byte) (*App, error) {
 		return nil, errors.New("bundle: wrangler.jsonc has no main")
 	}
 	a.Main = path.Clean(strings.TrimPrefix(w.Main, "./"))
+	assets := hasAssetsConfig(StripJSONC(wb)) // assets.go: assets/ holds files, not modules
 	for p, b := range files {
+		if assets && strings.HasPrefix(p, AssetsPrefix) {
+			continue
+		}
 		switch strings.ToLower(path.Ext(p)) {
 		case ".js", ".mjs", ".cjs", ".json", ".txt", ".wasm", ".html", ".bin":
 			if p == "wrangler.json" || p == "package.json" || p == "tw-bundle.json" || strings.HasPrefix(p, "node_modules/") {
@@ -357,6 +364,9 @@ func Parse(files map[string][]byte) (*App, error) {
 		return nil, err
 	}
 	if err := parseWorkflows(wb, a); err != nil {
+		return nil, err
+	}
+	if err := parseAssets(StripJSONC(wb), files, a); err != nil { // assets.go
 		return nil, err
 	}
 	var twJSON []byte

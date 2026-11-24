@@ -153,7 +153,9 @@ func TestWranglerWarnings(t *testing.T) {
 		"kv_namespaces": []any{map[string]any{"binding": "KV", "id": "k"}},
 		"r2_buckets":    []any{map[string]any{"binding": "BUCKET", "bucket_name": "b"}},
 		"ai":            map[string]any{"binding": "AI"},
+		// Static assets (ADR-static-assets): no line; Workers Sites still has one.
 		"assets":        map[string]any{"directory": "public"},
+		"site":          map[string]any{"bucket": "./public"},
 		"build":         map[string]any{"command": "npm run build"},
 		"observability": map[string]any{"enabled": true},
 		"frobnicate":    1,
@@ -164,11 +166,11 @@ func TestWranglerWarnings(t *testing.T) {
 	got := wranglerWarnings("wrangler.toml", cfg, "esbuild")
 	want := []string{
 		"wrangler.toml: ai: no such binding on tailworks: env.AI will be undefined",
-		"wrangler.toml: assets: not supported",
 		"wrangler.toml: build: needs wrangler's bundler",
 		"wrangler.toml: frobnicate: unknown key, ignored",
 		"wrangler.toml: observability: ignored by tailworks",
 		"wrangler.toml: routes: ignored",
+		"wrangler.toml: site: not supported",
 		"wrangler.toml: vectorize: no such binding on tailworks: env.CACHE, env.SESSIONS will be undefined",
 		"wrangler.toml: workers_dev: ignored",
 		"wrangler.toml: durable_objects binding REMOTE: script_name",

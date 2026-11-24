@@ -13,6 +13,7 @@ the template closest to what the user asked for:
 | `hello` | a plain Worker that returns its verified caller | `/` |
 | `agent` | a Cloudflare Agents SDK `Agent`: each instance is a Durable Object with its own SQLite storage and its own tailnet node | `/agents/support-agent/<name>` |
 | `mcp` | a stateless MCP server; each tool is allowed or denied by the caller's tailnet grant | `/mcp` |
+| `static-site` | wrangler `assets`: the files in `public/` served next to a Worker that answers `/api/*` and checks the caller before serving `/team/` | `/` |
 | `ai-agent` | a Vercel AI SDK agent (one per caller) that calls MCP tools over the tailnet; ships a scripted stand-in model, no LLM key | `/` |
 | `node-workflow` | a Vercel Workflow on tailworks' Node.js process tier (needs Node.js 24+ and `npm install`) | `/` |
 
@@ -40,7 +41,7 @@ cd hello-mcp
 - `wrangler.jsonc`: the Cloudflare config. Tailworks reads `wrangler.json`,
   `wrangler.jsonc` or `wrangler.toml`, the first it finds, like wrangler,
   and prints a warning for each setting it ignores (bindings it has no
-  equivalent for, `routes`, `assets`, ...). `--env <name>` on `tw dev` and
+  equivalent for, `routes`, `site`, ...). `--env <name>` on `tw dev` and
   `tw deploy` selects `[env.<name>]` as wrangler does.
 - `tailworks.jsonc`: tailworks' own settings. It's optional: without it the
   workload's tag is `tag:tw-wl-<workload>` and Durable Object classes get
@@ -72,7 +73,8 @@ won't work on tailworks. More: `tw docs show wrangler.md`.
 
 Check before you reach for a Cloudflare binding: KV, R2, D1, Queues,
 Workflows, Workers AI, Vectorize, Hyperdrive, Browser Rendering, service
-bindings and static assets have no binding on tailworks. Durable Object storage
+bindings have no binding on tailworks. Static assets (`assets`) work, without
+`_headers` and `_redirects`. Durable Object storage
 (KV API and SQLite) works. Call other services over the tailnet with
 `fetch("http://<magicdns-name>/...")`; the call leaves from the workload's
 own node. The full table: `tw docs show COMPAT.md`.

@@ -124,7 +124,7 @@ Cloudflare Agents SDK `Agent`. Each instance is a Durable Object with its own
 SQLite storage, **and** its own tailnet node.
 
 ```sh
-tw init support --template agent              # also: hello, mcp, ai-agent, lock, refund-approval, node-workflow
+tw init support --template agent              # also: hello, mcp, ai-agent, lock, static-site, refund-approval, node-workflow
 cd support
 npm install                                   # optional (needs Node.js): editor types for the Agents SDK and ctx.tailnet
 tw policy                                     # what this app needs in your tailnet policy, as one snippet
@@ -181,6 +181,26 @@ tw kill <object-id> --cascade                 # cut it (and its sub-agents) off 
 
 No answer, `identity_pending`, or a deployment `failed` in `tw ls`? See
 [docs/troubleshooting.md](docs/troubleshooting.md).
+
+### Try it: a static site with a Worker
+
+wrangler's `assets` work too: a folder of files (a plain site, or a Vite or
+React build) served next to a Worker. The `static-site` template is a page
+that greets you by your tailnet login, an API, and a folder only people
+(not tagged nodes) may read. It needs no tailnet to try:
+
+```sh
+tw init my-site --template static-site
+cd my-site
+tw dev                                        # open http://127.0.0.1:8787/ ; edit public/index.html and reload
+curl -i http://127.0.0.1:8787/style.css       # a file: Content-Type and ETag
+curl http://127.0.0.1:8787/api/whoami         # the Worker: your verified caller
+tw deploy                                     # the same site at its MagicDNS name
+```
+
+Its `wrangler.jsonc` has `"assets": { "directory": "./public", "binding":
+"ASSETS", "run_worker_first": ["/api/*", "/team/*"], "not_found_handling":
+"404-page" }`. What each setting does: [docs/wrangler.md#assets](docs/wrangler.md#assets).
 
 ## Using tailworks with a coding agent
 
@@ -246,7 +266,7 @@ prove every ✅ and ⚠️.
 | Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
-| Bindings | [Static assets](docs/COMPAT.md#assets) | ❌ | |
+| Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | no `_headers` / `_redirects` yet; within the 64 MiB bundle |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
 | Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | tailworks' API, admin only |

@@ -80,7 +80,7 @@ func TestTemplateTests(t *testing.T) {
 	}
 	t.Setenv("TW_WORKERD", wd)
 	bin := cliflow.BuildBinaries(t)
-	for _, tm := range []string{"hello", "lock", "agent", "mcp", "ai-agent", "refund-approval"} {
+	for _, tm := range []string{"hello", "lock", "agent", "mcp", "ai-agent", "refund-approval", "static-site"} {
 		t.Run(tm, func(t *testing.T) {
 			src := filepath.Join(root, "js", "packages", "create-tailworks", "templates", tm)
 			dir := filepath.Join(t.TempDir(), tm)

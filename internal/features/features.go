@@ -20,6 +20,10 @@ import (
 // Feature strings. A platform store kind (hostd/bundle RegisterStoreKind)
 // is its own feature: "d1", "kv", "r2", …
 const (
+	// Assets is wrangler "assets": static files served by a generated
+	// router Worker (ADR-static-assets). An older hostd would load the
+	// bundle's assets/ files as modules, or not serve them.
+	Assets = "assets"
 	// Queues is queue producers and consumers (ADR-039).
 	Queues = "queues"
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).
@@ -37,6 +41,7 @@ const (
 // kind plus the static features above, sorted.
 func Host() []string {
 	out := []string{
+		Assets,
 		Queues,
 		Telemetry,
 		WorkerInternet,
@@ -50,6 +55,9 @@ func Host() []string {
 // Required is what a parsed app needs from its host, sorted.
 func Required(app *bundle.App) []string {
 	var out []string
+	if app.Assets != nil {
+		out = append(out, Assets)
+	}
 	for _, s := range app.Stores {
 		out = append(out, s.Kind)
 	}

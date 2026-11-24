@@ -55,6 +55,7 @@ tenants sharing a host is in
 |---|---|---|---|
 | Deploy request body (the bundle, JSON-encoded) | 64 MiB | no | `mgmt/server.go:#mgmt-body` |
 | Unpacked bundle, all files | 64 MiB | no | `hostd/bundle/bundle.go:MaxBundle` |
+| Static assets (`assets.directory`), counted in the bundle | 64 MiB (about 48 MiB fits one deploy request) | no | `hostd/bundle/bundle.go:MaxBundle` |
 | Bundle sent into a microVM guest | 256 MiB | no | `guest/tw-guestd/main_linux.go:maxBundle` |
 | `tw deploy` wait for ready | 3 min | `tw deploy --wait` | `cmd/tw/app.go:-wait` |
 | One host bringing up a deployment | 2 min | no | `hostd/workload.go:#deploy-bringup` |
