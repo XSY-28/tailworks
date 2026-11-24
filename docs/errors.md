@@ -446,7 +446,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 400 · mgmt, hostd. **When:** a platform store write is too big: an entry over 2 MiB, an append over 4 MiB or 128 entries, a compaction key over 1 KiB, or a store over 1 GiB. **Fix:** write less at once, or delete data you no longer need.
 
 ### store_unavailable
-503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads still answer from the host's copy if the store has caught up with the journal on this host before, and fail if it never has (a new host). From the mgmt API it also means its database is unreachable. **Fix:** retry; check `tw status` for mgmt and the host.
+503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads answer from the host's copy (after waiting at most 2 s for mgmt) if the store has caught up with the journal on this host before, and fail if it never has (a new host) or if they need the journal (a D1 `first-primary` session or a bookmark ahead of the host's copy). hostd also returns it when mgmt doesn't answer a journal read within 10 s. From the mgmt API it also means its database is unreachable. **Fix:** retry; check `tw status` for mgmt and the host.
 
 ### superseded
 409 · mgmt. **When:** undeploy of a deployment that is not the latest for its workload. **Fix:** `tw undeploy <workload>` acts on the latest.
