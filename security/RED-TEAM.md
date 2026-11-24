@@ -992,3 +992,46 @@ something the Service grant withholds.
 | ID | Verdict | Evidence |
 |----|------|------|
 | H22 (CapMap) | **Fixed** | netd's attributed ingress (`netd/ingress.go`) and mgmt's WhoIs (`internal/mgmtd`) call `tssvc.WhoIs`, which uses `WhoIsForIP` with the connection's local address from the request context. `netd.TestServiceCapsScopedToVIP` drives `serveIngress` on testcontrol with a packet filter granting one cap to the VIP and one to the node's addresses; it failed before the change (Service flow: svc cap missing, node cap present) and passes after. `tssvc.TestRealServiceCaps` checks `tssvc.WhoIs` against production control. |
+
+---
+
+# Note 2026-11-24: H-binding-wire fixed for HTTP egress (#347)
+
+This note records a finding of the fresh-eyes pass of 2026-11-23 (master
+`27fd3de4`, v0.5.0) on service bindings (ADR-053). The earlier passes are
+left as written.
+
+**Finding (Low; hostile tenant code; workload ↔ workload in one tenant).**
+A service binding call to a named entrypoint or an RPC method carries
+`Tailworks-Binding` between hosts. The code said only hostd writes it
+(`routeBinding`, for a call the platform marked with `x-tw-binding`), but
+nothing removed a copy tenant code set on an ordinary `fetch()`: the
+platform's egress entrypoints stripped `x-tw-*`, `tw-*` and
+`proxy-authorization`, hostd deleted it only inside `routeBinding`, and
+netd forwards it by design. The callee's `bindingIngress` then admitted it
+from any caller with a node certificate of the tenant. So a Worker or
+object with a tailnet grant to a sibling workload reached the sibling's
+named entrypoints and RPC methods without declaring a `services` binding.
+The cross-tenant gate (no certificate, `binding_forbidden`) and the
+public-request refusal held.
+
+**Fix.** The header is removed from tenant requests in the platform worker
+(`objectEgress`, `WorkloadEgress.fetch`, `bindingEgress`) and again in
+hostd, in every HTTP egress handler: `takeBinding` (the workload and facet
+egress) and `nodeEgress` (the Node tier's proxy).
+
+**What the fix does not cover.** Checked while fixing: tenant code that
+speaks HTTP itself on a raw socket to the target's ingress port
+(`connect()`, ADR-052; a Node app's CONNECT tunnel) writes bytes hostd
+never parses, and its header still counts. The callee authorizes the
+calling node (WhoIs, the tenant's certificate, the grant); it cannot tell
+which code on that node wrote the header. That is the model ADR-053 §8
+states, and the docs now say it plainly: within a tenant, a named
+entrypoint is not a boundary between workloads the policy lets reach each
+other. Closing it needs a header the callee can authenticate (signed by
+the calling hostd, or a token mgmt issues when it resolves the binding),
+which is a new protocol field and a design decision.
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| H-binding-wire | **Fixed** for HTTP egress; the raw-socket path is a documented limit | `hostd.TestServiceBindings/*/TenantWireHeaderStripped` and `…/TenantWireHeaderStrippedFromFacetObject` (real workerd, hostd and netd, on fakemgmt and the real mgmt, with the target on the same host and on another): a plain `fetch()` with the header, in four spellings, is an ordinary request to the default `fetch()`. Before, the `Admin` entrypoint answered and `add(2, 3)` returned 5. `hostd.TestEgressDropsTenantBindingWire` drives hostd's handlers without the platform worker, and `gen.TestGeneratedWrapperProbe` (`ForgedEgressHeadersIgnored`, `WorkloadEgressIsWorkload`) the platform worker without hostd; each fails without its half. `hostd.TestServiceBindings/*/RawSocketStillCarriesWireHeader` pins the limit: it passes before and after. |

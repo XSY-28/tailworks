@@ -64,7 +64,13 @@ code wins.
   the receiver. The caller in `request.cf` is sealed by hostd and
   verified before an object sees it, so code in one workload cannot
   forge a caller to a sibling; it can still replay a real caller it was
-  sent, and plain DOs share the Worker's isolate (H08, F5).
+  sent, and plain DOs share the Worker's isolate (H08, F5). Between
+  workloads of one tenant, a service binding call to a named entrypoint
+  or RPC method (ADR-053) is admitted from any tailworks node of the
+  tenant that the tailnet policy lets reach the target: the grant and the
+  node certificate are the check, not the caller's `services`
+  declaration. A tenant `fetch()` can't carry the header that marks such
+  a call (stripped on egress); a raw socket can (H-binding-wire).
 - **B4 Host ↔ mgmt.** A host is `tag:tw-host` by WhoIs, bound to its host
   ID by a one-time registration secret (`tw host add`), and trusted only
   for the leases it holds: every host write is fenced by lease holder and
