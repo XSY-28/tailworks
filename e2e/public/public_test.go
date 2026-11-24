@@ -542,21 +542,32 @@ func TestE2EPublic(t *testing.T) {
 			Detail    json.RawMessage `json:"detail"`
 		} `json:"records"`
 	}
-	var n int
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
+	// One public_request record per request that reached the app (at least
+	// 8 above). Refused ones (the route checks' not_public and bad_request)
+	// are rolled into netd's per-minute public_rejected summary instead
+	// (H03, #68), so wait up to that window for it.
+	var n, notPublic, badRequest int
+	for deadline := time.Now().Add(90 * time.Second); time.Now().Before(deadline); time.Sleep(2 * time.Second) {
 		e.MustJSON(&aud, "audit", pub.ID)
-		n = 0
+		n, notPublic, badRequest = 0, 0, 0
 		for _, it := range aud.Items {
-			if it.Kind == "public_request" {
+			switch it.Kind {
+			case "public_request":
 				n++
+			case "public_rejected":
+				var sum struct{ NotPublic, BadRequest int }
+				json.Unmarshal(it.Detail, &sum)
+				notPublic += sum.NotPublic
+				badRequest += sum.BadRequest
 			}
 		}
-		if n >= 12 {
+		if n >= 8 && notPublic >= 2 && badRequest >= 1 {
 			break
 		}
 	}
 	raw := js(aud)
-	check("audit_public_requests", n >= 12 && !strings.Contains(raw, "secret-value"), fmt.Sprintf("%d public_request records", n))
+	check("audit_public_requests", n >= 8 && !strings.Contains(raw, "secret-value"), fmt.Sprintf("%d public_request records", n))
+	check("audit_public_rejected", notPublic >= 2 && badRequest >= 1, fmt.Sprintf("public_rejected summaries: notPublic %d, badRequest %d (want ≥2, ≥1: the route checks)", notPublic, badRequest))
 
 	// 11. tw doctor probes the public URL.
 	var doc struct {
