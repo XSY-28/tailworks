@@ -9,7 +9,7 @@ import (
 func TestDoctorSummary(t *testing.T) {
 	checks := []check{
 		{Name: "binaries", Status: "info", Detail: "not found next to tailworks (/x) or on PATH: tw-mgmt, tw-hostd; not needed in single-process mode (the daemons run inside tailworks), only for tw up --separate-host"},
-		{Name: "workerd", Status: "warn", Detail: "/home/u/.tailworks/bin/workerd: workerd 2026-11-14 (tailworks is tested with 1.20261118.1)"},
+		{Name: "workerd", Status: "warn", Detail: "/home/u/.tailworks/bin/workerd: workerd 2026-11-14 (tailworks is tested with 1.20261121.1)"},
 		{Name: "bundler", Status: "fail", Detail: "bundling template agent failed", Fix: "cd /home/u/src && make deps"},
 		{Name: "mint_mode", Status: "ok", Detail: "oauth: OAuth client abc from /home/u/oauth.env mints every node key"},
 		{Name: "transport", Status: "ok", Detail: "tsnet: mgmt API on its own node m.example.ts.net (WhoIs); host embedded"},
