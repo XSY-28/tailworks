@@ -146,9 +146,11 @@ Until then, the storage story is single-host
   ([COMPAT.md](COMPAT.md#do-storage), [locks](COMPAT.md#locks)). celld,
   Rivet and Cloudflare all replicate object storage or keep it in object
   storage.
-- **You write Python Workers.** Not supported
-  ([#292](https://github.com/rosskukulinski/tailworks/issues/292)); Python
-  runs only in a [container](containers.md).
+- **You write Python Workers that need Cloudflare-only pieces.** Python
+  Workers run ([python.md](python.md)), with Durable Objects, KV, R2 and D1
+  and pure-Python packages vendored by pywrangler. Python cron triggers,
+  Queues, Workflows, static assets and the microVM tier don't yet, and
+  Python Durable Objects have no tailnet node of their own.
 - **You are building a public SaaS.** tailworks identifies callers by
   tailnet identity, so its model fits internal tools and agents. Public
   routes exist, as opt-in paths over Tailscale Funnel

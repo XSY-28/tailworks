@@ -205,6 +205,16 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 `wrangler.jsonc` and has none of these settings. `tw deploy` does not
 use it.
 
+## <a id="python"></a>Python Workers
+
+A config whose `main` is a `.py` module, with `"python_workers"` in
+`compatibility_flags`, is a Python Worker. It isn't bundled: `tw deploy`
+ships the files under `main`'s directory and the vendored `python_modules/`,
+as pywrangler does, and hostd runs them in Pyodide. `--wrangler` and
+`--from-wrangler-out` don't apply (they bundle JavaScript). Vendor packages
+with `uv run pywrangler sync` before `tw deploy`. Everything else, and what
+isn't supported yet: [python.md](python.md).
+
 ## Settings tailworks ignores
 
 `tw deploy` and `tw dev` print one line per top-level key they don't use,
@@ -225,6 +235,7 @@ before anything else. Nothing is ignored silently:
 | `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on tailworks; the warning names each `env.X` that will be undefined. A section tailworks supports as a [platform store](design/adr/044-platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) or as [service bindings](#service-bindings) (`services`) is not warned about |
 | `site` | not supported (Workers Sites; use `assets`) |
 | `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by tailworks |
+| `python_modules` (its `exclude` globs) | ignored: `tw deploy` ships `python_modules/` whole, less `__pycache__` and `*.pyc` ([python.md](python.md#modules-and-files)) |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
 | anything else | unknown key, ignored |
 

@@ -105,6 +105,10 @@ type App struct {
 	// dist/index.js.map), not modules: hostd maps exception stacks in
 	// request records with them (hostd/stackmap.go).
 	SourceMaps map[string][]byte
+
+	// Python: main is a .py module (python.go). hostd runs the modules in
+	// a Python worker behind a JavaScript front.
+	Python bool
 }
 
 // RuntimeNode is the opt-in Node.js process tier (tailworks.jsonc "runtime": "node").
@@ -317,7 +321,7 @@ func Parse(files map[string][]byte) (*App, error) {
 			continue
 		}
 		switch strings.ToLower(path.Ext(p)) {
-		case ".js", ".mjs", ".cjs", ".json", ".txt", ".wasm", ".html", ".bin":
+		case ".js", ".mjs", ".cjs", ".json", ".txt", ".wasm", ".html", ".bin", ".py":
 			if p == "wrangler.json" || p == "package.json" || p == "tw-bundle.json" || strings.HasPrefix(p, "node_modules/") {
 				continue
 			}
@@ -410,6 +414,9 @@ func Parse(files map[string][]byte) (*App, error) {
 			a.Containers = map[string]container.Class{}
 		}
 		a.Containers[c.Class] = c
+	}
+	if err := finishPython(a); err != nil { // python.go
+		return nil, err
 	}
 	return a, nil
 }
