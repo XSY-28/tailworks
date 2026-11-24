@@ -150,12 +150,14 @@ func TestPublicIngress(t *testing.T) {
 	if strings.Contains(js(seen), "nFORGED") {
 		t.Fatalf("forged cf blob reached the app: %s", js(seen))
 	}
+	assertNoCfGeo(t, "public /hook/echo", r) // cfgeo_test.go (#302)
 
 	// The same handler over the tailnet still sees the tailnet caller.
 	tcode, tr := s.getJSON("http://" + wl.IP + "/hook/echo")
 	if tcode != 200 || get(tr, "requester", "kind") != "tailnet" || get(tr, "requester", "nodeId") != s.clientID || tr["callerError"] != nil {
 		t.Fatalf("tailnet /hook/echo: %d %s", tcode, js(tr))
 	}
+	assertNoCfGeo(t, "tailnet /hook/echo", tr)
 
 	// 2. Routes: only the listed prefixes; /_tw and odd paths never.
 	for _, c := range []struct {

@@ -32,6 +32,9 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
   `tailnet.egress.internet: false` in tailworks.jsonc turns internet
   egress off, and a list limits it
   ([recipes.md](recipes.md#call-an-internet-api)).
+- **No geolocation in `request.cf`.** `country`, `colo`, `latitude` and
+  the other geo fields are `undefined`; feature-detect them
+  ([below](#requestcf)).
 - **Each Durable Object is a tailnet node** with its own name, tags and
   grants. Its storage lives on one host's disk, with no replication.
 - **Same CLI shapes, different binary.** `tw dev`, `tw deploy`,
@@ -303,6 +306,40 @@ Differences from Cloudflare:
   (`"egress": "workload"`), not in facet-mode objects.
 - The host must run a tailworks release with the `assets` feature; mgmt
   doesn't place an assets deployment on an older host.
+
+## `request.cf`
+
+On Cloudflare, `request.cf` carries the client's location and the edge
+that served it. tailworks has neither, so **none of the geolocation fields
+are set**: `country`, `colo`, `city`, `region`, `regionCode`, `continent`,
+`postalCode`, `metroCode`, `latitude`, `longitude`, `timezone`,
+`isEUCountry`, `asn` and `asOrganization` are all `undefined`. They are
+absent, not set to `""` or `0`, so a check like `cf?.latitude !== undefined`
+tells you whether you have a location.
+
+- A tailnet caller connects from a `100.x` address, which has no IP
+  geolocation.
+- A public (Funnel) request has a real client IP
+  (`getRequester(req).ip`, `CF-Connecting-IP`), but tailworks doesn't
+  look it up in a GeoIP database.
+
+What tailworks does put in `request.cf`:
+
+| Key | What it is |
+|---|---|
+| `tailscale` | who sent the request: `caller` (the verified tailnet caller, with its `seal`) or, for a public request, `requester` (`{kind: "public", ip, ...}`). Read it with `getCaller(req)` / `getRequester(req)`, not directly |
+| `objectId` | the tailworks object (node) the request arrived on |
+| `traceId` | tailworks' audit trace ID for this hop |
+| `tw` | platform routing (which workload or object, the create ticket). Internal; don't depend on its shape |
+
+`request.cf` survives a service binding and a Durable Object stub's
+`fetch()`, so an object sees the same keys as the Worker.
+
+Ported code that reads a location has to feature-detect it and fall back:
+ask the client (the browser's Geolocation API, a form field), or look the
+public IP up yourself. For example, a Durable Object's `onConnect` that
+needs a position should handle `ctx.request.cf?.latitude === undefined`
+rather than drop the connection.
 
 <a id="pages"></a>
 ## Cloudflare Pages projects (`functions/`, `_worker.js`)
