@@ -1,7 +1,7 @@
 {
   "dev": {
     "date": "2026-11-24",
-    "commit": "103dbaf3770c3360ff5a7632d7fcc3d87592c6d5",
+    "commit": "dde4e0f2b761a0bfc0896fad7bab7b4c39eeb4fb",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -146,7 +146,7 @@
   },
   "deployed": {
     "date": "2026-11-24",
-    "commit": "103dbaf3770c3360ff5a7632d7fcc3d87592c6d5",
+    "commit": "dde4e0f2b761a0bfc0896fad7bab7b4c39eeb4fb",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
