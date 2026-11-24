@@ -77,8 +77,20 @@ Last update: 2026-11-23 23:30 PT. ADR-exit-node-egress drafted and built; tests 
 - `go test ./hostd -run 'Internet|Status|Feature|SelfUpgrade|ExitNode'`: ok.
 - `CI=true go test ./docs/ -run TestADRIndex`: FAIL, as designed: the slug
   file must be numbered by the PR that merges it (AGENTS.md rule 5).
-- `make lint`, `make test` (on the mbp runner), `go test ./netd -run Internet`
-  (needs workerd): see the bottom of this file.
+- `make deps` here, then `go test ./netd -run Internet` and
+  `go test ./hostd -run WorkerInternetEgress` (real workerd): ok.
+- Merged `origin/master` (60 commits; one conflict in
+  `internal/features/features.go`, both sides' `Required` additions kept).
+  After the merge: `make lint` ok; `go test ./internal/hostdrun
+  ./internal/features ./hostd/bundle ./docs` ok; `go test ./hostd -run
+  'ExitNode|Internet|Status|Feature|SelfUpgrade'` ok; `go test ./netd -run
+  Internet` ok; `go test ./cmd/tw -run
+  'WorkerInternet|Doctor|TestCLIReferenceUpToDate|CLIJSON'` ok.
+- `make test` on the mbp runner (`mbp-test.sh test`, post-merge tree):
+  ran to its last step (the `js/cli/tailworks` node tests, 3/3 and 51/51
+  pass) and exited 0. The script shows only the last 40 lines, so the Go
+  packages' `ok` lines were scrolled off; make stops at the first failing
+  target, so reaching the JS tests means every Go package passed.
 
 ## Not run
 
