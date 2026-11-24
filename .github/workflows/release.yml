@@ -166,9 +166,14 @@ jobs:
       - name: Ready to release (scripts/release-check.sh)
         if: matrix.gate == 'ready' && env.REHEARSAL == ''
         run: sh scripts/release-check.sh "$TAG"
+      # npm ci first: the dry run packs @tailworks/tailnet, whose prepack
+      # runs tsc and needs @types/node. (The lint and test gates get it from
+      # `make deps`; this gate runs no make target before the dry run.)
       - name: npm packages at the release's version (dry run; npm-publish.yml publishes)
         if: matrix.gate == 'ready'
-        run: sh scripts/npm-publish.sh "$(cat VERSION)" --dry-run
+        run: |
+          npm ci --no-audit --no-fund --loglevel=error
+          sh scripts/npm-publish.sh "$(cat VERSION)" --dry-run
       - name: install.sh upgrade and rollback
         if: matrix.gate == 'ready'
         run: scripts/ci-suite.sh make install-test
