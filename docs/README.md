@@ -91,6 +91,9 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 
 ## Understand: how it works
 
+- Where tailworks fits next to celld, workerd on its own, OpenOrange, Rivet,
+  Cloudflare Mesh and tsnet, and when not to use it:
+  [alternatives.md](alternatives.md)
 - Per-object egress: [egress-modes.md](egress-modes.md)
 - How a new Durable Object gets made: [create-admission.md](create-admission.md)
 - The design: [RFC](design/RFC.md) and the [ADRs](design/adr/README.md)
