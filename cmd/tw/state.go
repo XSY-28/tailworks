@@ -80,6 +80,10 @@ type Config struct {
 	// sandbox, still serve process-tier workloads of several tenants
 	// (incl. Node-tier apps whose egress is then unenforced, RT-08).
 	InsecureSharedHost bool `json:"insecureSharedHost,omitempty"`
+	// AllowExperimentalFlags (tw up --allow-experimental-flags): the host
+	// lets deployments set workerd's experimental compatibility flags
+	// (hostd/gen/compatflags.go, #337).
+	AllowExperimentalFlags bool `json:"allowExperimentalFlags,omitempty"`
 	// AllowSiblingEgress: objects dial other objects on this host over
 	// WireGuard instead of netd's in-process hop (tests).
 	AllowSiblingEgress bool `json:"allowSiblingEgress,omitempty"`

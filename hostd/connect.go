@@ -266,7 +266,7 @@ func (h *Host) connectAsFacet(inst *instance) connectAuth {
 		if c := inst.app.Classes[cls]; c == nil || !c.Facet() {
 			return nil, &apiError{Code: "unknown_object", Detail: "no facet class " + cls}
 		}
-		o, err := h.ensure(ctx, inst.w, cls, name, nil, nil, "")
+		o, err := h.facetEgressObject(ctx, inst, cls, name) // nodeless.go
 		if err != nil {
 			return nil, asAPIError(err)
 		}

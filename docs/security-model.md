@@ -65,6 +65,41 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
 The process tier is not a VM boundary. Don't run code you don't trust on
 it.
 
+### Side channels inside a workload
+
+On the process tier, one workload is one workerd process. Its Worker,
+every one of its objects (each a V8 isolate of its own) and tailworks'
+platform wrapper, which holds the per-instance key that signs egress
+attribution and callers, all share that process. V8 isolates keep
+JavaScript apart; they are not a boundary against CPU side channels such
+as Spectre. Cloudflare's production runtime adds mitigations that
+open-source workerd does not have: it freezes `Date.now()` while code runs
+and offers no shared memory. In the workerd tailworks ships, `Date.now()`
+and `performance.now()` advance in 1 ms steps during a CPU loop and
+`SharedArrayBuffer` exists (there is no second thread). Cloudflare's own
+researchers leaked a secret across isolates at up to 12 bit/s even with
+those mitigations in place.
+
+So tailworks' guarantees between the objects of one workload (per-object
+egress attribution, `getCaller()` in a sibling object, a sub-agent's `lim`)
+hold against JavaScript, not against an object that mounts a
+speculative-execution attack on its own process. An object that got the
+key could, inside its own workload only, send egress attributed to a
+sibling object, make `getCaller()` in a sibling name a caller of its
+choosing, and reach the facet Host's platform-only entry points. It gets
+nothing of another workload or tenant and none of hostd's node keys: those
+are in other processes. (What stands between processes of different
+workloads on one host is the host's and the kernel's job; see [When a host
+is shared between tenants](#when-a-host-is-shared-between-tenants).) The
+rule: **objects that must not trust each other
+belong in separate workloads**, which are separate processes; one workload
+is one trust domain. The microVM tier is the same per workload (the guest
+holds the key). tailworks does not restart workloads on a schedule to
+rotate the key: a restart drops Durable Objects' in-memory state and every
+WebSocket, and would stop only a slow leak. The clocks tenant code sees are
+pinned by a test against the pinned workerd, so a workerd update that
+changes them is noticed (ledger `C-clocks`, `H-sidechannel-inproc`).
+
 ### What the process-tier sandbox confines
 
 | | macOS (Seatbelt) | Linux, Landlock ABI ≥ 4 (kernel 6.7+) | Linux, Landlock ABI 1–3 |
@@ -120,6 +155,25 @@ a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
 
+### Experimental compatibility flags
+
+Every workerd tailworks starts runs with `--experimental`, because the
+platform worker needs it (the worker loader, facets). Without that switch
+workerd refuses the compatibility flags upstream marks experimental
+(`unsafe_module`, which gives `workerd:unsafe` and string eval; `rtti_api`;
+`precise_timers`; and whatever a workerd release adds). So that the switch
+doesn't also unlock them for tenant code, a deploy whose
+`compatibility_flags` list one is refused (`experimental_flag`): by mgmt at
+the deploy and its dry run, from the known list (`internal/compatflags`),
+and by the host when it generates the workerd config, from the list and
+from the pinned workerd itself (a 20 ms `workerd test` of a throwaway
+config without `--experimental`). `tw up --allow-experimental-flags` (or
+`tw-hostd -allow-experimental-flags`) lets a host run them; it advertises
+the `experimental-flags` feature and mgmt places such deployments only on
+hosts that have it. Everything an experimental flag unlocks stays inside
+the tenant's own workerd; the policy is about not handing out APIs upstream
+calls not ready (issue #337, [COMPAT.md](COMPAT.md#experimental-flags)).
+
 ### Availability between tenants
 
 The sandboxes above are about confidentiality and integrity: what a
@@ -164,6 +218,24 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
   `tw up --worker-internet=off` (`tw-hostd -worker-internet=off` on a host
   added with `tw host add`) turns it off for a whole host. A refused
   destination is `internet_egress_unavailable`.
+- **What a workload can do with the host's address.** Since ADR-052,
+  `connect()` (and `node:net`, and the Node tier's CONNECT) reaches any
+  public address on any TCP port, from the host's own address, and the
+  destination can't tell tenants on one host apart: whatever a workload
+  sends, the operator's address takes the blame for. The controls are
+  `tailnet.egress.internet: false` or a list, per workload, and
+  `-worker-internet=off` per host. Two things are bounded by default:
+  **TCP port 25 is refused** (`internet_port_refused`, audited as `deny`),
+  so a prompt-injected agent can't relay mail as the operator unless the
+  workload lists the relay with the port (`["smtp.example.com:25"]`;
+  submission ports 465 and 587 stay open); and an object has at most 256
+  open sockets. **Not bounded:** how many flows or `fetch()` calls a
+  workload starts per unit of time
+  ([limits.md](limits.md#limits-that-dont-exist)). A workload that is
+  allowed internet egress can scan, stuff credentials or flood from the
+  host's address until it is killed; the audit trail (every TCP flow,
+  the first `fetch()` per destination, every refusal) records it
+  afterwards.
 - **The SSRF guard always applies.** netd refuses loopback, private
   (RFC 1918, ULA), link-local (including `169.254.169.254` and other cloud
   metadata), CGNAT `100.64.0.0/10` and the tailnet ranges, the host's own
@@ -284,6 +356,15 @@ The red team's open items are tracked in
   Worker, so code that rewrites that isolate's JavaScript built-ins can
   defeat any check made there. Facet objects (the default) each get
   their own isolate.
+- **Isolates are not a side-channel boundary inside a workload.** The
+  objects of one workload and the platform wrapper that holds its key
+  share one process, and the workerd tailworks ships does not freeze
+  clocks. An object that mounted a speculative-execution attack on its
+  own process could forge egress attribution and callers among its
+  siblings, never beyond its workload. Put objects that must not trust
+  each other in separate workloads ([Side channels inside a
+  workload](#side-channels-inside-a-workload); ledger
+  `H-sidechannel-inproc`, disclosed).
 - **A named entrypoint is not a boundary inside a tenant.** A
   [service binding](wrangler.md#service-bindings) call to a named
   entrypoint or an RPC method is authorized by the tailnet grant and by

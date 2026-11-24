@@ -198,7 +198,8 @@ func (p *Project) deployDir(root string) (string, error) {
 // tailworks.jsonc with the workload's name and the run's tag. Without it the
 // workload would be tagged tag:tw-wl-<workload> (wrangler.md, "Without a
 // tailworks.jsonc"), one new tagOwner per project; with it every project
-// shares one tag. Durable Object classes stay internal, as without one.
+// shares one tag. Durable Object classes get no node of their own, as
+// without one (they are missing from tailnet.objects: docs/egress-modes.md).
 func writeOverlay(p *Project, dir, tag string) error {
 	if p.Expect.Kind == ExpectRefused && p.NoOverlay {
 		return nil

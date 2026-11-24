@@ -239,7 +239,7 @@ func TestTCPEgressInternet(t *testing.T) {
 			return nil, fmt.Errorf("no such host")
 		},
 		Dial: func(ctx context.Context, n, a string) (net.Conn, error) {
-			if a != "203.0.113.7:5432" {
+			if a != "203.0.113.7:5432" && a != "203.0.113.7:25" {
 				return nil, fmt.Errorf("unreachable")
 			}
 			return (&net.Dialer{}).DialContext(ctx, "tcp", ln.Addr().String())
@@ -264,13 +264,17 @@ func TestTCPEgressInternet(t *testing.T) {
 		s.waitPeer(wl.IP)
 		return wl
 	}
-	dial := func(t *testing.T, wl hostd.ObjectStatus, host string) map[string]any {
+	dialPort := func(t *testing.T, wl hostd.ObjectStatus, host, port, via string) map[string]any {
 		t.Helper()
-		code, r := s.getJSON("http://" + wl.IP + "/_tw/o/Facet/i1/connect?" + url.Values{"host": {host}, "port": {"5432"}, "via": {"tailnet"}}.Encode())
+		code, r := s.getJSON("http://" + wl.IP + "/_tw/o/Facet/i1/connect?" + url.Values{"host": {host}, "port": {port}, "via": {via}}.Encode())
 		if code != 200 {
 			t.Fatalf("%d %v", code, r)
 		}
 		return r
+	}
+	dial := func(t *testing.T, wl hostd.ObjectStatus, host string) map[string]any {
+		t.Helper()
+		return dialPort(t, wl, host, "5432", "tailnet")
 	}
 	t.Run("OnByDefault", func(t *testing.T) {
 		wl := deploy(t, "tcp-inet-on", "")
@@ -291,6 +295,45 @@ func TestTCPEgressInternet(t *testing.T) {
 		}
 		if r := dial(t, wl, "other.example.com"); r["ok"] != false || r["code"] != netd.CodeInternetEgressUnavailable {
 			t.Fatal(r)
+		}
+	})
+	// The default port policy (ADR-052 follow-up, issue #339): port 25 is
+	// refused for ctx.tailnet.connect() (typed) and stock connect()
+	// (opaque, audited), and allowed by an entry that names the port, which
+	// then covers that port only.
+	t.Run("Port25", func(t *testing.T) {
+		wl := deploy(t, "tcp-inet-smtp", "")
+		if r := dialPort(t, wl, "tcp.example.com", "25", "tailnet"); r["ok"] != false || r["code"] != netd.CodeInternetPortRefused {
+			t.Fatal(r)
+		}
+		if r := dialPort(t, wl, "tcp.example.com", "25", "stock"); r["ok"] != false {
+			t.Fatal(r)
+		}
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			n := 0
+			for _, rec := range e.Audit("").Items {
+				if rec.Kind == "deny" && rec.Dst == "tcp.example.com:25" && rec.Code == netd.CodeInternetPortRefused {
+					n++
+				}
+			}
+			if n >= 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("want two deny records with %s for tcp.example.com:25, got %d", netd.CodeInternetPortRefused, n)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		wl = deploy(t, "tcp-inet-smtp-ok", `["tcp.example.com:25"]`)
+		if r := dialPort(t, wl, "tcp.example.com", "25", "tailnet"); r["ok"] != true || r["read"] != "internet stand-in\nping\n" {
+			t.Fatal(r)
+		}
+		if r := dialPort(t, wl, "tcp.example.com", "25", "stock"); r["ok"] != true {
+			t.Fatal(r)
+		}
+		if r := dial(t, wl, "tcp.example.com"); r["ok"] != false || r["code"] != netd.CodeInternetEgressUnavailable {
+			t.Fatalf("an entry that names :25 must not cover :5432: %v", r)
 		}
 	})
 }
