@@ -97,6 +97,10 @@ goes red, fixing it comes before landing anything else.
 
 1. **Merge `origin/master`, then `make lint test`** locally (rule 6). Don't
    push to find out whether CI passes.
+   **Docs-only branches** (`sh scripts/docs-only.sh` exits 0: every changed
+   file is `.md`, none under `testdata/` or `e2e/`) run `make lint-docs
+   test-docs` instead. CI does the same for them, so they don't need the full
+   run.
 2. **Run the extra suites for what you touched.** CI doesn't run these:
 
    | You changed | Also run |
