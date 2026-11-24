@@ -22,9 +22,12 @@ target's `tagOwners`, so the control plane rejected it.
 
 ## Tests
 
-See the PR. New: `TestPolicyApplyDefinesConnectsTag`,
-`TestUndefinedConnectsTags` (mgmt), `TestPolicySnippetDefinesConnectsTag`
-(cmd/tw).
+After merging origin/master (2026-11-23): `make lint` ok, `make test` ok.
+New: `TestPolicyApplyDefinesConnectsTag`, `TestUndefinedConnectsTags`,
+`TestMissingGrantsMerge` (mgmt); `TestPolicySnippetDefinesConnectsTag`,
+`TestPolicySnippetMergesSrcs`, `TestCLIPolicyApplyUndeployedConnects`
+(cmd/tw, the ai-agent → mcp case end to end). Not run: `test-pg` (no store
+change), `e2e-headscale` (nightly), real-tailnet suites.
 
 ## Also (tw policy UX review)
 
