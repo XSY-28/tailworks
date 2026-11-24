@@ -836,6 +836,9 @@ func (a *v1api) CreateDeployment(w http.ResponseWriter, r *http.Request, params 
 		if err == nil {
 			err = a.s.M.checkReplicaName(r.Context(), req) // the deploy would refuse the name (workload_replicas.go, #348)
 		}
+		if err == nil {
+			err = a.s.M.checkCompatFlags(r.Context(), req) // the deploy would refuse the flags (compatflags.go, #337)
+		}
 		if err != nil {
 			writeErr(w, r, err)
 			return

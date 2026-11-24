@@ -15,6 +15,7 @@ import (
 	"slices"
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/internal/compatflags"
 )
 
 // Feature strings. A platform store kind (hostd/bundle RegisterStoreKind)
@@ -24,6 +25,12 @@ const (
 	// router Worker (ADR-050). An older hostd would load the
 	// bundle's assets/ files as modules, or not serve them.
 	Assets = "assets"
+	// ExperimentalFlags is a host that allows compatibility flags workerd
+	// marks experimental (tw-hostd -allow-experimental-flags, #337). A
+	// bundle that lists one (internal/compatflags) needs it; every other
+	// host refuses the deployment (experimental_flag). It depends on the
+	// host's flags, not its build, so hostd adds it to Host() itself.
+	ExperimentalFlags = "experimental-flags"
 	// InternetExitNode is a host whose internet path is a tailnet exit
 	// node (-worker-internet=exit-node=…, ADR-054). A bundle
 	// with tailnet.egress.via "exit-node" needs it. It depends on the
@@ -93,6 +100,9 @@ func Required(app *bundle.App) []string {
 	}
 	if app.EgressVia == bundle.ViaExitNode {
 		out = append(out, InternetExitNode)
+	}
+	if len(compatflags.Filter(app.CompatFlags)) > 0 {
+		out = append(out, ExperimentalFlags)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
