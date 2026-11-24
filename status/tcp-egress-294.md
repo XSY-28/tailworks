@@ -52,7 +52,12 @@ Last update: 2026-11-23 21:15 PT. Raw TCP egress (#294, ADR-052): stock `connect
   ./e2e/vm` PASS.
 - `go test ./mgmt/ -run 'TestSplitConnect|TestHasIPGrantPort|TestPreflightConnectsPort'`: PASS.
 - `node --test test/*.test.js` in js/packages/tailnet: 44 pass.
-- `make lint`: PASS. `make test`: see the PR.
+- `make test` (mini, before merging origin/master): PASS.
+- After merging origin/master (#299, and #285, which took ADR-051, so this
+  is ADR-052): `make lint` PASS. Also PASS: `go test ./mgmt/ ./cmd/...
+  ./docs/ ./schema/ ./internal/compatdoc/... ./hostd/gen/` and
+  `go test -run 'TestTCPEgress|TestLocalTokenConnect' ./hostd/`.
+- `make templates-typecheck test-sdk`: PASS.
 
 ## Gaps
 
