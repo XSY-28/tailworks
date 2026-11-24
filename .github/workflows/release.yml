@@ -7,7 +7,10 @@
 #
 # Rehearsal: `gh workflow run release.yml -f tag=master -f rehearsal=true`
 # runs everything on any ref (version <VERSION>-rc.<sha>, no tag/VERSION
-# check, no draft). Run one before cutting a tag.
+# check, no draft). Run one before cutting a tag. To rerun just the jobs a
+# fix touched, add `-f only=tailnet,mac-tailnet` (test job names, comma-
+# separated; setup and the builds they need always run). `only` needs
+# rehearsal: a release draft always comes from every job.
 #
 # Hosted runners (GitHub):
 #   setup          the version; on a tag, that it matches VERSION.
@@ -72,6 +75,10 @@ on:
         description: "rehearsal: run every gate and suite, draft nothing"
         type: boolean
         default: false
+      only:
+        description: "rehearsal only: comma-separated test jobs to run (e.g. tailnet,mac-tailnet); empty = all. The builds they need always run."
+        required: false
+        default: ""
 
 # Read-only by default; only the release job (which drafts the release and
 # uploads the tarballs) gets contents: write.
@@ -100,7 +107,12 @@ jobs:
           ref: ${{ env.TAG }}
       - id: v
         name: Version (a tag must match VERSION)
+        env:
+          ONLY: ${{ github.event.inputs.only }}
         run: |
+          if [ -n "$ONLY" ] && [ -z "$REHEARSAL" ]; then
+            echo "::error::only=$ONLY needs rehearsal=true: a release draft always comes from every job"; exit 1
+          fi
           if [ -n "$REHEARSAL" ]; then
             v="$(cat VERSION)-rc.$(git rev-parse --short=8 HEAD)"
           else
@@ -114,6 +126,7 @@ jobs:
 
   gates:
     needs: setup
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',gates,')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -148,6 +161,7 @@ jobs:
   # report separately.
   suites:
     needs: setup
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',suites,')
     name: ${{ matrix.target }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -189,6 +203,7 @@ jobs:
   # the registry conformance run with crane.
   test-images:
     needs: setup
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',test-images,')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -212,6 +227,7 @@ jobs:
 
   test-pg:
     needs: setup
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',test-pg,')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -247,6 +263,7 @@ jobs:
   # (docs/headscale.md); then add the newest two, one line each.
   headscale:
     needs: setup
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',headscale,')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -432,6 +449,7 @@ jobs:
   # Each tarball on a clean machine of its own platform, as a user gets it.
   tarballs:
     needs: [setup, build]
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',tarballs,')
     name: tarball ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -474,6 +492,7 @@ jobs:
   # firecracker, jailer from vm-assets), on the hosted runner's KVM.
   microvm-amd64:
     needs: [setup, vm-assets]
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',microvm-amd64,')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -520,9 +539,12 @@ jobs:
           TW_CI_ALLOW_SKIP: "TestBootBench|TestE2EContainerRegistry"
         run: scripts/ci-suite.sh make -o guest-image e2e-container GUEST_ARCH=amd64 GUEST_OUT=dist/vm-assets-amd64 TW_VM_KERNEL="$ASSETS/vmlinux" CTR_IMAGES="$RUNNER_TEMP/ctr-images" CTR_APPS="$RUNNER_TEMP/ctr-apps"
 
-  # Real tailnet, one suite at a time (they share the test tailnets).
+  # Real tailnet, one suite at a time (they share the test tailnets). Starts
+# right away, not after gates: the draft needs both anyway, and waiting cost
+# ~20 min of every run.
   tailnet:
-    needs: [setup, gates]
+    needs: setup
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',tailnet,')
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 180
@@ -585,6 +607,7 @@ jobs:
   # -o vz-assets: test the artifact, don't rebuild it.
   mac-vz:
     needs: [setup, vz-assets]
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',mac-vz,')
     runs-on: [self-hosted, macOS, ARM64, tw-release]
     timeout-minutes: 120
     env:
@@ -634,6 +657,7 @@ jobs:
   # guest, inside the runner's nested-virt Lima dev VM ($TW_DEV_VM).
   mac-firecracker:
     needs: [setup, vm-assets]
+    if: github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',mac-firecracker,')
     runs-on: [self-hosted, macOS, ARM64, tw-release]
     timeout-minutes: 150
     steps:
@@ -683,6 +707,12 @@ jobs:
   # tailnets at a time.
   mac-tailnet:
     needs: [setup, build, tailnet]
+    # After tailnet (one run on the test tailnets at a time), or without it
+    # when `only` leaves it out.
+    if: >-
+      !cancelled() && needs.setup.result == 'success' && needs.build.result == 'success' &&
+      (needs.tailnet.result == 'success' || needs.tailnet.result == 'skipped') &&
+      (github.event.inputs.only == '' || contains(format(',{0},', github.event.inputs.only), ',mac-tailnet,'))
     runs-on: [self-hosted, macOS, ARM64, tw-release]
     environment: release
     timeout-minutes: 300
@@ -736,7 +766,7 @@ jobs:
         run: rm -rf "$RUNNER_TEMP/ts-creds"
 
   release:
-    if: github.event.inputs.rehearsal != 'true'
+    if: github.event.inputs.rehearsal != 'true' && github.event.inputs.only == ''
     needs:
       - build
       - gates
