@@ -100,6 +100,7 @@ packages should be about the same size: their tarballs are 181 MB and
     succeed.
 - `make lint`: ok (on mini, after merging origin/master).
 - `make test npm-cli-test` on the mbp runner: ok (116 Go packages, every JS suite including the shim's). The first run caught `TestDoctor` (it needed the new `install` check, and on Linux glibc must stay `Checks[1]`); fixed.
+- 2026-11-23, after merging origin/master again (one conflict, `TestDoctor`'s expected checks: kept master's `worker_internet` and this branch's `install`): `make lint` ok, `make test npm-cli-test` ok, on macOS arm64 with Go 1.27.4.
 - Not run: `install-test` (install.sh/get.sh unchanged), and the credentialed and VM suites.
 
 ## Gaps / next steps
