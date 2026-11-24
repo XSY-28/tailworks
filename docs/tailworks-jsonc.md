@@ -182,12 +182,19 @@ retries once, then stops with
 [`policy_conflict`](errors.md#policy_conflict). The write is audited
 (`tw audit --all`, kind `policy_apply`). It needs the tenant's OAuth client
 to have the **Policy File** write scope (not just Read). Without that scope,
-copy the snippet `tw policy` prints into the admin console. Some lines are
-never written: a grant to `*` or `autogroup:*`, a grant to a tag your
-policy doesn't define (such as the `hello` template's `tag:db`, which the
-control plane would reject), a Service's `autoApprovers`, and the grant
-that lets people call the app. `tw policy` lists them for you to add
-yourself.
+copy the snippet `tw policy` prints into the admin console.
+
+When `tailnet.connects` names another tailworks app's tag that isn't defined
+yet (say `tag:tw-wl-mcp`, before `mcp` is deployed), `tw policy` adds its
+`tagOwners` entry, the same one deploying `mcp` would add, so the grant to
+it can be written. A tenant with its own owner tag (a team) doesn't get
+this: the tag may belong to another team's app, so you define it yourself.
+
+Some lines are never written: a grant to `*` or `autogroup:*`, a grant to a
+tag outside `tag:tw*` that your policy doesn't define (such as the `hello`
+template's `tag:db`, which the control plane would reject), a Service's
+`autoApprovers`, and the grant that lets people call the app. `tw policy`
+lists them for you to add yourself.
 
 If you'd rather not edit the policy for every app, reuse a small set of tags
 that an admin owns once, e.g. `tag:tw-app` for workloads and

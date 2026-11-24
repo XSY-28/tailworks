@@ -103,7 +103,7 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 	}
 	e := fail(code, msg)
 	// The public snippet already owns tag:tw-public; don't print it twice.
-	if len(pf.MissingTagOwners) > 0 && !(len(pf.MissingNodeAttrs) > 0 && onlyPublicTagOwner(pf.MissingTagOwners)) {
+	if needTagOwnersSnippet(pf) {
 		e.Fix = append(e.Fix, "add to your tailnet policy:", "  "+pf.TagOwnersSnippet)
 	}
 	if len(pf.Missing) > 0 {
@@ -123,6 +123,18 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 	}
 	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants")
 	return e
+}
+
+// needTagOwnersSnippet: pf.TagOwnersSnippet has something to add that the
+// public nodeAttrs snippet (which owns tag:tw-public) doesn't already.
+func needTagOwnersSnippet(pf mgmt.PreflightResult) bool {
+	if pf.TagOwnersSnippet == "" {
+		return false
+	}
+	if len(pf.UndefinedConnects) > 0 {
+		return true
+	}
+	return len(pf.MissingTagOwners) > 0 && !(len(pf.MissingNodeAttrs) > 0 && onlyPublicTagOwner(pf.MissingTagOwners))
 }
 
 func onlyPublicTagOwner(tags []string) bool {

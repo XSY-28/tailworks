@@ -577,12 +577,15 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 			fmt.Printf("✓ preflight  service %s auto-approved for the workload node\n", pf.Service)
 		}
 	}
-	if len(a.Cfg.Tailnet.Connects) == 0 && len(pf.MissingTagOwners) == 0 {
+	if len(a.Cfg.Tailnet.Connects) == 0 && len(pf.MissingTagOwners) == 0 && len(pf.UndefinedConnects) == 0 {
 		fmt.Printf("✓ preflight  no tailnet.connects declared · tagOwners ok for %s\n", strings.Join(a.srcTags(), ", "))
 		return
 	}
 	for _, t := range pf.MissingTagOwners {
 		fmt.Printf("› preflight: tagOwners %s … ✗ not in tagOwners (minting its nodes would fail)\n", t)
+	}
+	for _, t := range pf.UndefinedConnects {
+		fmt.Printf("› preflight: tagOwners %s … ✗ not in tagOwners (no app with this tag is deployed yet; a grant to it is rejected)\n", t)
 	}
 	missing := map[string]bool{}
 	for _, m := range pf.Missing {
@@ -604,9 +607,11 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 			fmt.Printf("✓ preflight  %s → %s granted\n", strings.Join(ok, ", "), dst)
 		}
 	}
-	if len(pf.Missing) > 0 || len(pf.MissingTagOwners) > 0 {
-		if len(pf.MissingTagOwners) > 0 {
+	if len(pf.Missing) > 0 || len(pf.MissingTagOwners) > 0 || len(pf.UndefinedConnects) > 0 {
+		if pf.TagOwnersSnippet != "" {
 			fmt.Printf("  add to your tailnet policy:\n    %s\n", pf.TagOwnersSnippet)
+		}
+		if len(pf.MissingTagOwners) > 0 {
 			printCallerGrant(a.Cfg.Tailnet.Tags, pf.Service) // callergrant.go
 		}
 		if len(pf.Missing) > 0 {

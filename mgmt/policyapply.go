@@ -146,7 +146,7 @@ func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag str
 		s.NodeAttrs = append(s.NodeAttrs, p.NodeAttrs...)
 		return nil
 	}
-	if len(pf.MissingTagOwners) > 0 && pf.TagOwnersSnippet != "" {
+	if pf.TagOwnersSnippet != "" && (len(pf.MissingTagOwners) > 0 || len(pf.UndefinedConnects) > 0) {
 		if err := add(pf.TagOwnersSnippet); err != nil {
 			return s, nil, err
 		}
@@ -187,7 +187,7 @@ func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag str
 		}
 		if u := undefinedDst(g, keep, defined); u != "" {
 			b, _ := json.Marshal(g)
-			manual = append(manual, fmt.Sprintf("grant %s (not written: %s has no tagOwners entry, and the control plane rejects a grant to an undefined tag; define %s, or drop it from tailnet.connects)", b, u, u))
+			manual = append(manual, fmt.Sprintf("grant %s (not written: %s has no tagOwners entry, and the control plane rejects a grant to an undefined tag; add a tagOwners entry for %s in the admin console, or drop it from tailnet.connects)", b, u, u))
 			continue
 		}
 		keep.Grants = append(keep.Grants, g)

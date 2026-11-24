@@ -118,7 +118,7 @@ func cmdPolicy(args []string) error {
 // preflight found missing, then the caller grant.
 func policySnippet(pf mgmt.PreflightResult, caller, svcCaller string) string {
 	var b strings.Builder
-	if len(pf.MissingTagOwners) > 0 && pf.TagOwnersSnippet != "" && !(len(pf.MissingNodeAttrs) > 0 && onlyPublicTagOwner(pf.MissingTagOwners)) {
+	if needTagOwnersSnippet(pf) {
 		b.WriteString(pf.TagOwnersSnippet + ",\n")
 	}
 	if len(pf.Missing) > 0 || caller != "" || svcCaller != "" {
@@ -171,6 +171,9 @@ func printPolicyChecks(a *app, pf mgmt.PreflightResult) {
 		fmt.Printf("✗ tagOwners  %s: missing (minting its nodes would fail)\n", strings.Join(pf.MissingTagOwners, ", "))
 	} else {
 		fmt.Printf("✓ tagOwners  %s\n", strings.Join(a.srcTags(), ", "))
+	}
+	for _, t := range pf.UndefinedConnects {
+		fmt.Printf("✗ tagOwners  %s: missing (no app with this tag is deployed yet; tailworks can define it)\n", t)
 	}
 	missing := map[string]bool{}
 	for _, m := range pf.Missing {
