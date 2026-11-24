@@ -108,15 +108,16 @@ goes red, fixing it comes before landing anything else.
    | logs, metrics, traces | `make e2e-observability` |
    | templates, `js/packages`, SDK compat | `make templates-typecheck test-sdk` |
    | wrangler config or bundling | `make e2e-wrangler` |
+   | how a Cloudflare project runs unmodified: wrangler config or bundling, assets, bindings (D1, KV, R2, Queues, Workflows, Durable Objects), `nodejs_compat`, the runtime wrapper (`hostd/gen`) | `make e2e-compat` |
    | anything `make changes-check` calls upgrade-relevant | `make e2e-upgrade` |
    | `tw upgrade` on a `tw up` machine, or how `tw up` restarts | `make e2e-tw-upgrade` |
    | `install.sh` / `get.sh` | `make install-test` |
    | the npm CLI packages (`js/cli/tailworks`, `scripts/npm-cli-packages.sh`, `internal/npminstall`) | `make npm-cli-test` |
 
    The suites that need credentials, a real tailnet, Docker, KVM or a Mac's
-   virtualization (`e2e-real`, `e2e-public`, `e2e-vm`, `e2e-vz`,
-   `e2e-headscale`, …) are fine to skip if you can't run them. Say so in the
-   PR.
+   virtualization (`e2e-real`, `e2e-public`, `e2e-compat`, `e2e-vm`,
+   `e2e-vz`, `e2e-headscale`, …) are fine to skip if you can't run them.
+   Say so in the PR.
 
    `.github/workflows/nightly.yml` runs the credential-free suites
    (including `e2e-headscale`) every night, and `test-pg` against a
