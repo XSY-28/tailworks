@@ -18,6 +18,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 - [Postgres and mgmt replicas](https://github.com/rosskukulinski/tailworks/blob/master/docs/postgres.md): when to switch, `tw-mgmt migrate --from sqlite`, `tw up --db-file`, backups with Postgres, HA replicas
 - [Upgrading tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/upgrading.md): what may run together, `tw upgrade`, fleet upgrade runs, cordon and drain
 - [Changelog](https://github.com/rosskukulinski/tailworks/blob/master/CHANGELOG.md): what changed in each release, breaking changes and upgrade actions first
+- [The launch demo](https://github.com/rosskukulinski/tailworks/blob/master/docs/demo.md): `scripts/demo.sh` (an MCP server and an agent deployed, a tool call allowed then denied by one grant, `tw kill`), the throwaway Headscale tailnet, how to record it
 - [Releasing tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/RELEASING.md): versions, release-note fragments, the release gates
 - [Running tailworks on Headscale](https://github.com/rosskukulinski/tailworks/blob/master/docs/headscale.md): the Headscale profile, `tw up --control=headscale`, what's different from Tailscale
 

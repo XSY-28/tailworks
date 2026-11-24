@@ -46,6 +46,9 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
   workload `mcp`), `lock`, `static-site` (wrangler `assets`: a
   folder of files next to a Worker), `refund-approval` (a Workflow that waits for a person), `node-workflow`.
   Each has a README.md: what it shows, how to run it, what to change.
+- [The launch demo](demo.md): `scripts/demo.sh` deploys an MCP server and an
+  agent, shows a tool call allowed, then denied by one grant, then the agent
+  killed. Also how to record it.
 - [Recipes](recipes.md): short, runnable how-tos (internet APIs and LLMs through a tailnet gateway, a Durable Object per user, a signed webhook, cron into KV).
 
 ## Do: how-to guides
