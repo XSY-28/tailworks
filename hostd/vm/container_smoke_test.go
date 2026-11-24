@@ -236,7 +236,7 @@ for a in [` + strings.Join(targets, ",") + `]:
 	// (no CAP_SYS_ADMIN) and can't reach guestd's cgroup through
 	// /proc/1/root (no CAP_SYS_PTRACE), so pids.max and a guest-side
 	// cpu.max hold against code running as root in the image.
-	r = runExec(t, c, sandbox.ExecSpec{Argv: []string{"python3", "-c", `
+	limitsProbe := sandbox.ExecSpec{Argv: []string{"python3", "-c", `
 import ctypes, errno, os
 libc = ctypes.CDLL(None, use_errno=True)
 out = {"uid": os.getuid()}
@@ -253,7 +253,20 @@ for p in paths:
     except Exception as e:
         out[p] = type(e).__name__
 print(out)
-`}}, "")
+`}}
+	// The storm's processes may still be going away (slower under Rosetta):
+	// until they are, a new exec can hit pids.max (EAGAIN: "failed to create
+	// new OS thread ... errno=11"). Retry only that, for up to 30 s; the
+	// check below is unchanged.
+	for deadline := time.Now().Add(30 * time.Second); ; {
+		r = runExec(t, c, limitsProbe, "")
+		eagain := strings.Contains(r.out+r.err, "errno=11") || strings.Contains(r.out+r.err, "Resource temporarily unavailable")
+		if r.code == 0 || !eagain || time.Now().After(deadline) {
+			break
+		}
+		t.Logf("limits probe hit pids.max (the storm is still draining); retrying")
+		time.Sleep(time.Second)
+	}
 	t.Logf("container root vs its limits: %s", strings.TrimSpace(r.out))
 	if r.code != 0 || !strings.Contains(r.out, "'uid': 0") || strings.Contains(r.out, "MOUNTED") || strings.Contains(r.out, "WROTE") {
 		t.Fatalf("container root lifted (or could not be checked against) its cgroup limits: %+v", r)
