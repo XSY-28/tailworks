@@ -433,6 +433,9 @@ func New(cfg Config) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := checkSandboxLayout(sb, cfg); err != nil { // sandboxlayout.go (#342)
+		return nil, err
+	}
 	// One field per line: features that add a map here should not collide.
 	h := &Host{
 		cfg:        cfg,

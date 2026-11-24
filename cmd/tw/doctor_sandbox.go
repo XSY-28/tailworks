@@ -189,12 +189,13 @@ func doctorLandlock(s *state) (string, string, string) {
 	if r := probe(procsb.ProbeRead, canary); r == "ok" {
 		return "fail", "Landlock did not enforce on " + osv + " (a file outside the profile was readable)", "report this; tenants are not confined on this machine"
 	}
-	if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
-		if r := probe(procsb.ProbeList, home); r == "ok" {
-			return "fail", "Landlock did not enforce on " + osv + " (the home dir was listable)", "report this; tenants are not confined on this machine"
-		}
+	// The real deny list (#342): every path hostd would deny for this state
+	// dir, probed under the profile. Landlock has no deny rules, so one
+	// under an allowed tree (/opt, /etc, …) is readable whatever hostd says.
+	if st, det, fix := doctorLandlockLayout(s, probe, osv); st != "" { // sandbox_layout.go
+		return st, det, fix
 	}
-	detail := fmt.Sprintf("Landlock ABI %d + seccomp work on %s: workerd starts under a tailworks profile, files outside it and the home dir are unreadable", abi, osv)
+	detail := fmt.Sprintf("Landlock ABI %d + seccomp work on %s: workerd starts under a tailworks profile; files outside it, tailworks' state and run dirs, credential files and the home dir are unreadable", abi, osv)
 	warn := ""
 	if abi >= 4 {
 		if r := probe(procsb.ProbeConnectTCP, "1.1.1.1:443"); r == "ok" {

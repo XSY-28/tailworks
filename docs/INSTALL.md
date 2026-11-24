@@ -277,7 +277,9 @@ Funnel, no HTTPS requirement.**
    no terminal (automation), write the file yourself, with the single line
    `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, or pass
    `--oauth-client-file <file>`. A file other users can read is tightened
-   to 0600.
+   to 0600. On Linux the file must not live under `/etc`, `/opt` or
+   another OS dir the process sandbox lets workloads read
+   (`sandbox_layout_unsafe`); `~/.config/tailworks/` is the place.
 
    Before minting anything, `tw up` exchanges the client for an access
    token (a wrong or revoked secret stops here: `oauth_exchange_failed`),
@@ -478,7 +480,12 @@ no Funnel and no posture. See [headscale.md](headscale.md).
 
 `tw up` starts `tw-mgmt` (SQLite, local key custody) and `tw-hostd`
 (workerd supervisor) under a detached supervisor; state and logs are in
-`~/.tailworks` (`--state-dir` to use another directory). `tw deploy` preflights
+`~/.tailworks` (`--state-dir` to use another directory; on Linux it, and
+every credential file, must stay outside `/usr`, `/lib*`, `/bin`, `/sbin`,
+`/etc`, `/opt`, `/nix/store` and `/run/current-system`, which the process
+sandbox lets every workload read: `tw up` refuses `--state-dir
+/opt/tailworks` or an OAuth client file in `/etc/tailworks/` with
+`sandbox_layout_unsafe`; `/var/lib/tailworks` is fine). `tw deploy` preflights
 the grants your app declares (`tailnet.connects`), bundles it, and waits
 until the workload node is on your tailnet, then prints its address:
 `http://tw-support-<id>.<tailnet>.ts.net/`. To call it, a grant must let
@@ -531,6 +538,12 @@ Installed with `get.sh`? It doesn't keep the release directory; see
   --apply-policy` (the OAuth client needs Policy File › Write). Nothing
   was minted.
 - `credential_file_insecure`: `chmod 600` the OAuth client file.
+- `sandbox_layout_unsafe` (Linux): the state dir, run dir, a credential
+  file or the home dir is under `/usr`, `/lib*`, `/bin`, `/sbin`, `/etc`,
+  `/opt`, `/nix/store` or `/run/current-system`, which the process sandbox
+  lets every workload read; move it (`--state-dir /var/lib/tailworks`,
+  `~/.config/tailworks/oauth.env`) and run the command again
+  ([errors.md](errors.md#sandbox_layout_unsafe)).
 - `oauth_exchange_failed`: the client secret is wrong or the client was
   revoked; generate a new one (Settings › Trust credentials).
 - `device_delete_unavailable` on `tw kill`: the kill held, but the OAuth

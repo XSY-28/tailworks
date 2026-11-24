@@ -260,6 +260,9 @@ func cmdUp(args []string) error {
 		}
 		oauthCreds = c
 	}
+	if err := checkUpLayout(s, absOAuth, *keyFile); err != nil { // sandbox_layout.go (#342)
+		return err
+	}
 	// --service defaults on for the default state dir (where the platform
 	// has a user service manager); a state dir already set up keeps how it
 	// runs, so tw upgrade's restart doesn't change it.
@@ -1126,10 +1129,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	tomb, _ := time.ParseDuration(s.Cfg.KillTombstone)
 	// No tenant's workerd may touch tailworks' state (mgmt custody, every
 	// tenant's node keys and DO storage) or its sockets, except its own.
-	deny := []string{filepath.Join(s.Dir, "mgmt"), filepath.Join(s.Dir, "hostd"), s.logDir(), s.configPath(), filepath.Join(s.Dir, "tenants"), s.runDir()}
-	if s.Cfg.OAuthClientFile != "" {
-		deny = append(deny, s.Cfg.OAuthClientFile) // the OAuth client secret (also denied via the tenant list)
-	}
+	deny := s.sandboxDenyList() // sandbox_layout.go
 	ho := hostdrun.Options{Client: inproc.NewClient(mrt.Handler(), s.Cfg.HostID), HostID: s.Cfg.HostID,
 		DataDir: filepath.Join(s.Dir, "hostd"), RunDir: s.hostdRunDir(), Workerd: s.Cfg.Workerd,
 		Heartbeat: hb, KillTombstone: tomb, HostnamePrefix: s.Cfg.HostnamePrefix, Sandbox: "auto", SandboxDeny: deny, PoolNodes: hostdrun.DefaultPoolNodes,
