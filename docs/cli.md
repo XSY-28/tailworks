@@ -257,6 +257,7 @@ flags:
     	machine-readable output
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -v	print every check with its full detail (default: problems, then one line per group)
 ```
 
 ### tw host
