@@ -78,7 +78,7 @@ func joinMgmtNode(ctx context.Context, o joinOpts) (*mgmtNode, error) {
 		if n.ErrMessage != nil {
 			msg := *n.ErrMessage
 			if tsapi.IsTagsNotPermitted(errors.New(msg)) {
-				return nil, policyMissingTagOwners("the control server refused the join of "+o.Hostname+" with tags "+strings.Join(o.Tags, ", "), errors.New(msg))
+				return nil, policyMissingTagOwners("the control server refused the join of "+o.Hostname+" with tags "+strings.Join(o.Tags, ", "), errors.New(msg), nil)
 			}
 			e := fail("bootstrap_failed", "the control server refused the join", msg)
 			if strings.Contains(strings.ToLower(msg), "tag") {

@@ -66,12 +66,26 @@ func upPolicyOptions() policy.Options {
 	return policy.Options{AllowSrcs: []string{"autogroup:admin"}}
 }
 
+// operatorSnippetFor is operatorSnippet for the tailnet policy pol (issue
+// #389). When pol already allows all traffic (a new tailnet's default
+// allow-all grant or ACL), the host ⇄ mgmt network grants add nothing, so
+// only the tagOwners and the admin grant (the console's app capability)
+// are wanted. A policy that narrows the allow-all later needs the network
+// grants back: tw up reports them as missing then.
+func operatorSnippetFor(pol []byte) policy.Snippet {
+	s := operatorSnippet()
+	if policy.AllowsAll(pol) {
+		s.Grants = slices.DeleteFunc(s.Grants, func(g map[string]any) bool { return g["app"] == nil })
+	}
+	return s
+}
+
 // upPolicyWant is what tw up --apply-policy adds to pol: operatorSnippet,
 // narrowed so that an existing tag's owners are never widened. A tag:tw
 // that is already there keeps the owners the admin chose (a group, say),
 // and an existing tag:tw-mgmt or tag:tw-host only gains tag:tw.
 func upPolicyWant(pol []byte) (policy.Snippet, error) {
-	want := operatorSnippet()
+	want := operatorSnippetFor(pol)
 	std, err := hujson.Standardize(append([]byte(nil), pol...))
 	if err != nil {
 		return want, fmt.Errorf("policy: %w", err)
@@ -138,7 +152,7 @@ func upApplyPolicy(ctx context.Context, api policy.API, f *flags, pol []byte, re
 			return pol, false, fail("bad_request", "can't parse the tailnet policy", err.Error())
 		}
 		if !tm.Empty() {
-			return pol, false, policyMissingTagOwners("--apply-policy could not write it (no Policy File › Write scope); the policy lacks tag:tw as an owner of: "+strings.Join(slices.Sorted(maps.Keys(tm.TagOwners)), ", "), nil)
+			return pol, false, policyMissingTagOwners("--apply-policy could not write it (no Policy File › Write scope); the policy lacks tag:tw as an owner of: "+strings.Join(slices.Sorted(maps.Keys(tm.TagOwners)), ", "), nil, pol)
 		}
 		return pol, false, nil
 	}

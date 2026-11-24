@@ -672,7 +672,7 @@ func cmdUp(args []string) error {
 			// the host key was not minted, so tag:tw-host ownership is
 			// checked here too, and everything about tag:tw-host is
 			// advisory (needed only for tw host add).
-			want := policy.Snippet{Grants: operatorSnippet().Grants}
+			want := policy.Snippet{Grants: operatorSnippetFor(pol).Grants}
 			if single {
 				want.TagOwners = map[string][]string{mgmt.HostTag: {"tag:tw"}}
 			}
