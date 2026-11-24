@@ -534,6 +534,10 @@ func (e *Env) Run() {
 		}
 	}
 	patch(tj, addConnects)
+	// hello declares a dependency nothing grants (the template's connects is empty).
+	patch(filepath.Join(helloDir, "tailworks.jsonc"), func(b []byte) []byte {
+		return bytes.Replace(b, []byte(`"connects": []`), []byte(`"connects": ["tag:db"]`), 1)
+	})
 	if e.Tier != "" {
 		for _, d := range []string{agentDir, mcpDir} {
 			patch(filepath.Join(d, "tailworks.jsonc"), func(b []byte) []byte {

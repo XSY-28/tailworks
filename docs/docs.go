@@ -91,7 +91,7 @@ func Read(name string) (string, bool) {
 }
 
 // RepoPath is a doc's (or doc#anchor's) path from the repo root:
-// "docs/errors.md", "README.md#quick-start-…".
+// "docs/errors.md", "README.md#quick-start".
 func RepoPath(doc string) string { return path.Join("docs", doc) }
 
 var anchorStrip = regexp.MustCompile(`[^\p{L}\p{N} _-]`)

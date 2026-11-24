@@ -4,7 +4,7 @@ What of the Cloudflare Workers platform works on tailworks, surface by surface.
 It's **measured, not claimed**: every ✅ and ⚠️ row names the tests that
 prove it, and `make lint` fails if one of those tests doesn't exist. The
 README's [Compatibility at a glance](../README.md#compatibility-at-a-glance)
-table is the summary of this page; the two must agree.
+table (collapsed) is the summary of this page; the two must agree.
 
 | Status | Meaning |
 |---|---|

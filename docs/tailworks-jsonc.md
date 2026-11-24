@@ -184,7 +184,7 @@ retries once, then stops with
 to have the **Policy File** write scope (not just Read). Without that scope,
 copy the snippet `tw policy` prints into the admin console. Some lines are
 never written: a grant to `*` or `autogroup:*`, a grant to a tag your
-policy doesn't define (such as the `hello` template's `tag:db`, which the
+policy doesn't define (such as `tag:db` before your policy has it, which the
 control plane would reject), a Service's `autoApprovers`, and the grant
 that lets people call the app. `tw policy` lists them for you to add
 yourself.

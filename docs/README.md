@@ -8,7 +8,7 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 
 - **You write Cloudflare Workers.** Run the app locally first, with no
   tailnet: [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet).
-  Then the [quick start](../README.md#quick-start-deploy-your-first-durable-object).
+  Then the [quick start](../README.md#quick-start).
   Bringing a wrangler project? Read
   [What's different from Cloudflare, in short](wrangler.md#whats-different-from-cloudflare-in-short),
   then [COMPAT.md](COMPAT.md) for each surface.
@@ -35,8 +35,8 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 
 ## Learn: walk-throughs
 
-- [Quick start](../README.md#quick-start-deploy-your-first-durable-object):
-  install, start tailworks, deploy a Durable Object, call it.
+- [Quick start](../README.md#quick-start):
+  install, start tailworks, deploy an app, call it.
 - [Concepts](concepts.md): the words tailworks uses (tenant, workload, object,
   tiers, facet mode, pool nodes, warm keys).
 - [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `tw dev`.

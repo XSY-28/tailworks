@@ -27,13 +27,11 @@ const consoleOAuthURL = "https://login.tailscale.com/admin/settings/oauth"
 // oauthConsoleSteps are the admin-console steps to create the client.
 func oauthConsoleSteps() []string {
 	return []string{
-		"1. Admin console › Settings › OAuth clients › Generate OAuth client (" + consoleOAuthURL + ")",
-		"2. Scopes: Auth Keys › Write, tag tag:tw   (required: mints mgmt's, the host's and every object's node key)",
-		"   optional: Devices › Core › Write, tag tag:tw   (kill also deletes the device; without it the device stays listed)",
-		"   optional: Policy File › Read   (deploy preflight and spawn checks read the tailnet policy)",
-		"3. Save the client ID and secret to a file only you can read:",
-		"     printf 'TS_OAUTH_CLIENT_ID=%s\\nTS_OAUTH_CLIENT_SECRET=%s\\n' <id> <tskey-client-…> > ~/.config/tailworks/oauth.env && chmod 600 ~/.config/tailworks/oauth.env",
-		"4. Policy (Access controls), before tw up: tag:tw must own tag:tw-mgmt and tag:tw-host (snippet below)",
+		"1. Policy (admin console › Access controls): tag:tw must own tag:tw-mgmt and tag:tw-host (snippet below)",
+		"2. Admin console › Settings › Trust credentials › Credential › OAuth (" + consoleOAuthURL + ")",
+		"3. Scopes: Auth Keys › Write (required). When it asks for a tag, pick tag:tw",
+		"   recommended: Devices › Core › Write (tag tag:tw), Policy File › Read, Services › Write",
+		"4. tw up, and paste the Client Secret when asked (saved to ~/.config/tailworks/oauth.env, 0600)",
 	}
 }
 
@@ -79,7 +77,7 @@ func mintModeRequired() *cliErr {
 	for _, s := range oauthConsoleSteps() {
 		lines = append(lines, "  "+s)
 	}
-	lines = append(lines, "then:  tw up --oauth-client-file ~/.config/tailworks/oauth.env [--service] [--yes]",
+	lines = append(lines, "no terminal? put TS_OAUTH_CLIENT_SECRET=tskey-client-… in ~/.config/tailworks/oauth.env, or pass tw up --oauth-client-file <file>",
 		"",
 		"Headscale instead of Tailscale: tw up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>",
 		"",
@@ -99,7 +97,7 @@ func mintModeRequired() *cliErr {
 func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSource, clientID, file string, out io.Writer, needed policy.Snippet) (tailnet string, pol []byte, readable bool, err error) {
 	if _, err := src.Token(ctx); err != nil {
 		return "", nil, false, fail("oauth_exchange_failed", "Tailscale refused the OAuth client "+clientID+" from "+file, netd.Redact(err.Error())).
-			withFix("check TS_OAUTH_CLIENT_SECRET in "+file+" (admin console › Settings › OAuth clients); a revoked client must be regenerated",
+			withFix("check TS_OAUTH_CLIENT_SECRET in "+file+" (admin console › Settings › Trust credentials); a revoked client must be regenerated",
 				"the client needs the Auth Keys (write) scope with tag tag:tw")
 	}
 	if api.Tailnet == "-" {

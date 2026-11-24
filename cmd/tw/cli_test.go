@@ -614,11 +614,8 @@ func TestCLIOAuth(t *testing.T) {
 	})
 	up := []string{"up", "--oauth-client-file", cred, "--tailnet", "ttest.ts.net", "--yes", "--control-url", ctl.URL, "--tsapi-url", api.URL,
 		"--hostname-prefix", "tw-o-", "--mgmt-hostname", "tw-o-mgmt", "--host-id", "tw-o", "--ephemeral", "--allow-sibling-egress"}
-	// 1. A group/world-readable client file is refused before anything happens.
-	if _, se, _, err := e.Tw(up...); err == nil || !strings.Contains(se, "credential_file_insecure") || !strings.Contains(se, "chmod 600") {
-		t.Fatalf("0644 client file: %v %s", err, se)
-	}
-	os.Chmod(cred, 0o600)
+	// 1. A group/world-readable client file (still 0644 here) is tightened
+	// to 0600, not refused: it is the operator's own file. Checked after 2.
 	// 2. Policy lacks tag:tw as an owner of the infra tags: typed error with
 	// the snippet, BEFORE any key is minted or node joined.
 	fts.mu.Lock()
@@ -639,7 +636,10 @@ func TestCLIOAuth(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(state, "mgmt", "tsnet", "tailscaled.state")); err == nil {
 		t.Fatal("mgmt's node joined before the policy was fixed")
 	}
-	res.Pass("oauth_refusals", "0644 → credential_file_insecure; no tag:tw owner → policy_missing_tag_owners, nothing minted")
+	if st, err := os.Stat(cred); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("0644 client file not tightened to 0600: %v %v", st.Mode(), err)
+	}
+	res.Pass("oauth_refusals", "0644 → tightened to 0600; no tag:tw owner → policy_missing_tag_owners, nothing minted")
 
 	// 3. The scenario (a)–(f) in oauth mode.
 	e.Run()
