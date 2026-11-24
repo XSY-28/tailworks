@@ -67,7 +67,7 @@ test-go:
 .PHONY: test-js
 test-js:
 	npm test --silent
-	node --test js/cli/tailworks/test/
+	node --test js/cli/tailworks/test/*.test.js
 
 ## test-sdk: M5 SDK conformance (hermetic): real Cloudflare Agents SDK and Vercel AI SDK
 ## apps on tw-hostd + stock workerd over testcontrol + local DERP; mock LLM, no keys.

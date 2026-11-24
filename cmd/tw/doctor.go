@@ -97,8 +97,6 @@ func cmdDoctor(args []string) error {
 		return "ok", "tw " + version + ", tw-mgmt and tw-hostd in " + exeDir(), ""
 	})
 
-	run("install", doctorInstall) // npm_install.go: tarball, npm or npx
-
 	doctorPlatform(run) // Linux: glibc (before workerd, which needs it)
 
 	run("workerd", func() (string, string, string) {
@@ -182,6 +180,8 @@ func cmdDoctor(args []string) error {
 		}
 		return "ok", detail, ""
 	})
+
+	run("install", doctorInstall) // npm_install.go: tarball, npm or npx
 
 	run("tw_home_writable", func() (string, string, string) {
 		home, err := os.UserHomeDir()
