@@ -72,3 +72,22 @@ this time.
   the hits may be another process on that machine, but that is not shown:
   the test now records each hit's source and local address, so a recurrence
   says where it came from. Not loosened.
+
+## Rehearsal 4 (run 45291083895)
+
+Everything passed except two jobs: gates, every hermetic suite, the signed
+build, all three tarballs (node-workflow fix confirmed), both Firecracker
+tiers, and e2e-vz with the six new microVM feature tests.
+
+- mac-vz TestContainerSmoke: canary clean this time. It failed one step
+  later: the limits probe after the pids storm hit pids.max ("failed to
+  create new OS thread … errno=11") because the storm was still draining
+  (slower under Rosetta) after the fixed 4 s sleep. The probe now retries
+  only on EAGAIN, up to 30 s; the assertion is unchanged. 5/5 locally.
+- e2e-public: /slow (a streaming request, not through fetch) got NXDOMAIN
+  for the Funnel name 39 s after it first answered. publicClient now keeps
+  each name's last good public DNS answer and dials it when a later lookup
+  fails (still over the internet to the Funnel edge; TLS still checks the
+  name).
+- Self-hosted jobs: setup-go `cache: false` (its restore was writing into
+  the runner user's own ~/go/pkg/mod; harmless, read-only, but not CI's).
