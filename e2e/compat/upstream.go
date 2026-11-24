@@ -274,8 +274,6 @@ func upstreamProjects() []*Project {
 			p.Exercises = []string{"vercel-ai", "nodejs-compat"}
 			p.Pins = map[string]string{"ai": AIVersion, "@ai-sdk/openai": AIOpenAIVersion}
 			p.Install = InstallUpgrade
-			p.AddDeps = map[string]string{"wrangler": "^4.145.0"}
-			p.DeployArgs = []string{"--wrangler"}
 			p.Files = map[string]string{
 				"wrangler.jsonc":           honoWrangler,
 				"tw-compat-entry.ts":       honoEntry,
@@ -287,7 +285,6 @@ func upstreamProjects() []*Project {
 			p.Changes = []string{
 				"the example is a Node server with no Workers config: a wrangler.jsonc and a Worker entry are added, and `@hono/node-server` is aliased to a shim whose `serve()` hands Hono's `app.fetch` to that entry instead of listening on port 8080; `src/` is unchanged",
 				noKeyChange,
-				wranglerBundle,
 			}
 			p.Probe = probeAIHono
 		}),
@@ -413,9 +410,7 @@ func nodeHTTPEx(id, dir, ext string, f func(*Project)) *Project {
 	p := Project{ID: id, Repo: "vercel/ai", Commit: vercelAICommit, Dir: dir, Section: SectionVercel}
 	p.Exercises = []string{"vercel-ai", "nodejs-compat"}
 	p.Pins = map[string]string{"ai": AIVersion, "@ai-sdk/openai": AIOpenAIVersion}
-	p.AddDeps = map[string]string{"wrangler": "^4.145.0"}
 	p.Install = InstallUpgrade
-	p.DeployArgs = []string{"--wrangler"}
 	p.Files = map[string]string{
 		"wrangler.jsonc": "// Written by e2e/compat.\n{\n  \"name\": \"" + id + "\",\n  \"main\": \"tw-compat-entry.ts\",\n  \"compatibility_date\": \"2026-06-11\",\n  \"compatibility_flags\": [\"nodejs_compat\"]\n}\n",
 		"tw-compat-entry.ts": `// Written by e2e/compat: the Worker entry. The first import answers the
@@ -435,17 +430,15 @@ export default httpServerHandler({ port: 8080 });
 	p.Changes = []string{
 		"the example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 8080 })` from `cloudflare:node`) are added; `src/` is unchanged",
 		noKeyChange,
-		wranglerBundle,
 	}
 	f(&p)
 	return &p
 }
 
 const (
-	aiPin          = `"ai" and "@ai-sdk/openai" ("workspace:*") are pinned to the published ` + AIVersion + ` and ` + AIOpenAIVersion + `, the versions the repo carries at this commit; npm install`
-	wranglerBundle = "wrangler is added and bundles it (`tw deploy --wrangler`): with `dotenv` in it, which the example imports, a Worker bundled by tailworks' built-in bundler can't start ([#356](https://github.com/rosskukulinski/tailworks/issues/356))"
-	noKeyChange    = "no OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called"
-	stubText       = "tw-compat scripted reply"
+	aiPin       = `"ai" and "@ai-sdk/openai" ("workspace:*") are pinned to the published ` + AIVersion + ` and ` + AIOpenAIVersion + `, the versions the repo carries at this commit; npm install`
+	noKeyChange = "no OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called"
+	stubText    = "tw-compat scripted reply"
 )
 
 // chatMessages is what useChat posts.

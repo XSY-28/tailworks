@@ -66,6 +66,10 @@ type Options struct {
 	// stack mapping needs only the positions).
 	SourceMap      bool
 	SourcesContent bool
+
+	// NodeCompat: the app has nodejs_compat (NodeCompat(flags)), so a
+	// require() of a Node builtin imports it (requirebuiltins.go).
+	NodeCompat bool
 }
 
 // Result is what BuildApp wrote.
@@ -144,7 +148,7 @@ func BuildApp(o Options) (*Result, error) {
 		NodePaths:         o.NodePaths,
 		LegalComments:     api.LegalCommentsNone,
 		LogLevel:          api.LogLevelSilent,
-		Plugins:           []api.Plugin{tw, rules},
+		Plugins:           []api.Plugin{requireBuiltinsPlugin(dir, o.NodeCompat), tw, rules},
 		Define:            o.Define,
 		Alias:             o.Alias,
 		KeepNames:         o.KeepNames,
