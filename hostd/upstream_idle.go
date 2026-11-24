@@ -16,8 +16,8 @@ import "time"
 // nodeUpstreamIdleTimeout is how long the Node-tier transport (direct and
 // ingress) keeps an idle connection to the app. Node's http.Server closes
 // an idle keep-alive connection keepAliveTimeout (default 5 s) after the
-// last response, plus keepAliveTimeoutBuffer (default 1 s) on Node 24 and
-// later. Measured: 5.0 s on Node 18 and 20, 6.0 s on Node 25 and 26.
+// last response, plus keepAliveTimeoutBuffer (default 1 s) where Node has
+// it. Measured: 5.0 s on Node 18.16 and 20.0, 6.0 s on 22.23, 25.1, 26.13.
 // TestNodeKeepsIdleConnLongerThanUpstream checks the Node on PATH. An app
 // that lowers keepAliveTimeout below this can still hit the race.
 const nodeUpstreamIdleTimeout = 3 * time.Second
