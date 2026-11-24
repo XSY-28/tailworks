@@ -56,7 +56,8 @@ Other runs:
 - twd-amd64, `tw doctor` built from this branch, `--state-dir` a symlink into `/opt` (no `~/.tailworks` touched): `✗ sandbox  the state dir /tmp/h342/var-lib-tw (/opt/tw-h342-nonexistent/state) is under /opt, which every sandboxed workload may read once it exists on Linux 6.8.0-149-generic: Linux's Landlock sandbox has no deny rules: … fix: use a state dir outside /usr, /lib, …`. With a plain temp state dir: `✓ Isolation  sandbox (Landlock ABI 4 + seccomp) · host sockets`.
 - macOS: `go test ./docs/ ./internal/procsb/` ok; `go test ./cmd/tw/ -run 'CLIReference|CLIJSON|Errors|Doctor'` ok (no command, flag or help text changed, so `docs/cli.md` is unchanged).
 - macOS: `make lint` → exit 0 (api-check, compat-check, changes-check, vet of every build tag, check-secrets).
-- `make test` offloaded to mbp (`sh ~/.claude/scratch/mbp-test.sh test`): see the PR's Tests section.
+- `make test` offloaded to mbp (`sh ~/.claude/scratch/mbp-test.sh test`, on the branch before the `origin/master` merge): exit 0, every Go package `ok` (130), JS tests ok, no FAIL.
+- After merging `origin/master` (one conflict, `security/LEDGER.md`: both branches appended a row; both kept, master's first): `make lint` exit 0; `go test ./cmd/tw/ ./internal/procsb/ ./security/attacks/ ./docs/` ok on macOS.
 
 Not run: `e2e-real`, `e2e-public`, `e2e-compat` and the other credentialed or VM suites (nothing in their table rows changed; the sandbox change is covered by the Linux runs above).
 
