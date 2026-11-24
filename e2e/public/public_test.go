@@ -40,6 +40,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,12 +94,43 @@ func approvedOnly(m policy.Snippet) error {
 
 // publicClient fetches like an internet client: public DNS (1.1.1.1),
 // verified TLS, never this machine's tailscaled or MagicDNS.
+// publicDNSGood: host → its last good public DNS answer (publicClient).
+var publicDNSGood sync.Map
+
 func publicClient(timeout time.Duration) *http.Client {
 	r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "udp", "1.1.1.1:53")
 	}}
 	d := &net.Dialer{Timeout: 10 * time.Second, Resolver: r}
-	tr := &http.Transport{DialContext: d.DialContext, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	// Public DNS for a new Funnel name flaps for a while after it first
+	// resolves (an anycast resolver node can still hold the NXDOMAIN from
+	// before it existed), which is not what this suite tests. So a name's
+	// last good addresses are kept, and used when a later lookup fails: the
+	// request still goes over the internet to the Funnel edge.
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		ips, lerr := r.LookupHost(ctx, host)
+		if lerr == nil && len(ips) > 0 {
+			publicDNSGood.Store(host, ips)
+		} else if v, ok := publicDNSGood.Load(host); ok {
+			ips = v.([]string)
+		} else {
+			return nil, lerr
+		}
+		var last error
+		for _, ip := range ips {
+			c, err := d.DialContext(ctx, network, net.JoinHostPort(ip, port))
+			if err == nil {
+				return c, nil
+			}
+			last = err
+		}
+		return nil, last
+	}
+	tr := &http.Transport{DialContext: dial, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 		Proxy: nil, ForceAttemptHTTP2: false, DisableKeepAlives: true}
 	return &http.Client{Timeout: timeout, Transport: tr}
 }
