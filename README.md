@@ -112,6 +112,8 @@ curl http://127.0.0.1:8787/api/whoami      # the Worker: your verified caller
 ```
 
 How the routing works: [docs/wrangler.md#assets](docs/wrangler.md#assets).
+A Cloudflare Pages site (`functions/` next to its build output) deploys the
+same way: [docs/wrangler.md#pages](docs/wrangler.md#pages).
 
 ### Next
 
@@ -176,6 +178,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | `_redirects`, `_headers` and assets-only work; within the 64 MiB bundle |
+| Bindings | [Cloudflare Pages projects](docs/COMPAT.md#pages) | ⚠️ | `functions/`, `_routes.json` and `_worker.js`; declare dashboard bindings in the config |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
 | Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | tailworks' API, admin only |

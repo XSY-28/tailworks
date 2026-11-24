@@ -172,6 +172,9 @@ type app struct {
 	WranglerFile string
 	Opts         appOpts
 	Warnings     []string
+
+	// Pages is a Cloudflare Pages project (pages.go); nil for a Worker.
+	Pages *pagesProject
 }
 
 func loadApp(dir, name string) (*app, error) { return loadAppWith(dir, name, appOpts{}) }
@@ -195,6 +198,10 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 		if wname, err = a.loadWrangler(top.Name); err != nil {
 			if _, none := err.(errNoWrangler); !none {
 				return nil, err
+			}
+			if dirExists(filepath.Join(dir, "functions")) { // pages.go
+				return nil, fail("bad_request", "no wrangler config in "+dir+", but functions/ looks like a Cloudflare Pages project").
+					withFix(`add a wrangler.jsonc: {"name": "<site>", "pages_build_output_dir": "./public"} (the folder your build writes)`)
 			}
 			if twErr != nil {
 				return nil, fail("bad_request", "no tailworks.jsonc or wrangler config in "+dir).withFix("tw init <dir> --template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow")
@@ -230,6 +237,11 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 	if len(a.Cfg.Tailnet.Tags) == 0 {
 		return nil, fail("bad_request", "tailworks.jsonc has no tailnet.tags (the workload node's tags)").
 			withFix(`add "tailnet": { "tags": ["tag:tw-wl-` + a.Name + `"] }`)
+	}
+	if a.Pages != nil {
+		secrets, _ := typesSecrets(a)
+		_, declared := genTypes(a, a.Dir, secrets)
+		a.pagesEnvWarnings(declared) // pages.go
 	}
 	return a, nil
 }
@@ -276,10 +288,17 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 	var types map[string]string
 	var js int
 	main := "dist/index.js"
+	if a.Pages != nil && a.Pages.Err != nil {
+		return nil, 0, a.Pages.Err // pages.go: a bad functions/ or _routes.json
+	}
 	if a.assetsOnly() {
 		// An assets-only project (assets.go): no Worker to bundle.
 		tb, err := a.packWorkerd(map[string][]byte{}, "", nil, vars)
 		return tb, 0, err
+	}
+	if a.Opts.builder() == "wrangler" && a.Pages.hasCode() {
+		_, err = a.pagesEntry(out) // pages.go: refuses --wrangler
+		return nil, 0, err
 	}
 	if a.Opts.builder() == "wrangler" {
 		files, main, types, js, err = a.buildWrangler(out)
