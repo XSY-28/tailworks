@@ -55,6 +55,10 @@ type check struct {
 	Detail string  `json:"detail"`
 	Fix    string  `json:"fix,omitempty"`
 	MS     float64 `json:"ms"`
+
+	// Group is the section the summary output lists the check under
+	// (doctor_render.go).
+	Group string `json:"group"`
 }
 
 // cmdDoctor checks this machine can run tailworks: workerd runs, the bundler and
@@ -62,6 +66,7 @@ type check struct {
 // mint credential is usable, and tailworks is not using the system tailscaled.
 func cmdDoctor(args []string) error {
 	f := newFlags("doctor")
+	verbose := f.Bool("v", false, "print every check with its full detail (default: problems, then one line per group)")
 	if _, err := f.parse(args); err != nil {
 		return err
 	}
@@ -69,7 +74,7 @@ func cmdDoctor(args []string) error {
 	run := func(name string, fn func() (status, detail, fix string)) {
 		t := time.Now()
 		st, d, fx := fn()
-		checks = append(checks, check{Name: name, Status: st, Detail: d, Fix: fx, MS: ms(time.Since(t))})
+		checks = append(checks, check{Name: name, Status: st, Detail: d, Fix: fx, MS: ms(time.Since(t)), Group: metaOf(name).group})
 	}
 	s, serr := openState(*f.stateDir)
 
@@ -85,7 +90,7 @@ func cmdDoctor(args []string) error {
 				// Single-process tw up runs both daemons inside tailworks itself;
 				// the binaries matter only for --separate-host (and
 				// tw-hostd on a machine added with tw host add).
-				return "warn", "not found next to tailworks (" + exeDir() + ") or on PATH: " + strings.Join(miss, ", ") + "; not needed in single-process mode (the daemons run inside tailworks), only for tw up --separate-host", "reinstall tailworks (install.sh) if you want the two-process layout"
+				return "info", "not found next to tailworks (" + exeDir() + ") or on PATH: " + strings.Join(miss, ", ") + "; not needed in single-process mode (the daemons run inside tailworks), only for tw up --separate-host", "reinstall tailworks (install.sh) if you want the two-process layout"
 			}
 			return "fail", "not found next to tailworks (" + exeDir() + ") or on PATH: " + strings.Join(miss, ", "), "reinstall tailworks (install.sh)"
 		}
@@ -326,17 +331,16 @@ func cmdDoctor(args []string) error {
 	}
 	res := map[string]any{"ok": !failed, "version": version, "checks": checks}
 	emit(f, res, func() {
-		mark := map[string]string{"ok": "✓", "warn": "!", "fail": "✗", "skip": "-", "info": "i"}
-		fmt.Printf("tw doctor · tw %s · %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
-		for _, c := range checks {
-			fmt.Printf("%s %-28s %s\n", mark[c.Status], c.Name, c.Detail)
-			if c.Fix != "" {
-				fmt.Printf("  %-28s fix: %s\n", "", c.Fix)
-			}
+		doctorHeader(os.Stdout, runtime.GOOS, runtime.GOARCH) // doctor_render.go
+		if *verbose {
+			renderDoctorVerbose(os.Stdout, checks)
+			return
 		}
+		home, _ := os.UserHomeDir()
+		renderDoctorSummary(os.Stdout, checks, home, doctorWidth())
 	})
 	if failed {
-		return fail("doctor_failed", "one or more checks failed (see above)")
+		return fail("doctor_failed", "one or more checks failed (see above; tw doctor -v for every check)")
 	}
 	return nil
 }
