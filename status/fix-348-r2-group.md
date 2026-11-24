@@ -57,3 +57,21 @@ which is the part of option 1 that costs nothing.
   `TestGroupMatchesHostdBlobPrefix` (200 000 random names against the
   expression hostd used) and `FuzzGroup` (9.7 million executions, no
   difference).
+
+## Commands run (darwin/arm64, go1.27.4)
+
+- `go test -run 'TestRT_Hr2group|TestWorkloadReplicas' ./mgmt/` with
+  `mgmt/service.go`, `mgmt/v1.go` and `mgmt/workload_replicas.go` reverted:
+  FAIL as intended (`got 202, want 409 replica_conflict`, in the new test
+  and in `NameTakenBySeparateWorkload`). With the change: PASS.
+- `go test ./internal/replicaname/`: PASS.
+  `go test -fuzz FuzzGroup -fuzztime 20s ./internal/replicaname/`: 9.7
+  million executions, no difference from the expression hostd used.
+- `go test -race -run TestR2BlobPrefixIsTheReplicaGroup ./hostd/`: PASS.
+- `make api` after editing `api/openapi.yaml` (the description of
+  `replica_conflict`; no schema change); the three generated files are
+  committed.
+- On the branch point (`4fb7e0f2`): `make lint` ok (`check-changes: ok
+  (needs: protocol; found in changes/fix-348-r2-group.md)`), `make test`
+  PASS, `make e2e-upgrade` PASS (from v0.4.0, the newest published
+  release, to this tree).
