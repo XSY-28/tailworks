@@ -1,4 +1,6 @@
-Last update: 2026-11-23 PT. Static assets (wrangler `assets`, issue #278) built; `static-site` template added.
+Last update: 2026-11-23 PT. Added `_redirects`, `_headers` and assets-only projects; all suites below re-run green after merging origin/master.
+
+Earlier: static assets (wrangler `assets`, issue #278) built; `static-site` template added.
 
 # Static assets (`assets`), issue #278
 
@@ -66,6 +68,17 @@ until it is numbered).
 - `sh scripts/templates-typecheck.sh static-site`: ok (npm install, tsc,
   `tw types --check`).
 - `tw dev --once` on the template: 200 with index.html.
+- Second round (`_redirects`, `_headers`, assets-only), after merging
+  origin/master again: `make lint`, `make test`,
+  `TW_UPGRADE_FROM=v0.4.0 make e2e-upgrade`, `templates-typecheck.sh
+  static-site`: all pass. New: `hostd/bundle:TestParseRedirects`,
+  `TestParseRedirectsInvalid`, `TestParseHeaders`, `TestParseHeadersInvalid`,
+  `TestParseAssetsRulesAndOnly`; `hostd/gen:TestAssetsRedirects`,
+  `TestAssetsHeaders`, `TestAssetsOnly` (mutation-checked: breaking header
+  joining, placeholder fill or assets-only mode fails them);
+  `cmd/tw:TestBuildAssetsOnly`; the template's test now checks a
+  `_redirects` 301 and a `_headers` header (and none on Worker responses).
+  `tw dev --once` on a wrangler.jsonc-only assets-only SPA: 200.
 - Not run: microVM tier (`e2e-vm`, needs Linux KVM), `e2e-vz`.
 
 ## Gaps / next steps
