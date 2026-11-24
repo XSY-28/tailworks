@@ -2354,7 +2354,7 @@ type Error struct {
 	// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
-	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, a replica name is taken by a separate workload, or a workload that is not a replica is given a name of that shape (n ≥ 2), which belongs to replicas |
 	// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
 	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
@@ -2458,7 +2458,7 @@ type Error struct {
 // | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 // | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 // | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
-// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, a replica name is taken by a separate workload, or a workload that is not a replica is given a name of that shape (n ≥ 2), which belongs to replicas |
 // | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
 // | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 // | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
@@ -2681,7 +2681,7 @@ type HostDrainResult struct {
 		// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 		// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 		// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
-		// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+		// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, a replica name is taken by a separate workload, or a workload that is not a replica is given a name of that shape (n ≥ 2), which belongs to replicas |
 		// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
 		// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 		// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |
@@ -4545,7 +4545,7 @@ type TombstoneError struct {
 	// | `queue_limit` | 400 | a send exceeds a message, batch, delay or queue size limit |
 	// | `store_unavailable` | 503 | the store is unreachable, restarting or contended (a row-lock or idle-transaction timeout); retry after `Retry-After` |
 	// | `tier_unavailable` | 409 | the chosen host (`--host`, or the workload's current host) does not offer the deployment's tier, or `containers` (for the image's `arch`) when the bundle declares containers |
-	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, or a replica name is taken by a separate workload |
+	// | `replica_conflict` | 409 | a deploy names a replica (`<workload>--r<n>`) instead of its workload, a replica name is taken by a separate workload, or a workload that is not a replica is given a name of that shape (n ≥ 2), which belongs to replicas |
 	// | `preview_conflict` | 409 | a preview's name (`<workload>--preview-<alias>`) is taken by a workload that is not a preview of this one |
 	// | `preview_failed` | 409 | promote of a preview its host reported `failed` |
 	// | `preview_unsupported` | 400 | `preview` for a bundle with queue bindings (queues are tenant-wide), or of a workload that is itself a preview or replica |

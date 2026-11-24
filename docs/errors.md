@@ -376,6 +376,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### queue_unavailable
 503 · hostd. **When:** a queue producer's send (or `metrics()`) couldn't reach mgmt through hostd. `send()` throws `Error: [queue_unavailable] … (503)`; nothing was enqueued. **Fix:** retry; check `tw status` for mgmt and the host.
 
+### replica_conflict
+409 · mgmt, cli. **When:** a deploy names a workload in a way that clashes with replica names (`tailworks.jsonc` `"replicas"`: replica *n* of `web` is the workload `web--r<n>`). One of: the name is a live replica (`web--r2`); a replica the deploy would create has the name of a separate workload; or a workload that is not a replica is being given a name ending in `--r<n>` with n ≥ 2 (also as a preview: `--preview-alias pr7--r2`). Those names belong to replicas: a replica shares its workload's stores, secrets and R2 objects, and tailworks tells one by its name. **Fix:** deploy the workload itself (`web`), not its replica; rename the workload or pick another `--preview-alias`; or undeploy the workload that holds the replica's name. A workload deployed under such a name by a release before this rule keeps deploying until it is undeployed; rename it when you can ([services.md](services.md#replicas-one-stateless-workload-on-several-hosts)).
+
 ### reserved_tag
 400 · mgmt. **When:** a bundle or namespace asks for one of tailworks' own tags (`tag:tw`, `tag:tw-mgmt`, `tag:tw-host`). **Fix:** use your app's tags (`tag:tw-wl-<name>`, class tags) in `tailworks.jsonc`.
 
