@@ -993,13 +993,103 @@ async function tracedStubFetch(cls, name, args, call) {
     throw e;
   }
 }
+function startChild(name, attrs) {
+  const st = als?.getStore();
+  if (!st) return void 0;
+  const rec = { traceId: st.traceId, spanId: newSpanId(), parentSpanId: st.spanId, name, start: Date.now(), end: 0, error: false, attrs };
+  return {
+    traceparent: `00-${st.traceId}-${rec.spanId}-${st.flags}`,
+    finish(error) {
+      rec.end = Date.now();
+      rec.error = error;
+      if (st.spans.length < MAX_SPANS) st.spans.push(rec);
+    }
+  };
+}
+async function runEntry(parent, name, attrs, fn, flush) {
+  if (!als) return fn();
+  const tp = parseTraceparent(parent);
+  const st = { traceId: tp?.traceId ?? randHex(16), spanId: newSpanId(), flags: tp?.flags ?? "01", incoming: "", spans: [] };
+  const rec = { traceId: st.traceId, spanId: st.spanId, parentSpanId: tp?.spanId ?? "", name, start: Date.now(), end: 0, error: false, attrs, kind: "server" };
+  return als.run(st, async () => {
+    try {
+      return await fn();
+    } catch (e) {
+      rec.error = true;
+      throw e;
+    } finally {
+      rec.end = Date.now();
+      const spans = [rec, ...st.spans.splice(0, MAX_SPANS - 1)];
+      if (flush) {
+        try {
+          flush(spans);
+        } catch {
+        }
+      }
+    }
+  });
+}
+
+// js/packages/tailnet/src/rpctrace.ts
+var MARK = "__tw_tp";
+async function rpcCall(cls, name, method, args, call) {
+  const c = startChild(`${cls} ${method}`, { "tw.do.class": cls, "tw.do.name": name, "rpc.method": method });
+  if (!c) return call(...args);
+  try {
+    const r = await call(...args, { [MARK]: c.traceparent });
+    c.finish(false);
+    return r;
+  } catch (e) {
+    c.finish(true);
+    throw e;
+  }
+}
+function takeMark(args) {
+  if (!args.length) return void 0;
+  const m = args[args.length - 1];
+  if (!m || typeof m !== "object") return void 0;
+  const proto = Object.getPrototypeOf(m);
+  if (proto !== Object.prototype && proto !== null) return void 0;
+  const keys = Object.keys(m);
+  if (keys.length !== 1 || keys[0] !== MARK || typeof m[MARK] !== "string") return void 0;
+  args.pop();
+  return m[MARK];
+}
+function tracedEntry(info, p, args, run) {
+  if (typeof p !== "string") return run(args);
+  if (p === info.alarm) {
+    return runEntry(null, `${info.cls} alarm`, { "tw.do.class": info.cls, ...info.attrs(), "tw.trigger": "alarm" }, () => run(args), info.flush());
+  }
+  const tp = takeMark(args);
+  if (tp === void 0) return run(args);
+  return runEntry(tp, `${info.cls} ${p}`, { "tw.do.class": info.cls, ...info.attrs(), "tw.trigger": "rpc", "rpc.method": p }, () => run(args), info.flush());
+}
+function traceGate(obj, info) {
+  const wrapped2 = /* @__PURE__ */ new Map();
+  return new Proxy(obj, {
+    get(t, p) {
+      const v = Reflect.get(t, p, t);
+      if (typeof v !== "function" || p === "constructor") return v;
+      const c = wrapped2.get(p);
+      if (c && c.v === v) return c.w;
+      const w = function(...args) {
+        return tracedEntry(info, p, args, (a) => v.apply(t, a));
+      };
+      wrapped2.set(p, { v, w });
+      return w;
+    },
+    set(t, p, v) {
+      return Reflect.set(t, p, v, t);
+    }
+  });
+}
 
 // js/packages/tailnet/src/runtime.ts
 installFetchPropagation();
-function spanFlusher(tw, ctx) {
+function spanFlusher(tw, ctx, as) {
   return (spans) => {
     if (!tw || typeof tw.call !== "function") return;
-    const p = Promise.resolve().then(() => tw.call("spans", { spans })).catch(() => {
+    const p = Promise.resolve().then(() => tw.call("spans", as ? { spans, as } : { spans })).catch(() => {
     });
     try {
       ctx?.waitUntil?.(p);
@@ -1008,6 +1098,34 @@ function spanFlusher(tw, ctx) {
   };
 }
 var twOf = /* @__PURE__ */ new WeakMap();
+function entryInfo(obj, cls, plain) {
+  const ctx = () => obj.ctx;
+  const oname = () => {
+    const n = ctx()?.id?.name;
+    return typeof n === "string" && n ? n : void 0;
+  };
+  return {
+    cls,
+    alarm: plain ? "alarm" : "__tw_alarm",
+    attrs() {
+      const a = {};
+      const n = oname();
+      if (n) a["tw.do.name"] = n;
+      if (plain) {
+        try {
+          const id = ctx()?.id?.toString?.();
+          if (typeof id === "string" && id) a["tw.do.id"] = id;
+        } catch {
+        }
+      }
+      return a;
+    },
+    flush() {
+      const n = oname();
+      return spanFlusher(twOf.get(obj), ctx(), plain && n ? { class: cls, name: n } : void 0);
+    }
+  };
+}
 function createTailnetContext(tw, env, bindings, self, ticket) {
   if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "tw platform binding missing (not running on tailworks?)");
   const op = async (name, args = {}) => {
@@ -1180,6 +1298,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
         super(ctx, e);
         twOf.set(this, tw);
+        return traceGate(this, entryInfo(this, name, false));
       }
       // Called by the Host DO when the delegated alarm fires.
       async __tw_alarm(info) {
@@ -1240,7 +1359,7 @@ function findDescriptor(o, p) {
   }
   return void 0;
 }
-function killGate(obj, cls) {
+function killGate(obj, cls, info) {
   const killedErr = (k) => new Error("[killed] object " + cls + "/" + (obj.ctx?.id?.name ?? "") + " was killed: " + k);
   const wrapped2 = /* @__PURE__ */ new Map();
   return new Proxy(obj, {
@@ -1262,7 +1381,7 @@ function killGate(obj, cls) {
             throw killedErr(k);
           }
         }
-        return v.apply(t, args);
+        return tracedEntry(info, p, args, (a) => v.apply(t, a));
       };
       wrapped2.set(p, { v, w });
       return w;
@@ -1287,7 +1406,7 @@ function wrapPlainClass(C, name, bindings, opts) {
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
-        const gated = killGate(this, name);
+        const gated = killGate(this, name, entryInfo(this, name, true));
         if (tw && oname && opts.node && !killedMark(ctx)) {
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
@@ -1380,7 +1499,7 @@ function guardStub(adm, cls, name, real) {
           await admit(adm, cls, name);
           const target = real && typeof real.then === "function" ? await real : real;
           if (p === "fetch") return tracedStubFetch(cls, name, args, (...a) => target.fetch(...a));
-          return target[p](...args);
+          return rpcCall(cls, name, String(p), args, (...a) => target[p](...a));
         };
       }
     }
@@ -1549,9 +1668,10 @@ function wrapHandler(H, bindings) {
           if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, void 0, ticket));
           if (isScheduledReq(req)) {
             const sc = scheduledCtx(this.ctx);
+            const flush = spanFlusher(tw, this.ctx);
             this.ctx = sc.ctx;
             const sf = typeof this.scheduled === "function" ? this.scheduled.bind(this) : void 0;
-            return runScheduled(sf, req, [], sc.drain);
+            return runTraced(req, () => runScheduled(sf, req, [], sc.drain), flush);
           }
         }
         try {
@@ -1592,7 +1712,7 @@ function wrapHandler(H, bindings) {
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, void 0, ticket));
         if (k === "fetch" && isScheduledReq(a)) {
           const sc = scheduledCtx(ctx);
-          return runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain);
+          return runTraced(a, () => runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain), spanFlusher(tw, ctx));
         }
       }
       let r;

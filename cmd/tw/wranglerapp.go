@@ -159,6 +159,25 @@ func wranglerBin(dir string) (string, error) {
 		withFix("npm install --save-dev wrangler", "or bundle with tailworks' built-in esbuild: drop --wrangler")
 }
 
+// wranglerEnv is the environment wrangler runs in. A project's own
+// wrangler (node_modules/.bin) gets that directory first on PATH, as under
+// `npm run deploy`, so a "build" command that calls a locally installed
+// tool (esbuild, tsc) finds it.
+func wranglerEnv(bin string) []string {
+	env := os.Environ()
+	dir := filepath.Dir(bin)
+	if filepath.Base(dir) != ".bin" || filepath.Base(filepath.Dir(dir)) != "node_modules" {
+		return env
+	}
+	for i, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "PATH="); ok {
+			env[i] = "PATH=" + dir + string(os.PathListSeparator) + v
+			return env
+		}
+	}
+	return append(env, "PATH="+dir)
+}
+
 // runWrangler runs `wrangler deploy --dry-run --outdir <outdir>` in the
 // app dir: wrangler bundles locally and sends nothing to Cloudflare.
 func (a *app) runWrangler(outdir string) error {
@@ -171,7 +190,7 @@ func (a *app) runWrangler(outdir string) error {
 	args := []string{"deploy", "--dry-run", "--outdir", outdir, "--config", a.WranglerFile, "--env=" + a.Opts.Env}
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = a.Dir
-	cmd.Env = append(os.Environ(), "WRANGLER_SEND_METRICS=false")
+	cmd.Env = append(wranglerEnv(bin), "WRANGLER_SEND_METRICS=false")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return fail("build_failed", "wrangler "+strings.Join(args, " ")+" failed in "+a.Dir, tailLines(string(b), 20)...)
 	}

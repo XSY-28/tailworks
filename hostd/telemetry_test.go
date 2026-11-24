@@ -403,6 +403,9 @@ func TestTelemetry(t *testing.T) {
 		}
 	})
 
+	// After PrometheusScrape, which counts the Obj objects.
+	t.Run("EntryTraces", func(t *testing.T) { testEntryTraces(t, s, coll, logPath, base, in, t0) }) // telemetry_entries_test.go
+
 	t.Run("ExportStopsWhenUnset", func(t *testing.T) {
 		e.FM.SetTelemetry(e.TenantID, nil)
 		waitFor(t, "the export to stop", 10*time.Second, func() bool { return !e.Host.TelemetryExporting(e.TenantID, "obsprobe") })

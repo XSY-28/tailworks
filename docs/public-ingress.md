@@ -155,7 +155,8 @@ export default {
   `Forwarded`, `X-Real-IP`.
 - **Client IP:** netd sets `CF-Connecting-IP` and `X-Forwarded-For` (one
   value) to the client address Funnel reports, and `X-Forwarded-Proto:
-  https`. There is no geo data (`request.cf.country` is absent).
+  https`. There is no geo data: `request.cf.country`, `colo`, `latitude`
+  and the other geo fields are absent ([wrangler.md](wrangler.md#requestcf)).
 
 ## Objects and spawn amplification
 

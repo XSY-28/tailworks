@@ -10,6 +10,16 @@ let CACHED_ENV = null;
 const SEEN = (req) =>
   Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-tw-") || k.startsWith("cf-") || k.startsWith("x-forwarded") || k.startsWith("tailscale-")));
 
+// GEO lists Cloudflare's request.cf geolocation fields. tailworks sets none
+// of them (#302); cfGeo reports any that are present, so the Go test can
+// check they are absent (undefined), not set to "" or 0.
+const GEO = ["asn", "asOrganization", "city", "colo", "continent", "country", "isEUCountry", "latitude", "longitude", "metroCode", "postalCode", "region", "regionCode", "timezone"];
+
+function cfGeo(req) {
+  const cf = req.cf ?? {};
+  return { cfKeys: Object.keys(cf).sort(), cfGeo: GEO.filter((k) => k in cf) };
+}
+
 function who(req) {
   let callerError = null;
   try {
@@ -18,7 +28,7 @@ function who(req) {
     callerError = isTailnetError(e) ? e.code : String(e);
   }
   const r = getRequester(req);
-  return { requester: { kind: r.kind, ip: r.ip, proto: r.proto, host: r.host, nodeId: r.nodeId }, callerError };
+  return { requester: { kind: r.kind, ip: r.ip, proto: r.proto, host: r.host, nodeId: r.nodeId }, callerError, ...cfGeo(req) };
 }
 
 class Base extends DurableObject {

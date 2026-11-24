@@ -281,7 +281,8 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 	}
 	keyFile := cliflow.WriteFakeOAuthFile(t, filepath.Join(work, "oauth.env"))
 	m.must("up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--control-url", ctl.URL, "--tsapi-url", api.URL,
-		"--hostname-prefix", "tw-tu-", "--mgmt-hostname", "tw-tu-mgmt", "--host-id", "tw-tu")
+		"--hostname-prefix", "tw-tu-", "--mgmt-hostname", "tw-tu-mgmt", "--host-id", "tw-tu",
+		"--worker-internet=off") // kept by every restart below (#295)
 	if v := m.runningVersion(); v != oldV {
 		t.Fatalf("running tw up is %q, want %s", v, oldV)
 	}
@@ -297,6 +298,7 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 	m.must("d1", "execute", "upg-db", "--command",
 		"CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT); INSERT INTO notes (body) VALUES ('written on "+oldV+"'), ('second row')")
 	m.checkData("before the upgrades")
+	m.checkWorkerInternetOff("before the upgrades")
 
 	// The plan changes nothing.
 	var plan upgradeResult
@@ -357,6 +359,7 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 			t.Fatalf("N+1 that %s: running tw up is %s after the rollback", c.name, v)
 		}
 		m.checkData("after rolling back an N+1 that " + c.name)
+		m.checkWorkerInternetOff("after rolling back an N+1 that " + c.name)
 		t.Logf("✓ N+1 that %s: rolled back to %s in %v (health: %s)", c.name, oldV, time.Since(st).Round(time.Second), res.Health)
 	}
 
@@ -389,9 +392,35 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 		t.Fatalf("running tw up is %s after the upgrade", v)
 	}
 	m.checkData("after the upgrade")
+	m.checkWorkerInternetOff("after the upgrade")
 	t.Logf("✓ upgraded %s → %s in %v, backup %s", oldV, newV, time.Since(st).Round(time.Second), res.Backup)
 	if _, err := os.Stat(sentinel); err == nil {
 		t.Fatal("a refused release's install.sh ran")
+	}
+
+	// 6. A plain restart (a reboot, a service restart) keeps it too.
+	m.must("down")
+	m.must("up", "--yes")
+	m.checkWorkerInternetOff("after tw down and tw up")
+}
+
+// checkWorkerInternetOff asserts tw up's --worker-internet=off survived:
+// tw.json still says off, and the running host reports off (tw status
+// --json fails when the host isn't up, and its workerInternet is what
+// the host reports).
+func (m *machine) checkWorkerInternetOff(when string) {
+	m.t.Helper()
+	var cfg struct{ WorkerInternet string }
+	if err := json.Unmarshal([]byte(m.read("tw.json")), &cfg); err != nil || cfg.WorkerInternet != "off" {
+		m.t.Fatalf("%s: tw.json workerInternet = %q (%v), want off", when, cfg.WorkerInternet, err)
+	}
+	var st struct {
+		Host           bool
+		WorkerInternet string
+	}
+	m.mustJSON(&st, "status")
+	if !st.Host || st.WorkerInternet != "off" {
+		m.t.Fatalf("%s: tw status: host %v, workerInternet %q, want off", when, st.Host, st.WorkerInternet)
 	}
 }
 

@@ -15,17 +15,18 @@ export { wrapWorkflowClass, isApprovalType } from "./workflows.js";
 import { wrapStores } from "./d1.js";
 import { sealedRequest } from "./seal.js";
 import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
+import { rpcCall, tracedEntry, traceGate, type EntryInfo } from "./rpctrace.js";
 
 // Egress fetch() carries the running handler's trace context
 // (ADR-045).
 installFetchPropagation();
 
 /** spanFlusher reports a handler's DO-call spans to hostd (TailnetApi "spans"). */
-function spanFlusher(tw: TailnetApiStub | undefined, ctx: any): (spans: SpanRecord[]) => void {
+function spanFlusher(tw: TailnetApiStub | undefined, ctx: any, as?: Self): (spans: SpanRecord[]) => void {
   return (spans) => {
     if (!tw || typeof tw.call !== "function") return;
     const p = Promise.resolve()
-      .then(() => tw.call("spans", { spans }))
+      .then(() => tw.call("spans", as ? { spans, as } : { spans }))
       .catch(() => {});
     try {
       ctx?.waitUntil?.(p);
@@ -37,6 +38,42 @@ function spanFlusher(tw: TailnetApiStub | undefined, ctx: any): (spans: SpanReco
 
 // The platform binding of each wrapped DO instance (for span reports).
 const twOf = new WeakMap<object, TailnetApiStub | undefined>();
+
+/**
+ * entryInfo: how a DO's entry points are traced (rpctrace.ts). A facet's
+ * span reports are attested by its platform binding; a plain DO's name its
+ * object and carry its ID, which is how hostd matches them to the
+ * invocation's tail record.
+ */
+function entryInfo(obj: any, cls: string, plain: boolean): EntryInfo {
+  const ctx = () => obj.ctx;
+  const oname = (): string | undefined => {
+    const n = ctx()?.id?.name;
+    return typeof n === "string" && n ? n : undefined;
+  };
+  return {
+    cls,
+    alarm: plain ? "alarm" : "__tw_alarm",
+    attrs() {
+      const a: Record<string, string> = {};
+      const n = oname();
+      if (n) a["tw.do.name"] = n;
+      if (plain) {
+        try {
+          const id = ctx()?.id?.toString?.();
+          if (typeof id === "string" && id) a["tw.do.id"] = id;
+        } catch {
+          /* no id */
+        }
+      }
+      return a;
+    },
+    flush() {
+      const n = oname();
+      return spanFlusher(twOf.get(obj), ctx(), plain && n ? { class: cls, name: n } : undefined);
+    },
+  };
+}
 
 /** The platform's TailnetApi stub (RPC). */
 export interface TailnetApiStub {
@@ -315,6 +352,8 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
         super(ctx, e);
         twOf.set(this, tw);
+        // RPC from the Host and the delegated alarm are traced (rpctrace.ts).
+        return traceGate(this, entryInfo(this, name, false));
       }
       // Called by the Host DO when the delegated alarm fires.
       async __tw_alarm(info: unknown) {
@@ -397,7 +436,7 @@ function findDescriptor(o: any, p: string): PropertyDescriptor | undefined {
  * and the object's own `this.method` lookups (decorator metadata, e.g.
  * the Agents SDK's @callable) are unchanged.
  */
-function killGate(obj: any, cls: string): any {
+function killGate(obj: any, cls: string, info: EntryInfo): any {
   const killedErr = (k: string) => new Error("[killed] object " + cls + "/" + (obj.ctx?.id?.name ?? "") + " was killed: " + k);
   const wrapped = new Map<PropertyKey, { v: Function; w: Function }>();
   return new Proxy(obj, {
@@ -419,7 +458,7 @@ function killGate(obj: any, cls: string): any {
             throw killedErr(k); // over RPC the caller's promise rejects with it
           }
         }
-        return v.apply(t, args);
+        return tracedEntry(info, p, args, (a) => v.apply(t, a)); // rpctrace.ts
       };
       wrapped.set(p, { v, w });
       return w;
@@ -451,7 +490,7 @@ export function wrapPlainClass(C: any, name: string, bindings: BindingMap, opts:
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
-        const gated = killGate(this, name);
+        const gated = killGate(this, name, entryInfo(this, name, true));
         if (tw && oname && opts.node && !killedMark(ctx)) {
           // The object's node comes up only if its creation was admitted
           // (RT3-06/07); fetch answers the refusal below. A killed object
@@ -586,7 +625,8 @@ function guardStub(adm: Admitter, cls: string, name: string, real: any): any {
           const target = real && typeof real.then === "function" ? await real : real;
           // A stub fetch() is a traced hop (its callee's parent span).
           if (p === "fetch") return tracedStubFetch(cls, name, args, (...a) => target.fetch(...a));
-          return target[p](...args);
+          // RPC: a traced hop too, its context passed as a marker argument.
+          return rpcCall(cls, name, String(p), args, (...a) => target[p](...a));
         };
       },
     },
@@ -810,9 +850,11 @@ export function wrapHandler(H: any, bindings: BindingMap) {
           if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, undefined, ticket));
           if (isScheduledReq(req)) {
             const sc = scheduledCtx(this.ctx);
+            const flush = spanFlusher(tw, this.ctx);
             this.ctx = sc.ctx;
             const sf = typeof this.scheduled === "function" ? this.scheduled.bind(this) : undefined;
-            return runScheduled(sf, req, [], sc.drain);
+            // hostd opens the run's root span and sends it as traceparent.
+            return runTraced(req, () => runScheduled(sf, req, [], sc.drain), flush);
           }
         }
         try {
@@ -856,7 +898,8 @@ export function wrapHandler(H: any, bindings: BindingMap) {
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, undefined, ticket));
         if (k === "fetch" && isScheduledReq(a)) {
           const sc = scheduledCtx(ctx);
-          return runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain);
+          // hostd opens the run's root span and sends it as traceparent.
+          return runTraced(a, () => runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain), spanFlusher(tw, ctx));
         }
       }
       let r: unknown;

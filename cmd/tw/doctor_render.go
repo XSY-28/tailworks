@@ -76,6 +76,7 @@ var doctorMetas = map[string]doctorMeta{
 	"transport":                  {group: "Tailnet", label: "transport", fact: submatch(reBeforeColon)},
 	"tw_home_writable":           {group: "Install", label: "~/.tailworks writable"},
 	"user_namespaces":            {group: "Linux host", label: "user namespaces"},
+	"worker_internet":            {group: "Isolation", label: "Worker internet", fact: submatch(reBeforeColon)},
 	"workerd":                    {group: "Install", label: "workerd", fact: submatch(reWorkerdVer)},
 }
 

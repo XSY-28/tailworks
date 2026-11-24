@@ -905,6 +905,14 @@
           "type": "integer",
           "description": "the operator tenant's pooled preauthorized join keys in mgmt custody (per tenant: tenants[].warmKeys); tw down revokes them"
         },
+        "workerInternet": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "off"
+          ],
+          "description": "this host's Worker internet egress (tw up --worker-internet): what the running host reports, else tw.json's"
+        },
         "tenants": {
           "type": "array",
           "items": {
@@ -3169,6 +3177,27 @@
         "restoreGeneration": { "type": "integer" }
       },
       "required": ["restored", "store"]
+    },
+    "custody migrate": {
+      "type": "object",
+      "description": "tw custody migrate: every file custody entry mapped to its name, copied to setec and read back (--dry-run: what would be copied), the names indexed in custody_names, the state kept before tw.json was switched",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "dryRun": { "type": "boolean" },
+        "files": { "type": "integer" },
+        "names": { "type": "array", "items": { "type": "string" } },
+        "backfilled": { "type": "array", "items": { "type": "string" } },
+        "unmapped": { "type": "array", "items": { "type": "string" } },
+        "partial": { "type": "array", "items": { "type": "string" } },
+        "conflicts": { "type": "array", "items": { "type": "string" } },
+        "copied": { "type": "integer" },
+        "present": { "type": "integer" },
+        "verified": { "type": "integer" },
+        "safetyBackup": { "type": "string" },
+        "switched": { "type": "boolean" }
+      },
+      "required": ["from", "to", "dryRun", "files", "names", "backfilled", "copied", "present", "verified", "switched"]
     },
     "upgrade": {
       "type": "object",
