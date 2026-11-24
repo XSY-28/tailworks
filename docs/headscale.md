@@ -34,7 +34,7 @@ You need a Headscale server with:
 
 - `dns.magic_dns: true` and a `dns.base_domain` (for example
   `hs.example.net`). Tailworks treats the base domain as the tailnet name.
-- `policy.mode: database`, if you want `--policy-apply` to write tailworks'
+- `policy.mode: database`, if you want `--apply-policy` to write tailworks'
   policy. With `policy.mode: file`, tailworks prints the snippet and you add it to
   the file yourself.
 
@@ -52,7 +52,7 @@ tw up --control=headscale \
   --control-url https://headscale.example.net \
   --tailnet hs.example.net \
   --api-key-file ~/.config/tailworks/headscale.env \
-  --policy-apply --yes
+  --apply-policy
 ```
 
 `--control-url` is Headscale's `server_url`. Its REST API is served at the
@@ -62,7 +62,8 @@ that it mints mgmt's node key and joins.
 
 **Headscale refuses to register a node whose tags its policy doesn't
 define.** So on this profile the policy goes in *before* anything joins.
-Without `--policy-apply`, `tw up` stops with `policy_missing_tag_owners`
+Without `--apply-policy` (`--policy-apply`, its earlier name, still
+works), `tw up` stops with `policy_missing_tag_owners`
 and prints the snippet:
 
 ```hujson

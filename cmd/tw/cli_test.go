@@ -629,6 +629,11 @@ func TestCLIOAuth(t *testing.T) {
 	if err == nil || !strings.Contains(se, "policy_missing_tag_owners") || !strings.Contains(se, `"tag:tw-mgmt": ["autogroup:admin","tag:tw"]`) {
 		t.Fatalf("policy without tag:tw owners: %v %s", err, se)
 	}
+	upApplyPolicyRefusals(t, e, up, func() (int, int) { // up_policyapply_ext_test.go
+		fts.mu.Lock()
+		defer fts.mu.Unlock()
+		return fts.n - minted, fts.setPolicy
+	})
 	fts.mu.Lock()
 	if fts.n != minted {
 		t.Fatalf("%d keys minted before the policy was fixed", fts.n-minted)

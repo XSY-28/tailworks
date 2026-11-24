@@ -226,7 +226,7 @@ tw-hostd -mgmt http://tw-mgmt.<tailnet> …
   ]
   ```
   Create the Service definition (`svc:tw-mgmt`, `tcp:80`) in the admin
-  console. `tw up --policy-apply` doesn't write `autoApprovers`.
+  console. `tw up --apply-policy` doesn't write `autoApprovers`.
   The admin cap in the `svc:tw-mgmt` grant counts on calls through the
   Service; a grant to `tag:tw-mgmt` counts only on calls to a replica's own
   node name.

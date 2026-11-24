@@ -17,13 +17,15 @@ start tailworks on this machine
 ```text
 tw up: start tailworks on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); an OAuth client of your tailnet mints every node key (Headscale: its API key); the first tw up asks for the client secret and saves it to ~/.config/tailworks/oauth.env, and installs a login service
 
-usage: tw up [--oauth-client-file <file>] [--service=false]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--policy-apply]
+usage: tw up [--oauth-client-file <file>] [--apply-policy [--yes]] [--service=false]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--apply-policy]
 
 flags:
   -allow-sibling-egress
     	dial other objects on this host over WireGuard (a hairpin) instead of netd's in-process hop (tests)
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
+  -apply-policy
+    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match). Tailscale: the OAuth client needs Policy File write; tw up shows the lines and asks first (--yes to skip). Headscale: written without asking
   -audit-max-age duration
     	audit retention: delete audit records older than this (e.g. 2160h), keeping a checkpoint so the rest still verify (0 = keep every record, the default)
   -audit-max-records int
@@ -63,7 +65,7 @@ flags:
   -oauth-client-file string
     	mint mode "oauth" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up
   -policy-apply
-    	headscale: apply the policy snippet (validated first, written with If-Match); default: print it
+    	the same as --apply-policy (its earlier name)
   -pool-nodes int
     	pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off) (default 1)
   -port-mapping
@@ -91,7 +93,7 @@ flags:
   -workerd string
     	workerd binary
   -yes
-    	accepted for scripts; tw up no longer asks for confirmation
+    	with --apply-policy on Tailscale: write the policy without asking (needed without a terminal, and with --json). Otherwise accepted and ignored: tw up asks nothing else
 ```
 
 ### tw down

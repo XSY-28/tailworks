@@ -105,8 +105,9 @@ func cmdUp(args []string) error {
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
 	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
-	yes := f.Bool("yes", false, "accepted for scripts; tw up no longer asks for confirmation")
-	apply := f.Bool("policy-apply", false, "headscale: apply the policy snippet (validated first, written with If-Match); default: print it")
+	yes := f.Bool("yes", false, "with --apply-policy on Tailscale: write the policy without asking (needed without a terminal, and with --json). Otherwise accepted and ignored: tw up asks nothing else")
+	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match). Tailscale: the OAuth client needs Policy File write; tw up shows the lines and asks first (--yes to skip). Headscale: written without asking")
+	f.BoolVar(apply, "policy-apply", false, "the same as --apply-policy (its earlier name)")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
 	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain)")
 	tsapiURL := f.String("tsapi-url", "", "Tailscale API base URL (testing)")
@@ -275,7 +276,6 @@ func cmdUp(args []string) error {
 			return err
 		}
 	}
-	_ = yes // kept for scripts: tw up no longer asks for confirmation
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	// Progress goes to stdout, or to stderr with --json (stdout then
@@ -290,6 +290,7 @@ func cmdUp(args []string) error {
 	var api *tsapi.Client
 	var capi controlAPI // mints mgmt's node key; reads/applies the policy
 	hsApplied := false  // headscale: the policy snippet was applied up front
+	upApplied := false  // tailscale: --apply-policy wrote the snippet (up_policyapply.go)
 	var pol []byte
 	policyReadable := false
 	absKey := ""
@@ -327,11 +328,20 @@ func cmdUp(args []string) error {
 		if singleLayout {
 			needed = policy.Snippet{TagOwners: map[string][]string{mgmt.MgmtTag: {"tag:tw"}}}
 		}
-		found, p, readable, err := oauthPreflight(ctx, api, src, oauthCreds.ClientID, absOAuth, out, needed)
+		pre := needed
+		if *apply {
+			pre = policy.Snippet{} // upApplyPolicy writes what is missing, then checks needed
+		}
+		found, p, readable, err := oauthPreflight(ctx, api, src, oauthCreds.ClientID, absOAuth, out, pre)
 		if err != nil {
 			return err
 		}
 		pol, policyReadable = p, readable
+		if *apply {
+			if pol, upApplied, err = upApplyPolicy(ctx, api, f, pol, readable, needed, *yes, out); err != nil {
+				return err
+			}
+		}
 		if *tailnet == "" && found != "" {
 			*tailnet = found
 		}
@@ -648,6 +658,7 @@ func cmdUp(args []string) error {
 		}
 		res.Applied = res.Applied || hsApplied
 	} else {
+		res.Applied = upApplied
 		// Tag ownership is proven (mgmt's and the host's keys minted); the
 		// grants are checked when the client can read the policy.
 		res.PolicyOK = true
@@ -701,6 +712,8 @@ func cmdUp(args []string) error {
 		}
 		fmt.Printf("✓ tenant   %s connected (tenant %s, mint mode %s) · control %s\n", *tailnet, tid, s.Cfg.mintMode(), *control)
 		switch {
+		case res.Applied && oauthMode:
+			fmt.Printf("✓ policy   applied tailworks' tagOwners and grants (--apply-policy; validated, If-Match)\n")
 		case res.Applied:
 			fmt.Printf("✓ policy   applied tag:tw tagOwners (validated, If-Match)\n")
 		case res.PolicyOK && hsMode:
@@ -719,9 +732,9 @@ func cmdUp(args []string) error {
 			fmt.Printf("✓ policy   tag:tw owns %s and %s (both keys minted); grants not checked (the OAuth client can't read the policy)\n", mgmt.MgmtTag, mgmt.HostTag)
 		default:
 			if oauthMode {
-				fmt.Printf("› policy   missing (add in the admin console › Access controls):\n")
+				fmt.Printf("› policy   missing (re-run with --apply-policy if the OAuth client has Policy File › Write, or add in the admin console › Access controls):\n")
 			} else {
-				fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in %s):\n", policyHome(profile))
+				fmt.Printf("› policy   not applied (re-run with --apply-policy, or add in %s):\n", policyHome(profile))
 			}
 			for _, l := range strings.Split(strings.TrimSpace(res.PolicyDiff), "\n") {
 				fmt.Printf("    %s\n", l)

@@ -153,7 +153,7 @@ func headscaleUpPolicy(ctx context.Context, api policy.API, pol []byte, apply bo
 	}
 	if !apply {
 		return pol, false, fail("policy_missing_tag_owners", "the Headscale policy does not define tailworks' tags, and Headscale refuses to register a node with undefined tags",
-			"nothing was minted").withFix(append([]string{"re-run with --policy-apply (needs policy.mode: database), or add to " + policyHome(controlHeadscale) + ":"},
+			"nothing was minted").withFix(append([]string{"re-run with --apply-policy (needs policy.mode: database), or add to " + policyHome(controlHeadscale) + ":"},
 			snippetLines(miss)...)...)
 	}
 	ar, err := policy.ApplyWith(ctx, api, snip, popts)

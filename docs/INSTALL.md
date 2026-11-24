@@ -212,7 +212,10 @@ expires and stays in a 0600 file on the host. **No browser login, no
 Funnel, no HTTPS requirement.**
 
 1. **Policy first** (admin console › Access controls). `tag:tw` must own
-   mgmt's and the host's tags, so the client can mint their keys:
+   mgmt's and the host's tags, so the client can mint their keys. Only the
+   `"tag:tw"` line has to be pasted by hand: with **Policy File › Write**
+   on the client (step 2), `tw up --apply-policy` (step 3) writes the
+   rest. Or paste all of it:
    ```jsonc
    "tagOwners": {
      "tag:tw":      ["autogroup:admin"],
@@ -238,21 +241,35 @@ Funnel, no HTTPS requirement.**
      then also deletes the device (without it the kill still holds, the
      node is unreachable and tombstoned, but the device stays listed;
      the kill result says `device_delete_unavailable` with this fix);
-   - optionally **Policy File › Read**: `tw deploy` preflights your
-     app's grants and `spawn()` checks sub-agent tags/caps against the
-     policy (without it, deploy says `preflight skipped` and `spawn()`
-     answers `policy_unavailable`). Pick **Policy File › Write** instead
-     if `tw policy --apply` should add each app's `tag:tw*` tagOwners,
-     grants and Service auto-approval for you ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init));
-     otherwise paste the snippet `tw policy` prints;
+   - recommended: **Policy File › Write**. `tw up --apply-policy` then
+     adds the snippet above, and `tw deploy --apply-policy` (or `tw policy
+     --apply`) each app's `tag:tw*` tagOwners, grants and Service
+     auto-approval ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)).
+     Both show the lines and ask first, and only ever add. Pick **Policy
+     File › Read** to paste the snippets yourself instead: `tw deploy`
+     still preflights your app's grants and `spawn()` checks sub-agent
+     tags/caps against the policy. With neither, deploy says `preflight
+     skipped` and `spawn()` answers `policy_unavailable`. Scopes can't be
+     changed on an existing client;
    - optionally **Services › Write**: workloads with `tailnet.service` get
      a Tailscale Service, i.e. a stable name and VIP
      ([services.md](services.md)). Without it, such a deploy fails with
      `service_api_failed`.
 3. **Start tailworks** and paste the **Client Secret** when asked:
    ```sh
-   tw up
+   tw up --apply-policy    # or plain `tw up` if you pasted the whole snippet
    ```
+   With `--apply-policy`, `tw up` prints the `tagOwners` and grants the
+   policy lacks and asks before writing them (`--yes` skips the question,
+   and is required without a terminal). It merges them into the policy
+   (comments kept, nothing changed or removed), has the control plane
+   validate the result, and writes it with `If-Match`, retrying once if
+   someone saved the policy in the meantime. A tag that is already in
+   `tagOwners` keeps its owners (`tag:tw-mgmt` and `tag:tw-host` only
+   gain `tag:tw`). If the client has no Policy File › Write scope,
+   nothing is written: `tw up` says so and goes on as without the flag.
+   Declining the question stops `tw up` before anything is minted.
+
    It saves the secret to `~/.config/tailworks/oauth.env` (mode 0600; the
    client ID is part of the secret) and installs a login service (a macOS
    LaunchAgent or a systemd user unit; `--service=false` skips it). With
@@ -453,7 +470,7 @@ host's disk. `tw ls` shows each workload's placement reason.
 tailworks also runs on a [Headscale](https://github.com/juanfont/headscale)
 server (v0.29 or later) instead of Tailscale: `tw up --control=headscale
 --control-url <server_url> --tailnet <base_domain> --api-key-file <file with
-HEADSCALE_API_KEY=…> --policy-apply`. The profile has no Tailscale Services,
+HEADSCALE_API_KEY=…> --apply-policy`. The profile has no Tailscale Services,
 no Funnel and no posture. See [headscale.md](headscale.md).
 
 ### 4. Day 2, stop and uninstall
@@ -508,7 +525,9 @@ Installed with `get.sh`? It doesn't keep the release directory; see
   mode an older tailworks used; switch it to an OAuth client
   ([Upgrading from API-key or WIF mode](#upgrading-from-api-key-or-wif-mode)).
 - `policy_missing_tag_owners`: `tag:tw` must own `tag:tw-mgmt` and
-  `tag:tw-host`; add the printed tagOwners and re-run. Nothing was minted.
+  `tag:tw-host`; add the printed tagOwners and re-run, or run `tw up
+  --apply-policy` (the OAuth client needs Policy File › Write). Nothing
+  was minted.
 - `credential_file_insecure`: `chmod 600` the OAuth client file.
 - `oauth_exchange_failed`: the client secret is wrong or the client was
   revoked; generate a new one (Settings › Trust credentials).

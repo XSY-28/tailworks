@@ -47,9 +47,22 @@ Both install the same binaries. The tarball also has the microVM
 tier, and `tw upgrade` upgrades it; npm upgrades the npm install
 ([Install with npm](docs/INSTALL.md#install-with-npm)).
 
-### 2. Add tailworks to your tailnet policy
+### 2. Add the `tag:tw` tag to your tailnet policy
 
-In the admin console, open **Access controls** and add:
+In the admin console, open **Access controls** and add one line to
+`tagOwners`:
+
+```jsonc
+"tagOwners": {
+  "tag:tw": ["autogroup:admin"],
+},
+```
+
+The tag has to exist before step 3 can give it to the OAuth client.
+`tw up --apply-policy` (step 4) writes the rest.
+
+<details>
+<summary>Or paste all of it now, if you'd rather not let tailworks write your policy</summary>
 
 ```jsonc
 "tagOwners": {
@@ -64,6 +77,8 @@ In the admin console, open **Access controls** and add:
 ],
 ```
 
+</details>
+
 ### 3. Create an OAuth client
 
 In the admin console, go to **Settings › Trust credentials**, click
@@ -74,7 +89,7 @@ for a tag, choose **`tag:tw`**.
 |---|---|
 | **Auth Keys › Write** | Required. tailworks mints a key for every node it runs. |
 | **Devices › Core › Write** | `tw kill` also removes the device. |
-| **Policy File › Read** | `tw deploy` checks your policy first. |
+| **Policy File › Write** | Recommended. `tw up` and `tw deploy` add tailworks' own `tag:tw*` lines to your policy (they show the lines and ask first), and `tw deploy` checks your policy. Choose **Read** to paste the lines yourself; scopes can't be changed later. |
 | **Services › Write** | For apps that use a Tailscale Service. |
 
 Generate it and keep the page open: you'll paste the **Client Secret** in the
@@ -83,27 +98,34 @@ next step (it is shown only once).
 ### 4. Start tailworks
 
 ```sh
-tw up
+tw up --apply-policy
 ```
 
 Paste the Client Secret when asked. `tw up` saves it to
-`~/.config/tailworks/oauth.env` (readable by you only), joins your tailnet
-as `tw-mgmt`, and installs a service so tailworks starts at login. It
-prints the admin console URL: `http://tw-mgmt.<tailnet>.ts.net/ui/`.
+`~/.config/tailworks/oauth.env` (readable by you only), shows the
+`tagOwners` and grants it will add to your policy and asks before writing
+them, joins your tailnet as `tw-mgmt`, and installs a service so tailworks
+starts at login. It prints the admin console URL:
+`http://tw-mgmt.<tailnet>.ts.net/ui/`.
+
+If you pasted the whole snippet in step 2, or chose **Policy File › Read**,
+run plain `tw up`: it prints any lines still missing.
 
 ### 5. Deploy an app
 
 ```sh
 tw init hello && cd hello
-tw policy        # prints the lines this app needs in your tailnet policy
+tw deploy --apply-policy
 ```
 
-Paste what `tw policy` prints into **Access controls**. It includes a grant
-that lets everyone on your tailnet call the app; narrow it if you like. Then:
+`tw deploy` shows the lines this app needs in your policy (its own tag),
+asks, writes them, and deploys. It also prints one grant it never writes,
+because who may call the app is your decision: the one that lets everyone
+on your tailnet reach it. Paste it into **Access controls**, or a narrower
+one.
 
-```sh
-tw deploy
-```
+Or paste everything yourself: `tw policy` prints the lines (the same grant
+included), then plain `tw deploy`.
 
 ### 6. Call it
 
@@ -144,8 +166,6 @@ same way: [docs/wrangler.md#pages](docs/wrangler.md#pages).
   `mcp` for its tools; its README walks through both.
 - An existing Workers project: [docs/wrangler.md](docs/wrangler.md).
 - More machines: `tw host add`. A separate laptop: `tw link`.
-- Let tailworks write policy lines for you: give the OAuth client
-  **Policy File › Write**, then `tw deploy --apply-policy`.
 
 ## Using tailworks with a coding agent
 
