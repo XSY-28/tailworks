@@ -106,7 +106,7 @@ func upstreamMoreProjects() []*Project {
 			// `import 'dotenv/config'` in src/main.ts, without a dotenv
 			// dependency: the monorepo root provides it.
 			p.AddDeps = map[string]string{"dotenv": "16.4.5", "zod": zodVersion}
-			p.Workarounds = append(p.Workarounds, "npm install --legacy-peer-deps: the example pins `@nestjs/core` ^11 next to `@nestjs/common` ^10, a peer conflict npm refuses (pnpm, in the monorepo, accepts it); so `zod`@" + zodVersion + ", a peer of `ai` that npm then leaves out, is added", "dotenv@16.4.5 added: `src/main.ts` imports `dotenv/config`, which the example's package.json leaves to the monorepo")
+			p.Workarounds = append(p.Workarounds, "npm install --legacy-peer-deps: the example pins `@nestjs/core` ^11 next to `@nestjs/common` ^10, a peer conflict npm refuses (pnpm, in the monorepo, accepts it); so `zod`@"+zodVersion+", a peer of `ai` that npm then leaves out, is added", "dotenv@16.4.5 added: `src/main.ts` imports `dotenv/config`, which the example's package.json leaves to the monorepo")
 			p.Changes[0] = "the example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 8080 })` from `cloudflare:node`) are added; the entry runs `dist/main.js`, the README's `nest build` output; `src/` is unchanged"
 			p.Probe = func(r *Run) error {
 				if err := r.Do("POST", "/", nil).Want(200, `"type":"text-delta"`, stubText); err != nil {
@@ -526,7 +526,7 @@ func probeNextRouting(r *Run) error {
 	if out, err := hub.RPC("deleteChat", chat); err != nil || string(out) != "true" {
 		return fmt.Errorf("deleteChat: %s %v", out, err)
 	}
-	return r.Get(chatPath+"/messages").Want(404)
+	return r.Get(chatPath + "/messages").Want(404)
 }
 
 func probeNextMCPClient(r *Run) error {
