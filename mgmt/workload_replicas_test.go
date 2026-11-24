@@ -136,7 +136,11 @@ func TestWorkloadReplicas(t *testing.T) {
 	})
 
 	t.Run("NameTakenBySeparateWorkload", func(t *testing.T) {
-		c.ok("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api--r2", "bundle": bundle(`{ "tailnet": { "tags": ["tag:tw-web"] } }`)}, nil)
+		// A workload of its own can no longer be given a replica's name
+		// (#348, TestRT_Hr2group_ReplicaNameReserved); one deployed before
+		// that rule still blocks the replica that would take its name.
+		c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api--r2", "bundle": bundle(`{ "tailnet": { "tags": ["tag:tw-web"] } }`)}, 409, "replica_conflict")
+		seedLegacyWorkload(t, e, tn, "api--r2", "h1", makeBundle(t, map[string]string{"tailworks.jsonc": `{ "tailnet": { "tags": ["tag:tw-web"] } }`, "dist/index.js": "export default {}"}))
 		c.fail("POST", "/v1/deployments", map[string]any{"tenantID": tn, "workload": "api", "bundle": bundle(`{ "replicas": 2, "tailnet": { "tags": ["tag:tw-web"] } }`)}, 409, "replica_conflict")
 	})
 

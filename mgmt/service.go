@@ -859,6 +859,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if !validName(r.Workload) {
 		return resp, errf(400, "bad_request", "workload must be a DNS label ([a-z0-9-], ≤63)")
 	}
+	if err := m.checkReplicaName(ctx, r); err != nil { // workload_replicas.go (#348)
+		return resp, err
+	}
 	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
 	var svcCfg *TwConfig

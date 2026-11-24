@@ -174,8 +174,16 @@ the preflight and at the deploy.
   - a redeploy with a smaller count undeploys the extra replicas, and
     undeploying the workload undeploys them all;
   - a replica can't be deployed by its own name (`409 replica_conflict`);
-  - a replica name already used by a separate workload is also refused
-    with `409 replica_conflict`;
+  - a name ending in `--r<n>` (n ≥ 2) belongs to replicas: a workload
+    that is not a replica can't be deployed under one, nor can a preview
+    (`--preview-alias pr7--r2`), with the same
+    [`409 replica_conflict`](errors.md#replica_conflict). tailworks tells
+    a replica by its name where it has nothing else: a replica's R2
+    objects are stored with its workload's. A workload that an earlier
+    release deployed under such a name keeps deploying until it is
+    undeployed; rename it when you can;
+  - a replica name that such an older, separate workload still uses is
+    refused to the replica, also with `409 replica_conflict`;
   - `tw deploy` waits for every replica and prints
     `✓ replicas 3 · web@h1, web--r2@h2, web--r3@h3`.
 - **Routing:** in the measured runs, Tailscale sent every fresh connection

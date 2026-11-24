@@ -1035,3 +1035,37 @@ which is a new protocol field and a design decision.
 | ID | Verdict | Evidence |
 |----|------|------|
 | H-binding-wire | **Fixed** for HTTP egress; the raw-socket path is a documented limit | `hostd.TestServiceBindings/*/TenantWireHeaderStripped` and `…/TenantWireHeaderStrippedFromFacetObject` (real workerd, hostd and netd, on fakemgmt and the real mgmt, with the target on the same host and on another): a plain `fetch()` with the header, in four spellings, is an ordinary request to the default `fetch()`. Before, the `Admin` entrypoint answered and `add(2, 3)` returned 5. `hostd.TestEgressDropsTenantBindingWire` drives hostd's handlers without the platform worker, and `gen.TestGeneratedWrapperProbe` (`ForgedEgressHeadersIgnored`, `WorkloadEgressIsWorkload`) the platform worker without hostd; each fails without its half. `hostd.TestServiceBindings/*/RawSocketStillCarriesWireHeader` pins the limit: it passes before and after. |
+
+---
+
+# Note 2026-11-24: H-r2group fixed (#348)
+
+This note records a finding of the fresh-eyes pass of 2026-11-23 (master
+`27fd3de4`, v0.5.0) on R2 (ADR-036) and workload replicas. The earlier
+passes are left as written.
+
+**Finding (Low/Info, latent; hostile tenant code; workload ↔ workload in
+one tenant).** A replica of `web` is the workload `web--r<n>`, and it
+shares `web`'s stores, secrets and R2 objects. Two resolvers decided
+whether a workload is a replica, and they disagreed for one kind of name.
+hostd filed R2 blob bytes under `r2Group(name)`, which stripped a trailing
+`--r<n>` (n ≥ 2) from the name. mgmt scopes the bucket's index, every
+other store and the secrets by the deployment record (`replicaGroupOf`,
+set only for real replicas). A workload of its own could be deployed as
+`web--r2`: its index was its own, and its bytes went under `web`'s prefix,
+against the R2 claim that no request a workload can cause names another
+workload's data. Not exploitable: a blob is reached only by a random
+128-bit ID from the workload's own index, and nothing lists or sweeps a
+prefix.
+
+**Fix.** A name of that shape belongs to replicas. mgmt refuses it to a
+workload that is not one (`409 replica_conflict`), in `Deploy` and in the
+deploy's dry run, and to a preview whose alias would make one. mgmt and
+hostd read names with one function (`internal/replicaname`), so they
+can't drift apart again. Existing names are not backfilled: a workload
+deployed under such a name before the rule keeps deploying while it is
+live, and shares the blob prefix until it is renamed.
+
+| ID | Verdict | Evidence |
+|----|------|------|
+| H-r2group | **Fixed** | `mgmt.TestRT_Hr2group_ReplicaNameReserved` (through the `/v1` API): new names of the shape are refused at the deploy and its dry run, and nothing is written; near-miss names and real replicas deploy; a preview alias that makes such a name is refused; a workload seeded as an older mgmt accepted it keeps deploying until it is undeployed. For every accepted name, mgmt's store scope equals hostd's blob group. Before: `POST /v1/deployments` for `web--r2` answered 202. `hostd.TestR2BlobPrefixIsTheReplicaGroup` drives the `r2API` handler with a directory backend. `replicaname.TestGroupMatchesHostdBlobPrefix` and `replicaname.FuzzGroup` show the shared parser strips exactly what hostd's expression stripped, so no replica's blobs move. |

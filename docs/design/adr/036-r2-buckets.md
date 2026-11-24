@@ -114,8 +114,12 @@
    workload can cause names another workload's or tenant's data, and an
    object key (any UTF-8, up to 1 KiB) never becomes a path at all. A
    workload's replicas (`<w>--r<n>`) use `<w>`'s blobs, as they use its
-   stores. Tenant and workload names are validated (no `/`, no `..`)
-   before they become path elements.
+   stores. hostd knows a replica by that name alone, while mgmt scopes
+   its stores from the deployment record, so mgmt gives such a name to
+   nothing else: a workload that is not a replica can't be deployed as
+   `<w>--r<n>` (`replica_conflict`; #348, `internal/replicaname`). Tenant
+   and workload names are validated (no `/`, no `..`) before they become
+   path elements.
 
 5. **Bodies stream end to end.** workerd sends a put body with its length;
    `R2Backend` passes the stream on (a `FixedLengthStream`, after taking

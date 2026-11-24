@@ -833,6 +833,9 @@ func (a *v1api) CreateDeployment(w http.ResponseWriter, r *http.Request, params 
 	req.By = principalOf(r.Context()).Actor(r)
 	if boolOf(params.DryRun) {
 		res, err := a.s.M.PreflightBundle(r.Context(), req)
+		if err == nil {
+			err = a.s.M.checkReplicaName(r.Context(), req) // the deploy would refuse the name (workload_replicas.go, #348)
+		}
 		if err != nil {
 			writeErr(w, r, err)
 			return
