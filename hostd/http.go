@@ -725,6 +725,9 @@ type StatusView struct {
 	Workloads []WorkloadStatus
 	// InsecureSharedHost echoes Config.InsecureSharedHost.
 	InsecureSharedHost bool `json:",omitempty"`
+	// WorkerInternet is "direct" when Config.WorkerInternet is set, else
+	// "off" (tw status, tw doctor).
+	WorkerInternet string `json:",omitempty"`
 	// Containers are this host's containers (ADR-032), running and stopped.
 	Containers []ContainerStatus `json:",omitempty"`
 	// ImageCacheBytes is the converted container image cache on disk.
@@ -735,6 +738,7 @@ type StatusView struct {
 func (h *Host) Status() StatusView {
 	h.mu.Lock()
 	v := StatusView{HostID: h.cfg.HostID, Sandbox: h.SandboxInfo(), Tiers: h.tiers(), InsecureSharedHost: h.cfg.InsecureSharedHost}
+	v.WorkerInternet = workerInternetMode(h.cfg.WorkerInternet) // internet.go
 	if h.cfg.VM != nil {
 		if vv, ok := h.cfg.VM.(interface{ Via() string }); ok {
 			v.VMVia = vv.Via()

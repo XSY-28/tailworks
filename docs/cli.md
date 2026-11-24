@@ -86,6 +86,8 @@ flags:
     	Tailscale API base URL (testing)
   -warm-keys int
     	pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off) (default 5)
+  -worker-internet string
+    	how Workers' fetch() reaches internet hosts, subject to each workload's tailnet.egress.internet: direct (this host's network, public addresses only) or off (refused on this host) (default "direct")
   -workerd string
     	workerd binary
   -yes
@@ -2110,14 +2112,16 @@ flags:
 
 ### tw backup
 
-back up mgmt's store, custody and tw.json, online
+back up mgmt's store, custody and DO storage, online
 
 ```text
-tw backup: back up this install's control plane while it runs: mgmt's store (a consistent SQLite copy), custody, the ID secret, mgmt's node state and tw.json, into a new directory (tw restore puts it back)
+tw backup: back up this install while it runs: mgmt's store (a consistent SQLite copy), custody, the ID secret, mgmt's node state and tw.json, and this host's Durable Object storage (each database a consistent copy) and fs R2 bytes, into a new directory (tw restore puts it back); --hostd=false copies the control plane only
 
-usage: tw backup [--out <dir>]
+usage: tw backup [--out <dir>] [--hostd=false]
 
 flags:
+  -hostd
+    	also copy each workload's Durable Object storage and the fs backend's R2 bytes (--hostd=false: the control plane only) (default true)
   -json
     	machine-readable output
   -out string
