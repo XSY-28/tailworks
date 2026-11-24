@@ -1518,6 +1518,9 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		if workload != "" {
 			in = " of workload " + workload
 		}
+		if r.Namespace == PoolNamespace { // name the class the pool node is for (#359)
+			return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q (for a %s node)", in, t.ID, classNS, PoolNamespace)
+		}
 		return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q", in, t.ID, r.Namespace)
 	}
 	workload = dep.Workload
