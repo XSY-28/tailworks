@@ -48,7 +48,7 @@ func cmdPolicy(args []string) error {
 	vars := varFlags{}
 	f.Var(vars, "var", "override a wrangler var (KEY=VALUE, repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
-	apply := f.Bool("apply", false, "write the missing tagOwners, grants and funnel nodeAttrs to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)")
+	apply := f.Bool("apply", false, "write the missing tagOwners, grants, funnel nodeAttrs and Service auto-approval to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)")
 	yes := f.Bool("yes", false, "with --apply: write without asking (needed without a terminal, and with --json)")
 	pos, err := f.parse(args)
 	if err != nil {
@@ -225,7 +225,7 @@ func printPolicyChecks(a *app, pf mgmt.PreflightResult) {
 		switch {
 		case slices.Contains(pf.Unchecked, dst):
 			fmt.Printf("? connects   → %s: a name, not a tag (not checked; name it by tag in tailnet.connects)\n", dst)
-		case !missing[dst]:
+		case !missing[connectTarget(dst)]:
 			fmt.Printf("✓ connects   → %s\n", dst)
 		}
 	}
@@ -265,4 +265,10 @@ func policyFailure(res policyResult, withSnippet bool) *cliErr {
 	}
 	e.Fix = append(e.Fix, "then run tw policy again, or tw deploy")
 	return e
+}
+
+// connectTarget is a tailnet.connects entry without its port.
+func connectTarget(c string) string {
+	t, _ := mgmt.SplitConnect(c)
+	return t
 }

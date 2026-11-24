@@ -400,6 +400,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("  ],\n  durableObjectStorage = (localDisk = \"do-storage\"),\n  bindings = [\n")
 	c.WriteString("    (name = \"LOADER\", workerLoader = ()),\n    (name = \"NETD_EGRESS\", service = \"netd-egress\"),\n    (name = \"HOSTD\", service = \"hostd\"),\n    (name = \"EGRESS_WL\", service = \"egress-wl\"),\n    (name = \"TENANT\", service = \"tenant\"),\n")
 	fmt.Fprintf(&c, "    (name = \"MAC_KEY\", text = %s),\n", cq(res.MACKey))
+	if l := o.Loopback; l != nil && o.Guest == nil {
+		// connect() tunnels carry the token in band (connect.go).
+		fmt.Fprintf(&c, "    (name = \"LOCAL_TOKEN\", text = %s),\n", cq(l.Token))
+	}
 	c.WriteString(storePlatformBindings(app))
 	c.WriteString(queuePlatformBindings(app))
 	for _, cl := range plains {

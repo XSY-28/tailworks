@@ -131,14 +131,17 @@ curl http://127.0.0.1:8787/api/whoami      # the Worker: your verified caller
 ```
 
 How the routing works: [docs/wrangler.md#assets](docs/wrangler.md#assets).
+A Cloudflare Pages site (`functions/` next to its build output) deploys the
+same way: [docs/wrangler.md#pages](docs/wrangler.md#pages).
 
 ### Next
 
 - Try it locally first, with no tailnet: `tw dev` serves an app on
   `127.0.0.1:8787`.
 - Other templates: `tw init <dir> --template agent` (also `mcp`, `ai-agent`,
-  `lock`, `static-site`, `refund-approval`, `node-workflow`). Each Durable Object instance
-  gets its own tailnet node.
+  `lock`, `static-site`, `refund-approval`, `node-workflow`). Each Durable
+  Object instance gets its own tailnet node. `ai-agent` needs a deployed
+  `mcp` for its tools; its README walks through both.
 - An existing Workers project: [docs/wrangler.md](docs/wrangler.md).
 - More machines: `tw host add`. A separate laptop: `tw link`.
 - Let tailworks write policy lines for you: give the OAuth client
@@ -165,7 +168,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 |---|---|---|---|
 | Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers from the workload's (or object's) own node, and public internet hosts from the host's network (on by default; `tailnet.egress.internet: false` turns it off, [call an internet API](docs/recipes.md#call-an-internet-api)) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
-| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
+| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ⚠️ | to tailnet peers and the internet with the object's identity; no `secureTransport` TLS |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
 | Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
 | Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
@@ -188,13 +191,14 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ✅ | workerd's built-in engine; approval events are tailworks' |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
-| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
+| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | drivers connect directly with `connect()` |
 | Bindings | [Browser Rendering](docs/COMPAT.md#browser) | ❌ | |
 | Bindings | [Email](docs/COMPAT.md#email) | ❌ | |
 | Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | `_redirects`, `_headers` and assets-only work; within the 64 MiB bundle |
+| Bindings | [Cloudflare Pages projects](docs/COMPAT.md#pages) | ⚠️ | `functions/`, `_routes.json` and `_worker.js`; declare dashboard bindings in the config |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
 | Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | tailworks' API, admin only |

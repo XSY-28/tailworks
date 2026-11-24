@@ -498,7 +498,7 @@ func TestDoctor(t *testing.T) {
 		got[c.Name] = c.Status
 	}
 	want := map[string]string{"binaries": "ok", "workerd": "ok", "bundler": "ok", "tw_home_writable": "ok",
-		"state_dir_writable": "ok", "mint_mode": "skip", "transport": "skip", "api_key": "skip", "https_certs": "skip", "sandbox": "skip", "host_sockets": "skip", "node_egress": "skip", "system_tailscaled_not_used": "ok",
+		"state_dir_writable": "ok", "mint_mode": "skip", "transport": "skip", "api_key": "skip", "https_certs": "skip", "sandbox": "skip", "host_sockets": "skip", "worker_internet": "skip", "node_egress": "skip", "system_tailscaled_not_used": "ok",
 		"store_sizes": "skip",
 		"install":     "info", // a test build: not an install.sh prefix or npm package (npm_install_test.go covers those)
 	}

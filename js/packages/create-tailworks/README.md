@@ -22,7 +22,8 @@ the template. The templates are in [`templates/`](templates/):
   one node per caller) whose tools are a tailworks MCP server's tools over the
   tailnet (`@ai-sdk/mcp` + `@tailworks/mcp` `mcpFetch`); it streams a UI message
   response. It ships with a scripted mock model (`src/model.ts`, no keys);
-  swap in a real provider.
+  swap in a real provider. Its tools need a second app, the `mcp` template
+  deployed as workload `mcp`, and a grant; its README walks through both.
 - `lock`: a lease-based lock and leader-election service: one Durable
   Object per lock name, holders recorded by tailnet identity, fencing tokens
   that keep increasing across a move to another host, and a copyable client

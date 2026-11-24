@@ -161,7 +161,8 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
   (different on each host) and no tailnet identity, and tailworks strips
   its identity headers. `tailnet.egress.internet: false` turns it off and a
   list limits it ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet));
-  `tw-hostd -worker-internet=off` turns it off for a whole host. A refused
+  `tw up --worker-internet=off` (`tw-hostd -worker-internet=off` on a host
+  added with `tw host add`) turns it off for a whole host. A refused
   destination is `internet_egress_unavailable`.
 - **The SSRF guard always applies.** netd refuses loopback, private
   (RFC 1918, ULA), link-local (including `169.254.169.254` and other cloud

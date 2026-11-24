@@ -196,8 +196,7 @@ func (h *Host) RunCron(ctx context.Context, tenantID, workload, cronExpr string,
 
 // invokeCron sends one scheduled() invocation to the workload's active
 // instance (cf.tw.kind = scheduled) and waits for its outcome.
-func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at time.Time) (CronResult, error) {
-	var res CronResult
+func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at time.Time) (res CronResult, err error) {
 	actx, cancel := context.WithTimeout(ctx, h.cfg.DrainTimeout+5*time.Second)
 	inst, release := w.acquire(actx)
 	cancel()
@@ -225,6 +224,8 @@ func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at 
 	})
 	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_tw/scheduled", nil)
 	req.Header.Set(netd.HeaderCF, string(blob))
+	cs := h.tel.startCron(w, inst, cronExpr, trace, req) // crontrace.go
+	defer func() { cs.end(res, err) }()
 	// inst.direct's client timeout is for short admin calls; a run may take
 	// up to CronTimeout, bounded by ctx instead.
 	resp, err := (&http.Client{Transport: inst.direct.Transport}).Do(req)

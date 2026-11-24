@@ -24,7 +24,7 @@ func undefinedConnectsTags(t Tenant, pol *Policy, connects, srcTags []string) []
 		return nil
 	}
 	var out []string
-	for _, dst := range connects {
+	for _, dst := range ConnectTargets(connects) {
 		if !strings.HasPrefix(dst, "tag:") || !policy.IsTwTag(dst) {
 			continue
 		}

@@ -119,6 +119,7 @@ func cmdUp(args []string) error {
 	tomb := f.Duration("kill-tombstone", 12*time.Second, "keep a killed node answering object_killed this long")
 	delDelay := f.Duration("device-delete-delay", 8*time.Second, "delete a killed object's device this long after the kill (< --kill-tombstone)")
 	retention := addRetentionFlags(f) // up_retention.go
+	workerInet := addWorkerInternetFlag(f)
 	siblings := f.Bool("allow-sibling-egress", false, "let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)")
 	warmKeys := f.Int("warm-keys", 5, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
 	poolNodes := f.Int("pool-nodes", 1, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
@@ -449,6 +450,9 @@ func cmdUp(args []string) error {
 	}
 	s.Cfg.WarmKeys, s.Cfg.PoolNodes, s.Cfg.PortMapping = warmKeys, poolNodes, *portMapping
 	if err := retention.save(&s.Cfg); err != nil {
+		return err
+	}
+	if err := saveWorkerInternet(&s.Cfg, *workerInet); err != nil {
 		return err
 	}
 	s.Cfg.LocalDev, s.Cfg.PushPort, s.Cfg.Mode = *localDev, *pushPort, layout
@@ -969,6 +973,7 @@ func cmdSupervise(args []string) error {
 	}
 	hargs = append(hargs, s.Cfg.identityHostdArgs()...)
 	hargs = append(hargs, s.Cfg.retentionHostdArgs()...) // up_retention.go
+	hargs = append(hargs, s.Cfg.workerInternetHostdArgs()...)
 	mg := &child{name: "tw-mgmt", args: margs, logPath: s.log("mgmt")}
 	hd := &child{name: "tw-hostd", args: hargs, logPath: s.log("hostd")}
 
@@ -1115,6 +1120,7 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 		Heartbeat: hb, KillTombstone: tomb, HostnamePrefix: s.Cfg.HostnamePrefix, Sandbox: "auto", SandboxDeny: deny, PoolNodes: hostdrun.DefaultPoolNodes,
 		Ephemeral: s.Cfg.Ephemeral, InsecureSharedHost: s.Cfg.InsecureSharedHost, AllowSiblingEgress: s.Cfg.AllowSiblingEgress, Log: hlog}
 	s.Cfg.retentionSingle(nil, &ho) // up_retention.go
+	s.Cfg.workerInternetSingle(&ho) // up_workerinternet.go
 	hrt, err := hostdrun.New(ctx, ho)
 	if err != nil {
 		logf("host agent failed to start: %v", err)
@@ -1335,6 +1341,11 @@ type statusResult struct {
 	// WarmKeys: the operator tenant's pooled preauthorized join keys in
 	// mgmt custody (#158; per tenant in Tenants).
 	WarmKeys int `json:"warmKeys"`
+
+	// WorkerInternet: this host's Worker internet egress, "direct" or
+	// "off" (up_workerinternet.go): what the running host reports, else
+	// tw.json's.
+	WorkerInternet string `json:"workerInternet"`
 }
 
 func cmdStatus(args []string) error {
@@ -1414,6 +1425,7 @@ func cmdStatus(args []string) error {
 		r.Tenants = append(r.Tenants, ts)
 	}
 	r.Containers = hv.Containers
+	r.WorkerInternet = cmpOr(hv.WorkerInternet, s.Cfg.workerInternet())
 	if r.Mgmt {
 		r.Capacity, r.Reservations = containerState(ctx, s.mgmt(), "")
 		r.DegradedStores = degradedStores(ctx, s.mgmt(), "")
@@ -1444,6 +1456,7 @@ func cmdStatus(args []string) error {
 			where = "local-dev"
 		}
 		fmt.Printf("%s host        %s (%s) · heartbeat %.1fs ago · objects %v\n", mark(r.Host), s.Cfg.HostID, where, float64(r.HostAgeMS)/1000, r.Objects)
+		printWorkerInternet(s.Cfg.workerInternet(), hv.WorkerInternet) // up_workerinternet.go
 		if len(r.Tenants) > 1 {
 			for _, t := range r.Tenants {
 				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · %s · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, warmKeysLabel(t.WarmKeys), t.Objects)

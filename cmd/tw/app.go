@@ -152,6 +152,10 @@ func cmdInit(args []string) error {
 			return
 		}
 		fmt.Printf("  cd %s && tw policy && tw deploy   # or `tw dev` for a local run with no tailnet\n", pos[0])
+		if *tmpl == "ai-agent" {
+			// Its tools are a second app's; on its own it only refuses.
+			fmt.Printf("  its tools need the mcp template deployed as workload \"mcp\" and a grant: see %s\n", filepath.Join(pos[0], "README.md"))
+		}
 	})
 	return nil
 }
@@ -172,6 +176,9 @@ type app struct {
 	WranglerFile string
 	Opts         appOpts
 	Warnings     []string
+
+	// Pages is a Cloudflare Pages project (pages.go); nil for a Worker.
+	Pages *pagesProject
 }
 
 func loadApp(dir, name string) (*app, error) { return loadAppWith(dir, name, appOpts{}) }
@@ -195,6 +202,10 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 		if wname, err = a.loadWrangler(top.Name); err != nil {
 			if _, none := err.(errNoWrangler); !none {
 				return nil, err
+			}
+			if dirExists(filepath.Join(dir, "functions")) { // pages.go
+				return nil, fail("bad_request", "no wrangler config in "+dir+", but functions/ looks like a Cloudflare Pages project").
+					withFix(`add a wrangler.jsonc: {"name": "<site>", "pages_build_output_dir": "./public"} (the folder your build writes)`)
 			}
 			if twErr != nil {
 				return nil, fail("bad_request", "no tailworks.jsonc or wrangler config in "+dir).withFix("tw init <dir> --template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow")
@@ -230,6 +241,11 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 	if len(a.Cfg.Tailnet.Tags) == 0 {
 		return nil, fail("bad_request", "tailworks.jsonc has no tailnet.tags (the workload node's tags)").
 			withFix(`add "tailnet": { "tags": ["tag:tw-wl-` + a.Name + `"] }`)
+	}
+	if a.Pages != nil {
+		secrets, _ := typesSecrets(a)
+		_, declared := genTypes(a, a.Dir, secrets)
+		a.pagesEnvWarnings(declared) // pages.go
 	}
 	return a, nil
 }
@@ -276,14 +292,27 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 	var types map[string]string
 	var js int
 	main := "dist/index.js"
+	if a.Pages != nil && a.Pages.Err != nil {
+		return nil, 0, a.Pages.Err // pages.go: a bad functions/ or _routes.json
+	}
 	if a.assetsOnly() {
 		// An assets-only project (assets.go): no Worker to bundle.
 		tb, err := a.packWorkerd(map[string][]byte{}, "", nil, vars)
 		return tb, 0, err
 	}
-	if a.Opts.builder() == "wrangler" {
+	if err := pythonWorker(a.WranglerFile, a.Wrangler); err != nil {
+		return nil, 0, err
+	}
+	if a.Opts.builder() == "wrangler" && a.Pages.hasCode() {
+		_, err = a.pagesEntry(out) // pages.go: refuses --wrangler
+		return nil, 0, err
+	}
+	switch a.builder() {
+	case "wrangler":
 		files, main, types, js, err = a.buildWrangler(out)
-	} else {
+	case builderPrebuilt:
+		files, main, types, js, err = a.buildPrebuilt() // nobundle.go
+	default:
 		files, types, js, err = a.buildEsbuild(out, nodePaths(ct))
 	}
 	if err != nil {
@@ -362,7 +391,7 @@ func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
 	name := f.String("name", "", "workload name (default: tailworks.jsonc name)")
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
-	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants or funnel nodeAttrs missing, write them to the tailnet policy first (as tw policy --apply)")
+	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)")
 	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
 	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
@@ -462,7 +491,7 @@ func cmdDeploy(args []string) error {
 		if a.Runtime == bundle.RuntimeNode {
 			main = "dist/server.mjs (runtime node)"
 		}
-		fmt.Printf("✓ build      %s %.1f KB (%s) · bundle %.1f KB\n", main, float64(jsBytes)/1024, a.Opts.builder(), float64(len(tb))/1024)
+		fmt.Printf("✓ build      %s %.1f KB (%s) · bundle %.1f KB\n", main, float64(jsBytes)/1024, a.builder(), float64(len(tb))/1024)
 	}
 	// Containers (ADR-032 D3): build the Dockerfile images here and push them
 	// to tailworks' registry; mgmt pins every image to a digest at deploy.
@@ -629,8 +658,9 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 			continue
 		}
 		var ok []string
+		target, _ := mgmt.SplitConnect(dst) // "tag:db:5432"
 		for _, src := range a.srcTags() {
-			if !missing[src+"→"+dst] {
+			if !missing[src+"→"+target] {
 				ok = append(ok, src)
 			}
 		}

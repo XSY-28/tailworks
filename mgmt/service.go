@@ -3179,7 +3179,7 @@ func auditSource(r AuditRecord) string {
 // every tag it will mint is in tagOwners.
 type PreflightRequest struct {
 	SrcTags  []string `json:"srcTags"`  // workload + object tags
-	Connects []string `json:"connects"` // tags ("tag:db") or "*"; names are reported unchecked
+	Connects []string `json:"connects"` // tags ("tag:db", "tag:db:5432") or "*"; names are reported unchecked
 	Port     string   `json:"port,omitempty"`
 	// Service, with WorkloadTags, checks autoApprovers.services.
 	Service      string   `json:"service,omitempty"`
@@ -3230,6 +3230,10 @@ type PreflightResult struct {
 	// not deployed yet) with no tagOwners entry; TagOwnersSnippet defines
 	// them too (connectstags.go).
 	UndefinedConnects []string `json:"undefinedConnects,omitempty"`
+
+	// workloadTags: the tags the workload node is deployed with, the only
+	// ones tw policy --apply lets host its Service (policyapply.go).
+	workloadTags []string
 }
 
 // Preflight checks the request against the tenant's current policy (read
@@ -3266,15 +3270,20 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	if len(owners) > 0 {
 		res.TagOwnersSnippet = `"tagOwners": { ` + strings.Join(owners, ", ") + ` }`
 	}
-	for _, dst := range r.Connects {
+	for _, c := range r.Connects {
+		dst, ip := SplitConnect(c) // connects.go: "tag:db:5432"
 		if dst != "*" && !strings.HasPrefix(dst, "tag:") && !strings.HasPrefix(dst, "autogroup:") {
-			res.Unchecked = append(res.Unchecked, dst)
+			res.Unchecked = append(res.Unchecked, c)
 			continue
 		}
+		want := ip
+		if want == "" {
+			want = port
+		}
 		for _, src := range r.SrcTags {
-			if !pol.HasIPGrant(src, dst) {
+			if !pol.HasIPGrantPort(src, dst, ip) {
 				res.Missing = append(res.Missing, PreflightMissing{Src: src, Dst: dst,
-					Snippet: fmt.Sprintf(`{ "src": [%q], "dst": [%q], "ip": [%q] }`, src, dst, port)})
+					Snippet: fmt.Sprintf(`{ "src": [%q], "dst": [%q], "ip": [%q] }`, src, dst, want)})
 			}
 		}
 	}

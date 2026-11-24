@@ -18,6 +18,8 @@ export type TailnetErrorCode =
   | "identity_pending"
   | "derp_unreachable"
   | "plan_feature_missing"
+  | "not_supported"
+  | "socket_limit"
   | "killed"
   | "object_killed"
   | "no_identity"
@@ -62,6 +64,8 @@ export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.
   identity_pending: { status: 503, title: "the object's node is not ready yet" },
   derp_unreachable: { status: 502, title: "no direct path and no reachable DERP relay" },
   plan_feature_missing: { status: 501, title: "the tailnet's plan or control server lacks a feature tailworks can use" },
+  not_supported: { status: 501, title: "tailworks doesn't support this call here (yet)" },
+  socket_limit: { status: 429, title: "too many open sockets for this object" },
   killed: { status: 410, title: "the object was killed" },
   object_killed: { status: 410, title: "a new request reached a killed object (its node's tombstone answered)" },
   no_identity: { status: 401, title: "the request carries no verified tailnet caller" },

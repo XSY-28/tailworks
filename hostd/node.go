@@ -377,6 +377,7 @@ func (h *Host) nodeIngress(inst *instance, tr http.RoundTripper) http.Handler {
 		ErrorLog:      log.New(io.Discard, "", 0),
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(&url.URL{Scheme: "http", Host: "app"})
+			netd.KeepBodyEOF(pr) // #138
 			pr.Out.Host = pr.In.Host
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {

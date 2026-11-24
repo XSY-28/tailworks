@@ -258,6 +258,7 @@ func cmdDoctor(args []string) error {
 
 	run("sandbox", func() (string, string, string) { return doctorSandbox(s) })
 	run("host_sockets", func() (string, string, string) { return doctorHostSockets(s) })
+	run("worker_internet", func() (string, string, string) { return doctorWorkerInternet(s) }) // up_workerinternet.go
 
 	doctorLinuxHost(run, s) // Linux: kernel, Landlock, user namespaces, KVM, firecracker, cgroups v2, systemd, microvm_tier
 

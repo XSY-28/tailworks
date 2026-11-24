@@ -66,7 +66,7 @@ schema. `tw init` writes this line for you:
 | key | type | what it does |
 |---|---|---|
 | `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
-| `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them |
+| `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them. Add the TCP port a socket dials (`"tag:db:5432"`) and the preflight checks the grant for that port instead of `tcp:80` |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
 | `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
@@ -102,7 +102,8 @@ started with `enableInternet: true` may reach
   `.lan` and other special-use suffixes are never looked up.
 - A destination the setting refuses gets `internet_egress_unavailable`.
   The host's operator can also turn internet egress off for every
-  workload on a host (`tw-hostd -worker-internet=off`).
+  workload on a host (`tw up --worker-internet=off`, or
+  `tw-hostd -worker-internet=off`; `tw status` and `tw doctor` show it).
 - A list entry is an exact host name, `*.suffix` (any name under it),
   `*` (any name), an IP or a CIDR. An IP literal in a URL matches only IP
   and CIDR entries.
@@ -172,7 +173,9 @@ checks this first and prints the lines to add:
 ```
 
 `tw policy --apply` (or `tw deploy --apply-policy`) writes those lines for
-you, along with the `tailnet.connects` grants and, for `public` routes,
+you, along with the `tailnet.connects` grants, for `tailnet.service` the
+`autoApprovers.services` entry that lets the workload's own tags host its
+Service (only that `svc:` name, only those tags), and, for `public` routes,
 `tag:tw-public` and its funnel `nodeAttrs`. It prints the lines first and
 asks, or takes `--yes` when there's no terminal. mgmt then reads the policy
 with its ETag, merges in only the missing lines (comments kept, nothing
@@ -192,8 +195,8 @@ this: the tag may belong to another team's app, so you define it yourself.
 
 Some lines are never written: a grant to `*` or `autogroup:*`, a grant to a
 tag outside `tag:tw*` that your policy doesn't define (such as `tag:db`
-before you add it to `tagOwners`, which the control plane would reject), a Service's
-`autoApprovers`, and the grant that lets people call the app. `tw policy`
+before you add it to `tagOwners`, which the control plane would reject), and the grant
+that lets people call the app. `tw policy`
 lists them for you to add yourself.
 
 If you'd rather not edit the policy for every app, reuse a small set of tags

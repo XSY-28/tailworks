@@ -57,6 +57,19 @@ func (e errNoWrangler) Error() string { return "no wrangler config in " + e.dir 
 // for an environment "<base>-<env>" unless the env sets its own name.
 func (a *app) loadWrangler(twName string) (string, error) {
 	file, shadowed := findWranglerConfig(a.Dir)
+	redirect, auxNotes, err := redirectedWranglerConfig(a.Dir) // viteredirect.go
+	if err != nil {
+		return "", err
+	}
+	if redirect != "" {
+		if a.Opts.Env != "" {
+			return "", fail("bad_request", fmt.Sprintf("--env %s: %s is the config `vite build` already wrote for one environment (%s)", a.Opts.Env, redirect, viteDeployConfig)).
+				withFix("CLOUDFLARE_ENV="+a.Opts.Env+" npm run build, then tw deploy without --env", "or delete "+viteDeployConfig+" to use the project's own wrangler config")
+		}
+		file, shadowed = redirect, nil
+		a.Warnings = append(a.Warnings, fmt.Sprintf("using %s, the config `vite build` wrote (%s), as wrangler deploy does", file, viteDeployConfig))
+		a.Warnings = append(a.Warnings, auxNotes...)
+	}
 	if file == "" {
 		return "", errNoWrangler{a.Dir}
 	}
@@ -68,13 +81,17 @@ func (a *app) loadWrangler(twName string) (string, error) {
 	if err != nil {
 		return "", fail("bad_request", file+": "+err.Error())
 	}
+	rebaseWranglerPaths(cfg, filepath.Dir(file)) // viteredirect.go: "." unless redirected
 	w, explicit, notes, err := applyWranglerEnv(cfg, a.Opts.Env, file)
 	if err != nil {
 		return "", err
 	}
 	a.Wrangler = w
 	a.Warnings = append(a.Warnings, notes...)
-	a.Warnings = append(a.Warnings, wranglerWarnings(file, w, a.Opts.builder())...)
+	a.Warnings = append(a.Warnings, wranglerWarnings(file, w, a.builder())...)
+	if err := a.detectPages(); err != nil { // pages.go
+		return "", err
+	}
 	base := twName
 	if base == "" {
 		base, _ = cfg["name"].(string)
@@ -103,6 +120,11 @@ func (a *app) printWarnings(w io.Writer) {
 // define, alias, rules, minify, keep_names, jsx_* and tsconfig.
 func (a *app) buildEsbuild(out string, np []string) (files map[string][]byte, types map[string]string, js int, err error) {
 	o := esbundle.Options{Dir: a.Dir, Main: wranglerMain(a.Wrangler), Outfile: filepath.Join(out, "index.js"), NodePaths: np}
+	if a.Pages.hasCode() {
+		if o.Main, err = a.pagesEntry(out); err != nil { // pages.go
+			return nil, nil, 0, err
+		}
+	}
 	if err := esbuildWranglerOptions(a.Wrangler, &o); err != nil {
 		return nil, nil, 0, fail("bad_request", a.WranglerFile+": "+err.Error())
 	}
@@ -151,6 +173,25 @@ func wranglerBin(dir string) (string, error) {
 		withFix("npm install --save-dev wrangler", "or bundle with tailworks' built-in esbuild: drop --wrangler")
 }
 
+// wranglerEnv is the environment wrangler runs in. A project's own
+// wrangler (node_modules/.bin) gets that directory first on PATH, as under
+// `npm run deploy`, so a "build" command that calls a locally installed
+// tool (esbuild, tsc) finds it.
+func wranglerEnv(bin string) []string {
+	env := os.Environ()
+	dir := filepath.Dir(bin)
+	if filepath.Base(dir) != ".bin" || filepath.Base(filepath.Dir(dir)) != "node_modules" {
+		return env
+	}
+	for i, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "PATH="); ok {
+			env[i] = "PATH=" + dir + string(os.PathListSeparator) + v
+			return env
+		}
+	}
+	return append(env, "PATH="+dir)
+}
+
 // runWrangler runs `wrangler deploy --dry-run --outdir <outdir>` in the
 // app dir: wrangler bundles locally and sends nothing to Cloudflare.
 func (a *app) runWrangler(outdir string) error {
@@ -163,7 +204,7 @@ func (a *app) runWrangler(outdir string) error {
 	args := []string{"deploy", "--dry-run", "--outdir", outdir, "--config", a.WranglerFile, "--env=" + a.Opts.Env}
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = a.Dir
-	cmd.Env = append(os.Environ(), "WRANGLER_SEND_METRICS=false")
+	cmd.Env = append(wranglerEnv(bin), "WRANGLER_SEND_METRICS=false")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return fail("build_failed", "wrangler "+strings.Join(args, " ")+" failed in "+a.Dir, tailLines(string(b), 20)...)
 	}

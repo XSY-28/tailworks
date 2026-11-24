@@ -87,7 +87,7 @@ func (o *Object) internetRoute(host string, port uint16, ipLiteral bool) (*inter
 		if ipLiteral {
 			return refuse(CodeForbiddenDestination, "non-tailnet destination (this host has no internet egress path)")
 		}
-		return refuse(CodeInternetEgressUnavailable, internetEgressDetail(host, "this host has internet egress turned off (tw-hostd -worker-internet=off)"))
+		return refuse(CodeInternetEgressUnavailable, internetEgressDetail(host, "this host has internet egress turned off (tw up --worker-internet=off, or tw-hostd -worker-internet=off)"))
 	}
 	if ipLiteral {
 		ip, _ := netip.ParseAddr(host)

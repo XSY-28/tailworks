@@ -242,8 +242,8 @@ Funnel, no HTTPS requirement.**
      app's grants and `spawn()` checks sub-agent tags/caps against the
      policy (without it, deploy says `preflight skipped` and `spawn()`
      answers `policy_unavailable`). Pick **Policy File › Write** instead
-     if `tw policy --apply` should add each app's `tag:tw*` tagOwners and
-     grants for you ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init));
+     if `tw policy --apply` should add each app's `tag:tw*` tagOwners,
+     grants and Service auto-approval for you ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init));
      otherwise paste the snippet `tw policy` prints;
    - optionally **Services › Write**: workloads with `tailnet.service` get
      a Tailscale Service, i.e. a stable name and VIP
@@ -328,7 +328,7 @@ on `tag:tw-mgmt`). Install tailworks there too (steps 1–2), then:
 
 ```sh
 tw link tw-mgmt.<tailnet>.ts.net       # https first, then http on :80; or just `tw link`: finds tw-mgmt through MagicDNS
-tw init support --template agent        # or hello, mcp, ai-agent, lock; node-workflow needs Node.js on this machine
+tw init support --template agent        # or hello, mcp, ai-agent (needs mcp deployed), lock; node-workflow needs Node.js
 cd support && tw dev                    # optional: run it locally against an embedded control plane
 tw deploy                               # bundles here (built-in esbuild), uploads to mgmt over the tailnet, waits until the node is ready
 tw ls · tw audit <object> · tw kill <object> --cascade
@@ -660,21 +660,55 @@ Everything tailworks keeps is in its state dir (`~/.tailworks`, or `--state-dir`
 tw backup --out ~/tw-backup-$(date +%F)
 ```
 
-`tw backup` works while tailworks runs. It writes a new directory with:
+`tw backup` works while tailworks runs. Nothing is stopped and no request
+waits. It writes a new directory with:
 
 - a consistent copy of `mgmt.db` (SQLite `VACUUM INTO`),
 - the rest of `mgmt/`: custody, the ID secret, mgmt's node state,
 - `tw.json`,
+- `hostd/`: each workload's **Durable Object storage**, and with the `fs`
+  backend, the **R2 object bytes** (see below),
 - `backup.json`, which says what the backup holds and what it doesn't.
+  Its `hostd` entry lists the workloads whose DO storage it holds and
+  counts the databases and R2 blobs.
 
 Without `--out` it writes to `~/.tailworks/backups/`. The backup holds the
 custody key and mgmt's node key, so store it like a secret.
 
+How `hostd/` is copied while workloads write to it:
+
+- **Durable Object storage.** Each object's storage is a SQLite database.
+  `tw backup` copies each one with `VACUUM INTO`, through a read-only
+  connection that shares workerd's locks. Each copy is the object as of
+  one committed write, never a torn one, and workerd keeps writing while
+  it is taken. Objects are copied one after another, not at a single
+  instant. No Durable Object transaction spans two objects, so that is
+  enough.
+- **R2 bytes** (`fs` backend). Blobs are immutable: a put writes a
+  temporary file and renames it into place, and a blob is never
+  rewritten. So every blob in the backup is whole. They are copied once
+  before mgmt's store (which holds the R2 index) and again after it, to
+  pick up blobs written in between. A blob on the same disk as the backup
+  is hard-linked, not copied, which is safe because it never changes.
+  One case is not covered: an object written *and* then overwritten or
+  deleted during the backup itself can come back from the restore
+  without its bytes (reading it fails). Take the backup again if that
+  matters.
+
+`tw backup --hostd=false` copies the control plane only, as `tw upgrade`'s
+backup does.
+
 It doesn't hold:
 
-- **`hostd/`:** Durable Object storage and, with the `fs` backend, R2 object
-  bytes. These are files the running workloads write. For a consistent
-  copy, `tw down`, copy `~/.tailworks/hostd`, then `tw up`.
+- **A microVM workload's DO volume** (`do.img`). The guest has it mounted,
+  so `tw backup` lists it as not included. Copy it with tailworks stopped.
+- **Node.js workloads' data directories** (`TW_DATA_DIR`). These are plain
+  files the app writes. Copy them with tailworks stopped.
+- **The rest of `hostd/`:** node state, logs, `objects.json`. `tw restore`
+  leaves this machine's copy in place.
+- **Other hosts.** `tw backup` copies this machine's `hostd/` only. Workloads
+  on a host added with `tw host add` keep their DO storage on that host.
+- **R2 bytes in an `s3` backend.** Back up the S3 bucket.
 - **`mgmt/registry/`:** container image blobs. If you deploy container
   images, copy it separately; it is content-addressed, so a copy taken
   while tailworks runs is fine.
@@ -682,11 +716,12 @@ It doesn't hold:
 - **A Postgres store.** `pg_dump` it ([postgres.md](postgres.md#back-up-and-restore-with-postgres)).
 
 For one database, `tw d1 export <db> --output <file>` also works while
-tailworks runs ([d1.md](d1.md)). `tw upgrade` takes the same kind of
-backup before it installs, in `~/.tailworks/backups/`
+tailworks runs ([d1.md](d1.md)). `tw upgrade` takes the control-plane part
+of this backup before it installs, in `~/.tailworks/backups/`
 ([upgrading.md](upgrading.md)).
 
-To copy everything, `hostd/` included, stop tailworks first:
+To copy everything, microVM volumes and Node.js data included, stop
+tailworks first:
 
 ```sh
 tw down
@@ -711,6 +746,11 @@ It:
 1. copies the state it replaces to `~/.tailworks/backups/<time>-before-restore`,
    so you can undo the restore with another `tw restore`;
 2. puts the backup's `mgmt/` and `tw.json` back;
+   if the backup holds `hostd/`, it also replaces every workload's Durable
+   Object storage and the R2 blobs with the backup's. What it replaces
+   moves into the safety backup from step 1. DO storage of workloads
+   created after the backup moves there too, so a workload that is
+   created again later starts empty;
 3. runs the **restore fence**: every lease epoch moves up past any epoch
    handed out since the backup, so no fencing token
    ([locks.md](locks.md)) is ever issued twice.

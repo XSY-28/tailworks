@@ -227,8 +227,8 @@ func wranglerKeyNote(k string, v any, builder string) string {
 	case "define", "alias", "rules", "minify", "keep_names", "jsx_factory", "jsx_fragment", "tsconfig":
 		return "" // both bundlers honour these
 	case "build", "no_bundle", "find_additional_modules", "base_dir", "preserve_file_names":
-		if builder == "wrangler" {
-			return ""
+		if builder == "wrangler" || (builder == builderPrebuilt && k != "build") {
+			return "" // nobundle.go packs a pre-built no_bundle Worker as wrangler does
 		}
 		return "needs wrangler's bundler; ignored by tailworks' built-in esbuild (use tw deploy --wrangler)"
 	case "upload_source_maps":
@@ -240,6 +240,8 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		return "ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (tailworks.jsonc \"public\" for the internet)"
 	case "assets":
 		return "" // assets.go: served by a generated router Worker
+	case "pages_build_output_dir":
+		return "" // pages.go: a Cloudflare Pages project's assets directory
 	case "site":
 		return "not supported: Workers Sites is deprecated; use \"assets\" (docs/wrangler.md#assets)"
 	case "kv_namespaces", "r2_buckets", "services", "ai", "browser", "vectorize",

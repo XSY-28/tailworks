@@ -92,10 +92,14 @@ func (sf storeFlags) apply(s *state) error {
 	if newCustody != c.Custody {
 		secrets, _ := os.ReadDir(filepath.Join(s.Dir, "mgmt", "custody", "secrets"))
 		if c.Custody == "setec" || len(secrets) > 0 {
+			move := "or start a new install (another --state-dir) with --custody " + custodyName(newCustody) + ", and move workloads to it"
+			if newCustody == "setec" {
+				move = "or move file custody to setec: tw down, then tw custody migrate --to setec --setec-url <url>   (docs/postgres.md)"
+			}
 			return fail("state_conflict", "this install keeps its secrets and store keys in "+custodyName(c.Custody)+" custody; tw up can't move them to "+custodyName(newCustody)+" custody",
 				"the store's data is sealed with keys in custody, so switching would make it unreadable").
 				withFix("keep the custody this install was set up with (leave --custody out)",
-					"or start a new install (another --state-dir) with --custody setec, and move workloads to it")
+					move)
 		}
 	}
 	wasSQLite := c.storeIsSQLite()
