@@ -171,11 +171,6 @@ func runDev(pr *Prepared, tw, state string) Result {
 	if pr.Err != nil {
 		return fail("prepare: %v", pr.Err)
 	}
-	port, err := freePort()
-	if err != nil {
-		return fail("%v", err)
-	}
-	base := fmt.Sprintf("http://127.0.0.1:%d", port)
 	// The README's `wrangler secret put` is .dev.vars in dev (as for
 	// wrangler dev). Removed afterwards: the deployed run shares the copy.
 	if len(p.Secrets) > 0 {
@@ -189,39 +184,25 @@ func runDev(pr *Prepared, tw, state string) Result {
 		}
 		defer os.Remove(dv)
 	}
-	if p.OriginVar != "" {
-		if err := setOriginVar(p, pr.Root, p.OriginVar, base+"/mcp"); err != nil {
-			return fail("%v", err)
+	// The port is chosen here (an OriginVar needs it before the start), so
+	// something else can take it first: try again with another one.
+	var (
+		d    *devProc
+		base string
+		t0   time.Time
+		err  error
+	)
+	for attempt := 1; ; attempt++ {
+		d, base, t0, err = startDev(pr, tw, state)
+		if d == nil {
+			return fail("tw dev: %v", err)
 		}
-	}
-	args := append([]string{"dev", pr.DeployDir, "--json", "--port", fmt.Sprint(port), "--console-port", "-1", "--state-dir", state}, p.DeployArgs...)
-	d := &devProc{cmd: exec.Command(tw, args...), done: make(chan struct{})}
-	d.cmd.Dir = filepath.Dir(state)
-	d.cmd.Stderr = &d.errb
-	stdout, err := d.cmd.StdoutPipe()
-	if err != nil {
-		return fail("%v", err)
-	}
-	t0 := time.Now()
-	if err := d.cmd.Start(); err != nil {
-		return fail("tw dev: %v", err)
-	}
-	go func() {
-		sc := bufio.NewScanner(stdout)
-		sc.Buffer(make([]byte, 1<<20), 4<<20)
-		for sc.Scan() {
-			d.mu.Lock()
-			d.out = append(d.out, sc.Text())
-			d.mu.Unlock()
+		if err == nil || attempt == 3 || !strings.Contains(err.Error(), "address already in use") {
+			break
 		}
-		d.cmd.Wait()
-		close(d.done)
-	}()
+		d.stop()
+	}
 	defer d.stop()
-	_, err = d.waitLine(4*time.Minute, func(l string) bool {
-		var ev struct{ Event string }
-		return json.Unmarshal([]byte(l), &ev) == nil && ev.Event == "ready"
-	})
 	if p.Expect.Kind == ExpectRefused {
 		// It must not start, and the error must name the surface.
 		if err == nil {
@@ -267,6 +248,51 @@ func runDev(pr *Prepared, tw, state string) Result {
 		r.Outcome, r.Detail = "PASS", fmt.Sprintf("%d steps", len(run.Steps))
 	}
 	return r
+}
+
+// startDev starts `tw dev --json` for a prepared project on a free port
+// and waits for its ready event. d is nil only when it could not be
+// started at all; err is why it didn't get ready.
+func startDev(pr *Prepared, tw, state string) (d *devProc, base string, t0 time.Time, err error) {
+	p := pr.P
+	port, err := freePort()
+	if err != nil {
+		return nil, "", t0, err
+	}
+	base = fmt.Sprintf("http://127.0.0.1:%d", port)
+	if p.OriginVar != "" {
+		if err := setOriginVar(p, pr.Root, p.OriginVar, base+"/mcp"); err != nil {
+			return nil, "", t0, err
+		}
+	}
+	args := append([]string{"dev", pr.DeployDir, "--json", "--port", fmt.Sprint(port), "--console-port", "-1", "--state-dir", state}, p.DeployArgs...)
+	d = &devProc{cmd: exec.Command(tw, args...), done: make(chan struct{})}
+	d.cmd.Dir = filepath.Dir(state)
+	d.cmd.Stderr = &d.errb
+	stdout, err := d.cmd.StdoutPipe()
+	if err != nil {
+		return nil, "", t0, err
+	}
+	t0 = time.Now()
+	if err := d.cmd.Start(); err != nil {
+		return nil, "", t0, err
+	}
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		sc.Buffer(make([]byte, 1<<20), 4<<20)
+		for sc.Scan() {
+			d.mu.Lock()
+			d.out = append(d.out, sc.Text())
+			d.mu.Unlock()
+		}
+		d.cmd.Wait()
+		close(d.done)
+	}()
+	_, err = d.waitLine(4*time.Minute, func(l string) bool {
+		var ev struct{ Event string }
+		return json.Unmarshal([]byte(l), &ev) == nil && ev.Event == "ready"
+	})
+	return d, base, t0, err
 }
 
 func sortedKeys(m map[string]string) []string {

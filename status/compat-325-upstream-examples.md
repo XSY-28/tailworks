@@ -38,7 +38,7 @@ Last update: 2026-11-24 PT. Issue #325: the upstream examples of cloudflare/agen
 - `mcp-agent` no longer uses the Vite redirect workaround (#301 is fixed);
   it deploys plainly, as the new Vite-built examples do.
 
-## Results (2026-11-24, darwin/arm64, tailworks `c97a6175a081`)
+## Results (2026-11-24, darwin/arm64; tailworks `286f6a184247` under `tw dev`, `c97a6175a081` deployed)
 
 | Upstream | Examples | pass | pass with change | fail | not run |
 |---|---|---|---|---|---|
@@ -100,7 +100,7 @@ on purpose), and the React clients are fetched, not run in a browser.
 The published results are from the last two runs below, on this branch
 after merging `origin/master` (`b5b6d2f5`).
 
-- `make e2e-compat-dev`: `--- PASS: TestCompatDev (15.12s)`, counts
+- `make e2e-compat-dev`: `--- PASS: TestCompatDev (17.80s)`, counts
   `PASS:17 XFAIL:3`.
 - `TW_COMPAT_ONLY='^(ag-|mcph-|ai-|mcp-server$|mcp-agent$)' make e2e-compat`
   (tailnet 1): `--- PASS: TestE2ECompat (125.66s)`, counts
@@ -120,7 +120,11 @@ after merging `origin/master` (`b5b6d2f5`).
   properties of null (reading 'edgesOut')`; reproduced here with
   `npx npm@10`; `--legacy-peer-deps` installs but leaves out peers the
   build needs). The example's `engines` asks for Node 24, so the nightly
-  job now runs on Node 24. LINUXRERUN
+  job now runs on Node 24. The second run, on Node 24, was
+  `PASS:16 XFAIL:3 FAIL:1` again, with a different failure, a race in the
+  dev runner: `ai-express`'s `tw dev` found its port taken (`address
+  already in use`), because the runner picks a free port before starting.
+  It now retries with another port. LINUXRERUN
 - `make lint`: ok (includes `compat-check`, `compat-upstream-check`,
   `go test ./e2e/compat/`, staticcheck). `make lint-docs test-docs`: ok.
 - `make changes-check`: ok (no upgrade-relevant paths).
