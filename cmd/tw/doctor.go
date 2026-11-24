@@ -255,6 +255,8 @@ func cmdDoctor(args []string) error {
 
 	doctorPublic(run, s)
 	doctorStorage(run, s) // doctor_storage.go: data_disk, store_sizes
+	// nodebudget.go: each tenant's live tailnet nodes.
+	run("node_budget", func() (string, string, string) { return doctorNodeBudget(s) })
 
 	run("sandbox", func() (string, string, string) { return doctorSandbox(s) })
 	run("host_sockets", func() (string, string, string) { return doctorHostSockets(s) })

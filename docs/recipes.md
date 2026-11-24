@@ -11,6 +11,7 @@ the recipe says what you'll see instead.
 - [Call an LLM through a gateway on your tailnet](#call-an-llm-through-a-gateway-on-your-tailnet)
 - [Connect to Postgres on your tailnet](#connect-to-postgres-on-your-tailnet)
 - [A Durable Object per user, authorized by `getCaller`](#a-durable-object-per-user-authorized-by-getcaller)
+- [Choose which classes get their own node](#choose-which-classes-get-their-own-node)
 - [A public webhook with signature verification](#a-public-webhook-with-signature-verification)
 - [A cron job that writes to KV](#a-cron-job-that-writes-to-kv)
 
@@ -391,6 +392,71 @@ curl http://127.0.0.1:8787/u/someone-else           # 403 {"error":"forbidden"}
 `tw dev` has no policy evaluator yet, so it can't show the `readAll`
 grant; on a tailnet, `tw ls` lists one object (and node) per person who
 has written a note.
+
+## Choose which classes get their own node
+
+This one is a decision, not an app. Each object of a class with `tags` in
+`tailnet.objects` is a node, which is a device on your tailnet: your
+Tailscale plan's device limit applies, and so does the tenant's
+`maxObjects` ([limits.md](limits.md#tailnet-node-budget)). So give a class
+its own identity when the tailnet has to tell its objects apart, and not
+otherwise.
+
+**Give the class tags** (a node per object) when:
+
+- it is an agent, or anything that acts on its own: you want grants,
+  `getCaller()` on the far side, flow logs and the audit trail to name
+  the object, not the app;
+- it calls out to other tailnet services, and what it may reach should be
+  a grant on its tag rather than on the whole workload's;
+- you want to kill or grant one object: `tw kill` takes that object's
+  node off the tailnet and leaves the rest of the app running;
+- it spawns sub-agents, which can hold at most their parent's grants.
+
+**Set `"node": false`** (no node; objects are reached through the
+workload) when:
+
+- there is one object per user, session or key, and they are only state:
+  counters, caches, rate limiters, per-user settings;
+- the number of objects grows with your users or your data rather than
+  with what you deploy: chat rooms, documents, game lobbies;
+- nothing outside the workload needs to call an object directly, and the
+  objects don't need different grants from the workload's.
+
+```jsonc
+// tailworks.jsonc
+{
+  "name": "support",
+  "tailnet": {
+    "tags": ["tag:tw-wl-support"],
+    "objects": {
+      // a few, long-lived, each acting for one customer: a node each
+      "SupportAgent": { "tags": ["tag:tw-agent-support"] },
+      // one per chat room and one per user: state only, no nodes
+      "Room": { "node": false },
+      "RateLimit": { "node": false }
+    }
+  }
+}
+```
+
+The Worker in front of a `"node": false` class is where you authorize:
+callers reach the workload node, so check `getCaller(req)` there before
+`env.ROOM.getByName(...)`, as the recipe above does.
+
+`"egress": "workload"` (plain-DO mode) is a different choice. The class
+still has a node per object for calls in; only its outbound `fetch()`
+leaves from the workload node. It doesn't save nodes
+([egress-modes.md](egress-modes.md)). `"node": false` implies plain-DO
+mode, and moving a class between facet mode and plain-DO mode starts its
+objects with empty storage, so decide before you store data.
+
+`tw policy` prints what an app will use before you deploy it, and `tw ls`
+what the tenant uses now:
+
+```
+  nodes      this app is 1 workload node + 1 node per SupportAgent object (RateLimit, Room objects share the workload node); tenant example.ts.net has 3 live nodes: 1 workload, 2 objects (maxObjects 1000)
+```
 
 ## A public webhook with signature verification
 

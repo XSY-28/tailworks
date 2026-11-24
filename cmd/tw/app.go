@@ -385,6 +385,10 @@ type deployResult struct {
 
 	// PolicyApplied: --apply-policy's result (policyapply.go).
 	PolicyApplied *mgmt.PolicyApplyResult `json:"policyApplied,omitempty"`
+
+	// Nodes: the tailnet nodes the app costs and the tenant's live count
+	// before this deploy (nodebudget.go).
+	Nodes *nodeBudget `json:"nodes,omitempty"`
 }
 
 func cmdDeploy(args []string) error {
@@ -473,6 +477,10 @@ func cmdDeploy(args []string) error {
 			printPreflight(a, pf)
 			printPublicPreflight(pf)
 		}
+	}
+	res.Nodes = s.nodeBudgetOf(ctx, tn, a.Cfg, *preview || *previewAlias != "") // nodebudget.go
+	if !*f.json {
+		printNodeBudget("✓ preflight  nodes: ", "! preflight  nodes: ", tn.Tailnet, res.Nodes)
 	}
 	if !pf.OK && *applyPolicy {
 		ar, err := applyAppPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, *yes, "tw deploy --apply-policy")

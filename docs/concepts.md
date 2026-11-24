@@ -68,7 +68,10 @@ One Durable Object instance (Cloudflare: a Durable Object). Each object of
 a class with tags in `tailnet.objects` gets its **own node**, with the
 class's tags, so it has its own identity for calls in and `fetch()` out,
 and `tw kill` can cut it off on its own. `tw ls` lists objects with their
-nodes.
+nodes. Each of those nodes is a device on your tailnet for as long as the
+object lives, so a class with many objects counts against your Tailscale
+plan's device limit; a class with `"node": false` adds none
+([Tailnet node budget](limits.md#tailnet-node-budget)).
 
 ### Sub-agent
 An object created by another object with `ctx.tailnet.spawn()`. It gets

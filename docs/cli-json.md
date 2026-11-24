@@ -175,6 +175,34 @@ line (`$defs/logs.line`):
 replica lines also carry the `host` they came from. With `-f`, lines keep
 coming until the command is stopped.
 
+## Node budget (`nodes`)
+
+`tw policy`, `tw deploy` and `tw ls` carry the tenant's tailnet nodes in
+`nodes` (schema `$defs/nodeBudget`;
+[limits.md](limits.md#tailnet-node-budget) has the counting rule):
+
+```json
+{"nodes": {
+  "app": {"workload": 1, "public": 0, "fixed": 1, "perObjectClasses": ["Room"], "sharedClasses": ["Counter"]},
+  "tenant": {"total": 14, "workloads": 2, "objects": 11, "pool": 1, "public": 0, "maxObjects": 1000},
+  "capacity": {"hosts": 1, "capacityNodes": 500, "liveNodes": 14},
+  "warnings": []
+}}
+```
+
+- `app` is what the app uses, from its `tailworks.jsonc`: `fixed` nodes at
+  deploy, plus one per object of each class in `perObjectClasses`.
+  `tw ls` has no `app`.
+- `tenant` is the live count now (for `tw deploy`, before the deploy).
+  It is absent if mgmt couldn't be asked; `capacity` is absent unless the
+  caller is an admin.
+- `warnings` is always present. It has a line when `tenant.total` is
+  within 80% of `maxObjects` or of the hosts' node capacity. A warning
+  never fails the command.
+
+`tw doctor` reports the same count in its `node_budget` check, with
+`status: "warn"` near a limit.
+
 ## Confirmations
 
 `--json` never prompts. Commands that ask before acting (`tw up`,
