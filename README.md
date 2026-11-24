@@ -236,6 +236,7 @@ No telemetry. The CLI checks GitHub for a new release at most once a day
 
 - [All docs, by role and task](docs/README.md) ·
   [CLI reference](docs/cli.md) · [Concepts](docs/concepts.md) ·
+  [Alternatives](docs/alternatives.md) ·
   [Install, upgrade, back up](docs/INSTALL.md) ·
   [Troubleshooting](docs/troubleshooting.md) · [Errors](docs/errors.md)
 - [`tailworks.jsonc`](docs/tailworks-jsonc.md) · [Secrets](docs/secrets.md) ·
