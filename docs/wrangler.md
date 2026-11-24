@@ -58,6 +58,34 @@ parents, because `tailworks.jsonc` sits there too.
 Whatever the format, the bundle carries the resolved config as JSON
 (`wrangler.jsonc`), so the host never sees TOML or environments.
 
+### <a id="vite"></a>Projects built with the Cloudflare Vite plugin
+
+`vite build` with `@cloudflare/vite-plugin` (React Router, the React and
+Workflows starters, Agents SDK examples) writes the Worker it built, with a
+wrangler config of its own, to the build output (`dist/<worker>/` or
+`build/server/`). It points `.wrangler/deploy/config.json` at that config.
+Like `wrangler deploy`, `tw deploy`, `tw dev`, `tw policy` and `tw types`
+follow the pointer when the project has one, and print one line saying so:
+
+```
+› using build/server/wrangler.json, the config `vite build` wrote (.wrangler/deploy/config.json), as wrangler deploy does
+```
+
+So `npm run build && tw deploy` deploys what the build produced, with the
+assets directory the build chose. `tailworks.jsonc` still comes from the
+project directory. Paths in the generated config (`main`, `assets`,
+`migrations_dir`, container Dockerfiles) are relative to that config, as in
+wrangler. The generated config already holds one environment, so `--env`
+is refused: build with `CLOUDFLARE_ENV=<name> npm run build` instead.
+Auxiliary Workers in the pointer are not deployed, with a line each. Delete
+`.wrangler/deploy/config.json` to go back to the project's own config, and
+rebuild after changing your sources: tailworks doesn't check that the build
+is up to date.
+
+The generated config has `"no_bundle": true` and an ES-module rule for
+`**/*.js` and `**/*.mjs`. The built-in path then packs the pre-built modules
+as they are, without running esbuild ([below](#no-bundle)).
+
 ## Environments (`--env`)
 
 `tw deploy --env staging` and `tw dev --env staging` use `[env.staging]`
@@ -134,6 +162,16 @@ maps. Each other module gets its type from your `rules` and wrangler's
 default rules, matched on its file name, and otherwise from its extension.
 Tailworks doesn't check that the directory is up to date with your sources.
 
+<a id="no-bundle"></a>A config with `"no_bundle": true` and `rules` of type
+ESModule whose globs are only `**/*.js` and `**/*.mjs` (what the
+[Vite plugin](#vite) writes) describes modules that are already built. The
+built-in path packs them as they are instead of bundling: `main`, plus
+every file under `base_dir` (default: `main`'s directory) that a rule types,
+at its path there, unless `find_additional_modules` is `false`. Other files
+(the build's `wrangler.json`, `.vite/manifest.json`, source maps) are left
+out. The build line names the bundler `prebuilt`. Other `no_bundle` configs
+still need `--wrangler`.
+
 ### What each bundler honours
 
 Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
@@ -146,7 +184,8 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 | `alias` | ✅ | ✅ | |
 | default `rules`: `.txt` / `.html` / `.sql` as Text, `.bin` as Data, `.wasm` / `.wasm?module` as CompiledWasm | ✅ | ✅ | same `<sha1>-<file>` module names |
 | custom `rules` of type Text, Data or CompiledWasm (with `fallthrough`) | ✅ | ✅ | e.g. `**/*.md` as Text. The host types each module from `tw-bundle.json` `modules` |
-| `rules` of type ESModule / CommonJS, `no_bundle`, `find_additional_modules`, `base_dir`, `preserve_file_names` | ❌ warned | ✅ ES modules | tailworks ships ES modules only; a `.cjs` module in wrangler's output is an error |
+| `no_bundle` with ESModule `rules` for only `**/*.js` / `**/*.mjs` (pre-built, e.g. Vite plugin output), with `find_additional_modules`, `base_dir` | ✅ packed as they are ([pre-built](#no-bundle)) | ✅ | |
+| other `rules` of type ESModule / CommonJS, `no_bundle`, `find_additional_modules`, `base_dir`, `preserve_file_names` | ❌ warned | ✅ ES modules | tailworks ships ES modules only; a `.cjs` module in wrangler's output is an error |
 | `build` (custom build command) | ❌ warned | ✅ | |
 | `minify`, `keep_names`, `jsx_factory`, `jsx_fragment`, `tsconfig` | ✅ mapped to esbuild options | ✅ | mapped, but not measured end to end |
 | `nodejs_compat` | ✅ bare built-ins become `node:*`; workerd provides them | ✅ plus wrangler's unenv polyfills | toml-app's entry: 1.0 KB built-in, 21 KB wrangler. Both pass the same checks (`node:buffer`) |
