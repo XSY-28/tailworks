@@ -117,6 +117,84 @@ See also [create-admission.md](create-admission.md).
 | Storage per object (workerd tier) | none | — | |
 | Storage per object (microVM tier) | 1024 MiB volume (sparse) | `tw-hostd -vm-volume-mib` | `cmd/tw-hostd/main.go:-vm-volume-mib` |
 
+## Tailnet node budget
+
+Every node tailworks runs for an app is a device on your tailnet. **Your
+Tailscale plan's device limit applies to those nodes** as it does to any
+other device: see [Tailscale's pricing page](https://tailscale.com/pricing)
+for what each plan includes. tailworks doesn't know your plan and can't
+check against it, so count before you deploy a class with many objects.
+
+What an app uses:
+
+| In `tailworks.jsonc` | Nodes |
+|---|---|
+| The workload (`tailnet.tags`) | 1, the workload node. It is one node wherever the workload runs, not one per host |
+| `"replicas": N` | N: each replica is a copy of the workload on its own host, with its own workload node |
+| `"public"` routes | 1 more per copy: the public node |
+| A class in `tailnet.objects` with `tags` | 1 per object, in facet mode and in plain-DO mode alike. `"egress"` picks which node outbound requests leave from, not whether the object has a node. A sub-agent (`ctx.tailnet.spawn()`) is an object |
+| A class with `"node": false` | 0: its objects are reached through the workload |
+| Containers | 0 |
+
+Also on the tailnet, and not in `tailworks.jsonc`:
+
+- **Previews.** `tw deploy --preview` runs a second copy of the workload,
+  with its own workload node and its own objects' nodes, until `tw promote`
+  or `tw undeploy`.
+- **Pool nodes.** tailworks keeps one pre-joined node per class that had a
+  new object on that host in the last hour ([concepts.md](concepts.md#pool-node-_pool)).
+  `tw up --pool-nodes 0` turns them off.
+- **tailworks itself.** The default `tw up` is one node, `tw-mgmt`. Each
+  host added with `tw host add` (and the host of `tw up --separate-host`)
+  is one more.
+
+An object's node stays on the tailnet for as long as the object lives. It
+does not go away when the object is idle (workerd evicts an idle object
+from memory; its node stays online). It goes away when the object is
+killed (`tw kill`), when its `ttl` runs out, or when its workload is
+undeployed; a pool node goes away after an hour without new objects of its
+class.
+
+To spend fewer nodes, give fewer classes their own:
+[recipes.md](recipes.md#choose-which-classes-get-their-own-node) says how
+to choose. A class without a node must say `"node": false`. A project with
+no `tailworks.jsonc` gets that for every class
+([wrangler.md](wrangler.md#without-a-tailworksjsonc)). A class that has a
+binding in the wrangler config but no entry in `tailnet.objects` is not a
+way to say it: mgmt mints no node for it and answers
+[`unknown_namespace`](errors.md#unknown_namespace) when the host asks for
+one.
+
+**Where to see it.** `tw policy` and `tw deploy`'s preflight print what
+the app uses and what the tenant has now:
+
+```
+✓ preflight  nodes: this app is 1 workload node + 1 node per Room object (Counter objects share the workload node); tenant example.ts.net has 14 live nodes: 2 workloads, 11 objects, 1 pool (maxObjects 1000; host runs 14 of 500 node capacity)
+```
+
+`tw ls` prints the tenant's count in its `NODES` line, and `tw doctor` in
+its `node_budget` check. With `--json`, all of them carry it in `nodes`
+([cli-json.md](cli-json.md#node-budget-nodes)). The count is the tenant's
+live objects in mgmt, including nodes that are still joining; tailworks'
+own nodes are not in it.
+
+tailworks has two limits of its own on the same count, and these it does
+check:
+
+| Limit | Value | Configurable? | Source |
+|---|---|---|---|
+| Live nodes per tenant (every row of the first table, previews and pool nodes) | 1000; past it a new object is refused 429 [`object_quota_exceeded`](errors.md#object_quota_exceeded) | `tw tenant set --max-objects` | `mgmt/types.go:DefaultMaxObjects` |
+| `tw policy`, `tw deploy`, `tw ls` and `tw doctor` warn when the tenant's nodes are this close to that quota or to its hosts' node capacity | 80% | no | `cmd/tw/nodebudget.go:nodeBudgetWarnPct` |
+
+The second limit is the node capacity each host advertises
+(`tw-hostd -capacity-nodes`, in [Hosts](#hosts-and-the-microvm-tier)).
+Placement uses it: a host with no free node capacity takes no new
+workloads. It does not refuse new objects of the workloads a host already
+runs. The warning compares the sum of the live hosts' capacity with the
+larger of the tenant's count and the nodes those hosts report (which
+covers every tenant they serve). Only an admin can read host capacity, so
+a linked developer machine gets the `maxObjects` warning alone.
+
 ## KV
 
 Details: [kv.md](kv.md#limits).
