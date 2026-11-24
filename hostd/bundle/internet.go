@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/rosskukulinski/tailworks/netd/publicip"
 )
 
 // ViaExitNode is tailworks.jsonc tailnet.egress.via "exit-node"
@@ -53,8 +57,26 @@ func (e *InternetEgress) UnmarshalJSON(b []byte) error {
 	if hosts == nil {
 		hosts = []string{}
 	}
+	for _, h := range hosts {
+		if !publicip.EntryPortOK(h) {
+			return fmt.Errorf("tailnet.egress.internet: %q: a host may be followed by \":<port>\" (1-65535), as in \"smtp.example.com:25\"", h)
+		}
+	}
 	*e = InternetEgress{Set: true, Hosts: hosts}
 	return nil
+}
+
+// NamesPort reports whether some list entry names a port
+// ("smtp.example.com:25"): the port policy's override (ADR-052 follow-up),
+// which hosts older than it read as a name that matches nothing
+// (features.InternetPorts).
+func (e InternetEgress) NamesPort() bool {
+	for _, h := range e.Hosts {
+		if _, port := publicip.SplitEntryPort(strings.ToLower(strings.TrimSpace(h))); port != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Boolean reports whether the value was true or false (not a list):

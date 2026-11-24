@@ -23,7 +23,7 @@ on, it is a major version.
   heartbeating, and its running workloads aren't disturbed, but placement
   skips it. `tw status --json` lists it under `versions.skewed`.
 - **Features gate new work.** Hosts report their features when they
-  register (`d1`, `kv`, `queues`, `r2`, `telemetry`, `worker-internet`, `workflows`, `self-upgrade`, `internet-exit-node`, …). A deployment
+  register (`d1`, `kv`, `queues`, `r2`, `telemetry`, `worker-internet`, `workflows`, `self-upgrade`, `internet-exit-node`, `internet-ports`, …). A deployment
   that uses a KV namespace is placed only on hosts that offer `kv`. When none
   does, the deploy fails with `feature_unavailable`, which names the hosts to
   upgrade.

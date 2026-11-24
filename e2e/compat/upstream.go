@@ -195,8 +195,6 @@ func upstreamProjects() []*Project {
 			p.What = "AgentWorkflow started by an agent: steps, progress reports to the agent and its clients, restart, list. (Its approval step sits behind the example's intentional random failures and isn't reached)"
 			p.Exercises = []string{"agents-sdk", "workflows", "websockets", "assets"}
 			p.Build = viteBuild
-			p.ExpectDeployed = Expect{Kind: ExpectProbeFail, Compat: "workflows",
-				Why: "the workflow the agent starts with `runWorkflow` stays queued: no progress report reaches the agent or its clients ([#359](https://github.com/rosskukulinski/tailworks/issues/359)). Plain Workflows in the same run pass"}
 			p.Probe = probeAgentsWorkflows
 		}),
 		agentsUp("ag-playground", "playground", func(p *Project) {

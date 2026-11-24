@@ -150,6 +150,12 @@ type Config struct {
 	// a Node-tier deployment there with egress_unenforced (RT-08: a hostile
 	// Node app can open raw sockets past the egress proxy).
 	InsecureSharedHost bool
+	// AllowExperimentalFlags lets deployments set compatibility flags
+	// workerd marks experimental (unsafe_module, rtti_api, precise_timers,
+	// …; gen/compatflags.go, #337). Off, such a deployment is refused
+	// (experimental_flag). The host advertises it as the
+	// experimental-flags feature, so mgmt places such deployments here.
+	AllowExperimentalFlags bool
 	// HostSockets overrides the Linux risky-host-socket scan
 	// (procsb.ScanHostSockets; tests).
 	HostSockets func() procsb.HostSockets
@@ -855,6 +861,7 @@ func (h *Host) syncAssignments(ctx context.Context) error {
 			h.undeploy(w, "no longer assigned")
 		}
 	}
+	h.forgetUnassignedTombstones(want) // unassignedtombstones.go (#364)
 	return nil
 }
 

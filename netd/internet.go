@@ -101,11 +101,11 @@ func (o *Object) internetRoute(host string, port uint16, ipLiteral bool) (*inter
 	if ic.Policy != nil {
 		pol = ic.Policy(o.id)
 	}
-	switch {
-	case pol.Off:
+	if pol.Off {
 		return refuse(CodeInternetEgressUnavailable, internetEgressDetail(host, "this workload has internet egress turned off (tailnet.egress.internet)"))
-	case pol.Allow != nil && !publicip.ParseAllowlist(pol.Allow).Allows(host):
-		return refuse(CodeInternetEgressUnavailable, internetEgressDetail(host, "it is not on this workload's tailnet.egress.internet allowlist"))
+	}
+	if code, detail := internetPortPolicy(host, port, pol); code != "" { // internetports.go
+		return refuse(code, detail)
 	}
 	return &internetDst{host: host, port: port}, nil
 }

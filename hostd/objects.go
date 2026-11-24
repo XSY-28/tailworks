@@ -164,6 +164,9 @@ func (h *Host) ensure(ctx context.Context, w *workload, class, name string, pare
 		// (it would hold the identity a later object is given).
 		return nil, &apiError{Code: "bad_request", Detail: "class " + class + " is reserved"}
 	}
+	if e := nodelessClass(w, class); e != nil { // nodeless.go
+		return nil, e
+	}
 	key := objKey(w.tenantID, w.name, class, name)
 	pubOK := false
 	for {
@@ -243,14 +246,14 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 	// A pre-joined node of this class, if one is idle (ADR-031): mgmt takes
 	// it only for a new, non-ephemeral object of exactly its tags.
 	var pool *object
-	if parent == nil && ttl == "" && poolable(class) {
+	pooled := parent == nil && ttl == "" && poolable(class)
+	if pooled {
 		h.mu.Lock()
 		pool = h.takePoolLocked(w.tenantID, w.name, class)
 		h.mu.Unlock()
 		if pool != nil {
 			req.PoolObjectID = pool.ID
 		}
-		defer h.noteDemand(w.tenantID, w.name, class)
 	}
 	release := func() {
 		if pool != nil {
@@ -265,6 +268,11 @@ func (h *Host) create(ctx context.Context, w *workload, class, name string, pare
 	if err != nil {
 		release()
 		return nil, err
+	}
+	if pooled {
+		// Only a create mgmt accepted is demand: a refused one (an
+		// undeclared class) must not start a pool refill mgmt refuses too.
+		defer h.noteDemand(w.tenantID, w.name, class)
 	}
 	if pool != nil && resp.Status != mgmtapi.StatusAssigned {
 		release() // mgmt minted instead (an existing object, or the node didn't qualify)
