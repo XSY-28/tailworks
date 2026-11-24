@@ -50,7 +50,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 500 · cli. **When:** `tw audit` found an audit chain whose hashes or host signatures do not verify (tampering, or a store problem). **Fix:** treat the trail as suspect; `tw logs --component mgmt` and report it.
 
 ### backup_failed
-500 · cli. **When:** `tw backup` could not copy the store, custody or `tw.json` (a full disk, an unreadable file); nothing is left in `--out`. **Fix:** free space or fix the permission it names, then `tw backup` again.
+500 · cli. **When:** `tw backup` could not copy the store, custody, `tw.json`, a Durable Object database or an R2 blob (a full disk, an unreadable file); nothing is left in `--out`. **Fix:** free space or fix the permission it names, then `tw backup` again.
 
 ### bad_bundle
 400 · mgmt. **When:** a deploy bundle has no `tailworks.jsonc`, or neither `tailnet.tags` nor `tailnet.objects`. **Fix:** add `"tailnet": { "tags": ["tag:tw-wl-<name>"] }` to `tailworks.jsonc` (`tw init` templates show the shape).
