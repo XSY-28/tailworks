@@ -118,8 +118,9 @@ How the routing works: [docs/wrangler.md#assets](docs/wrangler.md#assets).
 - Try it locally first, with no tailnet: `tw dev` serves an app on
   `127.0.0.1:8787`.
 - Other templates: `tw init <dir> --template agent` (also `mcp`, `ai-agent`,
-  `lock`, `static-site`, `refund-approval`, `node-workflow`). Each Durable Object instance
-  gets its own tailnet node.
+  `lock`, `static-site`, `refund-approval`, `node-workflow`). Each Durable
+  Object instance gets its own tailnet node. `ai-agent` needs a deployed
+  `mcp` for its tools; its README walks through both.
 - An existing Workers project: [docs/wrangler.md](docs/wrangler.md).
 - More machines: `tw host add`. A separate laptop: `tw link`.
 - Let tailworks write policy lines for you: give the OAuth client
