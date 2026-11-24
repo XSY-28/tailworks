@@ -72,6 +72,9 @@ func (r *Registry) sibling(ip netip.Addr) *Object {
 // host is dialed over the tailnet as usual). It returns nil when vip is not
 // a Service VIP in o's netmap.
 func (o *Object) serviceSibling(ctx context.Context, vip netip.Addr) *Object {
+	if !o.reg.servicesHosted() {
+		return nil // no object here advertises a Service: skip the netmap read
+	}
 	o.mu.Lock()
 	lc := o.lc
 	o.mu.Unlock()
@@ -111,6 +114,25 @@ func (o *Object) serviceSibling(ctx context.Context, vip netip.Addr) *Object {
 		}
 	}
 	return sib
+}
+
+// servicesHosted reports whether any object of r advertises a Service.
+func (r *Registry) servicesHosted() bool {
+	r.mu.Lock()
+	objs := make([]*Object, 0, len(r.objects))
+	for _, o := range r.objects {
+		objs = append(objs, o)
+	}
+	r.mu.Unlock()
+	for _, o := range objs {
+		o.mu.Lock()
+		n := len(o.services)
+		o.mu.Unlock()
+		if n > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // hopTarget reports where an egress dial to ap must be delivered in
@@ -158,6 +180,10 @@ func (o *Object) dialHop(dst *Object, ap netip.AddrPort, service bool) (net.Conn
 	dst.mu.Unlock()
 	if dstState != StateReady || dsrv == nil || ln == nil {
 		return refuse(CodeKilled, "destination object "+dst.id+" is "+string(dstState))
+	}
+	if dst.pub != nil {
+		// A public (Funnel) node has no tailnet listener (ADR-029).
+		return refuse(CodeDialFailed, "connection refused: the destination is a public node, which listens only on Funnel")
 	}
 	if int(ap.Port()) != o.reg.cfg.IngressPort {
 		return refuse(CodeDialFailed, "connection refused: the destination listens on port "+strconv.Itoa(o.reg.cfg.IngressPort)+" only")

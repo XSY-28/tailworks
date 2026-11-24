@@ -113,8 +113,8 @@ channel is to be revisited together with ADR-do-split (PR #11).
    (6) are the authorization. The target does not list its callers: as on
    Cloudflare, any Worker of the account can bind any other. Each call is
    an egress span on the caller and an ingress span on the callee
-   (ADR-045), with the trace context propagated by the runtime's `fetch()`;
-   refusals are audited as `deny` on the caller.
+   (ADR-045); a `traceparent` across the hop is not added yet. netd's
+   refusals are audited as `deny` on the caller, as for any egress.
 
 **Consequences.**
 
