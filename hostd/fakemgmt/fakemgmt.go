@@ -464,6 +464,9 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	h.RegisterRequest, h.lastSeen = req.RegisterRequest, time.Now()
 	v := s.hostView(h)
+	if recs := s.audit["host:"+req.HostID]; len(recs) > 0 {
+		v["auditHead"] = recs[len(recs)-1].Hash // like mgmt (#377)
+	}
 	s.mu.Unlock()
 	writeJSON(w, status, v)
 }

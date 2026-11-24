@@ -3909,6 +3909,7 @@ Enum: `bad_request`, `bad_cursor`, `bad_bundle`, `bad_object_name`, `reserved_ta
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `arch` | `Arch` | no | A Go GOARCH. Container images must match their host's. |
+| `auditHead` | string | no | Only in the answer to `PUT /v1/hosts/{id}`: the hash of the last record mgmt stores on the host's audit chain (`host:<hostID>`); absent when the chain is empty. A restarted host continues its chain from this head only when it matches the last record the host itself chained and flushed before a clean shutdown; otherwise it starts a new segment (`prevHash: ""`), which verification reports as a break. |
 | `auditPubKey` | string | no | base64 ed25519; verifies `hostSig`. |
 | `capacity` | `HostCapacity` | no | The capacity vector a host registers (ADR-032 D9). `nodes` is tailnet nodes (= `capacityNodes`); the rest bound microVMs (DO instances and containers alike): their count, guest memory (all, and the part backed by 2 MiB huge pages), vCPUs (times `vcpuOvercommit` for scheduling) and scratch disk. A host without a microVM backend reports 0 for every VM dimension. |
 | `capacityNodes` | integer | yes |  |
