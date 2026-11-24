@@ -5,7 +5,8 @@ Last update: 2026-11-24. Docs-only fast path in CI and AGENTS.md.
 - `scripts/docs-only.sh [base]`: exit 0 when every changed file is `.md` and
   none is under `testdata/` or `e2e/`.
 - `make lint-docs` (api-check, compat-check, changes-check, check-secrets) and
-  `make test-docs` (root package, `./docs/...`, `./agent/...`, and the doc
+  `make test-docs` (root package, `./docs/...`, `./agent/...`,
+  `./internal/catalog/...`, `./internal/compatdoc/...`, and the doc
   tests in `./cmd/tw`): the gates a Markdown-only change can actually fail.
 - `ci.yml`: new `changes` job. On a docs-only `pull_request`, lint and test
   run the docs targets and the suites are skipped; `ci-ok` accepts `skipped`

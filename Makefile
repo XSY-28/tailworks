@@ -56,11 +56,11 @@ bench:
 test: deps test-go test-js
 
 ## test-docs: the Go tests that read Markdown (embedded docs, doc references, the CLI
-## reference, ADR index, agent skills). CI runs it instead of test for a docs-only PR.
+## reference, ADR index, agent skills, CHANGELOG, policy snippets). CI runs it instead of test for a docs-only PR.
 .PHONY: test-docs
 test-docs:
-	$(GO) test -count=1 . ./docs/... ./agent/...
-	$(GO) test -count=1 -run 'CLIReference|DesignDocs|DocsNameRealCommands|DocRefCheck' ./cmd/tw/
+	$(GO) test -count=1 . ./docs/... ./agent/... ./internal/catalog/... ./internal/compatdoc/...
+	$(GO) test -count=1 -run 'CLIReference|DesignDocs|DocsNameRealCommands|DocRefCheck|DocPolicySnippets|Skill' ./cmd/tw/
 
 .PHONY: test-go
 # GO_TEST_SKIP: a go test -skip regexp (CI quarantines known failures with it; see ci.yml).
