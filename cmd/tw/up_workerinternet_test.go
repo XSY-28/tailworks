@@ -35,7 +35,7 @@ func TestUpWorkerInternet(t *testing.T) {
 	if err := saveWorkerInternet(&c, "exit-node=x,dns=nope"); err == nil || !strings.Contains(err.Error(), "want an IP") {
 		t.Errorf("--worker-internet exit-node=x,dns=nope: %v", err)
 	}
-	// An exit node (ADR-exit-node-egress) keeps the node's case, and is the
+	// An exit node (ADR-054) keeps the node's case, and is the
 	// containers' path too, in both layouts.
 	if err := saveWorkerInternet(&c, "Exit-Node=nABC,dns=1.1.1.1"); err != nil || c.WorkerInternet != "exit-node=nABC,dns=1.1.1.1" {
 		t.Fatalf("exit-node saved: %q %v", c.WorkerInternet, err)

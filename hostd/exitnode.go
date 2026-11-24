@@ -23,7 +23,7 @@ import (
 	"tailscale.com/tsnet"
 )
 
-// Internet egress through a tailnet exit node (ADR-exit-node-egress).
+// Internet egress through a tailnet exit node (ADR-054).
 //
 // With -worker-internet=exit-node=<node>, every internet flow from every
 // workload on this host (Workers through netd/internet.go, containers

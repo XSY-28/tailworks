@@ -34,7 +34,7 @@ const (
 
 	// Internet egress through the host's exit node (503): the exit node is
 	// missing from the netmap, not offered, offline or not answering DNS
-	// (ADR-exit-node-egress).
+	// (ADR-054).
 	CodeExitNodeUnavailable = "exit_node_unavailable"
 )
 

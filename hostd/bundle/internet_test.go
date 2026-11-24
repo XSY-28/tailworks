@@ -35,7 +35,7 @@ func TestInternetEgress(t *testing.T) {
 	}
 }
 
-// TestEgressVia: tailnet.egress.via is "" or "exit-node" (ADR-exit-node-egress).
+// TestEgressVia: tailnet.egress.via is "" or "exit-node" (ADR-054).
 func TestEgressVia(t *testing.T) {
 	parse := func(tw string) (*App, error) {
 		return Parse(map[string][]byte{

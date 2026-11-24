@@ -146,7 +146,7 @@ type Options struct {
 	// internet hosts from this host's network, subject to each workload's
 	// tailnet.egress.internet), "exit-node=<node>" (through that tailnet
 	// exit node via this host's own node; internetpath.go) or "off"
-	// (ADR-049, ADR-exit-node-egress).
+	// (ADR-049, ADR-054).
 	WorkerInternet string
 
 	// R2 holds R2 bucket bytes (hostd.Config.R2; nil: files under

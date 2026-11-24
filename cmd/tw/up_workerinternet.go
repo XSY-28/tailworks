@@ -11,7 +11,7 @@ import (
 )
 
 // `tw up --worker-internet=direct|exit-node=<node>|off` (issue #295, item
-// 5; ADR-049; ADR-exit-node-egress): the host-wide switch for Workers'
+// 5; ADR-049; ADR-054): the host-wide switch for Workers'
 // internet egress, tw-hostd's -worker-internet. Saved in tw.json
 // (Config.WorkerInternet) so a restart and the `tw up --yes` that `tw
 // upgrade` runs keep it; passed to hostd in both layouts; shown by `tw

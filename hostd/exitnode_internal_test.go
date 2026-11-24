@@ -55,7 +55,7 @@ func dnsStubAnswer(t *testing.T, q []byte, table map[string][]netip.Addr) []byte
 	return out
 }
 
-// TestExitNodeInternet (ADR-exit-node-egress): the path selects the exit
+// TestExitNodeInternet (ADR-054): the path selects the exit
 // node on the host node, resolves through the exit node's peer API (or a
 // dns= resolver) over the tailnet dialer, dials through it, and refuses
 // with exit_node_unavailable, never touching anything else, when the exit

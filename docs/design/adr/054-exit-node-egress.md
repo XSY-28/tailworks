@@ -1,13 +1,14 @@
-# ADR-exit-node-egress: A host can send all internet egress through a tailnet exit node; `tailnet.egress.via: "exit-node"` lets a workload require it
+# ADR-054: A host can send all internet egress through a tailnet exit node; `tailnet.egress.via: "exit-node"` lets a workload require it
 
 **Date:** 2026-11-23
-**Status:** Proposed (drafted and built on branch `require-exit-node-egress-hosts-workloads`; gets
-its number when it merges, AGENTS.md rule 5). Extends ADR-049 (Workers' internet
+**Status:** Accepted (2026-11-23; built on branch
+`require-exit-node-egress-hosts-workloads`). Drafted as
+`ADR-exit-node-egress`. Extends ADR-049 (Workers' internet
 egress from the host's network) and ADR-032 D4 (containers'
 `enableInternet`). Revisits the alternative ADR-049 rejected, "an exit node
 per workload", with a different carrier: the host's own node.
 
-**Context.**
+
 
 - Internet egress (ADR-049) leaves from the **host's own network**:
   `hostd.DirectInternet()` is the host dialer and the host resolver, for

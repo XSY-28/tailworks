@@ -25,7 +25,7 @@ const (
 	// bundle's assets/ files as modules, or not serve them.
 	Assets = "assets"
 	// InternetExitNode is a host whose internet path is a tailnet exit
-	// node (-worker-internet=exit-node=…, ADR-exit-node-egress). A bundle
+	// node (-worker-internet=exit-node=…, ADR-054). A bundle
 	// with tailnet.egress.via "exit-node" needs it. It depends on the
 	// host's flags, not its build, so hostd adds it to Host() itself.
 	InternetExitNode = "internet-exit-node"

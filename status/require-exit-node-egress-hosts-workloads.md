@@ -1,11 +1,10 @@
-Last update: 2026-11-23 23:30 PT. ADR-exit-node-egress drafted and built; tests below.
+Last update: 2026-11-23 23:30 PT. ADR-054 drafted and built; tests below.
 
 # require-exit-node-egress-hosts-workloads: internet egress through a tailnet exit node
 
 ## What's built
 
-- `docs/design/adr/exit-node-egress.md`: Proposed ADR (numbered on merge,
-  AGENTS.md rule 5). Open question 2 (exit-node DNS) was settled while
+- `docs/design/adr/054-exit-node-egress.md`: ADR-054, Accepted (numbered at the merge). Open question 2 (exit-node DNS) was settled while
   building, see "Findings".
 - **Host path** (`internal/hostdrun/internetpath.go`): `-worker-internet`
   and `-container-internet` accept `exit-node=<node>[,dns=<ip[:port]>]`
@@ -105,5 +104,5 @@ Last update: 2026-11-23 23:30 PT. ADR-exit-node-egress drafted and built; tests 
   change `schema/cli.schema.json`); the text output and `tw doctor` do.
 - A per-tenant resolver choice (`InternetConfig.Resolve`, ADR-049 §4) and
   a per-object exit node (object identity at the exit node) stay unbuilt.
-- Number the ADR on merge (`git grep ADR-exit-node-egress`), rename the
+- Number the ADR on merge (`git grep ADR-054`), rename the
   file, add the README row.

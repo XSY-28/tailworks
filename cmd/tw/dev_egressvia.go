@@ -9,7 +9,7 @@ import (
 
 // printDevEgressVia: tw dev has no exit node (its control is local,
 // ADR-014), so a workload with tailnet.egress.via "exit-node" runs on
-// this machine's network here, and says so once (ADR-exit-node-egress).
+// this machine's network here, and says so once (ADR-054).
 func printDevEgressVia(twRaw []byte, w io.Writer) {
 	var top struct {
 		Tailnet struct {

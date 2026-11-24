@@ -12,7 +12,7 @@ import (
 )
 
 // The host's internet path: -worker-internet and -container-internet
-// (ADR-049, ADR-exit-node-egress). Each is one of
+// (ADR-049, ADR-054). Each is one of
 //
 //	direct                       this host's network (public addresses only)
 //	exit-node=<node>[,dns=<ip>]  through that tailnet exit node, via this host's own node
