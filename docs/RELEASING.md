@@ -155,9 +155,11 @@ scripts/release-notes.sh v0.1.0 v0.2.0
      (amd64 on a hosted runner's KVM, arm64 in Lima on the release
      runner) and the vz tier, each with the shipped guest: `e2e-vm`,
      `e2e-container`, `e2e-vz`, `e2e-vz-container`;
-   - `tailnet`, `mac-tailnet`: the real-tailnet suites, one at a time,
-     including `e2e-linux` on every distro row and `e2e-linux-vm` from the
-     tarballs;
+   - `tailnet`, `linux-amd64`, `mac-linux`, `mac-linuxvm`, `mac-cli`: the
+     real-tailnet suites, including `e2e-linux` on every distro row (amd64
+     natively on a hosted runner) and `e2e-linux-vm` from the tarballs. The
+     Linux jobs run alongside `tailnet`; `mac-cli` waits for it (both write
+     policy);
    - `release`: a **draft** GitHub release with the tarballs,
      `SHA256SUMS`, `SHA256SUMS.sig` (see [Signing](#signing)) and the
      notes from `release-notes.sh`.
@@ -167,7 +169,7 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    everything and drafts nothing:
    `gh workflow run release.yml -f tag=master -f rehearsal=true`.
    After fixing one job, rerun just that job: add
-   `-f only=tailnet,mac-tailnet` (job names, comma-separated, no spaces;
+   `-f only=tailnet,mac-cli` (job names, comma-separated, no spaces;
    setup and the builds the jobs need always run). A real release always
    runs everything, and `only` without `rehearsal` is refused.
 6. **Review the draft.**
@@ -257,6 +259,12 @@ erofs-utils`), `jq`, Lima with a running-capable dev VM, and the
 nested-virt VM from `e2e/linuxvm/twl-kvm-u24.yaml`. The Linux distro rows
 of `e2e-linux` are created on demand. Plan for tens of GiB free: the guests,
 sandbox images (cached in `~/tw-ci-cache`) and Lima VMs.
+
+Five `mac-*` jobs run per release, so register two or three runner
+instances on a big machine (each its own directory and `./config.sh
+--name <host>-<n>`). The jobs use different Lima VMs and share the image
+cache under a lock. Budget memory for the dev VM (16 GiB), the nested-virt VM
+(10 GiB) and three distro VMs (6 GiB each) at once.
 
 - Install: download `actions-runner-osx-arm64` from
   github.com/actions/runner (check its SHA-256 against the release notes),
