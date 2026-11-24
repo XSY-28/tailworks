@@ -1,8 +1,8 @@
-# ADR-pages-functions: Cloudflare Pages projects are compiled by `tw` onto Workers with static assets
+# ADR-051: Cloudflare Pages projects are compiled by `tw` onto Workers with static assets
 
 **Date:** 2026-11-23
-**Status:** Proposed (issue #285, branch `pages-functions-issue-285`). Numbered when
-it merges.
+**Status:** Accepted (2026-11-23; issue #285, built on branch
+`pages-functions-issue-285`). Drafted as `ADR-pages-functions`.
 
 **Context.**
 

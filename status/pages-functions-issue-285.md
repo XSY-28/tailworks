@@ -2,8 +2,8 @@ Last update: 2026-11-23 PT. Cloudflare Pages projects (`functions/`, `_worker.js
 
 # Cloudflare Pages projects, issue #285
 
-Design: `docs/design/adr/pages-functions.md` (`ADR-pages-functions`, numbered
-when it merges). Builds on ADR-050 (static assets).
+Design: `docs/design/adr/051-pages-functions.md` (ADR-051, numbered in the
+merging PR; drafted as `ADR-pages-functions`). Builds on ADR-050 (static assets).
 
 ## What's built
 
@@ -40,6 +40,7 @@ when it merges). Builds on ADR-050 (static assets).
 ## Tests (2026-11-23, after merging origin/master at e4d4422e)
 
 - `make lint`: ok (re-run after the merge).
+- CI first run: `docs:TestADRIndex` failed (the ADR wasn't numbered; CI enforces it). Numbered ADR-051; `CI=true go test ./docs/` passes.
 - `make test`: ok (exit 0, -race Go and the JS suites; re-run after the merge).
 - New: `internal/pages:TestDiscover`, `TestDiscoverErrors`, `TestPatterns`,
   `TestParseRoutesJSON`, `TestEnvNames`, `TestFunctionsEntry`;

@@ -1,6 +1,6 @@
 package main
 
-// Cloudflare Pages projects (ADR-pages-functions, issue #285): a static
+// Cloudflare Pages projects (ADR-051, issue #285): a static
 // output directory, plus functions/ or an advanced-mode _worker.js. tw
 // translates one onto what ADR-050 already serves: the output directory
 // becomes "assets", functions/ is compiled (internal/pages) into the

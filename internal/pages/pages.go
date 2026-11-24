@@ -1,6 +1,6 @@
 // Package pages compiles a Cloudflare Pages project's functions/ directory
 // (and an advanced-mode _worker.js) into one Worker module that runs in
-// front of the project's static assets (ADR-pages-functions). tw deploy
+// front of the project's static assets (ADR-051). tw deploy
 // and tw dev bundle the module it generates with the built-in esbuild, so
 // a deploy needs no wrangler.
 //

@@ -1,6 +1,6 @@
 package gen_test
 
-// Cloudflare Pages projects (ADR-pages-functions): functions/ compiled by
+// Cloudflare Pages projects (ADR-051): functions/ compiled by
 // internal/pages, bundled by internal/esbundle (as tw deploy does), run in
 // real workerd behind the ADR-050 assets router.
 
