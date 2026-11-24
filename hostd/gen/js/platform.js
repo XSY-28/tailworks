@@ -801,13 +801,23 @@ export class TailnetApi extends WorkerEntrypoint {
     if (op === "admit") {
       // Create admission: may the caller reach, and so create, class/name?
       // hostd decides from who asks: an attested object (as), a tailnet
-      // request (its ticket), or a public request (public.create, ADR-029
+      // request (its ticket), a Workflow (workflow: classes with no node,
+      // and existing objects), or a public request (public.create, ADR-029
       // D5). Nothing is created here.
       if (typeof args.class !== "string" || !CFG.classes[args.class] || typeof args.name !== "string" || !args.name) {
         return { ok: false, error: errBody("create_not_admitted", "admit: unknown class or empty name") };
       }
       try {
-        return { ok: true, value: await hostd(this.env, "admit", { class: args.class, name: args.name, ticket: typeof args.ticket === "string" ? args.ticket : undefined, as }) };
+        return {
+          ok: true,
+          value: await hostd(this.env, "admit", {
+            class: args.class,
+            name: args.name,
+            ticket: typeof args.ticket === "string" ? args.ticket : undefined,
+            workflow: args.workflow === true,
+            as,
+          }),
+        };
       } catch (e) {
         return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
       }

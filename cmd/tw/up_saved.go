@@ -30,6 +30,7 @@ func keepSavedUpFlags(fs *flag.FlagSet, c Config) {
 	keep("hostname-prefix", c.HostnamePrefix)
 	keep("ephemeral", strconv.FormatBool(c.Ephemeral))
 	keep("insecure-shared-host", strconv.FormatBool(c.InsecureSharedHost))
+	keep("allow-experimental-flags", strconv.FormatBool(c.AllowExperimentalFlags))
 	keep("allow-sibling-egress", strconv.FormatBool(c.AllowSiblingEgress))
 	keep("local-dev", strconv.FormatBool(c.LocalDev))
 	keep("port-mapping", strconv.FormatBool(c.PortMapping))

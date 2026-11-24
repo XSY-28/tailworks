@@ -56,6 +56,7 @@ The ones you'll meet most:
 | `unknown_workload` | no such deployment; `tw ls` |
 | `peer_not_visible` | the app called a tailnet name that isn't in its netmap (missing or not granted); check `tailnet.connects` and the grants |
 | `internet_egress_unavailable` | the app called an internet destination that config refuses: `tailnet.egress.internet` is `false`/`[]` or doesn't list the host, or the host runs `-worker-internet=off`. Allow the host and redeploy, or call a gateway on the tailnet (docs/recipes.md#call-an-internet-api) |
+| `internet_port_refused` | the app opened an internet flow to TCP port 25 (`connect()`, `fetch()` to `host:25`), which is refused by default because it would leave from the host's own address. List the relay with the port in `tailnet.egress.internet` (`"smtp.example.com:25"`) and redeploy, or use a submission port (587) or a provider's API |
 | `cap_missing` | an MCP caller lacks the tool in its grant's app capability (see `tw-policy`) |
 
 ## Check the machine

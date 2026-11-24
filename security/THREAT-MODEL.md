@@ -148,11 +148,16 @@ code wins.
   ranges, the host's own addresses and translated forms are refused on the
   address actually dialled, after DNS; any forbidden answer refuses the
   name (no rebinding); special-use names are never looked up. Tailnet
-  names never reach host DNS. **Residual:** a Worker can send whatever it
-  can read on the tailnet to the internet; the host's resolver sees the
-  internet names it looks up, and tenants on one host share its cache (a
-  timing side channel); an upstream sees the host's address, so it can't
-  tell tenants on one host apart.
+  names never reach host DNS. Since ADR-052 the same path carries raw TCP
+  (`connect()`, `node:net`); TCP port 25 is refused by default unless the
+  workload's list names the destination with the port
+  (`internet_port_refused`, ADR-052 follow-up, #339). **Residual:** a
+  Worker can send whatever it can read on the tailnet to the internet; the
+  host's resolver sees the internet names it looks up, and tenants on one
+  host share its cache (a timing side channel); an upstream sees the
+  host's address, so it can't tell tenants on one host apart, and nothing
+  caps how many flows a workload opens from it per unit of time
+  (docs/limits.md "Limits that don't exist").
 
 ## 3. Attacker capabilities per tier
 
@@ -173,6 +178,34 @@ which has the full per-platform rows.
 On every tier the workload runs as tailworks' user (or the jail uid) and
 the process tier sets no CPU or memory limit (#115). The Node runtime is
 process tier only.
+
+**Hardware side channels** (H-host-sidechannel, #334) are a residual on
+every tier, because every tier shares the host's cores and kernel with
+tw-hostd, tw-netd, tw-mgmt (assets A1–A3) and the other tenants; the
+process or VM boundary is where the OS's and CPU's mitigations apply, and
+tailworks turns none of them on. Per tier:
+
+- **process, workerd** (any OS): the attacker runs JavaScript and
+  WebAssembly only, with timers and shared-memory threads; Spectre-class
+  reads from another process depend on the host kernel's mitigations and
+  on SMT. This is the tier Cloudflare's "no native code" argument comes
+  closest to, and still not fully: tailworks does not restrict timers or
+  `SharedArrayBuffer`.
+- **process, Node app** (any OS): native code by design (`node:vm`,
+  child processes, native modules, precise timers): `CLFLUSH`, `RDTSC`
+  and every published microarchitectural attack are available to it. The
+  mitigations and SMT state of the host kernel are the only defence.
+- **microVM, Linux**: native code inside the guest, with a VM boundary
+  between it and the host; the residual is what KVM and the host kernel
+  don't mitigate (L1TF with SMT on, MDS-class sampling, a `Vulnerable`
+  entry the microcode leaves), as Firecracker's production host setup
+  describes. KSM on the host would also merge pages across guests.
+- **macOS, both tiers**: the posture can't be read, so a macOS host is
+  development-grade for tenants that don't trust each other.
+
+`tw doctor` reports the Linux posture (`side_channels`) and warns on a
+`Vulnerable` entry, SMT on, `mitigations=off` or KSM on; nothing refuses a
+second tenant on it (decision in docs/security-model.md, "Side channels").
 
 So: the microVM tier is the boundary that doesn't depend on the host
 kernel's same-uid sandbox. On Linux with Landlock ABI ≥ 4 and on macOS the
