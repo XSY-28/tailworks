@@ -102,7 +102,8 @@ started with `enableInternet: true` may reach
   `.lan` and other special-use suffixes are never looked up.
 - A destination the setting refuses gets `internet_egress_unavailable`.
   The host's operator can also turn internet egress off for every
-  workload on a host (`tw-hostd -worker-internet=off`).
+  workload on a host (`tw up --worker-internet=off`, or
+  `tw-hostd -worker-internet=off`; `tw status` and `tw doctor` show it).
 - A list entry is an exact host name, `*.suffix` (any name under it),
   `*` (any name), an IP or a CIDR. An IP literal in a URL matches only IP
   and CIDR entries.

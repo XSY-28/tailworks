@@ -905,6 +905,14 @@
           "type": "integer",
           "description": "the operator tenant's pooled preauthorized join keys in mgmt custody (per tenant: tenants[].warmKeys); tw down revokes them"
         },
+        "workerInternet": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "off"
+          ],
+          "description": "this host's Worker internet egress (tw up --worker-internet): what the running host reports, else tw.json's"
+        },
         "tenants": {
           "type": "array",
           "items": {
