@@ -51,3 +51,24 @@ Last update: 2026-11-24. A tenant `fetch()` can no longer forge a service bindin
 - `gen.TestGeneratedWrapperProbe` (`ForgedEgressHeadersIgnored`,
   `WorkloadEgressIsWorkload`): the platform worker alone. Fails with the
   JavaScript change reverted.
+
+## Commands run (darwin/arm64, go1.27.4, after branching from master `a7a7393c`)
+
+- `go test -run TestServiceBindings ./hostd/` with the production change
+  reverted: FAIL as intended (`TenantWireHeaderStripped` and
+  `TenantWireHeaderStrippedFromFacetObject`, same host and other host). With
+  the change: PASS, fakemgmt and the real mgmt (44 s).
+- `go test -run TestEgressDropsTenantBindingWire ./hostd/`: FAIL with
+  `hostd/servicebind.go` and `hostd/node.go` reverted, PASS with them.
+- `go test -run TestGeneratedWrapperProbe ./hostd/gen/`: FAIL with the two
+  JavaScript files reverted, PASS with them.
+- `make lint`: ok (`check-changes: ok`, `changes/fix-347-binding-wire.md`).
+- `make test`: PASS (every Go package with `-race`, and the JS tests).
+- `make e2e-local`: PASS. `make test-node`: PASS (the Node tier's proxy is
+  one of the changed handlers). `make test-sdk`: PASS.
+
+Not run: `make e2e-compat` (the table in AGENTS.md lists it for changes to
+the runtime wrapper), `e2e-real`, `e2e-public`: they need a real tailnet
+and its credentials. `e2e-vm`, `e2e-vz`: need KVM or the Mac's
+virtualization entitlement. The microVM tier serves the same egress
+handlers as the process tier (ADR-052 §9).
