@@ -41,14 +41,14 @@ All real runs were against the throwaway Headscale tailnet
 
 | Command | Result |
 | --- | --- |
-| `sh scripts/demo_test.sh` (what `make demo-test` runs) | PASS: refusals, first run, rerun, interrupt restores the grant, cleanup |
+| `make demo-test` (after merging origin/master at v0.5.0) | PASS: refusals, first run, rerun, interrupt restores the grant, cleanup |
 | `scripts/demo.sh --tailnet demo.tw.test` through a pty, answering `n` | exit 1, "nothing was changed", policy has no demo entries |
 | the same, answering `y` and Enter at each of the 9 pauses | exit 0, all ten steps, on a fresh tenant |
 | `DEMO_NAME=demo2 scripts/demo.sh … --yes --no-pause`, then `--cleanup` | exit 0 both |
 | `go test -count=1 ./internal/demogrant` | ok |
 | `go test -count=1 ./docs/...` | ok |
 | `go test -count=1 ./cmd/tw -run 'Doc\|CLIReference\|Design\|Help\|Policy'` | ok |
-| `make lint`, `make changes-check` | see the PR body |
+| `make lint`, `make changes-check`, `make test` (after the merge) | all exit 0; 57 packages ok |
 
 ## Not tested
 
