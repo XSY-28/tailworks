@@ -67,6 +67,7 @@ test-go:
 .PHONY: test-js
 test-js:
 	npm test --silent
+	node --test js/cli/tailworks/test/*.test.js
 
 ## test-sdk: M5 SDK conformance (hermetic): real Cloudflare Agents SDK and Vercel AI SDK
 ## apps on tw-hostd + stock workerd over testcontrol + local DERP; mock LLM, no keys.
@@ -564,6 +565,12 @@ changes-check:
 .PHONY: install-test
 install-test:
 	sh scripts/install_test.sh
+
+## npm-cli-test: the tw CLI's npm packages: built from signed tarballs, npm install -g, the
+## tailworks shim runs tw (hermetic, fake releases, offline npm; issue #240).
+.PHONY: npm-cli-test
+npm-cli-test:
+	sh scripts/npm_cli_test.sh
 
 .PHONY: lint
 lint: api-check compat-check changes-check

@@ -82,6 +82,9 @@ See [Limits that don't exist](#limits-that-dont-exist) for duration, body and CP
 | Open `connect()` sockets per object (the workload node counts as one, for the Worker and plain-DO objects), per instance | 256, then `socket_limit` | no | `hostd/connect.go:maxSocketsPerObject` |
 | Time for the platform to authenticate a `connect()` tunnel | 10 s | no | `hostd/connect.go:connectPreambleTimeout` |
 | `connect()` dial (and `tls: "netd"` handshake) | 30 s, as an object's node wait | no | `hostd/host.go:ReadyTimeout` |
+| A service binding RPC call's encoded arguments, or its result | 32 MiB (`RangeError` / `bad_request` over it) | no | `hostd/gen/js/svc.js:RPC_MAX_BYTES` |
+| How long hostd reuses a service binding's resolved target | 5 s (dropped sooner when netd can't reach it) | no | `hostd/servicebind.go:svcTargetTTL` |
+| Wait for mgmt to know the calling node before a named-entrypoint or RPC call | 15 s, then the call goes anyway | no | `hostd/servicebind.go:#binding-ready-wait` |
 
 ## Process tier
 

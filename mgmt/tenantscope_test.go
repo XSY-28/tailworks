@@ -76,10 +76,11 @@ func TestTenantGrantPerValue(t *testing.T) {
 // tenantOperatorRoutes are the operations under /v1/tenants/{id} that stay
 // admin-only (no "tenant:" part), by decision, not by omission.
 var tenantOperatorRoutes = map[string]bool{
-	"DELETE /v1/tenants/{id}":         true, // removing a tenant
-	"DELETE /v1/tenants/{id}/objects": true, // purging every object
-	"GET /v1/tenants/{id}/approvals":  true, // approvers (github.com/rosskukulinski/tailworks/cap/approve)
-	"PATCH /v1/tenants/{id}":          true, // limits, pool, tier, credentials
+	"DELETE /v1/tenants/{id}":                                                    true, // removing a tenant
+	"DELETE /v1/tenants/{id}/objects":                                            true, // purging every object
+	"GET /v1/tenants/{id}/approvals":                                             true, // approvers (github.com/rosskukulinski/tailworks/cap/approve)
+	"GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}":       true, // hosts
+	"PATCH /v1/tenants/{id}":                                                     true, // limits, pool, tier, credentials
 	"POST /v1/tenants/{id}/workloads/{workload}/approvals/{workflow}/{instance}": true, // approvers
 	"POST /v1/tenants/{id}/workloads/{workload}/policy":                          true, // writes the tailnet policy (issue #116)
 	"POST /v1/tenants/{id}/workloads/{workload}/secret-grants":                   true, // hosts

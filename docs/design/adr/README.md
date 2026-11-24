@@ -66,3 +66,4 @@ has no row below.
 | [050](050-static-assets.md) | wrangler `assets` are served by a generated router Worker in front of the app, from files in the bundle, with `_redirects`, `_headers` and assets-only projects | 2026-11-23 | Accepted |
 | [051](051-pages-functions.md) | Cloudflare Pages projects (`functions/`, `_worker.js`, `_routes.json`) are compiled by `tw` onto Workers with static assets | 2026-11-23 | Accepted |
 | [052](052-tcp-egress.md) | Raw TCP egress: `connect()` handlers on the platform's egress entrypoints, CONNECT tunnels to hostd authenticated in band, dialled with netd's `DialEgress` | 2026-11-23 | Accepted |
+| [053](053-service-bindings.md) | Service bindings are tailnet calls from the calling node, resolved by mgmt; same-host calls take netd's in-process hop | 2026-11-23 | Accepted |

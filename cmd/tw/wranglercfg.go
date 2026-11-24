@@ -224,6 +224,8 @@ func wranglerKeyNote(k string, v any, builder string) string {
 	case "name", "main", "compatibility_date", "compatibility_flags", "vars", "durable_objects",
 		"migrations", "triggers", "containers", "placement", "workflows", "queues", "$schema", "env":
 		return ""
+	case "services":
+		return "" // service bindings (ADR-053): another workload of this tenant
 	case "define", "alias", "rules", "minify", "keep_names", "jsx_factory", "jsx_fragment", "tsconfig":
 		return "" // both bundlers honour these
 	case "build", "no_bundle", "find_additional_modules", "base_dir", "preserve_file_names":
@@ -244,7 +246,7 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		return "" // pages.go: a Cloudflare Pages project's assets directory
 	case "site":
 		return "not supported: Workers Sites is deprecated; use \"assets\" (docs/wrangler.md#assets)"
-	case "kv_namespaces", "r2_buckets", "services", "ai", "browser", "vectorize",
+	case "kv_namespaces", "r2_buckets", "ai", "browser", "vectorize",
 		"hyperdrive", "analytics_engine_datasets", "send_email", "dispatch_namespaces",
 		"mtls_certificates", "images", "pipelines", "ratelimits", "secrets_store_secrets", "version_metadata",
 		"worker_loaders", "vpc_services", "media", "unsafe", "unsafe_hello_world", "cloudchamber",

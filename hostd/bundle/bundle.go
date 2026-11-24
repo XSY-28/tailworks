@@ -21,6 +21,7 @@ import (
 	"github.com/rosskukulinski/tailworks/internal/cron"
 	"github.com/rosskukulinski/tailworks/internal/publicspec"
 	"github.com/rosskukulinski/tailworks/internal/queuecfg"
+	"github.com/rosskukulinski/tailworks/internal/svcbind"
 )
 
 // MaxBundle bounds an unpacked bundle.
@@ -92,6 +93,10 @@ type App struct {
 
 	// Assets is wrangler.jsonc "assets" and its files (assets.go); nil: none.
 	Assets *Assets
+
+	// Services are wrangler.jsonc "services" (services.go,
+	// ADR-053), in wrangler order.
+	Services []svcbind.Binding
 
 	// SourceMaps are the bundler's source maps (<module>.map, e.g.
 	// dist/index.js.map), not modules: hostd maps exception stacks in
@@ -374,6 +379,9 @@ func Parse(files map[string][]byte) (*App, error) {
 		return nil, err
 	}
 	if err := parseAssets(StripJSONC(wb), files, a); err != nil { // assets.go
+		return nil, err
+	}
+	if err := parseServices(StripJSONC(wb), a); err != nil { // services.go
 		return nil, err
 	}
 	var twJSON []byte

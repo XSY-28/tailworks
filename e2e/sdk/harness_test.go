@@ -6,8 +6,8 @@
 // tailnet (testcontrol + local DERP/STUN). No real tailnet, no LLM keys.
 //
 // Two hosts share one control plane: host A runs the agent apps, host B the
-// MCP servers, so agent → MCP calls cross the tailnet (netd refuses
-// same-host sibling hairpins; see TestSameHostMCPRefused).
+// MCP servers, so agent → MCP calls cross the tailnet (a same-host call
+// takes netd's in-process hop instead; see SameHostMCP).
 package sdk
 
 import (

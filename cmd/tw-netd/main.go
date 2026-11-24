@@ -61,7 +61,7 @@ func run() error {
 		rejoin        = flag.Bool("rejoin", true, "rejoin every object with saved state at start")
 		joinPar       = flag.Int("join-parallel", 16, "max concurrent node joins")
 		port          = flag.Int("ingress-port", 80, "ingress port on each object node")
-		siblings      = flag.Bool("allow-siblings", false, "allow egress to other objects on this host")
+		siblings      = flag.Bool("allow-siblings", false, "dial other objects on this host over WireGuard instead of the in-process hop")
 		logLevel      = flag.String("log-level", "info", "debug|info|warn|error")
 		tsnetLogs     = flag.Bool("tsnet-logs", false, "forward tsnet logs at debug level")
 	)

@@ -181,6 +181,8 @@ func cmdDoctor(args []string) error {
 		return "ok", detail, ""
 	})
 
+	run("install", doctorInstall) // npm_install.go: tarball, npm or npx
+
 	run("tw_home_writable", func() (string, string, string) {
 		home, err := os.UserHomeDir()
 		if err != nil {

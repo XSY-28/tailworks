@@ -26,6 +26,9 @@ const (
 	Assets = "assets"
 	// Queues is queue producers and consumers (ADR-039).
 	Queues = "queues"
+	// ServiceBindings is wrangler "services" (ADR-053). An
+	// older hostd leaves env.<binding> undefined.
+	ServiceBindings = "service-bindings"
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).
 	Telemetry = "telemetry"
 	// WorkerInternet is tailnet.egress.internet's boolean form (true or
@@ -43,6 +46,7 @@ func Host() []string {
 	out := []string{
 		Assets,
 		Queues,
+		ServiceBindings,
 		Telemetry,
 		WorkerInternet,
 		Workflows,
@@ -69,6 +73,9 @@ func Required(app *bundle.App) []string {
 	}
 	if app.Internet.Boolean() {
 		out = append(out, WorkerInternet)
+	}
+	if len(app.Services) > 0 {
+		out = append(out, ServiceBindings)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)

@@ -379,6 +379,9 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 		return err
 	}
 	prefix := pc.Prefix
+	if in, npm := npmSelf(); npm && prefix == "" {
+		return npmUpgradeErr(in) // npm_install.go
+	}
 	if prefix == "" && !planOnly {
 		return fail("bad_request", "this tailworks doesn't run from an install.sh prefix (bin/, share/tailworks, VERSION), so it can't upgrade itself in place").
 			withFix("install a release with scripts/get.sh, or upgrade by hand: tar -xzf tw-<v>-…tar.gz && ./tw-<v>-…/install.sh",

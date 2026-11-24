@@ -61,6 +61,7 @@ var doctorMetas = map[string]doctorMeta{
 	"glibc":                      {group: "Install", label: "glibc"},
 	"host_sockets":               {group: "Isolation", label: "host sockets"},
 	"https_certs":                {group: "Tailnet", label: "HTTPS certs"},
+	"install":                    {group: "Install", label: "installed by", fact: installFact},
 	"kernel":                     {group: "Linux host", label: "kernel"},
 	"kvm":                        {group: "Linux host", label: "KVM"},
 	"landlock":                   {group: "Linux host", label: "Landlock"},
@@ -83,6 +84,18 @@ var doctorMetas = map[string]doctorMeta{
 func binariesFact(d string) string {
 	if strings.Contains(d, "not needed in single-process mode") {
 		return "in-process"
+	}
+	return ""
+}
+
+func installFact(d string) string {
+	switch {
+	case strings.HasPrefix(d, "npm package") && strings.Contains(d, "(npx"):
+		return "npx"
+	case strings.HasPrefix(d, "npm package"):
+		return "npm"
+	case strings.HasPrefix(d, "release tarball"):
+		return "install.sh"
 	}
 	return ""
 }

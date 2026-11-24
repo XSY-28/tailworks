@@ -286,6 +286,7 @@ func genTypes(a *app, outDir string, secrets []string) ([]byte, []string) {
 			add("Queues (producers)", bindingMembers(q["producers"], "Queue"))
 		}
 		add("Workflows", bindingMembers(w["workflows"], "Workflow"))
+		add("Service bindings", bindingMembers(w["services"], "Fetcher"))
 		add("Static assets", bindingMembers([]any{w["assets"]}, "Fetcher"))
 	}
 	sec := map[string]string{}
