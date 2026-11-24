@@ -147,7 +147,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 |---|---|---|---|
 | Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers from the workload's (or object's) own node, and public internet hosts from the host's network (on by default; `tailnet.egress.internet: false` turns it off, [call an internet API](docs/recipes.md#call-an-internet-api)) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
-| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
+| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ⚠️ | to tailnet peers and the internet with the object's identity; no `secureTransport` TLS |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
 | Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
 | Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
@@ -170,7 +170,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ✅ | workerd's built-in engine; approval events are tailworks' |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
-| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
+| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | drivers connect directly with `connect()` |
 | Bindings | [Browser Rendering](docs/COMPAT.md#browser) | ❌ | |
 | Bindings | [Email](docs/COMPAT.md#email) | ❌ | |
 | Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |

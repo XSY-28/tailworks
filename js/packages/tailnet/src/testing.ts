@@ -15,7 +15,7 @@
 // import in app code throws instead of quietly minting callers.
 
 import { TailnetError, fromResponse } from "./errors.js";
-import type { SpawnOptions, Spawned, TailnetContext } from "./runtime.js";
+import type { SocketAddress, SpawnOptions, Spawned, TailnetContext, TailnetSocket, TailnetSocketOptions } from "./runtime.js";
 
 /** The MagicDNS suffix fake callers and fake objects get. */
 export const TEST_DOMAIN = "test.ts.net";
@@ -199,6 +199,11 @@ export interface TestTailnetOptions {
   fetch?: (req: Request) => Response | Promise<Response>;
   /** Called on each spawn before it is recorded; throw (e.g. a TailnetError) to make it fail. */
   onSpawn?: (rec: SpawnRecord) => void | Promise<void>;
+  /**
+   * ctx.tailnet.connect(): return a socket (e.g. cloudflare:sockets
+   * connect() to a test server). Default: refused with not_supported.
+   */
+  connect?: (address: SocketAddress, options: TailnetSocketOptions) => TailnetSocket;
 }
 
 /** A fake tw runtime: a ctx.tailnet that records what the app asked of it. */
@@ -309,8 +314,9 @@ export function createTestTailnet(opts: TestTailnetOptions = {}): TestTailnet {
     async self() {
       return { ...self };
     },
-    connect(): never {
-      throw new TailnetError("plan_feature_missing", "ctx.tailnet.connect() is not implemented yet (raw TCP egress)");
+    connect(address: SocketAddress, options: TailnetSocketOptions = {}): TailnetSocket {
+      if (opts.connect) return opts.connect(address, options);
+      throw new TailnetError("not_supported", "ctx.tailnet.connect() has no test socket: pass createTestTailnet({ connect })");
     },
   });
 

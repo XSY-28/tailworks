@@ -225,7 +225,7 @@ func printPolicyChecks(a *app, pf mgmt.PreflightResult) {
 		switch {
 		case slices.Contains(pf.Unchecked, dst):
 			fmt.Printf("? connects   → %s: a name, not a tag (not checked; name it by tag in tailnet.connects)\n", dst)
-		case !missing[dst]:
+		case !missing[connectTarget(dst)]:
 			fmt.Printf("✓ connects   → %s\n", dst)
 		}
 	}
@@ -265,4 +265,10 @@ func policyFailure(res policyResult, withSnippet bool) *cliErr {
 	}
 	e.Fix = append(e.Fix, "then run tw policy again, or tw deploy")
 	return e
+}
+
+// connectTarget is a tailnet.connects entry without its port.
+func connectTarget(c string) string {
+	t, _ := mgmt.SplitConnect(c)
+	return t
 }

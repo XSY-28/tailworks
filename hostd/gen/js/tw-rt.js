@@ -14,6 +14,8 @@ var CATALOG = Object.freeze({
   identity_pending: { status: 503, title: "the object's node is not ready yet" },
   derp_unreachable: { status: 502, title: "no direct path and no reachable DERP relay" },
   plan_feature_missing: { status: 501, title: "the tailnet's plan or control server lacks a feature tailworks can use" },
+  not_supported: { status: 501, title: "tailworks doesn't support this call here (yet)" },
+  socket_limit: { status: 429, title: "too many open sockets for this object" },
   killed: { status: 410, title: "the object was killed" },
   object_killed: { status: 410, title: "a new request reached a killed object (its node's tombstone answered)" },
   no_identity: { status: 401, title: "the request carries no verified tailnet caller" },
@@ -1072,11 +1074,64 @@ function createTailnetContext(tw, env, bindings, self, ticket) {
     self() {
       return op("self", {});
     },
-    connect() {
-      throw new TailnetError("plan_feature_missing", "ctx.tailnet.connect() is not implemented yet (raw TCP egress)");
+    connect(address, options = {}) {
+      return tailnetSocket(tw, socketAddress(address), options, self);
     }
   };
   return Object.freeze(tn);
+}
+function socketAddress(address) {
+  if (typeof address === "string") return address;
+  if (!address || typeof address.hostname !== "string" || !Number.isInteger(address.port)) {
+    throw new TailnetError("bad_request", 'connect: address must be "host:port" or { hostname, port }');
+  }
+  const h = address.hostname.includes(":") && !address.hostname.startsWith("[") ? "[" + address.hostname + "]" : address.hostname;
+  return h + ":" + address.port;
+}
+function tailnetSocket(tw, address, options, self) {
+  if (options.secureTransport && options.secureTransport !== "off") {
+    throw new TailnetError("not_supported", 'ctx.tailnet.connect: secureTransport "' + String(options.secureTransport) + '" is not supported; use { tls: "netd" }');
+  }
+  if (options.tls !== void 0 && options.tls !== "netd") throw new TailnetError("bad_request", 'ctx.tailnet.connect: tls must be "netd"');
+  if (typeof tw.tcpConnect !== "function") throw new TailnetError("not_supported", "ctx.tailnet.connect() needs a newer tailworks host");
+  const toUp = new TransformStream();
+  const fromUp = new TransformStream();
+  let closeUp = async () => {
+  };
+  const opened = (async () => {
+    const args = { address };
+    if (options.tls) args.tls = options.tls;
+    if (self) args.as = self;
+    const r = await tw.tcpConnect(args);
+    if (!r || !r.ok) throw TailnetError.from(r?.error);
+    return r.value;
+  })();
+  const closed = opened.then(
+    async (up) => {
+      const a = new AbortController();
+      closeUp = async () => a.abort();
+      await Promise.allSettled([
+        toUp.readable.pipeTo(up.writable, { signal: a.signal }),
+        up.readable.pipeTo(fromUp.writable, { signal: a.signal })
+      ]);
+    },
+    async (e) => {
+      await Promise.allSettled([toUp.readable.cancel(e), fromUp.writable.abort(e)]);
+      throw e;
+    }
+  );
+  closed.catch(() => {
+  });
+  return {
+    readable: fromUp.readable,
+    writable: toUp.writable,
+    opened: opened.then(() => ({ remoteAddress: address })),
+    closed,
+    async close() {
+      await closeUp();
+      await Promise.allSettled([toUp.writable.abort(), fromUp.readable.cancel()]);
+    }
+  };
 }
 function define(ctx, tn) {
   try {
@@ -1566,6 +1621,7 @@ export {
   guardTailnetEnv,
   isApprovalType,
   publicEnv,
+  socketAddress,
   wrapFacetClass,
   wrapHandler,
   wrapPlainClass,
