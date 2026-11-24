@@ -1,7 +1,7 @@
 # ADR-exit-node-egress: A host can send all internet egress through a tailnet exit node; `tailnet.egress.via: "exit-node"` lets a workload require it
 
 **Date:** 2026-11-23
-**Status:** Proposed (drafted and built on branch `deranged-dog`; gets
+**Status:** Proposed (drafted and built on branch `require-exit-node-egress-hosts-workloads`; gets
 its number when it merges, AGENTS.md rule 5). Extends ADR-049 (Workers' internet
 egress from the host's network) and ADR-032 D4 (containers'
 `enableInternet`). Revisits the alternative ADR-049 rejected, "an exit node

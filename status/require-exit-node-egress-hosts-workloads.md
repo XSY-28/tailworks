@@ -1,6 +1,6 @@
 Last update: 2026-11-23 23:30 PT. ADR-exit-node-egress drafted and built; tests below.
 
-# deranged-dog: internet egress through a tailnet exit node
+# require-exit-node-egress-hosts-workloads: internet egress through a tailnet exit node
 
 ## What's built
 
@@ -33,7 +33,7 @@ Last update: 2026-11-23 23:30 PT. ADR-exit-node-egress drafted and built; tests 
   `tw dev` prints a note for a `via` workload. `docs/cli.md` regenerated.
 - **Docs**: errors.md (`exit_node_unavailable`), tailworks-jsonc.md
   (`egress.via` row and section), security-model.md (Egress, trust table),
-  containers.md, recipes.md, upgrading.md. `changes/deranged-dog.md`
+  containers.md, recipes.md, upgrading.md. `changes/require-exit-node-egress-hosts-workloads.md`
   (feature-string).
 - Audit note for internet flows now names the path: "internet via exit
   node <node> (<addr>)".
