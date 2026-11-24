@@ -98,7 +98,9 @@ packages should be about the same size: their tarballs are 181 MB and
   - A SIGTERM to the shim stopped `tw dev` cleanly.
   - `npm publish --dry-run` of the shim and of a platform package both
     succeed.
-- `make lint`: ok. `make test`: see below.
+- `make lint`: ok (on mini, after merging origin/master).
+- `make test npm-cli-test` on the mbp runner: ok (116 Go packages, every JS suite including the shim's). The first run caught `TestDoctor` (it needed the new `install` check, and on Linux glibc must stay `Checks[1]`); fixed.
+- Not run: `install-test` (install.sh/get.sh unchanged), and the credentialed and VM suites.
 
 ## Gaps / next steps
 
