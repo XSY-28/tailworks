@@ -165,7 +165,7 @@ func (h *Host) startNodeInstance(w *workload, depID string, app *bundle.App, n i
 		return nil, err
 	}
 	dial := func(ctx context.Context, _, _ string) (net.Conn, error) { return np.dial(ctx) }
-	tr := &http.Transport{DialContext: dial, MaxIdleConnsPerHost: 64, IdleConnTimeout: 60 * time.Second}
+	tr := &http.Transport{DialContext: dial, MaxIdleConnsPerHost: 64, IdleConnTimeout: nodeUpstreamIdleTimeout}
 	inst.direct = &http.Client{Timeout: 10 * time.Second, Transport: tr}
 	inst.ingress = h.nodeIngress(inst, tr)
 	if np.proxy, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
