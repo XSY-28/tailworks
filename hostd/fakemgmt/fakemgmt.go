@@ -103,6 +103,7 @@ type Server struct {
 	reservations         map[string]*mgmtapi.ContainerReservation // container reservations by ID
 	reservationsDown     bool
 	heartbeatsDown       bool
+	heartbeatDelay       time.Duration // the next heartbeat's delay (DelayHeartbeat)
 	reg                  *registry.Registry
 	resolver             *registry.Resolver
 	services             map[string]string // workload -> Tailscale Service (SetService)
@@ -135,6 +136,14 @@ func (s *Server) SetHeartbeatsDown(down bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.heartbeatsDown = down
+}
+
+// DelayHeartbeat answers the next host heartbeat only after d (tests: a
+// slow mgmt or a loaded host; the heartbeat succeeds, late).
+func (s *Server) DelayHeartbeat(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.heartbeatDelay = d
 }
 
 // SetLeaseLostCredentials makes the next n credential calls fail with
@@ -465,6 +474,13 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 	if err := decode(r, &req); err != nil {
 		writeErr(w, 400, "bad_request", err.Error())
 		return
+	}
+	s.mu.Lock()
+	delay := s.heartbeatDelay
+	s.heartbeatDelay = 0
+	s.mu.Unlock()
+	if delay > 0 {
+		time.Sleep(delay)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
