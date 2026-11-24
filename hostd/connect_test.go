@@ -39,7 +39,7 @@ func serveWhoisTCP(t *testing.T, n *nettest.Node, port string) {
 			}
 			go func(c net.Conn) {
 				defer c.Close()
-				who, err := n.LC.WhoIs(context.Background(), c.RemoteAddr().String())
+				who, err := whoisNode(context.Background(), n, c.RemoteAddr().String())
 				if err != nil {
 					io.WriteString(c, "whois failed: "+err.Error()+"\n")
 					return
