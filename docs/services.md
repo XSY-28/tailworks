@@ -71,6 +71,10 @@ caps the caller didn't use (H22, measured below).
   ```jsonc
   "autoApprovers": { "services": { "svc:support": ["tag:tw-wl-support"] } }
   ```
+  `tw policy --apply` (or `tw deploy --apply-policy`) writes this entry
+  for you: only the workload's own `svc:` name, approved only for the tags
+  the workload node is deployed with. On Headscale, or when those tags
+  aren't defined, it stays a line for you to add.
 - **Service definition:** mgmt creates it (port `tcp:80`, the attributed
   HTTP ingress) with the comment `managed by tw: tenant=<id> workload=<name>`.
   - A redeploy adopts its own definition.
