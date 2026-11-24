@@ -99,6 +99,7 @@ func run() error {
 		vmPool     = flag.Int("vm-pool", 0, "microVM tier: warm pool size (pre-booted VMs without tenant code; single use; Durable Object VMs only, containers cold-boot): 0 = auto (≤ 2, within the huge-page reservation), -1 = off")
 		sandboxF   = flag.String("sandbox", "auto", "process-tier workerd/Node sandbox: auto (seatbelt on macOS, landlock on Linux) | seatbelt | seatbelt-legacy (macOS: the previous files-only profile, kept for one release) | landlock | none")
 		insecureSH = flag.Bool("insecure-shared-host", false, "without a process sandbox, still run process-tier workloads of more than one tenant (tenants are NOT isolated from each other)")
+		pyodideDir = flag.String("pyodide-dir", "", "Python Workers: the pinned Pyodide bundles workerd reads, read-only (default <data-dir>/pyodide; fetched on the first Python deployment, or copied there on an offline host: docs/python.md#offline-hosts)")
 		allowExp   = flag.Bool("allow-experimental-flags", false, "let deployments set compatibility flags workerd marks experimental (unsafe_module, rtti_api, precise_timers, …; refused by default, docs/COMPAT.md#experimental-flags); advertised to placement as the experimental-flags feature")
 		sbDeny     = flag.String("sandbox-deny", "", "comma-separated extra paths no workerd may read, write or connect to (tw up: its state and run dirs)")
 		nodeBin    = flag.String("node", "", "Node process tier (runtime \"node\"): node binary (default: $TW_NODE, or node on PATH)")
@@ -163,6 +164,7 @@ func run() error {
 	o.RequestLogMaxAge = *reqMaxAge // hostd/telemetry_retention.go
 	o.WorkerdHeapMiB, o.NodeHeapMiB = *wdHeap, *nodeHeap
 	o.AllowExperimentalFlags = *allowExp // hostd/gen/compatflags.go (#337)
+	o.PyodideDir = *pyodideDir           // hostd/pyodide.go
 	restart := make(chan struct{}, 1)
 	if *selfUpg {
 		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix

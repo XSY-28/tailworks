@@ -257,8 +257,10 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		return bindingHint + "ignored"
 	// limits.md#wrangler-limits-ignored
 	case "observability", "logpush", "limits", "usage_model", "send_metrics", "keep_vars", "dev",
-		"compliance_region", "first_party_worker", "legacy_env", "python_modules":
+		"compliance_region", "first_party_worker", "legacy_env":
 		return "ignored by tailworks"
+	case "python_modules":
+		return "ignored: tw deploy ships python_modules/ whole, less __pycache__ and *.pyc (docs/python.md#modules-and-files)"
 	case "secrets":
 		return "" // secrets.required: names `tw types` declares (deploy doesn't check them)
 	case "node_compat":

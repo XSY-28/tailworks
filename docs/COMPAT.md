@@ -39,9 +39,8 @@ other `e2e/` suites), its Tests cell must say "nightly". `make lint` runs
 projects from Cloudflare's repositories unmodified (pinned commits from
 cloudflare/templates, the create-cloudflare templates, cloudflare/agents and
 cloudflare/ai) to a real host on a real tailnet, and calls each one as its
-README does. The rows marked ❌ that those projects hit (Python Workers,
-service bindings, Workers AI) are expected to fail there in the way the row
-says.
+README does. The rows marked ❌ that those projects hit (service bindings,
+Workers AI) are expected to fail there in the way the row says.
 
 The same suite runs the **upstream projects' own examples** for the three
 SDK rows, at pinned commits, under `tw dev` and deployed: every example in
@@ -49,7 +48,9 @@ SDK rows, at pinned commits, under `tw dev` and deployed: every example in
 with its result (pass, pass with a change, fail, or not run and why) under
 [Agents SDK](#upstream-examples-agents-sdk),
 [Vercel AI SDK](#upstream-examples-vercel-ai-sdk) and
-[mcp-handler](#upstream-examples-mcp-handler). Those tables are generated
+[mcp-handler](#upstream-examples-mcp-handler), and every example in
+`cloudflare/python-workers-examples` under
+[Python Workers](#upstream-examples-python-workers). Those tables are generated
 from the suite's results, and `make lint` fails if they are edited by hand.
 
 ## Runtime
@@ -61,7 +62,7 @@ from the suite's results, and `make lint` fails if they are edited by hand.
 | <a id="connect"></a>TCP sockets (`connect()`, `cloudflare:sockets`) | ⚠️ | `connect()`, and `connect()` handlers on the `globalOutbound` | raw TCP egress with `fetch()`'s identity and policy (ADR-052): from a facet-mode object as its own node, from the Worker and plain-DO objects as the workload node, to tailnet peers or (under `tailnet.egress.internet`) the internet, where TCP port 25 is refused unless an entry names it (`"smtp.example.com:25"`), as on Cloudflare. `ctx.tailnet.connect()` is the same with typed errors (and `tls: "netd"`); `tailnet.connects` takes a port (`"tag:db:5432"`). Flows are audited, traced and reset by a kill. [Recipe](recipes.md#connect-to-postgres-on-your-tailnet) | a refusal reaches stock `connect()` as "Network connection lost" (the typed code is in `tw audit`); at most 256 open sockets per object | `secureTransport: "on"` / `"starttls"` (workerd can't hand a TLS socket to a `connect()` handler: use TLS off on the tailnet, or `ctx.tailnet.connect(addr, { tls: "netd" })`); `ctx.tailnet.connect()` in plain-DO mode (`not_supported`) | `hostd/gen:TestConnectEgress`, `hostd:TestTCPEgress/Identity`, `hostd:TestTCPEgress/Refusals`, `hostd:TestTCPEgress/KillResetsSocket`, `hostd:TestTCPEgress/Audit`, `hostd:TestTCPEgressInternet`, `hostd:TestTCPEgressPostgres`, `e2e/vm:TestE2EVMTCPEgress` |
 | <a id="wasm"></a>WebAssembly modules | ✅ | `.wasm` modules (`import mod from "./x.wasm"`), `WebAssembly.Instance` | the platform loads `.wasm` modules from the bundle, in the Worker and in both object modes; `tw deploy`'s bundlers ship them as wrangler does (`<sha1>-<file>.wasm`, also `.wasm?module`) | — | — | `hostd/gen:TestRuntimeCompatWasm`, `internal/esbundle:TestBuildAppWranglerSettings`, `e2e/wrangler:TestDevWrangler/BuiltinEsbuild` |
 | <a id="nodejs-compat"></a>`nodejs_compat` | ✅ | the `node:*` modules behind `compatibility_flags: ["nodejs_compat"]` | the bundler maps bare Node builtins (`buffer`, `crypto`, …) to `node:*`, and turns a `require()` of one in a CommonJS dependency (`dotenv`'s `require("fs")`) into an import of it, as wrangler does; without the flag such a `require()` throws, when it runs, an error naming the package and the flag | — | only a sample is tested: `Buffer`, `node:crypto` (`createHash`, `randomUUID`), `AsyncLocalStorage`, `EventEmitter`; for real Node, see [Node apps](#node-runtime) | `hostd/gen:TestRuntimeCompat/NodejsCompat`, `internal/esbundle:TestRequireBuiltins`, `cmd/tw:TestDevRequireBuiltins` |
-| <a id="python"></a>Python Workers | ❌ | Python Workers (Pyodide) | — | — | tailworks' bundler is JavaScript-only. Python runs in a [container](#containers) | — |
+| <a id="python"></a>Python Workers | ⚠️ | Python Workers (Pyodide): `WorkerEntrypoint`, Python `DurableObject` (storage, RPC, WebSocket hibernation), the `workers` SDK, the `js` interop | `tw deploy` and `tw dev` ship `main`'s directory and the vendored `python_modules/` as pywrangler does, with no bundler; a generated JavaScript front checks the caller seal, so `request.js_object.cf.tailscale.caller` is the verified caller (`get_caller` in the `python` template); the pinned Pyodide bundles are fetched once per host, digest-checked, and read-only to the sandbox, so workerd never downloads anything. [Details](python.md) | Python Durable Objects are internal objects (plain-DO mode, no tailnet node, no `ctx.tailnet`); packages are vendored before the deploy (`uv run pywrangler sync`), not installed by tailworks; from `compatibility_date` 2026-04-21 the `workers` SDK must be vendored too, or `disable_python_external_sdk` set; no memory snapshots | cron triggers, Queues, Workflows, static assets and containers for Python; the microVM tier (`tier_unavailable`); Pyodide's non-pure-Python packages (`numpy`, …); `--wrangler` for a Python Worker | `hostd/gen:TestPythonWorker`, `hostd/gen:TestPythonCallerUnsealed`, `hostd:TestPythonWorkerSandboxed`, `hostd:TestPythonMicroVMRefused`, `cmd/tw:TestDevPython`, `hostd/bundle:TestParsePython`, `internal/pyodide:TestBundlesMatchWorkerd`, [Cloudflare's Python examples](#upstream-examples-python-workers) |
 | <a id="node-runtime"></a>Node.js apps (`runtime: "node"`) | ✅ | — (tw-only) | runs a plain Node.js process as a workload with its own tailnet node, egress through netd's proxy; runs the Vercel Workflow SDK. [Details](#node-process-tier-m9) | not a Cloudflare surface. One tailnet identity per process: no Durable Objects, no `tailnet.objects` | crons and public routes on the Node runtime | `e2e/node:TestNodeTier`, `e2e/node:TestNodeWorkflow`, `hostd:TestNodeSecrets` |
 
 ## Durable Objects
@@ -123,7 +124,7 @@ from the suite's results, and `make lint` fails if they are edited by hand.
 | <a id="otlp-export"></a>Export to OpenTelemetry (Workers Observability destinations, Logpush) | ⚠️ | — | `tw telemetry set --otlp <url> [--header NAME]`: each workload's request records, metrics and spans over OTLP/HTTP (JSON); collector credentials kept in mgmt's custody like secrets. [Details](observability.md#export-to-a-collector-tw-telemetry-set) | by design the collector is a tailnet peer, dialed from each workload's own node, so your tailnet policy decides who may export where; no public destinations | per-workload config and sampling; Logpush to object storage | `hostd:TestTelemetry/OTLPExportFromTheWorkloadNode`, `mgmt:TestTelemetryRelease`, `mgmt:TestTelemetryRoles`, `cmd/tw:TestCLITelemetry`, `e2e/observability:TestObservabilityHermetic` |
 | <a id="wrangler-config"></a>Wrangler config (`wrangler.toml`, `wrangler.json`, `wrangler.jsonc`) | ⚠️ | — | `tw deploy` and `tw dev` read whichever file wrangler would (json, then jsonc, then toml) and use `name`, `main`, `compatibility_date`, `compatibility_flags`, `vars`, `durable_objects`, `kv_namespaces`, `r2_buckets`, `migrations`, `triggers.crons`, `queues`, `assets`, `placement`, `containers`, `workflows` and the build settings; a project without a `tailworks.jsonc` gets defaults; a Cloudflare Vite plugin build is followed through `.wrangler/deploy/config.json` to the config it wrote, as wrangler does ([wrangler.md](wrangler.md), [Vite](wrangler.md#vite)) | only the app directory is searched (wrangler also searches parents) | the keys tailworks can't use (`routes`, `workers_dev`, binding sections it has no binding for, `site`, …) are ignored with one warning line each. [Details](#wrangler-config-details) | `cmd/tw:TestFindWranglerConfigPrecedence`, `cmd/tw:TestReadWranglerTOML`, `cmd/tw:TestWranglerWarnings`, `cmd/tw:TestLoadAppWranglerTOMLOnly`, `cmd/tw:TestCLIDeployWranglerTOML`, `cmd/tw:TestViteRedirectedConfig`, `cmd/tw:TestViteRedirectErrors`, `e2e/wrangler:TestDevViteRedirect`, `hostd/bundle:TestParseCrons`, `hostd/bundle:TestParseQueues`, `hostd/bundle:TestParseContainers`, `hostd/gen:TestParseWorkflows`, `hostd/bundle:TestParseKVNamespaces`, `mgmt:TestResolvePlacement` |
 | <a id="wrangler-env"></a>Environments (`env.<name>`, `--env`) | ✅ | — | `tw deploy --env <name>` / `tw dev --env <name>` resolve `env.<name>` with wrangler's inheritance (`vars`, `define` and bindings are not inherited, warned per key as wrangler does) | each environment is its own workload, `<name>-<env>` unless the env sets `name`; `tailworks.jsonc` has no environments | — | `cmd/tw:TestApplyWranglerEnv`, `cmd/tw:TestCLIDeployWranglerTOML` |
-| <a id="wrangler-bundling"></a>Bundling (`define`, `alias`, `rules`, custom builds) | ✅ | — | the built-in esbuild honours `define`, `alias`, `rules` (Text, Data, CompiledWasm, with wrangler's defaults), `minify`, `keep_names`, `jsx_*`, `tsconfig`; `--wrangler` bundles with `wrangler deploy --dry-run --outdir`, and `--from-wrangler-out <dir>` packs such a directory (needed for `build`, and for `no_bundle` except pre-built ES modules); a pre-built `no_bundle` Worker (ESModule rules for only `.js`/`.mjs`, as the Vite plugin writes) is packed as it is ([details](wrangler.md#no-bundle)) | — | CommonJS and Python modules as `rules` module types (a CommonJS dependency of an ES-module Worker is bundled) | `internal/esbundle:TestBuildAppWranglerSettings`, `internal/esbundle:TestRuleGlobs`, `cmd/tw:TestBuildWranglerTOMLApp`, `e2e/wrangler:TestDevWrangler/FromWranglerOut`, `e2e/wrangler:TestDevWrangler/WranglerCLI`, `cmd/tw:TestPrebuiltNoBundle`, `cmd/tw:TestPrebuiltNoBundleDirect`, `e2e/wrangler:TestDevViteRedirect` |
+| <a id="wrangler-bundling"></a>Bundling (`define`, `alias`, `rules`, custom builds) | ✅ | — | the built-in esbuild honours `define`, `alias`, `rules` (Text, Data, CompiledWasm, with wrangler's defaults), `minify`, `keep_names`, `jsx_*`, `tsconfig`; `--wrangler` bundles with `wrangler deploy --dry-run --outdir`, and `--from-wrangler-out <dir>` packs such a directory (needed for `build`, and for `no_bundle` except pre-built ES modules); a pre-built `no_bundle` Worker (ESModule rules for only `.js`/`.mjs`, as the Vite plugin writes) is packed as it is ([details](wrangler.md#no-bundle)) | — | CommonJS modules as a `rules` module type (a CommonJS dependency of an ES-module Worker is bundled); `PythonModule` and `PythonRequirement` rules (a [Python Worker](#python) ships its `main` directory's files and `python_modules/` instead) | `internal/esbundle:TestBuildAppWranglerSettings`, `internal/esbundle:TestRuleGlobs`, `cmd/tw:TestBuildWranglerTOMLApp`, `e2e/wrangler:TestDevWrangler/FromWranglerOut`, `e2e/wrangler:TestDevWrangler/WranglerCLI`, `cmd/tw:TestPrebuiltNoBundle`, `cmd/tw:TestPrebuiltNoBundleDirect`, `e2e/wrangler:TestDevViteRedirect` |
 | <a id="wrangler-api"></a>`wrangler deploy`, `wrangler secret`, `wrangler tail` against tailworks | 🚫 | — | `tw deploy`, `tw secret`, `tw logs -f` take the same project | tailworks serves no Cloudflare-compatible API: it would have to track about 50 wrangler endpoints across frequent wrangler releases and bring bearer tokens back, and preflight, placement and image pinning don't fit wrangler's flow ([why](wrangler.md#wrangler-commands-that-call-cloudflare)) | — | — |
 
 ## SDKs
@@ -224,8 +225,8 @@ only a name and a tag. Anything more is in the last column.
 
 Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples) `examples/` at commit `95dacf84dcdf`. Versions: `agents` 0.34.0 (the examples depend on `"agents": "*"`, a workspace link; the suite installs the published version the repo carries at that commit, with `npm install`), `@modelcontextprotocol/server` 2.4.0 and `@modelcontextprotocol/sdk` 1.32.2 (pinned by the examples themselves). No other versions were run, so none is known not to work.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `5021fbb5d978`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `0bc7003f79dd`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
 
 69 examples: **10 pass, 0 pass with a change, 4 fail, 55 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -400,8 +401,8 @@ streaming and agent loop running on tailworks, not a model.
 
 Upstream: [vercel/ai](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples) `examples/` at commit `8956ca55ed9c`. Versions: `ai` 7.0.181 and `@ai-sdk/openai` 4.0.122 (the examples depend on `workspace:*`; the suite installs the published versions the repo carries at that commit). No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `5021fbb5d978`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `0bc7003f79dd`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
 
 25 examples: **0 pass, 3 pass with a change, 0 fail, 22 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -432,8 +433,8 @@ The three examples in [vercel/mcp-handler](https://github.com/vercel/mcp-handler
 
 Upstream: [vercel/mcp-handler](https://github.com/vercel/mcp-handler/tree/5518e8af4386a92756d189169a97601a4a7162ee/examples) `examples/` at commit `5518e8af4386`. Versions: `mcp-handler` 2.4.0 (the repo's version at that commit), `@modelcontextprotocol/server` 2.4.0, `zod` 4.6.7. No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `5021fbb5d978`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `0bc7003f79dd`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
 
 3 examples: **0 pass, 3 pass with a change, 0 fail, 0 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -444,6 +445,48 @@ Upstream: [vercel/mcp-handler](https://github.com/vercel/mcp-handler/tree/5518e8
 | [`auth-cookie/route.ts`](https://github.com/vercel/mcp-handler/blob/5518e8af4386a92756d189169a97601a4a7162ee/examples/auth-cookie/route.ts) | `withMcpAuth`: same-origin session cookie, or bearer token | pass | pass | **pass with change** | The example is a route module (`export { handler as GET, handler as POST }`), not a project: a package.json, a wrangler.jsonc and a 10-line Worker entry that mounts it at `/api/mcp` are added; `route.ts` is unchanged |
 
 <!-- upstream-examples:mcp:end -->
+
+### Upstream examples: Python Workers
+
+Every example in Cloudflare's
+[python-workers-examples](https://github.com/cloudflare/python-workers-examples)
+repository ([Python Workers](#python)).
+
+<!-- upstream-examples:python-workers:begin -->
+<!-- Generated by `make compat-upstream` from e2e/compat/upstream-results.json: don't edit this block by hand. -->
+
+Upstream: [cloudflare/python-workers-examples](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b), every top-level directory, at commit `47ec7d69f405`. Versions: the Pyodide bundles the pinned workerd runs (`internal/pyodide`); no package is vendored (`python_modules/`), so an example that needs one is not run. No other versions were run.
+
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `103dbaf3770c`.
+
+28 examples: **5 pass, 0 pass with a change, 4 fail, 19 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+
+| Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
+|---|---|---|---|---|---|
+| [`hello`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/hello) | Python Worker: fetch handler | pass | pass | **pass** | — |
+| [`binding`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/binding) | Python Worker: KV put and get | pass | pass | **pass** | — |
+| [`durable-objects`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/durable-objects) | Python Durable Object: RPC methods, storage | pass | pass | **pass** | — |
+| [`chatroom`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/chatroom) | Python Durable Object: hibernatable WebSocket chatroom, an HTML file read from disk | pass | pass | **pass** | — |
+| [`opengraph`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/opengraph) | Python Worker: HTMLRewriter over an internet fetch | pass | pass | **pass** | — |
+| [`cron`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/cron) | Python Worker: cron trigger | fail | fail | **fail** | Cron triggers of Python Workers aren't supported yet (docs/python.md#limits) |
+| [`workflows`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/workflows) | Python Workflow | fail | fail | **fail** | Python Workflows aren't supported yet (docs/python.md#limits) |
+| [`assets`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/assets) | Python Worker + static assets | fail | fail | **fail** | Static assets in front of a Python Worker aren't supported yet (docs/python.md#limits) |
+| [`url-shortener`](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b/url-shortener) | Python Worker on KV, compatibility_date 2026-09-01 | fail | fail | **fail** | From compatibility_date 2026-04-21 the `workers` SDK is a package pywrangler vendors (workers-runtime-sdk); tw deploy doesn't run pywrangler, so it asks for `uv run pywrangler sync` first (docs/python.md#packages) |
+
+Not run:
+
+| Why | Examples |
+|---|---|
+| needs packages vendored by pywrangler (`uv run pywrangler sync` into python_modules/); tw deploy ships what is vendored, and the suite doesn't run uv yet | `django`, `django-markdown-r2`, `django-todo-d1`, `fastapi`, `fastapi-todo`, `flask-todo`, `image-gen`, `js-api-pygments`, `mcp-server`, `sync-http-clients` |
+| needs Workers AI (an `ai` binding), which tailworks doesn't provide | `image-redraw`, `langchain`, `vectorize-rag`, `workers-ai` |
+| needs Hyperdrive | `hyperdrive-batched-counter` |
+| needs the Worker Loader (`worker_loaders` binding), which tailworks keeps to the platform | `dynamic-py-py` |
+| needs its database seeded after the deploy (`d1 execute --file db_init.sql`), which `tw dev` runs can't do; run by `make e2e-compat` as `py-query-d1` | `query-d1` |
+| a long-running Durable Object on the public Bluesky firehose (an outbound WebSocket); not tried | `websocket-stream-consumer` |
+| the repo's test harness, not an example | `tests` |
+
+<!-- upstream-examples:python-workers:end -->
 
 ## Containers: `ctx.container` and the Cloudflare Sandbox SDK (ADR-032)
 

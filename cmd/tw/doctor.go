@@ -153,7 +153,7 @@ func cmdDoctor(args []string) error {
 		if len(tms) == 0 {
 			return "fail", "no templates in " + ct, reinstallFix("reinstall tw")
 		}
-		var nodeTms []string
+		var nodeTms, pyTms []string
 		for _, tm := range tms {
 			dir := filepath.Join(ct, "templates", tm)
 			if isNodeRuntimeDir(dir) {
@@ -170,6 +170,10 @@ func cmdDoctor(args []string) error {
 				Main string `json:"main"`
 			}
 			bundle.UnmarshalJSONC(wb, &w)
+			if bundle.IsPythonMain(w.Main) {
+				pyTms = append(pyTms, tm) // python.go: packed as it is, no bundler
+				continue
+			}
 			n, err := esbundle.Build(esbundle.Options{Dir: dir, Main: w.Main, Outfile: filepath.Join(tmp, tm+".js"), NodePaths: np})
 			if err != nil {
 				return "fail", "bundling template " + tm + " failed: " + firstLine(err.Error()) + noNodeModules(np, ct), reinstallFix("reinstall tailworks (the vendored node_modules may be incomplete)")
@@ -179,6 +183,9 @@ func cmdDoctor(args []string) error {
 		detail := "esbuild " + esbundle.Version + " (built in, no Node.js needed) bundles every workerd template offline: " + strings.Join(sizes, ", ")
 		if len(nodeTms) > 0 {
 			detail += "; Node-tier templates (need Node.js to deploy): " + strings.Join(nodeTms, ", ")
+		}
+		if len(pyTms) > 0 {
+			detail += "; Python templates (no bundling): " + strings.Join(pyTms, ", ")
 		}
 		return "ok", detail, ""
 	})

@@ -66,6 +66,7 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 - Run one job at a time (locks, leader election): [locks.md](locks.md)
 - Run a container or code sandbox: [containers.md](containers.md)
 - Run a Node.js app: [node-tier.md](node-tier.md)
+- Run a Python Worker: [python.md](python.md)
 - Read logs, metrics and traces: [observability.md](observability.md)
 - Use the admin console: [ADMIN-UI.md](ADMIN-UI.md)
 - Let a team manage only its own tenant: [teams.md](teams.md)

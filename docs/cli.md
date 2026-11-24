@@ -394,7 +394,7 @@ create an app from a template
 ```text
 tw init: create an app from a template (node-workflow needs Node.js on the deploying machine)
 
-usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…
+usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow|python] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…
 
 flags:
   -json
@@ -410,7 +410,7 @@ flags:
   -tags string
     	use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init
   -template string
-    	hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow (default "hello")
+    	hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow | python (default "hello")
 ```
 
 ### tw dev

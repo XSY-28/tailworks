@@ -114,6 +114,13 @@ type Config struct {
 	// never on a host serving tenants.
 	WorkerdInspector bool
 
+	// PyodideDir holds the pinned Pyodide bundles Python Workers run on
+	// (pyodide.go; default <DataDir>/pyodide). Missing ones are fetched
+	// from PyodideURL ("" = workerd's own source) on the first Python
+	// deployment; workerd only reads them.
+	PyodideDir string
+	PyodideURL string
+
 	// Capacity sets the capacity vector's VM dimensions (nil: measured; see
 	// capacity.go). Its nodes are always CapacityNodes; without a microVM
 	// backend every VM dimension is 0.
