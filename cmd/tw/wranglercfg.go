@@ -238,8 +238,10 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		return "" // sourcemap.go: false leaves the map out of tw deploy
 	case "routes", "route", "workers_dev", "preview_urls", "account_id", "zone_id":
 		return "ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (tailworks.jsonc \"public\" for the internet)"
-	case "assets", "site":
-		return "not supported: tailworks does not serve static assets; import them as modules (rules) or serve them from the Worker"
+	case "assets":
+		return "" // assets.go: served by a generated router Worker
+	case "site":
+		return "not supported: Workers Sites is deprecated; use \"assets\" (docs/wrangler.md#assets)"
 	case "kv_namespaces", "r2_buckets", "services", "ai", "browser", "vectorize",
 		"hyperdrive", "analytics_engine_datasets", "send_email", "dispatch_namespaces",
 		"mtls_certificates", "images", "pipelines", "ratelimits", "secrets_store_secrets", "version_metadata",

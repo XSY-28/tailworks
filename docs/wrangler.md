@@ -38,7 +38,8 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
   `tw secret`, `tw kv`, `tw d1`, `tw queues`, `tw r2` and `tw logs`
   stand in for their wrangler commands. Secrets apply on the next deploy.
 - **Not there:** Workers AI, Vectorize, Hyperdrive, Browser Rendering,
-  Email, service bindings, static assets, TCP `connect()`. The full list,
+  Email, service bindings, TCP `connect()`. Static assets work, with
+  `_redirects` and `_headers` ([below](#assets)). The full list,
   with tests: [COMPAT.md](COMPAT.md).
 
 ## Config files
@@ -151,7 +152,8 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 | `nodejs_compat` | ✅ bare built-ins become `node:*`; workerd provides them | ✅ plus wrangler's unenv polyfills | toml-app's entry: 1.0 KB built-in, 21 KB wrangler. Both pass the same checks (`node:buffer`) |
 | `node_compat` (legacy) | ❌ warned | ❌ wrangler 4 rejects it | use `compatibility_flags = ["nodejs_compat"]` |
 | `upload_source_maps` | ✅ on unless `false` | ❌ warned | the built-in esbuild ships `dist/index.js.map` (no sources); hosts map exception stacks to `src/…` with it ([dev-debugging.md](dev-debugging.md)) |
-| `assets`, `site` (static assets) | ❌ warned | ❌ | serve files from the Worker, or import them as Text/Data modules |
+| `assets` (static assets) | ✅ | ✅ | read by `tw` itself, whichever bundler builds the Worker ([Static assets](#assets)) |
+| `site` (Workers Sites) | ❌ warned | ❌ | deprecated by Cloudflare; use `assets` |
 
 `create-tailworks`'s `build.mjs` (the npm bundler) still reads only
 `wrangler.jsonc` and has none of these settings. `tw deploy` does not
@@ -175,7 +177,7 @@ before anything else. Nothing is ignored silently:
 |---|---|
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `tailworks.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
 | `services`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on tailworks; the warning names each `env.X` that will be undefined. A section tailworks supports as a [platform store](design/adr/044-platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) is not warned about |
-| `assets`, `site` | not supported |
+| `site` | not supported (Workers Sites; use `assets`) |
 | `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by tailworks |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
 | anything else | unknown key, ignored |
@@ -183,8 +185,123 @@ before anything else. Nothing is ignored silently:
 These keys are used without a warning: `name`, `main`, `compatibility_date`,
 `compatibility_flags`, `vars`, `durable_objects`, `kv_namespaces` ([kv.md](kv.md)), `r2_buckets` ([r2.md](r2.md)), `migrations`, `triggers`
 ([cron-triggers.md](cron-triggers.md)), `containers`
-([containers.md](containers.md)), `placement`, `secrets` (its `required`
-names, for `tw types`), and the build settings above.
+([containers.md](containers.md)), `placement`, `assets` ([below](#assets)),
+`secrets` (its `required` names, for `tw types`), and the build settings
+above.
+
+<a id="assets"></a>
+
+## Static assets (`assets`)
+
+A folder of files served next to the Worker, as on Cloudflare: a plain site,
+or the build output of a Vite, React or docs project. The `static-site`
+template is a working example (`tw init my-site --template static-site`).
+
+```jsonc
+"assets": {
+  "directory": "./public",                 // required: the folder to serve
+  "binding": "ASSETS",                     // optional: env.ASSETS.fetch(req) in the Worker
+  "html_handling": "auto-trailing-slash",  // the default; or force-trailing-slash, drop-trailing-slash, none
+  "not_found_handling": "404-page",        // or single-page-application, none (the default)
+  "run_worker_first": ["/api/*"]           // or true: these paths run the Worker before any file
+}
+```
+
+How a request is answered:
+
+1. A path matching `run_worker_first` (`true` is every path; `*` matches
+   any characters, `/` too; a `!` pattern excludes) goes to the Worker.
+   It can answer, or check `getCaller(req)` and then serve a file with
+   `env.ASSETS.fetch(req)`.
+2. A `_redirects` rule that matches the path (first match wins) answers
+   with its redirect, or, for status `200`, with its destination's file
+   at the requested URL.
+3. A `GET` or `HEAD` for a file is answered with the file: `Content-Type`
+   from its extension, a strong `ETag`, `Cache-Control: public, max-age=0,
+   must-revalidate`, and `304 Not Modified` for a matching `If-None-Match`.
+   `html_handling` maps `/about` to `about.html`, `/docs/` to
+   `docs/index.html`, and redirects (307) the other spellings, the way
+   Cloudflare does.
+4. Anything else goes to the Worker. In `single-page-application` mode a
+   browser navigation (`Sec-Fetch-Mode: navigate`) that matches no file
+   gets `index.html` instead.
+
+`env.ASSETS.fetch(req)` applies `not_found_handling` to a path with no file:
+`404-page` serves the nearest `404.html` (status 404),
+`single-page-application` serves `index.html`, `none` answers an empty 404.
+
+What gets uploaded: every file under `directory`, except the patterns in
+its `.assetsignore` (gitignore-style: `*.map`, `private/`, `/top.txt`;
+no `!` or `**`), `.git`, `node_modules` and `.DS_Store`.
+
+### `_redirects` and `_headers`
+
+Put them at the top of `directory`. They are read by the host, never
+served as files, and `tw deploy` / `tw dev` reject a bad line (with its
+line number) before uploading.
+
+```
+# _redirects: <from> <to> [status]
+/old             /new                     # 302 by default
+/moved           /new             301     # 301, 302, 303, 307 or 308
+/blog/*          /posts/:splat    308     # * is a splat (any characters, / too)
+/u/:id/profile   /people/:id              # :name is one path segment
+/docs/*          https://docs.example.com/:splat
+/app/*           /index.html      200     # a rewrite: that file, at this URL
+```
+
+```
+# _headers: a path pattern, then indented headers
+/*
+  X-Frame-Options: DENY
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  ! X-Frame-Options
+```
+
+- Rules match the URL path as sent (percent-encoded). `_redirects` keeps
+  the request's query string unless the destination has its own. A `200`
+  rewrite only names a path on the site; a destination with no file is a
+  miss.
+- `_headers` apply to file responses (including 304s and the 404 page),
+  not to redirects or the Worker's own responses. A rule's header replaces
+  tailworks' default (`Cache-Control`, `Content-Type`); the same header
+  from several matching rules is joined with `, `; `! Name` removes it.
+  `:splat` and `:name` fill in values too.
+- Limits, as on Cloudflare: 2,000 static and 100 dynamic redirects (1,000
+  characters a line); 100 header rules (2,000 characters a line). Only
+  paths: domain-level rules (`https://host/…` as the pattern) are refused.
+
+### Assets-only projects
+
+A config with `assets` and no `main` is a site with no Worker:
+
+```jsonc
+{ "name": "docs", "assets": { "directory": "./dist", "not_found_handling": "single-page-application" } }
+```
+
+Every `GET` and `HEAD` is answered from the files, and a miss gets
+`not_found_handling` (a single-page app gets `index.html` for any path,
+navigation or not). Other methods get `405`. `run_worker_first` needs a
+Worker, so it is an error here. `tw` bundles no code; the host supplies
+the stand-in Worker.
+
+`tw dev` serves the same way and reloads when a file in `directory`
+changes, even when it is `dist/`. Build your client (for example
+`npm run build`) before `tw deploy`; tailworks doesn't run the build.
+
+Differences from Cloudflare:
+
+- The files ride in the deploy bundle, so they count against its 64 MiB
+  (about 48 MiB in one deploy request, which carries the bundle as JSON).
+  Larger sites need a separate upload path, which doesn't exist yet.
+- Who can read: anyone who can reach the workload, over the tailnet or a
+  [public](public-ingress.md) path. Put files that need an identity check
+  under a `run_worker_first` path.
+- `env.ASSETS` is in the Worker and in plain-mode Durable Objects
+  (`"egress": "workload"`), not in facet-mode objects.
+- The host must run a tailworks release with the `assets` feature; mgmt
+  doesn't place an assets deployment on an older host.
 
 ## Types: `tw types`
 

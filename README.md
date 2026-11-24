@@ -97,12 +97,28 @@ tw logs hello -f                               # one line per request
 
 Stuck? See [docs/troubleshooting.md](docs/troubleshooting.md).
 
+### Try it: a static site with a Worker
+
+wrangler `assets` work: a folder of files (a plain site, or a Vite or React
+build) served next to a Worker. The `static-site` template greets you by
+your tailnet login, has an API, and a folder only people (not tagged
+nodes) may read. It runs with no tailnet:
+
+```sh
+tw init my-site --template static-site && cd my-site
+tw dev                                     # open http://127.0.0.1:8787/ ; edit public/index.html and reload
+curl -i http://127.0.0.1:8787/style.css    # a file: Content-Type and ETag
+curl http://127.0.0.1:8787/api/whoami      # the Worker: your verified caller
+```
+
+How the routing works: [docs/wrangler.md#assets](docs/wrangler.md#assets).
+
 ### Next
 
 - Try it locally first, with no tailnet: `tw dev` serves an app on
   `127.0.0.1:8787`.
 - Other templates: `tw init <dir> --template agent` (also `mcp`, `ai-agent`,
-  `lock`, `refund-approval`, `node-workflow`). Each Durable Object instance
+  `lock`, `static-site`, `refund-approval`, `node-workflow`). Each Durable Object instance
   gets its own tailnet node.
 - An existing Workers project: [docs/wrangler.md](docs/wrangler.md).
 - More machines: `tw host add`. A separate laptop: `tw link`.
@@ -159,7 +175,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
-| Bindings | [Static assets](docs/COMPAT.md#assets) | ❌ | |
+| Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | `_redirects`, `_headers` and assets-only work; within the 64 MiB bundle |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
 | Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | tailworks' API, admin only |

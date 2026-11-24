@@ -33,7 +33,7 @@ func workloadLabel(s string) string {
 
 func cmdInit(args []string) error {
 	f := newFlags("init")
-	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | lock | refund-approval | node-workflow")
+	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow")
 	name := f.String("name", "", "workload name (default: the directory name)")
 	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)")
 	tags := f.String("tags", "", "use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init")
@@ -197,7 +197,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 				return nil, err
 			}
 			if twErr != nil {
-				return nil, fail("bad_request", "no tailworks.jsonc or wrangler config in "+dir).withFix("tw init <dir> --template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow")
+				return nil, fail("bad_request", "no tailworks.jsonc or wrangler config in "+dir).withFix("tw init <dir> --template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow")
 			}
 			return nil, fail("bad_request", "no wrangler.jsonc, wrangler.json or wrangler.toml in "+dir)
 		}
@@ -276,6 +276,11 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 	var types map[string]string
 	var js int
 	main := "dist/index.js"
+	if a.assetsOnly() {
+		// An assets-only project (assets.go): no Worker to bundle.
+		tb, err := a.packWorkerd(map[string][]byte{}, "", nil, vars)
+		return tb, 0, err
+	}
 	if a.Opts.builder() == "wrangler" {
 		files, main, types, js, err = a.buildWrangler(out)
 	} else {

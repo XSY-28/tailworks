@@ -16,9 +16,9 @@ whose policy file is managed by someone else.
 
 Gap: `tw init --json` output is unchanged (no tags field).
 
-## Tests (2026-11-23, on origin/master 3d75dc2f)
+## Tests (2026-11-23, after merging origin/master cfb66834)
 
-- `make lint test`: pass (exit 0).
+- `make lint test`: pass (exit 0), before and after the merge.
 - `make cli-docs`: `docs/cli.md` regenerated.
 - New: `TestSetTags`, `TestSetTagsRefuses`, `TestParseInitTagOverridesRefuses`,
   `TestInitExistingTags` (real `agent`/`hello` templates; a refused init
