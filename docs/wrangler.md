@@ -37,8 +37,11 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
 - **Same CLI shapes, different binary.** `tw dev`, `tw deploy`,
   `tw secret`, `tw kv`, `tw d1`, `tw queues`, `tw r2` and `tw logs`
   stand in for their wrangler commands. Secrets apply on the next deploy.
+- **Service bindings go over the tailnet.** `env.AUTH.fetch()` and RPC
+  to another workload's `WorkerEntrypoint` work, as the calling node, so
+  they need a grant like any tailnet call ([below](#service-bindings)).
 - **Not there:** Workers AI, Vectorize, Hyperdrive, Browser Rendering,
-  Email, service bindings, TCP `connect()`. Static assets work, with
+  Email, TCP `connect()`. Static assets work, with
   `_redirects` and `_headers` ([below](#assets)). The full list,
   with tests: [COMPAT.md](COMPAT.md).
 
@@ -176,7 +179,7 @@ before anything else. Nothing is ignored silently:
 | keys | what tailworks says |
 |---|---|
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `tailworks.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
-| `services`, `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on tailworks; the warning names each `env.X` that will be undefined. A section tailworks supports as a [platform store](design/adr/044-platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) is not warned about |
+| `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on tailworks; the warning names each `env.X` that will be undefined. A section tailworks supports as a [platform store](design/adr/044-platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) or as [service bindings](#service-bindings) (`services`) is not warned about |
 | `site` | not supported (Workers Sites; use `assets`) |
 | `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by tailworks |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
@@ -302,6 +305,57 @@ Differences from Cloudflare:
   (`"egress": "workload"`), not in facet-mode objects.
 - The host must run a tailworks release with the `assets` feature; mgmt
   doesn't place an assets deployment on an older host.
+
+## Service bindings (`services`)
+
+<a id="service-bindings"></a>
+A `services` entry binds another workload **of the same tenant** (the
+tailworks counterpart of a Cloudflare account), as on Cloudflare:
+
+```jsonc
+// wrangler.jsonc of the "shop" workload
+"services": [
+  { "binding": "AUTH", "service": "auth" },                         // auth's default export
+  { "binding": "ADMIN", "service": "auth", "entrypoint": "Admin" }, // export class Admin extends WorkerEntrypoint
+]
+```
+
+```js
+const r = await env.AUTH.fetch(request);      // a fetch() to auth
+const ok = await env.AUTH.check(token);       // RPC to auth's default WorkerEntrypoint
+const n = await env.ADMIN.countUsers();       // RPC to the Admin entrypoint
+```
+
+- **It's a tailnet call.** tailworks resolves `service` to that
+  workload's entry node and sends the call from the calling node: the
+  Worker's workload node, or a facet-mode object's own node. The target
+  can be on the same host (netd delivers it in process) or another host.
+  As for any tailnet call, the caller's tags need a grant to the target's
+  (`tw policy` prints it).
+- **The target knows who called.** `getCaller(request)` in `fetch()`, and
+  `getCaller(this.ctx)` in an RPC method, name the calling node. A caller
+  on the Request or in headers never gets through.
+- **Named entrypoints and RPC methods** answer only tailworks workloads
+  and objects of the same tenant ([`binding_forbidden`](errors.md#binding_forbidden)
+  otherwise). The target's default `fetch()` is an ordinary tailnet
+  endpoint.
+- **RPC values are copied**, as JSON over the tailnet: everything
+  structured clone handles (objects, arrays, `Date`, `Map`, `Set`,
+  `RegExp`, `BigInt`, typed arrays, `ArrayBuffer`, errors, `undefined`,
+  `NaN`). What Cloudflare passes by reference (functions, `RpcTarget`
+  stubs, streams, `Request`, `Response`) is refused with
+  [`rpc_not_forwardable`](errors.md#rpc_not_forwardable); send a body
+  with `fetch()` instead. A thrown error keeps its name and message.
+- **Errors:** a target that isn't deployed in the tenant, or an
+  `entrypoint` it doesn't export, is
+  [`service_not_found`](errors.md#service_not_found); a killed one is
+  `killed`.
+- Not supported: `environment` and `props` (refused at deploy), RPC
+  promise pipelining, a request and response streaming at the same time
+  (each streams on its own), and, in `tw dev`, a binding to another
+  workload.
+
+`tw types` types each binding as `Fetcher`.
 
 ## Types: `tw types`
 

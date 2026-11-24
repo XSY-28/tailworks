@@ -173,7 +173,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
 | Bindings | [Browser Rendering](docs/COMPAT.md#browser) | ❌ | |
 | Bindings | [Email](docs/COMPAT.md#email) | ❌ | |
-| Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
+| Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ⚠️ | `fetch()` and RPC between a tenant's workloads, over the tailnet as the calling node |
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | `_redirects`, `_headers` and assets-only work; within the 64 MiB bundle |

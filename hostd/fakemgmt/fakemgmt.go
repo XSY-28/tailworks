@@ -255,6 +255,7 @@ func New(cfg Config) *Server {
 	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/pull", s.pullQueue)
 	m.HandleFunc("POST /v1/tenants/{id}/queues/{queue}/messages/ack", s.ackQueue)
 	m.HandleFunc("POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants", s.telemetryGrant)
+	m.HandleFunc("GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}", s.serviceBinding) // servicebind.go
 	m.HandleFunc("PUT /v1/hosts/{id}", s.register)
 	m.HandleFunc("PUT /v1/hosts/{id}/status", s.heartbeat)
 	m.HandleFunc("GET /v1/hosts/{id}/assignments", s.assignments)

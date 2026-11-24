@@ -518,6 +518,7 @@ const (
 	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
+	ErrorCodeServiceNotFound         ErrorCode = "service_not_found"
 	ErrorCodeSharedOwnerTag          ErrorCode = "shared_owner_tag"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
 	ErrorCodeStorageQuotaExceeded    ErrorCode = "storage_quota_exceeded"
@@ -681,6 +682,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeServiceAPIFailed:
 		return true
 	case ErrorCodeServiceConflict:
+		return true
+	case ErrorCodeServiceNotFound:
 		return true
 	case ErrorCodeSharedOwnerTag:
 		return true
@@ -2340,6 +2343,7 @@ type Error struct {
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `unknown_queue` | 404 | the tenant has no queue of that name |
+	// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -2443,6 +2447,7 @@ type Error struct {
 // | `unknown_secret` | 404 | the workload has no secret of that name |
 // | `unknown_store` | 404 | the workload has no store of that kind and name |
 // | `unknown_queue` | 404 | the tenant has no queue of that name |
+// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
@@ -2665,6 +2670,7 @@ type HostDrainResult struct {
 		// | `unknown_secret` | 404 | the workload has no secret of that name |
 		// | `unknown_store` | 404 | the workload has no store of that kind and name |
 		// | `unknown_queue` | 404 | the tenant has no queue of that name |
+		// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 		// | `exists` | 409 | create of an existing ID |
 		// | `lease_lost` | 409 | epoch/holder fence failed |
 		// | `lease_held` | 409 | another host holds the lease |
@@ -3975,6 +3981,30 @@ type SelfInfo struct {
 	Transport *Transport `json:"transport,omitempty"`
 }
 
+// ServiceBindingTarget Where a service binding's calls go (ADR-052).
+type ServiceBindingTarget struct {
+	Binding string `json:"binding"`
+
+	// Entrypoint The named export the binding calls; absent for the default export.
+	Entrypoint *string `json:"entrypoint,omitempty"`
+	Hostname   string  `json:"hostname"`
+
+	// MagicDNS The entry node's MagicDNS name (no trailing dot).
+	MagicDNS string `json:"magicDNS"`
+
+	// ObjectID The target's entry node object.
+	ObjectID string `json:"objectID"`
+
+	// Service The target workload.
+	Service string `json:"service"`
+
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
+	Status ObjectStatus `json:"status"`
+}
+
 // ServiceEndpoint A workload's Tailscale Service: a stable name and VIPs that survive the workload node being re-minted or moving host. Callers need a grant to the `svc:` name; control routes it to the workload node only when policy `autoApprovers.services` lets the workload tags host it.
 type ServiceEndpoint struct {
 	// Addrs The Service VIPs (on create).
@@ -4504,6 +4534,7 @@ type TombstoneError struct {
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `unknown_queue` | 404 | the tenant has no queue of that name |
+	// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -5287,6 +5318,12 @@ type ListWorkloadSecretsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// GetServiceBindingTargetParams defines parameters for GetServiceBindingTarget.
+type GetServiceBindingTargetParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
+}
+
 // ListWorkloadStoresParams defines parameters for ListWorkloadStores.
 type ListWorkloadStoresParams struct {
 	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
@@ -5854,6 +5891,9 @@ type ServerInterface interface {
 	// PutWorkloadSecret Create or replace a workload secret (`tw secret put`)
 	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	PutWorkloadSecret(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, name SecretName)
+	// GetServiceBindingTarget Resolve a workload's service binding to its target's entry node
+	// (GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding})
+	GetServiceBindingTarget(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, binding string, params GetServiceBindingTargetParams)
 	// ListWorkloadStores List a workload's stores
 	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
 	ListWorkloadStores(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, params ListWorkloadStoresParams)
@@ -9584,6 +9624,66 @@ func (siw *ServerInterfaceWrapper) PutWorkloadSecret(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// GetServiceBindingTarget operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceBindingTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id TenantID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workload" -------------
+	var workload WorkloadName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workload", r.PathValue("workload"), &workload, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "binding" -------------
+	var binding string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "binding", r.PathValue("binding"), &binding, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "binding", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetServiceBindingTargetParams
+
+	// ------------- Required query parameter "epoch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "epoch", r.URL.Query(), &params.Epoch, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "epoch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceBindingTarget(w, r, id, workload, binding, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkloadStores operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkloadStores(w http.ResponseWriter, r *http.Request) {
 
@@ -10731,6 +10831,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/messages/pull", wrapper.PullQueueMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/queues/{queue}/messages/ack", wrapper.AckQueueMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/telemetry-grants", wrapper.CreateTelemetryGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}", wrapper.GetServiceBindingTarget)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.DeleteTenantTelemetry)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.GetTenantTelemetry)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tenants/{id}/telemetry", wrapper.PutTenantTelemetry)
@@ -19100,6 +19201,148 @@ func (response PutWorkloadSecretdefaultJSONResponse) VisitPutWorkloadSecretRespo
 	return err
 }
 
+type GetServiceBindingTargetRequestObject struct {
+	ID       TenantID     `json:"id"`
+	Workload WorkloadName `json:"workload"`
+	Binding  string       `json:"binding"`
+	Params   GetServiceBindingTargetParams
+}
+
+type GetServiceBindingTargetResponseObject interface {
+	VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error
+}
+
+type GetServiceBindingTarget200JSONResponse ServiceBindingTarget
+
+func (response GetServiceBindingTarget200JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTarget400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetServiceBindingTarget400JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTarget403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetServiceBindingTarget403JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTarget404JSONResponse Error
+
+func (response GetServiceBindingTarget404JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTarget409JSONResponse struct{ LeaseLostJSONResponse }
+
+func (response GetServiceBindingTarget409JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTarget410JSONResponse struct{ GoneJSONResponse }
+
+func (response GetServiceBindingTarget410JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(410)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTarget503JSONResponse Error
+
+func (response GetServiceBindingTarget503JSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceBindingTargetdefaultJSONResponse struct {
+	Body       Error
+	Headers    ErrorResponseHeaders
+	StatusCode int
+}
+
+func (response GetServiceBindingTargetdefaultJSONResponse) VisitGetServiceBindingTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.TwError != nil {
+		w.Header().Set("Tw-Error", fmt.Sprint(*response.Headers.TwError))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListWorkloadStoresRequestObject struct {
 	ID       TenantID     `json:"id"`
 	Workload WorkloadName `json:"workload"`
@@ -21263,6 +21506,9 @@ type StrictServerInterface interface {
 	// PutWorkloadSecret Create or replace a workload secret (`tw secret put`)
 	// (PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name})
 	PutWorkloadSecret(ctx context.Context, request PutWorkloadSecretRequestObject) (PutWorkloadSecretResponseObject, error)
+	// GetServiceBindingTarget Resolve a workload's service binding to its target's entry node
+	// (GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding})
+	GetServiceBindingTarget(ctx context.Context, request GetServiceBindingTargetRequestObject) (GetServiceBindingTargetResponseObject, error)
 	// ListWorkloadStores List a workload's stores
 	// (GET /v1/tenants/{id}/workloads/{workload}/stores)
 	ListWorkloadStores(ctx context.Context, request ListWorkloadStoresRequestObject) (ListWorkloadStoresResponseObject, error)
@@ -23803,6 +24049,35 @@ func (sh *strictHandler) PutWorkloadSecret(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutWorkloadSecretResponseObject); ok {
 		if err := validResponse.VisitPutWorkloadSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServiceBindingTarget operation middleware
+func (sh *strictHandler) GetServiceBindingTarget(w http.ResponseWriter, r *http.Request, id TenantID, workload WorkloadName, binding string, params GetServiceBindingTargetParams) {
+	var request GetServiceBindingTargetRequestObject
+
+	request.ID = id
+	request.Workload = workload
+	request.Binding = binding
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServiceBindingTarget(ctx, request.(GetServiceBindingTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServiceBindingTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServiceBindingTargetResponseObject); ok {
+		if err := validResponse.VisitGetServiceBindingTargetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

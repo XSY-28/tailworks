@@ -129,10 +129,11 @@ the workload is gone for good.
 **Egress to Services.** An object's `fetch("http://support.<tailnet>/")`
 (or the bare `http://support/`, or the VIP itself) resolves from that
 object's own netmap: the Service's MagicDNS record, routed by a peer that
-has the VIP in its AllowedIPs. Host DNS is never used. The sibling rule
-still applies: if every host of the Service is a sibling object on the same
-host, the call is refused with `forbidden_destination`, because same-host
-calls go through the platform.
+has the VIP in its AllowedIPs. Host DNS is never used. If every host of
+the Service is an object on the same host, netd delivers the call in
+process to that object's Service ingress (RFC §4.8), after the same checks:
+the caller sees the Service in its netmap, and the host's packet filter
+accepts it.
 
 ### Replicas: one stateless workload on several hosts
 

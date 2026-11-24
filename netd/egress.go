@@ -165,6 +165,9 @@ func (o *Object) dialEgress(ctx context.Context, network, addr string) (net.Conn
 	if state != StateReady || srv == nil {
 		return nil, &Error{Code: CodeKilled, Detail: "object " + o.id + " is " + string(state), Object: o.id}
 	}
+	if dst, svc, ok := o.hopTarget(ctx, ap); ok { // samehost.go
+		return o.dialHop(dst, ap, svc)
+	}
 	o.awaitPeerPath(ctx, ap.Addr())
 	c, err := srv.Dial(ctx, "tcp", ap.String())
 	if err != nil {
@@ -308,11 +311,13 @@ func (r *Registry) classify(o *Object, ip netip.Addr) (code, detail string) {
 		return CodeForbiddenDestination, "destination is this object's own node"
 	}
 	r.mu.Lock()
-	sib, isSib := r.localIPs[ip]
+	_, isSib := r.localIPs[ip]
 	host := r.hostIPs[ip]
 	r.mu.Unlock()
-	if isSib && !r.cfg.AllowSiblings {
-		return CodeForbiddenDestination, "destination is a sibling object on this host (" + sib + "); same-host calls go through the platform"
+	if isSib {
+		// A sibling object on this host: delivered in process after the
+		// peer checks (samehost.go), or over WireGuard with AllowSiblings.
+		return "", ""
 	}
 	if host {
 		return CodeForbiddenDestination, "destination is an address of this host"
@@ -361,39 +366,21 @@ func serviceVIP(ctx context.Context, lc interface {
 
 // servicePeer reports whether ip is a Service VIP routed by a peer in st
 // (the VIP is in the peer's AllowedIPs; control only routes it to approved
-// hosts the caller has a grant to). code is set when every such host is a
-// sibling object on this host (same-host calls go through the platform).
+// hosts the caller has a grant to). A Service whose only reachable hosts
+// are siblings on this host is delivered in process (samehost.go). code is
+// never set; it stays for callers that refuse on it.
 func (r *Registry) servicePeer(o *Object, st *ipnstate.Status, ip netip.Addr) (code, detail string, ok bool) {
-	var hosts []netip.Addr
 	for _, p := range st.Peer {
 		if p.AllowedIPs == nil {
 			continue
 		}
-		routes := false
 		for _, pfx := range p.AllowedIPs.All() {
 			if pfx.Contains(ip) && pfx.Bits() == ip.BitLen() {
-				routes = true
-				break
+				return "", "", true
 			}
 		}
-		if routes {
-			hosts = append(hosts, p.TailscaleIPs...)
-		}
 	}
-	if len(hosts) == 0 {
-		return "", "", false
-	}
-	if r.cfg.AllowSiblings {
-		return "", "", true
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, h := range hosts {
-		if _, sib := r.localIPs[h]; !sib {
-			return "", "", true
-		}
-	}
-	return CodeForbiddenDestination, "the service's only reachable host is a sibling object on this host; same-host calls go through the platform", true
+	return "", "", false
 }
 
 // PeerPathWait bounds how long an egress dial waits for a just-registered

@@ -84,6 +84,9 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 		if o.Class != "" {
 			route = map[string]any{"kind": "object", "class": o.Class, "name": o.Name, "workload": o.Workload, "objectID": o.ID}
 		}
+		if !h.bindingIngress(w, r, o, blob, route) { // servicebind.go
+			return
+		}
 		trace := newTraceID()
 		blob["tw"] = route
 		blob["traceId"] = trace
@@ -136,12 +139,17 @@ func (s *statusRecorder) Flush() {
 	}
 }
 
+// Unwrap lets netd's proxy hijack the connection for a WebSocket upgrade
+// (http.ResponseController).
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
 // egressObjHandler serves a facet's egress (platform Egress entrypoint):
 // verify the MAC, map class+name to the object (creating it on first use),
 // and hand the request to netd, which dials from the object's own node.
 func (h *Host) egressObjHandler(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cls, name, ok := gen.VerifyEgressOnce(inst.res.MACKey, r.Header, r.Method, r.RequestURI, time.Now(), &inst.nonces)
+		bc := takeBinding(r) // servicebind.go
 		if !ok {
 			writeAPIError(w, &apiError{Code: "unknown_object", Detail: "egress request failed platform authentication"})
 			return
@@ -164,6 +172,12 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 			return
 		}
 		gen.StripPlatformHeaders(r.Header)
+		if bc != nil {
+			var ok bool
+			if w, ok = h.routeBinding(w, r, inst, o, bc); !ok {
+				return
+			}
+		}
 		h.serveEgress(w, r, inst, o)
 	})
 }
@@ -173,12 +187,19 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 func (h *Host) egressWLHandler(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gen.StripPlatformHeaders(r.Header)
+		bc := takeBinding(r) // servicebind.go
 		inst.w.mu.Lock()
 		o := inst.w.wl
 		inst.w.mu.Unlock()
 		if o == nil {
 			writeAPIError(w, &apiError{Code: "identity_pending", Detail: "workload node not created yet"})
 			return
+		}
+		if bc != nil {
+			var ok bool
+			if w, ok = h.routeBinding(w, r, inst, o, bc); !ok {
+				return
+			}
 		}
 		h.serveEgress(w, r, inst, o)
 	})

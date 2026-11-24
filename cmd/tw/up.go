@@ -119,7 +119,7 @@ func cmdUp(args []string) error {
 	tomb := f.Duration("kill-tombstone", 12*time.Second, "keep a killed node answering object_killed this long")
 	delDelay := f.Duration("device-delete-delay", 8*time.Second, "delete a killed object's device this long after the kill (< --kill-tombstone)")
 	retention := addRetentionFlags(f) // up_retention.go
-	siblings := f.Bool("allow-sibling-egress", false, "let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)")
+	siblings := f.Bool("allow-sibling-egress", false, "dial other objects on this host over WireGuard (a hairpin) instead of netd's in-process hop (tests)")
 	warmKeys := f.Int("warm-keys", 5, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
 	poolNodes := f.Int("pool-nodes", 1, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
 	portMapping := f.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)")

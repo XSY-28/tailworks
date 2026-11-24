@@ -25,6 +25,9 @@ export type TailnetErrorCode =
   | "namespace_conflict"
   | "bad_request"
   | "unknown_object"
+  | "service_not_found"
+  | "binding_forbidden"
+  | "rpc_not_forwardable"
   | "dial_failed"
   | "upstream_unavailable"
   | "hostd_unavailable"
@@ -69,6 +72,9 @@ export const CATALOG: Readonly<Record<TailnetErrorCode, CatalogEntry>> = Object.
   namespace_conflict: { status: 409, title: "mgmt returned another identity's object for this workload's class + object name (an invariant violation; tailworks fails closed rather than share a node)" },
   bad_request: { status: 400, title: "the request is malformed" },
   unknown_object: { status: 404, title: "no such object" },
+  service_not_found: { status: 404, title: "a service binding's target workload (or its entrypoint) does not exist in this tenant" },
+  binding_forbidden: { status: 403, title: "a named entrypoint or RPC method was called by something that is not a tailworks node of the same tenant" },
+  rpc_not_forwardable: { status: 400, title: "an RPC argument or result is passed by reference on Cloudflare (a function, RpcTarget, stream, Request or Response) and cannot cross a service binding" },
   dial_failed: { status: 502, title: "the tailnet dial failed" },
   upstream_unavailable: { status: 503, title: "the platform upstream is unavailable" },
   hostd_unavailable: { status: 503, title: "the host agent is unavailable" },

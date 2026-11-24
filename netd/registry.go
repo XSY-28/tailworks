@@ -90,9 +90,10 @@ type Config struct {
 	Tags      []string
 	// Hostname maps an object ID to its node hostname. Default "tw-"+id.
 	Hostname func(objectID string) string
-	// AllowSiblings lets an object's egress reach other objects hosted by this
-	// registry. Default false: same-host object calls must go through the
-	// platform's policy-checked path (RFC §4.5), not a hairpin over WireGuard.
+	// AllowSiblings dials other objects hosted by this registry over
+	// WireGuard (a hairpin). Default false: a flow to a sibling is delivered
+	// in process to its attributed ingress, after the same netmap and packet
+	// filter checks (samehost.go, RFC §4.8).
 	AllowSiblings bool
 	// ExtraForbidden prefixes are always refused on egress (platform endpoints).
 	ExtraForbidden []netip.Prefix
@@ -270,6 +271,11 @@ type Object struct {
 	svcLn    *tssvc.ConnListener
 	svcHTTP  *http.Server
 	services []string // Services this node advertises
+
+	// hopLn feeds same-host flows from sibling objects to hopHTTP (the
+	// same handler as httpSrv; samehost.go).
+	hopLn   *tssvc.ConnListener
+	hopHTTP *http.Server
 	// pub is non-nil for a public (Funnel) node (ADR-029); set at Create
 	// and never changed.
 	pub *publicState
@@ -583,6 +589,7 @@ func (o *Object) start(ctx context.Context) error {
 	o.svcHTTP = &http.Server{Handler: hs.Handler, ReadHeaderTimeout: hs.ReadHeaderTimeout, ErrorLog: hs.ErrorLog}
 	o.svcHTTP.SetKeepAlivesEnabled(false) // until a Service is advertised
 	svcHS := o.svcHTTP
+	hopHS, hopLn := o.startHopLocked(hs) // samehost.go
 	o.state = StateReady
 	// Control can still reject the node now that it is ready (#200,
 	// rejected.go).
@@ -622,6 +629,7 @@ func (o *Object) start(ctx context.Context) error {
 		go hs.Serve(o.ln)
 	}
 	go svcHS.Serve(svcLn)
+	go hopHS.Serve(hopLn)
 	r.log.Info("object ready", "object", o.id, "hostname", hostname, "ip", ip4.String(),
 		"node", string(o.nodeID), "join_ms", joinDur.Milliseconds(), "rejoined", rejoin, "reminted", reminted, "spans", o.spans.get())
 	return nil
@@ -786,6 +794,7 @@ func (o *Object) teardown() {
 	o.stopCertPrefetch()
 	o.mu.Lock()
 	srv, hs, tr, ts, shs := o.srv, o.httpSrv, o.tr, o.tombSrv, o.svcHTTP
+	hop := o.hopHTTP
 	o.services = nil // a closed node advertises nothing
 	if o.rejectedCancel != nil {
 		o.rejectedCancel() // before srv.Close, which waits on open LocalAPI streams
@@ -796,6 +805,9 @@ func (o *Object) teardown() {
 	}
 	if shs != nil {
 		shs.Close()
+	}
+	if hop != nil {
+		hop.Close()
 	}
 	if ts != nil {
 		ts.Close()
