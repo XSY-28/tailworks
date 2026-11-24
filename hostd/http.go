@@ -164,7 +164,7 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 			writeAPIError(w, &apiError{Code: "unknown_object", Detail: "no facet class " + cls})
 			return
 		}
-		o, err := h.ensure(r.Context(), inst.w, cls, name, nil, nil, "")
+		o, err := h.facetEgressObject(r.Context(), inst, cls, name) // nodeless.go
 		if err != nil {
 			writeAPIError(w, asAPIError(err))
 			return
@@ -286,6 +286,10 @@ type apiReq struct {
 	// ("admit", a workload-level "spawn"). Public requests have none.
 	Ticket string `json:"ticket"`
 
+	// Workflow marks an "admit" from a Workflow's guarded env (no ticket):
+	// admitWorkflow, nodeless.go (#359).
+	Workflow bool `json:"workflow"`
+
 	// Approval is a Workflow's approval wait (op "approval", approvals.go).
 	Approval json.RawMessage `json:"approval"`
 }
@@ -352,6 +356,12 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 		fail := func(err error) { writeAPIError(w, asAPIError(err)) }
 		switch strings.TrimPrefix(r.URL.Path, "/v1/") {
 		case "ensure":
+			if req.As != nil {
+				if v, ok := nodelessEnsure(inst.app, req.As.Class, req.As.Name); ok { // nodeless.go
+					writeJSON(w, 200, v)
+					return
+				}
+			}
 			o, err := self()
 			if err != nil {
 				fail(err)
@@ -385,6 +395,8 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			_, ticketOK := gen.VerifyTicket(inst.macKey(), req.Ticket, time.Now())
 			if req.As != nil || ticketOK {
 				existing, e = h.admitCreate(wl, inst.app, req.Class, req.Name)
+			} else if req.Workflow {
+				existing, e = h.admitWorkflow(wl, inst.app, req.Class, req.Name) // nodeless.go
 			} else {
 				existing, e = h.admitPublic(wl, inst.app, req.Class, req.Name)
 			}

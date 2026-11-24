@@ -677,9 +677,14 @@ function guardEnv(env: any, bindings: BindingMap, mode: GuardMode, adm: Admitter
   return out;
 }
 
-/** guardTailnetEnv guards env as for a tailnet caller without a create ticket (Workflows). */
+/**
+ * guardTailnetEnv guards env as for a tailnet caller without a create
+ * ticket (Workflows). Its admits say they are a Workflow's, so hostd lets
+ * them reach objects of classes with no node (no admission applies to
+ * those), which a public request may not (#359).
+ */
 export function guardTailnetEnv(env: any, bindings: BindingMap): any {
-  return guardEnv(env, bindings, "tailnet", admitter(env?.__TW, {}));
+  return guardEnv(env, bindings, "tailnet", admitter(env?.__TW, { workflow: true }));
 }
 
 /** publicEnv returns env guarded for a public request (kept for callers of the old name). */

@@ -1548,7 +1548,7 @@ function guardEnv(env, bindings, mode, adm) {
   return out;
 }
 function guardTailnetEnv(env, bindings) {
-  return guardEnv(env, bindings, "tailnet", admitter(env?.__TW, {}));
+  return guardEnv(env, bindings, "tailnet", admitter(env?.__TW, { workflow: true }));
 }
 function publicEnv(env, bindings) {
   return guardEnv(env, bindings, "public", admitter(env?.__TW, {}));
